@@ -175,13 +175,20 @@ public final class ManagePluginsDialog {
             }
             if (at >= 0) {
                 PluginRegistry.Plugin entry = rows.get(at);
+                // The version is the local build's; everything else is still the registry's, the editor
+                // dependencies included — a developer's own build of a plugin needs exactly what the
+                // published one does.
                 rows.set(at, new PluginRegistry.Plugin(entry.id(), entry.name(), entry.coordinate(),
                         entry.repo(), entry.description(), entry.tags(), entry.minContractVersion(),
-                        entry.valueTypeIds(), build.version(), entry.verifiedAt()));
+                        entry.valueTypeIds(), entry.editorDependencies(), build.version(),
+                        entry.verifiedAt()));
             } else {
+                // A local build the registry has never seen has no entry to read a list from, so installing
+                // it declares the plugin alone. That is the honest answer — nothing here can know what a
+                // jar's optional dependencies are — and the way out is `botmaker plugin publish`.
                 rows.add(0, new PluginRegistry.Plugin(build.coordinate(), build.artifactId(),
                         build.coordinate(), "", "Built locally into ~/.m2 — not published.", List.of(), "",
-                        List.of(), build.version(), ""));
+                        List.of(), List.of(), build.version(), ""));
             }
         }
         return rows;
@@ -204,9 +211,11 @@ public final class ManagePluginsDialog {
      * it used to be attempted here, by rebuilding the user-library list, which could not see a plugin the
      * pom classes as built in and so wrote the SDK twice.
      *
-     * <p>It is also where a plugin that needs something of the host gets it: installing the SDK declares the
-     * {@code provided} entries its plugin half cannot load without. See {@code MavenService.installPlugin}
-     * for why that is the SDK alone and not a general privilege.
+     * <p>It is also where a plugin that needs something of the host gets it: the entry's
+     * {@code editorDependencies} are declared {@code provided} beside the plugin itself. Until 2026-09-06
+     * that was an {@code if (isSdk(…))} inside {@code MavenService} over a list written in Studio's source —
+     * the privilege this class's own javadoc says a plugin platform must not grant. The list is the
+     * registry's now, so a second plugin can have one.
      */
     private void install(PluginRegistry.Plugin plugin) {
         if (!plugin.isInstallable()) {
@@ -223,14 +232,16 @@ public final class ManagePluginsDialog {
                 return;
             }
             apply(libraryService.installPlugin(
-                            new UserLibrary(plugin.groupId(), plugin.artifactId(), version)),
+                            new UserLibrary(plugin.groupId(), plugin.artifactId(), version),
+                            plugin.editorLibraries()),
                     plugin.name() + " " + version + " installed.");
         });
     }
 
     private void remove(PluginRegistry.Plugin plugin) {
         busy(true);
-        apply(libraryService.removePlugin(plugin.groupId(), plugin.artifactId()),
+        apply(libraryService.removePlugin(plugin.groupId(), plugin.artifactId(),
+                        plugin.editorLibraries()),
                 plugin.name() + " removed.");
     }
 

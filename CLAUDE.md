@@ -698,15 +698,21 @@ point of it.**
     no pictures, no capture, no recorder and no pilot. That is what a project with no plugins installed looks
     like, and it was already reachable — it is what an existing project whose pom does not name the SDK has
     always done. What changed is that it is now the *starting* state.
-  - **`BOT_DEPENDENCIES` is kept and unused by creation.** It is the written statement of what a pom naming
-    the SDK plugin must carry — the five `provided` entries and why — which a template author needs and which
-    nothing else records. `ProjectRepair` writes it, and so does a test building a bot-shaped fixture.
+  - **`BOT_DEPENDENCIES` is kept and unused by creation.** It is what a pom naming the SDK carries for the
+    **bot's own source** — the SDK, JNA, Jackson, JUnit. `ProjectRepair` writes it, and so does a test
+    building a bot-shaped fixture. It held five more entries until 2026-09-06 and every one of them was
+    there on a *plugin's* behalf: the toolkit and both JavaFX artifacts went in the morning (transitive
+    through the SDK, and parent-first in the loader, respectively), and javalin/zxing went with the
+    `isSdk` branch — they are the SDK entry's `editorDependencies` now.
   - **`DEFAULT_GROUP_ARTIFACTS` is the union of both lists, and narrowing it would be a data-loss bug.** It
     classifies the pom of *any* project, not only one created today: a bot made before this date, and every
     project unpacked from a gallery template, carries the bot set. Left out of it, the SDK, the toolkit and
     JavaFX read as **user libraries** — offered for deletion in Manage Libraries, then genuinely dropped by
     `writeUserLibraries`, which keeps what `isDefaultDependency` recognises and discards the rest.
-    `MavenServiceSdkTest` holds both directions.
+    `MavenServiceSdkTest` holds both directions. Two additions follow from that: `RETIRED_GROUP_ARTIFACTS`
+    (coordinates the list *used to* write — recognised, never generated) and the rule that **any `provided`
+    dependency is built in**, which is the only shape that can cover a set of coordinates the registry
+    defines and Studio cannot enumerate.
   - **`readSdkVersion` answers `Optional`, and empty is ordinary.** It returned `SDK_FALLBACK_VERSION` for a
     pom naming no SDK, which was harmless while every pom named one and became a lie the moment a blank
     project could exist — its six readers resolve jars with that answer, offer upgrades against it and print
@@ -955,6 +961,18 @@ Manage Libraries uses. That is the whole design and it is deliberate: `META-INF/
 have one a plugin is a normal Maven dependency. A bespoke install path would be a privilege the bundled SDK
 plugin has and a third party's plugin does not — the back door the platform exists to close.
 
+- **What a plugin needs in the editor is the plugin's to declare, not Studio's to know (2026-09-06).** An
+  entry's `editorDependencies` — `groupId:artifactId:version` — are declared `provided` beside the plugin on
+  install and taken back out on remove. They exist because `optional` means *not transitive*: the SDK's
+  plugin half needs a web server and a QR encoder its pom marks exactly that way, so a project that
+  installed the SDK got the jar and a pilot button that failed with a missing class. Studio held that list
+  in `MavenService` as `if (isSdk(…))` until this date — **the one privilege plugin #1 had**, and the one
+  `PluginRegistry`'s own javadoc says a platform must not grant. Two consequences: a **local build the
+  registry has never seen** installs alone (there is no entry to read), and `ProjectRepair` rebuilding a
+  lost pom writes none of them (they are not on disk), which costs one visit to Manage Plugins.
+  `isDefaultDependency` recognises **any `provided` dependency** as built in for the same reason — the set
+  of coordinates is open, so no list here could classify them, and the failure to avoid is Manage Libraries
+  offering a companion for deletion and `writeUserLibraries` then discarding it.
 - **Studio only ever reads the registry.** A plugin is submitted with `botmaker publish`, whose validator is
   the same code the registry's CI runs; those checks need the plugin's build, which a bot's editor has not
   got. There is no publish path here and there should not be one.

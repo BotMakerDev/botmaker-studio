@@ -41,13 +41,19 @@ public final class PluginRegistry {
      *                   release
      * @param verifiedVersion the version the registry's own checks last ran against, which is what gets
      *                        installed: the newest tag may be one nothing has ever loaded
+     * @param editorDependencies {@code groupId:artifactId:version} of everything this plugin needs on the
+     *                           <em>editor's</em> classpath and does not bring itself — the dependencies it
+     *                           declares {@code optional}, which is exactly the set a resolve does not reach.
+     *                           Absent is the ordinary case: a plugin whose dependencies are ordinary needs
+     *                           no list, because they are transitive. See {@code MavenService.installPlugin}.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Plugin(String id, String name, String coordinate, String repo, String description,
                          List<String> tags, String minContractVersion, List<String> valueTypeIds,
-                         String verifiedVersion, String verifiedAt) {
+                         List<String> editorDependencies, String verifiedVersion, String verifiedAt) {
 
         public Plugin {
+            editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
             id = id == null ? "" : id.trim();
             name = name == null ? "" : name.trim();
             coordinate = coordinate == null ? "" : coordinate.trim();
@@ -68,6 +74,24 @@ public final class PluginRegistry {
         public String artifactId() {
             int colon = coordinate.indexOf(':');
             return colon < 0 ? "" : coordinate.substring(colon + 1);
+        }
+
+        /**
+         * {@link #editorDependencies} as libraries, skipping anything that is not
+         * {@code groupId:artifactId:version}.
+         *
+         * <p>Skipping rather than throwing, for the reason the whole parse is lenient: <b>this Studio is the
+         * reader that lags</b>. A malformed entry costs one plugin one dependency; refusing the catalog over
+         * it would cost the user every plugin. The registry's own gate is where a malformed list is an error,
+         * because that is the reader who can tell somebody to fix it.
+         */
+        public List<UserLibrary> editorLibraries() {
+            return editorDependencies.stream()
+                    .map(text -> text == null ? new String[0] : text.trim().split(":"))
+                    .filter(parts -> parts.length == 3
+                            && !parts[0].isBlank() && !parts[1].isBlank() && !parts[2].isBlank())
+                    .map(parts -> new UserLibrary(parts[0], parts[1], parts[2]))
+                    .toList();
         }
 
         /** A plugin with no resolvable coordinate cannot be installed, whatever else the entry says. */

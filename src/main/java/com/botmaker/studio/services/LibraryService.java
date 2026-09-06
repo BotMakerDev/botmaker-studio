@@ -54,17 +54,21 @@ public final class LibraryService {
     }
 
     /**
-     * Declares {@code plugin} in the pom — with, for the SDK, the {@code provided} entries its plugin half
-     * needs — then re-resolves, re-binds and re-indexes.
+     * Declares {@code plugin} in the pom, with the {@code provided} entries its registry entry says it needs
+     * in the editor, then re-resolves, re-binds and re-indexes.
      *
      * <p>Not expressible through {@link #updateLibraries}: that writer keeps the pom's default dependencies
      * and appends whatever list it is given, so installing a plugin that is also a default writes it twice.
      * {@link MavenService#installPlugin} edits the pom in place instead and is idempotent by coordinate.
+     *
+     * @param editorDependencies the plugin's own {@code editorDependencies}; empty for the plugins that need
+     *                           nothing, which is every plugin whose dependencies are ordinary and therefore
+     *                           transitive
      */
-    public CompletableFuture<Void> installPlugin(UserLibrary plugin) {
+    public CompletableFuture<Void> installPlugin(UserLibrary plugin, List<UserLibrary> editorDependencies) {
         return CompletableFuture.runAsync(() -> {
             try {
-                MavenService.installPlugin(config.projectPath(), plugin);
+                MavenService.installPlugin(config.projectPath(), plugin, editorDependencies);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
             }
@@ -72,11 +76,12 @@ public final class LibraryService {
         });
     }
 
-    /** Removes {@code groupId:artifactId} from the pom — the mirror of {@link #installPlugin}. */
-    public CompletableFuture<Void> removePlugin(String groupId, String artifactId) {
+    /** Removes {@code groupId:artifactId} and its editor dependencies — the mirror of {@link #installPlugin}. */
+    public CompletableFuture<Void> removePlugin(String groupId, String artifactId,
+                                                List<UserLibrary> editorDependencies) {
         return CompletableFuture.runAsync(() -> {
             try {
-                MavenService.removePlugin(config.projectPath(), groupId, artifactId);
+                MavenService.removePlugin(config.projectPath(), groupId, artifactId, editorDependencies);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
             }

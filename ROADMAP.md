@@ -6,6 +6,21 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-06 — installing a plugin stops knowing which plugin is first-party.**
+  `MavenService.installPlugin`/`removePlugin` take the editor dependencies as an argument;
+  `isSdk`/`pluginCompanions` are deleted, and so are javalin and zxing from `BOT_DEPENDENCIES`. The list
+  comes from `PluginRegistry.Plugin.editorDependencies` — the entry's own field, parsed by
+  `editorLibraries()` — through `LibraryService` and `ManagePluginsDialog`.
+  - **Why the entry and not the pom.** These are the dependencies a plugin declares `optional`, which is
+    precisely the set a resolve does not reach; a list readable off the pom would not need writing down.
+    `botmaker plugin publish` composes the field from the plugin's pom, and the registry's gate refuses a
+    hand-written one that names the contract or the toolkit.
+  - **`isDefaultDependency` now recognises any `provided` dependency as built in.** The coordinates are the
+    registry's to define, so no list here can enumerate them, and the failure to avoid is Manage Libraries
+    offering a companion for deletion and `writeUserLibraries` discarding it. The cost is bounded and
+    one-directional: a hand-added `provided` dependency is not listed there, and is never lost.
+  - **Two accepted costs, both stated where they occur.** A local build the registry has never seen installs
+    alone, and `ProjectRepair` rebuilding a lost pom writes no companions — neither can read an entry.
 - **2026-09-05 — the GitHub layer left for `botmaker-shared`.** `sharing/{GitHubClient, GitHubAuth,
   GitHubConfig, SemVer}` are `com.botmaker.shared.github`; 16 files retargeted an import and 5 more in
   `sharing/` gained one they had been getting same-package. `SemVerTest` went with the class.

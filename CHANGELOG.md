@@ -14,6 +14,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Installing a plugin declares what *that plugin* says it needs — not what Studio knew about one of
+  them.** Some plugins need a library in the editor that they do not carry into your bot: the SDK's Remote
+  Pilot needs a web server and a QR encoder, and a bot that never opens the pilot must not download either.
+  Studio used to carry that list in its own code, for the SDK alone, so any other plugin needing the same
+  thing simply did not work. The list is part of a plugin's registry entry now, Studio reads it there, and
+  removing the plugin takes it back out. Nothing changes for the SDK: the same two libraries are declared,
+  in the same place, at the same scope.
+
+  Two consequences worth knowing. A plugin you built locally that the registry has never seen is installed
+  on its own, because there is no entry to read a list from — publish it, or add the library through Manage
+  Libraries. And **File ▸ Recover Project Files** rebuilds a lost `pom.xml` from what is on disk, which
+  cannot include that list; a repaired project keeps its plugins and one visit to Manage Plugins puts back
+  what they need in the editor.
+
 - **A new project's `pom.xml` no longer declares the plugin toolkit or JavaFX.** Three dependencies left the
   generated list; two of them were downloads nothing ever used, and the third could break the editor. The
   SDK's own pom declares `botmaker-plugin-toolkit` normally, so it arrives with the SDK — and Maven prefers
