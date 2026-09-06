@@ -6,6 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-06 — a plugin that did not load is named in Manage Plugins.** `PluginHost.failures()` carries
+  what the last `bind` could not load (`PluginLoader.openReporting`), rebuilt per bind and cleared by
+  `unbind`; `ManagePluginsDialog.failureText` renders it as one red row that takes no height when empty.
+  Three incidents here end with the words *an empty palette and one line on stderr* — this is that line,
+  moved to where the person affected can read it. The formatting is static and pure (`PluginFailureTextTest`,
+  4 tests, no scene); what no test can answer is whether the row is legible in both themes.
 - **2026-09-06 — installing a plugin stops knowing which plugin is first-party.**
   `MavenService.installPlugin`/`removePlugin` take the editor dependencies as an argument;
   `isSdk`/`pluginCompanions` are deleted, and so are javalin and zxing from `BOT_DEPENDENCIES`. The list

@@ -4,6 +4,8 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
+import com.botmaker.plugin.host.PluginLoader;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
@@ -117,6 +119,17 @@ public final class ManagePluginsDialog {
         caveat.setWrapText(true);
         caveat.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
+        // What the last bind could not load. Empty is the ordinary state and the row then takes no height:
+        // this is the one place a user can be told the difference between "this project pins no plugin" and
+        // "this project pins a plugin that is broken", which are the same empty palette and completely
+        // different problems. Three incidents in this project's record end with the words "an empty palette
+        // and one line on stderr"; this is where that line goes now.
+        Label failed = new Label(failureText());
+        failed.setWrapText(true);
+        failed.setStyle("-fx-font-size: 11px; -fx-text-fill: #b00020;");
+        failed.setVisible(!failed.getText().isEmpty());
+        failed.setManaged(failed.isVisible());
+
         progress.setVisible(false);
         progress.setPrefSize(20, 20);
         Region spacer = new Region();
@@ -126,7 +139,7 @@ public final class ManagePluginsDialog {
         HBox bar = new HBox(10, progress, statusLabel, spacer, close);
         bar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox root = new VBox(12, searchField, list, hint, caveat, bar);
+        VBox root = new VBox(12, searchField, list, failed, hint, caveat, bar);
         root.setPadding(new Insets(16));
 
         stage.setScene(ThemedWindows.scene(root, 620, 520));
@@ -163,6 +176,32 @@ public final class ManagePluginsDialog {
      * <p>Only ever populated in a dev build — {@link MavenService#localPluginBuilds()} answers empty
      * otherwise — so a released Studio shows exactly the registry and nothing else.
      */
+    private static String failureText() {
+        return failureText(PluginHost.failures());
+    }
+
+    /**
+     * The one line this dialog says about plugins that did not load, or {@code ""} when they all did.
+     *
+     * <p>Static and pure so it can be asserted without a scene — the split this repo already uses for
+     * {@code BlockTree} and {@code PluginRegistry.Plugin}. The failure list itself is
+     * {@code PluginLoader.PluginFailure}, so the sentence is built from what the loader actually caught
+     * rather than from a guess about what a user did.
+     *
+     * <p>It names the plugins rather than counting them: <i>2 plugins did not load</i> is a sentence nobody
+     * can act on, and the provider class is the only identity available — a plugin that would not construct
+     * never got to answer {@code id()}.
+     */
+    static String failureText(List<PluginLoader.PluginFailure> failures) {
+        if (failures.isEmpty()) return "";
+        String lead = failures.size() == 1
+                ? "A plugin on this project's classpath did not load: "
+                : failures.size() + " plugins on this project's classpath did not load: ";
+        return lead + failures.stream().map(PluginLoader.PluginFailure::describe)
+                .collect(java.util.stream.Collectors.joining("; "))
+                + ". Its features are absent from the editor; the project itself is unaffected.";
+    }
+
     private List<PluginRegistry.Plugin> merge(List<PluginRegistry.Plugin> published,
                                               List<MavenService.LocalPluginBuild> builds) {
         localCoordinates.clear();

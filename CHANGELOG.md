@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A plugin that will not load is now said out loud, in Manage Plugins.** When a plugin on a project's
+  classpath cannot be loaded — most often because its own dependency is missing — Studio carries on with the
+  plugins that did load, which is right: a project must open. But the only trace was one line in a log
+  nobody reads, so *this project has no plugins* and *this project has a broken plugin* looked identical: an
+  empty palette. The dialog now names each plugin that failed and why, and says plainly that the project
+  itself is unaffected.
+
+- **One broken plugin no longer hides the others.** A project with two plugins, the first of which failed to
+  load, got **neither**. Each is loaded independently now.
+
 ### Changed
 
 - **Installing a plugin declares what *that plugin* says it needs — not what Studio knew about one of

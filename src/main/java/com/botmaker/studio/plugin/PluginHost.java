@@ -119,6 +119,9 @@ public final class PluginHost {
     /** Memoised beside the slot editors, rebuilt on the same bind. See {@link #toolbarItems()}. */
     private static volatile List<ToolbarItem> toolbarItems = mergeToolbarItems(BUNDLED);
 
+    /** What the last {@link #bind} could not load. See {@link #failures()}. */
+    private static volatile List<PluginLoader.PluginFailure> failures = List.of();
+
     /** pinned version → the sections of the Parameters window at it. Cleared with {@link #CACHE}. */
     private static final Map<String, List<ParameterGroup>> GROUPS = new ConcurrentHashMap<>();
 
@@ -134,7 +137,9 @@ public final class PluginHost {
      * fail-open note in the class javadoc.
      */
     public static synchronized void bind(List<String> resolvedClasspath) {
-        PluginLoader opened = PluginLoader.open(resolvedClasspath);
+        PluginLoader.Loaded loaded = PluginLoader.openReporting(resolvedClasspath);
+        failures = loaded.failures();
+        PluginLoader opened = loaded.loader();
         if (opened == null) {
             // Not unbind(): a classpath that would not open is still a project opening, and the bundled set
             // is about to serve it. Saying "no project" here would leave the next close with nobody to tell.
@@ -156,6 +161,24 @@ public final class PluginHost {
     public static synchronized void unbind() {
         swap(null, BUNDLED);
         serving = false;
+        failures = List.of();
+    }
+
+    /**
+     * The plugins on the open project's classpath that did not load, and why — empty when everything did.
+     *
+     * <p><b>This is the missing half of three incidents in a row</b>, each of which reads the same way in the
+     * record: <i>an empty palette and one line on stderr</i>. A plugin that will not load is caught here on
+     * purpose — a classpath with no plugin on it is an ordinary state and must not stop a project opening —
+     * and until 2026-09-06 being caught was the end of it. Nothing above this layer could tell <i>the
+     * project pins no plugin</i> from <i>the project pins a plugin that is broken</i>, which are the same
+     * screen and completely different problems.
+     *
+     * <p>Rebuilt on every {@link #bind} and cleared by {@link #unbind}, exactly like the catalogs: it
+     * describes the classpath currently bound and nothing else.
+     */
+    public static List<PluginLoader.PluginFailure> failures() {
+        return failures;
     }
 
     private static void swap(PluginLoader opened, List<StudioPlugin> bound) {

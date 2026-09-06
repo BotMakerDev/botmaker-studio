@@ -961,6 +961,14 @@ Manage Libraries uses. That is the whole design and it is deliberate: `META-INF/
 have one a plugin is a normal Maven dependency. A bespoke install path would be a privilege the bundled SDK
 plugin has and a third party's plugin does not — the back door the platform exists to close.
 
+- **A plugin that did not load is answerable, not only catchable (2026-09-06).** `PluginHost.failures()` is
+  what the last `bind` could not load, rebuilt on every bind and cleared by `unbind`, and
+  `ManagePluginsDialog.failureText` is the one line it becomes. Catching a broken plugin is correct — a
+  classpath with no plugin on it is an ordinary state and must not stop a project opening — but until now
+  being caught was the end of it, so *this project pins no plugin* and *this project pins a plugin that is
+  broken* were the same empty palette. The formatting is static and pure so it is asserted with no scene
+  (`PluginFailureTextTest`), the same split as `BlockTree`; what no test here can answer is whether the row
+  is legible in both themes.
 - **What a plugin needs in the editor is the plugin's to declare, not Studio's to know (2026-09-06).** An
   entry's `editorDependencies` — `groupId:artifactId:version` — are declared `provided` beside the plugin on
   install and taken back out on remove. They exist because `optional` means *not transitive*: the SDK's
