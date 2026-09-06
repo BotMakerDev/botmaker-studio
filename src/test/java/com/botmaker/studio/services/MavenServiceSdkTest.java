@@ -22,8 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Since 2026-09-04 a project Studio creates is <b>blank</b> — a test framework and nothing else — while
  * every project made before that date, and every one unpacked from a gallery template, carries the SDK plus
- * the eight entries that serve its plugin half. Both shapes are live on one machine at once, which is what
- * makes the classification cases below the load-bearing ones here.
+ * the entries that serve its plugin half. Both shapes are live on one machine at once, which is what makes
+ * the classification cases below the load-bearing ones here.
+ *
+ * <p>Since 2026-09-06 there is a <b>third</b> shape and it is the same argument one turn further on: a bot
+ * pom no longer declares the toolkit or JavaFX, so a pom that <em>does</em> is an older pom rather than a
+ * hand-edited one, and it has to keep classifying as built in.
  */
 class MavenServiceSdkTest {
 
@@ -184,14 +188,20 @@ class MavenServiceSdkTest {
 
         List<String> after = groupArtifacts(projectDir);
         assertTrue(after.contains(MavenService.SDK_GROUP_ID + ":" + MavenService.SDK_ARTIFACT_ID));
-        for (String companion : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
-                "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics",
-                "io.javalin:javalin", "com.google.zxing:core")) {
+        for (String companion : List.of("io.javalin:javalin", "com.google.zxing:core")) {
             assertTrue(after.contains(companion), companion + " was not declared");
         }
-        // provided, never compile: the bot itself must link none of them when it runs.
+        // And the three that stopped being companions on 2026-09-06. The toolkit is `compile` in the SDK's
+        // own pom, so it arrives transitively — and a direct entry here would BEAT it by nearest-wins,
+        // pinning the bot to a toolkit its SDK was never built against. JavaFX is parent-first in
+        // PluginLoader, so the host's own is what the plugin links whatever this pom says.
+        for (String gone : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+                "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics")) {
+            assertFalse(after.contains(gone), gone + " must not be declared by an install");
+        }
+        // provided, never compile: the bot itself must link neither when it runs.
         for (Dependency d : readModel(projectDir).getDependencies()) {
-            if (d.getArtifactId().equals("javafx-controls") || d.getArtifactId().equals("javalin")) {
+            if (d.getArtifactId().equals("core") || d.getArtifactId().equals("javalin")) {
                 assertEquals("provided", d.getScope(), d.getArtifactId() + " must be provided");
             }
         }
@@ -225,7 +235,7 @@ class MavenServiceSdkTest {
                 "re-installing must move the version, not add a second row");
         // And the companions are a floor, not a re-write: still one of each.
         assertEquals(1, groupArtifacts(projectDir).stream()
-                .filter(ga -> ga.equals("org.openjfx:javafx-controls")).count());
+                .filter(ga -> ga.equals("io.javalin:javalin")).count());
     }
 
     /** Removing the SDK takes back what installing it declared — the pom must not keep orphans. */
@@ -276,7 +286,91 @@ class MavenServiceSdkTest {
                 "the narrow reader must keep its meaning");
     }
 
+    // ---- what a bot pom declares, and what it deliberately does not (2026-09-06) -----------------------
+
+    /**
+     * A bot pom names the SDK and the two {@code optional} things nothing else supplies — and no toolkit,
+     * and no JavaFX.
+     *
+     * <p>Both absences are load-bearing and neither is tidiness. {@code botmaker-sdk} declares
+     * {@code botmaker-plugin-toolkit} at plain {@code compile} scope, so it is <b>transitive</b> and arrives
+     * with the SDK; a direct entry here sits at depth 1 and Maven's <b>nearest-wins</b> mediation makes it
+     * beat the SDK's own pin at depth 2 — so a bot could compile the editor against a toolkit its pinned SDK
+     * was never built against, and fail at runtime with {@code NoSuchMethodError}. JavaFX is in
+     * {@code PluginLoader.PARENT_FIRST}, so every plugin is handed the <em>host's</em> classes whatever this
+     * pom resolves; the two entries were three downloads nothing ever linked a class from.
+     *
+     * <p>What stays is the rule: an entry belongs here only when the SDK marks it {@code optional}
+     * <b>and</b> nothing else supplies it. Javalin and ZXing are the whole of that set.
+     */
+    @Test
+    void aBotPomNamesNoToolkitAndNoJavaFx() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("TestBot", projectsRoot);
+        Path projectDir = cfg.projectPath();
+        MavenService.writePom(projectDir, cfg, "1.1.6");
+
+        List<String> declared = groupArtifacts(projectDir);
+        for (String named : List.of(MavenService.SDK_GROUP_ID + ":" + MavenService.SDK_ARTIFACT_ID,
+                "io.javalin:javalin", "com.google.zxing:core")) {
+            assertTrue(declared.contains(named), named + " is missing from a bot pom");
+        }
+        for (String absent : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+                "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics")) {
+            assertFalse(declared.contains(absent), absent + " must not be written into a bot pom");
+        }
+    }
+
+    /**
+     * A pom written <em>before</em> 2026-09-06 still classifies its toolkit and JavaFX as built in.
+     *
+     * <p>This is the half that a deletion alone would get wrong, and it would be a data-loss bug rather than
+     * an untidy one: {@code isDefaultDependency} classifies the pom of <em>any</em> project, not only of one
+     * created today. A coordinate dropped from every list reads as a <b>user library</b> — offered for
+     * deletion in Manage Libraries, and then genuinely discarded by {@code writeUserLibraries}, which keeps
+     * what it recognises and throws the rest away. A dependency stops being written long before the last pom
+     * that has it is opened, which is what {@code RETIRED_GROUP_ARTIFACTS} is for.
+     */
+    @Test
+    void aPomWrittenBeforeTheToolkitLeftStillReadsItAsBuiltIn() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("TestBot", projectsRoot);
+        Path projectDir = cfg.projectPath();
+        MavenService.writePom(projectDir, cfg, "1.1.6");
+
+        // The shape every project created before 2026-09-06 has on disk.
+        Model model = readModel(projectDir);
+        for (String[] retired : new String[][] {
+                {"com.github.LiQiyeDev", "botmaker-plugin-toolkit", "0.0.5"},
+                {"org.openjfx", "javafx-controls", "21"},
+                {"org.openjfx", "javafx-graphics", "21"}}) {
+            Dependency dependency = new Dependency();
+            dependency.setGroupId(retired[0]);
+            dependency.setArtifactId(retired[1]);
+            dependency.setVersion(retired[2]);
+            dependency.setScope("provided");
+            model.getDependencies().add(dependency);
+        }
+        writeModel(projectDir, model);
+
+        assertEquals(List.of(), MavenService.readUserLibraries(projectDir),
+                "an older bot pom's toolkit and JavaFX must not read as user libraries");
+
+        // And the write side: editing libraries keeps them rather than discarding what it does not write.
+        MavenService.writeUserLibraries(projectDir,
+                List.of(new UserLibrary("com.example", "widget", "2.3.4")));
+        List<String> after = groupArtifacts(projectDir);
+        for (String kept : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+                "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics")) {
+            assertTrue(after.contains(kept), kept + " was dropped from an older bot's pom");
+        }
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------
+
+    private static void writeModel(Path projectDir, Model model) throws Exception {
+        try (java.io.OutputStream out = Files.newOutputStream(projectDir.resolve("pom.xml"))) {
+            new org.apache.maven.model.io.xpp3.MavenXpp3Writer().write(out, model);
+        }
+    }
 
     private static List<String> groupArtifacts(Path projectDir) throws Exception {
         return readModel(projectDir).getDependencies().stream()

@@ -12,6 +12,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **A new project's `pom.xml` no longer declares the plugin toolkit or JavaFX.** Three dependencies left the
+  generated list; two of them were downloads nothing ever used, and the third could break the editor. The
+  SDK's own pom declares `botmaker-plugin-toolkit` normally, so it arrives with the SDK — and Maven prefers
+  the *nearest* declaration, which meant a version written into your pom by whichever Studio created the
+  project won over the one the SDK you pinned was actually built with. An SDK newer than that pin then hit
+  `NoSuchMethodError` in the editor. JavaFX was never resolved from a project at all: Studio hands every
+  plugin its own. What a project still declares for the SDK plugin is Javalin and ZXing, the two the SDK
+  genuinely marks optional and nothing else supplies.
+
+  **Existing projects are untouched and keep working.** The three entries stay recognised as built in, so
+  Manage Libraries will not offer to delete them and editing your libraries will not drop them. Removing
+  them from an older project is safe but not necessary.
+
 ### Fixed
 
 - **A new project pins SDK 1.1.6, which is what 1.0.37 said it did.** That release's notes announced the

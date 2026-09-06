@@ -232,15 +232,18 @@ public final class MavenService {
     /** Dependencies every generated project gets (mirrors the old build.gradle). */
     private record Dep(String groupId, String artifactId, String version, String scope) {}
 
-    /**
-     * The version of {@code botmaker-plugin-toolkit} a generated pom declares.
-     *
-     * <p>Separate from {@link #SDK_FALLBACK_VERSION} and bumped by the same {@code release.sh} mechanism —
-     * a {@code sed} on this string literal — because the toolkit versions on its own schedule. It is
-     * deliberately <b>not</b> derived from anything: a computed value would make that sed silently stop
-     * working, which is the same reason the SDK fallback is a literal.
-     */
-    public static final String TOOLKIT_FALLBACK_VERSION = "0.0.5";
+    // There is no TOOLKIT_FALLBACK_VERSION any more, and its absence is the point (2026-09-06).
+    //
+    // A generated pom used to declare botmaker-plugin-toolkit at a version this constant held, `provided`,
+    // for the SDK plugin's sake. It was a landmine rather than a service: botmaker-sdk has declared the
+    // toolkit at plain `compile` scope since 2026-09-04, so it is transitive and arrives with the SDK — and
+    // Maven's nearest-wins mediation makes a bot's own direct entry BEAT the version the pinned SDK
+    // resolved. An SDK built against a newer toolkit therefore failed at runtime with NoSuchMethodError,
+    // in a project whose pom looked deliberate. Two pins for one artifact is what this constant was.
+    //
+    // Do not reinstate it. Whichever toolkit the pinned SDK was built against is the only right answer, and
+    // the SDK's own pom is the only thing that knows it. release.sh's PLUGIN_TOOLKIT -> STUDIO forcing edge
+    // and check_fallback_versions' second constant went with it.
 
     /**
      * The whole of a <b>blank</b> project's dependencies: a test framework, and nothing else.
@@ -275,15 +278,23 @@ public final class MavenService {
      * derivable from anywhere else, and because {@link #DEFAULT_GROUP_ARTIFACTS} must go on recognising every
      * one of these in the pom of a project that already exists.
      *
-     * <h2>Why five of them are {@code provided}, and what breaks without them</h2>
+     * <h2>Why two of them are {@code provided}, and what breaks without them</h2>
      *
      * <p>Since 2026-09-02 <b>Studio bundles no plugin</b>: every plugin, the SDK included, is loaded by
      * {@code PluginHost.bind} from the classpath this project's own pom resolves. That moved a cost nobody
-     * had priced. The SDK is a library <em>and</em> a plugin in one jar, and its plugin half needs a widget
-     * kit, JavaFX, a web server and a QR encoder — all of which the SDK's pom marks {@code optional} so a
-     * headless bot never links them. <b>{@code optional} is not transitive</b>, so with Studio no longer
-     * supplying them from its own classpath they reached nothing at all: {@code SdkPlugin} could not
-     * resolve its own superclass, and the pilot's toolbar button failed with a missing class.
+     * had priced. The SDK is a library <em>and</em> a plugin in one jar, and its plugin half needs a web
+     * server and a QR encoder that the SDK's pom marks {@code optional} so a headless bot never links them.
+     * <b>{@code optional} is not transitive</b>, so with Studio no longer supplying them from its own
+     * classpath they reached nothing at all and the pilot's toolbar button failed with a missing class.
+     *
+     * <p><b>The list was five entries until 2026-09-06, and the three that left were the dangerous half.</b>
+     * {@code botmaker-plugin-toolkit} is {@code compile} in the SDK's own pom, so it is transitive and
+     * arrives with the SDK — while a direct entry here <em>outranks</em> it by nearest-wins, pinning a bot
+     * to a toolkit its SDK was not built against. {@code javafx-controls}/{@code javafx-graphics} are
+     * {@code optional} in that pom, but {@code PluginLoader} is <b>parent-first for {@code javafx.}</b>, so
+     * the host's own JavaFX is the one every plugin links whatever a bot's pom says; the two entries were
+     * three downloads nothing resolved a class from. The rule the survivors state: <i>an entry belongs here
+     * only when the SDK marks it {@code optional} <b>and</b> nothing else supplies it</i>.
      *
      * <p>{@code provided} is the scope that says exactly what is true here — <i>present while the code is
      * being edited, absent when the bot runs</i>. {@link #resolveClasspath} filters out only {@code test},
@@ -307,12 +318,6 @@ public final class MavenService {
             new Dep("com.fasterxml.jackson.core", "jackson-databind", "2.15.2", null),
 
             // ---- the SDK plugin's own needs; see the javadoc above ------------------------------------
-            // SdkPlugin extends the toolkit's AbstractStudioPlugin, and its slot editors are Editors/Pills.
-            new Dep("com.github.LiQiyeDev", "botmaker-plugin-toolkit", TOOLKIT_FALLBACK_VERSION, "provided"),
-            // The slot editors and every dialog the plugin's toolbar items open are JavaFX. The two
-            // artifacts move together — javafx-controls is compiled against one exact javafx-graphics.
-            new Dep("org.openjfx", "javafx-controls", "21", "provided"),
-            new Dep("org.openjfx", "javafx-graphics", "21", "provided"),
             // The Remote Pilot's HTTP + WebSocket server.
             new Dep("io.javalin", "javalin", "6.7.0", "provided"),
             // The pairing QR code. `core` only: the BitMatrix is written straight into a JavaFX
@@ -337,9 +342,33 @@ public final class MavenService {
      * {@link #writeUserLibraries}, which keeps what {@link #isDefaultDependency} recognises and discards the
      * rest.
      */
+    /**
+     * Coordinates {@link #BOT_DEPENDENCIES} <b>used to</b> write and no longer does — recognised here, never
+     * generated.
+     *
+     * <p>The lists above describe the pom Studio writes today; this set is why removing an entry from one of
+     * them is not enough. {@link #isDefaultDependency} classifies the pom of <em>any</em> project, and every
+     * bot created before 2026-09-06 declares these three. Dropped from the union, they would read as user
+     * libraries — offered for deletion in Manage Libraries and then genuinely discarded by
+     * {@link #writeUserLibraries}, which keeps only what is recognised. A dependency stops being written long
+     * before the last pom that has it is opened, so the two questions are separate and this set is the
+     * second one's answer.
+     */
+    private static final Set<String> RETIRED_GROUP_ARTIFACTS = Set.of(
+            // Retired 2026-09-06. The SDK brings the toolkit transitively at compile scope, and a direct
+            // entry outranked it by nearest-wins; JavaFX is parent-first in PluginLoader, so the host's own
+            // is what every plugin links. Left in an existing pom they are harmless — an unused provided
+            // dependency — and taking them out is Manage Libraries' business, not a rewrite's.
+            "com.github.LiQiyeDev:botmaker-plugin-toolkit",
+            "org.openjfx:javafx-controls",
+            "org.openjfx:javafx-graphics");
+
     private static final Set<String> DEFAULT_GROUP_ARTIFACTS =
-            java.util.stream.Stream.concat(BLANK_DEPENDENCIES.stream(), BOT_DEPENDENCIES.stream())
-                    .map(d -> d.groupId() + ":" + d.artifactId())
+            java.util.stream.Stream.concat(
+                            java.util.stream.Stream.concat(
+                                            BLANK_DEPENDENCIES.stream(), BOT_DEPENDENCIES.stream())
+                                    .map(d -> d.groupId() + ":" + d.artifactId()),
+                            RETIRED_GROUP_ARTIFACTS.stream())
                     .collect(Collectors.toUnmodifiableSet());
 
     private static boolean isDefaultDependency(Dependency d) {
@@ -677,13 +706,15 @@ public final class MavenService {
      * <p><b>Why the SDK gets companions and nobody else does.</b> The rule is the platform's own:
      * <i>whoever puts a plugin on a classpath supplies what that plugin needs</i>, and here that is this pom,
      * because this pom is what names the plugin. The SDK is the only plugin that needs anything, because it
-     * is the only one that is a library <b>and</b> a plugin in one jar: it marks its widget toolkit, JavaFX,
-     * the pilot's server and the QR encoder {@code optional} so a headless bot links none of them, and
-     * <b>{@code optional} is not transitive</b> — so installing the SDK alone gave a project the SDK jar and
-     * no {@code AbstractStudioPlugin}, {@code ServiceLoader} failed constructing {@code SdkPlugin},
-     * {@code PluginLoader} caught it (a classpath with no plugin is an ordinary state) and the user got an
-     * empty palette and one line on stderr. A plugin generated by {@code botmaker-plugin-archetype} declares
-     * its toolkit at {@code compile} scope, so it is transitive and this arm never fires for it.
+     * is the only one that is a library <b>and</b> a plugin in one jar: it marks the pilot's server and the
+     * QR encoder {@code optional} so a headless bot links neither, and <b>{@code optional} is not
+     * transitive</b> — so installing the SDK alone gave a project the SDK jar and a pilot toolbar button
+     * that failed with a missing class. A plugin generated by {@code botmaker-plugin-archetype} declares
+     * everything it needs at {@code compile} scope, so it is transitive and this arm never fires for it.
+     *
+     * <p>It was five companions until 2026-09-06, and the widget toolkit was the loudest of them: the SDK
+     * declares it {@code compile}, so it already arrives, and a direct entry here outranked it by
+     * nearest-wins. See {@link #BOT_DEPENDENCIES}.
      *
      * <p>An entry the pom already declares is left alone, version and all — the companions are a floor, not
      * a pin this dialog is entitled to move.
@@ -717,8 +748,8 @@ public final class MavenService {
      * Removes {@code groupId:artifactId} from {@code projectDir/pom.xml} — and, for the SDK, the companions
      * {@link #installPlugin} declared with it.
      *
-     * <p>The mirror image, and it has to be: leaving a {@code provided} JavaFX and a web server behind in the
-     * pom of a project that no longer names a plugin is a set of dependencies nothing in the project explains.
+     * <p>The mirror image, and it has to be: leaving a {@code provided} web server behind in the pom of a
+     * project that no longer names a plugin is a dependency nothing in the project explains.
      */
     public static void removePlugin(Path projectDir, String groupId, String artifactId) throws IOException {
         Model model = requireModel(projectDir);
@@ -737,8 +768,8 @@ public final class MavenService {
      * carry for that plugin to load in the editor, and nothing a bot links when it runs.
      *
      * <p>Derived rather than listed a second time. That list is already the written statement of this, with a
-     * reason beside every entry, and a copy here would be a fourth place the same five coordinates are
-     * spelled — the drift this repo has already paid for once.
+     * reason beside every entry, and a copy here would be a fourth place the same coordinates are spelled —
+     * the drift this repo has already paid for once.
      */
     private static List<Dep> pluginCompanions() {
         return BOT_DEPENDENCIES.stream().filter(d -> "provided".equals(d.scope())).toList();
