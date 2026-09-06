@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A new project pins SDK 1.1.6, which is what 1.0.37 said it did.** That release's notes announced the
+  pin and the constant behind it never moved — it still read `1.1.5`, the one SDK whose editor-side half
+  cannot start on a machine without JavaFX. Projects created by 1.0.37 are unaffected in Studio itself,
+  which supplies JavaFX either way; what they could not do is pass the plugin registry's own check.
+  Existing projects are untouched — this is only what a *freshly created* pom declares, and
+  **Project ▸ Manage Libraries** changes it whenever you like.
+
 ### Changed
 
 - **The GitHub layer is `botmaker-shared`'s.** `GitHubClient`, `GitHubAuth`, `GitHubConfig` and `SemVer` are
