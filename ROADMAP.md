@@ -6,6 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-06 — the Studio ↔ SDK decoupling ledger exists.** Every place Studio's source still spells one
+  plugin's coordinate, package or name, with a verdict each — *generalize*, *rename only* or *keep, and here
+  is why*. It is below, under its own heading, rather than in this list, because it is a standing document.
+  Two findings worth reading before touching any of it: `SDK_GROUP_ID`/`SDK_ARTIFACT_ID` are read for two
+  different questions and only one of them is a privilege, and the whole upgrade/migration stack is six
+  renames plus one coordinate argument, because its grammar (`@ReplacedBy`, `@Replaces`) has been the
+  contract's since 2026-08-27. Written beside `../docs/refactor/27-toolkit-or-javafx.md`, which answers the
+  other question the audit raised.
 - **2026-09-06 — a plugin that did not load is named in Manage Plugins.** `PluginHost.failures()` carries
   what the last `bind` could not load (`PluginLoader.openReporting`), rebuilt per bind and cleared by
   `unbind`; `ManagePluginsDialog.failureText` renders it as one red row that takes no height when empty.
@@ -5480,6 +5488,87 @@ whenever work lands here (see CLAUDE.md → Roadmap).
   each real scene is shown (`BotMakerStudio`), forcing a layout pass so content fills the window.
 - **2026-07-05 — Renamed vision block headers** "while/if/repeat until image …" → drop "image"
   (`LambdaCallBlock.prefixFor`). Palette labels unchanged (the "Image" there aids discovery).
+
+## Studio ↔ SDK decoupling ledger (2026-09-06)
+
+Studio stopped depending on `botmaker-sdk` on 2026-09-02: the SDK reaches it only as **plugin #1**, loaded
+off the open project's own resolved classpath by `PluginHost.bind`. The pom no longer names it. What is left
+is every place Studio's **source** still spells that one plugin's coordinate, package or name.
+
+This is the scoped list, with a verdict each, so the remaining work is finite rather than open-ended. **No
+code moves in this entry.** Three verdicts are used:
+
+- **generalize** — the behaviour is right and the coordinate is wrong; a second plugin needs the same thing.
+- **rename only** — the mechanism is already plugin-agnostic; the class or parameter is misnamed.
+- **keep** — one plugin is genuinely the subject, and generalizing would invent a surface nobody asked for.
+
+### The coordinate itself
+
+| Item | Verdict | Note |
+|---|---|---|
+| `MavenService.SDK_GROUP_ID`, `SDK_ARTIFACT_ID` | **keep** | Seven readers, and they are not one concern. See the split below — this is the ledger's main finding. |
+| `MavenService.SDK_FALLBACK_VERSION` | **keep** | What a *freshly created* pom pins. Studio composes the pom because only the thing that knows the whole plugin set can, and a project with no plugin at all is not a useful default. `release.sh` `sed`s the constant, and `FallbackVersionsGate` now refuses a `--studio` release naming a tag that does not exist. |
+| `MavenService.BOT_DEPENDENCIES` SDK entry | **keep** | Same reason. The `provided` companions beside it were generalized on 2026-09-06 (they come from the registry entry now); the SDK line is the default plugin, not a privilege. |
+| `MavenService.localSdkVersions`, `isDefaultDependency`'s SDK arm | **keep** | The `~/.m2` snapshot scan is a dev-build affordance for the plugin Studio is developed alongside, gated on `AppVersion.isDevBuild()`. A general "scan for local builds of any installed plugin" is a feature nobody has asked for. |
+| `MavenService.resolveSdkJar` / `resolveSdkSourcesJar` / `readSdkVersion` / `setSdkVersion` | **generalize** | These are *resolve a coordinate out of this project's pom* with the coordinate baked in. The general form is one method taking `groupId`/`artifactId`; the SDK-named ones become two-line delegations. Cheap, and it is what every consumer below would need. |
+| `ManageLibrariesDialog`'s `isSdk` rows (lines 78, 213) | **generalize** | The dialog pins the SDK's row and refuses to let it be removed. The general rule is *a plugin the project has installed*, which `PluginRegistry` can now answer — the same generalization `installPlugin` got on 2026-09-06. |
+| `ProjectRepair`'s SDK pin reset and its `contains("com.botmaker.sdk")` witness | **keep, and say so louder** | Rebuilding a lost pom cannot read a registry entry, so it writes the default plugin and nothing else. The string witness is *does any Java in this project name the SDK* — a heuristic for "is this a bot", used when there is no pom to read. Both are already commented; neither has a general form, because the input is a project with no manifest. |
+| `BotProject`'s `botmaker-sdk-*.jar` classpath log | **rename only** | Diagnostics. It logs which build the resolved classpath points at. |
+
+**The main finding: `SDK_GROUP_ID`/`SDK_ARTIFACT_ID` are read for two different questions, and only one of
+them is a privilege.** *"What does a new project pin by default?"* is Studio's job and always will be — it
+composes the pom because only the host knows the whole plugin set. *"Which coordinate do I resolve a jar
+from?"* is not: it is a parameter that happens to be constant because there is one plugin. Splitting the
+constants by reader is the whole of the generalization work above, and it is small.
+
+### The upgrade and migration stack
+
+`SdkUpgradeService` (50 KB) plus `SdkApiModel`, `SdkPairing`, `SdkRedirects`, `SdkUpgradeDiff`,
+`SdkWhatsNew`, `SdkUpgradeDialog`, `SdkMigrationRunner`, `SdkReferences`. This is a per-plugin upgrade and
+migration story keyed to one coordinate — and it is **much closer to plugin-agnostic than its names
+suggest**, which is the second finding.
+
+| Item | Verdict | Note |
+|---|---|---|
+| `SdkApiModel`, `SdkPairing`, `SdkRedirects` | **rename only** | The grammar they read — `@ReplacedBy`, `@Replaces`, `fqn#member` — is **already the contract's**, `com.botmaker.plugin.api.meta`, moved there on 2026-08-27 for exactly this reason: it says how *any* library keeps faith with the code that calls it. These classes read bytecode from two jars and never name a coordinate. |
+| `SdkReferences` | **rename only** | Already coordinate-free: `references(unit, Set<String> types, …)`. The caller supplies the type names. |
+| `SdkMigrationRunner` | **rename only** | Turns checked redirects into edits through `CallMigrator`. Nothing in it is SDK-specific. |
+| `SdkUpgradeService` | **generalize** | The one place the coordinate enters: `jitpack.fetchVersions(SDK_GROUP_ID, SDK_ARTIFACT_ID)` and four `resolveSdkJar` calls. Everything else is generic. Take the coordinate as a constructor argument and this stack serves any plugin. |
+| `SdkWhatsNew` | **generalize, with a contract question attached** | It reads `META-INF/botmaker/whats-new.md` out of the target jar. That path is a convention the SDK's own pom implements with an `antrun` copy — nothing declares it, so a second plugin cannot know to do it. Generalizing means writing the convention down (a registry-entry field, or a documented jar entry). |
+| `SdkUpgradeDialog` | **generalize last** | UI. Follows the service; there is nothing to decide here until the service takes a coordinate. |
+
+**Verdict on the stack as a whole: it is worth generalizing and it is not urgent.** The blocking fact is not
+the code — six of the eight classes need only a rename — it is that **no second plugin has a release train**,
+so there is nothing to test a generalization against. Do it when one does, and do it by threading a
+coordinate through `SdkUpgradeService`, not by lifting anything.
+
+### The documentation stack
+
+`SdkDocsService`, `SdkDocsParser`, `SdkDocs`, `SdkSurfaceService`.
+
+| Item | Verdict | Note |
+|---|---|---|
+| `SdkDocsService` / `SdkDocsParser` / `SdkDocs` | **generalize** | Parses the resolved `:sources` jar with Eclipse JDT for Javadoc summaries and real parameter names. Coordinate-specific only through `resolveSdkSourcesJar`. `SdkDocs` is pure data with a `class → method → overloads` shape that has nothing SDK-shaped in it. The one real design question is whether *merged* docs across plugins are right, or one `SdkDocs` per plugin — merged is probably right, since the lookup key is a fully-qualified name. |
+| `SdkSurfaceService` | **generalize** | Already half-general: **curation** comes from `PluginHost.catalogFor(pin)`, which is every plugin's catalog, and **presence** comes from `TypeSummaryManager` scanning the project's own resolved classpath, which is every jar on it. What is SDK-shaped is `sdkVersion()` — one pin, read from one coordinate. The general form is a pin per installed plugin. |
+
+### Already generalized — recorded so it is not re-derived
+
+- `PluginHost.cataloguedPackages()` — was the literal `Set.of("com.botmaker.sdk.api")` on
+  `TypeSummaryManager` until 2026-09-02. Derived from the loaded catalogs now.
+- `PluginHost.ownerOf` / `qualifiedName` — name recognition reads the bundled catalog, never a package prefix.
+- `ImportManager.repairSdkImports` and `CodeEditor`'s call to it — **deleted** 2026-09-02. An undeclared
+  package move is a readable compile error, which is the honest outcome for a host that cannot know what the
+  package was called.
+- `MavenService.installPlugin`'s `isSdk` branch and `pluginCompanions` — **deleted** 2026-09-06; the list
+  comes from the registry entry.
+- `palette/SdkType` — **deleted** in plugin-platform phase 7. The catalog is reflected.
+
+### What is a comment and not code
+
+`VersionInfo`, `TypeSummaryManager`, `ProjectCreator`, `BotSettings`, `ImportManager`, `CodeEditor`,
+`ReviewMarks`, `ProgramShapeOverlay`, `ManagePluginsDialog`, `BotType` all mention `com.botmaker.sdk` or
+`botmaker-sdk` in prose only. They are the record of what moved and why, and are **not** decoupling debt.
+Nothing to do.
 
 ## Current state (2026-06-27)
 
