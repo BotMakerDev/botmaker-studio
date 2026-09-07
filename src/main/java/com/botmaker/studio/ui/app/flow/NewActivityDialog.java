@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.flow;
 
+import com.botmaker.studio.project.activity.ActivityDefinition;
 import com.botmaker.studio.project.activity.FlowEdge;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -203,7 +204,7 @@ public final class NewActivityDialog {
         // An id of its own from the moment it is created, so the very first rename is already a rename.
         created = new ActivityDraft(candidate, text, true, List.of(), List.copyOf(outcomes),
                 goHome.isSelected(), popupCheck.isSelected(), x, y,
-                com.botmaker.plugin.api.authoring.ActivityModel.newId());
+                ActivityDefinition.newId());
         stage.close();
     }
 

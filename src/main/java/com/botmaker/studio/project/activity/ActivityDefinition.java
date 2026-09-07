@@ -88,10 +88,27 @@ public record ActivityDefinition(String name, boolean enabled, String descriptio
         this(name, enabled, description, outcomes, goHome, popupCheck, null);
     }
 
+    /**
+     * A fresh, unguessable id — what the editor stamps onto an activity that has never had one.
+     *
+     * <p>Random rather than derived: an id computed from the name would be the name again, and an id counted
+     * up from the activity's position would move when the list is reordered. 12 hex characters, which is
+     * short enough to read in a diff and far past collision within one project.
+     *
+     * <p><b>The SDK's {@code ActivityModel.newId()} says the same line, and that is deliberate.</b> Studio
+     * called it directly while the authoring models sat in the plugin contract; they went back to
+     * {@code com.botmaker.sdk.authoring} on 2026-09-07 and Studio has no SDK dependency and must not gain
+     * one for a call to {@code UUID.randomUUID()}. Both sides only have to agree on the <em>shape</em> — 12
+     * hex characters — because an id is written once, by whoever creates the activity, and read as opaque
+     * text everywhere after.
+     */
+    public static String newId() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
     /** A fresh activity with the given name/description, disabled, and an id of its own from the start. */
     public static ActivityDefinition create(String name, String description) {
-        return new ActivityDefinition(name, false, description, List.of(), Boolean.TRUE, Boolean.TRUE,
-                com.botmaker.plugin.api.authoring.ActivityModel.newId());
+        return new ActivityDefinition(name, false, description, List.of(), Boolean.TRUE, Boolean.TRUE, newId());
     }
 
     /**
