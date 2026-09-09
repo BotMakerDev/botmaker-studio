@@ -98,13 +98,13 @@ public final class HostSlotContext implements SlotContext {
 
     @Override
     public String enclosingSource() {
-        MethodInvocation call = enclosingCall();
+        MethodInvocation call = enclosingInvocation();
         return call == null ? null : call.toString();
     }
 
     @Override
     public void replaceEnclosingCall(String javaExpression, String... importsNeeded) {
-        MethodInvocation call = enclosingCall();
+        MethodInvocation call = enclosingInvocation();
         if (call == null || javaExpression == null || javaExpression.isBlank()) return;
         rewrite(call, javaExpression, importsNeeded);
     }
@@ -117,8 +117,13 @@ public final class HostSlotContext implements SlotContext {
      * <p>Only a {@link MethodInvocation}, and only when the slot is genuinely one of its arguments: a slot
      * that is the <em>receiver</em> of a call ({@code x.foo()}) has that call as its parent too, and
      * replacing it would delete the call on the strength of editing the thing it was called on.
+     *
+     * <p><b>Named {@code enclosingInvocation} rather than {@code enclosingCall}</b>: the contract grew a
+     * {@code SlotContext.enclosingCall()} of its own — the {@code Optional} sibling of
+     * {@link #enclosingSource()} — and a private method cannot narrow a public one. The default sibling
+     * wraps {@code enclosingSource()}, so there is nothing here to override.
      */
-    private MethodInvocation enclosingCall() {
+    private MethodInvocation enclosingInvocation() {
         return slot.node() != null && slot.node().getParent() instanceof MethodInvocation call
                && call.arguments().contains(slot.node()) ? call : null;
     }
