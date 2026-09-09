@@ -1,8 +1,10 @@
 package com.botmaker.studio.project.activity;
 
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.value.Visibility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -99,7 +101,7 @@ class ParameterModelTest {
         // The default flipped with the tagged-variable model: a variable exists because someone wanted to
         // configure something, so the useful default is the one the person running the bot can see. Hiding
         // one is now the decision that has to be taken.
-        assertEquals(ParamVisibility.PUBLIC, variable("retryDelay", WHOLE_NUMBER).visibility());
+        assertEquals(Visibility.PUBLIC, variable("retryDelay", WHOLE_NUMBER).visibility());
         assertTrue(variable("retryDelay", WHOLE_NUMBER).isPublic());
     }
 
@@ -107,10 +109,10 @@ class ParameterModelTest {
     void anUnknownVisibilityLoadsAsEditorOnlyRatherThanFailing() {
         // A value from a newer Studio must not take the whole activities.json down with it, and the safe
         // reading of "I don't recognise this" is "don't show it to the user".
-        assertEquals(ParamVisibility.EDITOR_ONLY, ParamVisibility.fromId("everyone-plus-cats"));
-        assertEquals(ParamVisibility.EDITOR_ONLY, ParamVisibility.fromId(null));
-        assertEquals(ParamVisibility.PUBLIC, ParamVisibility.fromId("public"));
-        assertEquals(ParamVisibility.PUBLIC, ParamVisibility.fromId("PUBLIC"), "the enum name works too");
+        assertEquals(Visibility.EDITOR_ONLY, Visibility.fromId("everyone-plus-cats"));
+        assertEquals(Visibility.EDITOR_ONLY, Visibility.fromId(null));
+        assertEquals(Visibility.PUBLIC, Visibility.fromId("public"));
+        assertEquals(Visibility.PUBLIC, Visibility.fromId("PUBLIC"), "the enum name works too");
     }
 
     @Test
@@ -133,7 +135,7 @@ class ParameterModelTest {
 
         ActivityVariable read = ActivitiesConfig.read(dir).variables().getFirst();
 
-        assertEquals(ParamVisibility.PUBLIC, read.visibility());
+        assertEquals(Visibility.PUBLIC, read.visibility());
         assertEquals(List.of("fast", "safe"), read.options());
         assertEquals("safe", read.singleValue());
         assertEquals("Mining", read.tag());
@@ -220,7 +222,7 @@ class ParameterModelTest {
         ActivityVariable asNumber = mode.withType(oneOf(WHOLE_NUMBER));
         assertEquals("0", asNumber.singleValue(), "a choice is not a number; don't pretend it carries over");
         assertEquals(List.of(), asNumber.options());
-        assertEquals(ParamVisibility.PUBLIC, asNumber.visibility(), "who it is for doesn't change with the type");
+        assertEquals(Visibility.PUBLIC, asNumber.visibility(), "who it is for doesn't change with the type");
         assertEquals("how careful", asNumber.description());
 
         assertEquals(List.of("fast", "safe"),
@@ -277,11 +279,11 @@ class ParameterModelTest {
                 // A declared set has to be values of the type, or normalising them is what changes on the
                 // second pass. Two of the type's own defaults is the one set every type can supply.
                 List<String> options = shape.hasOptions()
-                        ? ValueWire.normalizeOptions(ValueWire.defaultWire(choice), choice, Bounds.NONE)
+                        ? ValueWire.normalizeOptions(ValueWire.defaultWire(choice), choice, Range.NONE)
                         : List.of();
                 List<String> once = ValueWire.normalize(ValueWire.defaultWire(choice), choice, options,
-                        Bounds.NONE);
-                assertEquals(once, ValueWire.normalize(once, choice, options, Bounds.NONE), choice.toString());
+                        Range.NONE);
+                assertEquals(once, ValueWire.normalize(once, choice, options, Range.NONE), choice.toString());
             }
         }
     }
@@ -409,7 +411,7 @@ class ParameterModelTest {
     void theRunnerIsOfferedThePublicVariablesGroupedByTag() {
         ActivityVariable speed = variable("speed", WHOLE_NUMBER);
         ActivityVariable retryDelay = variable("retryDelay", WHOLE_NUMBER)
-                .withVisibility(ParamVisibility.EDITOR_ONLY);
+                .withVisibility(Visibility.EDITOR_ONLY);
         ActivityVariable ore = variable("ore", TEXT).withTag("Mining");
 
         ActivitiesConfig config = ActivitiesConfig.of(
@@ -430,7 +432,7 @@ class ParameterModelTest {
     @Test
     void aDeclaredRangePullsAStoredValueBackIntoIt() {
         ActivityVariable retries = variable("retries", WHOLE_NUMBER)
-                .withBounds(new Bounds("1", "5"))
+                .withBounds(new Range("1", "5"))
                 .withValue("42");
 
         assertEquals(List.of("5"), retries.value());
@@ -445,16 +447,16 @@ class ParameterModelTest {
      */
     @Test
     void eitherEndOfARangeCanBeDeclaredWithoutTheOther() {
-        ActivityVariable atMost = variable("count", WHOLE_NUMBER).withBounds(new Bounds(null, "10"));
+        ActivityVariable atMost = variable("count", WHOLE_NUMBER).withBounds(new Range(null, "10"));
         assertEquals(List.of("10"), atMost.withValue("99").value());
         assertEquals(List.of("-500"), atMost.withValue("-500").value(), "no minimum means no floor");
 
-        ActivityVariable atLeast = variable("count", WHOLE_NUMBER).withBounds(new Bounds("1", null));
+        ActivityVariable atLeast = variable("count", WHOLE_NUMBER).withBounds(new Range("1", null));
         assertEquals(List.of("1"), atLeast.withValue("0").value());
         assertEquals(List.of("999999"), atLeast.withValue("999999").value(), "no maximum means no ceiling");
 
-        assertFalse(new Bounds(null, "10").isEmpty(), "one end declared is a declared range");
-        assertTrue(Bounds.NONE.isEmpty());
+        assertFalse(new Range(null, "10").isEmpty(), "one end declared is a declared range");
+        assertTrue(Range.NONE.isEmpty());
     }
 
     /**
@@ -505,9 +507,9 @@ class ParameterModelTest {
     /** Retyping drops the range with the value: a range for a number means nothing to the date replacing it. */
     @Test
     void retypingForgetsTheRange() {
-        ActivityVariable retries = variable("retries", WHOLE_NUMBER).withBounds(new Bounds("1", "5"));
+        ActivityVariable retries = variable("retries", WHOLE_NUMBER).withBounds(new Range("1", "5"));
 
-        assertEquals(Bounds.NONE, retries.withType(oneOf(DATE)).bounds());
+        assertEquals(Range.NONE, retries.withType(oneOf(DATE)).bounds());
     }
 
     /** An archived activity contributes no enable flag: a switch for something that cannot run. */

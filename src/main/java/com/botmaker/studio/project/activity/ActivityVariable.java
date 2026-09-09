@@ -1,8 +1,10 @@
 package com.botmaker.studio.project.activity;
 
 import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
+import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -35,13 +37,22 @@ import java.util.List;
  * shows its stored text and simply cannot be edited. The shape says whether the variable holds one value, one
  * out of a set the author wrote down, or several.
  *
+ * <p><b>{@link #visibility()} and {@link #bounds()} are the contract's too since 2026-09-10</b> —
+ * {@link Visibility} and {@link Range}, replacing Studio's own {@code ParamVisibility} and {@code Bounds},
+ * which were the same two types written twice. They were the last of the rival vocabulary this record
+ * carried, and duplicating them cost what a duplicate always costs here: a plugin handing a row to the
+ * Parameters window would have had to describe a visibility in the contract's words and Studio would have
+ * had to translate it, which is the translation that goes wrong on the first value either side adds. The
+ * stored text is unchanged — {@code "public"}/{@code "editor"}, and a {@code bounds} object of two optional
+ * strings — see {@link VisibilityWire}.
+ *
  * @param name        the generated field name on {@code Activities}; a valid Java identifier
  * @param type        what kind of value this is, and in what {@link ValueShape shape} — one value, one of
  *                    a declared set, or any number of them
  * @param value       the wire form of the current value
  * @param description an optional human-readable note explaining what it is for (may be empty)
  * @param tag         the group it is filed under, or blank for {@link #GENERAL}
- * @param visibility  whether the bot's user is offered this at all; absent ⇒ {@link ParamVisibility#PUBLIC}
+ * @param visibility  whether the bot's user is offered this at all; absent ⇒ {@link Visibility#PUBLIC}
  * @param options     the declared set of values, for a shape that {@link ValueChoice#hasOptions has one}
  * @param bounds      the declared range, for a bounded number
  * @param group       the {@link ParameterGroup} this is filed under — which plugin owns it, which section of
@@ -54,7 +65,9 @@ import java.util.List;
 public record ActivityVariable(String name,
                                @JsonSerialize(converter = ChoiceWire.ToWire.class) ValueChoice type,
                                List<String> value, String description,
-                               String tag, ParamVisibility visibility, List<String> options, Bounds bounds,
+                               String tag,
+                               @JsonSerialize(converter = VisibilityWire.ToWire.class) Visibility visibility,
+                               List<String> options, Range bounds,
                                String group) {
 
     /** The heading a variable with no tag is listed under. Not a real tag: nothing declares it. */
@@ -67,8 +80,8 @@ public record ActivityVariable(String name,
         // A variable exists to be configured, so it is offered to whoever runs the bot unless the editor says
         // otherwise. The old default was the reverse, which meant every new knob was invisible in the Runner
         // until somebody remembered a dropdown existed.
-        if (visibility == null) visibility = ParamVisibility.PUBLIC;
-        if (bounds == null) bounds = Bounds.NONE;
+        if (visibility == null) visibility = Visibility.PUBLIC;
+        if (bounds == null) bounds = Range.NONE;
         // Absent means the default plugin's, which is every variable in every project written before groups
         // existed — a discriminator that reads as the SDK's is what makes the partition need no migration.
         group = group == null ? ParameterGroup.DEFAULT_ID : group.trim();
@@ -99,12 +112,17 @@ public record ActivityVariable(String name,
             @com.fasterxml.jackson.annotation.JsonProperty("value") List<String> value,
             @com.fasterxml.jackson.annotation.JsonProperty("description") String description,
             @com.fasterxml.jackson.annotation.JsonProperty("tag") String tag,
-            @com.fasterxml.jackson.annotation.JsonProperty("visibility") ParamVisibility visibility,
+            @com.fasterxml.jackson.annotation.JsonProperty("visibility") String visibility,
             @com.fasterxml.jackson.annotation.JsonProperty("options") List<String> options,
-            @com.fasterxml.jackson.annotation.JsonProperty("bounds") Bounds bounds,
+            @com.fasterxml.jackson.annotation.JsonProperty("bounds") Range bounds,
             @com.fasterxml.jackson.annotation.JsonProperty("group") String group) {
+        // The visibility arrives as raw text and is resolved by the contract's own total factory: an id a
+        // newer Studio invented reads as EDITOR_ONLY rather than failing the whole file, and "I don't know
+        // what this says" must not publish something to the bot's user. An absent one is null here and the
+        // compact constructor reads it as PUBLIC, which is the other half of that pair and is why the two
+        // defaults differ.
         return new ActivityVariable(name, listShapeOf(ChoiceWire.toChoice(type), options), value, description,
-                tag, visibility, options, bounds, group);
+                tag, visibility == null ? null : Visibility.fromId(visibility), options, bounds, group);
     }
 
     /** {@link #fromJson}'s rule, alone so it can be read — and tested — without a file. */
@@ -123,7 +141,7 @@ public record ActivityVariable(String name,
     /** A fresh variable of {@code type} with a description. */
     public static ActivityVariable create(String name, ValueChoice type, String description) {
         return new ActivityVariable(name, type, ValueWire.defaultWire(type), description, "",
-                ParamVisibility.PUBLIC, List.of(), Bounds.NONE, ParameterGroup.DEFAULT_ID);
+                Visibility.PUBLIC, List.of(), Range.NONE, ParameterGroup.DEFAULT_ID);
     }
 
     /** A fresh variable filed under one plugin's {@link ParameterGroup} rather than the default plugin's. */
@@ -134,7 +152,7 @@ public record ActivityVariable(String name,
     /** True when the bot's user is offered this variable in the Runner window. */
     @JsonIgnore
     public boolean isPublic() {
-        return visibility == ParamVisibility.PUBLIC;
+        return visibility == Visibility.PUBLIC;
     }
 
     /** The tag this is filed under, or {@link #GENERAL} when it carries none. */
@@ -176,11 +194,11 @@ public record ActivityVariable(String name,
         return new ActivityVariable(name, type, value, description, newTag, visibility, options, bounds, group);
     }
 
-    public ActivityVariable withVisibility(ParamVisibility newVisibility) {
+    public ActivityVariable withVisibility(Visibility newVisibility) {
         return new ActivityVariable(name, type, value, description, tag, newVisibility, options, bounds, group);
     }
 
-    public ActivityVariable withBounds(Bounds newBounds) {
+    public ActivityVariable withBounds(Range newBounds) {
         return new ActivityVariable(name, type, value, description, tag, visibility, options, newBounds, group);
     }
 
@@ -216,7 +234,7 @@ public record ActivityVariable(String name,
         List<String> keptOptions =
                 newType.hasOptions() && newType.type().equals(type.type()) ? options : List.of();
         return new ActivityVariable(name, newType, ValueWire.defaultWire(newType), description, tag,
-                visibility, keptOptions, Bounds.NONE, group);
+                visibility, keptOptions, Range.NONE, group);
     }
 
     /**

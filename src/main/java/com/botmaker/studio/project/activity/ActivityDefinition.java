@@ -115,13 +115,16 @@ public record ActivityDefinition(String name, boolean enabled, String descriptio
      * The synthetic {@link ActivityVariable} for this activity's enable flag ({@code Activities.<Name>}).
      *
      * <p>Tagged with the activity's own name, so it is listed with that activity's variables, and
-     * {@link ParamVisibility#EDITOR_ONLY} because the Runner already offers every activity its own switch —
+     * {@link com.botmaker.plugin.api.value.Visibility#EDITOR_ONLY} because the Runner already offers every
+     * activity its own switch —
      * a second one under a tag heading would be the same flag twice.
      */
     public ActivityVariable enabledVariable() {
         return new ActivityVariable(name, ValueWire.one("YES_NO"),
-                List.of(Boolean.toString(enabled)), description, name, ParamVisibility.EDITOR_ONLY,
-                List.of(), Bounds.NONE, com.botmaker.plugin.api.ParameterGroup.DEFAULT_ID);
+                List.of(Boolean.toString(enabled)), description, name,
+                com.botmaker.plugin.api.value.Visibility.EDITOR_ONLY,
+                List.of(), com.botmaker.plugin.api.value.Range.NONE,
+                com.botmaker.plugin.api.ParameterGroup.DEFAULT_ID);
     }
 
     /**

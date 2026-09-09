@@ -6,6 +6,62 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-10 — the last of Studio's rival value vocabulary is deleted (phase 5 of
+  `settings-becomes-a-plugin.md`).** `project/activity/ParamVisibility` and `project/activity/Bounds` are
+  gone; `ActivityVariable` carries the plugin contract's `Visibility` and `Range` instead, and so do
+  `ValueWire`, `ActivityDefinition.enabledVariable`, `ParametersDialog`, `ValueEditors.Context` and
+  `PickerGalleryWindow`. Both deleted types were their contract counterparts written a second time, field
+  for field — two optional string ends, and two constants with the persisted ids `"public"`/`"editor"`.
+
+  **What the duplication actually cost, stated once**: the contract's seventh surface (2026-09-10) has a
+  plugin hand the Parameters window a `ParameterRow` carrying a `Visibility` and a `Range`, so keeping
+  Studio's own would have meant a translation at that boundary — and a translation between two enums is
+  exactly the thing that goes wrong on the first constant either side adds. The vocabulary being one
+  vocabulary is the whole point of the platform; this was the last place it was two.
+
+  **The stored text is unchanged, which was the requirement.** `ParamVisibility` carried `@JsonValue` and
+  `@JsonCreator`; the contract carries no Jackson annotations anywhere, deliberately (its one dependency is
+  `javafx-controls` at `provided`, and a JSON library there is imposed on every plugin). So the contract
+  declares the wire *form* and Studio, which owns `activities.json`, supplies the parser: `VisibilityWire`,
+  the exact sibling of `ChoiceWire`, writes `id()` and reads through `Visibility.fromId` — still
+  `"public"`/`"editor"`, still total, and still with the two deliberately different defaults (absent reads
+  as `PUBLIC` because a variable exists to be configured; *unrecognised* reads as `EDITOR_ONLY` because "I
+  don't know what this says" must not publish something to the bot's user). `Range` needs no converter: its
+  components are `min`/`max` exactly as `Bounds`' were, and the mapper already ignores unknown properties,
+  which is what kept the long-removed `step` harmless.
+
+  **`ParamVisibility.displayName()` did not come along, because nothing read it** — the audience control has
+  been a tick box since the tagged-variable model, not a picker. Had it survived, it would have stayed in
+  Studio: "Anyone running the bot" is a sentence about the Runner window, which is the host's. Compare
+  `ValueShape.label()`, which is the contract's precisely because a stored *shape* must read the same in
+  every host.
+
+  **What the plan said would happen here and did not**: `palette/BotType` and `project/activity/VariableWire`
+  are named for deletion in the plan text, and both were already settled on 2026-08-27 — `VariableWire` is
+  deleted, and `BotType` is no longer a rival vocabulary but the block editor's own list of *declarable*
+  types (JDK constants plus every plugin's `SourceSeed`s), which is Studio's and stays. The retype the plan
+  sized at ~94 files and ~1100 occurrences had already been done in stages; what was left is the 13 files
+  above.
+
+  **What is deferred to phase 6 and why, rather than landed as dead code**: the plan's second sentence for
+  this phase is *"the Parameters window then renders rows the owning plugin supplied, through the phase 4
+  surface"*. No plugin supplies any today — the rows come from `activities.json`, which becomes the SDK
+  plugin's data in phase 6 — so wiring `ParametersDialog` to `parameterRows`/`parameterEdited` now would add
+  a branch that returns nothing until that phase moves the data. It lands with phase 6, where there is
+  something on the other end of it.
+
+  **Studio's test numbers are unchanged and the failing set is identical** — 1011 run, 79 failures, 6
+  errors, 9 skipped, before and after, compared name by name. While comparing them, the **standing
+  undiagnosed 79 got a first reading, offered here rather than fixed**: they are two clusters, not a
+  spread. 47 are `SdkUpgradeServiceTest`. Most of the rest fail on *no plugin being loaded in the test JVM*
+  — `ParameterModelTest` (13) asserts `"some plugin has to have registered it"`, `PrecisionSeedTest` expects
+  `Precision.DEFAULT` and gets `new Precision()`, and `CaptureSourceOverloadTest`, `BlockConstructionTest`,
+  `ParamShapeWidgetTest` and `PickerGalleryWindowTest` all want a vocabulary or a seed nobody registered.
+  That is the direct consequence of Studio bundling no plugin since 2026-09-02: the tests were written when
+  the SDK was on Studio's own classpath, and they have been asserting the pre-2026-09-02 world since. It is
+  a test-fixture problem rather than a product one, and the fix is a fixture that binds a plugin — which is
+  the same fixture phase 6 needs anyway.
+
 - **2026-09-06 — the Studio ↔ SDK decoupling ledger exists.** Every place Studio's source still spells one
   plugin's coordinate, package or name, with a verdict each — *generalize*, *rename only* or *keep, and here
   is why*. It is below, under its own heading, rather than in this list, because it is a standing document.

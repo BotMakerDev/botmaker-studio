@@ -1,12 +1,12 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.SlotEditor;
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostValueContext;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.activity.Bounds;
 import com.botmaker.studio.project.activity.ValueWire;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -90,21 +90,21 @@ public final class ValueEditors {
      * variable's declared range (for the number editors). Both are optional — an editor that needs one it
      * wasn't given falls back to the unguided form rather than failing.
      */
-    public record Context(ProjectConfig project, Bounds bounds) {
+    public record Context(ProjectConfig project, Range bounds) {
 
         public Context {
-            if (bounds == null) bounds = Bounds.NONE;
+            if (bounds == null) bounds = Range.NONE;
         }
 
         public static Context of(ProjectConfig project) {
-            return new Context(project, Bounds.NONE);
+            return new Context(project, Range.NONE);
         }
 
         public static Context none() {
-            return new Context(null, Bounds.NONE);
+            return new Context(null, Range.NONE);
         }
 
-        public Context withBounds(Bounds newBounds) {
+        public Context withBounds(Range newBounds) {
             return new Context(project, newBounds);
         }
     }
@@ -325,7 +325,7 @@ public final class ValueEditors {
      * truth rather than a guess — which is precisely why a decimal is {@link #decimal a field instead}.
      *
      */
-    private static Editor number(String wire, Bounds bounds) {
+    private static Editor number(String wire, Range bounds) {
         double min = number(bounds.min(), Integer.MIN_VALUE);
         double max = number(bounds.max(), Integer.MAX_VALUE);
         if (max < min) max = min;
@@ -366,7 +366,7 @@ public final class ValueEditors {
      * total, and {@link ValueWire} pulls the value into range downstream where a limit can be tightened
      * afterwards without sealing a dialog shut.
      */
-    private static Editor decimal(String wire, Bounds bounds) {
+    private static Editor decimal(String wire, Range bounds) {
         TextField field = new TextField(wire == null ? "" : wire.trim());
         field.setPromptText("0.0");
         // A filter rather than a validator: the character that cannot be part of a number never arrives, so
@@ -451,7 +451,7 @@ public final class ValueEditors {
     }
 
     /** "at least 1", "at most 10", "1 to 10" — the declared range as the sentence it is. */
-    static String rangeText(Bounds bounds) {
+    static String rangeText(Range bounds) {
         if (bounds.min() != null && bounds.max() != null) return bounds.min() + " to " + bounds.max();
         if (bounds.min() != null) return "at least " + bounds.min();
         if (bounds.max() != null) return "at most " + bounds.max();

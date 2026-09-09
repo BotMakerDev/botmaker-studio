@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.activity;
 
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueType;
@@ -136,7 +137,7 @@ public final class ValueWire {
         return type.hasOptions();
     }
 
-    /** True when a declared {@link Bounds} means anything for this type — the type's own answer. */
+    /** True when a declared {@link Range} means anything for this type — the type's own answer. */
     public static boolean isBounded(ValueType type) {
         return type != null && type.bounded();
     }
@@ -172,10 +173,10 @@ public final class ValueWire {
      * @param bounds  the declared range, for a bounded number
      */
     public static List<String> normalize(List<String> wire, ValueChoice type, List<String> options,
-                                         Bounds bounds) {
+                                         Range bounds) {
         List<String> safe = wire == null ? List.of() : wire.stream().filter(Objects::nonNull).toList();
         List<String> choices = normalizeOptions(options, type, bounds);
-        Bounds range = bounds == null ? Bounds.NONE : bounds;
+        Range range = bounds == null ? Range.NONE : bounds;
 
         if (!type.isList()) {
             return List.of(constrain(
@@ -200,13 +201,13 @@ public final class ValueWire {
      * does — otherwise {@code "10 "} and {@code "10"} are two different choices, the radio button is labelled
      * with one and the stored value matches neither.
      */
-    public static List<String> normalizeOptions(List<String> options, ValueChoice type, Bounds bounds) {
+    public static List<String> normalizeOptions(List<String> options, ValueChoice type, Range bounds) {
         if (!type.hasOptions() || options == null) return List.of();
         // The author's own list, never {@link #effectiveOptions}: an enum's constants are what its editor
         // offers to pick from, not a set to be copied onto every variable of that type and stored.
         return options.stream()
                 .filter(Objects::nonNull)
-                .map(option -> normalizeItem(option, type.type(), bounds == null ? Bounds.NONE : bounds))
+                .map(option -> normalizeItem(option, type.type(), bounds == null ? Range.NONE : bounds))
                 .distinct()
                 .toList();
     }
@@ -224,13 +225,13 @@ public final class ValueWire {
      * disagree about the spelling of the result — a clamp that produced {@code "5"} for a decimal would
      * otherwise store text its own reader normalises to {@code "5.0"} on the very next open.
      */
-    private static String normalizeItem(String wire, ValueType type, Bounds bounds) {
+    private static String normalizeItem(String wire, ValueType type, Range bounds) {
         String canonical = catalog().normalize(type.id(), wire);
         if (!type.bounded() || bounds.isEmpty()) return canonical;
         return catalog().normalize(type.id(), clamp(canonical, bounds));
     }
 
-    private static String clamp(String canonical, Bounds bounds) {
+    private static String clamp(String canonical, Range bounds) {
         double value = parseDouble(canonical, 0.0);
         double min = parseDouble(bounds.min(), Double.NEGATIVE_INFINITY);
         double max = parseDouble(bounds.max(), Double.POSITIVE_INFINITY);

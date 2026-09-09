@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.botmaker.studio.project.activity.ActivityVariable;
-import com.botmaker.studio.project.activity.Bounds;
-import com.botmaker.studio.project.activity.ParamVisibility;
 import com.botmaker.studio.project.activity.ValueWire;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.ActivityService;
@@ -88,7 +88,7 @@ import java.util.function.UnaryOperator;
  * <h2>The audience axis</h2>
  *
  * <p>Each variable is either offered to whoever runs the bot or kept to the editor
- * ({@link ParamVisibility}). It is a tick box, ticked by default: a variable exists to be configured, and the
+ * ({@link Visibility}). It is a tick box, ticked by default: a variable exists to be configured, and the
  * dropdown it replaced meant every new one was invisible in the Runner until somebody remembered the dropdown
  * was there.
  *
@@ -533,7 +533,7 @@ public final class ParametersDialog {
         shared.setTooltip(new Tooltip("Ticked, this appears in the Runner window under its tag's heading. "
                 + "Unticked, it is yours alone and never leaves this dialog."));
         shared.setOnAction(e -> editQuietly(v, current -> current.withVisibility(
-                shared.isSelected() ? ParamVisibility.PUBLIC : ParamVisibility.EDITOR_ONLY)));
+                shared.isSelected() ? Visibility.PUBLIC : Visibility.EDITOR_ONLY)));
 
         Button drop = new Button("✕");
         drop.getStyleClass().add("row-icon-button");
@@ -747,7 +747,7 @@ public final class ParametersDialog {
         TextField min = boundField(v.bounds().min(), "no minimum");
         TextField max = boundField(v.bounds().max(), "no maximum");
         Runnable commit = () -> {
-            Bounds declared = new Bounds(min.getText(), max.getText());
+            Range declared = new Range(min.getText(), max.getText());
             if (!declared.equals(v.bounds())) edit(v, "the range", current -> current.withBounds(declared));
         };
         for (TextField field : List.of(min, max)) {

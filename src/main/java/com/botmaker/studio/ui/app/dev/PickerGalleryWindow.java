@@ -1,12 +1,12 @@
 package com.botmaker.studio.ui.app.dev;
 
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.activity.ActivityVariable;
-import com.botmaker.studio.project.activity.Bounds;
-import com.botmaker.studio.project.activity.ParamVisibility;
 import com.botmaker.studio.project.activity.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -263,7 +263,7 @@ public final class PickerGalleryWindow {
         if (choice.shape() != shape) return null;
         List<String> options = shape.hasOptions() ? options(type, templates) : List.of();
         return new ActivityVariable(identifier(type, shape), choice, ValueWire.defaultWire(choice),
-                "", "", ParamVisibility.PUBLIC, options, Bounds.NONE,
+                "", "", Visibility.PUBLIC, options, Range.NONE,
                 com.botmaker.plugin.api.ParameterGroup.DEFAULT_ID);
     }
 
