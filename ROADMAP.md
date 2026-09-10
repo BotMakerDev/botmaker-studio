@@ -6,6 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-10 (later) — a bound plugin is told which project it is serving.** `PluginHost.bind` takes a
+  `StudioServices` and hands it to every plugin that ends up serving the project, through the contract's new
+  `StudioPlugin.projectOpened`. `openIncoming` is the mirror of `closeOutgoing` and is called from `swap`
+  immediately after it — after the outgoing set has been told the old project is closing, because one plugin
+  may serve both and being handed the new project while it still believes it holds the old is how a release
+  runs against the wrong paths. Nobody is told on `unbind`: there is no project to name, and
+  `projectClosing()` has already said it is over. Both call sites (`BotProject.open`, `LibraryService.rebind`)
+  already had the `ProjectConfig`, so this is `HostServices.forProject(config)` at each.
+
+  **Why the host had to grow this**: a plugin is constructed once by `ServiceLoader` and then serves whatever
+  is bound to it, and `StudioServices` reached it only through a `SlotContext` or an `ActionContext` — that
+  is, only once a user was already editing something. The SDK plugin answering `parameterRows` is asked
+  before any of that. `ProjectOpeningTest` holds the four properties that matter and none of them need a
+  window: everyone is told, one thrower does not cost the next its project, a plugin that never heard of the
+  method is unaffected, and nobody is told when there is no project.
+
 - **2026-09-10 — the last of Studio's rival value vocabulary is deleted (phase 5 of
   `settings-becomes-a-plugin.md`).** `project/activity/ParamVisibility` and `project/activity/Bounds` are
   gone; `ActivityVariable` carries the plugin contract's `Visibility` and `Range` instead, and so do

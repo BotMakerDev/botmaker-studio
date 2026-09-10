@@ -3,6 +3,7 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -98,7 +99,7 @@ public final class LibraryService {
     private void rebind() {
         List<String> classpath = MavenService.resolveClasspath(config.projectPath());
         state.setResolvedClasspath(classpath);
-        PluginHost.bind(classpath);
+        PluginHost.bind(classpath, HostServices.forProject(config));
         typeIndex.refresh(classpath);
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));
     }

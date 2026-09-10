@@ -103,7 +103,7 @@ class ProjectClosingTest {
     void the_bundled_set_survives_a_bind_and_unbind() {
         List<StudioPlugin> before = PluginHost.plugins();
 
-        PluginHost.bind(List.of());
+        PluginHost.bind(List.of(), null);
         PluginHost.unbind();
 
         // It also asserted that the set still held the SDK plugin, until 2026-09-02: Studio bundles no

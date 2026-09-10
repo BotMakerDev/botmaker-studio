@@ -4,6 +4,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.plugin.HostRuns;
+import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSources;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
@@ -136,7 +137,7 @@ public class BotProject {
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
         // falls back to the bundled plugins; it never leaves Studio without an answer.
-        PluginHost.bind(classpath);
+        PluginHost.bind(classpath, HostServices.forProject(config));
 
         // 6. Build or load the type index for external libraries
         progress.message("Indexing libraries…");

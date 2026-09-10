@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.SlotEditor;
 import com.botmaker.plugin.api.SourceSeed;
 import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.ToolbarGroup;
 import com.botmaker.plugin.api.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
@@ -122,6 +123,15 @@ public final class PluginHost {
     /** What the last {@link #bind} could not load. See {@link #failures()}. */
     private static volatile List<PluginLoader.PluginFailure> failures = List.of();
 
+    /**
+     * The project being bound, handed to every plugin that ends up serving it.
+     *
+     * <p>Held only across one {@link #bind} — {@link #swap} reads it and {@link #unbind} clears it — because
+     * it is the argument of a call rather than state anybody here reads. It is a field only because
+     * {@code swap} is reached from three places and is where the incoming set is finally known.
+     */
+    private static StudioServices opening;
+
     /** pinned version → the sections of the Parameters window at it. Cleared with {@link #CACHE}. */
     private static final Map<String, List<ParameterGroup>> GROUPS = new ConcurrentHashMap<>();
 
@@ -135,8 +145,15 @@ public final class PluginHost {
      * <p>Called immediately after a project's classpath is resolved — on open, and again whenever the
      * libraries or the SDK pin change. Anything that goes wrong leaves {@link #BUNDLED} bound: see the
      * fail-open note in the class javadoc.
+     *
+     * <p>{@code services} names the project being bound, and every plugin that ends up serving it is told
+     * through {@link StudioPlugin#projectOpened(StudioServices)} — including the bundled set, which is what
+     * serves a project whose own plugins would not load. It is what a plugin answering
+     * {@link StudioPlugin#parameterRows(String)} reads its own file out of; those surfaces take no services
+     * argument, deliberately, because they are asked every time a window is drawn.
      */
-    public static synchronized void bind(List<String> resolvedClasspath) {
+    public static synchronized void bind(List<String> resolvedClasspath, StudioServices services) {
+        opening = services;
         PluginLoader.Loaded loaded = PluginLoader.openReporting(resolvedClasspath);
         failures = loaded.failures();
         PluginLoader opened = loaded.loader();
@@ -159,6 +176,7 @@ public final class PluginHost {
      * the <em>next</em> project's dependency resolve rather than this one's.
      */
     public static synchronized void unbind() {
+        opening = null;
         swap(null, BUNDLED);
         serving = false;
         failures = List.of();
@@ -197,6 +215,10 @@ public final class PluginHost {
         // Before anything is replaced, and before the outgoing loader is closed at the end of this method:
         // a plugin releasing a port or a nested display has to be able to run its own code to do it.
         if (serving) closeOutgoing(plugins);
+        // After the outgoing set has been told, never before: one plugin may serve both projects, and being
+        // handed the new one while it still believes it holds the old is how a release runs against the
+        // wrong project's paths.
+        openIncoming(bound, opening);
 
         PluginLoader previous = loader;
         loader = opened;
@@ -225,6 +247,30 @@ public final class PluginHost {
      * <p>Total, like every other pass over plugin code here: one plugin that throws on the way out must not
      * stop the next plugin from being told, and must not stop the project that is opening.
      */
+    /**
+     * Tells the plugins about to serve a project which project it is.
+     *
+     * <p>The mirror of {@link #closeOutgoing}, and total in the same way: a plugin that throws on the way in
+     * must not stop the next plugin from being told, and must not stop the project from opening. A plugin
+     * that refuses the project simply has no project — its data surfaces answer nothing, which is what an
+     * uninstalled plugin's do anyway.
+     *
+     * <p>Nobody is told on {@link #unbind}, and that is not an omission: there is no project to name, and
+     * every plugin that was serving one has just had {@link StudioPlugin#projectClosing()}, which is the
+     * statement that it is over. A plugin holds no project between binds.
+     */
+    static void openIncoming(List<StudioPlugin> incoming, StudioServices services) {
+        if (services == null) return;
+        for (StudioPlugin plugin : incoming) {
+            try {
+                plugin.projectOpened(services);
+            } catch (RuntimeException | Error e) {
+                System.err.println("Warning: plugin '" + plugin.id()
+                        + "' failed to take the opening project: " + e);
+            }
+        }
+    }
+
     static void closeOutgoing(List<StudioPlugin> outgoing) {
         for (StudioPlugin plugin : outgoing) {
             try {
