@@ -1,6 +1,9 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.api.ParameterDeclaration;
+import com.botmaker.plugin.api.ParameterEdit;
 import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.SlotEditor;
 import com.botmaker.plugin.api.SourceSeed;
 import com.botmaker.plugin.api.StudioPlugin;
@@ -22,6 +25,7 @@ import java.util.Set;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * The plugins this Studio has loaded, and the one place their contributions are composed.
@@ -466,6 +470,76 @@ public final class PluginHost {
             if (group.id().equals(wanted)) return group;
         }
         return null;
+    }
+
+    /**
+     * The rows one section currently holds, asked of whichever plugin owns the group.
+     *
+     * <p><b>Asked on every draw and never cached</b>, which is the surface's own rule: the file is the truth
+     * and the plugin is the only thing that can read it. The first plugin to answer anything owns the group —
+     * two plugins claiming one id is already refused when the groups are merged, so the loser is not asked.
+     *
+     * <p>A plugin that throws costs its own section and nothing else. The window has to draw either way, and
+     * the alternative is one broken plugin emptying a window several plugins contribute to.
+     */
+    public static List<ParameterRow> parameterRows(String groupId) {
+        String wanted = groupId == null ? ParameterGroup.DEFAULT_ID : groupId.trim();
+        for (StudioPlugin plugin : plugins) {
+            List<ParameterRow> rows = quietly(plugin, "read its parameters",
+                    () -> plugin.parameterRows(wanted));
+            if (rows != null && !rows.isEmpty()) return List.copyOf(rows);
+        }
+        return List.of();
+    }
+
+    /**
+     * A changed value, offered to each plugin until one takes it — the answer being the row as stored.
+     *
+     * <p>Empty is "nobody owns this", which the caller reads as *leave the screen alone*. It is deliberately
+     * the same answer a plugin that threw produces: a row the user's edit did not reach must not be redrawn
+     * as though it had.
+     */
+    public static Optional<ParameterRow> parameterEdited(ParameterEdit edit) {
+        if (edit == null) return Optional.empty();
+        for (StudioPlugin plugin : plugins) {
+            Optional<ParameterRow> stored = quietly(plugin, "store a parameter value",
+                    () -> plugin.parameterEdited(edit));
+            if (stored != null && stored.isPresent()) return stored;
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A declared row — added, renamed, retyped, refiled, removed — offered to each plugin until one owns it.
+     *
+     * <p>Empty means <em>no row stands under that name</em>, and the host cannot tell a removal from a
+     * refusal here: both are answered by re-reading {@link #parameterRows(String)}, which is what the window
+     * does after every declaration. A plugin that wants a refusal to be visible answers the row it kept.
+     */
+    public static Optional<ParameterRow> parameterDeclared(ParameterDeclaration declaration) {
+        if (declaration == null) return Optional.empty();
+        for (StudioPlugin plugin : plugins) {
+            Optional<ParameterRow> stored = quietly(plugin, "store a parameter declaration",
+                    () -> plugin.parameterDeclared(declaration));
+            if (stored != null && stored.isPresent()) return stored;
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Runs one plugin call, answering {@code null} when it throws.
+     *
+     * <p>The same containment every other pass over plugin code here uses: a plugin's failure costs that
+     * plugin's contribution and nobody else's. It is a printed line rather than a dialog because the window
+     * that asked has a section to draw and a user in front of it.
+     */
+    private static <T> T quietly(StudioPlugin plugin, String what, Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (RuntimeException | LinkageError e) {
+            System.err.println("Warning: plugin " + plugin.id() + " failed to " + what + ": " + e);
+            return null;
+        }
     }
 
     private static List<ParameterGroup> buildGroups(String pin) {

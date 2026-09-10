@@ -6,6 +6,30 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-10 (evening) — the Parameters window stops knowing what an activity is.** `ParametersDialog` is
+  retyped onto `ParameterRow`: it asks each plugin for the rows of the sections that plugin declared
+  (`PluginHost.parameterRows`), draws them, and hands every change back as data — a value through
+  `ParameterEdit`, everything else through the contract's new `ParameterDeclaration`. Gone from it:
+  `ActivitiesConfig`, `ActivityVariable`, `ValueWire`, `ActivityService`, the whole autosave apparatus
+  (`flush`, `markDirty`, the "Saving…"/"Saved" label, the pending-close dance) and the name-clash check
+  against the activities. `PluginHost` grew the three fan-outs — rows, edit, declaration — each containing a
+  throwing plugin to its own section.
+
+  **What replaced the nine edits is one call.** A rename, a retype, new choices, a range, a category, a note,
+  a visibility tick, an add and a delete are all *here is the row I want*; what each costs is the owner's
+  rule, so this window no longer coerces anything and renders whatever comes back. **Undo is replayed as
+  declarations** rather than as a file write: a snapshot is put back row by row and anything the plugins hold
+  that it does not name is removed, so an undo cannot restore a state the owner would have refused.
+
+  **There is no save here any more**, because there is no file here to write — which also ends the two-writer
+  hazard for this window: only the owning plugin touches its own storage.
+
+  **What is not verifiable this week**: every click path through the window, and the one behaviour that
+  changed for a user — a project written before the storage swap opens with no parameters, because nothing
+  reads the old `activities.json` array (the maintainer's *no migration* decision, 2026-09-10).
+  `ParamValueWidgets` and `VariableRailModel` grew row-shaped entry points beside their `ActivityVariable`
+  ones; the second pair dies with the Runner's retype.
+
 - **2026-09-10 (later) — a bound plugin is told which project it is serving.** `PluginHost.bind` takes a
   `StudioServices` and hands it to every plugin that ends up serving the project, through the contract's new
   `StudioPlugin.projectOpened`. `openIncoming` is the mirror of `closeOutgoing` and is called from `swap`

@@ -658,7 +658,7 @@ public class ActivityFlowDialog {
 
         Button open = new Button("Open Parameters…");
         open.setOnAction(e ->
-                new ParametersDialog(stage, activityService.projectConfig(), activityService).show());
+                new ParametersDialog(stage, activityService.projectConfig()).show());
 
         return new VBox(6, what, open);
     }

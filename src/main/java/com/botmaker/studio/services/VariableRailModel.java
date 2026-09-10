@@ -1,6 +1,7 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.studio.project.activity.ActivityVariable;
 
 import java.util.ArrayList;
@@ -94,11 +95,51 @@ public final class VariableRailModel {
      * case-insensitive match.
      */
     public static List<ActivityVariable> in(List<ActivityVariable> variables, String tag, List<String> declared) {
-        if (variables == null || variables.isEmpty()) return List.of();
-        if (tag == null || ALL.equals(tag)) return List.copyOf(variables);
-        if (ActivityVariable.GENERAL.equals(tag)) {
-            return variables.stream().filter(s -> !isDeclared(declared, s.tag())).toList();
+        return filter(variables, ActivityVariable::tag, tag, declared);
+    }
+
+    /**
+     * The same rail, for the {@link ParameterRow}s the plugins hand over — one entry per row, counted the
+     * same way and filed under {@link ParameterRow#category()}.
+     *
+     * <p>A second pair of methods rather than one generic surface, because the {@link ActivityVariable} pair
+     * has a known end date: the Runner is its last reader, and both go when it is retyped. The rules
+     * underneath are shared, which is what stops the two answering differently in the meantime.
+     */
+    public static List<Row> rowsOf(List<ParameterRow> rows, List<String> declared) {
+        List<ParameterRow> all = rows == null ? List.of() : rows;
+        List<String> categories = declared == null ? List.of() : declared;
+
+        List<Row> out = new ArrayList<>();
+        out.add(new TagRow(ALL, all.size()));
+        out.add(new Heading("Categories"));
+        out.add(new TagRow(ParameterRow.GENERAL, rowsIn(all, ParameterRow.GENERAL, categories).size()));
+        for (String category : categories) {
+            out.add(new TagRow(category, rowsIn(all, category, categories).size()));
         }
-        return variables.stream().filter(s -> s.tag().equalsIgnoreCase(tag)).toList();
+        return List.copyOf(out);
+    }
+
+    /** The rows {@code tag} holds — see {@link #in} for what each of the two computed rows means. */
+    public static List<ParameterRow> rowsIn(List<ParameterRow> rows, String tag, List<String> declared) {
+        return filter(rows, ParameterRow::category, tag, declared);
+    }
+
+    /**
+     * The members of {@code items} the row {@code tag} holds, whatever a member's category is read off.
+     *
+     * <p>One implementation for both shapes: the rule — <i>All is everything, General is the unfiled plus
+     * everything nobody declares, anything else is an exact case-insensitive match</i> — is the part that
+     * must not exist twice, because the pane on the right and the counts on the left would then disagree
+     * about which bucket a variable is in.
+     */
+    private static <T> List<T> filter(List<T> items, java.util.function.Function<T, String> categoryOf,
+                                      String tag, List<String> declared) {
+        if (items == null || items.isEmpty()) return List.of();
+        if (tag == null || ALL.equals(tag)) return List.copyOf(items);
+        if (ParameterRow.GENERAL.equals(tag)) {
+            return items.stream().filter(item -> !isDeclared(declared, categoryOf.apply(item))).toList();
+        }
+        return items.stream().filter(item -> categoryOf.apply(item).equalsIgnoreCase(tag)).toList();
     }
 }

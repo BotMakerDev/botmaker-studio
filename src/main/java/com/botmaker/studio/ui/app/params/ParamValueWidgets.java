@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.project.ProjectConfig;
@@ -55,13 +56,18 @@ public final class ParamValueWidgets {
      */
     public record ValueEditor(String group, String name, Supplier<List<String>> read) {
 
-        static ValueEditor of(ActivityVariable variable, Supplier<List<String>> read) {
-            return new ValueEditor(variable.group(), variable.name(), read);
+        static ValueEditor of(String group, ParameterRow row, Supplier<List<String>> read) {
+            return new ValueEditor(group, row.name(), read);
         }
 
         /** True when this reader was built from {@code variable} — the pair, never identity. */
         public boolean describes(ActivityVariable variable) {
             return variable.name().equals(name) && variable.isIn(group);
+        }
+
+        /** True when this reader was built from the row called {@code rowName} in {@code rowGroup}. */
+        public boolean describes(String rowGroup, String rowName) {
+            return name.equals(rowName) && group.equals(rowGroup == null ? "" : rowGroup);
         }
     }
 
@@ -72,6 +78,23 @@ public final class ParamValueWidgets {
      *               ({@code IMAGE_TEMPLATE})
      */
     public static Node build(ActivityVariable variable, ProjectConfig config, List<ValueEditor> sink) {
+        return build(variable.group(), rowOf(variable), config, sink);
+    }
+
+    /**
+     * The widget for one {@link ParameterRow} of {@code group}, seeded from its current value.
+     *
+     * <p>The row-shaped entry point, and the one the Parameters window uses: what a plugin hands over is a
+     * row, and a row carries every component this needs. The {@link ActivityVariable} overload above is the
+     * Runner's until it is retyped too, and it delegates here so there is one widget per type rather than
+     * two that can drift.
+     *
+     * @param group  the section the row is filed under — half of the handle a reader is keyed by
+     * @param config the project, needed by the one type whose picker reads from disk ({@code IMAGE_TEMPLATE})
+     */
+    public static Node build(String group, ParameterRow row, ProjectConfig config, List<ValueEditor> sink) {
+        ParameterRow variable = row;
+        String owner = group == null ? "" : group;
         ValueType base = variable.type().type();
         ValueEditors.Context ctx = new ValueEditors.Context(config, variable.bounds());
 
@@ -92,30 +115,47 @@ public final class ParamValueWidgets {
             // written yet is an empty set, not a different question. The "are there any choices" branch that
             // used to stand here is what made one shape render as two widgets — it is now the OPEN_LIST
             // shape's own case, chosen by the user rather than inferred from data they cannot see.
-            case ANY_OF -> checkList(variable, declared, base, ctx, sink);
-            case OPEN_LIST -> openList(variable, base, ctx, sink);
+            case ANY_OF -> checkList(owner, variable, declared, base, ctx, sink);
+            case OPEN_LIST -> openList(owner, variable, base, ctx, sink);
             // Radio buttons, not a dropdown: the choices are the editor's own and there are a handful of
             // them, so showing all of them costs one line each and saves a click to find out what they are.
-            case ONE_OF -> radioRow(variable, declared, base, ctx, sink);
+            case ONE_OF -> radioRow(owner, variable, declared, base, ctx, sink);
             // One value of one type, which is exactly what ValueEditors answers — the same editors the
             // activity Variables screen and the block editor get, so a duration is entered the same way
             // wherever it is met.
             // ONE, and — the reason there is a default at all — any shape a later contract adds. ValueShape
             // is a contract enum and documented as growable, so an exhaustive switch here would throw a
             // MatchException against a newer host rather than falling back to the single-value editor.
-            default -> single(variable, base, ctx, sink);
+            default -> single(owner, variable, base, ctx, sink);
         };
         widget.setId("param-value-" + variable.name());
         return widget;
     }
 
-    private static Node single(ActivityVariable variable, ValueType base, ValueEditors.Context ctx,
-                               List<ValueEditor> sink) {
+    private static Node single(String group, ParameterRow variable, ValueType base,
+                               ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueEditors.Editor editor = ValueEditors.editorFor(base, variable.singleValue(), ctx);
         Node widget = editor.node();
         ValueEditors.stretch(widget);
-        sink.add(ValueEditor.of(variable, () -> List.of(editor.read().get())));
+        sink.add(ValueEditor.of(group, variable, () -> List.of(editor.read().get())));
         return widget;
+    }
+
+    /**
+     * One variable as the row a plugin would have handed over.
+     *
+     * <p>Here rather than on {@link ActivityVariable} because it is a bridge with a known end date: the
+     * Runner is the last reader of that record set, and the conversion goes with it.
+     */
+    private static ParameterRow rowOf(ActivityVariable variable) {
+        return ParameterRow.named(variable.name(), variable.type())
+                .value(variable.value())
+                .description(variable.description())
+                .category(variable.tag())
+                .visibility(variable.visibility())
+                .options(variable.options())
+                .bounds(variable.bounds())
+                .build();
     }
 
     /** The same widget, pinned to one width — what a list of variables wants, and a form does not. */
@@ -131,8 +171,14 @@ public final class ParamValueWidgets {
         return variable.singleValue();
     }
 
+    /** The same, for a row. */
+    public static String display(ParameterRow row) {
+        if (row.type().isList()) return String.join(", ", row.value());
+        return row.singleValue();
+    }
+
     /** Declared choices, ticked. */
-    private static Node checkList(ActivityVariable variable, List<String> options, ValueType base,
+    private static Node checkList(String group, ParameterRow variable, List<String> options, ValueType base,
                                   ValueEditors.Context ctx, List<ValueEditor> sink) {
         List<CheckBox> boxes = new ArrayList<>();
         VBox column = new VBox(2);
@@ -145,7 +191,7 @@ public final class ParamValueWidgets {
             column.getChildren().add(box);
         }
         if (boxes.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(variable, () -> boxes.stream()
+        sink.add(ValueEditor.of(group, variable, () -> boxes.stream()
                 .filter(CheckBox::isSelected).map(box -> (String) box.getUserData()).toList()));
         return column;
     }
@@ -157,22 +203,22 @@ public final class ParamValueWidgets {
      * from the list shows as no selection rather than as the first choice, which would be this widget
      * choosing a setting on the user's behalf.
      */
-    private static Node radioRow(ActivityVariable variable, List<String> options, ValueType base,
+    private static Node radioRow(String group, ParameterRow variable, List<String> options, ValueType base,
                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ToggleGroup group = new ToggleGroup();
+        ToggleGroup toggles = new ToggleGroup();
         VBox column = new VBox(2);
         String current = variable.singleValue();
         for (String option : options) {
             RadioButton button = new RadioButton(option);
-            button.setToggleGroup(group);
+            button.setToggleGroup(toggles);
             button.setUserData(option);
             button.setGraphic(ValueEditors.optionGraphic(base, option, ctx));
             button.setSelected(option.equals(current));
             column.getChildren().add(button);
         }
         if (options.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(variable, () -> {
-            Toggle chosen = group.getSelectedToggle();
+        sink.add(ValueEditor.of(group, variable, () -> {
+            Toggle chosen = toggles.getSelectedToggle();
             return List.of(chosen == null ? "" : (String) chosen.getUserData());
         }));
         return column;
@@ -187,15 +233,15 @@ public final class ParamValueWidgets {
      * column of that type's own editor instead: a list of durations typed as text is four numbers per line to
      * decode, and a list of templates typed as text is names remembered rather than pictures chosen.
      */
-    private static Node openList(ActivityVariable variable, ValueType base, ValueEditors.Context ctx,
-                                 List<ValueEditor> sink) {
+    private static Node openList(String group, ParameterRow variable, ValueType base,
+                                 ValueEditors.Context ctx, List<ValueEditor> sink) {
         // By id, never by identity: a ValueType's identity *is* its persisted id, and two plugin
         // classloaders each holding their own copy of a class would make `==` mean nothing.
         if (ValueCatalog.TEXT_ID.equals(base.id())) {
             TextArea area = new TextArea(String.join("\n", variable.value()));
             area.setPrefRowCount(Math.max(3, Math.min(8, variable.value().size() + 1)));
             area.setPromptText("One per line");
-            sink.add(ValueEditor.of(variable, () -> area.getText() == null ? List.of()
+            sink.add(ValueEditor.of(group, variable, () -> area.getText() == null ? List.of()
                     : area.getText().lines().map(String::trim).filter(line -> !line.isEmpty()).toList()));
             return area;
         }
@@ -235,7 +281,7 @@ public final class ParamValueWidgets {
         });
         rebuild[0].run();
 
-        sink.add(ValueEditor.of(variable, () -> editors.stream()
+        sink.add(ValueEditor.of(group, variable, () -> editors.stream()
                 .map(editor -> editor.read().get())
                 .filter(value -> value != null && !value.isBlank())
                 .toList()));

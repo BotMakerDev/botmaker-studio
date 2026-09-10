@@ -264,7 +264,7 @@ final class StudioActions {
 
     /** The one editor for every value the bot reads. */
     private void openParameters() {
-        new ParametersDialog(primaryStage, config, activityService).show();
+        new ParametersDialog(primaryStage, config).show();
     }
 
     private void openProjectSettings() {
