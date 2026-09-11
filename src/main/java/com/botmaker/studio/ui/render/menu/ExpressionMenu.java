@@ -7,7 +7,8 @@ import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.activity.ActivityVariable;
+import com.botmaker.studio.plugin.HostParameters;
+import com.botmaker.studio.project.ActivityBodies;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -269,7 +270,7 @@ public final class ExpressionMenu {
                     .filter(mi -> mi.getText() != null && mi.getText().toLowerCase().contains(q))
                     .collect(Collectors.toList());
             if (activitySlot) {
-                for (String name : context.getProjectAnalyzer().getActivityNames()) {
+                for (String name : ActivityBodies.names(context.getConfig(), context.getState())) {
                     if (name.toLowerCase().contains(q)) matches.add(0, activityNameItem(name, onSelect));
                 }
             }
@@ -476,27 +477,28 @@ public final class ExpressionMenu {
     }
 
     /**
-     * The project's configured values whose type is assignment-compatible with the slot, inserted as
-     * {@code Activities.<field>} and grouped under the tag each is filed under.
+     * Every plugin's parameters whose type is assignment-compatible with the slot, inserted as
+     * {@code <the declaring class>.<field>} and grouped under the category each is filed under.
      *
-     * <p>The label is the variable's {@link ActivityVariable#displayLabel()} — what the editor called it —
-     * with the field name beside it, because the field name is what lands in the code and a menu that shows
+     * <p>The label is {@link com.botmaker.plugin.api.ParameterRow#displayLabel()} — what the author called it
+     * — with the field name beside it, because the field name is what lands in the code and a menu that shows
      * only the prose leaves the reader guessing at what they just inserted.
      */
     private static Menu activitiesSubmenu(ResolvedType expectedType, CodeEditorService context,
                                           Consumer<Object> onSelect) {
-        // "Parameters" — which since the split is also the class most of these fields live on, though not
-        // all: the activity enable flags are listed here too and are fields of Activities. The neighbouring
-        // "Activity name" menu is a different thing and keeps its name.
+        // "Parameters" — the window these are edited in, not the class they are fields of: a section may
+        // generate any class its plugin names, and two plugins do not share one. The neighbouring "Activity
+        // name" menu is a different thing and keeps its name.
         Menu menu = MenuIcons.decorate(new Menu("Parameters"), MenuIcons.ACTIVITIES);
-        List<ActivityVariable> variables = context.getProjectAnalyzer().getActivityVariables(expectedType);
+        List<HostParameters.Parameter> variables =
+                HostParameters.compatibleWith(context.getConfig(), expectedType);
         if (variables.isEmpty()) {
             menu.getItems().add(MenuBuilders.disabledItem("(Nothing of this type)"));
             return menu;
         }
-        Map<String, List<ActivityVariable>> byTag = new LinkedHashMap<>();
-        for (ActivityVariable v : variables) {
-            byTag.computeIfAbsent(v.tagOrGeneral(), t -> new ArrayList<>()).add(v);
+        Map<String, List<HostParameters.Parameter>> byTag = new LinkedHashMap<>();
+        for (HostParameters.Parameter v : variables) {
+            byTag.computeIfAbsent(v.row().categoryOrGeneral(), t -> new ArrayList<>()).add(v);
         }
         // Only group when there is more than one bucket: a lone "General" submenu is a click that reveals
         // exactly what was already there.
@@ -508,14 +510,12 @@ public final class ExpressionMenu {
                 menu.getItems().add(sub);
                 into = sub.getItems();
             }
-            for (ActivityVariable v : group) {
-                MenuItem item = new MenuItem(v.name().equals(v.displayLabel())
-                        ? v.name() + " (" + v.type().label() + ")"
-                        : v.displayLabel() + " — " + v.name());
-                // The holder per entry, not per menu: this list mixes the project's values with the activity
-                // enable flags, and since the split they are fields of two different generated classes.
-                String holder = context.getProjectAnalyzer().variableQualifier(v.name());
-                item.setOnAction(e -> onSelect.accept(new ExpressionChoice.Field(holder, v.name())));
+            for (HostParameters.Parameter v : group) {
+                MenuItem item = new MenuItem(v.menuLabel());
+                // The holder travels with the parameter, not with the menu: this list merges every plugin's
+                // sections, and two of them do not generate one class.
+                item.setOnAction(e ->
+                        onSelect.accept(new ExpressionChoice.Field(v.qualifier(), v.row().name())));
                 into.add(item);
             }
         });
@@ -547,7 +547,7 @@ public final class ExpressionMenu {
     /** "Activity name": the project's defined activity names, each inserted as a string literal. */
     private static Menu activityNameSubmenu(CodeEditorService context, Consumer<Object> onSelect) {
         Menu menu = MenuIcons.decorate(new Menu("Activity name"), MenuIcons.ACTIVITY_NAME);
-        List<String> names = context.getProjectAnalyzer().getActivityNames();
+        List<String> names = ActivityBodies.names(context.getConfig(), context.getState());
         if (names.isEmpty()) {
             menu.getItems().add(MenuBuilders.disabledItem("(No activities defined)"));
         } else {

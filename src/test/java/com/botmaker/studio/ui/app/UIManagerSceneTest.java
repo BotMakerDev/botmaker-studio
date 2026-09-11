@@ -7,7 +7,6 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.runtime.CodeExecutionService;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -100,7 +99,6 @@ class UIManagerSceneTest extends FxHeadlessTest {
 
         StudioContext ctx = new StudioContext(config, state, bus, diagnostics, dnd, analyzer,
                 new LibraryService(config, state, new TypeSummaryManager(Set.of()), bus),
-                new ActivityService(config, state, bus),
                 new ProjectSettingsService(config, state, bus),
                 null, // no SDK surface: nothing is resolved here, so the palette gate is inert by design
                 fixture.context(),

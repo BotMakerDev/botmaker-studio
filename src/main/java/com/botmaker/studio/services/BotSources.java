@@ -103,6 +103,21 @@ public final class BotSources {
         return null;
     }
 
+    /**
+     * Shows every file's source to {@code reader} exactly once, walking the same files in the same order as
+     * {@link #firstMatch}, buffer first. Nothing is written.
+     *
+     * <p>It is {@link #firstMatch} without the stop: some questions are about the project rather than about
+     * one file — <em>which activities does this bot define</em> is the one it was added for — and answering
+     * them by passing a predicate that always says no would make the walk's own name a lie.
+     */
+    public static void scan(ProjectConfig config, ProjectState state, java.util.function.BiConsumer<Path, String> reader) {
+        firstMatch(config, state, (file, source) -> {
+            reader.accept(file, source);
+            return false;
+        });
+    }
+
     /** The open buffers by absolute path — the copy that wins over the file on disk. */
     private static Map<Path, ProjectFile> openBuffers(ProjectState state) {
         Map<Path, ProjectFile> open = new LinkedHashMap<>();

@@ -3,7 +3,6 @@ package com.botmaker.studio.project.migration;
 import com.botmaker.shared.config.ProjectProperties;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -51,45 +50,36 @@ class ProjectSchemaTest {
     @Test
     void aFileWithoutTheKeyIsVersionZero(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "{\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "{}");
         Files.writeString(SchemaFile.PROPERTIES.in(config.resourcesRoot()), ProjectProperties.KEY_DEBUG + "=true\n");
 
-        assertEquals(OptionalInt.of(0), SchemaFile.ACTIVITIES.versionIn(config.resourcesRoot()));
+        assertEquals(OptionalInt.of(0), SchemaFile.SETTINGS.versionIn(config.resourcesRoot()));
         assertEquals(OptionalInt.of(0), SchemaFile.PROPERTIES.versionIn(config.resourcesRoot()));
     }
 
     // --- writing it ----------------------------------------------------------------------------------
 
     @Test
-    void writingActivitiesStampsTheCurrentVersion(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        ActivitiesConfig.empty().write(config.resourcesRoot());
-
-        JsonNode json = MAPPER.readTree(SchemaFile.ACTIVITIES.in(config.resourcesRoot()).toFile());
-        assertEquals(SchemaFile.ACTIVITIES.current(), json.get(SchemaFile.JSON_FIELD).asInt());
-        assertTrue(json.has("activities"), "the stamp is written beside the model, not instead of it");
-    }
-
-    @Test
     void writingSettingsStampsTheCurrentVersion(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         StudioProjectSettings.empty().write(config.resourcesRoot());
 
-        assertEquals(OptionalInt.of(SchemaFile.SETTINGS.current()),
-                SchemaFile.SETTINGS.versionIn(config.resourcesRoot()));
+        JsonNode json = MAPPER.readTree(SchemaFile.SETTINGS.in(config.resourcesRoot()).toFile());
+        assertEquals(SchemaFile.SETTINGS.current(), json.get(SchemaFile.JSON_FIELD).asInt());
+        assertTrue(json.size() > 1, "the stamp is written beside the settings, not instead of them");
     }
 
     @Test
     void theStampSurvivesAReadWriteRoundTrip(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        ActivitiesConfig.empty().write(config.resourcesRoot());
-        ActivitiesConfig.read(config.resourcesRoot()).write(config.resourcesRoot());
+        StudioProjectSettings.empty().write(config.resourcesRoot());
+        StudioProjectSettings.read(config.resourcesRoot()).write(config.resourcesRoot());
 
         // The number is not a record component, so a round trip through the model has to re-derive it rather
         // than carry it — which is exactly the case that would silently write version 0 back if write() did
         // not stamp.
-        assertEquals(OptionalInt.of(SchemaFile.ACTIVITIES.current()),
-                SchemaFile.ACTIVITIES.versionIn(config.resourcesRoot()));
+        assertEquals(OptionalInt.of(SchemaFile.SETTINGS.current()),
+                SchemaFile.SETTINGS.versionIn(config.resourcesRoot()));
     }
 
     @Test
@@ -106,13 +96,13 @@ class ProjectSchemaTest {
     @Test
     void migratingStampsEveryFileThatIsPresent(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "{\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "{}");
         Files.writeString(SchemaFile.PROPERTIES.in(config.resourcesRoot()), ProjectProperties.KEY_DEBUG + "=true\n");
 
         ProjectSchema.migrate(config, ignored -> { });
 
-        assertEquals(OptionalInt.of(SchemaFile.ACTIVITIES.current()),
-                SchemaFile.ACTIVITIES.versionIn(config.resourcesRoot()));
+        assertEquals(OptionalInt.of(SchemaFile.SETTINGS.current()),
+                SchemaFile.SETTINGS.versionIn(config.resourcesRoot()));
         assertEquals(OptionalInt.of(SchemaFile.PROPERTIES.current()),
                 SchemaFile.PROPERTIES.versionIn(config.resourcesRoot()));
 
@@ -133,7 +123,7 @@ class ProjectSchemaTest {
     @Test
     void aProjectFromTheGeneratorIsToldItsFilesAreItsOwn(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "{\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "{}");
         Path pkg = config.mainSourceFile().getParent();
         Files.writeString(pkg.resolve("Activities.java"), "package com.mybot;\npublic class Activities {}\n");
         Files.writeString(pkg.resolve("Templates.java"), "package com.mybot;\npublic class Templates {}\n");
@@ -158,7 +148,7 @@ class ProjectSchemaTest {
     @Test
     void aProjectThatNeverHadThoseFilesIsToldNothing(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "{\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "{}");
         Files.writeString(config.mainSourceFile(),
                 "package com.mybot;\npublic class MyBot { public static void main(String[] a) {} }\n");
 
@@ -171,23 +161,22 @@ class ProjectSchemaTest {
     @Test
     void aSecondOpenRunsNothingAndReportsNothing(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "{\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "{}");
         Files.writeString(SchemaFile.PROPERTIES.in(config.resourcesRoot()), ProjectProperties.KEY_DEBUG + "=true\n");
 
         ProjectSchema.migrate(config, ignored -> { });
-        String activitiesAfterFirst = Files.readString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()));
+        String settingsAfterFirst = Files.readString(SchemaFile.SETTINGS.in(config.resourcesRoot()));
 
         List<String> second = ProjectSchema.migrate(config, ignored -> { });
 
         assertTrue(second.isEmpty(), "an already-current project has nothing to say about being opened");
-        assertEquals(activitiesAfterFirst, Files.readString(SchemaFile.ACTIVITIES.in(config.resourcesRoot())),
+        assertEquals(settingsAfterFirst, Files.readString(SchemaFile.SETTINGS.in(config.resourcesRoot())),
                 "the whole point of the number: the second open does not touch the file");
     }
 
     @Test
     void aNewProjectIsStampedByItsOwnCreation(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        ActivitiesConfig.empty().write(config.resourcesRoot());
         StudioProjectSettings.empty().write(config.resourcesRoot());
 
         assertTrue(ProjectSchema.migrate(config, ignored -> { }).isEmpty(),
@@ -199,14 +188,14 @@ class ProjectSchemaTest {
     @Test
     void aProjectFromTheFutureIsRefusedByName(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()),
-                "{\"" + SchemaFile.JSON_FIELD + "\":99,\"activities\":[]}");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()),
+                "{\"" + SchemaFile.JSON_FIELD + "\":99}");
 
         ProjectSchemaTooNew refusal =
                 assertThrows(ProjectSchemaTooNew.class, () -> ProjectSchema.check(config));
 
-        assertTrue(refusal.getMessage().contains(SchemaFile.ACTIVITIES.fileName()),
-                "the message has to name the file, since only one of the three is from the future");
+        assertTrue(refusal.getMessage().contains(SchemaFile.SETTINGS.fileName()),
+                "the message has to name the file, since only one of the two is from the future");
         assertTrue(refusal.getMessage().contains("99"));
         assertTrue(refusal.getMessage().contains("update Studio"), "and say the way out");
     }
@@ -223,7 +212,6 @@ class ProjectSchemaTest {
     @Test
     void anOrdinaryProjectIsNotRefused(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        ActivitiesConfig.empty().write(config.resourcesRoot());
         StudioProjectSettings.empty().write(config.resourcesRoot());
         Files.writeString(SchemaFile.PROPERTIES.in(config.resourcesRoot()), ProjectProperties.KEY_DEBUG + "=true\n");
 
@@ -233,7 +221,7 @@ class ProjectSchemaTest {
     @Test
     void anUnreadableFileIsNotAClaimAboutTheFuture(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(SchemaFile.ACTIVITIES.in(config.resourcesRoot()), "this is not json");
+        Files.writeString(SchemaFile.SETTINGS.in(config.resourcesRoot()), "this is not json");
 
         // Refusing here would turn a corrupt file into "your Studio is too old", which is both wrong and
         // unactionable. It has no version, so it is left to the reader that actually parses it.

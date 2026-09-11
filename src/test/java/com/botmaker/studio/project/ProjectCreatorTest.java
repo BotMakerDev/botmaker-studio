@@ -1,6 +1,5 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.botmaker.studio.project.migration.SchemaFile;
 import com.botmaker.studio.services.MavenService;
 import org.junit.jupiter.api.Test;
@@ -41,33 +40,20 @@ class ProjectCreatorTest {
     // now, so there is no early-return left for it to guard.
 
     /**
-     * A new game bot keeps its values in Java. The model is recorded at creation and never inferred later, so
-     * this is the one moment it can be got wrong — and getting it wrong is silent: the project would simply
-     * behave like a legacy one for the rest of its life.
-     *
-     * <p>Written here since 2026-09-01 rather than handed to {@code Authoring.createProject} — but read back
-     * through {@link ActivitiesConfig}, which is the point worth keeping: the file is written once by
-     * {@link ActivitiesConfig#json} and read by every later open, and a stamp lost between the two would
-     * re-run every migration step against an already-current file.
+     * <b>No project gets an {@code activities.json}, whatever its template (2026-09-11).</b> Creation used to
+     * write an empty stamped one for a game bot, which is how this test read until the activity model left
+     * the editor. Seeding a plugin's store means knowing that plugin's format; the plugin writes its own file
+     * on its first save, and a project with nothing stored is the state every reader of it already handles.
      */
     @Test
-    void aNewGameBotGetsAnActivitiesFile(@TempDir Path root) throws IOException {
-        ProjectConfig config = ProjectConfig.forProject("MyBot", root);
-        ProjectCreator.writeProject(config, ProjectTemplate.GAME_BOT, POM.apply(config));
+    void noTemplateGetsAnActivitiesFile(@TempDir Path root) throws IOException {
+        ProjectConfig gameBot = ProjectConfig.forProject("MyBot", root);
+        ProjectCreator.writeProject(gameBot, ProjectTemplate.GAME_BOT, POM.apply(gameBot));
+        assertFalse(Files.exists(gameBot.resourcesRoot().resolve("activities.json")));
 
-        assertTrue(Files.exists(config.resourcesRoot().resolve(ActivitiesConfig.FILE_NAME)));
-        assertTrue(ActivitiesConfig.read(config.resourcesRoot()).isEmpty());
-        assertEquals(SchemaFile.ACTIVITIES.current(),
-                SchemaFile.ACTIVITIES.versionIn(config.resourcesRoot()).orElse(0),
-                "an unstamped file reads as version 0 and re-runs every migration on the next open");
-    }
-
-    @Test
-    void anEmptyProjectGetsNoActivitiesFile(@TempDir Path root) throws IOException {
-        ProjectConfig config = ProjectConfig.forProject("Plain", root);
-        ProjectCreator.writeProject(config, ProjectTemplate.EMPTY, POM.apply(config));
-
-        assertFalse(Files.exists(config.resourcesRoot().resolve(ActivitiesConfig.FILE_NAME)));
+        ProjectConfig plain = ProjectConfig.forProject("Plain", root);
+        ProjectCreator.writeProject(plain, ProjectTemplate.EMPTY, POM.apply(plain));
+        assertFalse(Files.exists(plain.resourcesRoot().resolve("activities.json")));
     }
 
     /** Every project gets the five directories, whatever its template. */
@@ -93,7 +79,9 @@ class ProjectCreatorTest {
     void aCallerCannotClaimAFileCreationWrites(@TempDir Path root) {
         ProjectConfig config = ProjectConfig.forProject("MyBot", root);
         Map<String, String> colliding = new java.util.LinkedHashMap<>(POM.apply(config));
-        colliding.put("src/main/resources/" + ActivitiesConfig.FILE_NAME, "{}");
+        // Any path creation writes will do; the starter source is the one it always writes. It was
+        // activities.json until 2026-09-11, when creation stopped writing that file at all.
+        colliding.put(StarterSources.of(config).keySet().iterator().next(), "// mine");
 
         assertThrows(IllegalArgumentException.class,
                 () -> ProjectCreator.writeProject(config, ProjectTemplate.GAME_BOT, colliding));
@@ -109,7 +97,9 @@ class ProjectCreatorTest {
     void arefusalLeavesNothingBehind(@TempDir Path root) {
         ProjectConfig config = ProjectConfig.forProject("MyBot", root);
         Map<String, String> colliding = new java.util.LinkedHashMap<>(POM.apply(config));
-        colliding.put("src/main/resources/" + ActivitiesConfig.FILE_NAME, "{}");
+        // Any path creation writes will do; the starter source is the one it always writes. It was
+        // activities.json until 2026-09-11, when creation stopped writing that file at all.
+        colliding.put(StarterSources.of(config).keySet().iterator().next(), "// mine");
 
         assertThrows(IllegalArgumentException.class,
                 () -> ProjectCreator.writeProject(config, ProjectTemplate.GAME_BOT, colliding));

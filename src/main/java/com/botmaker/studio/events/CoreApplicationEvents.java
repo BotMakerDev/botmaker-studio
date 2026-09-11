@@ -69,12 +69,12 @@ public class CoreApplicationEvents {
         }
     }
 
-    /**
-     * Published after the project's activities (global config variables) have changed: {@code activities.json}
-     * and the generated {@code Activities.java} have been rewritten and project state refreshed.
-     */
-    public record ActivitiesChangedEvent(com.botmaker.studio.project.activity.ActivitiesConfig config)
-            implements ApplicationEvent {}
+    // ActivitiesChangedEvent stood here and is deleted (2026-09-11). It announced that Studio had rewritten
+    // activities.json — which Studio no longer writes, reads or holds a parse of, the file being the SDK
+    // plugin's. There is deliberately no plugin-data-changed event to replace it: the host cannot know what
+    // a plugin has written, and inventing an event a plugin has to remember to fire would put the editor
+    // back in the business of tracking one plugin's file. Every window over that data asks for its rows when
+    // it opens.
 
     /**
      * Published after the project's {@link com.botmaker.studio.project.StudioProjectSettings} change

@@ -2,7 +2,6 @@ package com.botmaker.studio.project.migration;
 
 import com.botmaker.shared.config.ProjectProperties;
 import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -17,12 +16,17 @@ import java.util.Properties;
  * A project data file that carries a schema version, and the two operations a version needs: reading the one
  * on disk, and stamping the current one.
  *
- * <p>Three files, and they stay three. The split follows a real boundary rather than a filing convenience:
- * {@link #PROPERTIES} is a <em>runtime contract</em> — its keys are declared in {@code botmaker-shared} and
- * the SDK parses them inside the running bot; {@link #ACTIVITIES} is the <em>model</em>, which both Studio and
- * the generated code read; {@link #SETTINGS} is <em>editor state</em> the bot never opens. Each therefore
- * changes at its own pace, and a version per file lets it: bumping the model does not oblige the properties
- * file to claim it changed.
+ * <p><b>Two files, and the third left on 2026-09-11.</b> {@link #PROPERTIES} is a <em>runtime contract</em> —
+ * its keys are declared in {@code botmaker-shared} and the SDK parses them inside the running bot;
+ * {@link #SETTINGS} is <em>editor state</em> the bot never opens. Each changes at its own pace, and a version
+ * per file lets it: bumping one does not oblige the other to claim it changed.
+ *
+ * <p>{@code ACTIVITIES} was the third and held the <em>model</em>. It is gone because a schema ledger is a
+ * claim to own a file's shape, and {@code activities.json} is the SDK plugin's: the plugin reads and writes
+ * it through its own {@code Authoring}, carrying its own stamp. A host that went on migrating and stamping
+ * that file would be a second writer of it, which is the hazard the whole move exists to remove — and the
+ * host version number would be a number about somebody else's format. <b>Only a file this editor writes is
+ * listed here.</b>
  *
  * <p><b>Absent means 0.</b> Every project that exists today predates the marker, so a missing version is not
  * an error and not "unknown" — it is the oldest shape, and the migration steps from 0 are exactly the ones
@@ -34,9 +38,6 @@ import java.util.Properties;
  * the version; there is no constant to forget to bump beside it.
  */
 public enum SchemaFile {
-
-    /** {@code activities.json} — the activity/variable model, read by Studio and by the generated code. */
-    ACTIVITIES(ActivitiesConfig.FILE_NAME, Format.JSON, "activity model"),
 
     /** {@code settings.json} — per-project editor state (capture targets, overlay position, layout). */
     SETTINGS(StudioProjectSettings.FILE_NAME, Format.JSON, "editor settings"),

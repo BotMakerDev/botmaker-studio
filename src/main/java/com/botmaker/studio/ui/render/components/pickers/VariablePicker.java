@@ -1,8 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.core.ValueSlot;
-import com.botmaker.studio.project.activity.ActivityVariable;
-import com.botmaker.studio.project.activity.VariableHolder;
+import com.botmaker.studio.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
@@ -32,60 +31,68 @@ public final class VariablePicker {
     private VariablePicker() {}
 
     /**
-     * The field name this slot references, or null when it isn't a variable reference at all.
+     * The field name this slot references, or null when it isn't a parameter reference at all.
      *
-     * <p>Either holder counts: {@code Activities.MINING} is a flag and {@code Parameters.REST} is a value, and
-     * a slot holding one of them is a slot the user may want to point at the other. Which class the
-     * <em>replacement</em> is written on is asked of the model, not copied from what is there — see
-     * {@link #create}.
+     * <p>Any declared holder counts: {@code Activities.MINING} and {@code Parameters.REST} are both
+     * parameters of the SDK plugin's, and a slot holding one is a slot the user may want to point at the
+     * other. Which class the <em>replacement</em> is written on is asked afresh, not copied from what is
+     * there — see {@link #create}.
+     *
+     * <p><b>{@code qualifiers} is a parameter rather than something this looks up</b>, and that is what keeps
+     * the method a pure question about the expression: the set of classes that hold parameters comes from the
+     * loaded plugins ({@link HostParameters#isQualifier}), which needs a project, while <em>is this a
+     * qualified reference at all</em> needs only the node. It replaced a two-constant enum naming
+     * {@code Activities} and {@code Parameters} — one plugin's class names, written down in the host.
      */
-    static String referencedVariable(ValueSlot arg) {
+    static String referencedVariable(ValueSlot arg, java.util.function.Predicate<String> qualifiers) {
         ASTNode node = arg == null ? null : arg.node();
         if (node instanceof QualifiedName qualified) {
-            return isHolder(qualified.getQualifier().toString())
+            return qualifiers.test(qualified.getQualifier().toString())
                     ? qualified.getName().getIdentifier() : null;
         }
         if (node instanceof FieldAccess access) {
-            return isHolder(access.getExpression().toString()) ? access.getName().getIdentifier() : null;
+            return qualifiers.test(access.getExpression().toString())
+                    ? access.getName().getIdentifier() : null;
         }
         return null;
     }
 
-    private static boolean isHolder(String qualifier) {
-        return VariableHolder.ofClassName(qualifier) != null;
+    /** The same, over the parameter groups the open project's plugins declare. */
+    private static String referencedVariable(CodeEditorService context, ValueSlot arg) {
+        return referencedVariable(arg, q -> HostParameters.isQualifier(context.getConfig(), q));
     }
 
     public static Node create(CodeEditorService context, ValueSlot arg, ResolvedType slotType) {
-        String current = referencedVariable(arg);
+        String current = referencedVariable(context, arg);
         ComboBox<String> combo = new ComboBox<>();
         combo.getStyleClass().add("block-selector");
         combo.setTooltip(new Tooltip("Which project variable this is — edit them in Project ▸ Parameters"));
-        for (ActivityVariable variable : context.getProjectAnalyzer().getActivityVariables(slotType)) {
-            combo.getItems().add(variable.name());
+        for (HostParameters.Parameter parameter : HostParameters.compatibleWith(context.getConfig(), slotType)) {
+            combo.getItems().add(parameter.row().name());
         }
         if (current != null && !combo.getItems().contains(current)) combo.getItems().add(current);
         combo.setValue(current);
         combo.setOnAction(e -> {
             String picked = combo.getValue();
             if (picked == null || picked.equals(current)) return;
-            // The class the picked name is declared on, asked of the model rather than taken from the
-            // qualifier already in the slot: swapping a flag for a value moves the reference between the two
-            // generated classes, and keeping the old qualifier would write Activities.REST.
-            context.getCodeEditor().replaceWithFieldReference(
-                    arg.node(), context.getProjectAnalyzer().variableQualifier(picked), picked);
+            // The class the picked name is declared on, asked of the plugin that declares it rather than
+            // taken from the qualifier already in the slot: swapping a flag for a value moves the reference
+            // between two classes, and keeping the old qualifier would write Activities.REST.
+            String qualifier = HostParameters.qualifierOf(context.getConfig(), picked);
+            if (qualifier == null) return;   // the name left the declaration between opening and picking
+            context.getCodeEditor().replaceWithFieldReference(arg.node(), qualifier, picked);
         });
         return combo;
     }
 
     /**
-     * The {@link SpecialTypePicker} entry: matches a slot already holding {@code Parameters.<name>} or
-     * {@code Activities.<name>}.
+     * The {@link SpecialTypePicker} entry: matches a slot already holding {@code <a declared class>.<name>}.
      */
     public static SpecialTypePicker asSpecialType() {
         return new SpecialTypePicker() {
             @Override public boolean matches(PickerContext ctx) {
                 return ctx.context() != null && ctx.context().getProjectAnalyzer() != null
-                        && referencedVariable(ctx.arg()) != null;
+                        && referencedVariable(ctx.context(), ctx.arg()) != null;
             }
             @Override public Node create(PickerContext ctx) {
                 return VariablePicker.create(ctx.context(), ctx.arg(), ctx.paramType());

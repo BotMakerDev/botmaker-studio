@@ -7,9 +7,6 @@ import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
-import com.botmaker.studio.project.activity.ActivityDefinition;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -59,7 +56,6 @@ public class FileExplorerManager {
     private final ProjectConfig config;
     private final CodeEditorService codeEditorService;
     private final ProjectState state;
-    private final ActivityService activityService;
     private final TreeView<ExplorerNode> fileTree;
 
     /**
@@ -93,16 +89,12 @@ public class FileExplorerManager {
         this.config = ctx.config();
         this.codeEditorService = ctx.codeEditorService();
         this.state = ctx.state();
-        this.activityService = ctx.activityService();
         this.fileTree = new TreeView<>();
 
-        // Manage Activities / New Activity write new files; without this the tree wouldn't show them until
-        // some unrelated refresh happened to run.
-        EventBus eventBus = ctx.eventBus();
-        if (eventBus != null) {
-            eventBus.subscribe(CoreApplicationEvents.ActivitiesChangedEvent.class,
-                    e -> Platform.runLater(this::refreshTree), false);
-        }
+        // An ActivitiesChangedEvent subscription refreshed the tree here, from the days when saving an
+        // activity wrote a stub file. It is gone with the event (2026-09-11): a plugin writing its own JSON
+        // adds nothing to the source tree, and nothing else in the editor creates a file behind this one's
+        // back. The tree is still refreshed by every path that does write one.
     }
 
     public VBox createView() {

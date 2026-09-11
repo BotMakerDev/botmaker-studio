@@ -5,7 +5,6 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.services.capture.CaptureTarget;
@@ -13,7 +12,7 @@ import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 import com.botmaker.studio.services.capture.TargetCapture.WindowShot;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.events.CoreApplicationEvents.ActivitiesChangedEvent;
+import com.botmaker.studio.events.CoreApplicationEvents.CodeUpdatedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.StatusMessageEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.UIBlocksUpdatedEvent;
 import com.botmaker.studio.palette.BlockType;
@@ -111,7 +110,6 @@ public final class ProgramShapeOverlay {
     private final ProjectState state;
     private final ProjectSettingsService settings;
     private final ScreenCaptureService capture;
-    private final ActivityService activities;
     /** The default capture target: a window, a monitor, or the whole desktop. */
     private final CaptureTarget target;
 
@@ -204,16 +202,15 @@ public final class ProgramShapeOverlay {
     private BlockTree.Position pendingConfig;
 
     private ProgramShapeOverlay(CodeEditorService context, ProjectSettingsService settings,
-                                ScreenCaptureService capture, ActivityService activities,
+                                ScreenCaptureService capture,
                                 CaptureTarget target, TargetCapture.WindowRef window) {
         this.context = context;
         this.state = context.getState();
         this.settings = settings;
         this.capture = capture;
-        this.activities = activities;
         this.target = target;
         this.window = window;
-        this.picker = new OverlayTargetPicker(context, settings, activities,
+        this.picker = new OverlayTargetPicker(context, settings,
                 new OverlayTargetPicker.Callbacks(this::openTargetFile, this::scopeToMethod, this::status));
         this.palette = new OverlayPalette(context, settings,
                 new OverlayPalette.Callbacks(this::insertLibraryCall, this::addBelow));
@@ -240,7 +237,7 @@ public final class ProgramShapeOverlay {
      *                     explanatory warning rather than the same dialog again.
      */
     public static void open(Window owner, CodeEditorService context, ProjectSettingsService settings,
-                            ScreenCaptureService capture, ActivityService activities,
+                            ScreenCaptureService capture,
                             java.util.function.LongSupplier sessionWindow,
                             java.util.function.Consumer<Runnable> chooseTarget) {
         if (active != null && active.stage != null && active.stage.isShowing()) {
@@ -265,8 +262,7 @@ public final class ProgramShapeOverlay {
             // warning this used to be — the button's whole job is "let me author against the running game", and
             // on a fresh app run the session path always misses (the launcher is created lazily elsewhere).
             if (chooseTarget != null) {
-                chooseTarget.accept(() -> open(owner, context, settings, capture, activities,
-                        sessionWindow, null));
+                chooseTarget.accept(() -> open(owner, context, settings, capture, sessionWindow, null));
                 return;
             }
             warn(owner, "Overlay editor needs something to draw over.\n\nPick what the bot launches in "
@@ -275,7 +271,7 @@ public final class ProgramShapeOverlay {
         }
         // The session's window ref wins when there is one: it carries the live id, which is the only way to
         // name a gamescope host window at all. Otherwise the default target names a window, or it does not.
-        ProgramShapeOverlay overlay = new ProgramShapeOverlay(context, settings, capture, activities, target,
+        ProgramShapeOverlay overlay = new ProgramShapeOverlay(context, settings, capture, target,
                 session != null ? session : TargetCapture.WindowRef.of(target));
         active = overlay;
         overlay.start(owner);
@@ -435,9 +431,11 @@ public final class ProgramShapeOverlay {
             }
         }));
 
-        // Keep the activity picker current when an activity is created/renamed/removed elsewhere in the app —
-        // it otherwise only ever reflects the list captured at the moment the overlay was opened.
-        subscriptions.add(context.getEventBus().subscribe(ActivitiesChangedEvent.class, e -> {
+        // Keep the activity picker current when a define() call is written, renamed or deleted. It listened
+        // for ActivitiesChangedEvent until 2026-09-11, which announced a write to activities.json; the list
+        // comes out of the bot's own source now, so what changes it is an edit to that source — which is the
+        // very event above, re-used rather than given a second subscription that would fire in lockstep.
+        subscriptions.add(context.getEventBus().subscribe(CodeUpdatedEvent.class, e -> {
             if (stage != null && stage.isShowing()) Platform.runLater(picker::refreshActivities);
         }));
 

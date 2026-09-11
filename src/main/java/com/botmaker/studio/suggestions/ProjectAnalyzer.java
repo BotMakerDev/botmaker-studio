@@ -6,9 +6,6 @@ import io.github.classgraph.ClassInfo;
 import io.github.classgraph.FieldInfo;
 import io.github.classgraph.MethodInfo;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.activity.ActivityVariable;
-import com.botmaker.studio.project.activity.VariableHolder;
-import com.botmaker.studio.project.activity.ValueWire;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
@@ -612,53 +609,20 @@ public class ProjectAnalyzer {
         return args.isBlank() ? null : args.trim();
     }
 
-    /**
-     * The project's variables whose type is assignment-compatible with {@code requiredType}, each live
-     * activity's enable flag included. Sourced from project state (not the AST), so they're available
-     * regardless of scope. Used to populate the "Activities" expression submenu, which inserts
-     * {@code Activities.<name>}.
-     */
-    public List<ActivityVariable> getActivityVariables(ResolvedType requiredType) {
-        return state.getActivities().allVariables().stream()
-                .filter(a -> isCompatible(ValueWire.resolvedType(a.type()), requiredType))
-                .toList();
-    }
+    // getActivityVariables, variableHolder, variableQualifier and getActivityNames stood here and are gone
+    // (2026-09-11). All four answered out of a cached parse of activities.json, which is one plugin's file:
+    // the first three are `plugin/HostParameters` now, asked of whichever plugin declares the parameter, and
+    // the fourth is `ActivityBodies.names`, read out of the bot's own source. This class needs a
+    // ProjectConfig for neither, which is why they are not here — it holds a library index and the editor's
+    // state, and the pinned SDK version is a property of the project.
 
     /**
-     * Which generated class {@code name} is declared on — what a menu or a picker has to write in front of it.
-     *
-     * <p>Asked of the model rather than derived from the type, because the two classes do not divide by type:
-     * a flag is a {@code boolean} and so are plenty of variables. Sourced from project state for the same
-     * reason {@link #getActivityVariables} is — the answer must not depend on what is in scope where the user
-     * clicked.
+     * Whether a value of {@code actual} may stand where {@code required} is expected — an unknown or absent
+     * requirement accepting anything. Public because the same rule decides which of a plugin's parameters a
+     * slot may be filled from ({@code plugin/HostParameters}), and two spellings of "does this fit" would
+     * offer a variable in one menu and refuse it in another.
      */
-    public VariableHolder variableHolder(String name) {
-        return state.getActivities().holderOf(name);
-    }
-
-    /**
-     * The qualifier to write in front of {@code name} — {@code Parameters}, {@code Activities}, or the class
-     * of whichever plugin's parameter group the variable is filed under.
-     *
-     * <p>Prefer this to {@link #variableHolder}: since parameters became a plugin surface there are no longer
-     * only two generated classes to choose between, and the enum can only name the host's own two.
-     */
-    public String variableQualifier(String name) {
-        return state.getActivities().qualifierOf(name);
-    }
-
-    /**
-     * The names of the project's defined activities, in configured (run) order. Used by the enable/disable
-     * name picker to offer {@code Activity.enable("…")}/{@code disable("…")} the real activity names instead of
-     * a free-typed string. Sourced from project state (not the AST), so it's available regardless of scope.
-     */
-    public List<String> getActivityNames() {
-        return state.getActivities().activities().stream()
-                .map(com.botmaker.studio.project.activity.ActivityDefinition::name)
-                .toList();
-    }
-
-    private static boolean isCompatible(ResolvedType actual, ResolvedType required) {
+    public static boolean isCompatible(ResolvedType actual, ResolvedType required) {
         if (required == null || required.isUnknown()) return true;
         if (actual.simpleName().equals(required.simpleName())) return true;
         return actual.isAssignmentCompatible(required);

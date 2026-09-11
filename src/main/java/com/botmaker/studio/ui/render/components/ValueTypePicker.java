@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.project.activity.ValueWire;
+import com.botmaker.studio.plugin.ValueWire;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.control.Menu;

@@ -644,10 +644,10 @@ point of it.**
   - **`ProjectRepair` keeps everything that is not source**: `pom.xml`, `botmaker-project.properties`,
     `settings.json`, `activities.json` and the placeholder image. `looksLikeGameBot` is now the entry point's
     own text alone (`Bot.start` / `Bot.supervise`), the file-presence fallback having had no list to check.
-  - **`ActivityService.update` is `activities.json` and nothing else.** Adding an activity creates no file,
-    renaming one moves nothing, deleting one leaves whatever the user wrote where it is — an activity's
-    behaviour is an `Activities.define("Mining", ctx -> …)` call in a file BotMaker has never known the
-    location of.
+  - **`ActivityService` was `activities.json` and nothing else, and is deleted (2026-09-11).** Adding an
+    activity creates no file, renaming one moves nothing, deleting one leaves whatever the user wrote where
+    it is — an activity's behaviour is an `Activities.define("Mining", ctx -> …)` call in a file BotMaker
+    has never known the location of. That file is the SDK plugin's now, written by its own flow editor.
   - **So opening an activity is a search, not a path (`project/ActivityBodies`, 2026-08-30).** It matches
     `define("<name>"` — the method name alone, so a `static import` is found, with the literal matched whole
     so `Mining` does not open `MiningDeep` — over `BotSources.firstMatch`, the read-only half of the walk
@@ -894,8 +894,13 @@ The `ui/` package is split by concern:
   `com.botmaker.sdk.internal.plugin.capture`. `OverlayTemplateCapture` names them there and hands them a
   `StudioServices` (built from the project with `HostServices.forProject`) until it follows, which is the
   step that makes *Capture Templates* a `ToolbarItem`.
-- **`ui/app/flow/`** — the activity-flow graph editor: `FlowCanvas` (nodes, ports, edges, auto-arrange),
-  `FlowRules`, `FlowNames`, `ActivityDraft`, `ActivityValueWidgets`, `NewActivityDialog`.
+- **`ui/app/flow/` is gone (2026-09-11)** — the activity-flow graph editor is
+  `com.botmaker.sdk.internal.plugin.flow`, opened from a 🔀 Activity Flow toolbar item. A flow is the one
+  thing here that does not reduce to a `ParameterRow`, which is why it moved while the Parameters window and
+  the Runner stayed. **`activities.json` has no reader in Studio at all**: `project/activity/`,
+  `services/ActivityService`, `ActivitiesChangedEvent` and `ProjectState.activities` went with it. What a
+  menu or a picker needs instead is `plugin/HostParameters` (the parameters every loaded plugin declares)
+  and `project/ActivityBodies.names` (the activities the bot's own source defines).
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that

@@ -6,6 +6,39 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-11 (later) — `activities.json` has no reader in Studio at all.** The last of it is deleted:
+  `project/activity/` whole (`ActivitiesConfig`, `ActivityDefinition`, `ActivityVariable`, `ActivityFlow`,
+  `ActivityPreset`, `FlowNode`, `FlowEdge`, `ChoiceWire`, `VisibilityWire`, `VariableHolder`),
+  `services/ActivityService`, `CoreApplicationEvents.ActivitiesChangedEvent`, `ProjectState.activities` and
+  `SchemaFile.ACTIVITIES`. ~1,700 lines and three test classes.
+
+  **What replaced each reader is the point of the phase.** The expression menu and the variable picker ask
+  the plugins (`plugin/HostParameters`, over `PluginHost.parameterGroups`/`parameterRows`), so a second
+  plugin's parameters reach them on the same terms as the first's — which the file never allowed. The
+  overlay's activity list and the `Activity.enable("…")` picklist read the **bot's own source**
+  (`ActivityBodies.names`, matching `define("…")`), which is the narrower and truer question: an activity
+  with no body has nowhere to author into. `VariableHolder`'s two constants — `Activities` and `Parameters`
+  — were one plugin's class names written down in the host; the qualifier now travels with the parameter,
+  from its group's `className()`.
+
+  **Three things are given up, deliberately.** `ProjectRepair` no longer offers to restore
+  `activities.json`: the only copy it ever restored from was the host's parse, so a "recovery" would now
+  write an empty file over the user's values. `ProjectCreator` writes no `activities.json` for a game bot —
+  the plugin creates its own on first save. And the overlay's default target is the first activity rather
+  than the flow's start node, since the start node is in that file.
+
+  **`ValueWire` survives and moved to `plugin/`**: it names only contract types and answers only through
+  `PluginHost`, so it was never a reader of that file — it is the host's coercion over a plugin's value
+  vocabulary, and its callers are the Parameters window, the Runner and the pickers.
+
+  **The schema ledger keeps two files, not three**, and the three activity steps moved to `settings.json`:
+  none was ever about the JSON (an archived-stub restore and a report about the project's Java), and a host
+  that went on stamping a plugin's file would be a second writer of somebody else's format. The cost is
+  stated in `SchemaMigrations`: the numbering restarts, so both reports run once more on every project.
+
+  Studio: 925 tests, 65 failures / 5 errors / 9 skipped — the standing baseline with the 63 deleted tests
+  removed and **no new failure**, verified by stash-and-diff against the previous commit.
+
 - **2026-09-11 — the Activity Flow editor leaves, and Studio stops writing `activities.json` from two
   places.** `ui/app/ActivityFlowDialog` and the whole of `ui/app/flow` (`FlowCanvas`, `ActivityDraft`,
   `NewActivityDialog`, `FlowRules`, `FlowNames`, `FlowSnapshot`) are **deleted**; the editor is

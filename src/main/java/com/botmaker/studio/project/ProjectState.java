@@ -2,7 +2,6 @@ package com.botmaker.studio.project;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.component.Audience;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
@@ -28,8 +27,11 @@ public class ProjectState {
     // --- Build State ---
     private List<String> resolvedClasspath = new ArrayList<>();
 
-    // --- Activities (global config variables) ---
-    private ActivitiesConfig activities = ActivitiesConfig.empty();
+    // --- Activities: not here, and not anywhere in the editor (2026-09-11). The project's activities and the
+    //     values their parameters hold are the SDK plugin's file; the host asks for ParameterRows through
+    //     PluginHost when it needs to draw them, and asks the bot's own source (ActivityBodies) when it needs
+    //     to know which activities have a body. A cached parse of another plugin's file is exactly the stale
+    //     copy the parameter surface exists to remove.
 
     // --- Editor settings (capture targets, etc.) ---
     private StudioProjectSettings settings = StudioProjectSettings.empty();
@@ -185,14 +187,6 @@ public class ProjectState {
 
     public void setSettings(StudioProjectSettings settings) {
         this.settings = settings != null ? settings : StudioProjectSettings.empty();
-    }
-
-    public ActivitiesConfig getActivities() {
-        return activities;
-    }
-
-    public void setActivities(ActivitiesConfig activities) {
-        this.activities = activities != null ? activities : ActivitiesConfig.empty();
     }
 
     // =========================================================================

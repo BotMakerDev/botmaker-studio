@@ -30,7 +30,19 @@ public final class SchemaMigrations {
     private SchemaMigrations() {}
 
     /**
-     * <b>0 → 1: the archived-activity attic is emptied.</b> Archiving used to move an activity's hand-written
+     * <b>These three steps were {@code activities.json}'s until 2026-09-11, and they are {@code settings.json}'s
+     * now.</b> That file left the ledger with the rest of the activity model — it is the SDK plugin's, and a
+     * host that went on stamping it would be a second writer of somebody else's format. Not one of the three
+     * was ever about the JSON: each is about the project's <em>Java</em>, which is squarely the editor's
+     * business, and they were filed under the model only because the model was where activities lived.
+     *
+     * <p><b>The cost of the move, stated rather than discovered:</b> the numbering restarts. Every project in
+     * existence records {@code settings.json} at version 0, so all three run once on the next open. Step 1 is
+     * idempotent and says nothing for an empty attic, which is every project that has already had it; step 3
+     * is a report, so a project that was told once is told once more. Renumbering a file nobody owns any more
+     * was the alternative, and stranding whatever is still in the attic was the other.
+     *
+     * <p><b>0 → 1: the archived-activity attic is emptied.</b> Archiving used to move an activity's hand-written
      * {@code <Name>.java} into {@code .botmaker/archived-activities} while its definition stayed in
      * {@code activities.json} carrying {@code archived: true}. That flag is no longer read, so the activity is
      * simply live again on the next open — and its stub has to be live with it, or the project has an activity
@@ -73,7 +85,7 @@ public final class SchemaMigrations {
      * written down. A migration that deleted working code the user can read would be the generator's last
      * act of ownership, taken on the way out.
      */
-    private static final List<SchemaMigration> ACTIVITIES_STEPS = List.of(
+    private static final List<SchemaMigration> SETTINGS_STEPS = List.of(
             ctx -> {
                 int restored = restoreArchivedActivityStubs(ctx.config());
                 return restored == 0 ? null
@@ -122,12 +134,6 @@ public final class SchemaMigrations {
     }
 
     /**
-     * No steps yet — {@code settings.json} is still at version 0. Listed explicitly rather than left to a
-     * default, so "this file has never changed shape" is a statement and not an omission.
-     */
-    private static final List<SchemaMigration> SETTINGS_STEPS = List.of();
-
-    /**
      * <b>0 → 1 stood here and is a no-op since 2026-09-02.</b> It moved a bot's runtime tuning out of a
      * generated {@code BotSettings.java} — click delays, vision confidence, real input, the retry count —
      * by matching one plugin's facade calls with regexes over the user's own source. That is not a schema
@@ -143,7 +149,6 @@ public final class SchemaMigrations {
     /** The ordered steps for {@code file}. Index <i>i</i> migrates version <i>i</i> to <i>i+1</i>. */
     public static List<SchemaMigration> stepsFor(SchemaFile file) {
         return switch (file) {
-            case ACTIVITIES -> ACTIVITIES_STEPS;
             case SETTINGS -> SETTINGS_STEPS;
             case PROPERTIES -> PROPERTIES_STEPS;
         };

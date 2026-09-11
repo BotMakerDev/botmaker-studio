@@ -1,9 +1,6 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.shared.config.ProjectProperties;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
-import com.botmaker.studio.project.activity.ActivityDefinition;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.MavenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,7 +85,7 @@ class ProjectRepairTest {
 
     @Test
     void anIntactProjectHasNothingToRecover() {
-        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty()).isEmpty());
+        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT).isEmpty());
     }
 
     @Test
@@ -146,7 +143,7 @@ class ProjectRepairTest {
     void aDeletedSourceFileIsLeftAlone() throws IOException {
         Files.delete(mainDir.resolve("Popups.java"));
 
-        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty())
+        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT)
                 .isEmpty());
     }
 
@@ -167,7 +164,7 @@ class ProjectRepairTest {
         Files.delete(pom);
 
         List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty());
+                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT);
         assertEquals(List.of("pom.xml"), missing.stream().map(ProjectRepair.Missing::fileName).toList());
         // The SDK pin is the one thing a rewritten pom cannot recover — it was only ever written down here —
         // so the reason says out loud which version the project is about to be put on.
@@ -192,7 +189,7 @@ class ProjectRepairTest {
         Files.delete(pom);
 
         List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty());
+                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT);
         assertEquals(List.of("pom.xml"), missing.stream().map(ProjectRepair.Missing::fileName).toList());
         assertTrue(missing.getFirst().reason().contains("no BotMaker SDK"), missing.getFirst().reason());
 
@@ -208,7 +205,7 @@ class ProjectRepairTest {
         Files.delete(settings);
 
         List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty());
+                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT);
         // The placeholder picture was a third row here until 2026-09-01. It repairs itself now: the SDK
         // plugin's picture surfaces call ensurePlaceholder the first time they look at the folder, so the
         // editor restoring it only meant the editor knowing what a picture is called.
@@ -228,7 +225,7 @@ class ProjectRepairTest {
         Files.delete(config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME));
 
         List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, null, ActivitiesConfig.empty());
+                ProjectRepair.findMissing(config, null);
 
         // Writing a template guessed from `looksLikeGameBot` would turn a guess into a recorded fact, which is
         // worse than the absent file: nothing downstream could tell the two apart afterwards.
@@ -250,60 +247,36 @@ class ProjectRepairTest {
         Files.writeString(goHome, userEdited);
 
         Files.delete(mainDir.resolve("Popups.java"));   // something else is genuinely missing
-        List<ProjectRepair.Missing> missing = ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty());
+        List<ProjectRepair.Missing> missing = ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT);
         ProjectRepair.recover(config, missing);
 
         assertEquals(userEdited, Files.readString(goHome), "recovery must not clobber an existing file");
     }
 
     /**
-     * An activity implies no file. Its settings are still expected — {@code activities.json} is the model,
-     * and this class holds the only copy left of it once the file is gone — but there is no subclass stub to
-     * miss, because an activity's behaviour is an {@code Activities.define} call in a file the user owns and
-     * BotMaker never knew where it was.
+     * <b>A plugin's file is never listed (2026-09-11).</b> {@code activities.json} was, and was restored from
+     * the parse the editor kept in {@code ProjectState}; both the parse and the third parameter of
+     * {@link ProjectRepair#findMissing} are gone with the activity model. A deleted plugin file is a real
+     * loss and recovery has nothing honest to put back — an empty file would silently replace the user's
+     * values with defaults — so it is not offered.
      */
     @Test
-    void anActivityImpliesItsSettingsAndNoSource() {
-        ActivitiesConfig activities = ActivitiesConfig.of(
-                List.of(new ActivityDefinition("Mining", true, "", List.of(), true, true)), List.of());
+    void aDeletedPluginFileIsNotOffered() throws IOException {
+        Files.createDirectories(config.resourcesRoot());
+        Path activities = config.resourcesRoot().resolve("activities.json");
+        Files.writeString(activities, "{\"schemaVersion\":3,\"activities\":[{\"name\":\"Mining\"}]}");
+        Files.delete(activities);
 
-        List<ProjectRepair.Missing> missing = ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, activities);
-
-        assertEquals(List.of("activities.json"),
-                missing.stream().map(ProjectRepair.Missing::fileName).toList());
-        assertTrue(missing.stream().allMatch(m -> m.restorer() != null));
-    }
-
-    @Test
-    void anActivitiesClassIsNotExpectedWhenThereIsNothingToPutInIt() {
-        // ActivityService deletes Activities.java when there are no variables at all, so its absence is
-        // correct rather than damage. Same for activities.json, which a fresh project never writes.
-        List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, ActivitiesConfig.empty());
-        assertTrue(missing.isEmpty(), "an activity-less project is intact: " + missing);
-    }
-
-    @Test
-    void recoverWritesTheActivitySettingsBack() throws IOException {
-        ActivitiesConfig activities = ActivitiesConfig.of(
-                List.of(new ActivityDefinition("Mining", true, "", List.of(), true, true)), List.of());
-        List<ProjectRepair.Missing> missing = ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, activities);
-
-        List<Path> written = ProjectRepair.recover(config, missing);
-        assertEquals(List.of("activities.json"),
-                written.stream().map(p -> p.getFileName().toString()).toList());
-        assertTrue(written.stream().allMatch(Files::exists));
+        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT).isEmpty(),
+                "a project missing only a plugin's own file is intact as far as the host is concerned");
     }
 
     @Test
     void summariseGroupsByReason() throws IOException {
         Files.delete(config.projectPath().resolve("pom.xml"));
-        ActivitiesConfig activities = ActivitiesConfig.of(
-                List.of(new ActivityDefinition("Mining", true, "", List.of(), true, true)), List.of());
 
         Map<String, List<String>> summary =
-                ProjectRepair.summarise(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT, activities));
-        assertEquals(List.of("activities.json"), summary.get("activity settings"));
+                ProjectRepair.summarise(ProjectRepair.findMissing(config, ProjectTemplate.GAME_BOT));
         assertEquals(List.of("pom.xml"), summary.entrySet().stream()
                 .filter(e -> e.getKey().startsWith("build file")).findFirst().orElseThrow().getValue());
     }
@@ -313,7 +286,6 @@ class ProjectRepairTest {
     void aMissingEntryPointIsNotRecovered() throws IOException {
         Files.delete(config.mainSourceFile());
 
-        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.EMPTY, ActivitiesConfig.empty())
-                .isEmpty());
+        assertTrue(ProjectRepair.findMissing(config, ProjectTemplate.EMPTY).isEmpty());
     }
 }

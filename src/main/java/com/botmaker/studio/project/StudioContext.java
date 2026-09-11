@@ -2,7 +2,6 @@ package com.botmaker.studio.project;
 
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
@@ -36,7 +35,6 @@ public record StudioContext(ProjectConfig config,
                             BlockDragAndDropManager dragAndDropManager,
                             ProjectAnalyzer projectAnalyzer,
                             LibraryService libraryService,
-                            ActivityService activityService,
                             ProjectSettingsService projectSettingsService,
                             SdkSurfaceService sdkSurfaceService,
                             CodeEditorService codeEditorService,

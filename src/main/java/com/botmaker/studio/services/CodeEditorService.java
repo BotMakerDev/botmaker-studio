@@ -148,13 +148,10 @@ public class CodeEditorService {
         eventBus.subscribe(CoreApplicationEvents.BreakpointToggledEvent.class,
                 this::handleBreakpointToggle, false);
 
-        // ActivityService rewrites Activities.java / ActivityRegistry.java on disk behind our back; forget the
-        // cached copies so the next open reads the regenerated source instead of a stale snapshot.
-        eventBus.subscribe(CoreApplicationEvents.ActivitiesChangedEvent.class, event -> {
-            evictGeneratedActivityFiles();
-            // update() publishes from its background thread; re-rendering the open file is FX-thread work.
-            Platform.runLater(this::reloadActivityStubs);
-        }, false);
+        // An ActivitiesChangedEvent subscription stood here and is gone (2026-09-11), with the event, the
+        // service and the two generated classes it evicted. Nothing writes a project's Java any more — an
+        // activity is a define() call in a file the user owns — so there is no file behind the editor's back
+        // to forget, and a plugin writing its own JSON changes no source the editor has open.
 
         // The project's plugins have been re-bound, so the blocks on screen have to be built again. A block
         // caches the node it drew (AbstractCodeBlock.getUINode lazy-creates once), and what fills a value slot
@@ -621,8 +618,8 @@ public class CodeEditorService {
      * Makes {@code path} the active file and renders it.
      *
      * <p>{@code openFiles} is populated by {@link #openInitialFile(List)} at project open, but files appear on
-     * disk afterwards too — {@code ActivityService} writes activity stubs, {@code ProjectRepair} restores deleted
-     * scaffolding — and neither goes through this service. Such a file showed in the explorer (which reads the
+     * disk afterwards too — {@code ProjectRepair} restores a deleted pom or settings file, and a plugin may
+     * write one — and neither goes through this service. Such a file showed in the explorer (which reads the
      * real filesystem) but silently refused to open until the next restart re-walked the tree. So a miss here
      * means "not loaded yet", not "doesn't exist": load it from disk and carry on. Only a path that isn't a
      * readable file is an actual error.
@@ -667,48 +664,12 @@ public class CodeEditorService {
         }
     }
 
-    /**
-     * Drops the cached copies of the files {@code ActivityService} regenerates, so the next open re-reads them.
-     * Without this the {@code ProjectFile} kept the content captured at project open while the real file was
-     * rewritten underneath it, and the editor showed a stale {@code Activities}/{@code ActivityRegistry} —
-     * missing exactly the activity that was just added — until Studio restarted.
-     */
-    private void evictGeneratedActivityFiles() {
-        state.removeFile(config.activitiesSourceFile());
-        state.removeFile(config.activityRegistrySourceFile());
-    }
-
-    /**
-     * Re-reads the activity stubs {@code ActivityStubSync} may have just rewritten, and re-renders the open
-     * one if it was among them.
-     *
-     * <p>Adding an outcome in the flow dialog puts a new constant in that activity's {@code Outcome} enum, on
-     * disk. The editor's copy is a snapshot taken when the file was opened, and every block reads the AST of
-     * that snapshot — so the {@code return} block's outcome picker kept offering yesterday's constants until
-     * Studio was restarted, which read as "adding an outcome doesn't work".
-     *
-     * <p>Re-reading rather than {@link #evictGeneratedActivityFiles evicting}: a stub is ordinary user code,
-     * and dropping it from {@code openFiles} would take it out of {@link ProjectAnalyzer}'s view of the
-     * project until someone happened to open it again.
-     */
-    private void reloadActivityStubs() {
-        Path dir = config.activitiesPackageDir();
-        if (dir == null) return;
-        Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
-        boolean activeChanged = false;
-        for (ProjectFile file : List.copyOf(state.getAllFiles())) {
-            if (!file.getPath().startsWith(dir) || !Files.isRegularFile(file.getPath())) continue;
-            try {
-                String onDisk = Files.readString(file.getPath());
-                if (onDisk.equals(file.getContent())) continue;
-                file.setContent(onDisk);
-                activeChanged |= file.getPath().equals(active);
-            } catch (Exception e) {
-                System.err.println("Error re-reading activity stub: " + file.getPath() + " (" + e.getMessage() + ")");
-            }
-        }
-        if (activeChanged) switchToFile(active);
-    }
+    // evictGeneratedActivityFiles and reloadActivityStubs stood here and are deleted (2026-09-11). Both
+    // existed because something rewrote a project's Java behind the editor: the first dropped the cached
+    // Activities.java / ActivityRegistry.java so a regeneration would be re-read, the second re-read an
+    // activity stub after the flow dialog had put a new Outcome constant in it. Nothing has generated either
+    // since 2026-08-29, and the flow dialog is the SDK plugin's and writes JSON only, so the events that
+    // called them stopped existing before the methods did.
 
     public void createFile(String className) {
         try {
@@ -737,8 +698,8 @@ public class CodeEditorService {
     // There is no deleteFile here any more, and that is deliberate rather than an omission. Its only caller was
     // the file explorer's context menu, and a file in a bot project is never just a file: an activity's stub is
     // half of a pair with generated code that names it, and everything else is scaffolding the build needs.
-    // Removing an activity is ActivityService's job (it deletes the stub and stops generating the rest, both
-    // in one save), and nothing else here should go.
+    // Removing an activity is the SDK plugin's Activity Flow, which edits its own JSON and leaves whatever
+    // the user wrote exactly where it is, and nothing else here should go.
 
     private void refreshUI(String javaCode, boolean markNewIdentifiersAsUnedited) {
         render(adopt(javaCode), javaCode, markNewIdentifiersAsUnedited);

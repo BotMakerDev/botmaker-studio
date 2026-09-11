@@ -10,7 +10,6 @@ import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
@@ -57,7 +56,6 @@ final class StudioActions {
     private final ProjectSettingsService projectSettingsService;
     private final ScreenCaptureService screenCaptureService;
     private final ProjectAnalyzer projectAnalyzer;
-    private final ActivityService activityService;
     private final LibraryService libraryService;
     private final MenuBarManager menuBar;
     private final ToolbarManager toolbar;
@@ -94,7 +92,6 @@ final class StudioActions {
         this.projectSettingsService = ctx.projectSettingsService();
         this.screenCaptureService = screenCaptureService;
         this.projectAnalyzer = ctx.projectAnalyzer();
-        this.activityService = ctx.activityService();
         this.libraryService = ctx.libraryService();
         this.menuBar = menuBar;
         this.toolbar = toolbar;
@@ -289,7 +286,7 @@ final class StudioActions {
      */
     private void openOverlayEditor() {
         ProgramShapeOverlay.open(primaryStage, codeEditorService, projectSettingsService, screenCaptureService,
-                activityService, this::liveSessionWindow, null);
+                this::liveSessionWindow, null);
     }
 
     /**

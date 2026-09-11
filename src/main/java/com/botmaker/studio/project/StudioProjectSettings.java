@@ -17,7 +17,8 @@ import java.util.Map;
 
 /**
  * Per-project editor settings, persisted as {@code settings.json} under the project's
- * {@code src/main/resources}. Modeled on {@link com.botmaker.studio.project.activity.ActivitiesConfig}.
+ * {@code src/main/resources}. It is the only project file the editor itself both writes and versions —
+ * {@code activities.json} was the other, and that one is the SDK plugin's since 2026-09-11.
  *
  * <p><b>Nothing about capture is in this record any more (2026-09-01).</b> It carried three components that
  * were read from and written to the SDK's {@code capture.json} through {@code Authoring} — the saved capture
@@ -214,8 +215,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
 
     /**
      * Writes (overwrites) {@code settings.json} into {@code resourcesDir}, creating it if needed, stamped with
-     * the file's {@code schemaVersion} — see {@link SchemaFile#stamped} and the same note on
-     * {@link com.botmaker.studio.project.activity.ActivitiesConfig#write}.
+     * the file's {@code schemaVersion} — see {@link SchemaFile#stamped}.
      *
      * <p>It writes one file and no longer merges a second. The {@code Authoring.writeCapture} call that used
      * to sit here re-read {@code capture.json} to replace the one component the editor still owned, precisely

@@ -44,16 +44,31 @@ class VariablePickerMatchTest {
         return () -> argument;
     }
 
+    /**
+     * The classes a plugin's parameter groups generate. Handed in rather than looked up: the set comes from
+     * the loaded plugins in a real project, and the detection this test pins is the shape question that is
+     * asked once that set is known.
+     */
+    private static final java.util.Set<String> DECLARED = java.util.Set.of("Activities", "Parameters");
+
     @Test
     void aSlotHoldingAProjectVariableIsClaimed() {
-        assertEquals("RETRIES", VariablePicker.referencedVariable(firstArgument("wait(Activities.RETRIES);")));
+        assertEquals("RETRIES",
+                VariablePicker.referencedVariable(firstArgument("wait(Activities.RETRIES);"), DECLARED::contains));
     }
 
     @Test
     void anythingElseIsLeftToTheTypeBasedPickers() {
         // A literal, a local, and a field of some other class: none of them is "which variable is this".
-        assertNull(VariablePicker.referencedVariable(firstArgument("wait(3);")));
-        assertNull(VariablePicker.referencedVariable(firstArgument("wait(retries);")));
-        assertNull(VariablePicker.referencedVariable(firstArgument("wait(Templates.ORE);")));
+        assertNull(VariablePicker.referencedVariable(firstArgument("wait(3);"), DECLARED::contains));
+        assertNull(VariablePicker.referencedVariable(firstArgument("wait(retries);"), DECLARED::contains));
+        assertNull(VariablePicker.referencedVariable(firstArgument("wait(Templates.ORE);"), DECLARED::contains));
+    }
+
+    @Test
+    void aQualifierNoPluginDeclaresIsNotAParameterReference() {
+        // The point of the predicate: with no plugin declaring "Activities", the same expression is just a
+        // field of some class the user wrote.
+        assertNull(VariablePicker.referencedVariable(firstArgument("wait(Activities.RETRIES);"), q -> false));
     }
 }

@@ -1,8 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.studio.project.ActivityBodies;
-import com.botmaker.studio.project.activity.ActivityDefinition;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.geometry.Pos;
@@ -48,7 +46,6 @@ final class OverlayTargetPicker {
 
     private final CodeEditorService context;
     private final ProjectSettingsService settings;
-    private final ActivityService activities;
     private final Callbacks callbacks;
 
     /** The activity being authored into; picking one switches the editor to its file and re-homes the cursor. */
@@ -63,11 +60,9 @@ final class OverlayTargetPicker {
      */
     private String openTarget;
 
-    OverlayTargetPicker(CodeEditorService context, ProjectSettingsService settings,
-                        ActivityService activities, Callbacks callbacks) {
+    OverlayTargetPicker(CodeEditorService context, ProjectSettingsService settings, Callbacks callbacks) {
         this.context = context;
         this.settings = settings;
-        this.activities = activities;
         this.callbacks = callbacks;
     }
 
@@ -116,16 +111,24 @@ final class OverlayTargetPicker {
         return !targetNames().isEmpty();
     }
 
-    /** The project's activities, in flow order — each has a stub file and can run. */
+    /**
+     * The activities this bot defines, read out of its own source.
+     *
+     * <p>It was the flow's list, out of {@code activities.json} through {@code ActivityService}, until
+     * 2026-09-11 — one plugin's file, parsed by the host. What this picker is for is choosing a
+     * {@code define} call to insert blocks into, so asking the source is both the honest question and a
+     * narrower one: an activity wired in the flow with no body has nowhere to author into and is no longer
+     * offered, and one written by hand and never wired now is.
+     */
     private List<String> activityNames() {
-        return activities.current().activities().stream().map(ActivityDefinition::name).toList();
+        return ActivityBodies.names(context.getConfig(), context.getState());
     }
 
     /**
      * Everything the overlay can author into: the activities, then the two supervised hooks
      * ({@code GoHome}, {@code Popups}) if this project has them as files. They are as much a place for blocks
-     * as any activity — {@code Popups} in particular is where the popup-dismissal steps belong — but they have
-     * no {@link ActivityDefinition}, so a list built from the flow alone could never reach them.
+     * as any activity — {@code Popups} in particular is where the popup-dismissal steps belong — but nothing
+     * defines them, so a list built from the {@code define} calls alone could never reach them.
      *
      * <p>Only a project created before 2026-08-29 has them: a new one carries {@code goHome} and
      * {@code dismissPopups} as methods of its own entry point, and both are ordinary user code the overlay
@@ -178,7 +181,13 @@ final class OverlayTargetPicker {
     /**
      * Which target to open on: the one last authored into (activity <em>or</em> scaffold hook — the last-used
      * one is remembered per project so reopening the overlay resumes where the last session stopped), else the
-     * flow's start node, else the first activity, else a hook for a project that has no activities yet.
+     * first activity the source defines, else a hook for a project that has no activities yet.
+     *
+     * <p><b>The flow's start node was preferred over the first activity until 2026-09-11</b>, and it is not
+     * asked for any more: which node a flow starts at is the SDK plugin's graph, and the host reading that
+     * file to sort a dropdown is exactly the arrangement this phase removes. What the default costs is the
+     * one open where the user has never picked a target — every open after that resumes from
+     * {@code lastRecordedActivity}, which is the editor's own state and is untouched.
      */
     private String preferredTarget() {
         String last = settings.current().lastRecordedActivity();
@@ -188,8 +197,7 @@ final class OverlayTargetPicker {
             List<String> hooks = hookNames();
             return hooks.isEmpty() ? null : hooks.get(0);
         }
-        String start = activities.current().flow().resolvedStart(names);
-        return names.contains(start) ? start : names.get(0);
+        return names.get(0);
     }
 
     /**

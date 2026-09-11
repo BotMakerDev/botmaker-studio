@@ -6,7 +6,7 @@ import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.project.activity.ValueWire;
+import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;

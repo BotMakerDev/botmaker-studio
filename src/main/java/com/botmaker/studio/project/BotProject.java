@@ -8,7 +8,6 @@ import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSources;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.SdkDocsService;
 import com.botmaker.studio.services.SdkSurfaceService;
@@ -47,7 +46,6 @@ public class BotProject {
     private final BlockDragAndDropManager dragAndDropManager;
     private final ProjectAnalyzer projectAnalyzer;
     private final LibraryService libraryService;
-    private final ActivityService activityService;
     private final ProjectSettingsService projectSettingsService;
     private final SdkSurfaceService sdkSurfaceService;
 
@@ -64,7 +62,6 @@ public class BotProject {
                        BlockDragAndDropManager dragAndDropManager,
                        ProjectAnalyzer projectAnalyzer,
                        LibraryService libraryService,
-                       ActivityService activityService,
                        ProjectSettingsService projectSettingsService,
                        SdkSurfaceService sdkSurfaceService) {
         this.config = config;
@@ -74,7 +71,6 @@ public class BotProject {
         this.dragAndDropManager = dragAndDropManager;
         this.projectAnalyzer = projectAnalyzer;
         this.libraryService = libraryService;
-        this.activityService = activityService;
         this.projectSettingsService = projectSettingsService;
         this.sdkSurfaceService = sdkSurfaceService;
     }
@@ -174,9 +170,11 @@ public class BotProject {
         //      dependency — validation/ stays free of Maven, jars and ClassGraph.
         diagnosticsManager.setDeprecationProbe(sdkSurfaceService::isMemberDeprecated);
 
-        // 7c. Activities (global config variables); load existing schema/values into state
-        ActivityService activityService = new ActivityService(config, state, eventBus);
-        activityService.load();
+        // 7c. Activities used to be loaded here, into ProjectState, by an ActivityService that owned
+        //     activities.json. Both are gone (2026-09-11): that file belongs to the plugin that defines
+        //     activities, and a host that parsed it at open held a copy nothing could keep in step with the
+        //     plugin's own writes. Nothing takes its place at open — a window over a plugin's data reads it
+        //     when it is opened.
 
         // 7d. Editor settings (capture targets, etc.); load existing settings into state. This also resolves
         //     the project's template, which FileRole/MethodLock read to tell scaffolding from user code.
@@ -191,7 +189,7 @@ public class BotProject {
         BotProject project = new BotProject(
                 config, state, eventBus,
                 diagnosticsManager, dragAndDropManager,
-                projectAnalyzer, libraryService, activityService,
+                projectAnalyzer, libraryService,
                 projectSettingsService, sdkSurfaceService
         );
         project.blockConverter = blockConverter;
@@ -278,7 +276,7 @@ public class BotProject {
      */
     public StudioContext context() {
         return new StudioContext(config, state, eventBus, diagnosticsManager, dragAndDropManager,
-                projectAnalyzer, libraryService, activityService, projectSettingsService,
+                projectAnalyzer, libraryService, projectSettingsService,
                 sdkSurfaceService, codeEditorService, codeExecutionService);
     }
 
@@ -289,7 +287,6 @@ public class BotProject {
     public BlockDragAndDropManager getDragAndDropManager() { return dragAndDropManager; }
     public ProjectAnalyzer getProjectAnalyzer() { return projectAnalyzer; }
     public LibraryService getLibraryService() { return libraryService; }
-    public ActivityService getActivityService() { return activityService; }
     public ProjectSettingsService getProjectSettingsService() { return projectSettingsService; }
     public SdkSurfaceService getSdkSurfaceService() { return sdkSurfaceService; }
     public CodeEditorService getCodeEditorService() { return codeEditorService; }

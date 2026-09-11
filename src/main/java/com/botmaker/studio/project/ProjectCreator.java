@@ -1,7 +1,6 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.shared.config.ProjectProperties;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.botmaker.studio.project.launch.SupportedTargets;
 import com.botmaker.studio.project.migration.SchemaFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
@@ -26,10 +25,10 @@ import static com.botmaker.studio.config.Constants.PROJECTS_ROOT;
  *
  * <ul>
  *   <li>the directories are a {@code mkdir} list and were never knowledge;
- *   <li><b>{@code activities.json} is written by Studio on every edit anyway</b> —
- *       {@link ActivitiesConfig#write}, with Studio's own mapper and its own
- *       {@code SchemaFile.ACTIVITIES} stamp. Writing an empty one at creation was never a fact the SDK held
- *       and the editor did not;
+ *   <li><b>{@code activities.json} is nobody's here at all.</b> Studio wrote an empty stamped one for a game
+ *       bot until 2026-09-11 — with its own mapper and its own schema stamp — and it is the SDK plugin's
+ *       file: the plugin creates it on its first save, and a project with nothing stored is the state every
+ *       reader of it already has to handle;
  *   <li>{@code botmaker-project.properties} carried only the capture resolution, which stopped being the
  *       editor's on 2026-09-01 — a fresh project has neither key, and the capturing plugin seeds them;
  *   <li>the placeholder picture belongs to whoever offers the type it stands for, so the plugin's own
@@ -92,14 +91,12 @@ public class ProjectCreator {
         // naming a version nobody can resolve fails where the user can read why.
 
         try {
-            // 1. Everything the project is made of, in one pass: the src/ layout, activities.json for a game
-            //    bot, the pom and every .java. Rendered first, committed second, so a refusal lands before a
+            // 1. Everything the project is made of, in one pass: the src/ layout, the pom and every .java.
+            //    Rendered first, committed second, so a refusal lands before a
             //    single directory exists and a project that cannot be created never has to be deleted by
             //    hand.
             System.out.println("1. Creating the project...");
-            Map<String, String> ourFiles = new LinkedHashMap<>(StarterSources.of(cfg));
-            ourFiles.put("pom.xml", MavenService.blankPomXml(cfg));
-            writeProject(cfg, template, ourFiles);
+            writeProject(cfg, template, Map.of("pom.xml", MavenService.blankPomXml(cfg)));
 
             // 2. Seed settings.json (the chosen template). Studio's own file: no bot reads it, and it
             //    records what the editor chose rather than what the bot needs.
@@ -243,12 +240,14 @@ public class ProjectCreator {
         }
 
         // ---- render ----------------------------------------------------------------------------------
-        Map<String, String> files = new LinkedHashMap<>();
-        if (template == ProjectTemplate.GAME_BOT) {
-            // Empty, but stamped: an unstamped file reads as schema version 0 and the next open re-runs
-            // every migration step against an already-current file.
-            files.put("src/main/resources/" + ActivitiesConfig.FILE_NAME, ActivitiesConfig.empty().json());
-        }
+        // The starter source is what creation itself writes, and composing it here rather than taking it in
+        // is what keeps the collision check below able to fire: it was checked against an empty map for as
+        // long as every file arrived as a caller file, and a map cannot collide with itself.
+        //
+        // A game-bot project also got an empty, stamped activities.json until 2026-09-11. That file is the
+        // SDK plugin's, and seeding a plugin's store means knowing its format; the plugin writes it on its
+        // first save, and a project with nothing stored is the state every reader of it already handles.
+        Map<String, String> files = new LinkedHashMap<>(StarterSources.of(cfg));
         for (Map.Entry<String, String> file : callerFiles.entrySet()) {
             if (files.containsKey(file.getKey())) {
                 throw new IllegalArgumentException(

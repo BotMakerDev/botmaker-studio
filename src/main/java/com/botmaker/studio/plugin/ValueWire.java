@@ -1,10 +1,9 @@
-package com.botmaker.studio.project.activity;
+package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.ResolvedType;
 
@@ -32,11 +31,19 @@ import java.util.stream.Collectors;
  *
  * <h2>Text on the wire</h2>
  *
- * <p>Every value is stored as a <b>list of strings</b> in {@code activities.json}, whatever its type — one
- * entry for an ordinary variable, one per item for a {@code List of …} one. That uniformity is the point: a
- * value has exactly one shape on disk, so the file has one reader, one writer and one normaliser rather than
- * a special case per type. It is also what lets a value survive a retype, a hand edit, and a plugin that is
- * not installed today.
+ * <p>Every value crosses as a <b>list of strings</b>, whatever its type — one entry for an ordinary
+ * parameter, one per item for a {@code List of …} one. That is {@link com.botmaker.plugin.api.ParameterRow}'s
+ * own shape, and the uniformity is the point: a value has exactly one form, so there is one normaliser rather
+ * than a special case per type. It is also what lets a value survive a retype, a hand edit, and a plugin that
+ * is not installed today.
+ *
+ * <h2>Why it lives beside the host's other halves of the contract (2026-09-11)</h2>
+ *
+ * <p>It was {@code project.activity.ValueWire} for as long as the host parsed {@code activities.json}
+ * itself. That file is one plugin's and Studio no longer reads it — but this class never did: every type it
+ * names is the contract's, every answer it gives comes from {@link PluginHost#valueTypes()}, and its callers
+ * are the Parameters window, the Runner and the pickers, all of which work over rows a plugin hands over. So
+ * it moved here, and the package it left is deleted.
  *
  * <h2>Every conversion is total</h2>
  *
@@ -61,9 +68,9 @@ public final class ValueWire {
      * The registered type with this id, or an {@linkplain ValueType#unknown unknown} one.
      *
      * <p><b>An id written down in Studio's own source is not a back door</b>, and the distinction is worth
-     * stating because it looks like one. The id is the word {@code activities.json} holds; naming
-     * {@code "YES_NO"} here is Studio reading its own file format, exactly as it reads {@code "ONE_OF"}. What
-     * it is not allowed to do is reach past the host for the <em>answer</em> — hence
+     * stating because it looks like one. The id is the word a {@code ParameterRow} carries; naming
+     * {@code "YES_NO"} here is Studio spelling a type it draws a widget for. What it is not allowed to do is
+     * reach past the host for the <em>answer</em> — hence
      * {@link PluginHost#valueTypes()} and never {@code SdkValueTypes} — so an id no plugin claims yields an
      * unknown type here rather than a compile error somewhere.
      */
@@ -104,10 +111,10 @@ public final class ValueWire {
      * The Java type of the generated field — {@code int}, {@code java.time.Duration},
      * {@code java.util.List<com.example.plugin.Point>}.
      *
-     * <p>Everything outside {@code java.lang} is named in full, so the generated {@code Activities} class
-     * needs no import for a variable's type — the cheapest way to guarantee it never needs one that was
-     * forgotten. That is why this is not {@link ValueChoice#sourceName()}, which writes the simple name a
-     * type declares an import for.
+     * <p>Everything outside {@code java.lang} is named in full, so a caller composing a declaration needs no
+     * import for the type — the cheapest way to guarantee it never needs one that was forgotten. That is why
+     * this is not {@link ValueChoice#sourceName()}, which writes the simple name a type declares an import
+     * for.
      */
     public static String javaType(ValueChoice type) {
         ValueType base = type.type();

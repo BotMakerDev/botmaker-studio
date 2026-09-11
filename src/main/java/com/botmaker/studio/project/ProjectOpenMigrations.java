@@ -2,7 +2,6 @@ package com.botmaker.studio.project;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
 import com.botmaker.studio.project.migration.ProjectSchema;
 
 import java.io.IOException;
@@ -72,14 +71,14 @@ public final class ProjectOpenMigrations {
      * the class and the capability are gone with the generator: restoring a source file means knowing what
      * it ought to contain, and nothing knows that about a file whose author is the user. What is restored
      * is the four files that are not source — the pom, the project properties, {@code settings.json} and
-     * the placeholder image — plus {@code activities.json} itself.
+     * the placeholder image. {@code activities.json} was a fifth until 2026-09-11 and is a plugin's file, so
+     * the editor has no copy of it to restore from.
      */
     private static List<String> restoreMissingFiles(ProjectConfig config, ProjectState state) {
         List<String> report = new ArrayList<>();
         try {
-            ActivitiesConfig activities = ActivitiesConfig.read(config.resourcesRoot());
             List<ProjectRepair.Missing> missing =
-                    ProjectRepair.findMissing(config, state.getTemplate(), activities);
+                    ProjectRepair.findMissing(config, state.getTemplate());
             if (missing.isEmpty()) return report;
 
             List<Path> restored = ProjectRepair.recover(config, missing);

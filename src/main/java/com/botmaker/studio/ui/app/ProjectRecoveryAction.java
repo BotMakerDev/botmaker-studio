@@ -5,7 +5,6 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectRepair;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.services.ActivityService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -17,8 +16,10 @@ import java.util.List;
  * <b>Project ▸ Recover Project Files</b> — puts back the files a project needs and BotMaker owns.
  *
  * <p>Which, since 2026-08-29, means the files that are <b>not</b> the user's source: {@code pom.xml},
- * {@code botmaker-project.properties}, {@code settings.json}, {@code activities.json} and the placeholder
- * image template. Missing ones are recreated; a file that exists is never overwritten.
+ * {@code botmaker-project.properties}, {@code settings.json} and the placeholder image template — the files
+ * Studio itself writes. Missing ones are recreated; a file that exists is never overwritten.
+ * {@code activities.json} was listed here until 2026-09-11 and is a plugin's file now, which the editor has
+ * no copy of and so cannot honestly restore.
  *
  * <p><b>Two capabilities went with the generator, and the second is the interesting one.</b> Restoring a
  * missing {@code .java} needed something that knew what a project must contain, and nothing does. <b>Damaged
@@ -49,10 +50,8 @@ final class ProjectRecoveryAction {
     static void recover(StudioContext ctx, Runnable refreshTree) {
         ProjectConfig config = ctx.config();
         ProjectState state = ctx.state();
-        ActivityService activityService = ctx.activityService();
 
-        List<ProjectRepair.Missing> missing =
-                ProjectRepair.findMissing(config, state.getTemplate(), activityService.current());
+        List<ProjectRepair.Missing> missing = ProjectRepair.findMissing(config, state.getTemplate());
 
         if (missing.isEmpty()) {
             Alert ok = ThemedWindows.alert(Alert.AlertType.INFORMATION);
