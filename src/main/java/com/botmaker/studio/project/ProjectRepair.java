@@ -40,6 +40,16 @@ import java.util.Map;
  * template — every one of them a file Studio itself writes. A plugin's own file is not restorable here and
  * {@code activities.json} stopped being listed on 2026-09-11; see {@link #findMissing}.
  *
+ * <h2>A plugin's folder is never repaired, and never reported</h2>
+ *
+ * <p>Every plugin keeps its own files under {@code src/main/resources/plugins/<author>/<plugin>/}, and this
+ * class knows nothing about any of them — not that they should exist, not what they should contain, not
+ * whether one is missing. That is not a gap: recovery restores what <em>Studio</em> writes, and a file whose
+ * format only its owner knows can only be restored by its owner. A blank file written here would read as the
+ * user having no parameters rather than as a file that is gone, which is the one outcome worse than absence.
+ * The project-open pass names an absent owner instead of repairing anything; see
+ * {@link ProjectOpenMigrations} and {@code plugin/PluginOwners}.
+ *
  * <p>Two capabilities went with the generator, and both are worth knowing about rather than reinventing.
  * <b>Missing source</b> was restored by asking the project's own SDK to emit the file again — which needed a
  * generator that knew what a project must contain. <b>Damaged locked methods</b> ({@code findDamaged} /

@@ -800,18 +800,21 @@
 }
 
 /*
- * The SDK floor banner: this bot pins an SDK older than MavenService.MIN_SDK_VERSION. Amber, not red, and
- * above a project that opened normally — an old bot that runs is not a broken bot. Same shape as
- * .reader-banner deliberately: both say "this project is in a mode", and one visual grammar for that is
- * enough.
+ * The missing-plugin banner: this project holds data whose owning plugin is not installed. Amber, not red,
+ * and above a project that opened normally — nothing is broken and nothing is lost, one section is simply
+ * unreadable until the plugin is back. Same shape as .reader-banner deliberately: both say "this project is
+ * in a mode", and one visual grammar for that is enough.
+ *
+ * It took these rules over from .sdk-floor-banner, whose banner went on 2026-08-25 with the version floor —
+ * the selector had been styling nothing since.
  */
-.sdk-floor-banner {
+.missing-plugin-banner {
     -fx-background-color: -bm-cat-variables;
     -bm-text-on-color: -bm-on-accent;
     -fx-padding: 6 12 6 12;
     -fx-alignment: center-left;
 }
-.sdk-floor-banner .label {
+.missing-plugin-banner .label {
     -fx-text-fill: -bm-text-on-color;
     -fx-font-weight: bold;
 }

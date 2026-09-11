@@ -6,6 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-11 (later still) — a project says when its data has an owner who is not here.** `plugin/PluginOwners`
+  reads the plugin ids out of `src/main/resources/plugins/<author>/<plugin>/` — folder names only, never a
+  byte of a file — and reports the ones no loaded plugin claims. `EditorCanvas` shows a banner naming them
+  with an **Install…** button into Manage Plugins, re-asked on every `LibrariesChangedEvent` so installing
+  the plugin takes the banner down without a reopen; `ProjectOpenMigrations` adds the same sentence to the
+  open report.
+
+  **Why the host reads the tree at all, when every other question about plugin data is asked of the plugin:**
+  the plugin whose data is sitting in the project is precisely the one that is absent, and an absent plugin
+  answers nothing. The host is the only thing that always has the project directory. It is the narrowest
+  reading available — no format, no key, no value crosses — and the layout it knows is
+  `botmaker-plugin-basics`' own, written down a second time here because Studio cannot depend on a plugin.
+  The alternative was a project that silently drops a section with nothing able to say so.
+
+  `ProjectRepair` gains a heading rather than a feature: a plugin's folder is never reported and never
+  restored, because a blank file written by the host would read as *the user has no parameters* rather than
+  as *the file is gone* — the one outcome worse than absence. The amber `.sdk-floor-banner` CSS, styling
+  nothing since the version floor went on 2026-08-25, is now `.missing-plugin-banner`; `UIManager` stopped
+  holding the `SdkSurfaceService` it had been handing the canvas unread ever since.
+
 - **2026-09-11 (later) — `activities.json` has no reader in Studio at all.** The last of it is deleted:
   `project/activity/` whole (`ActivitiesConfig`, `ActivityDefinition`, `ActivityVariable`, `ActivityFlow`,
   `ActivityPreset`, `FlowNode`, `FlowEdge`, `ChoiceWire`, `VisibilityWire`, `VariableHolder`),

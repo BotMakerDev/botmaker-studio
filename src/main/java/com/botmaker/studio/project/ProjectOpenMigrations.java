@@ -1,6 +1,7 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.plugin.PluginOwners;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.migration.ProjectSchema;
 
@@ -52,7 +53,33 @@ public final class ProjectOpenMigrations {
         //    compile against the SDK it pins is what the upgrade path is for, and it edits the user's code
         //    only when they ask it to.
         report.addAll(restoreMissingFiles(config, state));
+
+        // 3. Say who owns data in this project and is not here to read it. Nothing is done about it — there
+        //    is nothing honest to do — and that is why it is a line rather than a pass: the project opens
+        //    exactly as it would have, and the one thing that was missing was anybody saying so.
+        report.addAll(absentPluginOwners(config));
         return report;
+    }
+
+    /**
+     * One line naming the plugins this project holds data for that nothing answers for.
+     *
+     * <p>The status-bar half of the canvas banner, and deliberately the same sentence in shorter form: the
+     * banner is what a user sees while they work, this is what they see once, in the order the open
+     * happened, beside whatever else was done to the project.
+     *
+     * <p><b>It reports and never repairs.</b> An absent owner's file is not damage — it is data whose reader
+     * is not installed — so there is nothing to restore, nothing to migrate and nothing to delete. The one
+     * failure mode worth the line is the silent one: a project that opens looking complete while a whole
+     * section of it is invisible. See {@code PluginOwners} for why the host reads the folder names at all,
+     * and {@link ProjectRepair} for why none of those files is ever offered for recovery.
+     */
+    private static List<String> absentPluginOwners(ProjectConfig config) {
+        List<String> absent = PluginOwners.absent(config);
+        if (absent.isEmpty()) return List.of();
+        return List.of("This project holds data owned by "
+                + (absent.size() == 1 ? "a plugin that is not installed: " : "plugins that are not installed: ")
+                + String.join(", ", absent) + ". It is kept as it is until the plugin is installed.");
     }
 
     /**

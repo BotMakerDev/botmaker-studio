@@ -6,6 +6,7 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.PluginOwners;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectOpenMigrations;
@@ -76,8 +77,9 @@ public class UIManager implements ProjectWindow {
     private final ProjectState state;
 
     private final ProjectSettingsService projectSettingsService;
-    /** This project's SDK surface — read once, by the canvas, to decide whether the version floor is breached. */
-    private final SdkSurfaceService sdkSurfaceService;
+    // The SDK surface was held here and handed to the canvas, for a version-floor banner deleted on
+    // 2026-08-25; the canvas took it for three weeks without reading it. The banner above the canvas now is
+    // about a missing plugin rather than an old version, and it asks PluginOwners.
     private final ToolbarManager toolbarManager;
     private final EventLogManager eventLogManager;
     private final MenuBarManager menuBarManager;
@@ -161,7 +163,6 @@ public class UIManager implements ProjectWindow {
         // (config, state, eventBus). The capture service honors the default target so pickers stop re-asking
         // which screen to use.
         this.projectSettingsService = ctx.projectSettingsService();
-        this.sdkSurfaceService = ctx.sdkSurfaceService();
         ScreenCaptureService screenCaptureService = new ScreenCaptureService(projectSettingsService);
 
         this.toolbarManager = new ToolbarManager(eventBus, projectSettingsService);
@@ -404,7 +405,7 @@ public class UIManager implements ProjectWindow {
         // --- 3. Center: Code Canvas ---
         editorCanvas = new EditorCanvas(codeEditorService, eventBus, state.isReaderMode(),
                 config.projectName(), this::switchToEditorMode,
-                sdkSurfaceService, actions::openSdkUpgrade);
+                () -> PluginOwners.absent(config), actions::openManagePlugins);
 
         // --- 4. Bottom Panel: Terminal/Errors ---
         outputArea = new TextArea();

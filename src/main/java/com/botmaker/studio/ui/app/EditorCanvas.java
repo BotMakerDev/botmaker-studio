@@ -4,8 +4,6 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.BlockEvent;
 import javafx.application.Platform;
@@ -22,9 +20,12 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.util.List;
+import java.util.function.Supplier;
+
 /**
- * The centre column: the scrolling block canvas, and — for an installed bot opened read-only — the Reader-mode
- * banner above it.
+ * The centre column: the scrolling block canvas, the Reader-mode banner for an installed bot opened
+ * read-only, and the missing-plugin banner for a project whose data has an owner that is not loaded.
  *
  * <p>It re-renders the whole program on every {@code UIBlocksUpdatedEvent}, which is what makes the scroll
  * position its problem: the swap empties the {@link ScrollPane}, so the viewport's position is lost unless
@@ -39,17 +40,21 @@ final class EditorCanvas {
     private final ScrollPane scrollPane;
     private final VBox column;
 
+    /** Above the canvas whenever the project holds data for a plugin that is not loaded; null when it does not. */
+    private HBox missingPluginBanner;
+
     /**
      * @param readerMode        renders without controls, under a banner offering the switch to Editor mode
      * @param projectName       named in that banner
      * @param onSwitchToEditor  the banner's button
-     * @param sdkSurface        this project's SDK surface; a version below the floor adds a second banner
-     * @param onUpgradeSdk      that banner's button — the Upgrade SDK report, which is where a version change
-     *                          starts: it reads both jars and says what moving would cost before anything moves
+     * @param missingPlugins    the ids this project holds data for that nothing answers for — asked again on
+     *                          every {@code LibrariesChangedEvent}, since installing the plugin is exactly
+     *                          what the banner's button leads to
+     * @param onManagePlugins   that banner's button — the registry browser, where the plugin is installed
      */
     EditorCanvas(CodeEditorService codeEditorService, EventBus eventBus,
                  boolean readerMode, String projectName, Runnable onSwitchToEditor,
-                 SdkSurfaceService sdkSurface, Runnable onUpgradeSdk) {
+                 Supplier<List<String>> missingPlugins, Runnable onManagePlugins) {
         this.codeEditorService = codeEditorService;
         this.eventBus = eventBus;
 
@@ -84,6 +89,57 @@ final class EditorCanvas {
         // The too-old-SDK banner that used to be added here went on 2026-08-25 with the version floor
         // itself: with no generation left in Studio there is nothing a version comparison protects, and the
         // palette's answer is per element, from the project's own jar. See MavenService.
+
+        // The missing-plugin banner takes its place, and it is a different kind of claim: not "this version
+        // is too old" but "this project's data has an owner who is not here". It is re-asked rather than
+        // computed once, because the pom can grow the plugin while the project stays open — installing it is
+        // the banner's own button, and a banner that outlived its cause would be the worst outcome.
+        showMissingPlugins(missingPlugins.get(), onManagePlugins);
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class,
+                e -> showMissingPlugins(missingPlugins.get(), onManagePlugins), true);
+    }
+
+    /**
+     * Puts the missing-plugin banner up, takes it down, or replaces it — whichever the current list asks for.
+     *
+     * <p>Below the reader banner and above the canvas: two banners can be true at once (someone else's bot,
+     * opened read-only, whose plugin this Studio's user has not installed either) and the reader banner is
+     * the one about what the user may do at all.
+     */
+    private void showMissingPlugins(List<String> missing, Runnable onManagePlugins) {
+        if (missingPluginBanner != null) {
+            column.getChildren().remove(missingPluginBanner);
+            missingPluginBanner = null;
+        }
+        if (missing == null || missing.isEmpty()) return;
+        missingPluginBanner = missingPluginBanner(missing, onManagePlugins);
+        column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
+                missingPluginBanner);
+    }
+
+    /**
+     * The "this project has data you cannot see" banner.
+     *
+     * <p>It names the plugins rather than counting them, because the id is what the user types into Manage
+     * Plugins and the only thing that makes the sentence actionable. What it deliberately does not say is
+     * <i>what</i> the data is: the host has not read a byte of it and must not guess — see
+     * {@code PluginOwners}.
+     */
+    private static HBox missingPluginBanner(List<String> missing, Runnable onManagePlugins) {
+        String names = String.join(", ", missing);
+        Label msg = new Label(missing.size() == 1
+                ? "This project holds data owned by “" + names + "”, which is not installed. "
+                        + "That data is kept as it is, and everything else keeps working."
+                : "This project holds data owned by plugins that are not installed: " + names + ". "
+                        + "That data is kept as it is, and everything else keeps working.");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Button install = new Button("Install…");
+        install.setOnAction(e -> onManagePlugins.run());
+        HBox banner = new HBox(10, msg, spacer, install);
+        banner.setAlignment(Pos.CENTER_LEFT);
+        banner.getStyleClass().add("missing-plugin-banner");
+        return banner;
     }
 
     VBox node() {
