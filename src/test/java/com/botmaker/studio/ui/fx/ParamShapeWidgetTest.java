@@ -1,9 +1,11 @@
 package com.botmaker.studio.ui.fx;
 
+import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.project.activity.ActivityVariable;
 import com.botmaker.studio.project.activity.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
@@ -41,11 +43,26 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     private static final ValueType POINT = ValueWire.type("POINT");
     private static final ValueType DIRECTION = ValueWire.type("DIRECTION");
 
-    private Node widgetFor(ActivityVariable variable) {
+    private Node widgetFor(ParameterRow row) {
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build(variable, null, sink));
+        interact(() -> built[0] = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, row, null, sink));
         return built[0];
+    }
+
+    /**
+     * One row as a plugin's own store would hand it over: seeded with the type's default and carrying the
+     * declared choices as that store normalises them, which is where a set a shape has no use for is dropped.
+     */
+    private static ParameterRow row(String name, ValueChoice type, List<String> options) {
+        return ParameterRow.named(name, type)
+                .value(ValueWire.defaultWire(type))
+                .options(ValueWire.normalizeOptions(options, type, Range.NONE))
+                .build();
+    }
+
+    private static ParameterRow row(String name, ValueChoice type) {
+        return row(name, type, List.of());
     }
 
     private List<Node> childrenOf(Node node) {
@@ -54,8 +71,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
 
     @Test
     void anyOfAClosedSetTicksTheTypesOwnValuesWithNothingDeclared() {
-        ActivityVariable directions = ActivityVariable.create("ways",
-                new ValueChoice(DIRECTION, ValueShape.ANY_OF));
+        ParameterRow directions = row("ways", new ValueChoice(DIRECTION, ValueShape.ANY_OF));
         assertTrue(directions.options().isEmpty(), "nobody declares the directions; the SDK has them");
 
         List<Node> rows = childrenOf(widgetFor(directions));
@@ -75,7 +91,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         List<String> known = ValueWire.fixedOptions(DIRECTION);
         assertFalse(known.isEmpty(), "the SDK enum is what the pad is built from");
 
-        Node pad = widgetFor(ActivityVariable.create("way", ValueChoice.of(DIRECTION)));
+        Node pad = widgetFor(row("way", ValueChoice.of(DIRECTION)));
         List<Node> parts = childrenOf(pad);
 
         assertEquals(1, parts.size(),
@@ -94,15 +110,13 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     void theTwoListShapesAreTwoWidgetsOnTheSameTypeAndTheSameChoices() {
         List<String> skills = List.of("mine", "fish", "cook");
 
-        ActivityVariable many = ActivityVariable.create("many",
-                new ValueChoice(TEXT, ValueShape.ANY_OF)).withOptions(skills);
+        ParameterRow many = row("many", new ValueChoice(TEXT, ValueShape.ANY_OF), skills);
         List<Node> ticks = childrenOf(widgetFor(many));
         assertEquals(skills.size(), ticks.size());
-        for (Node row : ticks) assertInstanceOf(CheckBox.class, row);
+        for (Node tick : ticks) assertInstanceOf(CheckBox.class, tick);
 
         // A textarea and not a Pane, so it has no children to count: text is written one per line.
-        ActivityVariable open = ActivityVariable.create("open",
-                ValueChoice.listOf(TEXT)).withOptions(skills);
+        ParameterRow open = row("open", ValueChoice.listOf(TEXT), skills);
         assertInstanceOf(TextArea.class, widgetFor(open),
                 "an open list is the user's to fill in, whatever the author wrote down");
         assertTrue(open.options().isEmpty(), "and the choices are not even stored on it");
@@ -111,7 +125,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     /** Every other type's open list is a growable column of that type's own editor, empty to begin with. */
     @Test
     void anOpenListOfSomethingOtherThanTextIsRowsOfItsOwnEditor() {
-        ActivityVariable spots = ActivityVariable.create("spots", ValueChoice.listOf(POINT));
+        ParameterRow spots = row("spots", ValueChoice.listOf(POINT));
 
         List<Node> parts = childrenOf(widgetFor(spots));
 
@@ -122,17 +136,15 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
 
     @Test
     void oneOfShowsItsRadioButtonsBeforeAnyChoiceIsDeclared() {
-        ActivityVariable size = ActivityVariable.create("size",
-                new ValueChoice(WHOLE_NUMBER, ValueShape.ONE_OF));
+        ValueChoice oneOf = new ValueChoice(WHOLE_NUMBER, ValueShape.ONE_OF);
 
         // With nothing declared it says so, rather than quietly rendering the free-value spinner.
-        assertEquals(1, childrenOf(widgetFor(size)).size());
+        assertEquals(1, childrenOf(widgetFor(row("size", oneOf))).size());
 
-        ActivityVariable declared = size.withOptions(List.of("1", "2", "3"));
-        List<Node> rows = childrenOf(widgetFor(declared));
+        List<Node> rows = childrenOf(widgetFor(row("size", oneOf, List.of("1", "2", "3"))));
 
         assertEquals(3, rows.size());
-        for (Node row : rows) assertInstanceOf(RadioButton.class, row);
+        for (Node button : rows) assertInstanceOf(RadioButton.class, button);
         assertEquals("2", ((RadioButton) rows.get(1)).getUserData());
     }
 
@@ -143,13 +155,11 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     @Test
     void whatIsReadBackIsTheStoredValueAndNotTheLabel() {
-        ActivityVariable picked = ActivityVariable.create("mode",
-                        new ValueChoice(TEXT, ValueShape.ONE_OF))
-                .withOptions(List.of("fast", "slow"))
-                .withValue("slow");
+        ParameterRow picked = row("mode", new ValueChoice(TEXT, ValueShape.ONE_OF),
+                List.of("fast", "slow")).toBuilder().value("slow").build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
-        interact(() -> ParamValueWidgets.build(picked, null, sink));
+        interact(() -> ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, picked, null, sink));
 
         assertEquals(1, sink.size());
         assertEquals(List.of("slow"), sink.getFirst().read().get());

@@ -6,6 +6,32 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-10 (night) — the Runner renders rows, and the activity checkbox list stops existing.**
+  `RunnerWindow` is retyped onto `ParameterRow`: it asks each plugin for the rows of the sections that plugin
+  declared, keeps the ones marked `PUBLIC`, files them under the category each row carries, and hands every
+  changed value back as a `ParameterEdit` on Run. Gone from it: `ActivitiesConfig`, `ActivityDefinition`,
+  `ActivityVariable`, `ActivityService`, `ProjectSettingsService`, the checkbox map and the `edited()` pass
+  that rewrote the whole document.
+
+  **The "What it does" section is not a section that moved, it is a section that stopped existing.** An
+  activity's enable flag is a parameter — a yes/no row of the SDK plugin's own section — so the Runner needs
+  no vocabulary of its own, which is exactly the reason the maintainer's evening reading kept this window in
+  Studio. What is left here is the frame: the layout, the tile reflow, the category index and the Run button.
+
+  **It leaves the two-writer hazard with the Parameters window.** Nothing here holds a document another
+  window could have moved underneath it; each row is written by its owner, only when it changed, and the
+  answer stored — clamped, canonicalised, pruned — is what a second Run compares against.
+
+  **The `ActivityVariable` halves of `ParamValueWidgets` and `VariableRailModel` are deleted** with it, which
+  was the whole point of writing them as pairs: `build`, `buildFixedWidth`, `display`, `ValueEditor.describes`
+  and the rail's `rows`/`in` are row-shaped only now. `PickerGalleryWindow` and the three tests over those
+  helpers are retyped with them; the dev gallery asks `ValueWire.normalize` directly for its *stored as* line,
+  because a row coerces nothing by itself — the coercion is the owning plugin's rule.
+
+  **What is not verifiable this week**: the window itself. As shipped it opens on a project written before the
+  storage swap with **no settings at all** (the *no migration* decision), and a bot's activities can only be
+  turned off once 6f gives the SDK plugin flag rows to hand over.
+
 - **2026-09-10 (evening) — the Parameters window stops knowing what an activity is.** `ParametersDialog` is
   retyped onto `ParameterRow`: it asks each plugin for the rows of the sections that plugin declared
   (`PluginHost.parameterRows`), draws them, and hands every change back as data — a value through

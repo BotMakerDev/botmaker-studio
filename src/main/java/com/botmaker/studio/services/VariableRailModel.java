@@ -2,7 +2,6 @@ package com.botmaker.studio.services;
 
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
-import com.botmaker.studio.project.activity.ActivityVariable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +21,7 @@ import java.util.List;
  *
  * <p><b>Nothing is ever unreachable.</b> A variable filed under a category the group no longer declares —
  * the plugin dropped it, or an older project carries an activity name — would otherwise have no row at all.
- * Rather than inventing one, it is listed under {@link ActivityVariable#GENERAL}, which is where a variable
+ * Rather than inventing one, it is listed under {@link ParameterRow#GENERAL}, which is where a parameter
  * with no category lives and where this one effectively now is. The dialog's picker then shows it as
  * unfiled, so the fix is a visible choice rather than a silent relabel.
  */
@@ -39,35 +38,8 @@ public final class VariableRailModel {
     /** A non-selectable group label ("Activities", "Custom"). */
     public record Heading(String text) implements Row {}
 
-    /** A selectable bucket, including the computed {@link #ALL} and {@link ActivityVariable#GENERAL} rows. */
+    /** A selectable bucket, including the computed {@link #ALL} and {@link ParameterRow#GENERAL} rows. */
     public record TagRow(String tag, int count) implements Row {}
-
-    /**
-     * The rail for {@code variables} over the categories {@code declared} by the plugins: All, then a
-     * <i>Categories</i> heading over General and each declared category in the order the plugin listed them.
-     * Both computed rows are always present — All because it is the way to see everything, General because it
-     * is where a new variable lands before anyone files it, and a bucket you cannot select is a bucket you
-     * cannot put anything in.
-     *
-     * <p>The declared list is flat and already merged across groups. It is not split into a heading per
-     * plugin, because the sections in the pane on the right already are: a rail that also grouped by plugin
-     * would ask the user to hold the plugin architecture in their head twice.
-     */
-    public static List<Row> rows(List<ActivityVariable> variables, List<String> declared) {
-        List<ActivityVariable> all = variables == null ? List.of() : variables;
-        List<String> categories = declared == null ? List.of() : declared;
-
-        List<Row> rows = new ArrayList<>();
-        rows.add(new TagRow(ALL, all.size()));
-        // "General" on its own, directly under All, read as a second everything-bucket. A heading over it says
-        // what it is — one category among the others — before the count does.
-        rows.add(new Heading("Categories"));
-        rows.add(new TagRow(ActivityVariable.GENERAL, in(all, ActivityVariable.GENERAL, categories).size()));
-        for (String category : categories) {
-            rows.add(new TagRow(category, in(all, category, categories).size()));
-        }
-        return List.copyOf(rows);
-    }
 
     /** Every category declared by any of {@code groups}, in group order then declaration order, deduplicated. */
     public static List<String> categoriesOf(List<ParameterGroup> groups) {
@@ -88,23 +60,18 @@ public final class VariableRailModel {
     }
 
     /**
-     * The variables row {@code tag} holds, in the order they were declared.
+     * The rail for the {@link ParameterRow}s the plugins hand over, over the categories {@code declared} by
+     * those plugins: All, then a <i>Categories</i> heading over General and each declared category in the
+     * order the plugin listed them. Both computed rows are always present — All because it is the way to see
+     * everything, General because it is where a new parameter lands before anyone files it, and a bucket you
+     * cannot select is a bucket you cannot put anything in.
      *
-     * <p>{@link #ALL} is everything. {@link ActivityVariable#GENERAL} is everything unfiled <em>plus</em>
-     * everything whose category no plugin declares — see the class note. Any other row is an exact,
-     * case-insensitive match.
-     */
-    public static List<ActivityVariable> in(List<ActivityVariable> variables, String tag, List<String> declared) {
-        return filter(variables, ActivityVariable::tag, tag, declared);
-    }
-
-    /**
-     * The same rail, for the {@link ParameterRow}s the plugins hand over — one entry per row, counted the
-     * same way and filed under {@link ParameterRow#category()}.
+     * <p>The declared list is flat and already merged across groups. It is not split into a heading per
+     * plugin, because the sections in the pane on the right already are: a rail that also grouped by plugin
+     * would ask the user to hold the plugin architecture in their head twice.
      *
-     * <p>A second pair of methods rather than one generic surface, because the {@link ActivityVariable} pair
-     * has a known end date: the Runner is its last reader, and both go when it is retyped. The rules
-     * underneath are shared, which is what stops the two answering differently in the meantime.
+     * <p>There was a second pair of these taking Studio's own {@code ActivityVariable}, for as long as the
+     * Runner still read one plugin's file; it went on 2026-09-10 with that window's retype.
      */
     public static List<Row> rowsOf(List<ParameterRow> rows, List<String> declared) {
         List<ParameterRow> all = rows == null ? List.of() : rows;
@@ -120,7 +87,13 @@ public final class VariableRailModel {
         return List.copyOf(out);
     }
 
-    /** The rows {@code tag} holds — see {@link #in} for what each of the two computed rows means. */
+    /**
+     * The rows {@code tag} holds, in the order they were declared.
+     *
+     * <p>{@link #ALL} is everything. {@link ParameterRow#GENERAL} is everything unfiled <em>plus</em>
+     * everything whose category no plugin declares — see the class note. Any other row is an exact,
+     * case-insensitive match.
+     */
     public static List<ParameterRow> rowsIn(List<ParameterRow> rows, String tag, List<String> declared) {
         return filter(rows, ParameterRow::category, tag, declared);
     }

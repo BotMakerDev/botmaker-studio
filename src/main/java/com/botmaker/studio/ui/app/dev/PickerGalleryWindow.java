@@ -1,12 +1,13 @@
 package com.botmaker.studio.ui.app.dev;
 
+import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.activity.ActivityVariable;
 import com.botmaker.studio.project.activity.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -46,7 +47,7 @@ import java.util.Locale;
  *
  * <p><b>The readout is the point.</b> Each row shows the control on the left and, on the right, the wire text
  * it reads back <em>right now</em> — polled, so it follows the control as it is touched — and beneath it the
- * value {@link ActivityVariable} would store, which is the same text after
+ * value a plugin's store would keep, which is the same text after
  * {@link ValueWire#normalize normalisation}. A picker that looks right and hands back {@code ""}, or one
  * whose value survives the widget and is thrown away by the normaliser, is invisible without those two lines
  * side by side.
@@ -166,7 +167,7 @@ public final class PickerGalleryWindow {
             }
             for (ValueShape shape : ValueShape.values()) {
                 if (shape != ValueShape.ONE && !shapesToo.isSelected()) continue;
-                ActivityVariable variable = sample(type, shape, templates);
+                ParameterRow variable = sample(type, shape, templates);
                 if (variable == null) continue;   // the shape is not a sentence for this type
                 line = addRow(variable, type, shape, line);
             }
@@ -175,7 +176,7 @@ public final class PickerGalleryWindow {
                 + (int) PULSE.toMillis() + "ms: touch a control and watch it move.");
     }
 
-    private int addRow(ActivityVariable variable, ValueType type, ValueShape shape, int line) {
+    private int addRow(ParameterRow variable, ValueType type, ValueShape shape, int line) {
         Label name = new Label(type.label());
         Label shapeName = new Label(shape.label());
         shapeName.getStyleClass().add("dialog-hint-text");
@@ -183,7 +184,7 @@ public final class PickerGalleryWindow {
         List<ParamValueWidgets.ValueEditor> readers = new ArrayList<>();
         Node widget;
         try {
-            widget = ParamValueWidgets.build(variable, project, readers);
+            widget = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, variable, project, readers);
         } catch (RuntimeException | Error e) {
             // The whole reason for the screen: an editor that cannot even be built is a finding, not a crash.
             widget = broken("built: " + e);
@@ -212,8 +213,8 @@ public final class PickerGalleryWindow {
         return label;
     }
 
-    /** One row: the variable it was built from, its widget's readers, and the two lines they write to. */
-    private record Row(ActivityVariable variable, List<ParamValueWidgets.ValueEditor> readers,
+    /** One row: the row it was built from, its widget's readers, and the two lines they write to. */
+    private record Row(ParameterRow variable, List<ParamValueWidgets.ValueEditor> readers,
                        Label raw, Label stored) {
 
         void refresh() {
@@ -230,7 +231,10 @@ public final class PickerGalleryWindow {
             }
             String kept;
             try {
-                kept = show(variable.withValue(read).value());
+                // What a plugin's store would keep, asked of the normaliser directly: a ParameterRow is what
+                // crosses the contract and coerces nothing by itself, precisely because the coercion is the
+                // owner's rule rather than the host's.
+                kept = show(ValueWire.normalize(read, variable.type(), variable.options(), variable.bounds()));
             } catch (RuntimeException | Error e) {
                 kept = "✕ stored: " + e;
             }
@@ -251,25 +255,34 @@ public final class PickerGalleryWindow {
     // --- the sample variable each row is built from ----------------------------------------------------------
 
     /**
-     * A variable of {@code type} in {@code shape}, or null when that pairing is not a thing anyone can
-     * declare — "one of a set of colours" is, "one of a set of directions" is not, since the type already
-     * shows every value it has.
+     * A row of {@code type} in {@code shape}, or null when that pairing is not a thing anyone can declare —
+     * "one of a set of colours" is, "one of a set of directions" is not, since the type already shows every
+     * value it has.
+     *
+     * <p>The declared choices are normalised here, which a plugin's own store would do on the way in: a set
+     * spelled the way nobody stores it labels its radio buttons with strings the value can never match, and
+     * that is a fault in this screen rather than in the editor it is showing.
      */
-    static ActivityVariable sample(ValueType type, ValueShape shape, List<String> templates) {
+    static ParameterRow sample(ValueType type, ValueShape shape, List<String> templates) {
         // ValueChoice corrects an impossible pairing rather than refusing it — it is built from files, and a
         // file that says something impossible must still open. Here the correction is the tell: the row it
         // would produce is another row's, already shown.
         ValueChoice choice = new ValueChoice(type, shape);
         if (choice.shape() != shape) return null;
-        List<String> options = shape.hasOptions() ? options(type, templates) : List.of();
-        return new ActivityVariable(identifier(type, shape), choice, ValueWire.defaultWire(choice),
-                "", "", Visibility.PUBLIC, options, Range.NONE,
-                com.botmaker.plugin.api.ParameterGroup.DEFAULT_ID);
+        List<String> options = shape.hasOptions()
+                ? ValueWire.normalizeOptions(options(type, templates), choice, Range.NONE)
+                : List.of();
+        return ParameterRow.named(identifier(type, shape), choice)
+                .value(ValueWire.defaultWire(choice))
+                .visibility(Visibility.PUBLIC)
+                .options(options)
+                .bounds(Range.NONE)
+                .build();
     }
 
     /**
-     * A valid Java identifier, because {@link ActivityVariable}'s name is a generated field's — nothing here
-     * generates code, and a sample that could not have been declared for real is a poor sample.
+     * A valid Java identifier, because a parameter's name is a generated field's — nothing here generates
+     * code, and a sample that could not have been declared for real is a poor sample.
      */
     private static String identifier(ValueType type, ValueShape shape) {
         // An id is a plugin's free string, not necessarily a Java name, so anything that cannot appear in one

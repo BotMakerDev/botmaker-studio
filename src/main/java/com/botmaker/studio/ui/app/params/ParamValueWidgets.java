@@ -4,7 +4,6 @@ import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.activity.ActivityVariable;
 import com.botmaker.studio.project.activity.ValueWire;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -24,14 +23,14 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Builds the value-entry widget for one {@link ActivityVariable}, seeded from its current value, and hands
- * back a reader turning the widget's live state into the type's wire form.
+ * Builds the value-entry widget for one {@link ParameterRow}, seeded from its current value, and hands back a
+ * reader turning the widget's live state into the type's wire form.
  *
  * <p><b>Reading is total and never validates.</b> A half-typed duration, a number past its bound, a template
- * that has since been deleted: every one of them is handed on as typed and pulled into range by
- * {@link ActivityVariable#withValue}, which normalises through {@link ValueWire}. Nothing here can refuse
- * a value, so nothing here can leave the editor unable to close a dialog because of a limit somebody
- * tightened afterwards.
+ * that has since been deleted: every one of them is handed on as typed, and what it is finally stored as is
+ * the owning plugin's answer to a {@code ParameterEdit} — clamped, canonicalised, pruned to the choices still
+ * on offer. Nothing here can refuse a value, so nothing here can leave a window unable to close because of a
+ * limit somebody tightened afterwards.
  *
  * <p><b>One widget per type, chosen by the type alone.</b> That is what makes retyping a variable safe to
  * handle by rebuilding the row wholesale: the dialog throws the old widget away rather than trying to
@@ -60,11 +59,6 @@ public final class ParamValueWidgets {
             return new ValueEditor(group, row.name(), read);
         }
 
-        /** True when this reader was built from {@code variable} — the pair, never identity. */
-        public boolean describes(ActivityVariable variable) {
-            return variable.name().equals(name) && variable.isIn(group);
-        }
-
         /** True when this reader was built from the row called {@code rowName} in {@code rowGroup}. */
         public boolean describes(String rowGroup, String rowName) {
             return name.equals(rowName) && group.equals(rowGroup == null ? "" : rowGroup);
@@ -72,22 +66,11 @@ public final class ParamValueWidgets {
     }
 
     /**
-     * The widget for {@code variable}, seeded from its current value, registering its reader in {@code sink}.
-     *
-     * @param config the project, needed by the one type whose picker reads from disk
-     *               ({@code IMAGE_TEMPLATE})
-     */
-    public static Node build(ActivityVariable variable, ProjectConfig config, List<ValueEditor> sink) {
-        return build(variable.group(), rowOf(variable), config, sink);
-    }
-
-    /**
      * The widget for one {@link ParameterRow} of {@code group}, seeded from its current value.
      *
-     * <p>The row-shaped entry point, and the one the Parameters window uses: what a plugin hands over is a
-     * row, and a row carries every component this needs. The {@link ActivityVariable} overload above is the
-     * Runner's until it is retyped too, and it delegates here so there is one widget per type rather than
-     * two that can drift.
+     * <p><b>The only entry point since 2026-09-10.</b> There was a second, taking Studio's own
+     * {@code ActivityVariable}, for as long as the Runner still read one plugin's file; both windows over this
+     * data now render rows, so there is one widget per type and nothing left that could drift.
      *
      * @param group  the section the row is filed under — half of the handle a reader is keyed by
      * @param config the project, needed by the one type whose picker reads from disk ({@code IMAGE_TEMPLATE})
@@ -141,37 +124,15 @@ public final class ParamValueWidgets {
         return widget;
     }
 
-    /**
-     * One variable as the row a plugin would have handed over.
-     *
-     * <p>Here rather than on {@link ActivityVariable} because it is a bridge with a known end date: the
-     * Runner is the last reader of that record set, and the conversion goes with it.
-     */
-    private static ParameterRow rowOf(ActivityVariable variable) {
-        return ParameterRow.named(variable.name(), variable.type())
-                .value(variable.value())
-                .description(variable.description())
-                .category(variable.tag())
-                .visibility(variable.visibility())
-                .options(variable.options())
-                .bounds(variable.bounds())
-                .build();
-    }
-
-    /** The same widget, pinned to one width — what a list of variables wants, and a form does not. */
-    public static Node buildFixedWidth(ActivityVariable variable, ProjectConfig config, List<ValueEditor> sink) {
-        Node widget = build(variable, config, sink);
+    /** The same widget, pinned to one width — what a list of rows wants, and a form does not. */
+    public static Node buildFixedWidth(String group, ParameterRow row, ProjectConfig config,
+                                       List<ValueEditor> sink) {
+        Node widget = build(group, row, config, sink);
         if (widget instanceof javafx.scene.layout.Region region) region.setPrefWidth(VALUE_WIDTH);
         return widget;
     }
 
     /** One value as a person would read it — a list as its joined members, not as an empty cell. */
-    public static String display(ActivityVariable variable) {
-        if (variable.type().isList()) return String.join(", ", variable.value());
-        return variable.singleValue();
-    }
-
-    /** The same, for a row. */
     public static String display(ParameterRow row) {
         if (row.type().isList()) return String.join(", ", row.value());
         return row.singleValue();

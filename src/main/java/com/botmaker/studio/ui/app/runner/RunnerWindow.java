@@ -1,16 +1,16 @@
 package com.botmaker.studio.ui.app.runner;
 
+import com.botmaker.plugin.api.ParameterEdit;
+import com.botmaker.plugin.api.ParameterGroup;
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.activity.ActivitiesConfig;
-import com.botmaker.studio.project.activity.ActivityDefinition;
-import com.botmaker.studio.project.activity.ActivityVariable;
 import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.services.ActivityService;
-import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
@@ -24,7 +24,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
@@ -43,11 +42,20 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * The window someone who wants to <em>use</em> a bot gets: what it launches, where it looks, which of its
- * activities to run, the settings its author chose to expose, and a Run button with the log underneath.
+ * The window someone who wants to <em>use</em> a bot gets: the settings its author chose to expose, and a Run
+ * button with the log underneath.
+ *
+ * <p><b>Nothing here knows what an activity is (2026-09-10).</b> The window asks each loaded plugin for the
+ * rows of the sections it declared, keeps the ones the author marked {@code PUBLIC}, and files them under the
+ * category each row carries. An activity's <em>enable flag</em> is a parameter like any other — a yes/no row
+ * of the SDK plugin's section — so the checkbox list this window used to build out of {@code activities.json}
+ * is not a special case that moved, it is a special case that stopped existing. What is left is the frame:
+ * the layout, the reflow, the category index and the Run button, which are the host's for the same reason a
+ * toolbar's grouping and overflow are.
  *
  * <p>It is a whole separate window rather than the editor with parts hidden, and that is the entire design.
  * Hiding is a rule someone has to remember to apply to every control they add; not building the editor at all
@@ -83,8 +91,6 @@ public final class RunnerWindow implements ProjectWindow {
     private final Origin origin;
     private final ProjectConfig config;
     private final EventBus eventBus;
-    private final ActivityService activityService;
-    private final ProjectSettingsService settings;
 
     /** Leaves the Runner for the editor scene, without changing what the project is. Supplied by the shell. */
     private final Runnable onShowEditor;
@@ -100,9 +106,19 @@ public final class RunnerWindow implements ProjectWindow {
     private Button runButton;
     private Button stopButton;
 
-    /** One checkbox per live activity, keyed by name — the "which of these do I want" list. */
-    private final Map<String, CheckBox> enableBoxes = new LinkedHashMap<>();
-    /** Every shared variable's widget. A variable's name is project-wide, so there is no scope to record. */
+    /**
+     * One row and the section it belongs to.
+     *
+     * <p>The pair, never the name alone: a name identifies a parameter only inside its own plugin's section,
+     * so two plugins may both offer a {@code Timeout} and a name-keyed handle would hand one of them the
+     * other's answer.
+     */
+    private record Owned(String group, ParameterRow row) {}
+
+    /** Every public row the loaded plugins hold, in section order — read once, when the window is built. */
+    private final List<Owned> rows = new ArrayList<>();
+
+    /** Every on-screen widget's reader, keyed by the {@code (group, name)} pair it was built from. */
     private final List<ParamValueWidgets.ValueEditor> valueEditors = new ArrayList<>();
 
     /** The body's scroller and one card per category — what the category chips jump between. */
@@ -114,8 +130,6 @@ public final class RunnerWindow implements ProjectWindow {
         this.origin = origin;
         this.config = ctx.config();
         this.eventBus = ctx.eventBus();
-        this.activityService = ctx.activityService();
-        this.settings = ctx.projectSettingsService();
         this.onShowEditor = onShowEditor;
 
         BlockTheme.initialize();
@@ -226,14 +240,15 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     // =========================================================================
-    // BODY — activities, settings
+    // BODY — the settings the plugins expose
     // =========================================================================
 
     private Node body() {
+        reload();
         VBox column = new VBox(18);
         column.setPadding(new Insets(18));
         column.setMaxWidth(CONTENT_MAX_WIDTH);
-        column.getChildren().addAll(activitiesSection(), settingsSection());
+        column.getChildren().add(settingsSection());
 
         ScrollPane scroll = new ScrollPane(column);
         scroll.setFitToWidth(true);
@@ -258,47 +273,65 @@ public final class RunnerWindow implements ProjectWindow {
         bodyScroll.setVvalue(Math.max(0, Math.min(1, y / (contentHeight - viewHeight))));
     }
 
-    /** The activity checkboxes: the bot's own list of things it can do, each one on or off. */
-    private Node activitiesSection() {
-        List<ActivityDefinition> live = activityService.current().activities();
-        VBox rows = new VBox(6);
-        if (live.isEmpty()) {
-            rows.getChildren().add(hint("This bot has no activities — Run just starts it."));
-        }
-        for (ActivityDefinition a : live) {
-            CheckBox box = new CheckBox(a.name());
-            box.setSelected(a.enabled());
-            enableBoxes.put(a.name(), box);
-            VBox cell = new VBox(1, box);
-            if (!a.description().isBlank()) {
-                Label note = hint(a.description());
-                note.setPadding(new Insets(0, 0, 0, 22));   // under the box's label, not under its tick
-                cell.getChildren().add(note);
+    /**
+     * The public rows of every loaded plugin's sections, in section order.
+     *
+     * <p>Read once, when the window is built: the Runner is not an editor, so nothing here changes a row's
+     * declaration and the only writes are values, which go back to their owner on Run.
+     *
+     * <p><b>A row the author kept to themselves is never read at all</b> — {@link ParameterRow#isPublic()} is
+     * checked here rather than at the card, so an editor-only parameter has no widget, no reader and nothing
+     * that could send a value for it. A user's window must not be able to change what it cannot see.
+     */
+    private void reload() {
+        rows.clear();
+        for (ParameterGroup group : PluginHost.parameterGroups(sdkPin())) {
+            for (ParameterRow row : PluginHost.parameterRows(group.id())) {
+                if (row.isPublic()) rows.add(new Owned(group.id(), row));
             }
-            rows.getChildren().add(cell);
         }
-        return section("What it does", "Untick anything you don't want it doing this run.", rows);
+    }
+
+    /** The SDK the open project pins, or null — what decides which curation a plugin serves. */
+    private String sdkPin() {
+        try {
+            return MavenService.readSdkVersion(config.projectPath()).orElse(null);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /**
-     * The variables the bot's author chose to share, under their tag headings. The grouping is the whole
-     * reason a variable carries a tag — the bot's user reads "Mining" and "General", not one flat list in
-     * which two activities' delays are told apart only by a prefix in their name.
+     * The rows under their category headings. The grouping is the whole reason a row carries a category — the
+     * bot's user reads "Mining" and "General", not one flat list in which two activities' delays are told
+     * apart only by a prefix in their name.
      *
-     * <p>Everything else stays where it belongs — with the author — which is why an empty section says so
-     * rather than quietly rendering nothing: "no settings" is a fact about this bot, not a sign the window
-     * failed to load.
+     * <p>The categories are merged across sections rather than nested under one heading per plugin: a
+     * category is a statement about what a parameter configures, and a user of a bot should not have to hold
+     * the plugin architecture in their head to find a delay.
+     *
+     * <p>An empty section says so rather than quietly rendering nothing: "no settings" is a fact about this
+     * bot, not a sign the window failed to load.
      */
     private Node settingsSection() {
-        Map<String, List<ActivityVariable>> byTag = activityService.current().sharedVariables();
+        Map<String, List<Owned>> byCategory = byCategory();
         VBox groups = new VBox(18);
-        if (byTag.isEmpty()) {
+        if (byCategory.isEmpty()) {
             groups.getChildren().add(hint("This bot has no settings for you to change."));
         }
-        byTag.forEach((tag, group) -> groups.getChildren().add(categoryCard(tag, group)));
+        byCategory.forEach((category, group) -> groups.getChildren().add(categoryCard(category, group)));
 
-        Node index = categoryIndex(byTag);
+        Node index = categoryIndex(byCategory);
         return section("Settings", null, index == null ? groups : new VBox(12, index, groups));
+    }
+
+    /** The rows filed under each category, in the order the plugins declared them. */
+    private Map<String, List<Owned>> byCategory() {
+        Map<String, List<Owned>> byCategory = new LinkedHashMap<>();
+        for (Owned entry : rows) {
+            byCategory.computeIfAbsent(entry.row().categoryOrGeneral(), key -> new ArrayList<>()).add(entry);
+        }
+        return byCategory;
     }
 
     /**
@@ -309,7 +342,7 @@ public final class RunnerWindow implements ProjectWindow {
      * index cannot offer a category that isn't below it — and it is left out entirely below two categories,
      * where a jump list is longer than the thing it indexes.
      */
-    private Node categoryIndex(Map<String, List<ActivityVariable>> byTag) {
+    private Node categoryIndex(Map<String, List<Owned>> byTag) {
         if (byTag.size() < 3) return null;
         FlowPane chips = new FlowPane(6, 6);
         byTag.forEach((tag, group) -> {
@@ -332,7 +365,7 @@ public final class RunnerWindow implements ProjectWindow {
      * window's width went unused no matter how wide it was pulled. A titled card with a rule under it and a
      * reflowing grid inside says where a group starts and ends without anybody having to count rows.
      */
-    private Node categoryCard(String tag, List<ActivityVariable> group) {
+    private Node categoryCard(String tag, List<Owned> group) {
         Label heading = new Label(tag);
         heading.getStyleClass().add("dialog-subheading");
         Label count = hint(group.size() == 1 ? "1 setting" : group.size() + " settings");
@@ -346,7 +379,7 @@ public final class RunnerWindow implements ProjectWindow {
         // pane wraps, so the reflow is the layout's own doing and needs no width listener.
         tiles.setPrefTileWidth(TILE_WIDTH);
         tiles.setTileAlignment(Pos.TOP_LEFT);
-        for (ActivityVariable v : group) tiles.getChildren().add(paramCard(v));
+        for (Owned entry : group) tiles.getChildren().add(paramCard(entry));
 
         VBox card = new VBox(8, title, new Separator(), tiles);
         card.getStyleClass().add("runner-category");
@@ -362,7 +395,8 @@ public final class RunnerWindow implements ProjectWindow {
      * beside "Delay" could be seconds or milliseconds, and "Region" could be a name or four numbers. The
      * badge says which, in the same words the author picked the type with.
      */
-    private Node paramCard(ActivityVariable v) {
+    private Node paramCard(Owned entry) {
+        ParameterRow v = entry.row();
         Label name = new Label(v.displayLabel());
         name.getStyleClass().add("runner-setting-name");
         name.setWrapText(true);
@@ -381,7 +415,7 @@ public final class RunnerWindow implements ProjectWindow {
         HBox header = new HBox(6, name, badge);
         header.setAlignment(Pos.TOP_LEFT);
 
-        Node widget = ParamValueWidgets.build(v, config, valueEditors);
+        Node widget = ParamValueWidgets.build(entry.group(), v, config, valueEditors);
         if (widget instanceof Region region) region.setMaxWidth(Double.MAX_VALUE);
 
         VBox card = new VBox(6, header, widget);
@@ -440,70 +474,57 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     /**
-     * Saves what the window is showing, then runs.
+     * Hands every changed value to the plugin that owns it, then runs.
      *
      * <p>The save is not optional and not a separate button: a tick box that does nothing until you find a
-     * Save you didn't know about is the bug this ordering removes. The run waits for the write because the
-     * bot reads {@code activities.json} off the classpath at startup — starting first would run the previous
-     * answers.
+     * Save you didn't know about is the bug this ordering removes. The run happens after the writes because a
+     * bot reads its parameters off the classpath at startup — starting first would run the previous answers.
+     *
+     * <p><b>Each row is written by its owner, one {@link ParameterEdit} at a time</b>, rather than by this
+     * window rewriting one file. That is what takes the Runner out of the two-writer hazard entirely: nothing
+     * here holds a document that another window could have moved underneath it, and a plugin that is not
+     * installed cannot lose its data because nothing here ever reads it.
      */
     private void run() {
         runButton.setDisable(true);
         status.setText("Saving your choices…");
-        activityService.update(edited()).whenComplete((ignored, error) -> Platform.runLater(() -> {
-            if (error != null) {
-                runButton.setDisable(false);
-                status.setText("Couldn't save your choices: " + rootMessage(error));
-                return;
-            }
-            status.setText("Starting…");
-            // Re-enabled before the publish, not after the run: a run that is refused (a compile error, an
-            // already-running bot) reports on the status line and never sends ProgramStarted/Stopped, so a
-            // button left disabled here would stay disabled for the rest of the session.
+        try {
+            flushValues();
+        } catch (RuntimeException e) {
             runButton.setDisable(false);
-            eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent());
-        }));
+            status.setText("Couldn't save your choices: " + rootMessage(e));
+            return;
+        }
+        status.setText("Starting…");
+        // Re-enabled before the publish, not after the run: a run that is refused (a compile error, an
+        // already-running bot) reports on the status line and never sends ProgramStarted/Stopped, so a
+        // button left disabled here would stay disabled for the rest of the session.
+        runButton.setDisable(false);
+        eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent());
     }
 
     /**
-     * The project's activities with this window's answers folded in: each activity's enable flag from its
-     * checkbox, and each public parameter's value from its widget. Everything else — the parameters the author
-     * kept to themselves, the flow, the presets — is carried through untouched, because a user's window must
-     * not be able to delete what it cannot see.
+     * Sends each widget's value to the section that owns the row it was built from.
+     *
+     * <p>Only what changed: a row whose widget reads back exactly what it was seeded with is not written, so
+     * pressing Run twice writes nothing the second time. The answer is the row <em>as stored</em> — clamped,
+     * canonicalised, pruned to the choices still on offer by the owning plugin — and it is kept, so a second
+     * Run compares against what the bot will actually get rather than against what was typed.
      */
-    private ActivitiesConfig edited() {
-        ActivitiesConfig base = activityService.current();
-
-        // Keyed by the (group, name) pair the widget was built from, never by the name alone: a name is
-        // unique inside its own plugin's section and only there, so two plugins may both offer a "Timeout"
-        // and a name-keyed map would hand one of them the other's answer.
-        Map<ParamValueWidgets.ValueEditor, List<String>> typed = new LinkedHashMap<>();
-        for (ParamValueWidgets.ValueEditor editor : valueEditors) typed.put(editor, editor.read().get());
-
-        List<ActivityDefinition> activities = new ArrayList<>();
-        for (ActivityDefinition a : base.activities()) {
-            CheckBox box = enableBoxes.get(a.name());
-            activities.add(box == null ? a : a.withEnabled(box.isSelected()));
+    private void flushValues() {
+        for (ParamValueWidgets.ValueEditor editor : valueEditors) {
+            for (int i = 0; i < rows.size(); i++) {
+                Owned entry = rows.get(i);
+                if (!editor.describes(entry.group(), entry.row().name())) continue;
+                List<String> typed = editor.read().get();
+                if (typed.equals(entry.row().value())) break;
+                Optional<ParameterRow> stored = PluginHost.parameterEdited(
+                        new ParameterEdit(entry.group(), entry.row().name(), typed));
+                int at = i;
+                stored.ifPresent(row -> rows.set(at, new Owned(entry.group(), row)));
+                break;
+            }
         }
-
-        // A variable nobody was offered is carried through as it was: a user's window must not be able to
-        // change what it cannot see.
-        List<ActivityVariable> variables = new ArrayList<>();
-        for (ActivityVariable v : base.variables()) {
-            List<String> value = typed.entrySet().stream()
-                    .filter(e -> e.getKey().describes(v))
-                    .map(Map.Entry::getValue)
-                    .findFirst()
-                    .orElse(null);
-            variables.add(value == null ? v : v.withValue(value));
-        }
-
-        return base.withActivities(activities).withVariables(variables);
-    }
-
-    /** Scope-qualified, because two activities may each have a parameter of the same name. */
-    private static String key(String activity, String param) {
-        return (activity == null ? "" : activity) + '#' + param;
     }
 
     private static String rootMessage(Throwable t) {

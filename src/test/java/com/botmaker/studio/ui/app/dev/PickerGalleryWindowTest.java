@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.plugin.api.value.ValueShape;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.project.activity.ActivityVariable;
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.studio.project.activity.ValueWire;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ public class PickerGalleryWindowTest {
     void everyPairingIsEitherARowOrNotASentence() {
         for (ValueType type : ValueWire.registered()) {
             for (ValueShape shape : ValueShape.values()) {
-                ActivityVariable variable = PickerGalleryWindow.sample(type, shape, TEMPLATES);
+                ParameterRow variable = PickerGalleryWindow.sample(type, shape, TEMPLATES);
                 // The only pairing ValueChoice corrects away — a declared subset of a type that is already a
                 // closed set. Everything else is a sentence, lists of a closed set included.
                 boolean legal = shape != ValueShape.ONE_OF || type.shapeable();
@@ -58,7 +58,7 @@ public class PickerGalleryWindowTest {
         for (ValueType type : ValueWire.registered()) {
             if (!type.shapeable()) continue;   // a closed set answers with its own constants
             if (PickerGalleryWindow.options(type, TEMPLATES).isEmpty()) continue;
-            ActivityVariable variable = PickerGalleryWindow.sample(type, ValueShape.ONE_OF, TEMPLATES);
+            ParameterRow variable = PickerGalleryWindow.sample(type, ValueShape.ONE_OF, TEMPLATES);
             assertNotNull(variable);
             assertTrue(variable.options().size() >= 2,
                     type + " offers " + variable.options() + ", which is not a set to choose from");
