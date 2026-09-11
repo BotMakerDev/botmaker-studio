@@ -97,7 +97,7 @@ Rather than one long script, a bot is a set of named activities — "Mining", "H
 
 Studio generates and maintains one source file per activity plus the registry that knows them. To stop an activity running, turn its switch off — it stays on the graph and keeps its code. Delete activity removes it and its source for good.
 
-*In Studio:* Project ▸ Activity Flow… (or 🔀 Flow on the toolbar)
+*In Studio:* 🔀 Activity Flow on the toolbar (contributed by the BotMaker SDK)
 
 ## 7. Give the bot its variables
 

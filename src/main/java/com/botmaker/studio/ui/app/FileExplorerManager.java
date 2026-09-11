@@ -113,10 +113,13 @@ public class FileExplorerManager {
         header.getStyleClass().add("sidebar-header");
         header.setMaxWidth(Double.MAX_VALUE);
 
-        Button newActivityBtn = new Button("New Activity");
-        newActivityBtn.getStyleClass().add("sidebar-button");
-        newActivityBtn.setMaxWidth(Double.MAX_VALUE);
-        newActivityBtn.setOnAction(e -> showCreateActivityDialog());
+        // "New Activity" stood here until 2026-09-11 and is gone, not moved. It wrote an activity into
+        // activities.json through ActivityService — and that file's editor is the SDK plugin's 🔀 Activity
+        // Flow window now, which writes the same file itself. Two writers of one file, one of them caching
+        // the parsed copy and publishing an event, is precisely the hazard the move exists to avoid: the
+        // explorer's write would have gone in behind a flow the user had just drawn. Adding an activity is
+        // one button on that canvas, and it is the only place that can also say where the activity sits and
+        // what it reports.
 
         configureTree();
         refreshTree();
@@ -127,7 +130,7 @@ public class FileExplorerManager {
         fileTree.setMaxHeight(Double.MAX_VALUE);
         VBox.setVgrow(fileTree, javafx.scene.layout.Priority.ALWAYS);
 
-        container.getChildren().addAll(header, newActivityBtn, fileTree);
+        container.getChildren().addAll(header, fileTree);
         container.setFillWidth(true);
         return container;
     }
@@ -294,67 +297,17 @@ public class FileExplorerManager {
     // now one level deep and the user group starts expanded, so there is no branch left to reveal.
 
     // ------------------------------------------------------------------
-    // New Activity
+    // New Activity — gone, and this explorer writes nothing to activities.json (2026-09-11)
     // ------------------------------------------------------------------
+    //
+    // showCreateActivityDialog stood here: a name prompt, a duplicate check, and ActivityService.update with
+    // one more ActivityDefinition in it. It is deleted rather than moved, because the window that owns that
+    // file is the SDK plugin's now and a second writer behind it is the exact hazard the move was ordered
+    // around. What it did beyond the write — opening the activity's body if the user had already written one
+    // — is ActivityBodies.find, which is still here and still used by the overlay.
 
-    /**
-     * Creates a new activity. Delegates to {@link ActivityService#update} — the same path Manage Activities
-     * drives — so the registry is regenerated and the {@code Activity} subclass stub is created for us.
-     * (This replaces the old "New Function Library", which wrote a bare {@code static void action()} class
-     * into the main package and registered nothing.)
-     */
-    private void showCreateActivityDialog() {
-        TextInputDialog dialog = new TextInputDialog();
-        ThemedWindows.apply(dialog);
-        dialog.setTitle("New Activity");
-        dialog.setHeaderText("Create a new activity");
-        dialog.setContentText("Name (e.g. Mining):");
-        Optional<String> result = dialog.showAndWait();
-
-        result.ifPresent(name -> {
-            String className = sanitizeActivityName(name);
-            if (className.isEmpty()) return;
-
-            ActivitiesConfig current = activityService.current();
-            boolean exists = current.activities().stream()
-                    .anyMatch(a -> a.name().equalsIgnoreCase(className));
-            if (exists) {
-                Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING);
-                alert.setTitle("Activity exists");
-                alert.setHeaderText("There is already an activity called " + className + ".");
-                alert.showAndWait();
-                return;
-            }
-
-            List<ActivityDefinition> updated = new ArrayList<>(current.activities());
-            updated.add(ActivityDefinition.create(className, "").withEnabled(true));
-            // withActivities, never a fresh ActivitiesConfig: rebuilding one from two fields is how this
-            // path used to drop the flow, the presets and every variable on the way to adding an activity.
-            activityService.update(current.withActivities(updated))
-                    .thenRun(() -> Platform.runLater(() -> {
-                        refreshTree();
-                        // Creating an activity writes no file — it is a row in activities.json. If the user
-                        // has already written its body somewhere, open that; otherwise there is nothing to
-                        // open, and offering to create one is exactly what this project stopped doing.
-                        Path body = ActivityBodies.find(config, codeEditorService.getState(), className);
-                        if (body != null) codeEditorService.switchToFile(body);
-                    }));
-        });
-    }
-
-    /**
-     * An activity's name is written into the user's code as a string literal — {@code Activities.define("Mining",
-     * …)} — and read back by matching that literal, so it is kept to letters and digits: strip
-     * non-alphanumerics, then drop any leading digits.
-     *
-     * <p>It used to have to be a valid Java identifier, because the name became a class and a field on a
-     * generated {@code Activities} class. Nothing is generated now and a name in quotes could hold anything;
-     * what the restriction still buys is that the name reads the same on the canvas as it does in the code,
-     * with no escaping to get wrong on either side.
-     */
-    static String sanitizeActivityName(String raw) {
-        if (raw == null) return "";
-        String cleaned = raw.trim().replaceAll("[^a-zA-Z0-9]", "");
-        return cleaned.replaceFirst("^[0-9]+", "");
-    }
+    // sanitizeActivityName went with the prompt above: it kept a typed activity name to letters and digits,
+    // so that the name read the same in the explorer as in the string literal the user's own code matches.
+    // The rule itself is not lost — FlowNames in the SDK plugin is the one place activity and outcome names
+    // are judged now, which is where the only dialog that types one lives.
 }

@@ -171,19 +171,11 @@
     -bm-severity-ok-text: #2e7d32;
 
     /*
-     * Activity Flow canvas. Every one of these derives from a token the theme overlays already redefine, so
-     * they are declared once here and nowhere else — a theme that says nothing about the flow still gets a
-     * readable one. That is the bug they exist for: the card body, its border, the wires and the grid were
-     * hex literals set from Java ("white", #c8c8c8, #4a7ebb), so a dark Studio drew a white card with white
-     * text on it and wires the same blue either way.
+     * The seven -bm-flow-* tokens stood here until 2026-09-11 and are in the SDK plugin's own flow.css now,
+     * with the canvas they were for. They derived from the tokens above and still do — a plugin's stylesheet
+     * is added after this one, so it can build on what a theme publishes here without this file knowing a
+     * flow exists.
      */
-    -bm-flow-card: -fx-control-inner-background;
-    -bm-flow-card-off: derive(-fx-control-inner-background, -10%);
-    -bm-flow-border: -bm-divider;
-    -bm-flow-grid: -bm-divider;
-    -bm-flow-wire: -bm-primary;
-    -bm-flow-wire-hot: -bm-danger;
-    -bm-flow-port: -bm-muted;
 }
 
 /*
@@ -433,168 +425,12 @@
     -fx-font-size: 11px;
 }
 
-/* Activity Flow canvas (FlowCanvas) — the "class" surface where Activities are laid out. */
-.flow-canvas-content {
-    -fx-background-color: -fx-control-inner-background;
-}
-
 /*
- * The dot grid's ink. Nothing is ever drawn with this rule: the grid is painted into a Canvas, whose
- * GraphicsContext takes a Color and has never heard of a stylesheet, so FlowCanvas keeps a zero-sized Region
- * carrying this class and reads the colour back off it. A probe, but a probe styled like anything else —
- * which is what keeps the one un-CSS-able surface on the same tokens as the rest.
+ * The Activity Flow canvas's forty-odd rules stood here — .flow-card through .flow-minimap-card — and left
+ * on 2026-09-11 with the canvas, into the SDK plugin's own flow.css. A host stylesheet naming one plugin's
+ * concepts is a look no second plugin could ever have had; what stays here is the palette they were written
+ * against, which every plugin's stylesheet may build on because the host's sheets are applied first.
  */
-.flow-grid-ink {
-    -fx-background-color: -bm-flow-grid;
-}
-
-/* One activity, as a card. :off is "won't run" (the switch is off), :picked is "selected". */
-.flow-card {
-    -fx-background-color: -bm-flow-card;
-    -fx-background-radius: 6;
-    -fx-border-color: -bm-flow-border;
-    -fx-border-width: 1;
-    -fx-border-radius: 6;
-}
-
-/*
- * "Won't run", and it has to say so in every theme. The fill alone did not: -bm-flow-card-off is a 10% step
- * off the card colour, which is a visible dip on a light canvas and nothing at all on a dark one, so a
- * disabled activity looked exactly like an enabled one in Dark and Black. The two cues added here are
- * theme-independent by construction — a dashed border and a dimmed card are the same signal at any lightness
- * — and the card also carries a literal "off" badge (see FlowCanvas.NodeCard), because a user should not have
- * to know the convention to read the state.
- */
-.flow-card:off {
-    -fx-background-color: -bm-flow-card-off;
-    -fx-border-style: dashed;
-    -fx-opacity: 0.68;
-}
-
-.flow-card:picked {
-    -fx-border-color: -bm-primary;
-    -fx-border-width: 2;
-}
-
-.flow-card-title {
-    -fx-font-weight: bold;
-}
-
- /* The two card toggles, told apart by shape as well as caption: a tick for "run this", a small pressed
- * button for the go-home pre-step. */
-.flow-toggle-run {
-    -fx-font-size: 10px;
-}
-
-.flow-toggle-home {
-    -fx-font-size: 10px;
-    -fx-padding: 1 5 1 5;
-    -fx-background-radius: 4;
-}
-
-/* "off", in words. See .flow-card:off for why a colour cue alone was not enough. */
-.flow-off-badge {
-    -fx-font-size: 10px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -bm-text-on-color;
-    -fx-background-color: -bm-muted;
-    -fx-background-radius: 3;
-    -fx-padding: 0 4 0 4;
-}
-
-.flow-start-badge {
-    -fx-font-size: 10px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -bm-severity-ok-text;
-}
-
-.flow-orphan-note {
-    -fx-font-size: 10px;
-    -fx-text-fill: -bm-severity-warning-text;
-}
-
-.flow-port-label {
-    -fx-font-size: 9px;
-    -fx-text-fill: -bm-muted;
-}
-
-/* The port dots. The stroke is the card's own colour, so a dot reads as punched out of the card's edge. */
-.flow-port-in,
-.flow-port-out {
-    -fx-stroke: -bm-flow-card;
-}
-
-.flow-port-in {
-    -fx-fill: -bm-flow-port;
-}
-
-.flow-port-out {
-    -fx-fill: -bm-flow-wire;
-}
-
-/*
- * The DISABLED port. Muted rather than coloured: it is the wire taken when the activity does not run, so it
- * should read as the quiet one on a card whose other ports are all ways of having finished.
- */
-.flow-port-out-disabled {
-    -fx-fill: -bm-muted;
-}
-
-/*
- * A wire: the visible curve, its arrow head, and — behind both — a transparent curve of the same geometry at
- * six times the width. That last one is the whole hitbox. Picking on a 2.5px curve meant hunting for the
- * pixel; picking on this means aiming at the wire.
- */
-.flow-wire {
-    -fx-stroke: -bm-flow-wire;
-    -fx-stroke-width: 2.5;
-    -fx-fill: transparent;
-}
-
-.flow-wire-hit {
-    -fx-stroke: transparent;
-    -fx-stroke-width: 14;
-    -fx-fill: transparent;
-}
-
-.flow-arrow {
-    -fx-fill: -bm-flow-wire;
-}
-
-.flow-wire-group:hover > .flow-wire,
-.flow-wire-group:picked > .flow-wire {
-    -fx-stroke: -bm-flow-wire-hot;
-}
-
-.flow-wire-group:hover > .flow-arrow,
-.flow-wire-group:picked > .flow-arrow {
-    -fx-fill: -bm-flow-wire-hot;
-}
-
-.flow-wire-group:picked > .flow-wire {
-    -fx-stroke-width: 3.5;
-}
-
-/* Marquee and minimap: outlines rather than washes, because a translucent fill needs an alpha CSS has no
-   function for, and a token with alpha baked in would stop following the theme. */
-.flow-band,
-.flow-minimap-viewport {
-    -fx-fill: transparent;
-    -fx-stroke: -bm-flow-wire;
-}
-
-.flow-minimap {
-    -fx-background-color: -bm-flow-card;
-    -fx-border-color: -bm-flow-border;
-}
-
-.flow-minimap-card {
-    -fx-fill: -bm-flow-wire;
-}
-
-.flow-minimap-card:off {
-    -fx-fill: -bm-flow-port;
-}
 
 .file-explorer .sidebar-header {
     -fx-font-weight: bold;

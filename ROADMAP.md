@@ -6,6 +6,37 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-11 — the Activity Flow editor leaves, and Studio stops writing `activities.json` from two
+  places.** `ui/app/ActivityFlowDialog` and the whole of `ui/app/flow` (`FlowCanvas`, `ActivityDraft`,
+  `NewActivityDialog`, `FlowRules`, `FlowNames`, `FlowSnapshot`) are **deleted**; the editor is
+  `com.botmaker.sdk.internal.plugin.flow`, reached through a 🔀 Activity Flow toolbar item in
+  `ToolbarGroup.AUTHORING` at order 10 — the slot Studio's own 🔀 Flow button vacated, so the bar reads the
+  same. The four tests over them went with them, into the SDK.
+
+  **Why this one and not the other two.** The rule the maintainer settled on has the host drawing every
+  window frame over sections a plugin supplies as data, which is exactly what the Parameters window and the
+  Runner now do. A flow does not reduce to a row: its nodes, edges, ports and outcomes would have to become
+  contract vocabulary for Studio to keep drawing them.
+
+  **Four host entry points went, and one of them is not a door but a writer.** The Project ▸ Activity Flow
+  menu entry and `setOnActivityFlow` on both the menu bar and the toolbar; `StudioActions.openActivityFlow`
+  and its `StudioAction.ACTIVITY_FLOW` registration (the Getting Started step still reads, without an Open
+  button, and its text names the toolbar item); and — the writer — the file explorer's **New Activity**
+  button, which added a row to `activities.json` through `ActivityService`. That last one had to go in this
+  same commit: `ActivityService.update` caches the parsed file and publishes an event, so a plugin writing
+  the same file behind it leaves that state stale and fires nothing. Adding an activity is a button on the
+  canvas now.
+
+  **The look went with the canvas.** Forty-odd `.flow-*` rules and seven `-bm-flow-*` tokens left
+  `blocks.css` for the plugin's own `flow.css`, which derives them from the tokens this file still
+  publishes — a host stylesheet naming one plugin's concepts is a look no second plugin could have had.
+  `NoInlineColourStyleTest` scans three roots instead of four.
+
+  **What is not verifiable this week**: the window itself in both themes — including whether the canvas
+  reads correctly with its stylesheet added after the host's rather than inside it — the toolbar's order with
+  a real plugin bound, and the save path, which now writes through the SDK's own `Authoring` rather than
+  through `ActivityService`.
+
 - **2026-09-10 (night) — the Runner renders rows, and the activity checkbox list stops existing.**
   `RunnerWindow` is retyped onto `ParameterRow`: it asks each plugin for the rows of the sections that plugin
   declared, keeps the ones marked `PUBLIC`, files them under the category each row carries, and hands every

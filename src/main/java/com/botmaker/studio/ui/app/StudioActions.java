@@ -116,8 +116,10 @@ final class StudioActions {
         // 2026-08-31. Every row of it reads a file the plugin owns, so the shell could only ever have shown
         // it by asking the plugin for the answers.
         menuBar.setOnManageImports(this::openManageImports);
-        menuBar.setOnActivityFlow(this::openActivityFlow);
-        toolbar.setOnActivityFlow(this::openActivityFlow);
+        // Nothing to wire for the Activity Flow: the graph editor is the SDK plugin's 🔀 Activity Flow item
+        // since 2026-09-11. A flow's nodes, edges and outcomes are that plugin's vocabulary, so the shell
+        // could only ever have drawn it by learning what a branch is — and the file it writes is the
+        // plugin's too, which is why its host original was deleted rather than kept as a second door.
         menuBar.setOnParameters(this::openParameters);
         toolbar.setOnParameters(this::openParameters);
         menuBar.setOnRecoverProjectFiles(recoverProjectFiles);
@@ -250,10 +252,6 @@ final class StudioActions {
         new ManageImportsDialog(primaryStage, codeEditorService).show();
     }
 
-    private void openActivityFlow() {
-        new ActivityFlowDialog(primaryStage, activityService).show();
-    }
-
     /**
      * Opens the dev-only picker gallery, seeded with this project so the template and colour editors have
      * something real to resolve. Only reachable from a dev build's Help menu.
@@ -324,7 +322,9 @@ final class StudioActions {
                 // own text already says where it lives, which is what that field is for.
                 // No RESOURCES entry, for the same reason as CAPTURE_TEMPLATES: the Resource Manager is the
                 // SDK plugin's since 2026-09-01 and the shell has no handle on it.
-                .on(StudioAction.ACTIVITY_FLOW, this::openActivityFlow)
+                // No ACTIVITY_FLOW entry since 2026-09-11, for the same reason as CAPTURE_TEMPLATES: the
+                // graph editor is the SDK plugin's toolbar item and the shell has no handle on it. The step
+                // still reads, without an Open button.
                 .on(StudioAction.PARAMETERS, this::openParameters)
                 .on(StudioAction.OVERLAY_EDITOR, this::openOverlayEditor)
                 .on(StudioAction.PUBLISH, this::openPublishDialog)

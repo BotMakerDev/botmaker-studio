@@ -91,7 +91,7 @@ final class OverlayTargetPicker {
         activityBox.setDisable(items.isEmpty());
         if (activityNames().isEmpty()) {
             activityBox.setPromptText("none yet");
-            row.getChildren().add(dimLabel("add one in Project ▸ Activity Flow"));
+            row.getChildren().add(dimLabel("add one in 🔀 Activity Flow on the toolbar"));
         }
         row.setAlignment(Pos.CENTER_LEFT);
         return row;

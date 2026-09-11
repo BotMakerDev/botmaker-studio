@@ -45,7 +45,6 @@ public class ToolbarManager {
 
     /** Opens the Project Settings dialog; the same action the Project menu fires. */
     private Runnable onProjectSettings;
-    private Runnable onActivityFlow;
     /** Opens the Parameters dialog; the same action the Project menu fires. */
     private Runnable onParameters;
 
@@ -141,11 +140,6 @@ public class ToolbarManager {
         this.onProjectSettings = callback;
     }
 
-    /** Sets the callback invoked when the toolbar's Activity Flow button is clicked. */
-    public void setOnActivityFlow(Runnable callback) {
-        this.onActivityFlow = callback;
-    }
-
     /**
      * Wires the debug-output toggle: {@code initial} is the project's persisted {@code debug} state (shown as the
      * toggle's starting position) and {@code onToggle} persists each change. Call before {@link #createCaptureGroup()}.
@@ -228,9 +222,10 @@ public class ToolbarManager {
         // the button. That label is what the move cost: toolbarItems() is called with no StudioServices, so a
         // plugin's item has no project to name.
 
-        place(placed, ctx, ToolbarItem.of("flow", "🔀 Flow",
-                "Define the bot's activities and wire the order they run in",
-                ToolbarGroup.AUTHORING, 10, c -> run(onActivityFlow)));
+        // 🔀 Flow stood here at AUTHORING/10 until 2026-09-11 and is the SDK plugin's 🔀 Activity Flow item
+        // now, in the same slot, placed by the same merge as any other plugin's. It went because a flow is
+        // the one thing on this bar that does not reduce to data the contract already carries: a parameter
+        // is a ParameterRow, and the window over those stayed here.
 
         place(placed, ctx, ToolbarItem.of("parameters", "🎚 Parameters",
                 "The project's variables: every value the bot reads, with its tag and its editor",

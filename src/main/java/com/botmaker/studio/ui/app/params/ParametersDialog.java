@@ -15,7 +15,6 @@ import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.StudioWindow;
-import com.botmaker.studio.ui.app.flow.FlowNames;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets.ValueEditor;
 import com.botmaker.studio.ui.render.components.ValueTypePicker;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -803,7 +802,7 @@ public final class ParametersDialog {
 
         Runnable addParameter = () -> {
             String candidate = name.getText() == null ? "" : name.getText().trim();
-            if (!FlowNames.isValidIdentifier(candidate)) {
+            if (!isValidIdentifier(candidate)) {
                 error("Enter a valid name (letters, digits, _; not starting with a digit).");
                 return;
             }
@@ -866,10 +865,26 @@ public final class ParametersDialog {
         };
     }
 
+    /**
+     * Whether {@code s} can be written into Java as-is — a parameter's name reaches a bot's source as a
+     * field, so a name this refuses is a name nobody could read back.
+     *
+     * <p>Four lines here rather than a call into the flow editor's {@code FlowNames}, which is what it was
+     * until 2026-09-11: that class is the SDK plugin's now, and the host asking a plugin whether a name is
+     * legal would be the host taking one plugin's judgement for every plugin's rows.
+     */
+    private static boolean isValidIdentifier(String s) {
+        if (s == null || s.isEmpty() || !Character.isJavaIdentifierStart(s.charAt(0))) return false;
+        for (int i = 1; i < s.length(); i++) {
+            if (!Character.isJavaIdentifierPart(s.charAt(i))) return false;
+        }
+        return true;
+    }
+
     private void commitRename(Owned entry, TextField field) {
         String candidate = field.getText() == null ? "" : field.getText().trim();
         if (candidate.equals(entry.row().name())) return;
-        if (!FlowNames.isValidIdentifier(candidate)) {
+        if (!isValidIdentifier(candidate)) {
             error("Invalid parameter name — reverted.");
             field.setText(entry.row().name());
             return;

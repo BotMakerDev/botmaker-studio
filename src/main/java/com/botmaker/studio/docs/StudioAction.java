@@ -25,7 +25,8 @@ public enum StudioAction {
     CAPTURE_TEMPLATES("Open Capture Templates ▸", "✂ Capture Templates on the toolbar (contributed by the "
             + "BotMaker SDK)"),
     RESOURCES("Open Resource Manager ▸", "Project ▸ Resource Manager… (or 🗂 Resources on the toolbar)"),
-    ACTIVITY_FLOW("Open Activity Flow ▸", "Project ▸ Activity Flow… (or 🔀 Flow on the toolbar)"),
+    ACTIVITY_FLOW("Open Activity Flow ▸", "🔀 Activity Flow on the toolbar (contributed by the "
+            + "BotMaker SDK)"),
     PARAMETERS("Open Parameters ▸", "Project ▸ Parameters… (or 🎚 Parameters on the toolbar)"),
     // F9 was named here as a shortcut and never was one: it is the *recorder's* global hotkey, which left
     // with the recorder on 2026-09-02 and was never bound to opening the overlay in the first place.

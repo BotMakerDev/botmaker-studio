@@ -34,7 +34,6 @@ public class MenuBarManager {
     private Runnable onUpgradeSdk;
     private Runnable onModernise;
     private Runnable onManageImports;
-    private Runnable onActivityFlow;
     private Runnable onParameters;
     /** Kept so the entry can be renamed once the project's settings model is known. */
     private Runnable onRecoverProjectFiles;
@@ -232,11 +231,8 @@ public class MenuBarManager {
             if (onManageImports != null) onManageImports.run();
         });
 
-        // One entry for the whole activity story — define, configure, order and switch activities on.
-        MenuItem activityFlowItem = new MenuItem("Activity Flow...");
-        activityFlowItem.setOnAction(e -> {
-            if (onActivityFlow != null) onActivityFlow.run();
-        });
+        // No Activity Flow entry since 2026-09-11: the graph editor is the SDK plugin's 🔀 Activity Flow
+        // toolbar item, and a menu is a place the shell can only offer what it can open itself.
 
         // Where a parameter is defined, retyped and exposed. Separate from the flow editor on purpose: that
         // one is about where the bot goes next, this one about what it is configured with.
@@ -295,7 +291,7 @@ public class MenuBarManager {
                 manageLibrariesItem, managePluginsItem, reloadPluginsItem, upgradeSdkItem, moderniseItem,
                 manageImportsItem,
                 new SeparatorMenuItem(),
-                activityFlowItem, parametersItem,
+                parametersItem,
                 new SeparatorMenuItem(),
                 projectSettingsItem, new SeparatorMenuItem(),
                 recoverFilesItem, reviewItem, historyItem, new SeparatorMenuItem(),
@@ -729,11 +725,6 @@ public class MenuBarManager {
     /** Sets the callback for when "Recover Project Files..." is clicked. */
     public void setOnRecoverProjectFiles(Runnable callback) {
         this.onRecoverProjectFiles = callback;
-    }
-
-    /** Sets the callback for when "Activity Flow..." is clicked. */
-    public void setOnActivityFlow(Runnable callback) {
-        this.onActivityFlow = callback;
     }
 
     /** Sets the callback for when "Parameters..." is clicked. */
