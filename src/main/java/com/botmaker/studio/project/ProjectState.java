@@ -2,6 +2,7 @@ package com.botmaker.studio.project;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.component.Audience;
+import com.botmaker.studio.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
@@ -185,8 +186,19 @@ public class ProjectState {
         this.template = template;
     }
 
+    /**
+     * Adopts {@code settings} as the project's current ones, and binds the plugin host's editor verdicts with
+     * them.
+     *
+     * <p>The bind is here rather than at the three callers ({@code ProjectSettingsService}'s load, save and
+     * update) because <em>the settings that are current</em> is exactly this field, so a fourth caller would
+     * otherwise have to remember. What it feeds is which plugin's editor draws a type two plugins both claim
+     * — a fact the walks over the editors cannot read for themselves, since one of them holds only a
+     * {@code ProjectConfig}. See {@code EditorContest}.
+     */
     public void setSettings(StudioProjectSettings settings) {
         this.settings = settings != null ? settings : StudioProjectSettings.empty();
+        PluginHost.preferEditors(this.settings.preferredEditors());
     }
 
     // =========================================================================

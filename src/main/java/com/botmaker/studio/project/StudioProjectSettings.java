@@ -59,13 +59,20 @@ import java.util.Map;
  *                            release adds one — must appear, not be absent from every project written before
  *                            it existed. A name this Studio does not know is ignored on read, and so is not
  *                            written back; see {@code ToolbarVisibility} (backward-compatible; absent → empty)
+ * @param preferredEditors    which plugin's editor draws a type two plugins both claim:
+ *                            {@code fully.qualified.TypeName → pluginId}. Empty is the ordinary state — a row
+ *                            exists only where a user was actually shown a contest and answered it. A verdict
+ *                            naming an uninstalled plugin is inert rather than an error, the same shape as
+ *                            {@code lastRecordedActivity} naming a deleted activity; see
+ *                            {@code EditorContest} (backward-compatible; absent → empty)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, String> favoriteOverloads,
                                     Map<String, List<String>> favoriteMethods,
                                     ProjectTemplate template, String lastRecordedActivity,
                                     OverlayState overlayState, WorkspaceLayout workspaceLayout,
-                                    List<String> hiddenToolbarGroups) {
+                                    List<String> hiddenToolbarGroups,
+                                    Map<String, String> preferredEditors) {
 
     /**
      * The overlay editor HUD's remembered layout: its top-left corner on screen and how many tree rows it
@@ -131,6 +138,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         favoriteOverloads = favoriteOverloads == null ? Map.of() : Map.copyOf(favoriteOverloads);
         favoriteMethods = favoriteMethods == null ? Map.of() : deepCopy(favoriteMethods);
         hiddenToolbarGroups = hiddenToolbarGroups == null ? List.of() : List.copyOf(hiddenToolbarGroups);
+        preferredEditors = preferredEditors == null ? Map.of() : Map.copyOf(preferredEditors);
     }
 
     private static Map<String, List<String>> deepCopy(Map<String, List<String>> src) {
@@ -141,7 +149,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
 
     /** A fresh project's settings — nothing remembered yet, and no template recorded until one is chosen. */
     public static StudioProjectSettings empty() {
-        return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null, List.of());
+        return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null, List.of(),
+                Map.of());
     }
 
     // withTargets, withDefaultIndex, withKnownWindowTitles and withReferenceResolution are deleted
@@ -152,25 +161,25 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     /** This settings with the originating template recorded ({@code null} clears it). */
     public StudioProjectSettings withTemplate(ProjectTemplate template) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors);
     }
 
     /** This settings with the overlay editor's last authored activity recorded ({@code null} clears it). */
     public StudioProjectSettings withLastRecordedActivity(String activityName) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                activityName, overlayState, workspaceLayout, hiddenToolbarGroups);
+                activityName, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors);
     }
 
     /** This settings with the overlay HUD's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withOverlayState(OverlayState state) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, state, workspaceLayout, hiddenToolbarGroups);
+                lastRecordedActivity, state, workspaceLayout, hiddenToolbarGroups, preferredEditors);
     }
 
     /** This settings with the main window's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withWorkspaceLayout(WorkspaceLayout layout) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, layout, hiddenToolbarGroups);
+                lastRecordedActivity, overlayState, layout, hiddenToolbarGroups, preferredEditors);
     }
 
     /**
@@ -184,13 +193,35 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     public StudioProjectSettings withHiddenToolbarGroups(Collection<String> groupNames) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastRecordedActivity, overlayState, workspaceLayout,
-                groupNames == null ? List.of() : List.copyOf(groupNames));
+                groupNames == null ? List.of() : List.copyOf(groupNames), preferredEditors);
     }
 
     /** Whether {@code groupName} (a {@code ToolbarGroup} enum name) is switched off for this project. */
     @JsonIgnore
     public boolean isGroupHidden(String groupName) {
         return hiddenToolbarGroups.contains(groupName);
+    }
+
+    /**
+     * This settings with {@code typeName}'s editor set to {@code pluginId} ({@code null} clears it).
+     *
+     * <p>Keyed on the fully qualified Java type rather than on a value-type id, which is what makes one
+     * verdict serve both densities: a block's slot knows a resolved Java type and a Parameters row knows a
+     * {@code ValueType} whose {@code javaName()} spells the same thing. A value-type id would be unanswerable
+     * on the canvas, where there is no id — only a type.
+     */
+    public StudioProjectSettings withPreferredEditor(String typeName, String pluginId) {
+        Map<String, String> next = new LinkedHashMap<>(preferredEditors);
+        if (pluginId == null) next.remove(typeName);
+        else next.put(typeName, pluginId);
+        return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, next);
+    }
+
+    /** The chosen plugin id for {@code typeName}, or {@code null} when the user has not been asked. */
+    @JsonIgnore
+    public String preferredEditorFor(String typeName) {
+        return preferredEditors.get(typeName);
     }
 
     /**
@@ -202,7 +233,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (signatureKey == null) next.remove(methodKey);
         else next.put(methodKey, signatureKey);
         return new StudioProjectSettings(knownWindowTitles, next, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors);
     }
 
     /** The chosen overload signature key for {@code methodKey}, or {@code null} if no favorite is set. */
@@ -220,7 +251,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (methods == null || methods.isEmpty()) next.remove(className);
         else next.put(className, List.copyOf(methods));
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, next, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors);
     }
 
     /** The favorite method names for {@code className} (preference order), or an empty list if none. */

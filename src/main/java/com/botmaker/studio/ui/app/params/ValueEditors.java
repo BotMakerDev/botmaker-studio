@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app.params;
 import com.botmaker.plugin.api.SlotEditor;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostValueContext;
 import com.botmaker.studio.plugin.PluginHost;
@@ -213,13 +214,10 @@ public final class ValueEditors {
      * telling the host how to read it back.
      */
     private static Editor fromPlugin(ValueType type, String wire, Context ctx) {
-        List<SlotEditor> editors = PluginHost.slotEditors();
-        if (editors.isEmpty()) return null;
         HostValueContext context = HostValueContext.of(type, List.of(wire == null ? "" : wire),
                 HostServices.forProject(ctx.project()), null);
-        for (SlotEditor editor : editors) {
+        for (SlotEditor editor : claimants(type, context)) {
             try {
-                if (!editor.matches(context)) continue;
                 Node node = editor.create(context);
                 if (node != null) return new Editor(node, context::single);
             } catch (RuntimeException | LinkageError e) {
@@ -234,6 +232,45 @@ public final class ValueEditors {
     }
 
     /**
+     * Every plugin editor that claims {@code context}, in the order they should be tried — the user's chosen
+     * plugin first when there is a contest and they have settled it.
+     *
+     * <p>Shared by both walks below, because a row and its option previews must not be drawn by two different
+     * plugins. The key is {@code ValueType.javaName()} — the fully qualified Java type, which is what
+     * {@code ResolvedType.qualifiedName()} spells on the canvas — and one key space is what makes a verdict
+     * given on a block apply to this row, which is the promise a single editor across both densities is for.
+     *
+     * <p><b>This window offers no <i>Edit with</i> menu of its own</b>, and that is a stated gap rather than
+     * an oversight. A verdict has to be persisted, and persisting it means a {@code ProjectSettingsService},
+     * which needs the project's state and event bus; {@link Context} carries a {@code ProjectConfig} and
+     * nothing else. Writing the file directly would leave {@code ProjectState} and the plugin host holding
+     * the old verdict until the next project open — two answers to one question — and threading a service
+     * through a record eight call sites construct is a change of its own. So the canvas asks, and this window
+     * honours the answer.
+     */
+    private static List<SlotEditor> claimants(ValueType type, HostValueContext context) {
+        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
+        if (editors.isEmpty()) return List.of();
+
+        List<PluginHost.OwnedEditor> claiming = new ArrayList<>();
+        for (PluginHost.OwnedEditor owned : editors) {
+            try {
+                if (owned.editor().matches(context)) claiming.add(owned);
+            } catch (RuntimeException | LinkageError e) {
+                System.err.println("Plugin slot editor failed for type " + (type == null ? "?" : type.id())
+                                   + ": " + e);
+            }
+        }
+        String typeName = type == null ? null : type.javaName();
+        List<PluginHost.OwnedEditor> ordered = EditorContest.ordered(
+                claiming, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName));
+
+        List<SlotEditor> result = new ArrayList<>();
+        for (PluginHost.OwnedEditor owned : ordered) result.add(owned.editor());
+        return result;
+    }
+
+    /**
      * The picture a plugin draws beside one declared choice of its own type, or {@code null}.
      *
      * <p>The third place this window shows a value, and the last one the host answered for a plugin's type.
@@ -243,13 +280,10 @@ public final class ValueEditors {
      * before.
      */
     private static Node previewFromPlugin(ValueType type, String wire, Context ctx) {
-        List<SlotEditor> editors = PluginHost.slotEditors();
-        if (editors.isEmpty()) return null;
         HostValueContext context = HostValueContext.of(type, List.of(wire == null ? "" : wire),
                 HostServices.forProject(ctx.project()), null);
-        for (SlotEditor editor : editors) {
+        for (SlotEditor editor : claimants(type, context)) {
             try {
-                if (!editor.matches(context)) continue;
                 Node node = editor.preview(context);
                 if (node != null) return node;
             } catch (RuntimeException | LinkageError e) {

@@ -2,11 +2,15 @@ package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.plugin.api.SlotEditor;
 import com.botmaker.plugin.api.SlotRun;
+import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSlotContext;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.services.ProjectSettingsService;
+import javafx.application.Platform;
 import javafx.scene.Node;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -51,25 +55,73 @@ final class PluginPickers {
      * discarded — {@code matches} is documented as cheap, {@code create} is not.
      */
     private static Node dispatch(PickerContext ctx, boolean build, SlotRun run) {
-        List<SlotEditor> editors = PluginHost.slotEditors();
+        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
         if (editors.isEmpty() || ctx == null) return null;
 
         HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),
                 ctx.className(), ctx.methodName(), ctx.argIndex(),
                 HostServices.forProject(ctx.context() == null ? null : ctx.context().getConfig()), run);
 
-        for (SlotEditor editor : editors) {
+        // Every claimant, not the first — which is what makes a contest visible at all. matches() is cheap by
+        // contract and this walk happened anyway; what changes is that it does not stop.
+        List<PluginHost.OwnedEditor> claimants = new ArrayList<>();
+        for (PluginHost.OwnedEditor owned : editors) {
             try {
-                if (!editor.matches(context)) continue;
-                if (!build) return MATCHED;
-                Node node = editor.create(context);
-                if (node != null) return node;
+                if (owned.editor().matches(context)) claimants.add(owned);
             } catch (RuntimeException | LinkageError e) {
-                System.err.println("Plugin slot editor failed for "
-                                   + (ctx.paramType() == null ? "?" : ctx.paramType().simpleName()) + ": " + e);
+                System.err.println("Plugin slot editor failed for " + typeLabel(ctx) + ": " + e);
             }
         }
+        if (claimants.isEmpty()) return null;
+        if (!build) return MATCHED;
+
+        String typeName = ctx.paramType() == null ? null : ctx.paramType().qualifiedName();
+        List<PluginHost.OwnedEditor> ordered = EditorContest.ordered(
+                claimants, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName));
+
+        for (PluginHost.OwnedEditor owned : ordered) {
+            Node node;
+            try {
+                node = owned.editor().create(context);
+            } catch (RuntimeException | LinkageError e) {
+                // Unchanged rule: a plugin's editor is third-party code drawn inside our window, and one that
+                // throws costs the user that widget and nothing more.
+                System.err.println("Plugin slot editor failed for " + typeLabel(ctx) + ": " + e);
+                continue;
+            }
+            if (node == null) continue;
+            if (ordered.size() > 1) offerTheOthers(node, typeName, ordered, owned.pluginId(), ctx);
+            return node;
+        }
         return null;
+    }
+
+    /**
+     * Attaches the <i>Edit with</i> menu to a contested slot, and persists whatever the user picks.
+     *
+     * <p>The redraw is explicit rather than a {@code SettingsChangedEvent} subscription: the canvas does not
+     * listen for one, and making it would re-render the whole program on every unrelated settings write — the
+     * same objection the toolbar's own comment records. What a verdict changes is which widget a slot is drawn
+     * with, which is exactly what {@code rerenderActiveFile} is for.
+     */
+    private static void offerTheOthers(Node node, String typeName, List<PluginHost.OwnedEditor> ordered,
+                                       String drawing, PickerContext ctx) {
+        if (typeName == null || typeName.isBlank() || ctx.context() == null) return;
+
+        List<EditorContest.Claim> claims = new ArrayList<>();
+        for (PluginHost.OwnedEditor owned : ordered) {
+            claims.add(new EditorContest.Claim(owned.pluginId(), owned.pluginName()));
+        }
+        EditorContest.arm(node, EditorContest.menu(typeName, claims, drawing, pluginId -> {
+            ProjectSettingsService settings = ProjectSettingsService.forProject(ctx.context());
+            settings.update(settings.current().withPreferredEditor(typeName, pluginId))
+                    .thenRun(() -> Platform.runLater(ctx.context()::rerenderActiveFile));
+        }));
+    }
+
+    /** The type a failure was about, for one stderr line; a slot with no resolved type still says something. */
+    private static String typeLabel(PickerContext ctx) {
+        return ctx.paramType() == null ? "?" : ctx.paramType().simpleName();
     }
 
     /** Stands for "some editor claims this" in the detection-only walk; never attached to a scene. */

@@ -14,6 +14,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Right-click a value to choose which plugin's editor draws it.** Two plugins may honestly both have an
+  editor for a rectangle, and until now the winner was whichever one `ServiceLoader` reached first —
+  silently, and in an order nothing guaranteed. The host collects every claimant and offers *Edit with ▸* on
+  the slot; the verdict is saved per project in `settings.json` as `preferredEditors`, keyed on the fully
+  qualified Java type so a choice made on a block also applies to that type's row in the Parameters window
+  and to the pictures beside its declared choices. A verdict naming an uninstalled plugin is inert. Nothing
+  crosses the contract — there is no priority a plugin can declare for itself, because the first one to write
+  a big number would win forever. **The menu is on the canvas only**: persisting a verdict needs the
+  project's settings service, and the Parameters window's editors are handed a `ProjectConfig` alone, so that
+  window honours the verdict without being able to set one.
+- `CodeEditorService.rerenderActiveFile()` — draws the open file's blocks again from the text already in
+  memory, for the changes that alter *how* a block is drawn rather than what it says. Two callers: a re-bound
+  plugin set, and an editor verdict.
 - **The overlay editor draws a plugin row.** Every `ToolbarGroup.OVERLAY` item, built by the same
   `ToolbarItems` the main bar uses — so a plugin's button on the HUD is styled, tooltipped, icon-boxed and
   guarded identically. At 340px a second renderer would not merely look different, it would size differently
@@ -39,6 +52,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   a row several plugins can contribute to, not a better argument.
 
 ### Changed
+
+- `PluginHost` remembers which plugin each slot editor came from (`ownedSlotEditors()`). `slotEditors()` is
+  unchanged and still answers the flat list — derived from the owned one, so the two cannot disagree.
 
 - **The overlay editor asks which window to draw over.** When no private session is live it offers every open
   window first, in the window manager's own order, then any remembered title not already there. **Nothing is

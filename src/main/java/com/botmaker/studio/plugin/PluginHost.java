@@ -119,7 +119,21 @@ public final class PluginHost {
     private static volatile ValueCatalog valueTypes = mergeValueTypes();
 
     /** Memoised beside the value catalog, and rebuilt on the same bind, for the same reason. */
-    private static volatile List<SlotEditor> slotEditors = mergeSlotEditors(BUNDLED);
+    private static volatile List<OwnedEditor> ownedSlotEditors = mergeOwnedSlotEditors(BUNDLED);
+
+    /** The same editors without their owner — derived, so the two can never disagree. See {@link #slotEditors()}. */
+    private static volatile List<SlotEditor> slotEditors = strip(ownedSlotEditors);
+
+    /**
+     * The user's choice of editor per Java type name, or empty when nothing is contested.
+     *
+     * <p>Held here rather than read at each walk site for the same reason the editor list is: the canvas walk
+     * has a whole project to ask ({@code PluginPickers} holds a {@code CodeEditorService}) and the Parameters
+     * window's has only a {@code ProjectConfig}, so a verdict read at the call site would be reachable in one
+     * of them. It is bound from the open project's settings exactly as the plugin list itself is — a plugin is
+     * constructed once and serves whatever is bound to it, and so is this.
+     */
+    private static volatile Map<String, String> preferredEditors = Map.of();
 
     /** Memoised beside the slot editors, rebuilt on the same bind. See {@link #toolbarItems()}. */
     private static volatile List<ToolbarItem> toolbarItems = mergeToolbarItems(BUNDLED);
@@ -228,7 +242,8 @@ public final class PluginHost {
         loader = opened;
         plugins = bound;
         valueTypes = merged;
-        slotEditors = mergeSlotEditors(bound);
+        ownedSlotEditors = mergeOwnedSlotEditors(bound);
+        slotEditors = strip(ownedSlotEditors);
         toolbarItems = mergeToolbarItems(bound);
         CACHE.clear();
         GROUPS.clear();
@@ -340,13 +355,63 @@ public final class PluginHost {
         return slotEditors;
     }
 
-    private static List<SlotEditor> mergeSlotEditors(List<StudioPlugin> set) {
-        List<SlotEditor> merged = new ArrayList<>();
+    /**
+     * One plugin's editor, with the plugin it came from.
+     *
+     * <p>{@link SlotEditor} carries no id — correctly, since an editor is a widget and not a contribution
+     * record — so ownership is the merge's to remember. Nothing needed it until a user had to be shown
+     * <em>which</em> plugin is drawing their value; see {@link EditorContest}.
+     */
+    public record OwnedEditor(String pluginId, String pluginName, SlotEditor editor) {}
+
+    /** Every loaded plugin's slot editors with their owner, in plugin order. */
+    public static List<OwnedEditor> ownedSlotEditors() {
+        return ownedSlotEditors;
+    }
+
+    private static List<OwnedEditor> mergeOwnedSlotEditors(List<StudioPlugin> set) {
+        List<OwnedEditor> merged = new ArrayList<>();
         for (StudioPlugin plugin : set) {
             List<SlotEditor> offered = plugin.slotEditors();
-            if (offered != null) merged.addAll(offered);
+            if (offered == null) continue;
+            String name = displayNameOf(plugin);
+            for (SlotEditor editor : offered) {
+                if (editor != null) merged.add(new OwnedEditor(plugin.id(), name, editor));
+            }
         }
         return List.copyOf(merged);
+    }
+
+    /** A plugin's own name for itself, falling back to its id — a plugin that throws here costs only a label. */
+    private static String displayNameOf(StudioPlugin plugin) {
+        try {
+            String name = plugin.displayName();
+            return name == null || name.isBlank() ? plugin.id() : name;
+        } catch (RuntimeException | Error e) {
+            return plugin.id();
+        }
+    }
+
+    private static List<SlotEditor> strip(List<OwnedEditor> owned) {
+        List<SlotEditor> editors = new ArrayList<>();
+        for (OwnedEditor each : owned) editors.add(each.editor());
+        return List.copyOf(editors);
+    }
+
+    /** Binds the open project's editor verdicts. Called wherever its settings become the current ones. */
+    public static void preferEditors(Map<String, String> byTypeName) {
+        preferredEditors = byTypeName == null ? Map.of() : Map.copyOf(byTypeName);
+    }
+
+    /**
+     * The plugin id the user chose to draw {@code typeName}, or {@code null} for no verdict.
+     *
+     * @param typeName the fully qualified Java type — {@code ResolvedType.qualifiedName()} on the canvas,
+     *                 {@code ValueType.javaName()} in the Parameters window, which is one key space on
+     *                 purpose: a verdict given on a block applies to the row
+     */
+    public static String preferredEditorFor(String typeName) {
+        return typeName == null || typeName.isBlank() ? null : preferredEditors.get(typeName);
     }
 
     /**

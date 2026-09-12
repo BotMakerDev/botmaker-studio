@@ -159,12 +159,8 @@ public class CodeEditorService {
         // bound. So a slot the newly installed plugin now has an editor for goes on showing the text field it
         // was drawn with until something rebuilds it, which is what made installing a plugin need a restart.
         // Nothing on disk changed: re-render the text ProjectState already holds, and record no history.
-        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, event -> {
-            Path active = activePath();
-            if (active == null) return;
-            state.getFile(active).map(f -> f.getContent()).ifPresent(text ->
-                    eventBus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(text)));
-        }, false);
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class,
+                event -> rerenderActiveFile(), false);
 
         eventBus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, event -> {
             handleCodeUpdateForHistory(event);
@@ -643,6 +639,28 @@ public class CodeEditorService {
         if (!LockResolver.forActiveFile(config, state).suppressesInteraction()) {
             codeEditor.normalizeSwitches();
         }
+    }
+
+    /**
+     * Draws the open file's blocks again from the text {@link ProjectState} already holds — nothing is read
+     * from disk, nothing is written, and no history step is recorded.
+     *
+     * <p>For the changes that alter <em>how</em> a block is drawn rather than what it says. A block caches the
+     * node it drew ({@code AbstractCodeBlock.getUINode} lazy-creates once) and what fills a value slot is
+     * decided while that node is built, so a slot goes on showing the widget it was drawn with until
+     * something rebuilds it. Two callers: a plugin set that has just been re-bound
+     * ({@code LibrariesChangedEvent}, which is what made installing a plugin need a restart), and a user
+     * choosing a different plugin's editor for a type ({@code EditorContest}) — where a verdict persisted and
+     * not drawn until the next project open is the one outcome to avoid.
+     *
+     * <p>A no-op with no file open. Safe to call from the FX thread: the refresh is published as an event and
+     * the rebuild is deferred to a later pulse.
+     */
+    public void rerenderActiveFile() {
+        Path active = activePath();
+        if (active == null) return;
+        state.getFile(active).map(ProjectFile::getContent).ifPresent(text ->
+                eventBus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(text)));
     }
 
     /**
