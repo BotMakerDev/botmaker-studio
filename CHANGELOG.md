@@ -46,6 +46,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the owning plugin's `capture.json` — two facts with one shape, held by the two owners that actually have an
   opinion about them, rather than one fact spelled twice.
 
+### Removed
+
+- **Studio holds no capture target.** `services/capture/CaptureTarget`,
+  `ScreenCaptureService.defaultTarget()`/`captureDefaultTargetAsync`/`forProjectFiles` and `TargetCapture`'s
+  default-target supplier, its `ProjectSettingsService` constructor, its monitor/desktop/emulator branches
+  and its ADB frame are all gone. The record was field-for-field the owning plugin's own capture-target
+  model, and every one of those readers had answered "no target" since Studio stopped reading `capture.json`
+  on 2026-08-31. The overlay editor resolves its own window live, and the *bot's* target is written by the
+  plugin from the overlay's own row, so there is nothing left for a second spelling to hold. What Studio's
+  capture service still does is what a caller with a window in hand asks for — raise, resize, capture,
+  bounds, the title list — plus the screen, which a pick over several monitors now always asks about.
+
 ### Fixed
 
 - **Opening the overlay editor with nothing to draw over is no longer a dead end.** It read the project's

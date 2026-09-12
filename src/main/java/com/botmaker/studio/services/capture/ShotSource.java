@@ -12,9 +12,10 @@ import javafx.stage.Window;
  * chooser, the rubber-band surfaces, the magnifier, the crop arithmetic, the blank-frame warning — was
  * already target-free.
  *
- * <p>{@link TargetCapture} is the implementation today. It is also the whole of what has to be reimplemented
- * on the far side when the target half moves to the SDK plugin: the overlay stays in Studio behind
- * {@code StudioServices.capture()} and keeps consuming this.
+ * <p>{@link TargetCapture} implements it, and since 2026-09-12 it answers the second method with
+ * {@code null} always: the overlay editor resolves its own window live and hands it to a capture call
+ * directly, so the source Studio has knows no window. A source that <em>does</em> know one is a plugin's to
+ * supply — which is the whole of what has to exist on the far side, and is what this interface is for.
  */
 public interface ShotSource {
 

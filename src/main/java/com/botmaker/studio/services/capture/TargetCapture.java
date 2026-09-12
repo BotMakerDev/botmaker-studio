@@ -3,16 +3,7 @@ package com.botmaker.studio.services.capture;
 import com.botmaker.shared.capture.GenericWindow;
 import com.botmaker.shared.capture.NativeController;
 import com.botmaker.shared.capture.NativeControllerFactory;
-import com.botmaker.shared.emulator.EmulatorInstance;
-import com.botmaker.shared.emulator.EmulatorInstances;
-import com.botmaker.shared.config.CaptureSourceKind;
-import com.botmaker.shared.emulator.EmulatorProbe;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.services.ProjectSettingsService;
 
-import javafx.application.Platform;
-import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
 import javafx.stage.Window;
 
@@ -20,16 +11,20 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * <b>Which pixels</b> — the half of editor-time capture that knows what a capture target is.
  *
- * <p>It resolves the project's default target and grabs it: a window it raises and focuses first, a monitor
- * cropped out of a desktop grab, the whole virtual desktop, or an emulator's frame pulled over ADB. It also
- * owns everything else that needs a native window handle — bounds probes, raise, resize, the title list the
- * target chooser offers.
+ * <p>It grabs a window a caller names — raising and focusing it first — or the screen, and it owns everything
+ * else that needs a native window handle: bounds probes, raise, resize, the title list the overlay editor's
+ * picker offers.
+ *
+ * <p><b>It resolves no capture target, and since 2026-09-12 it holds no notion of one.</b> It used to switch
+ * on the project's configured default — window, monitor, desktop, emulator over ADB — and that default has
+ * answered {@code null} for every caller since Studio stopped reading {@code capture.json} on 2026-08-31,
+ * because the file describes what the <b>bot</b> looks at and belongs to the plugin that owns
+ * {@code CaptureSource}. So `CaptureTarget`, the supplier and the emulator branch are gone: what is left is
+ * what a caller with a window in hand asks for.
  *
  * <p><b>This class is on its way out of Studio, and the split that isolates it is the point.</b> A capture
  * target is the SDK's vocabulary rather than an editor's — a window to look at is what a bot's own
@@ -40,13 +35,7 @@ import java.util.function.Supplier;
  * <p>It implements {@link ShotSource}, which is the whole of what the overlay needs from it — and therefore
  * the whole of what has to exist on the far side afterwards.
  *
- * <h2>Two things worth knowing before changing anything here</h2>
- *
- * <p><b>An emulator is captured the way the bot captures it, not the way it looks.</b> {@link #emulatorShot}
- * pulls a frame over ADB rather than grabbing the host window the emulator is drawn in. Without that branch a
- * template was cropped out of the host window while the bot matched it against the ADB frame — on Waydroid
- * those two are a scale factor apart, so nothing ever matched and the crop looked perfectly accurate, because
- * it was accurate in the space it was taken in.
+ * <h2>One thing worth knowing before changing anything here</h2>
  *
  * <p><b>A window capture that comes back blank falls through to a desktop crop.</b> Native per-window capture
  * returns black under Wayland; the fallback grabs the whole desktop (which has a CLI path there) and crops it
@@ -55,22 +44,9 @@ import java.util.function.Supplier;
 public final class TargetCapture implements ShotSource {
 
     /**
-     * Where the project's default capture target comes from, or {@code null} when the caller has no project
-     * context. When a default is set the pickers use it directly and skip the chooser.
-     *
-     * <p>A supplier rather than the {@link ProjectSettingsService} itself, because the two callers want it
-     * from different places: a picker inside the editor has the live service, while a picker in a dialog that
-     * was handed nothing but a {@link ProjectConfig} — the Parameters dialog, the Runner, the Variables
-     * screen — can still read the same {@code settings.json} off disk. Asking for the target at pick time
-     * rather than at construction is also what lets a target chosen in one window be honoured in another
-     * without anybody re-wiring a service.
-     */
-    private final Supplier<CaptureTarget> defaultTarget;
-
-    /**
      * A window to act on, named by title and — when the caller has one — by its exact native handle.
      *
-     * <p><b>The id is why this is not a {@link CaptureTarget}.</b> A stored target's identity is its spec
+     * <p><b>The id is why this is not a stored capture target.</b> A stored target's identity is its spec
      * text, and an id belongs to one live process: persisting one is meaningless, which is exactly what
      * {@code window:<title>} says by having nowhere to put it. But a caller that has just launched a window
      * <em>does</em> know which one it means, and a title cannot always say — a gamescope session renames its
@@ -87,90 +63,41 @@ public final class TargetCapture implements ShotSource {
         public WindowRef(String titleSubstring) {
             this(titleSubstring, null);
         }
-
-        /** The window {@code target} names, or {@code null} when it names no window. */
-        public static WindowRef of(CaptureTarget target) {
-            String title = target == null ? null : target.windowTitle();
-            return title == null ? null : new WindowRef(title);
-        }
-    }
-
-    public TargetCapture() {
-        this((Supplier<CaptureTarget>) null);
-    }
-
-    /**
-     * Kept so the editor's wiring reads the same, and deliberately ignoring its argument.
-     *
-     * <p>It used to be {@code settings::defaultTarget} — the project's configured capture target, read out of
-     * {@code capture.json}. That file describes what the <b>bot</b> looks at and belongs to the plugin that
-     * owns {@code CaptureSource}, so Studio stopped reading it (2026-08-31) and
-     * {@code ProjectSettingsService.defaultTarget} went with it. There is therefore nothing to supply, and a
-     * capture with no default asks the user which screen — which is the honest behaviour for an editor that no
-     * longer knows what the bot watches.
-     */
-    public TargetCapture(ProjectSettingsService settings) {
-        this((Supplier<CaptureTarget>) null);
-    }
-
-    /** A capture over an explicit default — the one way a caller can still supply one. */
-    public TargetCapture(Supplier<CaptureTarget> defaultTarget) {
-        this.defaultTarget = defaultTarget;
-    }
-
-    /**
-     * A capture source for a caller that has the project's files but not its services.
-     *
-     * <p>It read the project's recorded default so a screen pick did not ask which screen every time. That
-     * default is the plugin's now (see the constructor above), so this is the bare service — and its one
-     * caller, {@code ValueEditors}' geometry row, is itself gone to the SDK's {@code GeometryEditors}.
-     */
-    public static TargetCapture forProjectFiles(ProjectConfig config) {
-        return new TargetCapture();
-    }
-
-    /** The project's default capture target, or {@code null} — asked afresh at each pick. */
-    public CaptureTarget defaultTarget() {
-        return defaultTarget == null ? null : defaultTarget.get();
     }
 
     @Override
     public Grab grab(Window owner) {
-        return grabOffThread(owner);
+        return grabOffThread();
     }
 
     /**
-     * The title a template captured through this source records as the window it came from, or {@code null}
-     * for a screen/desktop grab (there is no window to name). Same rule as the capture toolbar's own.
+     * The window title a template captured through this source records, or {@code null}.
+     *
+     * <p>Always {@code null} now, and it has been in effect since 2026-08-31: the answer came from the
+     * project's configured capture target, which is the owning plugin's and which Studio does not read. The
+     * method stays because {@link ShotSource} is the contract {@link ScreenOverlay} consumes, and a capture
+     * source that <em>does</em> know its window is exactly what a plugin implementing that interface would
+     * supply.
      */
     @Override
     public String title() {
-        CaptureTarget target = defaultTarget();
-        return target == null ? null : target.windowTitle();
+        return null;
     }
 
     /**
-     * Resolves the capture target and grabs its pixels (blocking — call off the FX thread only).
+     * Grabs the screen (blocking — call off the FX thread only).
      *
      * <ul>
-     *   <li>default is a window → focus + capture that window ({@link #captureWindow});</li>
-     *   <li>default is a screen → grab the desktop and crop to that monitor (no dialog);</li>
-     *   <li>default is the whole desktop (or unset on a single monitor) → the whole virtual desktop;</li>
-     *   <li>unset default + multiple monitors → return the desktop image for the FX-thread chooser.</li>
+     *   <li>one monitor → the whole virtual desktop;</li>
+     *   <li>several monitors → the desktop image, for the FX-thread chooser to ask which one.</li>
      * </ul>
+     *
+     * <p>It used to switch on the project's default capture target first — window, monitor, desktop, chooser.
+     * Studio holds no capture target, so every pick asks, which is the honest behaviour for an editor that
+     * does not know what the bot watches. A source that <em>does</em> know is a plugin's to supply through
+     * {@link ShotSource}.
      */
-    private Grab grabOffThread(Window owner) {
-        CaptureTarget target = defaultTarget();
-
-        WindowRef window = WindowRef.of(target);
-        if (window != null) {
-            WindowShot ws = captureWindow(window);
-            if (ws == null) return new Grab(null, null);
-            java.awt.Rectangle b = ws.bounds();
-            Rectangle2D bounds = new Rectangle2D(b.x, b.y, b.width, b.height);
-            return new Grab(new ScreenShot(ws.image(), bounds, false, false), null);
-        }
-
+    private Grab grabOffThread() {
         BufferedImage desktop;
         try {
             desktop = DesktopGrab.grabVirtualDesktop();
@@ -182,18 +109,8 @@ public final class TargetCapture implements ShotSource {
         boolean blank = DesktopGrab.looksBlank(desktop);
 
         List<Screen> screens = Screen.getScreens();
-        if (target != null && target.is(CaptureSourceKind.MONITOR) && target.monitorIndex() < screens.size()) {
-            Screen screen = screens.get(target.monitorIndex()); // remembered default → no dialog
-            return new Grab(new ScreenShot(Screens.cropToScreen(desktop, screens, screen), screen.getBounds(), true, blank), null);
-        }
-        // isDesktop rather than is(DESKTOP): a spec nothing recognises reads as the whole desktop here, the
-        // same fallback every other reader of a target takes, rather than dropping through to the chooser.
-        if (target != null && target.isDesktop()) {
-            // Whole virtual desktop: overlay spans every monitor (positioned, not single-screen fullscreen).
-            return new Grab(new ScreenShot(desktop, Screens.virtualScreenBounds(screens), false, blank), null);
-        }
         if (screens.size() > 1) {
-            return new Grab(null, desktop); // unset default → FX-thread chooser
+            return new Grab(null, desktop); // no default to consult → FX-thread chooser
         }
         Screen screen = Screen.getPrimary();
         return new Grab(new ScreenShot(Screens.cropToScreen(desktop, screens, screen), screen.getBounds(), true, blank), null);
@@ -249,101 +166,6 @@ public final class TargetCapture implements ShotSource {
             }
         }
         return img == null ? null : new WindowShot(img, bounds);
-    }
-
-    /**
-     * A target-agnostic captured frame: the pixels, the absolute logical {@code bounds} to place an overlay
-     * over and map coordinates against, a human {@code label}, whether the source is a window (so callers can
-     * skip window-only steps like resize for a screen/desktop target), and whether those pixels are actually
-     * <em>on the desktop</em> at {@code bounds}.
-     *
-     * <p>{@code onScreen} is false for exactly one target kind today — an emulator, whose frame comes over ADB
-     * rather than off the desktop. That distinction is load-bearing: a transparent rubber-band surface shows
-     * the user whatever is behind it, so over an emulator it would show the host window (gamescope's scaled
-     * output, or nothing at all if the emulator is minimised) while the crop is taken from the ADB frame.
-     * Callers must draw the frame themselves when this is false — see {@code CaptureSurface}'s backdrop.
-     */
-    public record TargetShot(BufferedImage image, java.awt.Rectangle bounds, String label, boolean isWindow,
-                             boolean onScreen) {}
-
-    /**
-     * Off-thread grab of the project's current <b>default</b> capture target — a window, a monitor, the whole
-     * desktop, or an emulator — as a {@link TargetShot}, delivered back on the FX thread ({@code null} on
-     * failure or a blank Wayland grab). Unlike {@link #captureWindow}, this works for any target type, so
-     * overlay tools (Capture Templates / Overlay Editor) can operate over a screen/desktop and not only a
-     * window. Requires a default to be set (there is always one after project creation); it does not run the
-     * screen chooser.
-     */
-    public void captureDefaultTargetAsync(Window owner, Consumer<TargetShot> onFx) {
-        Thread t = new Thread(() -> {
-            TargetShot result = null;
-            try {
-                TargetShot adb = emulatorShot();
-                if (adb != null) {
-                    Platform.runLater(() -> onFx.accept(adb));
-                    return;
-                }
-                Grab grab = grabOffThread(owner);
-                ScreenShot shot = grab.shot();
-                if (shot != null && !shot.blank()) {
-                    Rectangle2D b = shot.bounds();
-                    java.awt.Rectangle awt = new java.awt.Rectangle(
-                            (int) Math.round(b.getMinX()), (int) Math.round(b.getMinY()),
-                            (int) Math.round(b.getWidth()), (int) Math.round(b.getHeight()));
-                    CaptureTarget def = defaultTarget();
-                    String label = def != null ? def.shortLabel() : "Screen";
-                    result = new TargetShot(shot.image(), awt, label, def != null && def.windowTitle() != null, true);
-                }
-            } catch (Throwable ex) {
-                System.err.println("Default-target capture failed: " + ex.getMessage());
-            }
-            TargetShot r = result;
-            Platform.runLater(() -> onFx.accept(r));
-        }, "capture-default-target");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /**
-     * One ADB {@code screencap} of the default target when that target is an <b>emulator</b>, or {@code null}
-     * when it isn't one (so the caller falls through to the desktop grab). Blocking — off the FX thread only.
-     *
-     * <p><b>Why this branch has to exist.</b> Without it an emulator target fell all the way through
-     * {@link #grabOffThread} to "grab the virtual desktop", so a template was cropped out of the <em>host
-     * window</em> the emulator happens to be drawn in, while the bot matches that template against the frame it
-     * pulls over ADB. On Waydroid those two were a scale factor apart and nothing ever matched — the crop
-     * looked perfectly accurate, because it was accurate in the space it was taken in. Capturing the same way
-     * the bot does makes the two spaces the same one by construction rather than by luck.
-     *
-     * <p>The bounds are a placement, not a location: these pixels are not on the desktop anywhere (see
-     * {@link TargetShot#onScreen()}), so the frame is centred on the primary screen at its own aspect ratio and
-     * the surface draws it. Aspect ratio is what matters — every crop is mapped back by the width/height ratio.
-     */
-    private TargetShot emulatorShot() {
-        CaptureTarget target = defaultTarget();
-        String instanceName = target == null ? null : target.emulatorName();
-        if (instanceName == null) {
-            return null;
-        }
-        EmulatorInstance instance = EmulatorInstances.byName(instanceName).orElse(null);
-        BufferedImage frame = (instance == null) ? null : EmulatorProbe.screencap(instance);
-        if (frame == null || frame.getWidth() <= 0 || frame.getHeight() <= 0) {
-            return null;   // not running, or the grab failed — the caller reports "couldn't capture the target"
-        }
-        return new TargetShot(frame, fitToPrimaryScreen(frame.getWidth(), frame.getHeight()),
-                target.shortLabel(), false, false);
-    }
-
-    /** A {@code w}×{@code h}-shaped rectangle centred on the primary screen, at most 80% of its visual area. */
-    private static java.awt.Rectangle fitToPrimaryScreen(int w, int h) {
-        Rectangle2D visual = Screen.getPrimary().getVisualBounds();
-        double scale = Math.min(1.0, Math.min(visual.getWidth() * 0.8 / w, visual.getHeight() * 0.8 / h));
-        int width = Math.max(1, (int) Math.round(w * scale));
-        int height = Math.max(1, (int) Math.round(h * scale));
-        return new java.awt.Rectangle(
-                (int) Math.round(visual.getMinX() + (visual.getWidth() - width) / 2),
-                (int) Math.round(visual.getMinY() + (visual.getHeight() - height) / 2),
-                width, height);
     }
 
     /**

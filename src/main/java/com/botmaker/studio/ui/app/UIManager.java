@@ -159,11 +159,12 @@ public class UIManager implements ProjectWindow {
         this.config = ctx.config();
         this.state = ctx.state();
 
-        // Editor settings (capture targets + default) — the project's own, not a second one over the same
-        // (config, state, eventBus). The capture service honors the default target so pickers stop re-asking
-        // which screen to use.
+        // Editor settings — the project's own, not a second one over the same (config, state, eventBus). The
+        // capture service takes none of them: it holds no capture target, so a pick over several monitors
+        // asks which one. What the bot looks at is the owning plugin's capture.json, which Studio does not
+        // read; see docs/refactor/28-overlay-items.md.
         this.projectSettingsService = ctx.projectSettingsService();
-        ScreenCaptureService screenCaptureService = new ScreenCaptureService(projectSettingsService);
+        ScreenCaptureService screenCaptureService = new ScreenCaptureService();
 
         this.toolbarManager = new ToolbarManager(eventBus, projectSettingsService);
         this.eventLogManager = new EventLogManager(eventBus);

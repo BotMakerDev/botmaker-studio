@@ -344,48 +344,38 @@ public final class ProgramShapeOverlay {
      * canonical size beneath the overlay.
      */
     private void start(Window owner) {
-        // A window target is raised + snapped to the reference resolution beneath the HUD; a screen/desktop
-        // target is used at its native bounds (no raise/resize).
-        if (window != null) {
-            TargetCapture.WindowRef wt = window;
-            Thread t = new Thread(() -> {
-                WindowShot shot = capture.captureWindow(wt);   // restores + raises + focuses the window
-                if (shot == null) {
-                    Platform.runLater(() -> {
-                        if (active == this) active = null;
-                        warn(owner, "Couldn't find the window \"" + wt.titleSubstring() + "\". Is it open?");
-                    });
-                    return;
-                }
-                ResolutionChoices.Resolution ref = reference;
-                if (ref == null) {
-                    ref = new ResolutionChoices.Resolution(shot.bounds().width, shot.bounds().height);
-                    reference = ref;
-                }
-                // Never resize a private session's host window. gamescope is launched with its output size
-                // (-W/-H) and its internal size (-w/-h) both set to the project resolution, which is what makes
-                // the captured pixels 1:1 with what the bot sees and its click coordinates need no mapping.
-                // Resizing the host window changes one of those two and silently breaks that identity — the
-                // overlay would still draw, the clicks would just land somewhere else.
-                if (wt.windowId() == null) {
-                    capture.resizeTarget(wt, ref.width(), ref.height());
-                }
-                WindowShot after = capture.captureWindow(wt);
-                java.awt.Rectangle bounds = after != null ? after.bounds() : shot.bounds();
-                Platform.runLater(() -> show(bounds));
-            }, "overlay-editor-open");
-            t.setDaemon(true);
-            t.start();
-        } else {
-            capture.captureDefaultTargetAsync(owner, shot -> {
-                if (shot == null) {
+        // Always a window: open() returns rather than constructing this without one, so the screen/desktop
+        // branch this used to carry — capture.captureDefaultTargetAsync, over the project's configured target
+        // — was unreachable from the day the picker landed, and went with the target itself.
+        TargetCapture.WindowRef wt = window;
+        Thread t = new Thread(() -> {
+            WindowShot shot = capture.captureWindow(wt);   // restores + raises + focuses the window
+            if (shot == null) {
+                Platform.runLater(() -> {
                     if (active == this) active = null;
-                    warn(owner, "Couldn't capture the target. Is the screen available?");
-                    return;
-                }
-                show(shot.bounds());
-            });
-        }
+                    warn(owner, "Couldn't find the window \"" + wt.titleSubstring() + "\". Is it open?");
+                });
+                return;
+            }
+            ResolutionChoices.Resolution ref = reference;
+            if (ref == null) {
+                ref = new ResolutionChoices.Resolution(shot.bounds().width, shot.bounds().height);
+                reference = ref;
+            }
+            // Never resize a private session's host window. gamescope is launched with its output size
+            // (-W/-H) and its internal size (-w/-h) both set to the project resolution, which is what makes
+            // the captured pixels 1:1 with what the bot sees and its click coordinates need no mapping.
+            // Resizing the host window changes one of those two and silently breaks that identity — the
+            // overlay would still draw, the clicks would just land somewhere else.
+            if (wt.windowId() == null) {
+                capture.resizeTarget(wt, ref.width(), ref.height());
+            }
+            WindowShot after = capture.captureWindow(wt);
+            java.awt.Rectangle bounds = after != null ? after.bounds() : shot.bounds();
+            Platform.runLater(() -> show(bounds));
+        }, "overlay-editor-open");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void show(java.awt.Rectangle windowBounds) {

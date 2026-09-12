@@ -1,7 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.services.capture.CaptureTarget;
-import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 import com.botmaker.studio.services.capture.TargetCapture.WindowRef;
@@ -25,14 +23,19 @@ import java.util.function.Consumer;
  * the seam between them is a {@link com.botmaker.studio.services.capture.ScreenShot} — pixels, bounds, and
  * two flags. This class holds one of each and forwards, so that the split cost no call site a change.
  *
- * <p><b>It is scaffolding and it is meant to disappear.</b> The target half is the SDK's vocabulary — a
- * window to look at is what a bot's own {@code CaptureSource} names — so it leaves for the SDK plugin, and
- * what stays behind is the overlay, which is what the plugin contract's {@code StudioServices.capture()} is
- * implemented with. When the last caller of a target-aware method here is gone, so is this class; the
- * remaining callers construct a {@link ScreenOverlay} directly.
+ * <p><b>It is scaffolding and it is meant to disappear.</b> What stays behind is the overlay, which is what
+ * the plugin contract's {@code StudioServices.capture()} is implemented with; the remaining callers can
+ * construct a {@link ScreenOverlay} and a {@link TargetCapture} directly.
+ *
+ * <p><b>Nothing here knows what a capture target is any more (2026-09-12).</b> {@code defaultTarget()},
+ * {@code captureDefaultTargetAsync}, {@code forProjectFiles} and the {@code ProjectSettingsService}
+ * constructor are gone with {@code CaptureTarget} itself: the target describes what the <b>bot</b> looks at,
+ * lives in the owning plugin's {@code capture.json}, and Studio stopped reading it on 2026-08-31 — so every
+ * one of them had answered "no target" for every caller since. What is left is a window a caller already
+ * holds (raise, resize, capture, bounds, the title list) and the screen.
  *
  * <p>So: <b>add nothing here.</b> A new overlay behaviour belongs on {@link ScreenOverlay}, and anything
- * that needs to know what a capture target is belongs on {@link TargetCapture}.
+ * that needs a native window handle belongs on {@link TargetCapture}.
  */
 public final class ScreenCaptureService {
 
@@ -40,41 +43,8 @@ public final class ScreenCaptureService {
     private final ScreenOverlay overlay;
 
     public ScreenCaptureService() {
-        this(new TargetCapture());
-    }
-
-    public ScreenCaptureService(ProjectSettingsService settings) {
-        this(new TargetCapture(settings));
-    }
-
-    private ScreenCaptureService(TargetCapture target) {
-        this.target = target;
+        this.target = new TargetCapture();
         this.overlay = new ScreenOverlay(target);
-    }
-
-    /**
-     * A capture service for a caller that has the project's files but not its services — every editor built
-     * from {@link com.botmaker.studio.ui.app.params.ValueEditors}. Without this they constructed the bare
-     * service, whose target is always null, so a screen pick asked which screen every single time even though
-     * the project had a default recorded.
-     */
-    public static ScreenCaptureService forProjectFiles(ProjectConfig config) {
-        return new ScreenCaptureService(TargetCapture.forProjectFiles(config));
-    }
-
-    /**
-     * A capture service bound to {@code context}'s project settings, so it honors the configured default
-     * capture target. The single place the argument pickers and the "Pick all" session construct their
-     * settings-bound service.
-     */
-    public static ScreenCaptureService forProject(CodeEditorService context) {
-        return new ScreenCaptureService(new ProjectSettingsService(
-                context.getConfig(), context.getState(), context.getEventBus()));
-    }
-
-    /** The project's default capture target, or {@code null} — asked afresh at each pick. */
-    public CaptureTarget defaultTarget() {
-        return target.defaultTarget();
     }
 
     // ── The overlay half ────────────────────────────────────────────────────────────────────────────────
@@ -142,14 +112,6 @@ public final class ScreenCaptureService {
      */
     public TargetCapture.WindowShot captureWindow(WindowRef windowTarget) {
         return target.captureWindow(windowTarget);
-    }
-
-    /**
-     * Off-thread grab of the project's current <b>default</b> capture target, delivered back on the FX thread
-     * ({@code null} on failure or a blank Wayland grab).
-     */
-    public void captureDefaultTargetAsync(Window owner, Consumer<TargetCapture.TargetShot> onFx) {
-        target.captureDefaultTargetAsync(owner, onFx);
     }
 
     /** The current absolute bounds of the window matching {@code target}, or {@code null}. Cheap; FX-safe. */
