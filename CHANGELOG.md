@@ -38,7 +38,24 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   became a plugin was accepted because a capability shaped to one caller is a back door; what answers that is
   a row several plugins can contribute to, not a better argument.
 
+### Changed
+
+- **The overlay editor asks which window to draw over.** When no private session is live it offers every open
+  window first, in the window manager's own order, then any remembered title not already there. **Nothing is
+  persisted:** which window the *editor* draws on lasts as long as the HUD, while what the *bot* watches stays
+  the owning plugin's `capture.json` — two facts with one shape, held by the two owners that actually have an
+  opinion about them, rather than one fact spelled twice.
+
 ### Fixed
+
+- **Opening the overlay editor with nothing to draw over is no longer a dead end.** It read the project's
+  configured capture target, which Studio stopped reading on 2026-08-31 — so
+  `ScreenCaptureService.defaultTarget()` had answered `null` for every caller since, and the HUD could only
+  open over a live private session. It asks now. `ProgramShapeOverlay.open`'s `chooseTarget` parameter is gone
+  with it: the Launch Target dialog it existed to call left for the SDK plugin on 2026-09-01, so its one
+  caller had been passing `null` for eleven days. What replaces the affordance is better than what it lost —
+  the dialog arranged a *launch*, while the question is which of the windows already open the user means, and
+  a window they opened by hand was never reachable through it at all.
 
 - **A plugin that will not load is now said out loud, in Manage Plugins.** When a plugin on a project's
   classpath cannot be loaded — most often because its own dependency is missing — Studio carries on with the

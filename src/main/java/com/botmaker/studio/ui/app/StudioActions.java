@@ -268,10 +268,13 @@ final class StudioActions {
 
     // openLaunchTarget stood here until 2026-09-01, showing the Launch Target dialog and — when the overlay
     // editor had nothing to draw over — running a callback once it closed. The dialog went with the launch
-    // rows, so there is no recovery to offer: the overlay now says what to do instead of opening the one
-    // place that could have fixed it. That is a real loss of an affordance, recorded rather than papered
-    // over, and the thing that would restore it is the launcher becoming a plugin's toolbar item like the
-    // capture tools already are.
+    // rows, so there was no recovery to offer and this class passed null for that callback for eleven days,
+    // leaving the overlay's fallback a dead-end warning.
+    //
+    // Restored 2026-09-12, and not by the route recorded here (the launcher becoming a plugin's toolbar
+    // item): the overlay asks which window to draw over. That is a better answer than the dialog it lost,
+    // because the dialog arranged a *launch* while the question is which of the windows already open the
+    // user means — and a window opened by hand was never reachable through it at all.
 
     private void writeDebug(boolean on) {
         try {
@@ -286,7 +289,7 @@ final class StudioActions {
      */
     private void openOverlayEditor() {
         ProgramShapeOverlay.open(primaryStage, codeEditorService, projectSettingsService, screenCaptureService,
-                this::liveSessionWindow, null);
+                this::liveSessionWindow);
     }
 
     /**

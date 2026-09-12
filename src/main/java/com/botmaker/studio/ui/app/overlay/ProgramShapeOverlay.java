@@ -11,7 +11,6 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
-import com.botmaker.studio.services.capture.CaptureTarget;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 import com.botmaker.studio.services.capture.TargetCapture.WindowShot;
@@ -67,8 +66,9 @@ import static com.botmaker.studio.ui.app.overlay.OverlayStyles.warn;
  * companion to the capture overlay: while you work in the target app, this shows where you are in the bot and
  * lets you grow it.
  *
- * <p>Like the capture tool it is a <b>true overlay over a window target</b>: opening it requires the project's
- * default capture target to be a window, and on open it brings that window to the front and snaps it to the
+ * <p>Like the capture tool it is a <b>true overlay over one window</b>: opening it requires a window to draw
+ * over — a live private session's host window, or one the user picks from {@link OverlayWindowPicker} — and on
+ * open it brings that window to the front and snaps it to the
  * project reference resolution (reusing {@link ScreenCaptureService#raiseWindow} /
  * {@link ScreenCaptureService#resizeTarget}). The stage itself is {@link StageStyle#TRANSPARENT} with rounded
  * semi-opaque panels (matching {@code OverlayToolbars}), so the app shows through the gaps.
@@ -127,15 +127,16 @@ public final class ProgramShapeOverlay {
     private final ProjectState state;
     private final ProjectSettingsService settings;
     private final ScreenCaptureService capture;
-    /** The default capture target: a window, a monitor, or the whole desktop. */
-    private final CaptureTarget target;
-
     /**
-     * The same target as a window to act on, or {@code null} when it names no window.
+     * The window this HUD is drawn over — never {@code null}, since {@link #open} refuses without one.
      *
-     * <p>Held beside {@link #target} rather than derived from it because of the one case a stored target
-     * cannot express: a private session's host window is named by its live id, and {@link #sessionTarget}
-     * is the only thing that knows it.
+     * <p>It used to sit beside a {@code CaptureTarget} field, which was the project's <em>configured</em>
+     * target and was written and never read. What is left is the only thing the HUD ever acted on: a title,
+     * plus a live window id in the one case a title cannot name at all — a private session's gamescope host
+     * window, which gamescope renames after whatever app is inside it.
+     *
+     * <p>It is not persisted and has no counterpart on disk. What the <b>bot</b> watches is the owning
+     * plugin's {@code capture.json}, written from the HUD's own row; see {@link OverlayWindowPicker}.
      */
     private final TargetCapture.WindowRef window;
 
@@ -231,13 +232,11 @@ public final class ProgramShapeOverlay {
     private BlockTree.Position pendingConfig;
 
     private ProgramShapeOverlay(CodeEditorService context, ProjectSettingsService settings,
-                                ScreenCaptureService capture,
-                                CaptureTarget target, TargetCapture.WindowRef window) {
+                                ScreenCaptureService capture, TargetCapture.WindowRef window) {
         this.context = context;
         this.state = context.getState();
         this.settings = settings;
         this.capture = capture;
-        this.target = target;
         this.window = window;
         this.picker = new OverlayTargetPicker(context, settings,
                 new OverlayTargetPicker.Callbacks(this::openTargetFile, this::scopeToMethod, this::status));
@@ -260,59 +259,73 @@ public final class ProgramShapeOverlay {
     /**
      * Opens (or focuses) the overlay editor for the active file. Must be called on the FX thread.
      *
-     * @param chooseTarget invoked when nothing can be drawn over, with a callback to re-attempt the open; the
-     *                     caller shows the Launch Target dialog and runs it once that closes. The retry passes
-     *                     {@code null} here, so a user who closes the dialog without choosing gets one
-     *                     explanatory warning rather than the same dialog again.
+     * <p>It took a {@code Consumer<Runnable> chooseTarget} until 2026-09-12 — a callback invoked with nothing
+     * to draw over, so the caller could show the Launch Target dialog and re-attempt the open once it closed.
+     * The parameter is gone because the thing it called is: the launch rows became the SDK plugin's on
+     * 2026-09-01 and a host has no handle on another plugin's toolbar item, so its one caller had been
+     * passing {@code null} ever since. What replaces the affordance is better than the dialog it lost —
+     * {@link OverlayWindowPicker} offers every window that is actually open, which is what the user would
+     * have gone to that dialog to arrange.
+     *
+     * @param sessionWindow the live private session's host window id, or {@code 0} for none; it outranks the
+     *                      picker, because while a session is up that is where the game is
      */
     public static void open(Window owner, CodeEditorService context, ProjectSettingsService settings,
                             ScreenCaptureService capture,
-                            java.util.function.LongSupplier sessionWindow,
-                            java.util.function.Consumer<Runnable> chooseTarget) {
+                            java.util.function.LongSupplier sessionWindow) {
         if (active != null && active.stage != null && active.stage.isShowing()) {
             active.stage.toFront();
             return;
         }
-        TargetCapture.WindowRef session = sessionTarget(sessionWindow);
-        CaptureTarget target = session == null ? null : CaptureTarget.window(session.titleSubstring());
-        if (target == null) {
-            // Was ProjectSettingsService.defaultTarget() — capture.json, which is the SDK plugin's file and
-            // which the editor no longer reads. TargetCapture answers the same question for whatever default
-            // the host itself has, and answers null when there is none, which is the branch below.
-            try {
-                target = capture.defaultTarget();
-            } catch (Exception ignored) {
-                // no default configured
-            }
+        // The session's window ref wins when there is one: it carries the live id, which is the only way to
+        // name a gamescope host window at all.
+        TargetCapture.WindowRef window = sessionTarget(sessionWindow);
+        if (window == null) {
+            // Was capture.defaultTarget() — the project's configured capture target, which describes what the
+            // BOT looks at, lives in the owning plugin's capture.json, and which Studio stopped reading on
+            // 2026-08-31, so it had answered null for every caller since and the overlay could only open over
+            // a live session. What the editor needs is which window it is drawing on, which is its own live
+            // fact: ask, use it for this HUD, persist nothing. See docs/refactor/28-overlay-items.md.
+            String title = OverlayWindowPicker.ask(owner, OverlayWindowPicker.candidates(
+                    ScreenCaptureService.listWindowTitles(), knownTitles(settings)));
+            if (title != null) window = new TargetCapture.WindowRef(title);
         }
-        if (target == null) {
-            // Nothing to draw over: no private session is up and no default capture target is configured. Send
-            // the user to the Launch Target dialog and come back when it closes, rather than the dead-end
-            // warning this used to be — the button's whole job is "let me author against the running game", and
-            // on a fresh app run the session path always misses (the launcher is created lazily elsewhere).
-            if (chooseTarget != null) {
-                chooseTarget.accept(() -> open(owner, context, settings, capture, sessionWindow, null));
-                return;
-            }
-            warn(owner, "Overlay editor needs something to draw over.\n\nPick what the bot launches in "
-                    + "\"Launch Target\" (and start it), or set a default window in \"Capture Targets\".");
+        if (window == null) {
+            // Either nothing is open to draw over, or the user closed the picker without choosing. There is
+            // nothing left for the host to offer: launching the game is the SDK plugin's Launch Target item
+            // since 2026-09-01, and a host has no handle on another plugin's toolbar item.
+            warn(owner, "Overlay editor needs a window to draw over.\n\nOpen the app or game you're "
+                    + "automating — start it with \"Launch Target\" if the bot launches it — and try again.");
             return;
         }
-        // The session's window ref wins when there is one: it carries the live id, which is the only way to
-        // name a gamescope host window at all. Otherwise the default target names a window, or it does not.
-        ProgramShapeOverlay overlay = new ProgramShapeOverlay(context, settings, capture, target,
-                session != null ? session : TargetCapture.WindowRef.of(target));
+        ProgramShapeOverlay overlay = new ProgramShapeOverlay(context, settings, capture, window);
         active = overlay;
         overlay.start(owner);
     }
 
     /**
-     * The live private session's host window as a capture target, or {@code null} when no session is running (or
-     * its window isn't up yet) — in which case the project's configured default target is used as before.
+     * Remembered window titles, or an empty list — an MRU for the picker, never a target.
      *
-     * <p>A running session <em>outranks</em> the configured default deliberately: while a session is up, that is
-     * where the game is, and the configured window target names something on the real desktop that either isn't
-     * running or isn't the thing the user is looking at. The target carries the window <em>id</em> because a
+     * <p>{@code knownWindowTitles} has had no reader since the capture-targets dialog left on 2026-08-31, and
+     * this is not that dialog's job returning: the list is offered <em>after</em> every live window and
+     * nothing here writes it back, so a remembered title is a convenience and never a configured answer.
+     */
+    private static List<String> knownTitles(ProjectSettingsService settings) {
+        try {
+            return settings == null ? List.of() : settings.current().knownWindowTitles();
+        } catch (RuntimeException unreadable) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The live private session's host window, or {@code null} when no session is running (or its window isn't
+     * up yet) — in which case {@link OverlayWindowPicker} asks.
+     *
+     * <p>A running session <em>outranks</em> the picker deliberately: while a session is up, that is where the
+     * game is, and every other window on the list is on a desktop the user is not looking at. It is also the
+     * one answer a picker could not give, since the host window is not named by anything stable. The ref
+     * carries the window <em>id</em> because a
      * gamescope host window cannot be named by title — gamescope renames it after whatever app is inside it, and
      * a second window of its own carries the same {@code WM_CLASS}. The title here is a label, not a key.
      */
