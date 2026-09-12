@@ -367,6 +367,24 @@ public final class PluginHost {
     }
 
     /**
+     * The merged items in one group, in their merged order.
+     *
+     * <p>Two readers, which is why this exists rather than each filtering for itself: the main bar takes
+     * every group but {@link ToolbarGroup#OVERLAY}, and {@code ProgramShapeOverlay} takes only that one. A
+     * group nobody reads is an item <em>silently absent</em>, which is the class of failure every rule in
+     * {@code ToolbarMergeTest} is about — so the split is one filter with two callers rather than two
+     * conditions that can disagree about which groups exist.
+     */
+    public static List<ToolbarItem> itemsIn(ToolbarGroup group) {
+        return itemsIn(toolbarItems(), group);
+    }
+
+    /** The same filter over an explicit list — the seam the merge test uses. */
+    static List<ToolbarItem> itemsIn(List<ToolbarItem> items, ToolbarGroup group) {
+        return items.stream().filter(item -> item.group() == group).toList();
+    }
+
+    /**
      * The Java a fresh value of a plugin-owned type should be written as — asked on every seed, never
      * memoised, which is the one place this class deliberately does not cache.
      *

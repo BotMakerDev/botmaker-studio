@@ -12,6 +12,24 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **The overlay editor draws a plugin row.** Every `ToolbarGroup.OVERLAY` item, built by the same
+  `ToolbarItems` the main bar uses — so a plugin's button on the HUD is styled, tooltipped, icon-boxed and
+  guarded identically. At 340px a second renderer would not merely look different, it would size differently
+  and push the rest of the row off the panel.
+- `PluginHost.itemsIn(ToolbarGroup)` — one filter with two readers, the main bar (every group but `OVERLAY`)
+  and the HUD (only that one). A group nobody reads is an item silently absent, which is what
+  `ToolbarMergeTest` exists to catch.
+- `HostOverlayContext` — `HostActionContext` plus the three live facts an overlay item is handed: the title of
+  the window the HUD is drawn over, where that window sits right now, and the editor's insertion cursor. All
+  three are suppliers, because the window moves and the cursor changes while the HUD is up.
+- **Recorded actions can land at the overlay's cursor again.** `ActionContext.insertAtCursor` is served here
+  through `CodeEditor.pasteCode`, so an inserted statement brings its imports and goes through the same
+  rewrite, undo entry and diagnostics refresh as any other edit. The loss recorded when the macro recorder
+  became a plugin was accepted because a capability shaped to one caller is a back door; what answers that is
+  a row several plugins can contribute to, not a better argument.
+
 ### Fixed
 
 - **A plugin that will not load is now said out loud, in Manage Plugins.** When a plugin on a project's

@@ -20,8 +20,15 @@ import javafx.scene.image.ImageView;
  * <p>Studio's own items go through it too, and that is the point rather than a convenience: an item built by
  * a different path is an item that can drift from what a plugin's looks like, and the first thing anybody
  * would notice is that the host's buttons are the ones that line up.
+ *
+ * <p>The overlay editor's row goes through it too, for the same reason and with more at stake: the HUD is
+ * ~340px wide, so a second renderer would not merely look different, it would <em>size</em> differently and
+ * push the rest of the row off the panel. That is why this class and {@link #button} are public rather than
+ * package-private — the one out-of-package caller is {@code ui.app.overlay.OverlayItemRow}. {@link #refresh}
+ * and {@link #applyState} stay package-private: the HUD's row is rebuilt on each open rather than refreshed
+ * in place, so widening them would be widening a surface with no second caller.
  */
-final class ToolbarItems {
+public final class ToolbarItems {
 
     /** Edge length of an item's icon. Matches the launch target's cover thumbnail, which predates this. */
     private static final int ICON_PX = 20;
@@ -34,7 +41,7 @@ final class ToolbarItems {
      * <p>The click is guarded: an action that throws is a plugin's bug and must not take the editor with it.
      * What the user gets is a button that did nothing, which is bad — and better than a dead window.
      */
-    static Button button(ToolbarItem item, ActionContext ctx) {
+    public static Button button(ToolbarItem item, ActionContext ctx) {
         Button button = new Button();
         button.getStyleClass().add("toolbar-btn");
         if (item.tooltip() != null && !item.tooltip().isBlank()) {

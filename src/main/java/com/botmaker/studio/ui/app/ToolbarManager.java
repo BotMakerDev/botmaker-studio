@@ -313,8 +313,15 @@ public class ToolbarManager {
         placed.add(new Placed(ToolbarGroup.STUDIO, 100, "resolution", resolutionLabel, null));
 
         // Every plugin's items, merged into the same groups. PluginHost has already sorted them and already
-        // refused anything claiming ToolbarGroup.STUDIO, so what arrives here is only ever placeable.
-        for (ToolbarItem item : PluginHost.toolbarItems()) place(placed, ctx, item);
+        // refused anything claiming ToolbarGroup.STUDIO, so what arrives here is only ever placeable — with
+        // one group it also has to skip. An OVERLAY item's subject is "the window the HUD is drawn over", so
+        // it belongs to ProgramShapeOverlay's own row and this bar has no section for it; placing one here
+        // would put a button on a bar that is drawn with no overlay open, where its context answers empty.
+        // The filter is PluginHost.itemsIn's complement, and the two are the only readers of that split.
+        for (ToolbarItem item : PluginHost.toolbarItems()) {
+            if (item.group() == ToolbarGroup.OVERLAY) continue;
+            place(placed, ctx, item);
+        }
 
         // The reading order the bar was hand-arranged into, now stated as four groups rather than as an
         // argument list — and it comes out identical, which is the acceptance test for this change.

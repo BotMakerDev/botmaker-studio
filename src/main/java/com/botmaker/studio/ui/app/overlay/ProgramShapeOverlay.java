@@ -1,6 +1,10 @@
 package com.botmaker.studio.ui.app.overlay;
 
+import com.botmaker.plugin.api.ActionContext;
+import com.botmaker.plugin.api.ToolbarGroup;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
+import com.botmaker.studio.plugin.HostOverlayContext;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
@@ -27,6 +31,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
@@ -91,9 +96,19 @@ import static com.botmaker.studio.ui.app.overlay.OverlayStyles.warn;
  * {@code MacroTranslator}, and therefore owned five SDK class literals deciding that a click is a
  * {@code Mouse}. That is a vocabulary and it belongs to the plugin whose types it spells, so the whole
  * recorder moved into the SDK plugin ({@code com.botmaker.sdk.internal.plugin.record}) and is reached from
- * the toolbar. <b>The cursor did not go with it</b>: a recording is delivered as text to copy, because there
- * is no contract capability for inserting statements at an editor's cursor and one shaped to a single caller
- * is the back door the platform exists to close. That is a real loss, recorded here rather than smoothed over.
+ * the toolbar. <b>The cursor did not go with it, and now it has.</b> For ten days a recording was delivered
+ * as text to copy, because there was no contract capability for inserting statements at an editor's cursor
+ * and one shaped to a single caller is the back door the platform exists to close. What answers that
+ * objection is not a better argument but a <em>second caller</em>: {@code ToolbarGroup.OVERLAY} gives this
+ * HUD a row any plugin may contribute to, so {@link ActionContext#insertAtCursor} serves the recorder, a
+ * paste-a-click item and whatever a third plugin puts there. The loss is recorded above rather than smoothed
+ * over because the reasoning that accepted it was right at the time.
+ *
+ * <p><b>The plugin row.</b> Below the tree sits every {@code ToolbarGroup.OVERLAY} item, built by the same
+ * {@code ToolbarItems} the main bar uses. Its context is {@link HostOverlayContext}, which answers three
+ * things no plugin could learn for itself: the title of the window this HUD is drawn over, where that window
+ * sits right now, and the insertion cursor. A plugin can enumerate every window on the machine — what it
+ * cannot know is which one the host chose to draw over.
  *
  * <p><b>Where the blocks land.</b> The HUD names its target: an activity picker switches the editor to
  * {@code activities/<Name>.java} and parks the cursor inside that activity's {@code run()}. It has to, because
@@ -160,6 +175,15 @@ public final class ProgramShapeOverlay {
 
     /** When on, inserting a call opens its argument config popover as soon as the re-parsed block is available. */
     private CheckBox autoFillArgs;
+
+    /**
+     * The plugin row — every {@code ToolbarGroup.OVERLAY} item. See {@link OverlayItemRow}.
+     *
+     * <p>Built on each open and never cached across one: a project's plugins are re-bound when its libraries
+     * change, and a row held from a previous open would draw buttons whose {@code onClick} runs on a dead
+     * classloader. {@code null} when nothing is contributed, which is every session with no project open.
+     */
+    private Node pluginRow;
 
     /** Where blocks go: the activity file and the method within it. See {@link OverlayTargetPicker}. */
     private final OverlayTargetPicker picker;
@@ -521,11 +545,36 @@ public final class ProgramShapeOverlay {
         autoFillArgs.setTooltip(new Tooltip(
                 "When on, adding an action immediately opens its argument editor (draw rect / pick template)"));
 
+        pluginRow = OverlayItemRow.build(PluginHost.itemsIn(ToolbarGroup.OVERLAY), itemContext());
+
         VBox controls = new VBox(6, picker.activityRow(), picker.methodRow(), paletteBar, stepRow,
-                autoFillArgs, status);
+                autoFillArgs);
+        // Above the status line, below everything that authors code: an item's subject is the *window*, not
+        // the program, so it reads as a different kind of action than the palette and the step row.
+        if (pluginRow != null) controls.getChildren().add(pluginRow);
+        controls.getChildren().add(status);
         controls.setPadding(new Insets(8));
         controls.setStyle(PANEL);
         return controls;
+    }
+
+    /**
+     * What an overlay item's click is handed.
+     *
+     * <p>Every field is read through a supplier rather than captured, because all three move while the HUD is
+     * up: the user drags the game window, the window manager re-raises it, and the insertion cursor changes
+     * on every click in the tree. The pin is {@code ""} exactly as the main bar's context leaves it — Studio
+     * does not know which plugin is about to be pressed, and the contract documents the string as the
+     * plugin's own to interpret.
+     */
+    private ActionContext itemContext() {
+        return new HostOverlayContext(
+                context::getConfig,
+                () -> "",
+                () -> window == null ? null : window.titleSubstring(),
+                () -> windowBounds == null ? null : new ActionContext.Area(
+                        windowBounds.x, windowBounds.y, windowBounds.width, windowBounds.height),
+                this::insertStatementsAtCursor);
     }
 
     // ── where blocks go ─────────────────────────────────────────────────────────────────────────────────
@@ -596,6 +645,52 @@ public final class ProgramShapeOverlay {
         int insertIndex = Math.min(c.index() + 1, c.body().getStatements().size());
         pendingInsert = new PendingFocus(new BlockTree.Position(index().ordinalOf(c.body()), insertIndex), true);
         context.getCodeEditor().addStatement(c.body(), type, insertIndex);
+    }
+
+    /**
+     * Places whole statements at the cursor — the host side of {@link ActionContext#insertAtCursor}.
+     *
+     * <p>It goes through {@code CodeEditor.pasteCode}, which is the editor's existing source-text insert: it
+     * brings the imports a pasted call needs along with it, and it runs through the same rewrite, re-parse,
+     * undo entry and diagnostics refresh every other edit does. A second parse-and-insert path is how a HUD
+     * edit ends up invisible to the main editor, and how a statement lands in a file that never imported the
+     * type it names.
+     *
+     * <p>Statements are placed in order and the cursor is left after the last one, so a plugin handing over
+     * three lines gets three lines in the order it wrote them. Each one is a separate edit because each is a
+     * separate undo step — a recording of eleven clicks that can only be undone as one is worse than eleven
+     * undos.
+     *
+     * <p>Every refusal speaks through {@link #status}: a plugin's item is pressed on a surface with no
+     * console, and a silent no-op reads as a broken plugin.
+     */
+    private void insertStatementsAtCursor(String[] statements) {
+        Platform.runLater(() -> {
+            InsertionCursor c = cursor();
+            if (c == null) {
+                status("Nowhere to insert — click a row to place the caret first.");
+                return;
+            }
+            if (c.body().isReadOnly()) {
+                status("Can't insert here — this is generated code. Pick an activity method.");
+                return;
+            }
+            int placed = 0;
+            for (String statement : statements) {
+                if (statement == null || statement.isBlank()) continue;
+                // Re-read the cursor on each pass: pasteCode re-parses, which replaces every block object,
+                // so the body held from before the first insert is stale for the second.
+                InsertionCursor at = placed == 0 ? c : cursor();
+                if (at == null || at.body().isReadOnly()) break;
+                int insertIndex = Math.min(at.index() + 1, at.body().getStatements().size());
+                pendingInsert = new PendingFocus(
+                        new BlockTree.Position(index().ordinalOf(at.body()), insertIndex), false);
+                context.getCodeEditor().pasteCode(at.body(), insertIndex, statement.strip());
+                placed++;
+            }
+            status(placed == 0 ? "Nothing to insert." : "Added " + placed
+                    + (placed == 1 ? " statement." : " statements."));
+        });
     }
 
     /** Removes the block the cursor sits on (Delete/Backspace), leaving the caret on the slot above it. */

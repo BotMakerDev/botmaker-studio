@@ -145,4 +145,37 @@ class ToolbarMergeTest {
         assertTrue(PluginHost.toolbarItems().isEmpty(),
                 "the bar carries plugin items with nothing loaded: " + ids(PluginHost.toolbarItems()));
     }
+
+    /**
+     * {@code OVERLAY} is a group a plugin may claim, unlike {@code STUDIO}.
+     *
+     * <p>Worth its own case because the two refusals read alike and are opposites: {@code STUDIO} is the
+     * host's own section and an item asking for it is dropped with the plugin named, while {@code OVERLAY} is
+     * a section a plugin is <em>meant</em> to claim — it simply has a different reader.
+     */
+    @Test
+    void an_overlay_item_is_merged_like_any_other() {
+        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(new Fake("com.example.one", List.of(
+                item("point-here", ToolbarGroup.OVERLAY, 10),
+                item("cut", ToolbarGroup.TOOLS, 20)))));
+
+        assertEquals(List.of("cut", "point-here"), ids(merged),
+                "OVERLAY sorts after TOOLS, which is its declaration order");
+    }
+
+    /**
+     * One filter, two readers — the main bar takes every group but {@code OVERLAY}, the HUD takes only that
+     * one. Tested because a group nobody reads is an item silently absent, which is the failure this whole
+     * file exists for.
+     */
+    @Test
+    void itemsIn_answers_one_group_only() {
+        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(new Fake("com.example.one", List.of(
+                item("point-here", ToolbarGroup.OVERLAY, 10),
+                item("cut", ToolbarGroup.TOOLS, 20)))));
+
+        assertEquals(List.of("point-here"), ids(PluginHost.itemsIn(merged, ToolbarGroup.OVERLAY)));
+        assertEquals(List.of("cut"), ids(PluginHost.itemsIn(merged, ToolbarGroup.TOOLS)));
+        assertTrue(PluginHost.itemsIn(merged, ToolbarGroup.RUN).isEmpty());
+    }
 }
