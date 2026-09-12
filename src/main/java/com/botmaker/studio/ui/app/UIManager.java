@@ -263,6 +263,14 @@ public class UIManager implements ProjectWindow {
             topBar.setCenter(toolbarManager.createCaptureGroup());
         }, true);
 
+        // Hiding a toolbar group changes what is *on* the bar, so it rebuilds it the same way installing a
+        // plugin does — same call, same guards. Not an event: the menu is this bar's own, so there is nobody
+        // else to tell, and a SettingsChangedEvent would rebuild the bar on every unrelated settings write.
+        toolbarManager.setOnRebuildBar(() -> {
+            if (disposed || topBar == null) return;
+            topBar.setCenter(toolbarManager.createCaptureGroup());
+        });
+
         eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, event -> {
             if (editorCanvas != null) editorCanvas.handleBlocksUpdate(event);
         }, true);

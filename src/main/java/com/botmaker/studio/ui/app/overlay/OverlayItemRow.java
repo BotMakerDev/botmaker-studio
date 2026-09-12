@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.ActionContext;
+import com.botmaker.plugin.api.ToolbarGroup;
 import com.botmaker.plugin.api.ToolbarItem;
 import com.botmaker.studio.ui.app.ToolbarItems;
 import javafx.geometry.Insets;
@@ -9,6 +10,7 @@ import javafx.scene.control.Button;
 import javafx.scene.layout.FlowPane;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * The HUD's plugin row: every {@code ToolbarGroup.OVERLAY} item, drawn by the host.
@@ -27,14 +29,18 @@ final class OverlayItemRow {
     private OverlayItemRow() {}
 
     /**
-     * The row, or {@code null} when no plugin contributed anything.
+     * The row, or {@code null} when there is nothing to draw.
      *
      * <p>{@code null} rather than an empty pane, and that is the ordinary case: with no project open no
      * plugin is loaded at all. The HUD stacks its rows, so an empty one would cost the tree real pixels for
      * something that says nothing.
+     *
+     * @param hidden the groups the project has switched off; {@code OVERLAY} among them means the user asked
+     *               for no row at all, which is the same answer as no items
      */
-    static Node build(List<ToolbarItem> items, ActionContext ctx) {
+    static Node build(List<ToolbarItem> items, ActionContext ctx, Set<ToolbarGroup> hidden) {
         if (items == null || items.isEmpty()) return null;
+        if (hidden != null && hidden.contains(ToolbarGroup.OVERLAY)) return null;
 
         FlowPane row = new FlowPane(4, 4);
         row.setPadding(new Insets(2, 0, 0, 0));

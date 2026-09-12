@@ -23,7 +23,9 @@ import javafx.scene.layout.Region;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class ToolbarManager {
@@ -66,6 +68,8 @@ public class ToolbarManager {
     private Runnable onConfigureInput;
     /** Opens the program-shape overlay authoring editor; wired by {@link UIManager}. */
     private Runnable onOverlayEditor;
+    /** Rebuilds the bar in place after a group is hidden or shown; wired by {@link UIManager}. */
+    private Runnable onRebuildBar;
 
     private enum AppState { IDLE, RUNNING, DEBUGGING }
     private AppState currentAppState = AppState.IDLE;
@@ -161,6 +165,16 @@ public class ToolbarManager {
     /** Sets the callback invoked when the toolbar's Overlay Editor button is clicked. */
     public void setOnOverlayEditor(Runnable callback) {
         this.onOverlayEditor = callback;
+    }
+
+    /**
+     * Wires the in-place rebuild the visibility menu needs.
+     *
+     * <p>A rebuild rather than a hide: see {@link #hideGroups}. Read at click time, so it may be wired at
+     * any point before the bar can be right-clicked.
+     */
+    public void setOnRebuildBar(Runnable callback) {
+        this.onRebuildBar = callback;
     }
 
     /** Sets the callback invoked when the toolbar's Parameters button is clicked. */
@@ -339,10 +353,42 @@ public class ToolbarManager {
         placed.sort(Comparator.comparing(Placed::group)
                 .thenComparingInt(Placed::order)
                 .thenComparing(Placed::id));
+        // A group the user switched off leaves the node list rather than being made invisible inside it:
+        // OverflowBar packs what it is given, so a hidden-but-present node keeps its gap and keeps counting
+        // towards the » menu. Dropped *after* the sort, so what is missing cannot change the tie-break.
+        Set<ToolbarGroup> hidden = hiddenGroups();
+        placed.removeIf(p -> hidden.contains(p.group()));
         this.items = List.copyOf(placed);
         Node[] nodes = new Node[placed.size()];
         for (int i = 0; i < placed.size(); i++) nodes[i] = placed.get(i).node();
-        return new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.CENTER, nodes);
+        OverflowBar bar = new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.CENTER, nodes);
+        // The way back in, and the only one: hiding every group leaves an empty bar, which is still a node
+        // with this handler on it. That is why the menu's "Show all" cannot be unticked.
+        bar.setOnContextMenuRequested(e -> {
+            ToolbarVisibility.menu(hiddenGroups(), this::hideGroups).show(bar, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+        return bar;
+    }
+
+    /** The groups this project has switched off, or none when there is no project open. */
+    private Set<ToolbarGroup> hiddenGroups() {
+        return settings == null
+                ? EnumSet.noneOf(ToolbarGroup.class)
+                : ToolbarVisibility.hidden(settings.current().hiddenToolbarGroups());
+    }
+
+    /**
+     * Persists the new hidden set and rebuilds the bar, in that order.
+     *
+     * <p>The rebuild is asked for rather than done here: this class builds the bar and does not own where it
+     * hangs. {@link UIManager} wires {@link #setOnRebuildBar} to the same {@code setCenter} it uses when a
+     * project's plugins change, which is the one path that swaps a live node into the scene graph.
+     */
+    private void hideGroups(Set<ToolbarGroup> hidden) {
+        if (settings == null) return;
+        settings.update(settings.current().withHiddenToolbarGroups(ToolbarVisibility.wire(hidden)));
+        run(onRebuildBar);
     }
 
     /**

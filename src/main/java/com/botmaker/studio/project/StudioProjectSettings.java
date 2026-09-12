@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,12 +54,18 @@ import java.util.Map;
  *                            opens (backward-compatible; absent → null)
  * @param workspaceLayout     where the main window's two dividers sat and which bottom tab was open, restored
  *                            the next time the project opens (backward-compatible; absent → null)
+ * @param hiddenToolbarGroups the {@code ToolbarGroup} names the user has switched off, by enum name. Hidden
+ *                            rather than visible on purpose: a group this project has never heard of — a
+ *                            release adds one — must appear, not be absent from every project written before
+ *                            it existed. A name this Studio does not know is ignored on read, and so is not
+ *                            written back; see {@code ToolbarVisibility} (backward-compatible; absent → empty)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, String> favoriteOverloads,
                                     Map<String, List<String>> favoriteMethods,
                                     ProjectTemplate template, String lastRecordedActivity,
-                                    OverlayState overlayState, WorkspaceLayout workspaceLayout) {
+                                    OverlayState overlayState, WorkspaceLayout workspaceLayout,
+                                    List<String> hiddenToolbarGroups) {
 
     /**
      * The overlay editor HUD's remembered layout: its top-left corner on screen and how many tree rows it
@@ -123,6 +130,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         knownWindowTitles = knownWindowTitles == null ? List.of() : List.copyOf(knownWindowTitles);
         favoriteOverloads = favoriteOverloads == null ? Map.of() : Map.copyOf(favoriteOverloads);
         favoriteMethods = favoriteMethods == null ? Map.of() : deepCopy(favoriteMethods);
+        hiddenToolbarGroups = hiddenToolbarGroups == null ? List.of() : List.copyOf(hiddenToolbarGroups);
     }
 
     private static Map<String, List<String>> deepCopy(Map<String, List<String>> src) {
@@ -133,7 +141,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
 
     /** A fresh project's settings — nothing remembered yet, and no template recorded until one is chosen. */
     public static StudioProjectSettings empty() {
-        return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null);
+        return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null, List.of());
     }
 
     // withTargets, withDefaultIndex, withKnownWindowTitles and withReferenceResolution are deleted
@@ -144,25 +152,45 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     /** This settings with the originating template recorded ({@code null} clears it). */
     public StudioProjectSettings withTemplate(ProjectTemplate template) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
     }
 
     /** This settings with the overlay editor's last authored activity recorded ({@code null} clears it). */
     public StudioProjectSettings withLastRecordedActivity(String activityName) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                activityName, overlayState, workspaceLayout);
+                activityName, overlayState, workspaceLayout, hiddenToolbarGroups);
     }
 
     /** This settings with the overlay HUD's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withOverlayState(OverlayState state) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, state, workspaceLayout);
+                lastRecordedActivity, state, workspaceLayout, hiddenToolbarGroups);
     }
 
     /** This settings with the main window's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withWorkspaceLayout(WorkspaceLayout layout) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, layout);
+                lastRecordedActivity, overlayState, layout, hiddenToolbarGroups);
+    }
+
+    /**
+     * This settings with the hidden toolbar groups replaced (an empty or {@code null} collection shows
+     * everything).
+     *
+     * <p>Takes the enum <em>names</em> rather than the groups: this record is Jackson's to read and write and
+     * must not name a contract type to do it, the same rule {@code VisibilityWire} keeps for the stored
+     * visibility of a parameter. {@code ToolbarVisibility.wire} is the one place that spells them.
+     */
+    public StudioProjectSettings withHiddenToolbarGroups(Collection<String> groupNames) {
+        return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
+                lastRecordedActivity, overlayState, workspaceLayout,
+                groupNames == null ? List.of() : List.copyOf(groupNames));
+    }
+
+    /** Whether {@code groupName} (a {@code ToolbarGroup} enum name) is switched off for this project. */
+    @JsonIgnore
+    public boolean isGroupHidden(String groupName) {
+        return hiddenToolbarGroups.contains(groupName);
     }
 
     /**
@@ -174,7 +202,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (signatureKey == null) next.remove(methodKey);
         else next.put(methodKey, signatureKey);
         return new StudioProjectSettings(knownWindowTitles, next, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
     }
 
     /** The chosen overload signature key for {@code methodKey}, or {@code null} if no favorite is set. */
@@ -192,7 +220,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (methods == null || methods.isEmpty()) next.remove(className);
         else next.put(className, List.copyOf(methods));
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, next, template,
-                lastRecordedActivity, overlayState, workspaceLayout);
+                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups);
     }
 
     /** The favorite method names for {@code className} (preference order), or an empty list if none. */

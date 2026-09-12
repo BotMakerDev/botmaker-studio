@@ -24,6 +24,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - `HostOverlayContext` — `HostActionContext` plus the three live facts an overlay item is handed: the title of
   the window the HUD is drawn over, where that window sits right now, and the editor's insertion cursor. All
   three are suppliers, because the window moves and the cursor changes while the HUD is up.
+- **Right-click either toolbar to hide a group.** Six checkboxes, one per `ToolbarGroup`, saved per project in
+  `settings.json` as `hiddenToolbarGroups`. It hides Studio's own items in that group as well as any
+  plugin's — a group whose plugin buttons vanish while the host's remain is a group that lies about what it
+  holds — and it is not an overflow policy: `OverflowBar` already answers *no room right now*, this answers
+  *never*, and survives a resize. The set names what is **hidden**, so a group a later release adds shows up
+  rather than being absent from every project written before it existed, and an enum name this Studio does
+  not know is ignored rather than costing the user the rest of their list. The overlay HUD's row carries the
+  same menu, because the HUD has no menu bar to get a group back from.
 - **Recorded actions can land at the overlay's cursor again.** `ActionContext.insertAtCursor` is served here
   through `CodeEditor.pasteCode`, so an inserted statement brings its imports and goes through the same
   rewrite, undo entry and diagnostics refresh as any other edit. The loss recorded when the macro recorder

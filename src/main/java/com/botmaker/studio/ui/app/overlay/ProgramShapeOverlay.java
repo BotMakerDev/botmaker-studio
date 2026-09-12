@@ -25,6 +25,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.CursorNavigator;
 import com.botmaker.studio.ui.app.ResolutionChoices;
+import com.botmaker.studio.ui.app.ToolbarVisibility;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 import com.botmaker.studio.util.MethodSignature;
 import javafx.application.Platform;
@@ -47,6 +48,7 @@ import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.Statement;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -184,6 +186,9 @@ public final class ProgramShapeOverlay {
      * classloader. {@code null} when nothing is contributed, which is every session with no project open.
      */
     private Node pluginRow;
+
+    /** The panel {@link #pluginRow} hangs in, so a visibility change can replace the row without a reopen. */
+    private VBox controlsPane;
 
     /** Where blocks go: the activity file and the method within it. See {@link OverlayTargetPicker}. */
     private final OverlayTargetPicker picker;
@@ -545,17 +550,52 @@ public final class ProgramShapeOverlay {
         autoFillArgs.setTooltip(new Tooltip(
                 "When on, adding an action immediately opens its argument editor (draw rect / pick template)"));
 
-        pluginRow = OverlayItemRow.build(PluginHost.itemsIn(ToolbarGroup.OVERLAY), itemContext());
-
         VBox controls = new VBox(6, picker.activityRow(), picker.methodRow(), paletteBar, stepRow,
                 autoFillArgs);
-        // Above the status line, below everything that authors code: an item's subject is the *window*, not
-        // the program, so it reads as a different kind of action than the palette and the step row.
-        if (pluginRow != null) controls.getChildren().add(pluginRow);
         controls.getChildren().add(status);
         controls.setPadding(new Insets(8));
         controls.setStyle(PANEL);
+        this.controlsPane = controls;
+        // Above the status line, below everything that authors code: an item's subject is the *window*, not
+        // the program, so it reads as a different kind of action than the palette and the step row.
+        rebuildItemRow();
         return controls;
+    }
+
+    /**
+     * Builds (or replaces) the plugin row in place, just above the status line.
+     *
+     * <p>Called on every open and again whenever the user hides or shows the {@code OVERLAY} group, which is
+     * the same reason {@code UIManager} rebuilds the main bar rather than making nodes invisible: the row is
+     * a {@code FlowPane} and a hidden-but-present child still occupies its parent's spacing.
+     */
+    private void rebuildItemRow() {
+        if (controlsPane == null) return;
+        if (pluginRow != null) controlsPane.getChildren().remove(pluginRow);
+        pluginRow = OverlayItemRow.build(PluginHost.itemsIn(ToolbarGroup.OVERLAY), itemContext(),
+                hiddenGroups());
+        if (pluginRow == null) return;
+        // The HUD has no menu bar, so the row carries the same menu the main toolbar does — otherwise a user
+        // who hid a group from the bar could not get it back without leaving the game. Hiding OVERLAY itself
+        // leaves no row to right-click, and the main bar's menu is deliberately the only way back from that.
+        pluginRow.setOnContextMenuRequested(e -> {
+            ToolbarVisibility.menu(hiddenGroups(), next -> {
+                if (settings != null) {
+                    settings.update(settings.current().withHiddenToolbarGroups(ToolbarVisibility.wire(next)));
+                }
+                rebuildItemRow();
+            }).show(pluginRow, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+        int statusAt = controlsPane.getChildren().indexOf(status);
+        controlsPane.getChildren().add(statusAt < 0 ? controlsPane.getChildren().size() : statusAt, pluginRow);
+    }
+
+    /** The groups this project has switched off, or none when the HUD has no settings service. */
+    private Set<ToolbarGroup> hiddenGroups() {
+        return settings == null
+                ? EnumSet.noneOf(ToolbarGroup.class)
+                : ToolbarVisibility.hidden(settings.current().hiddenToolbarGroups());
     }
 
     /**
