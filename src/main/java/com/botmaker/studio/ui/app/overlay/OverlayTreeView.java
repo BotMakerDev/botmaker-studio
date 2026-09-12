@@ -4,11 +4,15 @@ import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
+import com.botmaker.studio.core.component.Audience;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.validation.BlockValidator;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -66,6 +70,15 @@ final class OverlayTreeView {
     private static final int MAX_LABEL_CHARS = 70;
 
     private final Callbacks callbacks;
+
+    /**
+     * The editor session, held for one reason: a block's declared {@link ComponentSpec} is built against it.
+     *
+     * <p>Also where the audience comes from, read per row rather than captured — Reader mode is a toggle a
+     * user flips while the HUD is up, and a captured audience would keep drawing a bot's author's view of it.
+     */
+    private final CodeEditorService context;
+
     private final VBox rows = new VBox(2);
     private final ScrollPane scroll = new ScrollPane(rows);
     private final Spinner<Integer> visibleLines = new Spinner<>(3, 30, 8);
@@ -74,7 +87,8 @@ final class OverlayTreeView {
     /** Compile diagnostics, so a broken block is marked here as well as in the main editor. May be null. */
     private DiagnosticsManager diagnostics;
 
-    OverlayTreeView(Callbacks callbacks, Runnable onResize) {
+    OverlayTreeView(CodeEditorService context, Callbacks callbacks, Runnable onResize) {
+        this.context = context;
         this.callbacks = callbacks;
 
         rows.setPadding(new Insets(6));
@@ -188,7 +202,14 @@ final class OverlayTreeView {
 
         HBox node = shell(row, focused);
         if (row.fold() != BlockTree.Fold.NONE) node.getChildren().add(foldToggle(row));
-        node.getChildren().add(text);
+
+        // A block that declares a render schema is drawn from it — the same components the canvas draws, on
+        // one line. One that declares none falls back to its source text, which is what every row was until
+        // a block first declared a spec, and what most rows still are. The fallback is not a degraded mode:
+        // the text is also this row's tooltip either way.
+        List<Node> declared = CompactSpecRow.nodes(spec(stmt), audience(), locked);
+        if (declared.isEmpty()) node.getChildren().add(text);
+        else node.getChildren().addAll(declared);
         Tooltip.install(node, new Tooltip(rowTooltip(stmt, locked, broken)));
         node.setOnMouseClicked(e -> callbacks.onFocus().accept(new InsertionCursor(row.body(), row.index())));
         node.setPickOnBounds(true);
@@ -225,6 +246,29 @@ final class OverlayTreeView {
             node.getChildren().add(remove);
         }
         return node;
+    }
+
+    /**
+     * {@code stmt}'s declared schema, or an empty one — including when the block throws asking for it.
+     *
+     * <p>Total on purpose: a spec is built by a block against a live editor session, and a block that cannot
+     * describe itself must cost the user that row's widgets rather than the whole HUD. The empty answer is
+     * the text fallback, which is the same outcome as never having declared a spec.
+     */
+    private ComponentSpec spec(StatementBlock stmt) {
+        if (stmt == null || context == null) return ComponentSpec.empty();
+        try {
+            ComponentSpec declared = stmt.componentSpec(context);
+            return declared == null ? ComponentSpec.empty() : declared;
+        } catch (RuntimeException | LinkageError e) {
+            System.err.println("Block could not describe itself: " + e);
+            return ComponentSpec.empty();
+        }
+    }
+
+    /** Who the HUD is drawing for, read per row — see the {@link #context} field. */
+    private Audience audience() {
+        return context == null || context.getState() == null ? Audience.EDITOR : context.getState().getAudience();
     }
 
     /**

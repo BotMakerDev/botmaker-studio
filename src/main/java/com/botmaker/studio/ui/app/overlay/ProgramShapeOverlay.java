@@ -245,6 +245,7 @@ public final class ProgramShapeOverlay {
         this.config = new ArgumentConfigPopover(context, this::index, () -> stage);
         // After `config`: the row's ⚙ opens the popover, and a field initializer could not see it yet.
         this.tree = new OverlayTreeView(
+                context,
                 new OverlayTreeView.Callbacks(this::move, this::delete, config::open, this::moveStatement,
                         this::toggleFold),
                 () -> { if (stage != null) Platform.runLater(stage::sizeToScene); });

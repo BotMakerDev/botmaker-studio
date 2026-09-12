@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -29,6 +30,25 @@ public interface CodeBlock {
     }
     Node getUINode(CodeEditorService context);
     Node getUINode();
+
+    /**
+     * This block's rendering schema, or {@link ComponentSpec#empty()} when it has not declared one.
+     *
+     * <p><b>Empty is the migration's coexistence mechanism, not a failure.</b> A block that declares a spec
+     * can be drawn by any surface that understands the vocabulary — {@code ComponentLayoutBuilder} at canvas
+     * density, {@code CompactSpecRow} at the overlay editor's — while a block that declares nothing renders
+     * through its own {@code createUINode} on the canvas and as a line of source text in the overlay, exactly
+     * as every block did before. That is what lets this proceed one block at a time.
+     *
+     * <p>The components hold {@code Supplier<Node>}s rather than nodes, so declaring a spec builds no widget:
+     * a surface that drops a component never calls its supplier, which is what keeps the schema answerable
+     * headlessly and keeps a hidden component out of the scene graph entirely.
+     *
+     * @param context the editor session, because a component's widget is built against it
+     */
+    default ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.empty();
+    }
 
     // Visual State
     void highlight();

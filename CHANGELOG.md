@@ -14,6 +14,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A block may declare how it is rendered, and two surfaces read the declaration.**
+  `CodeBlock.componentSpec(context)` answers a `ComponentSpec` — the labels, slots, pickers and bodies a block
+  is made of, each as a supplier of its widget — and the overlay editor's `CompactSpecRow` draws it at HUD
+  density, one line inside a 340px panel, while the canvas draws the same components through its own layout
+  builder. Visibility and the lock are `ComponentResolver`'s on both surfaces, so a component hidden on one
+  cannot appear on the other; a body is dropped in the HUD, because the tree already shows branches as nested
+  rows. The default is an empty spec, and a block that declares none renders exactly as it did before — which
+  is what lets this land one block at a time. **Observably a no-op so far: no block declares a spec yet.**
+
 - **Right-click a value to choose which plugin's editor draws it.** Two plugins may honestly both have an
   editor for a rectangle, and until now the winner was whichever one `ServiceLoader` reached first —
   silently, and in an order nothing guaranteed. The host collects every claimant and offers *Edit with ▸* on
