@@ -529,11 +529,20 @@ public class CodeEditorService {
     }
 
     private void handleBreakpointToggle(CoreApplicationEvents.BreakpointToggledEvent event) {
+        // Keyed by the file it was set in: a block id is a path within one compilation unit, so the same id
+        // names a block in every file. See ProjectState.addBreakpoint.
+        Path file = activeFilePath();
         if (event.enabled()) {
-            state.addBreakpoint(event.block().getId());
+            state.addBreakpoint(file, event.block().getId());
         } else {
-            state.removeBreakpoint(event.block().getId());
+            state.removeBreakpoint(file, event.block().getId());
         }
+    }
+
+    /** The file being edited, or null when none is open — which {@code ProjectState} accepts as a key. */
+    private Path activeFilePath() {
+        ProjectFile active = state.getActiveFile();
+        return active == null ? null : active.getPath();
     }
 
     /**
@@ -775,8 +784,12 @@ public class CodeEditorService {
         AbstractCodeBlock rootBlock = result.root();
         this.lastRootBlock = rootBlock;
 
+        // Put the breakpoints back onto the freshly built blocks. This is the one reader of a block id that
+        // crosses a re-parse, and the reason BlockId is a structural path rather than a character offset:
+        // with offsets, every block below an edit answered to a new id here and silently lost its mark.
+        Path breakpointFile = activeFilePath();
         for (CodeBlock block : state.getNodeToBlockMap().values()) {
-            if (state.hasBreakpoint(block.getId())) {
+            if (state.hasBreakpoint(breakpointFile, block.getId())) {
                 block.setBreakpoint(true);
             }
         }

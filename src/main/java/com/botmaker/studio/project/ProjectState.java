@@ -49,7 +49,7 @@ public class ProjectState {
     private CodeBlock highlightedBlock;
     private InsertionCursor insertionCursor;
     private boolean isDebugging;
-    private final Set<String> breakpointIds = new HashSet<>();
+    private final Map<Path, Set<String>> breakpointsByFile = new HashMap<>();
     private final Set<String> collapsedMethods = new HashSet<>();
     private long docVersion = 1;
 
@@ -281,10 +281,32 @@ public class ProjectState {
     public boolean isDebugging() { return isDebugging; }
     public void setDebugging(boolean debugging) { this.isDebugging = debugging; }
 
-    public Set<String> getBreakpointIds() { return Collections.unmodifiableSet(breakpointIds); }
-    public void addBreakpoint(String blockId) { breakpointIds.add(blockId); }
-    public void removeBreakpoint(String blockId) { breakpointIds.remove(blockId); }
-    public boolean hasBreakpoint(String blockId) { return breakpointIds.contains(blockId); }
+    /**
+     * Breakpoints, per file.
+     *
+     * <p><b>The file key is not decoration.</b> A block id is a structural path within one compilation unit
+     * ({@code parser/BlockId}), so {@code types[0]/bodyDeclarations[0]/body/statements[0]} is the first
+     * statement of the first method of <em>every</em> file in the project. A flat set — which this was until
+     * 2026-09-13 — would light a breakpoint in whichever file the user opened next. The old positional ids
+     * could collide the same way and merely did so less often, so this is a latent defect being closed rather
+     * than one being introduced.
+     *
+     * <p>{@code null} is a legal key: it is what {@code getActiveFile()} answers with no file open, and a
+     * breakpoint toggled then belongs to no file, which {@link HashMap} is happy to say.
+     */
+    public void addBreakpoint(Path file, String blockId) {
+        breakpointsByFile.computeIfAbsent(file, f -> new HashSet<>()).add(blockId);
+    }
+
+    public void removeBreakpoint(Path file, String blockId) {
+        Set<String> inFile = breakpointsByFile.get(file);
+        if (inFile != null && inFile.remove(blockId) && inFile.isEmpty()) breakpointsByFile.remove(file);
+    }
+
+    public boolean hasBreakpoint(Path file, String blockId) {
+        Set<String> inFile = breakpointsByFile.get(file);
+        return inFile != null && inFile.contains(blockId);
+    }
 
     // =========================================================================
     // VERSIONING

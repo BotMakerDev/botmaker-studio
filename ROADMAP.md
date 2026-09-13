@@ -6,6 +6,28 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-13 (later still) — a block id is where the block is, not where its characters are.**
+  `parser/BlockId.of` walks `getLocationInParent()` to the compilation unit, so an id reads
+  `types[0]/bodyDeclarations[0]/body/statements[1]/thenStatement/statements[0]` instead of
+  `ExpressionStatement_109_29`.
+
+  **The id has exactly one reader that crosses a re-parse — the breakpoint set — and the offset encoding
+  failed it.** Every edit is followed by a re-parse, so typing one character anywhere above a block changed
+  its id and dropped its breakpoint silently. Measured against the new test's own fixture: an edit in
+  *another method* moved the print's old id from `ExpressionStatement_109_29` to `ExpressionStatement_147_29`.
+  The old javadoc's "stable across re-parses of unchanged code" was true and useless.
+
+  **`ProjectState`'s breakpoints are keyed by file now**, `Map<Path, Set<String>>`, and that is not a bonus:
+  a path id has the same shape in every file, so a flat set would have shown a breakpoint from one file on
+  whichever file was opened next. The positional ids could collide the same way and merely did so more
+  rarely. `getBreakpointIds()` had no reader and went with it.
+
+  What still moves an id, correctly: inserting a **preceding sibling**, since a block's index in its own list
+  is part of where it is — pinned by `BlockIdStabilityTest` rather than left to be discovered. A `Comment`
+  has no path (it hangs off `cu.getCommentList()`) and keeps the old positional encoding, which is all it
+  needed. 972 tests, 65 failures / 5 errors / 9 skipped — the standing baseline, +9 new tests all green.
+  `docs/refactor/29-block-layer.md` §2.3.
+
 - **2026-09-13 (later) — the audience axis is deleted.** `core/component/Audience` and
   `core/component/ComponentResolver` are gone; `BlockComponent` is `(id, Kind, Supplier<Node>)` with no
   `Visibility` and no `WhenLocked`. Both enums had exactly one live value, because **no component in the
