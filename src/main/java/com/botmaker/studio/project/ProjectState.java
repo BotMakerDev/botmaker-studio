@@ -1,7 +1,6 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -324,17 +323,10 @@ public class ProjectState {
     public boolean isReaderMode() { return readerMode; }
     public void setReaderMode(boolean readerMode) { this.readerMode = readerMode; }
 
-    /**
-     * Who the canvas is drawn for. Defaults to {@link Audience#EDITOR} so a project someone authored looks
-     * exactly as it did before the component schema existed.
-     */
-    private Audience audience = Audience.EDITOR;
-
-    /**
-     * The audience to render at. Reader mode forces {@link Audience#USER}: someone reading a bot they did not
-     * write is by definition not its editor, so the two settings cannot contradict each other.
-     */
-    public Audience getAudience() { return readerMode ? Audience.USER : audience; }
-
-    public void setAudience(Audience audience) { this.audience = audience == null ? Audience.EDITOR : audience; }
+    // There was an Audience beside this until 2026-09-13 — an EDITOR/USER enum the canvas filtered components
+    // by. It is deleted. Its setter never had a caller, so the field was always EDITOR and the getter reduced
+    // to `readerMode ? USER : EDITOR`: a second spelling of the boolean directly above. What it was built for
+    // was separating an editor from a runner, and the Runner window renders plugin parameter rows and draws no
+    // block at all. Reader mode is carried where it is actually consulted, by LockResolver, which makes every
+    // block in the file read-only. See docs/refactor/29-block-layer.md §2.1.
 }

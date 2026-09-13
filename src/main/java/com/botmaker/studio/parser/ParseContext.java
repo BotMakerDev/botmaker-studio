@@ -1,7 +1,6 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -22,12 +21,13 @@ import java.util.Map;
  * @param manager                       drag-and-drop manager handed to interactive blocks
  * @param readOnly                      whether blocks parsed under this context are locked
  * @param resolver                      the file's lock rules; null when there is no project (tests)
- * @param audience                      who the canvas is being drawn for. It used to decide whole members —
- *                                      a {@code USER} parse left the Studio's own scaffolding out of the
- *                                      tree — and now reaches only the component level, because there is no
- *                                      scaffolding: every member of every file is the user's
  * @param markNewIdentifiersAsUnedited  whether freshly created identifiers/field accesses
  *                                      should be visually marked as auto-generated
+ *
+ * <p>There was an {@code audience} component here until 2026-09-13, threaded in from
+ * {@code ProjectState.getAudience()} and <b>never read by anything</b>: it had already narrowed from deciding
+ * whole members to deciding components, and the component axis is gone too. See
+ * {@code docs/refactor/29-block-layer.md} §2.1.
  */
 public record ParseContext(
         CompilationUnit cu,
@@ -37,7 +37,6 @@ public record ParseContext(
         BlockDragAndDropManager manager,
         boolean readOnly,
         LockResolver resolver,
-        Audience audience,
         boolean markNewIdentifiersAsUnedited
 ) {
     /**
@@ -52,7 +51,7 @@ public record ParseContext(
      */
     public ParseContext withReadOnly(boolean ro) {
         return ro == readOnly ? this
-                : new ParseContext(cu, sourceCode, comments, nodeToBlockMap, manager, ro, resolver, audience,
+                : new ParseContext(cu, sourceCode, comments, nodeToBlockMap, manager, ro, resolver,
                         markNewIdentifiersAsUnedited);
     }
 }

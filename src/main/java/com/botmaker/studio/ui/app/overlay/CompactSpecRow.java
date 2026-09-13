@@ -1,8 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.BlockComponent;
-import com.botmaker.studio.core.component.ComponentResolver;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
 import javafx.scene.Node;
@@ -22,31 +20,29 @@ import java.util.List;
  * different: the HUD shows a block's branches as its own nested rows ({@code BlockTree.flatten}), so drawing
  * one inline would draw the program twice.
  *
- * <p>Visibility and the lock are {@link ComponentResolver}'s, asked exactly as the canvas asks, so a
- * component hidden on one surface cannot be visible on the other.
+ * <p>Everything else is asked exactly as the canvas asks it — a null supplier answer is an affordance that
+ * does not exist, and a locked block's components are stamped read-only — so a component drawn on one surface
+ * is drawn on the other.
  */
 public final class CompactSpecRow {
 
     private CompactSpecRow() {}
 
     /** The nodes for {@code spec} at HUD density, in declaration order. Empty for an empty spec. */
-    public static List<Node> nodes(ComponentSpec spec, Audience audience, boolean locked) {
+    public static List<Node> nodes(ComponentSpec spec, boolean locked) {
         if (spec == null || spec.components().isEmpty()) return List.of();
 
         List<Node> out = new ArrayList<>();
         for (BlockComponent component : spec.components()) {
-            // Before the verdict, and deliberately: a body is dropped whatever the verdict would have been,
-            // so its supplier is never called on this surface.
+            if (component == null) continue;
+            // A body is dropped before its supplier is reached, so it is never built on this surface.
             if (component.kind() == BlockComponent.Kind.BODY) continue;
-
-            ComponentResolver.Verdict verdict = ComponentResolver.resolve(component, audience, locked);
-            if (!verdict.isVisible()) continue;
 
             Node node = component.node().get();
             // Null is "this affordance does not exist" — the convention the canvas builder documents.
             if (node == null) continue;
 
-            if (verdict.isReadOnly()) {
+            if (locked) {
                 node.pseudoClassStateChanged(ReadOnlyDecorator.READ_ONLY, true);
             }
             out.add(node);

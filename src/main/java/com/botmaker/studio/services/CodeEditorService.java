@@ -6,7 +6,6 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
@@ -833,16 +832,6 @@ public class CodeEditorService {
     public CodeEditor getCodeEditor() { return codeEditor; }
     public ProjectState getState() { return state; }
 
-    /**
-     * Who this session is drawing for. One derivation with several readers — the canvas's blocks, the overlay
-     * HUD's rows — because {@code readerMode} is a live toggle and a second spelling of "editor unless the
-     * state says otherwise" is a surface that keeps showing the author's view to a reader.
-     *
-     * <p>{@link Audience#EDITOR} with no state, matching {@code ComponentResolver}'s own permissive default.
-     */
-    public Audience audience() {
-        return state == null ? Audience.EDITOR : state.getAudience();
-    }
     public EventBus getEventBus() { return eventBus; }
     public BlockDragAndDropManager getDragAndDropManager() { return dragAndDropManager; }
 

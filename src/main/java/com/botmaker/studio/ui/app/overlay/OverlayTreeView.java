@@ -4,7 +4,6 @@ import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.project.InsertionCursor;
 import com.botmaker.studio.services.CodeEditorService;
@@ -207,7 +206,7 @@ final class OverlayTreeView {
         // one line. One that declares none falls back to its source text, which is what every row was until
         // a block first declared a spec, and what most rows still are. The fallback is not a degraded mode:
         // the text is also this row's tooltip either way.
-        List<Node> declared = CompactSpecRow.nodes(spec(stmt), audience(), locked);
+        List<Node> declared = CompactSpecRow.nodes(spec(stmt), locked);
         if (declared.isEmpty()) node.getChildren().add(text);
         else node.getChildren().addAll(declared);
         Tooltip.install(node, new Tooltip(rowTooltip(stmt, locked, broken)));
@@ -264,11 +263,6 @@ final class OverlayTreeView {
             System.err.println("Block could not describe itself: " + e);
             return ComponentSpec.empty();
         }
-    }
-
-    /** Who the HUD is drawing for, read per row — see the {@link #context} field. */
-    private Audience audience() {
-        return context == null ? Audience.EDITOR : context.audience();
     }
 
     /**

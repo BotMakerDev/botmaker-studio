@@ -6,6 +6,25 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-13 (later) — the audience axis is deleted.** `core/component/Audience` and
+  `core/component/ComponentResolver` are gone; `BlockComponent` is `(id, Kind, Supplier<Node>)` with no
+  `Visibility` and no `WhenLocked`. Both enums had exactly one live value, because **no component in the
+  codebase ever declared another** — and `setAudience` had no caller, so the field was always `EDITOR` and
+  `getAudience()` was a second spelling of `readerMode`. The axis was built to separate an editor from a
+  runner, and `RunnerWindow` renders plugin parameter rows and draws no block.
+
+  **A fourth dead thing turned up on the way**: `ParseContext.audience`, threaded in from `BlockConverter`
+  on every parse and read by nothing at all.
+
+  What is kept is what is real: `isReadOnly` and `LockResolver` are untouched, and the two rules the renderers
+  actually run — skip a null node, stamp `:read-only` when the block is locked — now live in the renderers
+  rather than behind a three-value verdict. `ComponentLayoutBuilder`, `StackLayoutBuilder`,
+  `BlockLayout.components`/`.stack` and `CompactSpecRow.nodes` each lost a parameter.
+  `ComponentResolverTest` is deleted; its two assertions that were about the *spec* rather than the resolver
+  are `ComponentSpecTest`. ~210 lines net. 963 tests, 65 failures / 5 errors / 9 skipped — the standing
+  baseline exactly, with the 31 tests over the touched code green. Reasoning and measurements:
+  `docs/refactor/29-block-layer.md` §2.1.
+
 - **2026-09-13 — the block layer, assessed.** `docs/refactor/29-block-layer.md` (umbrella repo): what
   `ComponentSpec` is and is not, the three axes audited, the `CodeBlock`/`AbstractCodeBlock` inheritance read
   cold, and six alternatives with one refused. Three measured findings: **`Audience` is dead** (`setAudience`

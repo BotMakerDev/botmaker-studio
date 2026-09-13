@@ -77,11 +77,6 @@ public record ComponentSpec(List<BlockComponent> components) {
             return add(BlockComponent.of(id, BlockComponent.Kind.BODY, node));
         }
 
-        /** A component only the bot's author sees — a generated member, or scaffold wiring. */
-        public Builder editorOnly(String id, BlockComponent.Kind kind, Supplier<Node> node) {
-            return add(BlockComponent.editorOnly(id, kind, node));
-        }
-
         public ComponentSpec build() {
             return components.isEmpty() ? EMPTY : new ComponentSpec(components);
         }

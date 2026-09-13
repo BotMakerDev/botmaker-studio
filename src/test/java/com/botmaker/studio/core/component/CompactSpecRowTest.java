@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * What the HUD keeps and what it drops from a block's declared spec.
  *
  * <p>Headless: {@link ComponentSpec} holds {@code Supplier<Node>}s that a dropped component's renderer never
- * calls, so the two rules worth asserting — a body is not drawn inline, and a hidden component's widget is
- * never built — are both assertable without a JavaFX toolkit. That property is why the spec was designed with
- * suppliers, and it is the same reason {@code BlockTree} was kept free of JavaFX.
+ * calls, so the rule worth asserting — a body is not drawn inline, and its widget is never built — is
+ * assertable without a JavaFX toolkit. That property is why the spec was designed with suppliers, and it is
+ * the same reason {@code BlockTree} was kept free of JavaFX.
  */
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class CompactSpecRowTest {
@@ -40,25 +40,25 @@ class CompactSpecRowTest {
                 .body("body", body)
                 .build();
 
-        CompactSpecRow.nodes(spec, Audience.EDITOR, false);
+        CompactSpecRow.nodes(spec, false);
 
         assertFalse(body.asked, "the HUD shows bodies as nested rows, never inline");
     }
 
     @Test
-    void an_editor_only_component_is_not_built_for_the_user_audience() {
-        Probe scaffold = new Probe();
+    void a_component_whose_supplier_answers_null_is_skipped_rather_than_drawn() {
+        // Null is "this affordance does not exist" — a locked block's buttons answer it rather than coming
+        // back disabled, which is the whole of the read-only rendering rule on both surfaces.
         ComponentSpec spec = ComponentSpec.builder()
-                .editorOnly("wiring", BlockComponent.Kind.LABEL, scaffold)
+                .label("kw", () -> null)
+                .picker("change", () -> null)
                 .build();
 
-        CompactSpecRow.nodes(spec, Audience.USER, false);
-
-        assertFalse(scaffold.asked, "a hidden component's widget never enters the scene graph");
+        assertEquals(List.of(), CompactSpecRow.nodes(spec, true));
     }
 
     @Test
     void a_block_with_no_declared_spec_yields_no_nodes() {
-        assertEquals(List.of(), CompactSpecRow.nodes(ComponentSpec.empty(), Audience.EDITOR, false));
+        assertEquals(List.of(), CompactSpecRow.nodes(ComponentSpec.empty(), false));
     }
 }

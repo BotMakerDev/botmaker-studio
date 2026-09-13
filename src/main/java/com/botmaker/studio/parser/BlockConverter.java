@@ -88,7 +88,7 @@ public class BlockConverter {
 
             ParseContext ctx = new ParseContext(
                     ast, javaCode, comments, nodeToBlockMap, manager, isReadOnly,
-                    LockResolver.forActiveFile(config, state), state.getAudience(),
+                    LockResolver.forActiveFile(config, state),
                     markNewIdentifiersAsUnedited);
 
             if (ast.types().isEmpty()) return new ConvertResult(null, ast);

@@ -213,11 +213,9 @@ public abstract class AbstractCodeBlock implements CodeBlock {
      * This block's declared {@link com.botmaker.studio.core.component.ComponentSpec} drawn at canvas density —
      * what a migrated block's {@code createUINode} hands to {@code BlockLayout.header().withCustomNode(…)}.
      *
-     * <p>It exists so the audience and the lock are read in one place rather than per block: {@code audience}
-     * from the session (Reader mode is a live toggle, so it must be read at render time and never captured),
-     * {@code locked} from this block's own {@link #isReadOnly()}, which is what the whole block layer already
-     * means by locked. A block that spelled either of those itself is a block that can disagree with the HUD
-     * about the same component.
+     * <p>It exists so the lock is read in one place rather than per block: {@code locked} comes from this
+     * block's own {@link #isReadOnly()}, which is what the whole block layer already means by locked. A block
+     * that spelled it itself is a block that can disagree with the HUD about the same component.
      */
     protected Node renderSpec(CodeEditorService context) {
         return renderSpecRow(context).build();
@@ -229,7 +227,7 @@ public abstract class AbstractCodeBlock implements CodeBlock {
      */
     protected com.botmaker.studio.ui.render.layout.ComponentLayoutBuilder renderSpecRow(CodeEditorService context) {
         return com.botmaker.studio.ui.render.layout.BlockLayout
-                .components(componentSpec(context), audienceOf(context), isReadOnly());
+                .components(componentSpec(context), isReadOnly());
     }
 
     /**
@@ -241,12 +239,7 @@ public abstract class AbstractCodeBlock implements CodeBlock {
      */
     protected com.botmaker.studio.ui.render.layout.StackLayoutBuilder renderSpecStacked(CodeEditorService context) {
         return com.botmaker.studio.ui.render.layout.BlockLayout
-                .stack(componentSpec(context), audienceOf(context), isReadOnly());
-    }
-
-    /** Who this block is being drawn for — the session's answer, or the editor when there is no session. */
-    private static com.botmaker.studio.core.component.Audience audienceOf(CodeEditorService context) {
-        return context == null ? com.botmaker.studio.core.component.Audience.EDITOR : context.audience();
+                .stack(componentSpec(context), isReadOnly());
     }
 
     /**

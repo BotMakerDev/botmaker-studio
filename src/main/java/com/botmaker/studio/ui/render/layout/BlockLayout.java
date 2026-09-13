@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.render.layout;
 
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.ComponentSpec;
 
 /**
@@ -20,27 +19,26 @@ public class BlockLayout {
     }
 
     /**
-     * Renders a declared {@link ComponentSpec} instead of a hand-assembled sentence, filtering each component
-     * through {@link com.botmaker.studio.core.component.ComponentResolver}.
+     * Renders a declared {@link ComponentSpec} instead of a hand-assembled sentence.
      *
      * <p>This is the migration target for {@code createUINode}, not a replacement for the builders above: a
      * block that has not declared a spec keeps using {@link #sentence()} / {@link #header()} and renders
      * exactly as before. Both coexist for as long as the migration takes.
      *
-     * @param locked whether the code this block edits is locked — take it from
-     *               {@code ComponentResolver.isLocked(LockResolver, ASTNode, EditKind)} rather than
-     *               re-deriving it, so the visibility verdict cannot drift from the edit verdict.
+     * @param locked whether the code this block edits is locked — take it from the block's own
+     *               {@code isReadOnly()}, which is what {@code LockResolver}'s verdict was written into while
+     *               the block was parsed, rather than re-deriving it here.
      */
-    public static ComponentLayoutBuilder components(ComponentSpec spec, Audience audience, boolean locked) {
-        return new ComponentLayoutBuilder(spec, audience, locked);
+    public static ComponentLayoutBuilder components(ComponentSpec spec, boolean locked) {
+        return new ComponentLayoutBuilder(spec, locked);
     }
 
     /**
      * The same, for a spec that declares a {@code BODY} — rows stacked with each body between them, which is
      * every control-flow block. Use {@link #components} when the block is one sentence; the two differ only in
-     * where the row breaks, and share the visibility filter.
+     * where the row breaks, and share the one pass over the components.
      */
-    public static StackLayoutBuilder stack(ComponentSpec spec, Audience audience, boolean locked) {
-        return new StackLayoutBuilder(spec, audience, locked);
+    public static StackLayoutBuilder stack(ComponentSpec spec, boolean locked) {
+        return new StackLayoutBuilder(spec, locked);
     }
 }

@@ -2,7 +2,6 @@ package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.BlockComponent;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.parser.EditorFixture;
@@ -267,15 +266,13 @@ class BlockSpecDeclarationTest {
     }
 
     @Test
-    void every_declared_component_is_shown_to_both_audiences() {
-        // Neither block has anything scaffolding-ish in it, so nothing here may be EDITOR_ONLY: a reader of
-        // someone else's bot must see the whole print and the whole return.
+    void every_declared_component_has_an_id_that_is_its_own() {
+        // A duplicate id is refused by the spec's own constructor, so reaching here at all is the assertion;
+        // finding each component back by name is what the HUD does to keep focus on the one being edited.
         ComponentSpec print = blockOf(inRun("System.out.println(\"hi\");"), "PrintBlock").componentSpec(null);
 
         for (BlockComponent component : print.components()) {
-            assertTrue(com.botmaker.studio.core.component.ComponentResolver
-                            .isVisibleTo(component.visibility(), Audience.USER),
-                    component.id() + " is hidden from a reader");
+            assertTrue(print.find(component.id()).isPresent(), component.id() + " cannot be found by name");
         }
     }
 }

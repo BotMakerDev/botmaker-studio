@@ -1,8 +1,6 @@
 package com.botmaker.studio.ui.render.layout;
 
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.BlockComponent;
-import com.botmaker.studio.core.component.ComponentResolver;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
 import javafx.geometry.Pos;
@@ -18,22 +16,21 @@ import java.util.List;
  * <p>It adds no styling, no spacing rule and no container of its own: the result is the same
  * {@link WrappingSentencePane} a sentence layout produces, so CSS, {@code styleContainer} and every caller that
  * reaches into {@code getChildren()} are unaffected. The only thing this builder does that the sentence
- * builder does not is <em>ask</em> — {@link ComponentResolver} decides, per component, between drawing it,
- * drawing it read-only, and not building it at all.
+ * builder does not is read a declaration rather than a call sequence.
  *
- * <p>A hidden component's {@code node} supplier is never invoked, so its widget never enters the scene graph.
+ * <p>A component whose supplier answers {@code null} is skipped and never enters the scene graph — which is
+ * the whole read-only rendering rule, since a locked block's buttons answer {@code null} rather than coming
+ * back disabled.
  */
 public final class ComponentLayoutBuilder {
 
     private final ComponentSpec spec;
-    private final Audience audience;
     private final boolean locked;
     private double spacing = 5.0;
     private Pos alignment = Pos.CENTER_LEFT;
 
-    ComponentLayoutBuilder(ComponentSpec spec, Audience audience, boolean locked) {
+    ComponentLayoutBuilder(ComponentSpec spec, boolean locked) {
         this.spec = spec == null ? ComponentSpec.empty() : spec;
-        this.audience = audience == null ? Audience.EDITOR : audience;
         this.locked = locked;
     }
 
@@ -49,35 +46,33 @@ public final class ComponentLayoutBuilder {
 
     public WrappingSentencePane build() {
         List<Node> nodes = new ArrayList<>();
-        for (Rendered rendered : render(spec, audience, locked)) nodes.add(rendered.node());
+        for (Rendered rendered : render(spec, locked)) nodes.add(rendered.node());
         return pane(nodes, spacing, alignment);
     }
 
-    /** One component that survived the verdict, paired with the node it built. */
+    /** One component that was drawn, paired with the node it built. */
     record Rendered(BlockComponent component, Node node) {}
 
     /**
-     * Every component of {@code spec} that is drawn, in declaration order, each already stamped read-only if
-     * the verdict said so.
+     * Every component of {@code spec} that is drawn, in declaration order, each already stamped read-only when
+     * the block is locked.
      *
      * <p>Shared with {@link StackLayoutBuilder}, which needs the components as well as their nodes so it can
-     * break a block into rows at each {@link BlockComponent.Kind#BODY}. Two callers, one filter: a second
-     * place deciding what is visible is a canvas and a HUD disagreeing about the same component, which is the
-     * thing {@link ComponentResolver} exists to stop.
+     * break a block into rows at each {@link BlockComponent.Kind#BODY}. Two callers, one pass: a second place
+     * deciding what is drawn is a canvas and a HUD disagreeing about the same component.
      */
-    static List<Rendered> render(ComponentSpec spec, Audience audience, boolean locked) {
+    static List<Rendered> render(ComponentSpec spec, boolean locked) {
         List<Rendered> out = new ArrayList<>();
         if (spec == null) return out;
         for (BlockComponent component : spec.components()) {
-            ComponentResolver.Verdict verdict = ComponentResolver.resolve(component, audience, locked);
-            if (!verdict.isVisible()) continue;
+            if (component == null) continue;
 
             Node node = component.node().get();
             // Null is "this affordance does not exist", the convention SentenceLayoutBuilder.addNode
             // documents — a read-only block's buttons return null rather than a disabled control.
             if (node == null) continue;
 
-            if (verdict.isReadOnly()) {
+            if (locked) {
                 node.pseudoClassStateChanged(ReadOnlyDecorator.READ_ONLY, true);
             }
             out.add(new Rendered(component, node));

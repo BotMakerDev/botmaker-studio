@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.render.layout;
 
-import com.botmaker.studio.core.component.Audience;
 import com.botmaker.studio.core.component.BlockComponent;
 import com.botmaker.studio.core.component.ComponentSpec;
 import javafx.geometry.Pos;
@@ -18,8 +17,8 @@ import java.util.List;
  * <p>{@link ComponentLayoutBuilder} draws a spec that is one sentence. This draws one that is not — a
  * {@code while} is a row then a body, a {@code do/while} is a row, a body, and another row — and the split is
  * simply "break the row at every {@link BlockComponent.Kind#BODY}". Nothing else about the two differs: both
- * take their visible components from {@link ComponentLayoutBuilder#render}, so a component's verdict cannot
- * depend on which of them is drawing it.
+ * take their components from {@link ComponentLayoutBuilder#render}, so what is drawn cannot depend on which of
+ * them is drawing it.
  *
  * <p>The <b>first</b> row is the header — it carries the delete cross — wherever it falls in the spec. A
  * {@code do/while} declares its body before its condition, so its first row is the word {@code do}, exactly as
@@ -32,7 +31,6 @@ import java.util.List;
 public final class StackLayoutBuilder {
 
     private final ComponentSpec spec;
-    private final Audience audience;
     private final boolean locked;
     private final List<String> styleClasses = new ArrayList<>();
     private final List<String> rowStyleClasses = new ArrayList<>();
@@ -41,9 +39,8 @@ public final class StackLayoutBuilder {
     private double rowSpacing = 5.0;
     private Pos alignment = Pos.CENTER_LEFT;
 
-    StackLayoutBuilder(ComponentSpec spec, Audience audience, boolean locked) {
+    StackLayoutBuilder(ComponentSpec spec, boolean locked) {
         this.spec = spec == null ? ComponentSpec.empty() : spec;
-        this.audience = audience == null ? Audience.EDITOR : audience;
         this.locked = locked;
     }
 
@@ -82,7 +79,7 @@ public final class StackLayoutBuilder {
         List<Node> row = new ArrayList<>();
         boolean headerDone = false;
 
-        for (ComponentLayoutBuilder.Rendered rendered : ComponentLayoutBuilder.render(spec, audience, locked)) {
+        for (ComponentLayoutBuilder.Rendered rendered : ComponentLayoutBuilder.render(spec, locked)) {
             if (rendered.component().kind() != BlockComponent.Kind.BODY) {
                 row.add(rendered.node());
                 continue;
