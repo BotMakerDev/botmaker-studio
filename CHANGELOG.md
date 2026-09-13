@@ -73,6 +73,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Removed
 
+- **The Wait block is the plugin's, so Studio no longer has one.** `blocks/flow/WaitBlock`, the
+  `BlockConverter` arm that recognised `try { Thread.sleep(n) } catch (InterruptedException e)`, the palette's
+  `Kind.WAIT` and the `StatementFactory` branch behind it are deleted. The hand-written Wait *entry* went on
+  2026-09-01 with every other palette entry naming a plugin's type; what was left was the editor still
+  recognising a raw-sleep spelling and captioning it `Wait … ms` — a second, host-flavoured way to say a word
+  the SDK owns, under labels Studio invented. A wait written the plugin's way (`Wait.time(…)`) draws as an
+  ordinary facade call with the plugin's own editors, as it already did. **The cost, plainly:** a bot whose
+  source holds a hand-written `Thread.sleep` no longer shows that statement on the canvas — the same as every
+  other `try`, which this editor has never drawn. The source text is untouched, and it still runs. It also
+  removes the one place in the editor that ever wrote a `printStackTrace` into a user's bot.
+
 - **Studio holds no capture target.** `services/capture/CaptureTarget`,
   `ScreenCaptureService.defaultTarget()`/`captureDefaultTargetAsync`/`forProjectFiles` and `TargetCapture`'s
   default-target supplier, its `ProjectSettingsService` constructor, its monitor/desktop/emulator branches

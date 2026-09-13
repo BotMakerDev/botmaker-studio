@@ -47,8 +47,12 @@ public sealed interface BlockType
             // switch over the SDK's Matches — a language construct the editor had to spell on one library's
             // behalf. Branching on what was found is a chain of ordinary calls now, which the palette offers
             // like any other member, so there is no bespoke statement shape left to key on.
+            //
+            // WAIT stood between RETURN and ASSIGNMENT until 2026-09-13, unreachable since its palette entry
+            // went on 2026-09-01. It built a raw `Thread.sleep` in a try/catch: waiting is a plugin's verb,
+            // and the plugin offers it as an ordinary member call.
             PRINT, IF, WHILE, FOR, DO_WHILE, SWITCH,
-            BREAK, CONTINUE, RETURN, WAIT, ASSIGNMENT, FUNCTION_CALL, COMMENT, ARRAY
+            BREAK, CONTINUE, RETURN, ASSIGNMENT, FUNCTION_CALL, COMMENT, ARRAY
         }
 
         // A call to one of the user's own functions is a value like any other call. ASSIGNMENT is deliberately

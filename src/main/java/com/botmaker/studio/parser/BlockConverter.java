@@ -291,7 +291,13 @@ public class BlockConverter {
             if (stmt instanceof BreakStatement b) return Optional.of(new BreakBlock(BlockId.of(b), b));
             if (stmt instanceof ContinueStatement c) return Optional.of(new ContinueBlock(BlockId.of(c), c));
             if (stmt instanceof ReturnStatement r) return parseReturn(r, ctx);
-            if (stmt instanceof TryStatement t) return parseTry(t, ctx);
+            // A TryStatement arm stood here until 2026-09-13. It matched one shape —
+            // `try { Thread.sleep(n) } catch (InterruptedException e)` — and drew it as a bespoke WaitBlock
+            // captioned `Wait … ms`. Waiting is a plugin's verb: the SDK spells it `Wait.time(Duration)`,
+            // which arrives here as an ordinary facade call with the plugin's own editors, and the palette's
+            // hand-written Wait entry went on 2026-09-01. Recognising the raw-sleep spelling as well left the
+            // host offering a second, host-flavoured way to say one plugin's word, under a caption Studio
+            // invented. Every other try has always fallen through to the empty below, and so does this one.
             if (stmt instanceof ExpressionStatement e) return parseExprStmt(e, ctx);
         } catch (Exception e) {
             System.err.println("Error parsing statement: " + stmt);
@@ -559,18 +565,6 @@ public class BlockConverter {
         return Optional.of(block);
     }
 
-    private Optional<StatementBlock> parseTry(TryStatement stmt, ParseContext ctx) {
-        if (isWait(stmt)) {
-            WaitBlock block = new WaitBlock(BlockId.of(stmt), stmt);
-            ctx.nodeToBlockMap().put(stmt, block);
-            Statement inner = (Statement) stmt.getBody().statements().getFirst();
-            MethodInvocation mi = (MethodInvocation) ((ExpressionStatement) inner).getExpression();
-            if (!mi.arguments().isEmpty()) parseExpression((Expression) mi.arguments().getFirst(), ctx).ifPresent(block::setDuration);
-            return Optional.of(block);
-        }
-        return Optional.empty();
-    }
-
     // =========================================================================
     // EXPRESSIONS
     // =========================================================================
@@ -731,13 +725,7 @@ public class BlockConverter {
                 op == InfixExpression.Operator.CONDITIONAL_AND || op == InfixExpression.Operator.CONDITIONAL_OR;
     }
 
-    private static boolean isWait(TryStatement stmt) {
-        if (stmt.getBody().statements().size() != 1) return false;
-        Statement first = (Statement) stmt.getBody().statements().getFirst();
-        if (!(first instanceof ExpressionStatement)) return false;
-        Expression e = ((ExpressionStatement) first).getExpression();
-        return e instanceof MethodInvocation mi && "sleep".equals(mi.getName().getIdentifier()) && "Thread".equals(mi.getExpression().toString());
-    }
+    // isWait went on 2026-09-13 with the WaitBlock it fed; see the TryStatement note in dispatchStatement.
 
     public static boolean isPrintStatement(Expression expression) {
         if (!(expression instanceof MethodInvocation method)) return false;

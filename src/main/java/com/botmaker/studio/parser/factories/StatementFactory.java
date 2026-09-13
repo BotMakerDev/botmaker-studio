@@ -52,7 +52,6 @@ public class StatementFactory {
             case BREAK -> ast.newBreakStatement();
             case CONTINUE -> ast.newContinueStatement();
             case RETURN -> ast.newReturnStatement();
-            case WAIT -> createWaitStatement(ast);
             case ASSIGNMENT -> createAssignmentStatement(ast, ctx.analyzer(), context);
             case FUNCTION_CALL -> createFunctionCallStatement(ctx, context);
             case ARRAY -> createArrayDeclaration(ctx, context);
@@ -589,28 +588,9 @@ public class StatementFactory {
         return null;
     }
 
-    private static Statement createWaitStatement(AST ast) {
-        TryStatement tryStmt = ast.newTryStatement();
-        Block tryBody = ast.newBlock();
-        MethodInvocation sleepCall = ast.newMethodInvocation();
-        sleepCall.setExpression(ast.newSimpleName("Thread"));
-        sleepCall.setName(ast.newSimpleName("sleep"));
-        sleepCall.arguments().add(ast.newNumberLiteral("1000"));
-        tryBody.statements().add(ast.newExpressionStatement(sleepCall));
-        tryStmt.setBody(tryBody);
-        CatchClause catchClause = ast.newCatchClause();
-        SingleVariableDeclaration exceptionDecl = ast.newSingleVariableDeclaration();
-        exceptionDecl.setType(ast.newSimpleType(ast.newSimpleName("InterruptedException")));
-        exceptionDecl.setName(ast.newSimpleName("e"));
-        catchClause.setException(exceptionDecl);
-        Block catchBody = ast.newBlock();
-        MethodInvocation printStackTrace = ast.newMethodInvocation();
-        printStackTrace.setExpression(ast.newSimpleName("e"));
-        printStackTrace.setName(ast.newSimpleName("printStackTrace"));
-        catchBody.statements().add(ast.newExpressionStatement(printStackTrace));
-        catchClause.setBody(catchBody);
-        tryStmt.catchClauses().add(catchClause);
-        return tryStmt;
-    }
+    // createWaitStatement went on 2026-09-13 with Kind.WAIT. It emitted
+    // `try { Thread.sleep(1000) } catch (InterruptedException e) { e.printStackTrace(); }` — the editor
+    // spelling a plugin's verb in raw JDK, and the only place in this factory that ever wrote a
+    // printStackTrace into a user's bot. No palette entry has reached it since 2026-09-01.
 
 }

@@ -206,23 +206,12 @@ class StatementFactoryTest {
     // plugin's type, and a Wait block now comes from the plugin's own catalog. The test's own javadoc had
     // already concluded that what remained of SP8 was a deletion; this is it.
     //
-    // What it also asserted — that no generated bot source carries a printStackTrace — is not lost: the dead
-    // Kind.WAIT branch below is still asserted dead, and that branch is the only place in the factory that ever
-    // emitted one. BlockConverter.isWait is likewise untouched, so an existing bot's hand-written Thread.sleep
-    // still round-trips through the editor.
-
-    /**
-     * The dead branch, asserted as dead. {@code Kind.WAIT} still builds the old template — including the
-     * {@code printStackTrace} — so this pins what SP8 is deleting rather than pretending it is already gone.
-     */
-    @Test
-    void theUnreachableWaitKindStillBuildsTheOldTemplate() {
-        String legacy = text(controlFlow(Kind.WAIT));
-
-        assertTrue(legacy.contains("Thread.sleep(1000)"), legacy);
-        assertTrue(legacy.contains("printStackTrace"),
-                "the branch SP8 exists to remove — reachable only from a Kind no palette entry uses: " + legacy);
-    }
+    // What it also asserted — that no generated bot source carries a printStackTrace — is a property of the
+    // source now rather than of a test: on 2026-09-13 Kind.WAIT, createWaitStatement, WaitBlock and
+    // BlockConverter.isWait were all deleted, and that branch was the only place in the factory that ever
+    // emitted a printStackTrace. The accepted cost is that a bot's hand-written `try { Thread.sleep(n) }` is
+    // no longer drawn on the canvas — the same as every other try, which this parser has never rendered. Its
+    // source text is untouched; a wait a plugin owns (`Wait.time(…)`) draws as an ordinary facade call.
 
     /**
      * Date, Time of day and Duration used to insert <b>nothing at all</b>. Their seed names the JDK type

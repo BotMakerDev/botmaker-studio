@@ -48,7 +48,7 @@ class StatementRoundTripTest {
                 + "}\n";
     }
 
-    /** The thirteen kinds {@code dispatchStatement} names — the control group. */
+    /** The kinds {@code dispatchStatement} names — the control group. */
     private static List<Kind> modelled() {
         return List.of(
                 new Kind("block", "{ int nested = 1; }"),
@@ -59,9 +59,7 @@ class StatementRoundTripTest {
                 new Kind("do-while", "do { int d = 1; } while (false);"),
                 new Kind("switch", "switch (1) { case 1: break; default: break; }"),
                 new Kind("expression statement", "System.out.println(\"hi\");"),
-                new Kind("enum declaration", "enum Local { A, B }"),
-                new Kind("wait (the generated try/sleep template)",
-                        "try { Thread.sleep(1000); } catch (InterruptedException e) { e.printStackTrace(); }"));
+                new Kind("enum declaration", "enum Local { A, B }"));
     }
 
     /**
@@ -69,10 +67,17 @@ class StatementRoundTripTest {
      *
      * <p>The last two are <b>not</b> in B12's original list, which was derived by reading
      * {@code dispatchStatement}'s thirteen branches. They were found by running this test, and they matter
-     * more than the five that were: {@code parseTry} returns {@code Optional.empty()} for every try that is
-     * not the generated {@code Wait} template, so an ordinary {@code try/catch} — the single most common
-     * "exotic" statement in real bot code, and what the SDK's own examples use — disappears from the editor.
-     * A local {@code class} does the same through {@code parseTypeDeclaration}, which handles only enums.
+     * more than the five that were: an ordinary {@code try/catch} — the single most common "exotic" statement
+     * in real bot code, and what the SDK's own examples use — disappears from the editor. A local
+     * {@code class} does the same through {@code parseTypeDeclaration}, which handles only enums.
+     *
+     * <p><b>A {@code try/sleep} joined them on 2026-09-13</b>, and it is the one entry here that arrived by a
+     * deliberate deletion rather than by never having been written. {@code parseTry} recognised exactly that
+     * shape and drew it as a {@code WaitBlock}; waiting is a plugin's verb, so the recognition went with the
+     * palette entry that had gone on 2026-09-01. There is no {@code parseTry} at all now, so every try is
+     * this one case, which is what makes the list honest — it was always true of six tries out of seven.
+     * <b>SP6 is therefore owed a wait as much as it is owed a throw</b>: the write-model hazard in
+     * {@link #assertEveryStatementHasABlock} is unchanged by which of them is invisible.
      */
     private static List<Kind> unmodelled() {
         return List.of(
@@ -82,6 +87,8 @@ class StatementRoundTripTest {
                 new Kind("labelled", "outer: while (false) { break outer; }"),
                 new Kind("classic for", "for (int i = 0; i < 3; i++) { int g = 1; }"),
                 new Kind("plain try/catch", "try { int e = 1; } catch (RuntimeException ex) { }"),
+                new Kind("try/sleep, once drawn as a Wait block",
+                        "try { Thread.sleep(1000); } catch (InterruptedException e) { e.printStackTrace(); }"),
                 new Kind("local class declaration", "class Local { }"));
     }
 
