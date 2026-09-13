@@ -6,6 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-13 — the block layer, assessed.** `docs/refactor/29-block-layer.md` (umbrella repo): what
+  `ComponentSpec` is and is not, the three axes audited, the `CodeBlock`/`AbstractCodeBlock` inheritance read
+  cold, and six alternatives with one refused. Three measured findings: **`Audience` is dead** (`setAudience`
+  has zero callers, and `EDITOR_ONLY`/`NOBODY`/`hiddenWhenLocked` have zero users, so every `BlockComponent`
+  ever built is `EVERYONE` + `SHOW`); **`WhenLocked` has one live value** while `isReadOnly` stays, since
+  reader mode and library source are whole-file locks and only `main`'s signature is per-member; and
+  **`BlockId` fails its one cross-render job** — `kind_start_length` shifts on any edit above a block, so the
+  breakpoint it carries is silently lost. No code changed.
+
 - **2026-09-11 (later still) — a project says when its data has an owner who is not here.** `plugin/PluginOwners`
   reads the plugin ids out of `src/main/resources/plugins/<author>/<plugin>/` — folder names only, never a
   byte of a file — and reports the ones no loaded plugin claims. `EditorCanvas` shows a banner naming them
