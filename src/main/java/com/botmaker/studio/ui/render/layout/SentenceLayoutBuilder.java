@@ -19,15 +19,30 @@ public class SentenceLayoutBuilder {
     private Pos alignment = Pos.CENTER_LEFT;
 
     public SentenceLayoutBuilder addKeyword(String text) {
-        Label label = new Label(text);
-        label.getStyleClass().add("keyword-label");
-        nodes.add(noEllipsis(label));
+        nodes.add(keywordNode(text));
         return this;
     }
 
     public SentenceLayoutBuilder addLabel(String text) {
-        nodes.add(noEllipsis(new Label(text)));
+        nodes.add(labelNode(text));
         return this;
+    }
+
+    // The three factories below exist so a block that declares a ComponentSpec draws the *same* node as a block
+    // that assembles a sentence here — a spec supplies one node at a time, and reimplementing "what a keyword
+    // looks like" beside this class is how the two densities would start to disagree. The add* methods above
+    // are now their only other callers.
+
+    /** A keyword as the sentence layout builds one: {@code keyword-label}, clipped rather than ellipsized. */
+    public static Label keywordNode(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("keyword-label");
+        return noEllipsis(label);
+    }
+
+    /** A connecting word as the sentence layout builds one. */
+    public static Label labelNode(String text) {
+        return noEllipsis(new Label(text));
     }
 
     /**
@@ -60,20 +75,31 @@ public class SentenceLayoutBuilder {
     public SentenceLayoutBuilder addExpressionSlot(com.botmaker.studio.core.ExpressionBlock expression,
                                                    com.botmaker.studio.services.CodeEditorService context,
                                                    com.botmaker.studio.types.ResolvedType expectedType) {
-        if (expression != null) {
-            // A typed slot gets its specialized picker (image/group/rect/point/enum), same as call-argument
-            // slots — so e.g. the whileFind/ifFind image slot is fillable, not just a raw expression node.
-            Node picker = com.botmaker.studio.ui.render.components.pickers.PickerRegistry.pickerNodeFor(
-                    com.botmaker.studio.ui.render.components.pickers.PickerContext.of(context, com.botmaker.studio.core.ValueSlot.of(expression), expectedType));
-            Node slotNode = picker != null ? picker : expression.getUINode(context);
-            makeDroppable(slotNode, expression, context, expectedType);
-            nodes.add(slotNode);
-        } else {
-            javafx.scene.control.Label placeholder = new javafx.scene.control.Label("⟨expression⟩");
-            placeholder.getStyleClass().add("block-placeholder");
-            nodes.add(placeholder);
-        }
+        nodes.add(expressionSlotNode(expression, context, expectedType));
         return this;
+    }
+
+    /**
+     * One expression slot, drop wiring and all — the node {@link #addExpressionSlot} adds.
+     *
+     * <p>A null {@code expression} is an empty slot and renders the placeholder, which is what a block whose
+     * value was dragged out shows.
+     */
+    public static Node expressionSlotNode(com.botmaker.studio.core.ExpressionBlock expression,
+                                          CodeEditorService context,
+                                          com.botmaker.studio.types.ResolvedType expectedType) {
+        if (expression == null) {
+            Label placeholder = new Label("⟨expression⟩");
+            placeholder.getStyleClass().add("block-placeholder");
+            return placeholder;
+        }
+        // A typed slot gets its specialized picker (image/group/rect/point/enum), same as call-argument
+        // slots — so e.g. the whileFind/ifFind image slot is fillable, not just a raw expression node.
+        Node picker = com.botmaker.studio.ui.render.components.pickers.PickerRegistry.pickerNodeFor(
+                com.botmaker.studio.ui.render.components.pickers.PickerContext.of(context, com.botmaker.studio.core.ValueSlot.of(expression), expectedType));
+        Node slotNode = picker != null ? picker : expression.getUINode(context);
+        makeDroppable(slotNode, expression, context, expectedType);
+        return slotNode;
     }
 
     public SentenceLayoutBuilder addOperatorSelector(

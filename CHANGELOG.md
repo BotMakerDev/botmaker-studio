@@ -23,6 +23,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   rows. The default is an empty spec, and a block that declares none renders exactly as it did before — which
   is what lets this land one block at a time. **Observably a no-op so far: no block declares a spec yet.**
 
+- **Print and Return declare their sentence, and both surfaces read the declaration.** The first two blocks to
+  answer `componentSpec` — a print is the word, one slot per argument and the ⊕; a return is the keyword plus
+  whichever of its three tails applies (a value with its change button, a missing value with its ⊕, or the
+  `(void)` note). Nothing about what is drawn changes: the canvas builds the same nodes it always did, through
+  the same factories, because the sentence layout's keyword, label and slot construction is now called by both
+  it and the schema instead of living in one of them. What is new is that the overlay HUD can draw those parts
+  at its own density rather than falling back to a line of source text.
+- `CodeEditorService.audience()` — one derivation of who the session is drawing for, with the canvas and the
+  HUD as its readers. Reader mode is a live toggle, so it is read at render time and never captured.
+
 - **Right-click a value to choose which plugin's editor draws it.** Two plugins may honestly both have an
   editor for a rectangle, and until now the winner was whichever one `ServiceLoader` reached first —
   silently, and in an order nothing guaranteed. The host collects every claimant and offers *Edit with ▸* on

@@ -268,7 +268,7 @@ final class OverlayTreeView {
 
     /** Who the HUD is drawing for, read per row — see the {@link #context} field. */
     private Audience audience() {
-        return context == null || context.getState() == null ? Audience.EDITOR : context.getState().getAudience();
+        return context == null ? Audience.EDITOR : context.audience();
     }
 
     /**

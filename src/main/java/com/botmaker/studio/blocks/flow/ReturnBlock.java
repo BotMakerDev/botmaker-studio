@@ -5,11 +5,12 @@ import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
-import com.botmaker.studio.ui.render.theme.StyleBuilder;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
@@ -39,43 +40,51 @@ public class ReturnBlock extends AbstractStatementBlock {
         return BlockCategory.CONTROL;
     }
 
+    /**
+     * A return's sentence, declared — {@code return} plus whichever of its three tails applies.
+     *
+     * <p>An activity's run() used to close with a pinned {@code return Outcome.X;} that BotMaker wrote and
+     * kept, so this drew a dedicated outcome picker over it instead of the generic expression menu, with no
+     * delete button. Nothing generates an activity class or its Outcome enum now: an outcome is reported by
+     * {@code ctx.outcome("BAG_FULL")}, an ordinary call whose argument gets its picker from the SDK's own slot
+     * editor. So a return is a return, and this is the only path.
+     *
+     * <p>The three arms declare different components rather than one component that changes shape, because
+     * each is a different thing to point at: a value that can be changed, a value that is missing, and a
+     * function that gives nothing back. The HUD needs to tell them apart as much as the canvas does.
+     */
     @Override
-    protected Node createUINode(CodeEditorService context) {
-        // An activity's run() used to close with a pinned `return Outcome.X;` that BotMaker wrote and kept, so
-        // this drew a dedicated outcome picker over it instead of the generic expression menu, with no delete
-        // button. Nothing generates an activity class or its Outcome enum now: an outcome is reported by
-        // `ctx.outcome("BAG_FULL")`, an ordinary call whose argument gets its picker from the SDK's own slot
-        // editor. So a return is a return, and this is the only path.
+    public ComponentSpec componentSpec(CodeEditorService context) {
         String methodReturnType = findParentMethodReturnType();
         boolean isVoid = "void".equals(methodReturnType);
 
-        var sentenceBuilder = BlockLayout.sentence().addKeyword("return");
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("return"));
 
         if (expression != null) {
-            sentenceBuilder
-                    .addExpressionSlot(expression, context, ResolvedType.named(methodReturnType))
-                    .addNode(createChangeButton(e ->
-                            showExpressionMenuAndReplace((Button)e.getSource(), context, ResolvedType.named(methodReturnType),
-                                    (org.eclipse.jdt.core.dom.Expression)expression.getAstNode())
-                    ));
+            spec.slot("value", () -> SentenceLayoutBuilder.expressionSlotNode(
+                            expression, context, ResolvedType.named(methodReturnType)))
+                    .picker("change", () -> createChangeButton(e ->
+                            showExpressionMenuAndReplace((Button) e.getSource(), context,
+                                    ResolvedType.named(methodReturnType),
+                                    (org.eclipse.jdt.core.dom.Expression) expression.getAstNode())));
         } else if (!isVoid) {
-            sentenceBuilder.addNode(createAddButton(e ->
+            spec.picker("add", () -> createAddButton(e ->
                     ExpressionMenu.create(
                             ResolvedType.named(methodReturnType), false, context, this.astNode, x -> true,
                             selection -> context.getCodeEditor().setReturnExpression((ReturnStatement) this.astNode, selection)
-                    ).show((Button)e.getSource(), javafx.geometry.Side.BOTTOM, 0, 0)
-            ));
+                    ).show((Button) e.getSource(), javafx.geometry.Side.BOTTOM, 0, 0)));
         } else {
-            Label voidLabel = new Label("(void)");
-            StyleBuilder.create()
-                    .textColor("#aaa")
-                    .fontSize(10)
-                    .build();
-            sentenceBuilder.addNode(voidLabel);
+            spec.label("void", () -> new Label("(void)"));
         }
 
+        return spec.build();
+    }
+
+    @Override
+    protected Node createUINode(CodeEditorService context) {
         return BlockLayout.header()
-                .withCustomNode(sentenceBuilder.build())
+                .withCustomNode(renderSpec(context))
                 .withDeleteButton(deleteAction(context))
                 .build();
     }

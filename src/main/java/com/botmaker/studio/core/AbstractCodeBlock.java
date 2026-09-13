@@ -210,6 +210,24 @@ public abstract class AbstractCodeBlock implements CodeBlock {
     protected abstract Node createUINode(CodeEditorService context);
 
     /**
+     * This block's declared {@link com.botmaker.studio.core.component.ComponentSpec} drawn at canvas density —
+     * what a migrated block's {@code createUINode} hands to {@code BlockLayout.header().withCustomNode(…)}.
+     *
+     * <p>It exists so the audience and the lock are read in one place rather than per block: {@code audience}
+     * from the session (Reader mode is a live toggle, so it must be read at render time and never captured),
+     * {@code locked} from this block's own {@link #isReadOnly()}, which is what the whole block layer already
+     * means by locked. A block that spelled either of those itself is a block that can disagree with the HUD
+     * about the same component.
+     */
+    protected Node renderSpec(CodeEditorService context) {
+        return com.botmaker.studio.ui.render.layout.BlockLayout
+                .components(componentSpec(context),
+                        context == null ? com.botmaker.studio.core.component.Audience.EDITOR : context.audience(),
+                        isReadOnly())
+                .build();
+    }
+
+    /**
      * The "change this expression" button, or null when this block is read-only — the layout builders skip
      * null nodes, so the affordance simply doesn't exist. Prefer this over
      * {@code BlockUIComponents.createChangeButton}, which knows nothing about locks.
