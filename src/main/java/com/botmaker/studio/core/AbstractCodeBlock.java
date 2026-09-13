@@ -220,9 +220,16 @@ public abstract class AbstractCodeBlock implements CodeBlock {
      * about the same component.
      */
     protected Node renderSpec(CodeEditorService context) {
+        return renderSpecRow(context).build();
+    }
+
+    /**
+     * The same as {@link #renderSpec}, as the builder — for a block that has more to say about the row it
+     * produces, such as a style class keyed on what the block is or a control appended after it.
+     */
+    protected com.botmaker.studio.ui.render.layout.ComponentLayoutBuilder renderSpecRow(CodeEditorService context) {
         return com.botmaker.studio.ui.render.layout.BlockLayout
-                .components(componentSpec(context), audienceOf(context), isReadOnly())
-                .build();
+                .components(componentSpec(context), audienceOf(context), isReadOnly());
     }
 
     /**

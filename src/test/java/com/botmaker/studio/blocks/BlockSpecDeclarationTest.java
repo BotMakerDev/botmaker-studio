@@ -196,6 +196,60 @@ class BlockSpecDeclarationTest {
                 .count();
     }
 
+    // ---- The call block ----
+
+    /** The ids of {@code spec}'s components, in declaration order. */
+    private static List<String> ids(ComponentSpec spec) {
+        return spec.components().stream().map(BlockComponent::id).toList();
+    }
+
+    @Test
+    void a_call_declares_its_sentence_with_one_component_per_argument() {
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
+                .componentSpec(null);
+
+        assertEquals(List.of("kind", "scope", "dot", "method", "signature", "open",
+                        "arg0", "arg0-remove", "arg1", "arg1-remove",
+                        "images", "varargs-add", "close", "returns", "info"),
+                ids(spec));
+    }
+
+    @Test
+    void a_calls_argument_ids_survive_a_re_parse() {
+        // The property the overlay editor needs: it keeps focus on "the argument being edited", and the block
+        // behind that row is thrown away and rebuilt on every keystroke that changes the file. An id derived
+        // from position is stable in a way an object identity is not.
+        String source = inRun("String s = \"a\";\ns.substring(1, 2);");
+
+        assertEquals(ids(blockOf(source, "MethodInvocationBlock").componentSpec(null)),
+                ids(blockOf(source, "MethodInvocationBlock").componentSpec(null)));
+    }
+
+    @Test
+    void a_call_with_no_arguments_declares_no_argument_components() {
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.trim();"), "MethodInvocationBlock")
+                .componentSpec(null);
+
+        assertTrue(ids(spec).stream().noneMatch(id -> id.startsWith("arg")), ids(spec).toString());
+        // The picture-run row and the varargs ＋ are still declared: whether either exists is a question about
+        // the resolved overload, and resolving one is exactly what declaring a spec must not do.
+        assertTrue(spec.find("images").isPresent());
+        assertTrue(spec.find("varargs-add").isPresent());
+    }
+
+    @Test
+    void declaring_a_calls_spec_resolves_nothing() {
+        // The strong version of "builds no widget": this block's scope selector, method list and overload
+        // lookup are a knot that has to be untied before a single argument can be typed, and none of it may
+        // happen until something actually draws. A null context proves it — every supplier here would throw
+        // on one.
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
+                .componentSpec(null);
+
+        assertEquals(15, spec.components().size());
+        for (BlockComponent component : spec.components()) assertNotNull(component.node());
+    }
+
     // ---- The property both of them rest on ----
 
     @Test

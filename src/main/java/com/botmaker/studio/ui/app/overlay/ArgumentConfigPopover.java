@@ -50,6 +50,25 @@ import static com.botmaker.studio.ui.app.overlay.OverlayStyles.label;
  * dropped every edit after the first. It survives by re-resolving its call from a
  * {@link BlockTree.Position} — coordinates into the tree, not a block reference — so the window itself (and
  * its position) outlives the blocks it is editing.
+ *
+ * <h2>Why it survives the call block declaring a {@code ComponentSpec}</h2>
+ *
+ * <p>Since 2026-09-13 {@code MethodInvocationBlock} declares its arguments as components, so the HUD row can
+ * draw them in place and the obvious question is whether this window still has a job. It does, for two
+ * reasons that are about <em>size</em> rather than about capability.
+ *
+ * <p><b>A row is 340px and a parameter list is not.</b> This window gives each parameter its own row, with the
+ * parameter's name beside its editor; the HUD row gives the whole call one line. A call with four arguments is
+ * legible here and is not there.
+ *
+ * <p><b>A {@code SlotEditor} returns an arbitrary node.</b> A plugin's picture gallery, a region drawn on the
+ * screen, a colour surface — none of them is a pill, and none was written to fit beside a method dropdown. The
+ * declared spec does not change that: it says what the parts of a call <em>are</em>, and a surface still has
+ * to have room for the part it draws.
+ *
+ * <p>What has changed is the division: the row is now where an argument is <em>seen</em> and small edits are
+ * made, and this window is where a call is configured. If the row ever becomes enough on its own, deleting
+ * this is a deletion of its own — not a side effect of a block declaring its shape.
  */
 final class ArgumentConfigPopover {
 

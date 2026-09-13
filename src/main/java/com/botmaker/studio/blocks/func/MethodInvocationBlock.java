@@ -3,6 +3,7 @@ package com.botmaker.studio.blocks.func;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.StatementBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.palette.SdkDocs;
 import com.botmaker.studio.services.CodeEditorService;
@@ -10,7 +11,6 @@ import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.HostSlotRun;
@@ -126,8 +126,126 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                 (MethodInvocation) this.astNode, scopeForAST, getMethodName(), sig.paramTypes());
     }
 
+    /**
+     * A call's sentence, declared: {@code Call|🤖 SDK  [scope] . [method] ⚙ ( arg… ) → Type ⓘ}.
+     *
+     * <p><b>Everything here is lazy, and it has to be.</b> The scope selector, the method selector and the
+     * resolved overload are a knot — the method list depends on the scope, the argument types depend on the
+     * overload, the overload depends on the scope — so the parts are built once per render behind
+     * {@link #once}, and each component's supplier reads what it needs from there. Declaring the spec still
+     * builds no widget and resolves nothing, which is what lets the shape of a call be asserted headlessly and
+     * what keeps a component nobody draws from costing a classpath lookup.
+     *
+     * <p><b>Every argument is declared, in order, with a stable id</b> — {@code arg0}, {@code arg1}, … — and
+     * its {@code argN-remove} beside it. That is the property the overlay editor needs: an id that survives a
+     * re-parse is what lets the HUD keep focus on the argument the user is editing while the block behind it
+     * is rebuilt. Which widget an argument gets — a plugin's picker or the ordinary pill — is the supplier's
+     * decision, because it depends on the overload, and the overload is not known until something draws.
+     *
+     * <p>Null is absence throughout, the convention the layout builders already document: an argument the
+     * picture-run row has claimed, a remove cross on a fixed parameter, an info button with nothing to say,
+     * and every control on a locked block all return null and are simply not drawn.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        java.util.function.Supplier<Controls> controls = once(() -> buildControls(context));
+        java.util.function.Supplier<ArgPlan> plan = once(() -> argPlan(context, controls.get()));
+
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kind", () -> fixedScopeName == null
+                        ? SentenceLayoutBuilder.labelNode("Call")  // only generic blocks say "Call"
+                        : sdkBadge())
+                .custom("scope", () -> controls.get().scopeNode())
+                .label("dot", () -> SentenceLayoutBuilder.labelNode("."))
+                .custom("method", () -> methodNode(context, controls.get()));
+
+        if (!isReadOnly()) {
+            // Both the signature picker and the selectors rewrite the call, so a locked block gets neither.
+            // The info button below stays: it explains the call rather than changing it, and reading is not
+            // editing.
+            spec.picker("signature", () -> signatureButton(context, controls.get()));
+        }
+
+        spec.label("open", () -> SentenceLayoutBuilder.labelNode("("));
+        for (int i = 0; i < arguments.size(); i++) {
+            int index = i;
+            spec.slot("arg" + index, () -> argumentNode(context, plan.get(), index));
+            spec.picker("arg" + index + "-remove", () -> removeVarargsButton(context, plan.get().varargsFrom(), index));
+        }
+        // The picture run's row stands for the whole varargs tail, so it is declared after the arguments it
+        // replaces — which return null — and it lands exactly where the first of them would have been. It is
+        // declared even when the tail is empty: hasAny() has no argument to hang a slot on, and that is the
+        // case the row exists for most.
+        spec.picker("images", () -> plan.get().imageVarargsFrom() < 0 ? null : plan.get().imageRow());
+        spec.picker("varargs-add", () -> varargsButton(context, plan.get()));
+        spec.label("close", () -> SentenceLayoutBuilder.labelNode(")"));
+
+        // After the arguments, per the block layout: what the call yields, then the help.
+        spec.label("returns", () -> returnTypeBadge(context, controls.get()));
+        spec.picker("info", () -> infoButton(context, controls.get()));
+        return spec.build();
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
+        HBox container = renderSpecRow(context).build();
+        styleContainer(container);
+
+        // Add delete button if statement
+        if (isStatementContext && !isReadOnly()) {
+            container.getChildren().addAll(
+                    BlockUIComponents.createSpacer(),
+                    BlockUIComponents.createDeleteButton(() -> {
+                        // enclosingStatement(), not astNode.getParent(): this block's node is the
+                        // MethodInvocation, and the wrapping ExpressionStatement is not always its direct parent.
+                        Statement statement = enclosingStatement();
+                        if (statement != null) context.getCodeEditor().deleteStatement(statement);
+                    })
+            );
+        }
+
+        return container;
+    }
+
+    /** A supplier that builds once and then answers from what it built — one render's shared parts. */
+    private static <T> java.util.function.Supplier<T> once(java.util.function.Supplier<T> source) {
+        return new java.util.function.Supplier<>() {
+            private T value;
+            private boolean built;
+
+            @Override
+            public T get() {
+                if (!built) {
+                    value = source.get();
+                    built = true;
+                }
+                return value;
+            }
+        };
+    }
+
+    /** The wired-together controls one render shares: the scope, the method list, and how to read the scope. */
+    private record Controls(Node scopeNode, ComboBox<String> methodSelector,
+                            java.util.function.Supplier<String> scopeGetter, String currentFileClass) {}
+
+    /** What one render resolved about this call's arguments — the overload and what it makes of the tail. */
+    private record ArgPlan(MethodSignature signature, String targetType, List<SdkDocs.Param> docParams,
+                           int imageVarargsFrom, int varargsFrom, Node imageRow) {}
+
+    private Label sdkBadge() {
+        Label badge = new Label("🤖 SDK");
+        badge.getStyleClass().add("sdk-badge");
+        return badge;
+    }
+
+    /** The method selector, or the method's name when this block is locked — struck through if deprecated. */
+    private Node methodNode(CodeEditorService context, Controls controls) {
+        Node node = isReadOnly() ? staticValueLabel(methodName) : controls.methodSelector();
+        markIfDeprecated(node, context, controls.scopeGetter());
+        return node;
+    }
+
+    private Controls buildControls(CodeEditorService context) {
         String currentFileClass = "";
         if (context.getState() != null && context.getState().getActiveFile() != null) {
             currentFileClass = context.getState().getActiveFile().getClassName();
@@ -234,65 +352,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
             );
         });
 
-        // --- 4. Build Layout ---
-        var sentenceBuilder = BlockLayout.sentence();
-
-        if (fixedScopeName == null) {
-            sentenceBuilder.addLabel("Call"); // Only show "Call" for generic blocks
-        } else {
-            Label sdkBadge = new Label("🤖 SDK");
-            sdkBadge.getStyleClass().add("sdk-badge");
-            sentenceBuilder.addNode(sdkBadge);
-        }
-
-        Node methodNode = isReadOnly() ? staticValueLabel(methodName) : methodSelector;
-        markIfDeprecated(methodNode, context, currentScopeGetter);
-
-        sentenceBuilder
-                .addNode(scopeNode)
-                .addLabel(".")
-                .addNode(methodNode);
-
-        if (!isReadOnly()) {
-            // Both of these rewrite the call, so a locked block gets neither. The info button below stays: it
-            // explains the call rather than changing it, and reading is not editing.
-
-            // Signature Button (explicit overload picker) — argument sync is automatic on method change.
-            addSignatureButton(sentenceBuilder, context, currentScopeGetter, methodSelector, finalCurrentFileClass);
-        }
-
-        sentenceBuilder.addLabel("(");
-
-        // Arguments
-        renderArguments(sentenceBuilder, context, currentScopeGetter, methodSelector);
-
-        sentenceBuilder.addLabel(")");
-
-        // Return-type badge AFTER the arguments (SDK calls): the vision API returns boolean/int (find/click →
-        // boolean, findAll/clickAll → int, Vision.lastMatch → MatchResult, lastMatches → Matches),
-        // so surface what the call yields — placed after the argument list per the block layout.
-        addReturnTypeBadge(sentenceBuilder, context, currentScopeGetter);
-
-        // Explanation (?) button — far right of all elements — SDK method help from the sources-jar Javadoc.
-        addInfoButton(sentenceBuilder, context, currentScopeGetter);
-
-        HBox container = sentenceBuilder.build();
-        styleContainer(container);
-
-        // Add delete button if statement
-        if (isStatementContext && !isReadOnly()) {
-            container.getChildren().addAll(
-                    BlockUIComponents.createSpacer(),
-                    BlockUIComponents.createDeleteButton(() -> {
-                        // enclosingStatement(), not astNode.getParent(): this block's node is the
-                        // MethodInvocation, and the wrapping ExpressionStatement is not always its direct parent.
-                        Statement statement = enclosingStatement();
-                        if (statement != null) context.getCodeEditor().deleteStatement(statement);
-                    })
-            );
-        }
-
-        return container;
+        return new Controls(scopeNode, methodSelector, currentScopeGetter, finalCurrentFileClass);
     }
 
     /**
@@ -529,7 +589,12 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     }
 
     /** Explicit overload picker (⚙): lets the user choose a specific overload; arg sync is automatic. */
-    private void addSignatureButton(SentenceLayoutBuilder builder, CodeEditorService context, java.util.function.Supplier<String> scopeGetter, ComboBox<String> methodSelector, String currentFileClass) {
+    /** The ⚙ overload picker — argument sync is automatic on method change. */
+    private Node signatureButton(CodeEditorService context, Controls controls) {
+        java.util.function.Supplier<String> scopeGetter = controls.scopeGetter();
+        ComboBox<String> methodSelector = controls.methodSelector();
+        String currentFileClass = controls.currentFileClass();
+
         MenuButton signatureBtn = new MenuButton("⚙");
         signatureBtn.getStyleClass().addAll("block-action-button", "block-action-button--mini");
         signatureBtn.setTooltip(new Tooltip("Select Method Signature"));
@@ -563,7 +628,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                 addFavoriteOverloadMenu(signatureBtn.getItems(), context, targetType, currentMethod, signatures);
             }
         });
-        builder.addNode(signatureBtn);
+        return signatureBtn;
     }
 
     /**
@@ -609,8 +674,15 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     // so it could offer a shortcut across it. The per-argument pickers are unaffected — they come from
     // PickerRegistry, and each one still opens the same overlay for its own argument.
 
-    private void renderArguments(SentenceLayoutBuilder builder, CodeEditorService context, java.util.function.Supplier<String> scopeGetter, ComboBox<String> methodSelector) {
-        String currentScope = scopeGetter.get();
+    /**
+     * What this render resolved about the call's arguments — the overload, its documented parameter names, and
+     * what it makes of a trailing varargs tail.
+     *
+     * <p>Resolved once per render rather than per argument: every argument's type comes from the same
+     * overload, and asking the classpath once per pill is how a call with six arguments became six lookups.
+     */
+    private ArgPlan argPlan(CodeEditorService context, Controls controls) {
+        String currentScope = controls.scopeGetter().get();
         String targetType = (currentScope != null) ? resolveTargetType(currentScope, context) : "";
         MethodSignature currentSignature = determineCurrentSignature(context, targetType, methodName);
 
@@ -619,7 +691,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         List<SdkDocs.Param> docParams = sdkDocParams(context, targetType, currentSignature);
 
         int imageVarargsStart = imageVarargsStart(currentSignature);
-        // The row is built up front, because whether there is one decides how the whole argument list is
+        // The row is resolved up front, because whether there is one decides how the whole argument list is
         // drawn. A null means no plugin claimed the run — an ordinary state for a host with no picture
         // plugin loaded — and the call falls back to the per-argument slots it had before the row existed.
         Node imageVarargsRow = imageVarargsStart < 0 || currentSignature == null ? null
@@ -629,49 +701,40 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // Everything the image chip row doesn't claim falls back to the generic grow/shrink affordance.
         int varargsFrom = imageVarargsFrom >= 0 ? -1 : varargsTailStart(currentSignature);
 
-        for (int i = 0; i < arguments.size(); i++) {
-            if (i == imageVarargsFrom) {
-                builder.addNode(imageVarargsRow);
-                break;
-            }
-            ExpressionBlock arg = arguments.get(i);
+        return new ArgPlan(currentSignature, targetType, docParams, imageVarargsFrom, varargsFrom, imageVarargsRow);
+    }
 
-            // paramTypeAt stretches a trailing varargs parameter over every trailing argument, so e.g. every
-            // ImageTemplate in findAny(a, b, c) gets the image picker — not just the first.
-            ResolvedType paramType = currentSignature != null ? currentSignature.paramTypeAt(i) : null;
-            if (paramType == null) paramType = ResolvedType.UNKNOWN;
+    /**
+     * Argument {@code index}: a plugin's picker in a pill, or the ordinary pill — or nothing at all when the
+     * picture run's row stands for this argument, which is what {@code break}ing the old loop meant.
+     */
+    private Node argumentNode(CodeEditorService context, ArgPlan plan, int index) {
+        if (plan.imageVarargsFrom() >= 0 && index >= plan.imageVarargsFrom()) return null;
+        ExpressionBlock arg = arguments.get(index);
 
-            final ResolvedType finalParamType = paramType;
-            SdkDocs.Param doc = (i < docParams.size()) ? docParams.get(i) : null;
-            String argName = (doc != null && doc.name() != null && !doc.name().isBlank()) ? doc.name() : null;
-            String argDesc = (doc != null) ? doc.desc() : null;
+        // paramTypeAt stretches a trailing varargs parameter over every trailing argument, so e.g. every
+        // ImageTemplate in findAny(a, b, c) gets the image picker — not just the first.
+        ResolvedType paramType = plan.signature() != null ? plan.signature().paramTypeAt(index) : null;
+        if (paramType == null) paramType = ResolvedType.UNKNOWN;
 
-            Node editor = ArgumentEditors.editorFor(context, arg, paramType, targetType, methodName, i);
-            if (editor != null) {
-                // Specialized picker (image/region/enum). Wrap it in the standard pill so it *also* gets the
-                // "+" change button (open the expression menu to swap in a variable/other expression) — the
-                // control some SDK arg slots were missing — plus its parameter name/description.
-                Label pickerLabel = argName != null ? argLabel(argName, argDesc) : null;
-                Button changeBtn = createChangeButton(e ->
-                        showExpressionMenuAndReplace((Button) e.getSource(), context, finalParamType, (Expression) arg.getAstNode()));
-                builder.addNode(BlockUIComponents.createArgumentPill(pickerLabel, editor, changeBtn));
-                addRemoveVarargsButton(builder, context, varargsFrom, i);
-                continue;
-            }
+        final ResolvedType finalParamType = paramType;
+        SdkDocs.Param doc = (index < plan.docParams().size()) ? plan.docParams().get(index) : null;
+        String argName = (doc != null && doc.name() != null && !doc.name().isBlank()) ? doc.name() : null;
+        String argDesc = (doc != null) ? doc.desc() : null;
 
-            Label typeLabel = argLabel(argName != null ? argName : paramType.simpleName(), argDesc);
-            builder.addNode(createArgumentPill(context, arg, paramType, typeLabel));
-            addRemoveVarargsButton(builder, context, varargsFrom, i);
+        Node editor = ArgumentEditors.editorFor(context, arg, paramType, plan.targetType(), methodName, index);
+        if (editor != null) {
+            // Specialized picker (image/region/enum). Wrap it in the standard pill so it *also* gets the
+            // "+" change button (open the expression menu to swap in a variable/other expression) — the
+            // control some SDK arg slots were missing — plus its parameter name/description.
+            Label pickerLabel = argName != null ? argLabel(argName, argDesc) : null;
+            Button changeBtn = createChangeButton(e ->
+                    showExpressionMenuAndReplace((Button) e.getSource(), context, finalParamType, (Expression) arg.getAstNode()));
+            return BlockUIComponents.createArgumentPill(pickerLabel, editor, changeBtn);
         }
 
-        if (varargsFrom >= 0) addVarargsButton(builder, context, currentSignature);
-
-        // An image varargs call that has no templates yet — hasAny(), findAll() — renders nothing above,
-        // because the loop walks the arguments that exist. The row still has to appear, or the slot is
-        // unfillable.
-        if (imageVarargsFrom == arguments.size()) {
-            builder.addNode(imageVarargsRow);
-        }
+        Label typeLabel = argLabel(argName != null ? argName : paramType.simpleName(), argDesc);
+        return createArgumentPill(context, arg, paramType, typeLabel);
     }
 
     /**
@@ -688,14 +751,14 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
      * The {@code ✕} that drops argument {@code index}, rendered only on arguments inside the varargs tail —
      * a fixed parameter can't be removed without breaking the call.
      */
-    private void addRemoveVarargsButton(SentenceLayoutBuilder builder, CodeEditorService context, int varargsFrom, int index) {
-        if (varargsFrom < 0 || index < varargsFrom || isReadOnly) return;
+    private Node removeVarargsButton(CodeEditorService context, int varargsFrom, int index) {
+        if (varargsFrom < 0 || index < varargsFrom || isReadOnly) return null;
         Button remove = new Button("✕");
         remove.getStyleClass().add("icon-button");
         remove.setTooltip(new Tooltip("Remove this argument"));
         remove.setOnAction(e ->
                 context.getCodeEditor().deleteArgumentFromMethodInvocation((MethodInvocation) this.astNode, index));
-        builder.addNode(remove);
+        return remove;
     }
 
     /**
@@ -703,15 +766,16 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
      * {@code MethodSignature} could model varargs correctly since the beginning and a call still never grew
      * past the arguments it was created with: {@code CodeEditor.addVarargsArgument} had no caller.
      */
-    private void addVarargsButton(SentenceLayoutBuilder builder, CodeEditorService context, MethodSignature signature) {
-        if (isReadOnly) return;
+    private Node varargsButton(CodeEditorService context, ArgPlan plan) {
+        MethodSignature signature = plan.signature();
+        if (isReadOnly || plan.varargsFrom() < 0 || signature == null) return null;
         ResolvedType element = signature.paramTypes().get(signature.paramTypes().size() - 1);
         Button add = new Button("＋");
         add.getStyleClass().addAll("icon-button", "expression-add-button");
         add.setTooltip(new Tooltip("Add another " + (element != null ? element.simpleName() : "argument")));
         add.setOnAction(e ->
                 context.getCodeEditor().addVarargsArgument((MethodInvocation) this.astNode, element));
-        builder.addNode(add);
+        return add;
     }
 
     /**
@@ -761,18 +825,17 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
      * calls). Driven by the resolved current overload's return type, so it tracks method/overload switches —
      * e.g. flips {@code → boolean} to {@code → int} when the user switches {@code find} to {@code findAll}.
      */
-    private void addReturnTypeBadge(SentenceLayoutBuilder builder, CodeEditorService context,
-                                    java.util.function.Supplier<String> scopeGetter) {
-        if (fixedScopeName == null) return;
-        String currentScope = scopeGetter.get();
+    private Node returnTypeBadge(CodeEditorService context, Controls controls) {
+        if (fixedScopeName == null) return null;
+        String currentScope = controls.scopeGetter().get();
         String targetType = (currentScope != null) ? resolveTargetType(currentScope, context) : fixedScopeName;
         MethodSignature sig = determineCurrentSignature(context, targetType, methodName);
-        if (sig == null || sig.returnType() == null || sig.returnType().isVoid()) return;
+        if (sig == null || sig.returnType() == null || sig.returnType().isVoid()) return null;
         String returnName = sig.returnType().simpleName();
         Label badge = new Label("→ " + returnName);
         badge.getStyleClass().add("return-type-badge");
         badge.setTooltip(new Tooltip("This call returns " + returnName));
-        builder.addNode(badge);
+        return badge;
     }
 
     /** A small arg-slot label (parameter name or type) carrying the {@code @param} description as a tooltip. */
@@ -825,10 +888,9 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                 : methodName + "() is deprecated — " + note.trim()));
     }
 
-    private void addInfoButton(SentenceLayoutBuilder builder, CodeEditorService context,
-                               java.util.function.Supplier<String> scopeGetter) {
-        if (fixedScopeName == null) return;
-        String currentScope = scopeGetter.get();
+    private Node infoButton(CodeEditorService context, Controls controls) {
+        if (fixedScopeName == null) return null;
+        String currentScope = controls.scopeGetter().get();
         String targetType = (currentScope != null) ? resolveTargetType(currentScope, context) : fixedScopeName;
         MethodSignature sig = determineCurrentSignature(context, targetType, methodName);
         List<String> typeNames = (sig != null)
@@ -836,7 +898,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                 : List.of();
 
         Optional<SdkDocs.Overload> overload = context.getSdkDocs().lookup(targetType, methodName, typeNames);
-        if (overload.isEmpty()) return;
+        if (overload.isEmpty()) return null;
         SdkDocs.Overload o = overload.get();
 
         StringBuilder body = new StringBuilder();
@@ -854,8 +916,8 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                 body.append("• ").append(p.name()).append(" — ").append(p.desc().trim());
             }
         }
-        if (body.length() == 0) return;
-        builder.addNode(BlockUIComponents.createInfoButton(methodName + "()", body.toString()));
+        if (body.length() == 0) return null;
+        return BlockUIComponents.createInfoButton(methodName + "()", body.toString());
     }
 
 }

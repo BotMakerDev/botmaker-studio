@@ -23,6 +23,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   rows. The default is an empty spec, and a block that declares none renders exactly as it did before — which
   is what lets this land one block at a time. **Observably a no-op so far: no block declares a spec yet.**
 
+- **A call declares its sentence, argument by argument.** `MethodInvocationBlock` — the SDK badge, the scope,
+  the method, the ⚙ overload picker, one component per argument with its ✕, the picture-run row, the varargs
+  ＋, the `→ Type` badge and the ⓘ — is now a declaration rather than 130 lines of assembly, so the overlay
+  editor can draw a call's arguments in the row instead of only as text. Each argument has a stable id
+  (`arg0`, `arg1`, …) that survives a re-parse, which is what lets the HUD keep focus on the argument being
+  edited while the block behind it is rebuilt. Everything the declaration needs — the scope selector, the
+  method list, the resolved overload — is resolved once per render and only when something actually draws, so
+  describing a call costs no classpath lookup. The call config popover keeps its job: a 340px row has no space
+  for a parameter list or for a plugin's gallery, and that is a question about size rather than capability.
 - **The control-flow blocks declare their shape too, bodies included.** `while`, `do/while`, `for each` and
   the assignment block answer `componentSpec`, which is what makes a body a *declared* part of a block rather
   than something each surface guesses at: the canvas breaks the block into rows at each body and draws it
