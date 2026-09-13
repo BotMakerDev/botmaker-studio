@@ -6,13 +6,13 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.WhileStatement;
@@ -45,36 +45,28 @@ public class WhileBlock extends AbstractStatementBlock implements BlockWithChild
         return BlockCategory.LOOPS;
     }
 
+    /** {@code while [condition] [+]}, then the body — the first spec here to declare one. */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("while"))
+                .slot("condition", () -> SentenceLayoutBuilder.expressionSlotNode(condition, context, ResolvedType.BOOLEAN))
+                // Built as a change button rather than through the header builder's own, so the handler can
+                // capture the event source: the menu opens on the button that was clicked.
+                .picker("change", () -> createAddButton(e ->
+                        showExpressionMenuAndReplace(
+                                (Button) e.getSource(),
+                                context,
+                                ResolvedType.BOOLEAN,
+                                condition != null ? (Expression) condition.getAstNode() : null)))
+                .body("body", () -> createIndentedBody(body, context, "loop-body"))
+                .build();
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(5);
-
-        // 1. Create the Add/Change Button
-        // We do this manually to capture the event source (the button itself)
-        Button changeBtn = createAddButton(e ->
-                showExpressionMenuAndReplace(
-                        (Button) e.getSource(),
-                        context,
-                        ResolvedType.BOOLEAN,
-                        condition != null ? (Expression) condition.getAstNode() : null
-                )
-        );
-
-        // 2. Build Header: "while [condition] [+]"
-        Node headerContent = BlockLayout.sentence()
-                .addKeyword("while")
-                .addExpressionSlot(condition, context, ResolvedType.BOOLEAN)
-                .addNode(changeBtn)
-                .build();
-
-        container.getChildren().add(BlockLayout.header()
-                .withCustomNode(headerContent)
+        return renderSpecStacked(context)
                 .withDeleteButton(deleteAction(context))
-                .build());
-
-        // 3. Body
-        container.getChildren().add(createIndentedBody(body, context, "loop-body"));
-
-        return container;
+                .build();
     }
 }

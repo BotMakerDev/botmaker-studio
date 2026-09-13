@@ -57,17 +57,33 @@ public class BodyLayoutBuilder {
         }
 
         if (bodyBlock != null) {
-            VBox bodyContainer = new VBox();
-            // "block-body" draws the left accent bar (blocks.css) so the body reads as enclosed by the block,
-            // not merely indented.
-            bodyContainer.getStyleClass().add("block-body");
-            if (indented) {
-                bodyContainer.setPadding(indentation);
-            }
-            bodyContainer.getChildren().add(bodyBlock.getUINode(context));
-            container.getChildren().add(bodyContainer);
+            container.getChildren().add(bodyPane(bodyBlock, context, indented ? indentation : null));
         }
 
         return container;
+    }
+
+    /**
+     * The body region on its own — what {@link #build()} puts under the header.
+     *
+     * <p>Public because a block that declares a {@code ComponentSpec} supplies its body as one component, and
+     * that component has to be the same node this builder would have produced. A second spelling of the accent
+     * bar and the indentation is a body that looks different depending on which path drew it.
+     *
+     * @param indentation the padding, or null for none
+     */
+    public static VBox bodyPane(BodyBlock body, CodeEditorService context, Insets indentation) {
+        VBox bodyContainer = new VBox();
+        // "block-body" draws the left accent bar (blocks.css) so the body reads as enclosed by the block,
+        // not merely indented.
+        bodyContainer.getStyleClass().add("block-body");
+        if (indentation != null) bodyContainer.setPadding(indentation);
+        if (body != null) bodyContainer.getChildren().add(body.getUINode(context));
+        return bodyContainer;
+    }
+
+    /** The body region with this builder's standard indentation. */
+    public static VBox bodyPane(BodyBlock body, CodeEditorService context) {
+        return bodyPane(body, context, new Insets(5, 0, 0, 20));
     }
 }

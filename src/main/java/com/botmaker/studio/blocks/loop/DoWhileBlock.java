@@ -6,14 +6,13 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.DoStatement;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.Statement;
@@ -46,37 +45,34 @@ public class DoWhileBlock extends AbstractStatementBlock implements BlockWithChi
         return BlockCategory.LOOPS;
     }
 
+    /**
+     * {@code do}, the body, then {@code while [condition] [+]}.
+     *
+     * <p>The body is declared <em>between</em> two rows, which is the case that decides how a spec with bodies
+     * is drawn at all: the canvas breaks its rows at each body, so the closing condition lands under it rather
+     * than beside the word {@code do}. The HUD drops the body and draws the two rows as one line, which is the
+     * same reading of the same declaration.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .label("do", () -> SentenceLayoutBuilder.keywordNode("do"))
+                .body("body", () -> createIndentedBody(body, context, "loop-body"))
+                .label("while", () -> SentenceLayoutBuilder.keywordNode("while"))
+                .slot("condition", () -> SentenceLayoutBuilder.expressionSlotNode(condition, context, ResolvedType.BOOLEAN))
+                .picker("change", () -> createAddButton(e ->
+                        showExpressionMenuAndReplace(
+                                (Button) e.getSource(),
+                                context,
+                                ResolvedType.BOOLEAN,
+                                condition != null ? (Expression) condition.getAstNode() : null)))
+                .build();
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(5);
-
-        // 1. Header: "do"
-        container.getChildren().add(BlockLayout.header()
-                .withKeyword("do")
+        return renderSpecStacked(context)
                 .withDeleteButton(deleteAction(context))
-                .build());
-
-        // 2. Body
-        container.getChildren().add(createIndentedBody(body, context, "loop-body"));
-
-        // 3. Footer: "while [condition] [+]"
-        Button changeBtn = createAddButton(e ->
-                showExpressionMenuAndReplace(
-                        (Button) e.getSource(),
-                        context,
-                        ResolvedType.BOOLEAN,
-                        condition != null ? (Expression) condition.getAstNode() : null
-                )
-        );
-
-        HBox footer = BlockLayout.sentence()
-                .addKeyword("while")
-                .addExpressionSlot(condition, context, ResolvedType.BOOLEAN)
-                .addNode(changeBtn)
                 .build();
-
-        container.getChildren().add(footer);
-
-        return container;
     }
 }

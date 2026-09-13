@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -115,6 +116,84 @@ class BlockSpecDeclarationTest {
         assertFalse(kinds(spec).contains(BlockComponent.Kind.EXPRESSION_SLOT),
                 "a void return has nothing to put in a slot: " + kinds(spec));
         assertTrue(spec.find("void").isPresent(), "the (void) note is declared like anything else");
+    }
+
+    // ---- The blocks with bodies ----
+
+    @Test
+    void a_while_declares_its_keyword_its_condition_its_add_button_and_its_body() {
+        ComponentSpec spec = blockOf(inRun("while (true) { int a = 1; }"), "WhileBlock").componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.LABEL,
+                        BlockComponent.Kind.EXPRESSION_SLOT,
+                        BlockComponent.Kind.PICKER,
+                        BlockComponent.Kind.BODY),
+                kinds(spec));
+    }
+
+    @Test
+    void a_do_while_declares_its_body_before_its_condition() {
+        // The declaration order is the on-screen order, so this is how "do … while (…)" is expressible at all:
+        // the keyword, then the body, then the closing row. The canvas breaks its rows at the body for exactly
+        // this reason.
+        ComponentSpec spec = blockOf(inRun("do { int d = 1; } while (false);"), "DoWhileBlock").componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.LABEL,
+                        BlockComponent.Kind.BODY,
+                        BlockComponent.Kind.LABEL,
+                        BlockComponent.Kind.EXPRESSION_SLOT,
+                        BlockComponent.Kind.PICKER),
+                kinds(spec));
+    }
+
+    @Test
+    void a_for_each_declares_its_name_field_its_collection_and_its_body() {
+        ComponentSpec spec = blockOf(inRun("for (String s : new String[0]) { int c = 1; }"), "ForBlock")
+                .componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.LABEL,
+                        BlockComponent.Kind.CUSTOM,
+                        BlockComponent.Kind.LABEL,
+                        BlockComponent.Kind.EXPRESSION_SLOT,
+                        BlockComponent.Kind.BODY),
+                kinds(spec));
+    }
+
+    @Test
+    void an_assignment_declares_its_target_its_operator_and_its_value() {
+        ComponentSpec spec = blockOf(inRun("int x = 1;\nx = 2;"), "AssignmentBlock").componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.EXPRESSION_SLOT,
+                        BlockComponent.Kind.PICKER,
+                        BlockComponent.Kind.EXPRESSION_SLOT,
+                        BlockComponent.Kind.PICKER),
+                kinds(spec));
+    }
+
+    @Test
+    void an_increment_declares_no_value_because_it_has_none() {
+        ComponentSpec spec = blockOf(inRun("int x = 1;\nx++;"), "AssignmentBlock").componentSpec(null);
+
+        assertEquals(2, spec.components().size(), "target and operator only: " + kinds(spec));
+    }
+
+    @Test
+    void every_block_with_children_declares_exactly_one_body() {
+        // What the two densities then do with it differs — the canvas draws it between rows, the HUD drops it
+        // because its tree already shows the branches — and that rule is asserted on suppliers in
+        // CompactSpecRowTest, which is where it can be checked without a JavaFX toolkit. Here the point is the
+        // declaration: a block whose body were left out of its spec would lose it on the canvas and keep it in
+        // the HUD, which is the one divergence a single schema is supposed to make impossible.
+        assertAll(
+                () -> assertEquals(1, bodies("while (true) { int a = 1; }", "WhileBlock"), "while"),
+                () -> assertEquals(1, bodies("do { int d = 1; } while (false);", "DoWhileBlock"), "do/while"),
+                () -> assertEquals(1, bodies("for (String s : new String[0]) { int c = 1; }", "ForBlock"), "for"));
+    }
+
+    private static long bodies(String body, String simpleName) {
+        return kinds(blockOf(inRun(body), simpleName).componentSpec(null)).stream()
+                .filter(k -> k == BlockComponent.Kind.BODY)
+                .count();
     }
 
     // ---- The property both of them rest on ----

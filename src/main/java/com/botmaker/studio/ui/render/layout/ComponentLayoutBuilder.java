@@ -49,6 +49,25 @@ public final class ComponentLayoutBuilder {
 
     public WrappingSentencePane build() {
         List<Node> nodes = new ArrayList<>();
+        for (Rendered rendered : render(spec, audience, locked)) nodes.add(rendered.node());
+        return pane(nodes, spacing, alignment);
+    }
+
+    /** One component that survived the verdict, paired with the node it built. */
+    record Rendered(BlockComponent component, Node node) {}
+
+    /**
+     * Every component of {@code spec} that is drawn, in declaration order, each already stamped read-only if
+     * the verdict said so.
+     *
+     * <p>Shared with {@link StackLayoutBuilder}, which needs the components as well as their nodes so it can
+     * break a block into rows at each {@link BlockComponent.Kind#BODY}. Two callers, one filter: a second
+     * place deciding what is visible is a canvas and a HUD disagreeing about the same component, which is the
+     * thing {@link ComponentResolver} exists to stop.
+     */
+    static List<Rendered> render(ComponentSpec spec, Audience audience, boolean locked) {
+        List<Rendered> out = new ArrayList<>();
+        if (spec == null) return out;
         for (BlockComponent component : spec.components()) {
             ComponentResolver.Verdict verdict = ComponentResolver.resolve(component, audience, locked);
             if (!verdict.isVisible()) continue;
@@ -61,9 +80,13 @@ public final class ComponentLayoutBuilder {
             if (verdict.isReadOnly()) {
                 node.pseudoClassStateChanged(ReadOnlyDecorator.READ_ONLY, true);
             }
-            nodes.add(node);
+            out.add(new Rendered(component, node));
         }
+        return out;
+    }
 
+    /** The sentence row itself — the same {@link WrappingSentencePane} a hand-assembled sentence produces. */
+    static WrappingSentencePane pane(List<Node> nodes, double spacing, Pos alignment) {
         WrappingSentencePane container = new WrappingSentencePane(spacing);
         container.setAlignment(alignment);
         container.getChildren().addAll(nodes);

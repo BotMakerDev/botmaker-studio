@@ -23,6 +23,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   rows. The default is an empty spec, and a block that declares none renders exactly as it did before — which
   is what lets this land one block at a time. **Observably a no-op so far: no block declares a spec yet.**
 
+- **The control-flow blocks declare their shape too, bodies included.** `while`, `do/while`, `for each` and
+  the assignment block answer `componentSpec`, which is what makes a body a *declared* part of a block rather
+  than something each surface guesses at: the canvas breaks the block into rows at each body and draws it
+  between them, the overlay HUD drops it and draws one line, because the HUD's tree already shows branches as
+  nested rows. `do/while` is the case that proves the rule — its body is declared between two rows, so the
+  closing `while (…)` lands under the body exactly as it always has.
 - **Print and Return declare their sentence, and both surfaces read the declaration.** The first two blocks to
   answer `componentSpec` — a print is the word, one slot per argument and the ⊕; a return is the keyword plus
   whichever of its three tails applies (a value with its change button, a missing value with its ⊕, or the

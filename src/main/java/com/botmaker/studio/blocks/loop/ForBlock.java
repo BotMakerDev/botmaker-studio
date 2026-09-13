@@ -6,9 +6,11 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.BodyLayoutBuilder;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
@@ -47,40 +49,46 @@ public class ForBlock extends AbstractStatementBlock implements BlockWithChildre
         return BlockCategory.LOOPS;
     }
 
+    /**
+     * {@code for each [name] in [collection]}, then the body.
+     *
+     * <p>The loop variable is a {@code CUSTOM} component rather than a slot: it is a name being declared here,
+     * not a value standing in a slot, so nothing may be dropped onto it and it is edited as text.
+     */
     @Override
-    protected Node createUINode(CodeEditorService context) {
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("for each"))
+                .custom("name", () -> nameField(context))
+                .label("in", () -> SentenceLayoutBuilder.keywordNode("in"))
+                .slot("collection", () -> SentenceLayoutBuilder.expressionSlotNode(collection, context, ResolvedType.UNKNOWN))
+                .body("body", () -> BodyLayoutBuilder.bodyPane(body, context))
+                .build();
+    }
+
+    /** The editable loop-variable name. */
+    private Node nameField(CodeEditorService context) {
         // Extract variable name safely
         String varName = "";
         if (variable != null && variable.getAstNode() instanceof SimpleName) {
             varName = ((SimpleName) variable.getAstNode()).getIdentifier();
         }
 
-        // Create editable field for the loop variable
-        Node nameField = TextFieldComponents.createVariableName(varName, !isReadOnly(), newName -> {
+        return TextFieldComponents.createVariableName(varName, !isReadOnly(), newName -> {
             if (variable != null && variable.getAstNode() instanceof SimpleName) {
                 // Rename the declaration AND its references in the loop body — a plain replaceSimpleName renames
                 // only the declaration, leaving the body on the old name so the code stops compiling.
                 context.getCodeEditor().renameForEachVariable((SimpleName) variable.getAstNode(), newName);
             }
         });
+    }
 
-        // Build sentence: "for each [nameField] in [collection]"
-        var sentence = BlockLayout.sentence()
-                .addKeyword("for each")
-                .addNode(nameField) // Use the text field directly
-                .addKeyword("in")
-                .addExpressionSlot(collection, context, ResolvedType.UNKNOWN)
-                .build();
-
-        sentence.getStyleClass().add("for-header");
-
-        // Build full structure with header and body
-        return BlockLayout.header()
-                .withCustomNode(sentence)
+    @Override
+    protected Node createUINode(CodeEditorService context) {
+        return renderSpecStacked(context)
                 .withDeleteButton(deleteAction(context))
-                .andBody()
-                .withContent(body, context)
                 .withStyleClass("for-block")
+                .withRowStyleClass("for-header")
                 .build();
     }
 }

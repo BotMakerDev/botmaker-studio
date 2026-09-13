@@ -221,10 +221,25 @@ public abstract class AbstractCodeBlock implements CodeBlock {
      */
     protected Node renderSpec(CodeEditorService context) {
         return com.botmaker.studio.ui.render.layout.BlockLayout
-                .components(componentSpec(context),
-                        context == null ? com.botmaker.studio.core.component.Audience.EDITOR : context.audience(),
-                        isReadOnly())
+                .components(componentSpec(context), audienceOf(context), isReadOnly())
                 .build();
+    }
+
+    /**
+     * This block's spec drawn as stacked rows — for a block whose spec declares a {@code BODY}, where the
+     * canvas draws the body inline between rows and the HUD draws it as nested rows of its own tree.
+     *
+     * <p>Returned as the builder rather than a node so a block can still say what its own chrome is: the outer
+     * style class, the header row's style class, the delete action.
+     */
+    protected com.botmaker.studio.ui.render.layout.StackLayoutBuilder renderSpecStacked(CodeEditorService context) {
+        return com.botmaker.studio.ui.render.layout.BlockLayout
+                .stack(componentSpec(context), audienceOf(context), isReadOnly());
+    }
+
+    /** Who this block is being drawn for — the session's answer, or the editor when there is no session. */
+    private static com.botmaker.studio.core.component.Audience audienceOf(CodeEditorService context) {
+        return context == null ? com.botmaker.studio.core.component.Audience.EDITOR : context.audience();
     }
 
     /**

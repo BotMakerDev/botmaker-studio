@@ -3,8 +3,10 @@ package com.botmaker.studio.blocks.var;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.*;
@@ -48,41 +50,56 @@ public class AssignmentBlock extends AbstractStatementBlock {
         return BlockCategory.VARIABLES;
     }
 
+    /**
+     * {@code [target] [operator] [value] [+]} — with the last two absent for {@code ++} and {@code --}, which
+     * have no value to assign.
+     *
+     * <p>The operator is declared as a {@code PICKER} in both states: a live selector when this block may be
+     * edited, and the same word as a plain label when it may not. It stays one component because it is one
+     * thing on screen — a locked block offering a dropdown that refuses every pick is the failure the whole
+     * null-is-absence rule exists to avoid, and the read-only spelling is what the block already did.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                // The target is a slot to look at, never a drop target: what is being assigned *to* is chosen
+                // by name, not by dragging a call onto it.
+                .slot("target", () -> leftHandSide != null
+                        ? leftHandSide.getUINode(context)
+                        : createExpressionDropZone(context))
+                .picker("operator", () -> operatorNode(context));
+
+        if (operator.equals("++") || operator.equals("--")) return spec.build();
+
+        return spec
+                .slot("value", () -> rightHandSide != null
+                        ? SentenceLayoutBuilder.expressionSlotNode(rightHandSide, context, ResolvedType.UNKNOWN)
+                        : createEmptySlot(context, ResolvedType.UNKNOWN))
+                .picker("change", () -> createAddButton(e ->
+                        showExpressionMenu((javafx.scene.control.Button) e.getSource(), context)))
+                .build();
+    }
+
+    /** The operator control: a selector, or a plain word when this block is locked. */
+    private Node operatorNode(CodeEditorService context) {
+        if (isReadOnly()) return SentenceLayoutBuilder.keywordNode(operatorDisplayName());
+        return com.botmaker.studio.ui.render.components.SelectorComponents.createOperatorSelector(
+                OPERATOR_NAMES,
+                OPERATOR_SYMBOLS,
+                operator,
+                newOperator -> {
+                    this.operator = newOperator;
+                    if (this.astNode instanceof ExpressionStatement) {
+                        Expression expr = ((ExpressionStatement) this.astNode).getExpression();
+                        context.getCodeEditor().updateAssignmentOperator(expr, newOperator);
+                    }
+                });
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        var sentenceBuilder = BlockLayout.sentence()
-                .addNode(leftHandSide != null ? leftHandSide.getUINode(context) : createExpressionDropZone(context));
-
-        // Operator (a plain label when read-only: no live control on a locked block)
-        if (isReadOnly()) {
-            sentenceBuilder.addKeyword(operatorDisplayName());
-        } else {
-            sentenceBuilder.addOperatorSelector(
-                    OPERATOR_NAMES,
-                    OPERATOR_SYMBOLS,
-                    operator,
-                    newOperator -> {
-                        this.operator = newOperator;
-                        if (this.astNode instanceof ExpressionStatement) {
-                            Expression expr = ((ExpressionStatement) this.astNode).getExpression();
-                            context.getCodeEditor().updateAssignmentOperator(expr, newOperator);
-                        }
-                    }
-            );
-        }
-
-        // Right hand side (only for non-increment/decrement)
-        if (!operator.equals("++") && !operator.equals("--")) {
-            // The value side is a drop target; the target side (left) deliberately is not — what is being
-            // assigned *to* is chosen by name, not by dragging a call onto it.
-            if (rightHandSide != null) sentenceBuilder.addExpressionSlot(rightHandSide, context, ResolvedType.UNKNOWN);
-            else sentenceBuilder.addNode(createEmptySlot(context, ResolvedType.UNKNOWN));
-            sentenceBuilder
-                    .addNode(createAddButton(e -> showExpressionMenu((javafx.scene.control.Button) e.getSource(), context)));
-        }
-
         return BlockLayout.header()
-                .withCustomNode(sentenceBuilder.build())
+                .withCustomNode(renderSpec(context))
                 .withDeleteButton(deleteAction(context))
                 .build();
     }

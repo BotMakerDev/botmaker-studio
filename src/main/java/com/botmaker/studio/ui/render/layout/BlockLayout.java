@@ -34,4 +34,13 @@ public class BlockLayout {
     public static ComponentLayoutBuilder components(ComponentSpec spec, Audience audience, boolean locked) {
         return new ComponentLayoutBuilder(spec, audience, locked);
     }
+
+    /**
+     * The same, for a spec that declares a {@code BODY} — rows stacked with each body between them, which is
+     * every control-flow block. Use {@link #components} when the block is one sentence; the two differ only in
+     * where the row breaks, and share the visibility filter.
+     */
+    public static StackLayoutBuilder stack(ComponentSpec spec, Audience audience, boolean locked) {
+        return new StackLayoutBuilder(spec, audience, locked);
+    }
 }

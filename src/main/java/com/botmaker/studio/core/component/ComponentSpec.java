@@ -68,6 +68,11 @@ public record ComponentSpec(List<BlockComponent> components) {
             return add(BlockComponent.of(id, BlockComponent.Kind.PICKER, node));
         }
 
+        /** Something the block builds itself that the vocabulary does not model — a text field, a selector. */
+        public Builder custom(String id, Supplier<Node> node) {
+            return add(BlockComponent.of(id, BlockComponent.Kind.CUSTOM, node));
+        }
+
         public Builder body(String id, Supplier<Node> node) {
             return add(BlockComponent.of(id, BlockComponent.Kind.BODY, node));
         }
