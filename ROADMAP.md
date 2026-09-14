@@ -6,6 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — Alt 3 step one: what may survive a re-parse.** `BlockComponent` grew an opt-in `rebind`
+  hook, `core/component/SpecReconciler` decides which component may keep its widget (four refusals, each a way
+  a carry could edit the *wrong* code), and `core/component/ComponentNodes` is the trail from a focused widget
+  back to its component and block — stamped by `ComponentLayoutBuilder.render` and `AbstractCodeBlock`.
+  Maintainer's decision: carry the **focused** component only, rebound; expression blocks wait for the
+  reconciler. **Nothing calls it yet** — the render-path wiring is its own phase.
+
 - **2026-09-14 — the block count was wrong twice; corrected, and it closes Alt 1's first strand.** 36 block
   classes (not 37 — `expr/ListElementType` is a helper), **18 declare a spec** (not 17 — `LibraryCallBlock`
   inherits `MethodInvocationBlock`'s). Of the 18 that do not: `CommentBlock` is the only real holdout;

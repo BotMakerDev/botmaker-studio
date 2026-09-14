@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,7 +24,7 @@ class ComponentSpecTest {
 
     /** A component whose supplier fails loudly, so any test that accidentally builds a node says so. */
     private static BlockComponent component() {
-        return new BlockComponent("field", BlockComponent.Kind.PICKER,
+        return BlockComponent.of("field", BlockComponent.Kind.PICKER,
                 () -> { throw new AssertionError("nothing here may build a node"); });
     }
 
@@ -41,10 +42,18 @@ class ComponentSpecTest {
     @Test
     void a_component_must_declare_every_field() {
         assertThrows(IllegalArgumentException.class,
-                () -> new BlockComponent(" ", BlockComponent.Kind.LABEL, () -> null));
+                () -> BlockComponent.of(" ", BlockComponent.Kind.LABEL, () -> null));
         assertThrows(IllegalArgumentException.class,
-                () -> new BlockComponent("id", BlockComponent.Kind.LABEL, null));
+                () -> BlockComponent.of("id", BlockComponent.Kind.LABEL, null));
         assertThrows(IllegalArgumentException.class,
-                () -> new BlockComponent("id", null, () -> null));
+                () -> BlockComponent.of("id", null, () -> null));
+    }
+
+    @Test
+    void a_rebind_hook_is_the_one_field_that_may_be_absent() {
+        // Absent means "rebuild me across a re-parse", which is what every component did before carrying
+        // existed — so the safe answer is the default and opting in is deliberate. See SpecReconciler.
+        assertFalse(BlockComponent.of("id", BlockComponent.Kind.CUSTOM, () -> null).isCarried());
+        assertTrue(BlockComponent.carried("id", BlockComponent.Kind.CUSTOM, () -> null, node -> {}).isCarried());
     }
 }

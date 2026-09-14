@@ -105,6 +105,11 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             BlockCategory category = category();
             if (category != null) uiNode.getStyleClass().add(category.styleClass());
 
+            // The other half of the trail a focused widget follows home: the component id names which field
+            // it is, this names which block declared it. Both are needed, because a component id is unique
+            // within a spec and not across the file.
+            com.botmaker.studio.core.component.ComponentNodes.stampBlock(uiNode, id);
+
             for (BlockDecorator decorator : DECORATORS) {
                 decorator.decorate(uiNode, this, context);
             }

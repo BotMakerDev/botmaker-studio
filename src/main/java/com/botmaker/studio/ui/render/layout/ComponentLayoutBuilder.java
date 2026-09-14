@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.layout;
 
 import com.botmaker.studio.core.component.BlockComponent;
+import com.botmaker.studio.core.component.ComponentNodes;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
 import javafx.geometry.Pos;
@@ -75,6 +76,10 @@ public final class ComponentLayoutBuilder {
             if (locked) {
                 node.pseudoClassStateChanged(ReadOnlyDecorator.READ_ONLY, true);
             }
+            // The trail back: a focused widget several containers down can name the component it came from,
+            // which is what SpecReconciler decides a carry by. Stamped here rather than in each block, so
+            // every declared component carries it and none can forget.
+            ComponentNodes.stampComponent(node, component.id());
             out.add(new Rendered(component, node));
         }
         return out;

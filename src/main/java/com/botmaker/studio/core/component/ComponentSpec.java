@@ -73,6 +73,15 @@ public record ComponentSpec(List<BlockComponent> components) {
             return add(BlockComponent.of(id, BlockComponent.Kind.CUSTOM, node));
         }
 
+        /**
+         * A {@code CUSTOM} component whose widget may be <b>carried across a re-parse</b> instead of rebuilt —
+         * see {@link BlockComponent#carried}. Declaring {@code rebind} is a promise to re-point every handler
+         * on the given node at this block's own AST node; declaring nothing is always safe.
+         */
+        public Builder carried(String id, Supplier<Node> node, java.util.function.Consumer<Node> rebind) {
+            return add(BlockComponent.carried(id, BlockComponent.Kind.CUSTOM, node, rebind));
+        }
+
         public Builder body(String id, Supplier<Node> node) {
             return add(BlockComponent.of(id, BlockComponent.Kind.BODY, node));
         }
