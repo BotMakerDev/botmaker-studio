@@ -6,9 +6,11 @@ import com.botmaker.studio.blocks.expr.ListBlock;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.ExpressionSlots;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.LayoutComponents;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
@@ -45,50 +47,61 @@ public class VariableDeclarationBlock extends AbstractStatementBlock {
         return BlockCategory.VARIABLES;
     }
 
+    /**
+     * {@code Rect area = ⟨value⟩ ⊕ ✎} — the declaration's sentence, declared.
+     *
+     * <p>Name and type are <em>shown</em> here and changed elsewhere, which is why neither is a slot. Both
+     * used to be editable in place, and the inline rename went through {@code replaceSimpleName} on the
+     * declaration alone — every use site kept the old name, so renaming a variable on its own block is how a
+     * file stops compiling. The Variables screen rewrites the uses with it ({@code renameLocalVariable}) and
+     * is the {@code ✎} at the end.
+     *
+     * <p>The starting value is the one {@code EXPRESSION_SLOT}, and it is the reason this block was worth
+     * declaring before the bigger ones: a variable declaration is the commonest statement in a bot, and until
+     * now the overlay HUD drew it as a line of source text with nothing to click.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .label("type", () -> createTypeLabel(varType.simpleName()))
+                .custom("name", () -> TextFieldComponents.createVariableName(variableName, false, newName -> {}))
+                .label("eq", () -> SentenceLayoutBuilder.keywordNode("="))
+                .slot("value", () -> initializerNode(context))
+                .picker("add", () -> createAddButton(e ->
+                        showInitializerMenu((Button) e.getSource(), context, varType)))
+                .picker("edit", () -> variablesButton(context))
+                .build();
+    }
+
+    /**
+     * Whatever stands for the starting value: a list, an array, a type-matched picker, or the dashed hole.
+     *
+     * <p>Was inline in {@code createUINode}; it is a method now because a spec declares one node per
+     * component and this is the component that has four shapes.
+     */
+    private Node initializerNode(CodeEditorService context) {
+        if (initializer == null) return emptyInitializer(context, varType);
+
+        if (initializer instanceof ListBlock) return initializer.getUINode(context);
+        if (initializer.getAstNode() instanceof ArrayInitializer) return createListDisplay(context);
+
+        // Route the initializer through the same specialized pickers used for call arguments, keyed on
+        // the declared variable type — so `ImageTemplate t = new ImageTemplate(...)`, `Rect r = ...`,
+        // `Point p = ...`, `Direction d = ...` get their thumbnail/region/enum editor instead of a raw
+        // expression node. Falls back to the generic node when no picker matches.
+        Node picker = PickerRegistry.pickerNodeFor(PickerContext.of(context, ValueSlot.of(initializer), varType));
+        Node initNode = picker != null ? picker : initializer.getUINode(context);
+        // Dropping a call onto the value of a declaration is the same gesture as dropping it into any
+        // other slot. The list/array renderings above stay out of it: they hold several expressions,
+        // and a drop names exactly one to replace.
+        ExpressionSlots.makeDroppable(initNode, initializer, context, varType);
+        return initNode;
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        // Name and type are shown here and changed elsewhere. Both used to be editable in place, and the
-        // inline rename went through `replaceSimpleName` on the declaration alone — every use site kept the
-        // old name, so renaming a variable on its own block is how a file stops compiling. The Variables
-        // screen rewrites the uses with it (`renameLocalVariable`) and is one button away, below.
-        Label typeLabel = createTypeLabel(varType.simpleName());
-        Node nameField = TextFieldComponents.createVariableName(variableName, false, newName -> {});
-
-        Node initNode;
-        if (initializer != null) {
-            if (initializer instanceof ListBlock) {
-                initNode = initializer.getUINode(context);
-            } else if (initializer.getAstNode() instanceof ArrayInitializer) {
-                initNode = createListDisplay(context);
-            } else {
-                // Route the initializer through the same specialized pickers used for call arguments, keyed on
-                // the declared variable type — so `ImageTemplate t = new ImageTemplate(...)`, `Rect r = ...`,
-                // `Point p = ...`, `Direction d = ...` get their thumbnail/region/enum editor instead of a raw
-                // expression node. Falls back to the generic node when no picker matches.
-                Node picker = PickerRegistry.pickerNodeFor(PickerContext.of(context, ValueSlot.of(initializer), varType));
-                initNode = picker != null ? picker : initializer.getUINode(context);
-                // Dropping a call onto the value of a declaration is the same gesture as dropping it into any
-                // other slot. The list/array renderings above stay out of it: they hold several expressions,
-                // and a drop names exactly one to replace.
-                ExpressionSlots.makeDroppable(initNode, initializer, context, varType);
-            }
-        } else {
-            initNode = emptyInitializer(context, varType);
-        }
-
-        Button addButton = createAddButton(e -> showInitializerMenu((Button) e.getSource(), context, varType));
-
-        var sentence = BlockLayout.sentence()
-                .addNode(typeLabel)
-                .addNode(nameField)
-                .addKeyword("=")
-                .addNode(initNode)
-                .addNode(addButton)
-                .addNode(variablesButton(context))
-                .build();
-
         return BlockLayout.header()
-                .withCustomNode(sentence)
+                .withCustomNode(renderSpec(context))
                 .withDeleteButton(deleteAction(context))
                 .build();
     }

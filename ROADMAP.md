@@ -6,6 +6,23 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — the three leaf statements declare their sentence.** `BreakBlock`, `ContinueBlock` and
+  `VariableDeclarationBlock` now answer `componentSpec`, taking the migration to **10 of 37 blocks**. The
+  first two are one `LABEL` each; the third declares type, name, `=`, the starting-value slot, the ⊕ and the
+  ✎ — and it is the one worth having, because a variable declaration is the commonest statement in a bot and
+  the overlay HUD drew it as a line of source text with nothing to click.
+
+  **Nothing about the canvas changes**, which is checkable rather than hoped for: `ComponentLayoutBuilder`
+  and `SentenceLayoutBuilder` share the same defaults (spacing 5.0, `CENTER_LEFT`) and the same node
+  factories, so the pane is the one that was built before. `initializerNode` is the old inline branch lifted
+  to a method, because a spec declares one node per component and the starting value has four shapes.
+
+  **Two blocks were left out on purpose.** `CommentBlock` is not a declaration — `showReadOnly`/`showEditing`
+  swap a `TextArea` in and out of its own `HBox`, so it needs restructuring rather than describing.
+  `IfBlock`, `SwitchBlock` and `BranchChainBlock` carry bodies and branch chains, where a spec has to meet
+  `BranchingBlock.branches()`; that is its own turn. 9 statement blocks remain. 976 tests, 65 failures /
+  5 errors / 9 skipped — the standing baseline. `docs/refactor/29-block-layer.md` §5.
+
 - **2026-09-13 (later still) — a block id is where the block is, not where its characters are.**
   `parser/BlockId.of` walks `getLocationInParent()` to the compilation unit, so an id reads
   `types[0]/bodyDeclarations[0]/body/statements[1]/thenStatement/statements[0]` instead of

@@ -117,6 +117,52 @@ class BlockSpecDeclarationTest {
         assertTrue(spec.find("void").isPresent(), "the (void) note is declared like anything else");
     }
 
+    // ---- The leaf statements ----
+
+    @Test
+    void break_and_continue_are_one_word_and_declare_exactly_that() {
+        // The smallest spec there is, and worth a test for one reason: a block with nothing in its sentence
+        // but a keyword is the case where it is tempting to leave the spec empty — and an empty spec means
+        // "declares nothing", which sends the HUD back to drawing a line of source text.
+        ComponentSpec brk = blockOf(inRun("while (true) { break; }"), "BreakBlock").componentSpec(null);
+        ComponentSpec cont = blockOf(inRun("while (true) { continue; }"), "ContinueBlock").componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.LABEL), kinds(brk));
+        assertEquals(List.of(BlockComponent.Kind.LABEL), kinds(cont));
+    }
+
+    @Test
+    void a_variable_declaration_declares_its_type_name_value_and_the_two_buttons() {
+        ComponentSpec spec = blockOf(inRun("int attempts = 3;"), "VariableDeclarationBlock").componentSpec(null);
+
+        assertEquals(List.of(BlockComponent.Kind.LABEL,       // the type
+                        BlockComponent.Kind.CUSTOM,           // the name, shown not edited
+                        BlockComponent.Kind.LABEL,            // =
+                        BlockComponent.Kind.EXPRESSION_SLOT,  // the starting value
+                        BlockComponent.Kind.PICKER,           // ⊕
+                        BlockComponent.Kind.PICKER),          // ✎, to the Variables screen
+                kinds(spec));
+    }
+
+    @Test
+    void a_variable_with_no_starting_value_still_declares_a_slot() {
+        // `int x;` is a real state — the slot is the dashed hole the value goes into, so it has to be
+        // declared even when there is nothing in it.
+        ComponentSpec spec = blockOf(inRun("int later;"), "VariableDeclarationBlock").componentSpec(null);
+
+        assertTrue(spec.find("value").isPresent(), "the empty starting value is still a slot: " + kinds(spec));
+    }
+
+    @Test
+    void a_variables_name_is_custom_rather_than_a_slot_because_it_is_not_edited_here() {
+        // Renaming on the block itself rewrote the declaration and left every use pointing at the old name.
+        // The name is shown here and changed on the Variables screen, so it must not read as an editable slot
+        // to anything drawing this spec.
+        ComponentSpec spec = blockOf(inRun("int attempts = 3;"), "VariableDeclarationBlock").componentSpec(null);
+
+        assertEquals(BlockComponent.Kind.CUSTOM, spec.find("name").orElseThrow().kind());
+    }
+
     // ---- The blocks with bodies ----
 
     @Test
