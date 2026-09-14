@@ -6,6 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — the last four ordinary statements declare their sentence.** `BodyCallBlock`,
+  `DeclareClassVariableBlock`, `DeclareEnumBlock` and `InitializerBlock` (**17 of 37**), settling the rule the
+  earlier slices kept circling: *a block's spec is its sentence; chrome that is not a sentence stays in
+  `createUINode`*. Only `BodyCallBlock` migrated whole — the other three keep a caption row, a constants list
+  or a `block-body-wrapper` that no compact renderer draws. `CommentBlock` and `MethodDeclarationBlock` are
+  the two statements left.
+
 - **2026-09-14 — the branching statements declare their shape.** `IfBlock` and `BranchChainBlock` answer
   `componentSpec` (**12 of 37 blocks**), which needed one rule rather than a new mechanism: for a
   `BranchingBlock`, `CompactSpecRow` drops the whole tail after the first `BODY`, because an `if`'s

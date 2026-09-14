@@ -2,6 +2,7 @@ package com.botmaker.studio.blocks.var;
 
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
@@ -62,35 +63,44 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
         return BlockCategory.VARIABLES;
     }
 
+    /**
+     * {@code Enum ⟨name⟩ ＋ Add Value} — the enum's sentence. The constants beneath it stay chrome rather than
+     * becoming a {@code BODY}: they are not a {@code BodyBlock}, nothing nests them and no compact renderer
+     * draws them, so describing them component by component would declare rows nobody reads.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .custom("kind", () -> {
+                    Label label = BlockUIComponents.createKeywordLabel("Enum");
+                    label.getStyleClass().add("block-chip");
+                    return label;
+                })
+                .custom("name", () -> TextFieldComponents.createVariableName(enumName, !isReadOnly(), newName -> {
+                    if (!newName.equals(enumName) && !newName.isEmpty()) {
+                        context.getCodeEditor().renameEnum(enumDeclaration, newName);
+                    }
+                }))
+                // Null on a locked enum, and every renderer skips a null: an activity's generated Outcome enum
+                // is edited on the flow canvas, so offering "+ Add Value" here was an invitation the write
+                // layer refuses.
+                .picker("add-value", () -> isReadOnly() ? null : addConstantButton(context))
+                .build();
+    }
+
+    private Button addConstantButton(CodeEditorService context) {
+        Button addConstant = new Button("+ Add Value");
+        addConstant.getStyleClass().addAll("block-action-button", "block-action-button--mini");
+        addConstant.setOnAction(e -> context.getCodeEditor().addEnumConstant(enumDeclaration, "NEW_VALUE"));
+        return addConstant;
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
         VBox container = new VBox(5);
         container.getStyleClass().add("enum-block");
 
-        // --- Header ---
-        Label label = BlockUIComponents.createKeywordLabel("Enum");
-        label.getStyleClass().add("block-chip");
-
-        Node nameField = TextFieldComponents.createVariableName(enumName, !isReadOnly(), newName -> {
-            if (!newName.equals(enumName) && !newName.isEmpty()) {
-                context.getCodeEditor().renameEnum(enumDeclaration, newName);
-            }
-        });
-
-        // Null on a locked enum, and the sentence builder skips nulls: an activity's generated Outcome enum is
-        // edited on the flow canvas, so offering "+ Add Value" here was an invitation the write layer refuses.
-        Button addConstantBtn = null;
-        if (!isReadOnly()) {
-            addConstantBtn = new Button("+ Add Value");
-            addConstantBtn.getStyleClass().addAll("block-action-button", "block-action-button--mini");
-            addConstantBtn.setOnAction(e -> context.getCodeEditor().addEnumConstant(enumDeclaration, "NEW_VALUE"));
-        }
-
-        var headerSentence = BlockLayout.sentence()
-                .addNode(label)
-                .addNode(nameField)
-                .addNode(addConstantBtn)
-                .build();
+        Node headerSentence = renderSpec(context);
 
         // Not deleteAction(context): a class-level enum is removed from its type, not from a statement list.
         // The read-only gate is the shared one all the same — this block used to build the delete

@@ -325,6 +325,80 @@ class BlockSpecDeclarationTest {
                 ids(blockOf(chain, "BranchChainBlock").componentSpec(null)));
     }
 
+    // ---- The blocks whose spec is their sentence and whose chrome is not ----
+
+    @Test
+    void a_body_call_declares_a_slot_per_leading_argument_and_the_body_last() {
+        String call = "Object finder = null;\n"
+                + "finder.each(1, 2, found -> { int a = 1; });";
+        ComponentSpec spec = blockOf(inRun(call), "BodyCallBlock").componentSpec(null);
+
+        assertEquals(List.of("scope", "dot", "method", "open",
+                        "arg0", "arg0-change", "sep1", "arg1", "arg1-change",
+                        "close", "body"),
+                ids(spec));
+    }
+
+    @Test
+    void declaring_a_body_calls_spec_asks_the_analyzer_nothing() {
+        // The slot types come from the bot's own resolved classpath, which a headless caller has not got. A
+        // null context proves the lookup is behind the suppliers: it would throw if the declaration ran it.
+        ComponentSpec spec = blockOf(
+                inRun("Object finder = null;\nfinder.each(1, found -> { int a = 1; });"), "BodyCallBlock")
+                .componentSpec(null);
+
+        for (BlockComponent component : spec.components()) assertNotNull(component.node());
+    }
+
+    @Test
+    void a_field_declares_its_sentence_and_not_its_caption() {
+        // "Private Static Field" and the cross beside it are chrome on a row no compact renderer draws.
+        String field = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    private static int attempts = 3;\n"
+                + "}\n";
+        ComponentSpec spec = blockOf(field, "DeclareClassVariableBlock").componentSpec(null);
+
+        assertEquals(List.of("type", "name", "eq", "value", "change"), ids(spec));
+    }
+
+    @Test
+    void a_field_with_no_value_declares_the_button_that_gives_it_one() {
+        String field = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    private int attempts;\n"
+                + "}\n";
+        ComponentSpec spec = blockOf(field, "DeclareClassVariableBlock").componentSpec(null);
+
+        assertEquals(List.of("type", "name", "set-value"), ids(spec));
+    }
+
+    @Test
+    void an_enum_declares_its_sentence_and_leaves_its_constants_as_chrome() {
+        // The constants are not a BodyBlock, nothing nests them and no compact renderer draws them, so
+        // describing them component by component would declare rows nobody reads.
+        String decl = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    enum Outcome { WON, LOST }\n"
+                + "}\n";
+        ComponentSpec spec = blockOf(decl, "DeclareEnumBlock").componentSpec(null);
+
+        assertEquals(List.of("kind", "name", "add-value"), ids(spec));
+    }
+
+    @Test
+    void an_initializer_declares_two_labels_and_nothing_to_press() {
+        // It is there to be read rather than typed in, and the spec is what says so.
+        String decl = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    static { int a = 1; }\n"
+                + "}\n";
+        ComponentSpec spec = blockOf(decl, "InitializerBlock").componentSpec(null);
+
+        assertEquals(List.of("kw", "hint"), ids(spec));
+        assertEquals(List.of(BlockComponent.Kind.LABEL, BlockComponent.Kind.LABEL), kinds(spec));
+    }
+
     // ---- The call block ----
 
     /** The ids of {@code spec}'s components, in declaration order. */

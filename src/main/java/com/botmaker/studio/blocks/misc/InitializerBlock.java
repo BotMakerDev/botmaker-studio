@@ -4,11 +4,10 @@ import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.Initializer;
 import org.eclipse.jdt.core.dom.Modifier;
@@ -58,24 +57,38 @@ public class InitializerBlock extends AbstractStatementBlock implements BlockWit
         return body != null ? Collections.singletonList(body) : Collections.emptyList();
     }
 
+    /**
+     * {@code Static setup — runs once when the bot starts}. Two labels and nothing else: this block is there to
+     * be read rather than typed in, so it declares no picker and no slot, and its spec is what says so.
+     *
+     * <p>The body is <em>not</em> declared. It is wrapped in this block's own {@code block-body-wrapper} rather
+     * than the standard indented body, which is chrome a stacked renderer does not produce — the same reason
+     * {@link com.botmaker.studio.blocks.var.DeclareEnumBlock} keeps its constants list out of its spec.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        return ComponentSpec.builder()
+                .label("kw", () -> {
+                    Label keyword = new Label(isStatic ? "Static setup" : "Setup");
+                    keyword.getStyleClass().add("header-keyword-label");
+                    return keyword;
+                })
+                .label("hint", () -> {
+                    Label hint = new Label(
+                            isStatic ? "runs once when the bot starts" : "runs when this object is created");
+                    hint.getStyleClass().add("initializer-hint-label");
+                    return hint;
+                })
+                .build();
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
         VBox container = new VBox(0);
 
         VBox headerBox = new VBox(5);
         headerBox.getStyleClass().add("block-header");
-
-        Label keyword = new Label(isStatic ? "Static setup" : "Setup");
-        keyword.getStyleClass().add("header-keyword-label");
-
-        Label hint = new Label(isStatic ? "runs once when the bot starts" : "runs when this object is created");
-        hint.getStyleClass().add("initializer-hint-label");
-
-        HBox topRow = BlockLayout.sentence()
-                .addNode(keyword)
-                .addNode(hint)
-                .build();
-        headerBox.getChildren().add(topRow);
+        headerBox.getChildren().add(renderSpec(context));
         container.getChildren().add(headerBox);
 
         VBox bodyWrapper = new VBox();

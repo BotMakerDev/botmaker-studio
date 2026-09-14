@@ -5,20 +5,21 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.util.MethodSignature;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Expression;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.IntFunction;
 
 /**
  * A call whose last argument is a body — {@code Receiver.method(args…, param -> { … })} — drawn as a header
@@ -76,44 +77,64 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
         return children;
     }
 
+    /**
+     * {@code Receiver.method(⟨arg⟩ ⊕, …)} and then the body — one component per leading argument, ids
+     * positional ({@code arg0}, {@code arg0-change}) like {@code MethodInvocationBlock}'s, so a renderer that
+     * reconciles two specs can tell a changed argument from a new one.
+     *
+     * <p><b>The parameter types are resolved once, at draw time, and never while declaring.</b> Asking the bot's
+     * own classpath what this method's signature is, is exactly the work a declaration must not do — a headless
+     * caller asks for a spec with no {@code ProjectAnalyzer} in hand — so the lookup sits behind a memo every
+     * argument's supplier shares, rather than being run per slot or run up front.
+     */
     @Override
-    protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(5);
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        AtomicReference<List<ResolvedType>> resolved = new AtomicReference<>();
+        IntFunction<ResolvedType> slotType = i -> {
+            List<ResolvedType> types = resolved.updateAndGet(v -> v != null ? v : leadingParameterTypes(context));
+            return i < types.size() ? types.get(i) : ResolvedType.UNKNOWN;
+        };
 
-        List<ResolvedType> slotTypes = leadingParameterTypes(context);
-
-        var sentence = BlockLayout.sentence();
+        ComponentSpec.Builder spec = ComponentSpec.builder();
         if (!receiver.isEmpty()) {
-            Label scope = new Label(receiver);
-            scope.getStyleClass().addAll("sdk-class-selector", "block-chip");
-            sentence.addNode(scope).addLabel(".");
+            spec.custom("scope", this::receiverChip)
+                    .label("dot", () -> SentenceLayoutBuilder.labelNode("."));
         }
-        sentence.addLabel(method).addLabel("(");
+        spec.label("method", () -> SentenceLayoutBuilder.labelNode(method))
+                .label("open", () -> SentenceLayoutBuilder.labelNode("("));
 
         for (int i = 0; i < arguments.size(); i++) {
-            if (i > 0) sentence.addLabel(",");
             ExpressionBlock argument = arguments.get(i);
-            ResolvedType slotType = i < slotTypes.size() ? slotTypes.get(i) : ResolvedType.UNKNOWN;
-            sentence.addExpressionSlot(argument, context, slotType);
-            sentence.addNode(createAddButton(e -> showExpressionMenuAndReplace(
-                    (Button) e.getSource(),
-                    context,
-                    slotType,
-                    argument != null ? (Expression) argument.getAstNode() : null)));
+            int index = i;
+            if (i > 0) spec.label("sep" + i, () -> SentenceLayoutBuilder.labelNode(","));
+            spec.slot("arg" + i, () ->
+                            SentenceLayoutBuilder.expressionSlotNode(argument, context, slotType.apply(index)))
+                    .picker("arg" + i + "-change", () -> createAddButton(e -> showExpressionMenuAndReplace(
+                            (Button) e.getSource(),
+                            context,
+                            slotType.apply(index),
+                            argument != null ? (Expression) argument.getAstNode() : null)));
         }
-        sentence.addLabel(")");
 
-        HBox headerContent = sentence.build();
+        return spec.label("close", () -> SentenceLayoutBuilder.labelNode(")"))
+                .body("body", () -> createIndentedBody(body, context, "sdk-lambda-body"))
+                .build();
+    }
 
+    @Override
+    protected Node createUINode(CodeEditorService context) {
         // The frame wraps header AND body, so the body reads as enclosed by the call rather than detached.
-        container.getStyleClass().add("sdk-call-block");
-        container.getChildren().add(BlockLayout.header()
-                .withCustomNode(headerContent)
+        return renderSpecStacked(context)
+                .withStyleClass("sdk-call-block")
                 .withDeleteButton(deleteAction(context))
-                .build());
-        container.getChildren().add(createIndentedBody(body, context, "sdk-lambda-body"));
+                .build();
+    }
 
-        return container;
+    /** {@code Receiver} — the text the user's code holds, never a type this editor claims to know. */
+    private Label receiverChip() {
+        Label scope = new Label(receiver);
+        scope.getStyleClass().addAll("sdk-class-selector", "block-chip");
+        return scope;
     }
 
     /**
