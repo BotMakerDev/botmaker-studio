@@ -6,6 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — the branching statements declare their shape.** `IfBlock` and `BranchChainBlock` answer
+  `componentSpec` (**12 of 37 blocks**), which needed one rule rather than a new mechanism: for a
+  `BranchingBlock`, `CompactSpecRow` drops the whole tail after the first `BODY`, because an `if`'s
+  `Else ⊕ ✕` and a chain's per-link rows are chrome about branches the HUD's tree already draws out of
+  `branches()`. A block that does not branch keeps its tail, so `do/while` still reads whole in the HUD.
+  `SwitchBlock` is left for its own turn — its cases render through a six-argument `createUINode`.
+
 - **2026-09-14 — the three leaf statements declare their sentence.** `BreakBlock`, `ContinueBlock` and
   `VariableDeclarationBlock` now answer `componentSpec`, taking the migration to **10 of 37 blocks**. The
   first two are one `LABEL` each; the third declares type, name, `=`, the starting-value slot, the ⊕ and the

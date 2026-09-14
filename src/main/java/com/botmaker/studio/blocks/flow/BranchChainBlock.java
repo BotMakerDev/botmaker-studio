@@ -6,17 +6,16 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.Statement;
@@ -114,66 +113,68 @@ public class BranchChainBlock extends AbstractStatementBlock implements BlockWit
         return BlockCategory.FLOW;
     }
 
+    /**
+     * {@code Branch on ⟨subject⟩}, then one row and one body per link — a spec whose length is the chain's
+     * length, which is what makes this block worth declaring rather than drawing.
+     *
+     * <p>Component ids are positional ({@code link1}, {@code link1-add}), the same convention
+     * {@code MethodInvocationBlock} uses for its arguments and for the same reason: the id has to name the same
+     * thing across a re-parse so a renderer that reconciles two specs can tell a changed row from a new one.
+     *
+     * <p>Everything after the first body is chrome about a branch, so {@code CompactSpecRow} draws only the
+     * {@code Branch on …} header in the HUD and lets the tree draw the links out of {@link #branches()}. The
+     * captions there are the source's own method names, which is why nothing in this file spells a library's
+     * vocabulary.
+     */
     @Override
-    protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(5);
-        container.getStyleClass().add("branch-chain-block");
-
-        container.getChildren().add(BlockLayout.header()
-                .withCustomNode(subjectSentence())
-                .withDeleteButton(deleteAction(context))
-                .build());
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("Branch on"))
+                .custom("subject", this::subjectChip);
 
         for (int i = 0; i < links.size(); i++) {
             LinkView link = links.get(i);
-            container.getChildren().add(linkHeader(context, link, i));
-            container.getChildren().add(createIndentedBody(link.body, context, "branch-chain-body"));
+            int index = i;
+            String id = "link" + i;
+
+            spec.label(id, () -> SentenceLayoutBuilder.keywordNode(link.method()));
+            // A terminal link gets no condition slot — there is nothing to test — and no ⊕, because a branch
+            // inserted after the fallback could never run. Its ⊕ sits on the row before it, which is where a
+            // user reaching for "one more branch" is already looking.
+            if (!link.isTerminal()) {
+                spec.slot(id + "-condition", () ->
+                                SentenceLayoutBuilder.expressionSlotNode(link.condition, context, ResolvedType.BOOLEAN))
+                        .picker(id + "-change", () -> createAddButton(e -> showExpressionMenuAndReplace(
+                                (Button) e.getSource(),
+                                context,
+                                ResolvedType.BOOLEAN,
+                                link.condition != null ? (Expression) link.condition.getAstNode() : null)));
+            }
+            spec.custom(id + "-spacer", BlockUIComponents::createSpacer)
+                    .picker(id + "-add", () -> addBranchButton(context, index))
+                    .picker(id + "-delete", () -> isReadOnly() || links.size() <= 1 ? null
+                            : BlockUIComponents.createDeleteButton(
+                                    () -> context.getCodeEditor().removeBranchLink((Statement) this.astNode, index)))
+                    .body(id + "-body", () -> createIndentedBody(link.body, context, "branch-chain-body"));
         }
 
-        return container;
+        return spec.build();
     }
 
-    /** {@code Branch on  found} — says what the chain is over without claiming to know its type. */
-    private HBox subjectSentence() {
-        Label chip = new Label(subject.isBlank() ? "…" : subject);
-        chip.getStyleClass().addAll("block-chip", "branch-chain-subject");
-        chip.setTooltip(new Tooltip("Every branch below asks about this one value, as it was at this moment."));
-        return BlockLayout.sentence()
-                .addKeyword("Branch on")
-                .addNode(chip)
+    @Override
+    protected Node createUINode(CodeEditorService context) {
+        return renderSpecStacked(context)
+                .withStyleClass("branch-chain-block")
+                .withDeleteButton(deleteAction(context))
                 .build();
     }
 
-    /**
-     * One row: the method name as a keyword, the condition slot for a testing link, and the two controls.
-     *
-     * <p>A terminal link gets no condition slot — there is nothing to test — and no {@code +}, because a
-     * branch inserted after the fallback could never run. Its {@code +} sits on the row <em>before</em> it,
-     * which is where a user reaching for "one more branch" is already looking.
-     */
-    private HBox linkHeader(CodeEditorService context, LinkView link, int index) {
-        var sentence = BlockLayout.sentence().addKeyword(link.method());
-
-        if (!link.isTerminal()) {
-            sentence.addExpressionSlot(link.condition, context, ResolvedType.BOOLEAN)
-                    .addNode(createAddButton(e -> showExpressionMenuAndReplace(
-                            (Button) e.getSource(),
-                            context,
-                            ResolvedType.BOOLEAN,
-                            link.condition != null ? (Expression) link.condition.getAstNode() : null)));
-        }
-
-        sentence.addNode(BlockUIComponents.createSpacer());
-
-        Button addBranch = addBranchButton(context, index);
-        if (addBranch != null) sentence.addNode(addBranch);
-
-        if (!isReadOnly() && links.size() > 1) {
-            sentence.addNode(BlockUIComponents.createDeleteButton(
-                    () -> context.getCodeEditor().removeBranchLink((Statement) this.astNode, index)));
-        }
-
-        return sentence.build();
+    /** {@code found} — says what the chain is over without claiming to know its type. */
+    private Label subjectChip() {
+        Label chip = new Label(subject.isBlank() ? "…" : subject);
+        chip.getStyleClass().addAll("block-chip", "branch-chain-subject");
+        chip.setTooltip(new Tooltip("Every branch below asks about this one value, as it was at this moment."));
+        return chip;
     }
 
     /**

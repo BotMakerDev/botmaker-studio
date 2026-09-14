@@ -241,6 +241,67 @@ class BlockSpecDeclarationTest {
                 .count();
     }
 
+    // ---- The branching blocks ----
+
+    /**
+     * An {@code if} is three different sentences depending on what follows it, so its spec is the first here
+     * whose <em>shape</em> varies rather than only its contents.
+     */
+    @Test
+    void an_if_with_no_else_declares_one_body_and_the_offer_of_one() {
+        ComponentSpec spec = blockOf(inRun("if (true) { int a = 1; }"), "IfBlock").componentSpec(null);
+
+        assertEquals(List.of("kw", "condition", "change", "then", "add-else"), ids(spec));
+    }
+
+    @Test
+    void an_if_with_an_else_declares_the_else_row_and_the_else_body() {
+        ComponentSpec spec = blockOf(inRun("if (true) { int a = 1; } else { int b = 2; }"), "IfBlock")
+                .componentSpec(null);
+
+        assertEquals(List.of("kw", "condition", "change", "then",
+                        "else-kw", "else-to-else-if", "else-spacer", "else-delete", "else-body"),
+                ids(spec));
+        // The row is chrome about a branch: everything after "then" is what CompactSpecRow drops for a
+        // BranchingBlock, because the HUD's tree already draws that branch out of branches().
+        assertTrue(blockOf(inRun("if (true) { int a = 1; } else { int b = 2; }"), "IfBlock")
+                instanceof com.botmaker.studio.core.BranchingBlock);
+    }
+
+    @Test
+    void an_else_if_is_one_body_holding_the_block_that_continues_the_chain() {
+        // Not a row plus a body: the nested IfBlock draws its own "Else If" sentence, which is what keeps a
+        // chain flat on screen instead of stepping right once per link.
+        ComponentSpec spec = blockOf(
+                inRun("if (true) { int a = 1; } else if (false) { int b = 2; }"), "IfBlock").componentSpec(null);
+
+        assertEquals(List.of("kw", "condition", "change", "then", "else-if"), ids(spec));
+        assertEquals(2, bodies("if (true) { int a = 1; } else if (false) { int b = 2; }", "IfBlock"));
+    }
+
+    @Test
+    void a_branch_chain_declares_one_row_and_one_body_per_link() {
+        String chain = "Object found = null;\n"
+                + "found.when(m -> m.hasAny(), () -> { int a = 1; }).otherwise(() -> { int b = 2; });";
+        ComponentSpec spec = blockOf(inRun(chain), "BranchChainBlock").componentSpec(null);
+
+        assertEquals(List.of("kw", "subject",
+                        "link0", "link0-condition", "link0-change", "link0-spacer", "link0-add", "link0-delete",
+                        "link0-body",
+                        // The fallback has nothing to test, so no condition slot and no ⊕ of its own.
+                        "link1", "link1-spacer", "link1-add", "link1-delete", "link1-body"),
+                ids(spec));
+    }
+
+    @Test
+    void a_branch_chains_component_ids_survive_a_re_parse() {
+        String chain = inRun("Object found = null;\n"
+                + "found.when(m -> m.hasAny(), () -> { int a = 1; }).otherwise(() -> { int b = 2; });");
+
+        assertEquals(ids(blockOf(chain, "BranchChainBlock").componentSpec(null)),
+                ids(blockOf(chain, "BranchChainBlock").componentSpec(null)));
+    }
+
     // ---- The call block ----
 
     /** The ids of {@code spec}'s components, in declaration order. */

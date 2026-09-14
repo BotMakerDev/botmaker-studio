@@ -8,14 +8,14 @@ import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.StatementBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
@@ -82,81 +82,71 @@ public class IfBlock extends AbstractStatementBlock implements BlockWithChildren
         return BlockCategory.FLOW;
     }
 
+    /**
+     * {@code If ⟨condition⟩ ⊕}, the {@code then} body, and then whichever tail this {@code if} has — the first
+     * spec here whose <em>shape</em> varies, because an {@code if} is three different sentences depending on
+     * what follows it.
+     *
+     * <p>The three tails are declared rather than drawn: an {@code else if} is one {@code BODY} holding the
+     * nested block that continues the chain, a plain {@code else} is a row ({@code Else ⊕ ✕}) followed by its
+     * own {@code BODY}, and an {@code if} with no else is a lone ⊕. Everything after the first body is branch
+     * chrome, which is exactly the tail {@code CompactSpecRow} drops for a {@link BranchingBlock}: the HUD
+     * already draws those branches as captioned rows out of {@link #branches()}, so this spec and that method
+     * describe the same thing at two densities instead of disagreeing about it.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode(isElseIf ? "Else If" : "If"))
+                .slot("condition", () ->
+                        SentenceLayoutBuilder.expressionSlotNode(condition, context, ResolvedType.BOOLEAN))
+                // A change button rather than the header builder's own, so the handler can capture the event
+                // source: the menu opens on the button that was clicked.
+                .picker("change", () -> createAddButton(e ->
+                        showExpressionMenuAndReplace((Button) e.getSource(), context, ResolvedType.BOOLEAN,
+                                condition != null ? (Expression) condition.getAstNode() : null)))
+                .body("then", () -> thenBody == null ? null : createIndentedBody(thenBody, context, "if-body"));
+
+        if (elseStatement instanceof IfBlock chained) {
+            spec.body("else-if", () -> chainedNode(chained, context));
+        } else if (elseStatement instanceof BodyBlock elseBody) {
+            spec.label("else-kw", () -> SentenceLayoutBuilder.keywordNode("Else"))
+                    .picker("else-to-else-if", () -> createAddButton(e ->
+                            context.getCodeEditor().convertElseToElseIf((IfStatement) this.astNode)))
+                    .custom("else-spacer", BlockUIComponents::createSpacer)
+                    // Removing the else is an edit like any other: no control on a locked block.
+                    .picker("else-delete", () -> isReadOnly() ? null
+                            : BlockUIComponents.createDeleteButton(() ->
+                                    context.getCodeEditor().deleteElseFromIfStatement((IfStatement) this.astNode)))
+                    .body("else-body", () -> createIndentedBody(elseBody, context, "if-body"));
+        } else {
+            spec.picker("add-else", () -> createAddButton(e ->
+                    context.getCodeEditor().addElseToIfStatement((IfStatement) this.astNode)));
+        }
+
+        return spec.build();
+    }
+
+    /**
+     * The nested {@code else if}, drawn by the block itself so the chain stays flat on screen.
+     *
+     * <p>The child comes with its own gutter padding; it is pulled back left by exactly the gutter width so
+     * {@code Else If} aligns with {@code If} rather than stepping right once per link.
+     */
+    private Node chainedNode(IfBlock chained, CodeEditorService context) {
+        chained.setIsElseIf(true);
+        Node node = chained.getUINode(context);
+        double gutter = com.botmaker.studio.ui.render.theme.BlockTheme.current().spacing().gutter();
+        VBox.setMargin(node, new Insets(0, 0, 0, -gutter));
+        return node;
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(5);
-        container.getStyleClass().add("if-block");
-
-        // Header with condition
-        // Change keyword based on context
-        String keyword = isElseIf ? "Else If" : "If";
-
-        Button addButton = createAddButton(e ->
-                showExpressionMenuAndReplace((Button)e.getSource(), context, ResolvedType.BOOLEAN,
-                        condition != null ? (Expression) condition.getAstNode() : null)
-        );
-
-        Node headerContent = BlockLayout.sentence()
-                .addKeyword(keyword)
-                .addExpressionSlot(condition, context, ResolvedType.BOOLEAN)
-                .addNode(addButton)
-                .build();
-
-        container.getChildren().add(BlockLayout.header()
-                .withCustomNode(headerContent)
+        return renderSpecStacked(context)
+                .withStyleClass("if-block")
                 .withDeleteButton(deleteAction(context))
-                .build());
-
-        // Then Body
-        if (thenBody != null) {
-            VBox thenNode = createIndentedBody(thenBody, context, "if-body");
-            container.getChildren().add(thenNode);
-        }
-
-        // Else / Else If Logic
-        if (elseStatement != null) {
-            if (elseStatement instanceof IfBlock) {
-                // Else If (Recursive IfBlock)
-                // We delegate the "Else If" rendering to the child block itself to keep the hierarchy flat visually
-                IfBlock childIf = (IfBlock) elseStatement;
-                childIf.setIsElseIf(true);
-
-                Node elseIfNode = childIf.getUINode(context);
-
-                // The child block comes with its own gutter padding; pull it back left by exactly the
-                // gutter width so "Else If" aligns with "If" rather than indenting.
-                double gutter = com.botmaker.studio.ui.render.theme.BlockTheme.current().spacing().gutter();
-                VBox.setMargin(elseIfNode, new Insets(0, 0, 0, -gutter));
-
-                container.getChildren().add(elseIfNode);
-
-            } else if (elseStatement instanceof BodyBlock) {
-                // Regular Else
-                VBox elseContainer = new VBox(5);
-
-                HBox elseHeader = BlockLayout.sentence()
-                        .addKeyword("Else")
-                        .addNode(createAddButton(e ->
-                                context.getCodeEditor().convertElseToElseIf((IfStatement) this.astNode)))
-                        .addNode(BlockUIComponents.createSpacer())
-                        // Removing the else is an edit like any other: no control on a locked block.
-                        .addNode(isReadOnly() ? null : BlockUIComponents.createDeleteButton(() ->
-                                context.getCodeEditor().deleteElseFromIfStatement((IfStatement) this.astNode)))
-                        .build();
-
-                VBox elseBodyNode = createIndentedBody((BodyBlock) elseStatement, context, "if-body");
-                elseContainer.getChildren().addAll(elseHeader, elseBodyNode);
-                container.getChildren().add(elseContainer);
-            }
-        } else {
-            // Add Else Button — null when read-only (a VBox rejects null children, unlike the layout
-            // builders, so the guard is on us here).
-            Button addElseButton = createAddButton(e ->
-                    context.getCodeEditor().addElseToIfStatement((IfStatement) this.astNode));
-            if (addElseButton != null) container.getChildren().add(addElseButton);
-        }
-
-        return container;
+                .build();
     }
 
     @Override

@@ -9,6 +9,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * What the HUD keeps and what it drops from a block's declared spec.
@@ -60,5 +61,41 @@ class CompactSpecRowTest {
     @Test
     void a_block_with_no_declared_spec_yields_no_nodes() {
         assertEquals(List.of(), CompactSpecRow.nodes(ComponentSpec.empty(), false));
+    }
+
+    @Test
+    void a_branching_blocks_spec_stops_at_its_first_body() {
+        // An if's spec continues past its then with "Else", the ⊕ that turns it into an else if and the ✕ that
+        // removes it. Every one of those is chrome about a branch, and the HUD's tree is already drawing that
+        // branch as a captioned row — so drawing them here would put the word Else on the if's own line.
+        Probe elseKeyword = new Probe();
+        Probe elseBody = new Probe();
+        ComponentSpec spec = ComponentSpec.builder()
+                .label("kw", () -> null)
+                .body("then", () -> null)
+                .label("else-kw", elseKeyword)
+                .body("else-body", elseBody)
+                .build();
+
+        CompactSpecRow.nodes(spec, false, true);
+
+        assertFalse(elseKeyword.asked, "branch chrome after the first body is the tree's to draw");
+        assertFalse(elseBody.asked);
+    }
+
+    @Test
+    void a_block_that_does_not_branch_keeps_the_tail_after_its_body() {
+        // A do/while declares its body before its condition, so stopping at the first body would leave its HUD
+        // row reading "do" and nothing else. What follows that body is the loop's own sentence, not a branch.
+        Probe condition = new Probe();
+        ComponentSpec spec = ComponentSpec.builder()
+                .label("do", () -> null)
+                .body("body", () -> null)
+                .slot("condition", condition)
+                .build();
+
+        CompactSpecRow.nodes(spec, false, false);
+
+        assertTrue(condition.asked, "a do/while still reads as a whole sentence in the HUD");
     }
 }

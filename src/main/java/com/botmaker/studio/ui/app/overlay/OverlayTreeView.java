@@ -206,7 +206,8 @@ final class OverlayTreeView {
         // one line. One that declares none falls back to its source text, which is what every row was until
         // a block first declared a spec, and what most rows still are. The fallback is not a degraded mode:
         // the text is also this row's tooltip either way.
-        List<Node> declared = CompactSpecRow.nodes(spec(stmt), locked);
+        List<Node> declared = CompactSpecRow.nodes(
+                spec(stmt), locked, stmt instanceof com.botmaker.studio.core.BranchingBlock);
         if (declared.isEmpty()) node.getChildren().add(text);
         else node.getChildren().addAll(declared);
         Tooltip.install(node, new Tooltip(rowTooltip(stmt, locked, broken)));
