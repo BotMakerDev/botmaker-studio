@@ -6,6 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — block reuse, phase 1: the mechanism, with no caller.** `AbstractCodeBlock.astNode` is no
+  longer final and gains `adopt(ASTNode)`; `parser/BlockReuse` decides which blocks of the previous parse may
+  be kept (four refusals) and re-points the survivors in a lockstep walk over JDT's structural properties,
+  with comments paired by order within the subtree. Offered at `BlockConverter`'s three choke points, so a
+  rebuilt parent is handed the survivor and no container block is edited. `BlockReuse.NONE` is the default
+  and **nothing turns it on yet**. Design: `docs/refactor/30-block-reuse.md`.
+
 - **2026-09-14 — Alt 3 step two held: the wiring has almost nothing to carry.** Surveyed, not written. Every
   text editor in the block layer commits on **focus-lost**, so the caret has already gone when the re-parse
   runs; the only shape that keeps focus is `ComboBox.setOnAction`, at four sites, of which **one**

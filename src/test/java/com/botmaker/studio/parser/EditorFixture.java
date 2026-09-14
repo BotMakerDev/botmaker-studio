@@ -46,6 +46,8 @@ public final class EditorFixture {
     public final CodeEditor editor;
     public final ProjectState state;
     public final AbstractCodeBlock root;
+    /** The source this fixture first parsed — what a {@link BlockReuse} over its tree indexes into. */
+    public final String source;
     public String lastCode;
     /** Every user-facing status line the editor published — how a refused edit announces itself. */
     public final List<String> statusMessages = new ArrayList<>();
@@ -71,6 +73,7 @@ public final class EditorFixture {
      * running the suite never writes into the developer's diagnostics.
      */
     public EditorFixture(String source, Path file, RefusalJournal journal) {
+        this.source = source;
         state = new ProjectState();
         state.addFile(new ProjectFile(file, source));
         state.setActiveFile(file);
@@ -110,6 +113,23 @@ public final class EditorFixture {
         return context;
     }
 
+    /**
+     * Parses {@code newSource} over this fixture's existing tree, the way {@code CodeEditorService.render}
+     * re-parses after an edit: a fresh registry, published in one assignment, with the previous parse offered
+     * back through {@code reuse}.
+     *
+     * <p>Pass {@link BlockReuse#NONE} to assert that reuse-off is unchanged.
+     */
+    public BlockConverter.ConvertResult reparse(String newSource, BlockReuse reuse) {
+        java.util.Map<org.eclipse.jdt.core.dom.ASTNode, CodeBlock> registry = new java.util.HashMap<>();
+        BlockConverter.ConvertResult result = converter.convert(
+                null, newSource, registry, dragAndDrop, false, false, reuse);
+        state.setNodeToBlockMap(registry);
+        state.setCompilationUnit(result.cu());
+        state.setCurrentCode(newSource);
+        return result;
+    }
+
     /** A path under this project's activities package — a file there is treated as an activity stub. */
     public static Path activitiesFile(String fileName) {
         return CONFIG.activitiesPackageDir().resolve(fileName).toAbsolutePath();
@@ -117,16 +137,19 @@ public final class EditorFixture {
 
     /** The {@link BodyBlock} for {@code methodName}'s body, found the way CodeEditorService finds it: by AST node. */
     public BodyBlock body(String methodName) {
-        TypeDeclaration type = (TypeDeclaration) root.getAstNode();
+        // Off the state's current compilation unit and registry rather than off `root`, so this keeps
+        // answering after a reparse() -- root is the first parse's. That is also how CodeEditorService finds
+        // a body: by AST node, through the registry it just published.
+        TypeDeclaration type = (TypeDeclaration) state.getCompilationUnit()
+                .orElseThrow(() -> new AssertionError("fixture has no compilation unit"))
+                .types().getFirst();
         MethodDeclaration found = null;
         for (MethodDeclaration m : type.getMethods()) {
             if (m.getName().getIdentifier().equals(methodName)) found = m;
         }
         assertNotNull(found, "fixture should have " + methodName + "()");
-        var target = found.getBody();
-        for (CodeBlock b : all(root)) {
-            if (b instanceof BodyBlock bb && bb.getAstNode() == target) return bb;
-        }
+        CodeBlock block = state.getNodeToBlockMap().get(found.getBody());
+        if (block instanceof BodyBlock body) return body;
         throw new AssertionError("no body block for " + methodName);
     }
 

@@ -26,7 +26,10 @@ import java.util.List;
 
 public abstract class AbstractCodeBlock implements CodeBlock {
     protected final String id;
-    protected final ASTNode astNode;
+
+    // Not final since 2026-09-14: BlockReuse re-points a surviving block at the node it now describes.
+    // Assigned in the constructor and then only by adopt(), which is the whole of the mutation.
+    protected ASTNode astNode;
 
     protected Node uiNode;
     private Tooltip errorTooltip;
@@ -59,6 +62,24 @@ public abstract class AbstractCodeBlock implements CodeBlock {
 
     @Override
     public ASTNode getAstNode() { return astNode; }
+
+    /**
+     * Re-points this block at the node it now describes, after a re-parse produced a structurally identical
+     * subtree.
+     *
+     * <p>This is the whole of what makes block reuse safe, and it works because of how the blocks are
+     * written: a handler that needs its AST node reads {@code this.astNode} <em>when it fires</em>, not when
+     * it was built. Re-pointing the field before anything can fire therefore leaves every such handler
+     * correct, with no rebinding and no per-component opt-in.
+     *
+     * <p>Called only by {@link com.botmaker.studio.parser.BlockReuse}, which has already established that the
+     * two nodes carry identical source text at an identical structural path. Do not call it from a block: a
+     * block re-pointing itself is a block deciding it survived an edit, which is not its question to answer.
+     * See {@code docs/refactor/30-block-reuse.md} §5.
+     */
+    public void adopt(ASTNode node) {
+        if (node != null) this.astNode = node;
+    }
 
     @Override
     public void setReadOnly(boolean readOnly) {

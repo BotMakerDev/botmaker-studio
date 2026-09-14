@@ -78,6 +78,25 @@ public class BlockConverter {
                                  BlockDragAndDropManager manager,
                                  boolean isReadOnly,
                                  boolean markNewIdentifiersAsUnedited) {
+        return convert(parsed, javaCode, nodeToBlockMap, manager, isReadOnly, markNewIdentifiersAsUnedited,
+                BlockReuse.NONE);
+    }
+
+    /**
+     * The same conversion, offering the blocks of a previous parse back to this one.
+     *
+     * <p>An overload rather than a widened signature because {@link BlockReuse#NONE} has to stay the thing a
+     * caller gets without asking: reuse changes which objects are on screen after an edit, and a caller that
+     * has not thought about that must keep the behaviour it has. See
+     * {@code docs/refactor/30-block-reuse.md} §3.
+     */
+    public ConvertResult convert(CompilationUnit parsed,
+                                 String javaCode,
+                                 Map<ASTNode, CodeBlock> nodeToBlockMap,
+                                 BlockDragAndDropManager manager,
+                                 boolean isReadOnly,
+                                 boolean markNewIdentifiersAsUnedited,
+                                 BlockReuse reuse) {
         try {
             CompilationUnit ast = parsed != null ? parsed : parse(javaCode);
 
@@ -89,7 +108,7 @@ public class BlockConverter {
             ParseContext ctx = new ParseContext(
                     ast, javaCode, comments, nodeToBlockMap, manager, isReadOnly,
                     LockResolver.forActiveFile(config, state),
-                    markNewIdentifiersAsUnedited);
+                    markNewIdentifiersAsUnedited, reuse);
 
             if (ast.types().isEmpty()) return new ConvertResult(null, ast);
 
@@ -215,6 +234,8 @@ public class BlockConverter {
     // =========================================================================
 
     public BodyBlock parseBodyBlock(Block astBlock, ParseContext ctx) {
+        if (ctx.reuse().take(astBlock, ctx) instanceof BodyBlock kept) return kept;
+
         BodyBlock bodyBlock = new BodyBlock(BlockId.of(astBlock), astBlock, ctx.manager());
         applyReadOnly(bodyBlock, ctx);
         ctx.nodeToBlockMap().put(astBlock, bodyBlock);
@@ -270,6 +291,11 @@ public class BlockConverter {
     // =========================================================================
 
     public Optional<StatementBlock> parseStatement(Statement stmt, ParseContext ctx) {
+        // Reuse first: a block whose source text is unchanged at an unchanged structural path keeps its own
+        // JavaFX node, and is handed back here so the parent assigning it into its own field never learns the
+        // difference. BlockReuse.NONE -- the default -- always answers null, and null matches no pattern.
+        if (ctx.reuse().take(stmt, ctx) instanceof StatementBlock kept) return Optional.of(kept);
+
         Optional<StatementBlock> result = dispatchStatement(stmt, ctx);
         result.ifPresent(b -> applyReadOnly(b, ctx));
         return result;
@@ -570,6 +596,8 @@ public class BlockConverter {
     // =========================================================================
 
     public Optional<ExpressionBlock> parseExpression(Expression expr, ParseContext ctx) {
+        if (ctx.reuse().take(expr, ctx) instanceof ExpressionBlock kept) return Optional.of(kept);
+
         if (expr instanceof ArrayCreation ac && ac.getInitializer() != null) {
             Optional<ExpressionBlock> inner = parseExpression(ac.getInitializer(), ctx);
             inner.ifPresent(b -> ctx.nodeToBlockMap().put(expr, b));

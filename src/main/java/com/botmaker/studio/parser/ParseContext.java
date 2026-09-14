@@ -23,6 +23,10 @@ import java.util.Map;
  * @param resolver                      the file's lock rules; null when there is no project (tests)
  * @param markNewIdentifiersAsUnedited  whether freshly created identifiers/field accesses
  *                                      should be visually marked as auto-generated
+ * @param reuse                         which blocks of the previous parse may be kept; {@link BlockReuse#NONE}
+ *                                      switches reuse off, which is what every caller that has not opted in
+ *                                      passes and what makes a parse under it byte for byte the parse this
+ *                                      project has always done
  *
  * <p>There was an {@code audience} component here until 2026-09-13, threaded in from
  * {@code ProjectState.getAudience()} and <b>never read by anything</b>: it had already narrowed from deciding
@@ -37,7 +41,8 @@ public record ParseContext(
         BlockDragAndDropManager manager,
         boolean readOnly,
         LockResolver resolver,
-        boolean markNewIdentifiersAsUnedited
+        boolean markNewIdentifiersAsUnedited,
+        BlockReuse reuse
 ) {
     /**
      * This context with {@code readOnly} set to {@code ro}, for parsing a method body whose lock differs from
@@ -52,6 +57,6 @@ public record ParseContext(
     public ParseContext withReadOnly(boolean ro) {
         return ro == readOnly ? this
                 : new ParseContext(cu, sourceCode, comments, nodeToBlockMap, manager, ro, resolver,
-                        markNewIdentifiersAsUnedited);
+                        markNewIdentifiersAsUnedited, reuse);
     }
 }
