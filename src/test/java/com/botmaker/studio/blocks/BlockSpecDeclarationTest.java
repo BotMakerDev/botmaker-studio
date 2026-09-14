@@ -294,6 +294,29 @@ class BlockSpecDeclarationTest {
     }
 
     @Test
+    void a_switch_declares_all_of_its_cases_as_one_body() {
+        // Not one body per case. A SwitchCaseBlock is a structural node — branches() skips it and hands a
+        // compact renderer the body the case runs — so no surface draws a case as a row of its own, and the
+        // five facts a case needs to render (its index, the count, the switch's type, its siblings' labels,
+        // the statement) are all this block's. Declaring them per case would be describing a row nobody draws.
+        ComponentSpec spec = blockOf(inRun("int k = 1;\nswitch (k) { case 1: break; default: break; }"),
+                "SwitchBlock").componentSpec(null);
+
+        assertEquals(List.of("kw", "expression", "change", "cases", "add-case"), ids(spec));
+    }
+
+    @Test
+    void declaring_a_switchs_spec_resolves_no_binding() {
+        // The switch's type comes from the expression's own ITypeBinding, and resolving one is exactly what a
+        // declaration must not do: a headless caller asks for a spec with no bindings in hand. Every supplier
+        // below would reach one; none is called.
+        ComponentSpec spec = blockOf(inRun("int k = 1;\nswitch (k) { case 1: break; }"), "SwitchBlock")
+                .componentSpec(null);
+
+        for (BlockComponent component : spec.components()) assertNotNull(component.node());
+    }
+
+    @Test
     void a_branch_chains_component_ids_survive_a_re_parse() {
         String chain = inRun("Object found = null;\n"
                 + "found.when(m -> m.hasAny(), () -> { int a = 1; }).otherwise(() -> { int b = 2; });");

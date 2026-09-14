@@ -9,9 +9,11 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
@@ -69,58 +71,74 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
         return BlockCategory.FLOW;
     }
 
+    /**
+     * {@code switch ⟨expression⟩ ⚙}, the cases, and the button that adds one.
+     *
+     * <p><b>Every case is one {@code BODY}, not one per case</b>, and that is a statement about what a case
+     * <em>is</em> rather than a shortcut. A {@link SwitchCaseBlock} is a structural node: {@link #branches()}
+     * skips it and hands a compact renderer the body the case runs, so no surface ever draws a case as a row
+     * of its own and none needs it described component by component. What the cases need instead is five
+     * facts that only this block has — the case's index, how many there are, the switch's resolved type, the
+     * labels its <em>siblings</em> already claim, and the {@code SwitchStatement} itself — which is why
+     * {@code SwitchCaseBlock.createUINode} takes them as arguments and stays imperative.
+     *
+     * <p>The type is resolved inside the supplier rather than while declaring, which is the rule
+     * {@code MethodInvocationBlock} follows for its overloads: declaring a spec must resolve nothing, because
+     * a headless caller asks for one with no bindings in hand.
+     */
+    @Override
+    public ComponentSpec componentSpec(CodeEditorService context) {
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("switch"))
+                .slot("expression", () ->
+                        SentenceLayoutBuilder.expressionSlotNode(expression, context, switchType()))
+                .picker("change", () -> createChangeButton(e ->
+                        showExpressionMenuAndReplace((Button) e.getSource(), context, switchType(),
+                                expression != null ? (Expression) expression.getAstNode() : null)))
+                .body("cases", () -> casesNode(context));
+
+        if (!isReadOnly()) {
+            spec.picker("add-case", () -> {
+                Button addCase = new Button("+ Add Case");
+                addCase.setOnAction(e -> context.getCodeEditor().addCaseToSwitch((SwitchStatement) this.astNode));
+                return addCase;
+            });
+        }
+        return spec.build();
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
-        VBox mainContainer = new VBox(5);
-
-        // 1. Determine Switch Type
-        ResolvedType switchType = ResolvedType.UNKNOWN;
-        if (expression != null && expression.getAstNode() != null) {
-            Expression expr = (Expression) expression.getAstNode();
-            ITypeBinding binding = expr.resolveTypeBinding();
-            if (binding != null) {
-                switchType = ResolvedType.of(binding);
-            }
-        }
-
-        ResolvedType finalSwitchType = switchType;
-        Button changeSwitchExprBtn = createChangeButton(e ->
-                showExpressionMenuAndReplace((Button)e.getSource(), context, finalSwitchType,
-                        expression != null ? (Expression) expression.getAstNode() : null)
-        );
-
-        var headerSentence = BlockLayout.sentence()
-                .addKeyword("switch")
-                .addExpressionSlot(expression, context, switchType)
-                .addNode(changeSwitchExprBtn)
-                .build();
-
-        mainContainer.getChildren().add(BlockLayout.header()
-                .withCustomNode(headerSentence)
+        return renderSpecStacked(context)
                 .withDeleteButton(deleteAction(context))
-                .build());
+                .build();
+    }
 
+    /** What this switch is over, from the expression's own binding — {@code UNKNOWN} when nothing resolves. */
+    private ResolvedType switchType() {
+        if (expression == null || expression.getAstNode() == null) return ResolvedType.UNKNOWN;
+        ITypeBinding binding = ((Expression) expression.getAstNode()).resolveTypeBinding();
+        return binding == null ? ResolvedType.UNKNOWN : ResolvedType.of(binding);
+    }
+
+    /**
+     * The cases, indented as one group.
+     *
+     * <p>Each is handed the switch's type and the labels the <em>siblings</em> already use: a duplicate case
+     * label doesn't compile, so an already-taken value must not be offered a second time.
+     */
+    private VBox casesNode(CodeEditorService context) {
         VBox casesContainer = new VBox(5);
         casesContainer.setPadding(new javafx.geometry.Insets(5, 0, 0, 20));
 
-        // Pass switchType down to cases, along with the labels the *siblings* already use: a duplicate case
-        // label doesn't compile, so an already-taken value must not be offered a second time.
+        ResolvedType switchType = switchType();
         for (int i = 0; i < cases.size(); i++) {
             SwitchCaseBlock caseBlock = cases.get(i);
             casesContainer.getChildren().add(
                     caseBlock.createUINode(context, i, cases.size(), switchType, usedLabelsExcluding(caseBlock),
                             (SwitchStatement) this.astNode));
         }
-
-        mainContainer.getChildren().add(casesContainer);
-
-        if (!isReadOnly()) {
-            Button addCaseButton = new Button("+ Add Case");
-            addCaseButton.setOnAction(e -> context.getCodeEditor().addCaseToSwitch((SwitchStatement) this.astNode));
-            mainContainer.getChildren().add(addCaseButton);
-        }
-
-        return mainContainer;
+        return casesContainer;
     }
 
     /** The case labels every case <em>other</em> than {@code self} uses, as source text. */

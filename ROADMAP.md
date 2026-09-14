@@ -11,7 +11,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
   `BranchingBlock`, `CompactSpecRow` drops the whole tail after the first `BODY`, because an `if`'s
   `Else ⊕ ✕` and a chain's per-link rows are chrome about branches the HUD's tree already draws out of
   `branches()`. A block that does not branch keeps its tail, so `do/while` still reads whole in the HUD.
-  `SwitchBlock` is left for its own turn — its cases render through a six-argument `createUINode`.
+  `SwitchBlock` followed the same day (**13 of 37**): its cases are one `BODY`, because a `SwitchCaseBlock`
+  is a structural node that `branches()` skips and no surface draws as a row — so it needs no spec, and its
+  six-argument `createUINode` correctly stays. The switch's type is resolved inside the supplier, never while
+  declaring.
 
 - **2026-09-14 — the three leaf statements declare their sentence.** `BreakBlock`, `ContinueBlock` and
   `VariableDeclarationBlock` now answer `componentSpec`, taking the migration to **10 of 37 blocks**. The
