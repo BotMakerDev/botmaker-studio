@@ -6,6 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — the block count was wrong twice; corrected, and it closes Alt 1's first strand.** 36 block
+  classes (not 37 — `expr/ListElementType` is a helper), **18 declare a spec** (not 17 — `LibraryCallBlock`
+  inherits `MethodInvocationBlock`'s). Of the 18 that do not: `CommentBlock` is the only real holdout;
+  `ClassBlock`, `MethodDeclarationBlock`, `MainBlock` and `ConstructorBlock` are **refused**, because
+  `OverlayTreeView.spec(StatementBlock)` never asks a member for one and declaring a schema no renderer reads
+  would force a row break into `ComponentSpec` for one caller; the 13 expression blocks buy the HUD nothing
+  today and are a question for after Alt 3's shape is decided. See `docs/refactor/29-block-layer.md`.
+
 - **2026-09-14 — the last four ordinary statements declare their sentence.** `BodyCallBlock`,
   `DeclareClassVariableBlock`, `DeclareEnumBlock` and `InitializerBlock` (**17 of 37**), settling the rule the
   earlier slices kept circling: *a block's spec is its sentence; chrome that is not a sentence stays in
