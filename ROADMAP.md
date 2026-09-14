@@ -6,6 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-14 — Alt 3 step two held: the wiring has almost nothing to carry.** Surveyed, not written. Every
+  text editor in the block layer commits on **focus-lost**, so the caret has already gone when the re-parse
+  runs; the only shape that keeps focus is `ComboBox.setOnAction`, at four sites, of which **one**
+  (`AssignmentBlock`'s operator) declares a spec — the other three are among the expression blocks already
+  deferred *until the reconciler ships*. Recorded in `docs/refactor/29-block-layer.md` with the two facts a
+  later step-two needs (`Builder.carried` is `CUSTOM`-only; the capture point is `CodeEditorService.render`,
+  not the canvas) and the two ways forward: the diffing renderer, or a widget that commits live.
+
 - **2026-09-14 — Alt 3 step one: what may survive a re-parse.** `BlockComponent` grew an opt-in `rebind`
   hook, `core/component/SpecReconciler` decides which component may keep its widget (four refusals, each a way
   a carry could edit the *wrong* code), and `core/component/ComponentNodes` is the trail from a focused widget
