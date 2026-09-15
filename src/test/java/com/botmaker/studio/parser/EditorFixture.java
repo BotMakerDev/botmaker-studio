@@ -138,6 +138,32 @@ public final class EditorFixture {
         return result;
     }
 
+    /** This fixture's bus — for a test that publishes the events a real edit publishes. */
+    public EventBus bus() {
+        return bus;
+    }
+
+    /**
+     * Calls {@code handler} with the root of every tree {@code CodeEditorService} renders.
+     *
+     * <p>How an FX test gets the service's blocks into a scene: {@code render} publishes the root and nothing
+     * else hands it out, and a block that is in no scene has no focus owner to walk up from.
+     */
+    public void subscribeBlocksUpdated(java.util.function.Consumer<AbstractCodeBlock> handler) {
+        bus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class,
+                e -> handler.accept(e.rootBlock()), false);
+    }
+
+    /**
+     * Asks the service to render the source the state already holds, the way installing a plugin does.
+     *
+     * <p>Reuse is off on this path by construction, which is what makes it the right way to establish a
+     * first render: the tree it produces is the one a later edit is then offered.
+     */
+    public void rerender() {
+        bus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(state.getCurrentCode()));
+    }
+
     /** A path under this project's activities package — a file there is treated as an activity stub. */
     public static Path activitiesFile(String fileName) {
         return CONFIG.activitiesPackageDir().resolve(fileName).toAbsolutePath();

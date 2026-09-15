@@ -6,6 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse, phase 2: the narrow policy, canvas only.** `CodeEditorService` builds the
+  oracle on the `CodeUpdatedEvent` path — before `adopt()`, which replaces the state's source — and offers
+  reuse for one subtree: the focused block's, or the highlighted one's once focus has left (every text editor
+  here commits on focus-lost). `render` takes a `BlockReuse`; the other two renders pass `NONE` deliberately —
+  `UIRefreshRequestedEvent` because `LibrariesChangedEvent` rebuilds through it to pick up a newly bound
+  plugin's pickers, and `refreshUI` because its one caller is `switchToFile`, where the tree on screen is a
+  different file's. `BlockReuseRenderTest` (4 tests, TestFX headless) asserts the surviving block keeps the
+  same JavaFX `Node`. **First observable phase**: the caret, selection and scroll position inside the block
+  being edited now survive the edit.
+
 - **2026-09-15 — block reuse: a parse whose lock verdict moved keeps nothing.** `BlockReuse.take` gains a
   fifth refusal, checked first and refusing every subtree at once: `BlockConverter` stamps the read-only
   verdict on a block it *builds*, and a survivor is never built, so reader mode being switched on would

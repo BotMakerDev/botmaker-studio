@@ -6,9 +6,11 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
+import com.botmaker.studio.core.component.ComponentNodes;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
+import com.botmaker.studio.parser.BlockReuse;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.parser.SlotVacancy;
 import com.botmaker.studio.parser.StatementPlacement;
@@ -31,6 +33,8 @@ import com.botmaker.studio.ui.dnd.MoveBlockInfo;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
+import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -70,6 +74,15 @@ public class CodeEditorService {
 
     /** Cache of the last rendered block-tree root, exposed via {@link #getRootBlock()} for the overlay editor. */
     private AbstractCodeBlock lastRootBlock;
+
+    /**
+     * The lock verdict the blocks currently on screen were parsed under.
+     *
+     * <p>Handed to {@link BlockReuse#of} so a re-parse whose verdict moved keeps nothing: a survivor carries
+     * the {@code isReadOnly} it was built with, and {@code BlockConverter} stamps that verdict only on a
+     * block it builds. See {@code docs/refactor/30-block-reuse.md} §10.
+     */
+    private boolean lastRenderWasReadOnly;
 
     public CodeEditorService(
             ProjectConfig config,
@@ -142,7 +155,10 @@ public class CodeEditorService {
         // canvas on the publishing call; it was never meant to hold back what the file says.
         eventBus.subscribe(CoreApplicationEvents.UIRefreshRequestedEvent.class, event -> {
             CompilationUnit parsed = adopt(event.code());
-            Platform.runLater(() -> render(parsed, event.code(), false));
+            // No reuse here, and deliberately so: LibrariesChangedEvent rebuilds through this event, and its
+            // whole job is to throw the cached widgets away so a newly bound plugin's pickers are drawn. A
+            // kept node is exactly the restart this event exists to avoid needing.
+            Platform.runLater(() -> render(parsed, event.code(), false, BlockReuse.NONE));
         }, false);
 
         eventBus.subscribe(CoreApplicationEvents.BreakpointToggledEvent.class,
@@ -164,8 +180,13 @@ public class CodeEditorService {
 
         eventBus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, event -> {
             handleCodeUpdateForHistory(event);
+            // The edit path, and the one place reuse is offered. Built before adopt(), which replaces the
+            // state's source: BlockReuse slices the outgoing nodes' offsets out of the source they were
+            // parsed from, and against the new text that is two different files.
+            BlockReuse reuse = reuseForThisEdit();
             CompilationUnit parsed = adopt(event.newCode());
-            Platform.runLater(() -> render(parsed, event.newCode(), event.markNewIdentifiersAsUnedited()));
+            Platform.runLater(() ->
+                    render(parsed, event.newCode(), event.markNewIdentifiersAsUnedited(), reuse));
         }, false);
 
         eventBus.subscribe(CoreApplicationEvents.UndoRequestedEvent.class,
@@ -728,8 +749,60 @@ public class CodeEditorService {
     // Removing an activity is the SDK plugin's Activity Flow, which edits its own JSON and leaves whatever
     // the user wrote exactly where it is, and nothing else here should go.
 
+    /**
+     * A whole-file render with <b>no reuse</b>, and the {@code NONE} is load-bearing rather than cautious:
+     * this is reached from {@link #switchToFile}, so the tree on screen belongs to a <em>different file</em>.
+     * A {@code BlockId} is a path from the compilation unit, so {@code types[0]/…/statements[0]} names a node
+     * in both files, and two files that happen to agree on one statement's text would hand a block across.
+     */
     private void refreshUI(String javaCode, boolean markNewIdentifiersAsUnedited) {
-        render(adopt(javaCode), javaCode, markNewIdentifiersAsUnedited);
+        render(adopt(javaCode), javaCode, markNewIdentifiersAsUnedited, BlockReuse.NONE);
+    }
+
+    /**
+     * Which blocks of the parse now on screen this edit is willing to keep.
+     *
+     * <p><b>Narrow by design: only the subtree the user is actually in.</b> A block kept anywhere else buys
+     * nothing a rebuild does not — the widgets are equivalent — while a block kept where the user is typing
+     * keeps the caret, the selection, an open popup and the scroll position inside it. So the blast radius of
+     * a bug here is one subtree, next to the thing the user was doing, rather than the whole file. Widening
+     * it to {@code block -> true} is the later phase and is a one-line change; see
+     * {@code docs/refactor/30-block-reuse.md} §7.
+     *
+     * <p>Answers {@link BlockReuse#NONE} whenever the answer is not obvious: no previous parse, or nothing
+     * focused and nothing highlighted. The lock verdict is <em>not</em> checked here — it is passed down and
+     * refused inside {@link BlockReuse#take}, so no future caller of this mechanism can forget it.
+     */
+    private BlockReuse reuseForThisEdit() {
+        Map<ASTNode, CodeBlock> previous = state.getNodeToBlockMap();
+        String previousSource = state.getCurrentCode();
+        if (previous == null || previous.isEmpty() || previousSource == null) return BlockReuse.NONE;
+
+        String keepUnder = focusedBlockId();
+        if (keepUnder == null) return BlockReuse.NONE;
+
+        return BlockReuse.of(previous, previousSource, lastRenderWasReadOnly,
+                block -> keepUnder.equals(block.getId()));
+    }
+
+    /**
+     * The id of the block the user is in — the focus owner's, or failing that the highlighted block's.
+     *
+     * <p>{@code ComponentNodes.blockIdOf} walks up from the focused widget to the nearest node carrying a
+     * block id, which {@code AbstractCodeBlock.getUINode} stamps on every block root. A text field several
+     * containers deep can therefore name the block it belongs to with nothing keeping a map of which widget
+     * is whose.
+     *
+     * <p>The highlight is the fallback rather than an equal, and that ordering matters: almost every text
+     * editor in this layer commits on <em>focus-lost</em>, so by the time the re-parse runs the focus has
+     * often already left. The highlight is what still names where the user was.
+     */
+    private String focusedBlockId() {
+        Node root = lastRootBlock == null ? null : lastRootBlock.getUINode();
+        Scene scene = root == null ? null : root.getScene();
+        String fromFocus = scene == null ? null : ComponentNodes.blockIdOf(scene.getFocusOwner());
+        if (fromFocus != null) return fromFocus;
+        return state.getHighlightedBlock().map(CodeBlock::getId).orElse(null);
     }
 
     /**
@@ -757,7 +830,8 @@ public class CodeEditorService {
         }
     }
 
-    private void render(CompilationUnit parsed, String javaCode, boolean markNewIdentifiersAsUnedited) {
+    private void render(CompilationUnit parsed, String javaCode, boolean markNewIdentifiersAsUnedited,
+                        BlockReuse reuse) {
         // The registry is rebuilt into a fresh map and published once, at the end. Clearing the live one and
         // refilling it in place is what let a background reader walk a half-built registry (bugs.md B10).
         Map<ASTNode, CodeBlock> rebuilt = new HashMap<>();
@@ -778,8 +852,10 @@ public class CodeEditorService {
                 rebuilt,
                 dragAndDropManager,
                 resolver.suppressesInteraction(),
-                markNewIdentifiersAsUnedited
+                markNewIdentifiersAsUnedited,
+                reuse
         );
+        lastRenderWasReadOnly = resolver.suppressesInteraction();
         state.setNodeToBlockMap(rebuilt);
         AbstractCodeBlock rootBlock = result.root();
         this.lastRootBlock = rootBlock;
