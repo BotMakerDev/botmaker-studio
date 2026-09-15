@@ -394,8 +394,19 @@ point of it.**
   (`MavenService.resolveSdkJar`, any version — the project pom's JitPack repo means it need never have been on
   this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
-  (file + line), and where each break went — read from the **pointer pair the two jars carry**
-  (`@ReplacedBy`/`@Replaces`, `docs/refactor/21-api-compat.md` §4). Four things about it are load-bearing:
+  (file + line), and where each break went — read from the **one pointer the old jar carries**
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Four things about it are load-bearing:
+  - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
+    (2026-09-15). The default filters to `PluginHost.cataloguedPackages()` — the packages the plugins bound
+    *right now* catalogue — which is the right question for a menu and the wrong one here: the jar being read
+    may belong to a plugin that is not bound, is being installed for the first time, or failed to load, and
+    each of those answers the empty set. **A scan filtered to nothing reads as "this jar has no public API at
+    all"**, which is the sentence the report actually printed in every headless caller from 2026-09-02, when
+    the literal `Set.of("com.botmaker.sdk.api")` became the catalog lookup. Production never saw it (a bound
+    SDK answers its own package) and 57 tests did, silently, for thirteen days. What a jar contains is a
+    property of the jar. The extra classes cost nothing downstream — attribution is by the type name the
+    bot's own source writes, so a class no bot can name is never a call site — and the one list that shows
+    unintersected names, `SdkUpgradeDiff.additions`, filters for itself.
   - **A redirect where the jars confirm it, a default where they do not.** The SDK once shipped a repair per
     break (a `fix` in `migrations.json`) and it was guessing — nothing checked that two members shared a
     return type, an arity or any semantics. What replaced it is not the absence of a redirect but a
@@ -413,18 +424,27 @@ point of it.**
     (`CallChange.CallDeleted`, because `0;` is not a statement), and `@NeedsReview` on the enclosing function
     **in the same rewrite** — see the review-marks bullet below. *The repair makes the bot compile; the user
     makes it correct.*
-  - **`services/SdkPairing` follows edges, and pairs members independently of types.** One edge map:
-    the **old** jar's `@ReplacedBy` forwards (the author of the element the bot actually calls saying where it
-    went) plus the **new** jar's `@Replaces` backwards, **filtered by era** — an entry is consulted only for a
-    bot pinned at or below the version it records. The walk follows edges until it reaches a spelling the
-    target jar actually has, which is what resolves a **chain** with no intermediate jar fetched; a visited
-    set bounds it, and a cycle reaching nothing live is simply unpaired. Three deliberate refusals: a
-    spelling the target **still has** is answered by the live element (so an accumulated entry can never go
-    stale into a wrong answer), an ambiguous claim is left unpaired with a `problems()` line, and a pairing is
-    never invented. `memberName` and `targetOf` are the two readers — the first answers "what is this called
-    on the type this one paired with", the second hands back an endpoint that crossed types, and only
-    `redirectsFor` (which is about to move the receiver too) is entitled to that.
-  - **The graph is multi-valued, because a member can become two.** `forwardEdges`/`backwardEdges` are
+  - **`services/SdkPairing` follows edges, and pairs members independently of types.** One edge map, built
+    from one annotation: the **old** jar's `@ReplacedBy`, the author of the element the bot actually calls
+    saying where it went. The walk follows edges until it reaches a spelling the target jar actually has; a
+    visited set bounds it, and a cycle reaching nothing live is simply unpaired. Two deliberate refusals: a
+    spelling the target **still has** is answered by the live element (so an accumulated pointer can never go
+    stale into a wrong answer), and a pairing is never invented. `memberName` and `targetOf` are the two
+    readers — the first answers "what is this called on the type this one paired with", the second hands back
+    an endpoint that crossed types, and only `redirectsFor` (which is about to move the receiver too) is
+    entitled to that.
+  - **There is no back edge, and the removal on 2026-09-15 is worth knowing before anyone proposes one.**
+    `@Replaces` on the survivor — with an era filter, since an entry only describes a bot pinned at or below
+    the version it records — was read here until then, for the one case a forward pointer cannot answer: a
+    **deleted** element carries no pointer. Two facts retired it. Nothing writes it: the contract declares
+    `ReplacedBy` and nothing else, and `com.botmaker.plugin.api.meta.Replaces` has never existed, so for two
+    weeks `SdkApiModel` read an annotation no plugin could produce. And nothing needs to: japicmp refuses a
+    removal from a plugin's published API, so the target jar still carries the deprecated element and its own
+    forward pointer. What that changes about a **chain** is worth stating, because it is not nothing — the
+    intermediate is now *present* in the target jar rather than absent from both, so an upgrade stops there
+    (`Legacy → Middle`) and it takes Modernise to walk past it (`Middle → Modern`). The bot compiles either
+    way, which is the property that matters.
+  - **The graph is multi-valued, because a member can become two.** `forwardEdges` is
     `Map<String, List<String>>`, `follow` returns a *list* expanded in declared order and depth-first through
     chains, and `SdkRedirects.redirectsFor` returns `List<Candidate>` in preference order — `redirectFor`
     survives as the one-line "first candidate, or null", which is the whole answer for every reader that does
@@ -450,13 +470,11 @@ point of it.**
     `META-INF/botmaker/whats-new.md`; `Report.highlights()` holds the sections in `(from, to]`, newest first,
     rendered above every cost section, with the exhaustive API diff still below it. Absent file → exactly the
     old dialog, which is the standing rule that every new reader degrades.
-  - **The author's own sentence reaches the user verbatim.** `@ReplacedBy(note=…)` / `@Replaces(note=…)` are
-    preferred over Studio's generated sentence and never rewritten; when both jars carry one the **old** jar's
-    wins (the author speaking at the moment of the change, on the element the bot actually calls) and the new
-    jar's is the fallback for a bot that skipped that release. `behaviourChanged` is a logical OR across the
-    two ends and forces the review mark **even where the shape did not move** — `shapeChanged ||
-    behaviourChanged` — which is the one gap the model cannot detect by construction. `@Since` groups the
-    additions by the version that introduced them.
+  - **The author's own sentence reaches the user verbatim.** `@ReplacedBy(note=…)` is preferred over Studio's
+    generated sentence and never rewritten — the author speaking at the moment of the change, on the element
+    the bot actually calls, which is the only end there is. `behaviourChanged` forces the review mark **even
+    where the shape did not move** — `shapeChanged || behaviourChanged` — which is the one gap the model
+    cannot detect by construction. `@Since` groups the additions by the version that introduced them.
   - **A removed type with no pairing is the one break that refuses the upgrade**
     (`BreakKind.TYPE_REMOVED`, `Break.isRepairable()` false): a default has nowhere to go in
     `ImageTemplate t = …;`. It disables the whole span (`Report.canMigrate()`), because rewriting some call

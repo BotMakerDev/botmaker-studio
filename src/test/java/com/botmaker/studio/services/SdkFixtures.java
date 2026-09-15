@@ -38,6 +38,9 @@ final class SdkFixtures {
 
     static final String PKG = "com.botmaker.sdk.api";
 
+    /** Where the pointer vocabulary really lives — the plugin contract's, not any one plugin's. */
+    static final String META = "com.botmaker.plugin.api.meta";
+
     /**
      * The jars get unique names: {@link TypeSummaryManager}'s disk cache is keyed by jar <em>filename</em>
      * and settles ties by mtime, so two same-named fixtures written in the same millisecond would have the
@@ -54,19 +57,23 @@ final class SdkFixtures {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         assumeTrue(compiler != null, "no platform compiler on this JRE; the fixture jars cannot be built");
 
-        Path src = dir.resolve("src-" + label + "-" + UNIQUE.get()).resolve(PKG.replace('.', '/'));
+        Path root = dir.resolve("src-" + label + "-" + UNIQUE.get());
+        Path src = root.resolve(PKG.replace('.', '/'));
         Files.createDirectories(src);
         List<String> paths = new ArrayList<>();
         for (Map.Entry<String, String> e : classes.entrySet()) {
-            // A key may name a sub-package — "meta.Since" — because @Since and @Scaffolding only ever
-            // existed under api.meta, and a fixture that put them in `api` would be testing a jar the SDK
-            // has never published.
+            // A bare key is a class of PKG, which is every class fixture. A dotted key is a fully-qualified
+            // name, which is how the pointer annotations land in the contract's package rather than this
+            // plugin's — the vocabulary is every plugin's, and a fixture that put it under PKG would be
+            // testing a jar shape no plugin produces.
             String key = e.getKey();
             int dot = key.lastIndexOf('.');
-            Path pkgDir = dot < 0 ? src : src.resolve(key.substring(0, dot).replace('.', '/'));
+            String pkg = dot < 0 ? PKG : key.substring(0, dot);
+            String simple = key.substring(dot + 1);
+            Path pkgDir = root.resolve(pkg.replace('.', '/'));
             Files.createDirectories(pkgDir);
-            Path file = pkgDir.resolve(key.substring(dot + 1) + ".java");
-            Files.writeString(file, e.getValue());
+            Path file = pkgDir.resolve(simple + ".java");
+            Files.writeString(file, withMetaImport(e.getValue()));
             paths.add(file.toString());
         }
 
@@ -95,6 +102,24 @@ final class SdkFixtures {
         return jar;
     }
 
+    /**
+     * {@code source} with {@code import com.botmaker.plugin.api.meta.*;} after its package line.
+     *
+     * <p>A fixture class writes {@code @ReplacedBy(…)} unqualified, which worked while the annotations were
+     * declared in the same package it is. They are the contract's now, so every fixture would otherwise have
+     * to carry the import — one line repeated across three test classes, forgotten in exactly the test that
+     * adds the next pointer case. A real plugin imports the contract the same way.
+     *
+     * <p>A source already in that package is left alone, and an unused import of a package the jar declares
+     * is not a compile error, so this is applied to every fixture rather than to the ones that need it.
+     */
+    private static String withMetaImport(String source) {
+        if (source.contains("package " + META + ";")) return source;
+        int end = source.indexOf(';', source.indexOf("package "));
+        return end < 0 ? source
+                : source.substring(0, end + 1) + "\nimport " + META + ".*;" + source.substring(end + 1);
+    }
+
     /** A service over a throwaway project holding {@code sources} as {@code Subject.java}, {@code Subject1}… */
     static SdkUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
         Path project = tmp.resolve("project");
@@ -116,17 +141,22 @@ final class SdkFixtures {
     }
 
     /**
-     * The four meta annotations, compiled into whichever fixture jar wants them. CLASS retention is the
-     * default, which is exactly what the real ones declare — and what makes them readable off a jar.
+     * The meta annotations, compiled into whichever fixture jar wants them. CLASS retention is the default,
+     * which is exactly what the real ones declare — and what makes them readable off a jar.
      *
-     * <p>{@code ReplacedBy} and {@code Replaces} are declared under {@code api} rather than {@code api.meta}
-     * on purpose: that is where a pre-1.1.0 jar has them, which is the jar an upgrade reads the forward
-     * pointer out of. {@code Since} and {@code Scaffolding} have no such spelling and are declared where the
-     * SDK actually keeps them.
+     * <p><b>They are declared in {@link #META}, the plugin contract's own package, because that is the only
+     * spelling {@code SdkApiModel} reads.</b> They were declared under {@code com.botmaker.sdk.api} until
+     * 2026-09-15, which was where a pre-1.1.0 SDK jar kept them — and the reader stopped accepting that
+     * spelling on 2026-09-02, when the four historical package names were dropped. Nothing failed loudly:
+     * the fixture went on compiling, the jars went on carrying annotations, and every pointer test simply
+     * asserted against a jar whose pointers production could no longer see.
+     *
+     * <p>{@code Since} lives there too. There is no {@code Replaces}: the back edge is not read any more, and
+     * a fixture that can still express one would be testing a jar shape no plugin can produce.
      */
     static Map<String, String> withPointers(Map<String, String> base) {
         Map<String, String> out = new HashMap<>(base);
-        out.put("ReplacedBy", """
+        out.put(META + ".ReplacedBy", """
                 package %s;
                 public @interface ReplacedBy {
                     String[] value() default {};
@@ -134,23 +164,11 @@ final class SdkFixtures {
                     String note() default "";
                     boolean behaviourChanged() default false;
                 }
-                """.formatted(PKG));
-        out.put("Replaces", """
+                """.formatted(META));
+        out.put(META + ".Since", """
                 package %s;
-                public @interface Replaces {
-                    String[] value();
-                    String note() default "";
-                    boolean behaviourChanged() default false;
-                }
-                """.formatted(PKG));
-        out.put("meta.Since", """
-                package %s.meta;
                 public @interface Since { String value(); }
-                """.formatted(PKG));
-        out.put("meta.Scaffolding", """
-                package %s.meta;
-                public @interface Scaffolding {}
-                """.formatted(PKG));
+                """.formatted(META));
         return out;
     }
 }

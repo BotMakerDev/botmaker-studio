@@ -501,7 +501,7 @@ class SdkUpgradeServiceTest {
                 jarOf(tmp, "new", after, Map.of()), from, to);
     }
 
-    /** The class that took {@code Legacy}'s place, carrying whatever backward pointer the test wants. */
+    /** The class that took {@code Legacy}'s place, carrying whatever annotation the test wants. */
     private static String modern(String annotation) {
         return """
                 package %s;
@@ -529,41 +529,30 @@ class SdkUpgradeServiceTest {
     }
 
     @Test
-    void theNewJarsBackwardPointerAloneIsEnoughToo(@TempDir Path tmp) throws IOException {
-        // The half that survives the deletion: once Legacy is finally removed, @Replaces on the survivor is
-        // the only remaining record that it was ever called that.
-        assertPaired(pointerReport(tmp, "",
-                Map.of("Modern", modern("@Replaces(\"com.botmaker.sdk.api.Legacy@1.5.0\")")),
-                "1.0.0", "2.0.0"));
-    }
+    void aChainStopsAtTheIntermediateTheTargetJarStillHas(@TempDir Path tmp) throws IOException {
+        // `Legacy → Middle` was announced by the release the bot is on; `Middle → Modern` by a later one.
+        // Never-delete is what makes this answerable with two jars: Middle is deprecated rather than removed,
+        // so the TARGET jar still has it, carrying its own pointer onward.
+        //
+        // An upgrade stops there, and that is the right answer rather than a shortfall — Middle exists, the
+        // rewritten call compiles, and moving off a deprecation is a separate question the user asks when
+        // they choose to. `aDeprecatedMemberIsOnlyFollowedWhenTheExtraHopWasAskedFor` is the other half.
+        Report r = pointerReport(tmp, "@ReplacedBy(\"com.botmaker.sdk.api.Middle\")", Map.of(
+                        "Middle", """
+                                package %s;
+                                @Deprecated
+                                @ReplacedBy("com.botmaker.sdk.api.Modern")
+                                public class Middle {
+                                    public static void anything() {}
+                                }
+                                """.formatted(PKG),
+                        "Modern", modern("")),
+                "1.0.0", "3.0.0");
 
-    @Test
-    void bothEndsAgreeingIsStillOneAnswer(@TempDir Path tmp) throws IOException {
-        assertPaired(pointerReport(tmp, "@ReplacedBy(\"com.botmaker.sdk.api.Modern\")",
-                Map.of("Modern", modern("@Replaces(\"com.botmaker.sdk.api.Legacy@1.5.0\")")),
-                "1.0.0", "2.0.0"));
-    }
-
-    @Test
-    void thePointersComposeIntoAChainWithNoIntermediateJar(@TempDir Path tmp) throws IOException {
-        // The case the two halves exist for. `Legacy → Middle` was announced by the release the bot is on;
-        // `Middle → Modern` by a later one. Middle is in NEITHER jar in hand, and the bot still says Legacy.
-        assertPaired(pointerReport(tmp, "@ReplacedBy(\"com.botmaker.sdk.api.Middle\")",
-                Map.of("Modern", modern("@Replaces(\"com.botmaker.sdk.api.Middle@2.5.0\")")),
-                "1.0.0", "3.0.0"));
-    }
-
-    @Test
-    void anEntryFromBeforeTheBotsOwnVersionIsNotAboutThisBot(@TempDir Path tmp) throws IOException {
-        // The entry records the last release in which the old spelling existed. A bot pinned after that never
-        // wrote it that way, so its `Legacy` is a different Legacy — reintroduced and removed again — and
-        // pairing the two would be the invented answer the design refuses.
-        Report r = pointerReport(tmp, "",
-                Map.of("Modern", modern("@Replaces(\"com.botmaker.sdk.api.Legacy@0.9.0\")")),
-                "1.0.0", "2.0.0");
-
-        assertEquals(BreakKind.TYPE_REMOVED,
-                brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString())).kind());
+        Break renamed = brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString()));
+        assertEquals(BreakKind.TYPE_RENAMED, renamed.kind(), r.breaks() + " " + r.problems());
+        assertTrue(renamed.detail().contains("Middle"), renamed.detail());
+        assertTrue(r.canMigrate(), r.breaks() + " " + r.problems());
     }
 
     @Test
@@ -584,26 +573,6 @@ class SdkUpgradeServiceTest {
 
         assertEquals(BreakKind.TYPE_REMOVED,
                 brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString())).kind());
-    }
-
-    @Test
-    void anOldNameTwoSurvivorsBothClaimIsAQuestionNotAGuess(@TempDir Path tmp) throws IOException {
-        Report r = pointerReport(tmp, "", Map.of(
-                        "Modern", modern("@Replaces(\"com.botmaker.sdk.api.Legacy@1.5.0\")"),
-                        "Other", """
-                                package %s;
-                                @Replaces("com.botmaker.sdk.api.Legacy@1.5.0")
-                                public class Other {
-                                    public static void anything() {}
-                                }
-                                """.formatted(PKG)),
-                "1.0.0", "2.0.0");
-
-        assertEquals(BreakKind.TYPE_REMOVED,
-                brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString())).kind());
-        assertTrue(r.problems().stream().anyMatch(p -> p.contains("Legacy") && p.contains("Modern")),
-                "the user is told why it could not be answered: " + r.problems());
-        assertFalse(r.canMigrate());
     }
 
     @Test
@@ -644,7 +613,6 @@ class SdkUpgradeServiceTest {
                 package %s;
                 public class Mouse {
                     public static void click(int x, int y, long delayMs) {}
-                    @Replaces("com.botmaker.sdk.api.Mouse#doubleClick@1.5.0")
                     public static void twoClicks(int x, int y) {}
                 }
                 """.formatted(PKG));
@@ -795,10 +763,9 @@ class SdkUpgradeServiceTest {
                 "Vision", """
                         package %s;
                         public class Vision {
-                            @Replaces("%s.Finder#find@1.0.0")
                             public static Hit find(String query) { return null; }
                         }
-                        """.formatted(PKG, PKG));
+                        """.formatted(PKG));
         Report r = finderReport(tmp, finderPointingAt(PKG + ".Vision#find"), after);
 
         Break moved = brk(r, "Finder.find").orElseThrow(() -> new AssertionError(r.breaks().toString()));
@@ -970,9 +937,9 @@ class SdkUpgradeServiceTest {
     /**
      * {@code Mouse.doubleClick} → {@code Mouse.twoClicks}: the same shape, the same type, so nothing Studio
      * can read off the two jars would ever mark it. Whatever the row says beyond "becomes Mouse.twoClicks"
-     * came from the annotations, which is exactly what these tests are about.
+     * came from the annotation, which is exactly what these tests are about.
      */
-    private static Report moveReport(Path tmp, String forward, String backward) throws IOException {
+    private static Report moveReport(Path tmp, String forward) throws IOException {
         Map<String, String> before = withPointers(oldSdk());
         before.put("Mouse", """
                 package %s;
@@ -988,10 +955,9 @@ class SdkUpgradeServiceTest {
                 package %s;
                 public class Mouse {
                     public static void click(int x, int y, long delayMs) {}
-                    %s
                     public static void twoClicks(int x, int y) {}
                 }
-                """.formatted(PKG, backward));
+                """.formatted(PKG));
         return serviceOver(tmp, BOT).compare(jarOf(tmp, "old", before, Map.of()),
                 jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0");
     }
@@ -1000,35 +966,11 @@ class SdkUpgradeServiceTest {
     void theAuthorsOwnSentenceReachesTheUserWordForWord(@TempDir Path tmp) throws IOException {
         Report r = moveReport(tmp,
                 "@ReplacedBy(value = \"" + PKG + ".Mouse#twoClicks\", note = \"twoClicks waits between the "
-                        + "two presses, which is what most games expect.\")", "");
+                        + "two presses, which is what most games expect.\")");
 
         Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertEquals("becomes Mouse.twoClicks — twoClicks waits between the two presses, which is what most "
                 + "games expect.", moved.repair());
-    }
-
-    @Test
-    void theSurvivorsSentenceAnswersForABotThatSkippedTheDeprecationRelease(@TempDir Path tmp)
-            throws IOException {
-        // No forward pointer at all: the deprecated member is simply gone, and the back edge — with its
-        // arity, since by now there is no overload left to sit on — is the only record of what happened.
-        Report r = moveReport(tmp, "",
-                "@Replaces(value = \"" + PKG + ".Mouse#doubleClick(2)@1.5.0\", note = \"Say twoClicks now.\")");
-
-        Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
-        assertEquals("becomes Mouse.twoClicks — Say twoClicks now.", moved.repair());
-    }
-
-    @Test
-    void whenBothJarsSpeakTheOldOneWins(@TempDir Path tmp) throws IOException {
-        // The old jar is the author speaking at the moment of the change, on the very element this bot
-        // calls. The new jar's copy is the fallback for the bot that was not there to hear it.
-        Report r = moveReport(tmp,
-                "@ReplacedBy(value = \"" + PKG + ".Mouse#twoClicks\", note = \"Forward.\")",
-                "@Replaces(value = \"" + PKG + ".Mouse#doubleClick(2)@1.5.0\", note = \"Backward.\")");
-
-        Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
-        assertEquals("becomes Mouse.twoClicks — Forward.", moved.repair());
     }
 
     @Test
@@ -1037,7 +979,7 @@ class SdkUpgradeServiceTest {
         // and a different thing happening at runtime. Only the author can say so, and saying so is enough.
         Report r = moveReport(tmp,
                 "@ReplacedBy(value = \"" + PKG + ".Mouse#twoClicks\", behaviourChanged = true, "
-                        + "note = \"twoClicks now waits between the presses.\")", "");
+                        + "note = \"twoClicks now waits between the presses.\")");
 
         Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertTrue(moved.repair().contains("marked for your review"), moved.repair());
@@ -1045,19 +987,9 @@ class SdkUpgradeServiceTest {
     }
 
     @Test
-    void eitherEndAssertingBehaviourChangedIsEnough(@TempDir Path tmp) throws IOException {
-        Report r = moveReport(tmp, "@ReplacedBy(\"" + PKG + ".Mouse#twoClicks\")",
-                "@Replaces(value = \"" + PKG + ".Mouse#doubleClick(2)@1.5.0\", behaviourChanged = true, "
-                        + "note = \"It waits now.\")");
-
-        Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
-        assertTrue(moved.repair().contains("marked for your review"), moved.repair());
-    }
-
-    @Test
     void theSameMoveWithNothingSaidAboutItIsUnmarkedAndUnannotated(@TempDir Path tmp) throws IOException {
-        // The control: every sentence above has to be the annotations' doing, not the diff's.
-        Report r = moveReport(tmp, "@ReplacedBy(\"" + PKG + ".Mouse#twoClicks\")", "");
+        // The control: every sentence above has to be the annotation's doing, not the diff's.
+        Report r = moveReport(tmp, "@ReplacedBy(\"" + PKG + ".Mouse#twoClicks\")");
 
         Break moved = brk(r, "Mouse.doubleClick").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertEquals("becomes Mouse.twoClicks", moved.repair());
@@ -1071,13 +1003,13 @@ class SdkUpgradeServiceTest {
                 public class Mouse {
                     public static void click(int x, int y, long delayMs) {}
                     public static void doubleClick(int x, int y) {}
-                    @com.botmaker.sdk.api.meta.Since("2.0.0")
+                    @Since("2.0.0")
                     public static void dragTo(int x, int y) {}
                 }
                 """.formatted(PKG));
         after.put("Session", """
                 package %s;
-                @com.botmaker.sdk.api.meta.Since("1.5.0")
+                @Since("1.5.0")
                 public class Session {
                     public static void open() {}
                 }
@@ -1102,30 +1034,23 @@ class SdkUpgradeServiceTest {
         assertTrue(r.added().contains("Mouse.dragTo(…)"), r.added().toString());
     }
 
+    /**
+     * <b>{@code Report.scaffolding()} can no longer be anything but empty, and this records that rather than
+     * asserting the feature.</b>
+     *
+     * <p>It listed the members Studio's own <em>generated</em> files wrote, so that an upgrade those files
+     * blocked said so before the user committed to it. The flag came from {@code @Scaffolding}, which was
+     * deleted from the SDK on 2026-08-25 along with every generator Studio had — and
+     * {@code SdkApiModel.apiClassOf} has passed the literal {@code false} for both the class and the member
+     * ever since, so nothing can set it.
+     *
+     * <p>The plumbing is still wired end to end — the record component, {@code SdkUpgradeDiff.scaffolding},
+     * and a warning block in {@code SdkUpgradeDialog} that cannot render. It is left standing rather than
+     * demolished here, because that is a decision of its own and this pass is about the pointer vocabulary;
+     * what must not stand is a test that passes only if a deleted annotation comes back.
+     */
     @Test
-    void aBreakOnSomethingStudioItselfWritesIsSaidUpFront(@TempDir Path tmp) throws IOException {
-        // Generated files are rendered from Studio's templates, never migrated, so this upgrade cannot be
-        // completed by a rewrite of the user's code alone. That was a refusal thrown mid-apply; it is now
-        // also a line in the report, before the user commits to anything.
-        Map<String, String> before = withPointers(oldSdk());
-        before.put("Wait", """
-                package %s;
-                public class Wait {
-                    @com.botmaker.sdk.api.meta.Scaffolding
-                    public static void seconds(int s) {}
-                    public static void time(long ms) {}
-                }
-                """.formatted(PKG));
-        Report r = serviceOver(tmp, BOT).compare(jarOf(tmp, "old", before, Map.of()),
-                jarOf(tmp, "new", withPointers(newSdk()), Map.of()), "1.0.0", "2.0.0");
-
-        assertEquals(List.of("Wait.seconds"), r.scaffolding(), "problems=" + r.problems());
-        // And it changes no verdict: the break is still exactly the break it was.
-        assertEquals(BreakKind.MEMBER_REMOVED, brk(r, "Wait.seconds").orElseThrow().kind());
-    }
-
-    @Test
-    void aBreakOnAnOrdinaryMemberSaysNothingAboutScaffolding(@TempDir Path tmp) throws IOException {
+    void nothingIsEverReportedAsScaffoldingAnyMore(@TempDir Path tmp) throws IOException {
         assertTrue(reportFor(tmp, BOT).scaffolding().isEmpty());
     }
 

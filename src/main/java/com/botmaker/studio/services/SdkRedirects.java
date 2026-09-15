@@ -107,7 +107,7 @@ final class SdkRedirects {
 
         boolean moved = !owner.name().equals(now.name());
         String oldReturn = returnTypeOf(then, call);
-        Advice advice = adviceFor(then, call, owner, name);
+        Advice advice = pointerAdvice(overloadOf(then, call));
 
         if (call.isField()) {
             if (!owner.declaresField(name)) return null;
@@ -138,28 +138,6 @@ final class SdkRedirects {
                 returnTypeFqn(oldReturn, after), advice.note(), advice.behaviourChanged());
     }
 
-    /**
-     * What the SDK's own author said about this move, from whichever end of the pointer pair carries it.
-     *
-     * <p>Both ends are asked because only one of them need exist. The <b>forward</b> half is the
-     * {@code @ReplacedBy} on the element in the <em>old</em> jar — the one the bot still calls — and it wins,
-     * being the author speaking on the member the user actually wrote. The <b>backward</b> half is the
-     * {@code @Replaces} claim on the survivor in the <em>new</em> jar, which is the only place the sentence
-     * survives once the deprecated element is finally deleted, and so is the answer for a bot that skipped
-     * the deprecation release entirely. See {@link Advice}.
-     */
-    private static Advice adviceFor(ApiClass then, Call call, ApiClass owner, String name) {
-        Advice forward = pointerAdvice(overloadOf(then, call));
-        String oldSpelling = then.name() + "#" + call.member();
-        Advice backward = owner.byName().getOrDefault(name, List.of()).stream()
-                .flatMap(m -> m.replaces().stream())
-                .filter(c -> c.name().equals(oldSpelling) && c.covers(call.argCount()))
-                .findFirst()
-                .map(c -> new Advice(c.note(), c.behaviourChanged()))
-                .orElse(Advice.NONE);
-        return forward.over(backward);
-    }
-
     /** The overload this call reaches, by arity, falling back to any of the name — see {@link #returnTypeOf}. */
     private static ApiMember overloadOf(ApiClass then, Call call) {
         List<ApiMember> named = then.byName().getOrDefault(call.member(), List.of());
@@ -169,6 +147,12 @@ final class SdkRedirects {
                 .orElseGet(() -> named.stream().findFirst().orElse(null));
     }
 
+    /**
+     * What the plugin's own author said about this move: the {@code @ReplacedBy} on the element in the
+     * <em>old</em> jar, the one the bot still calls. That is the only end there is — see
+     * {@code SdkApiModel.Pointer} — and it is the right one anyway, being the author speaking on the member
+     * the user actually wrote.
+     */
     private static Advice pointerAdvice(ApiMember member) {
         if (member == null || member.replacedBy() == null) return Advice.NONE;
         return new Advice(member.replacedBy().note(), member.replacedBy().behaviourChanged());

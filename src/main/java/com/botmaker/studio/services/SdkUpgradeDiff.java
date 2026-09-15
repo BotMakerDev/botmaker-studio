@@ -57,10 +57,17 @@ final class SdkUpgradeDiff {
      * class (a whole new class carries one annotation, not one per member). Everything that answers nothing
      * lands in the {@code ""} bucket, which is sorted last and rendered without a heading — a jar predating
      * {@code @Since} therefore produces exactly the flat alphabetical list this used to return.
+     *
+     * <p><b>This is the one list that shows a name the bot never wrote, so it is the one that filters.</b>
+     * {@code SdkApiModel.snapshot} reads the whole jar, because what a jar contains must be answerable with
+     * no plugin bound; every other list here is already intersected with the bot's own call sites, which hides
+     * a class no bot can name by construction. Here nothing intersects, so {@link #offerable} drops the
+     * package a plugin keeps its implementation in.
      */
     static Map<String, List<String>> additions(Map<String, ApiClass> before, Map<String, ApiClass> after) {
         Map<String, Set<String>> byEra = new LinkedHashMap<>();
         for (ApiClass now : after.values()) {
+            if (!offerable(now)) continue;
             ApiClass then = before.get(now.simpleName());
             if (then == null) {
                 byEra.computeIfAbsent(now.since(), k -> new TreeSet<>())
@@ -89,6 +96,24 @@ final class SdkUpgradeDiff {
                 .forEach(e -> out.put(e.getKey(), List.copyOf(e.getValue())));
         // Not Map.copyOf: that is a hash map, and the sort immediately above is the whole point.
         return Collections.unmodifiableMap(out);
+    }
+
+    /**
+     * Whether a class is worth announcing to somebody deciding whether to take this release — a class a bot
+     * could write down, rather than one the plugin resolves for itself.
+     *
+     * <p><b>It is a heuristic, and it is confined to a display list on purpose.</b> The honest answer is the
+     * plugin's own catalogue, and reading that means loading the plugin — which an upgrade must work without,
+     * since a plugin that will not load is exactly the one a user is trying to move off. So this reads the
+     * convention instead: an {@code internal} package segment, which is the boundary
+     * {@code com.botmaker.sdk.api} / {@code com.botmaker.sdk.internal} states and which
+     * {@code botmaker-plugin-archetype} generates. Being wrong costs one row in a list nobody acts on
+     * directly; it can never cost an attribution, a break or a rewrite, none of which consult it.
+     */
+    private static boolean offerable(ApiClass klass) {
+        String pkg = klass.name().substring(0, Math.max(0, klass.name().lastIndexOf('.')));
+        return !pkg.equals("internal") && !pkg.startsWith("internal.")
+                && !pkg.endsWith(".internal") && !pkg.contains(".internal.");
     }
 
     /**

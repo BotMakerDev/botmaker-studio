@@ -1,9 +1,6 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.shared.github.SemVer;
 import com.botmaker.studio.services.SdkApiModel.ApiClass;
-import com.botmaker.studio.services.SdkApiModel.ApiMember;
-import com.botmaker.studio.services.SdkApiModel.Claim;
 import com.botmaker.studio.services.SdkApiModel.Pointer;
 
 import java.util.ArrayDeque;
@@ -17,7 +14,6 @@ import java.util.Set;
 
 import static com.botmaker.studio.services.SdkApiModel.lastSegment;
 import static com.botmaker.studio.services.SdkApiModel.memberPart;
-import static com.botmaker.studio.services.SdkApiModel.strip;
 import static com.botmaker.studio.services.SdkApiModel.typePart;
 
 /**
@@ -25,27 +21,26 @@ import static com.botmaker.studio.services.SdkApiModel.typePart;
  *
  * <p>It is a walk over a tiny graph of <b>old spelling → newer spelling</b>, built once from both jars.
  * A node is a spelling in the grammar the pointers use: {@code fqn} for a type, {@code fqn#member} for a
- * member. Two things put edges in it:
+ * member. One thing puts edges in it: the <b>old</b> jar's {@code @ReplacedBy}, which is the author of the
+ * element the bot actually calls saying where it went. A modernisation adds the <b>new</b> jar's forward
+ * pointers too, which is the same shape of edge read one hop further.
  *
- * <ul>
- *   <li>the <b>old</b> jar's {@code @ReplacedBy}, which is the author of the element the bot actually
- *       calls saying where it went;</li>
- *   <li>the <b>new</b> jar's {@code @Replaces}, read backwards — each entry is an edge from the old
- *       spelling it names to the element carrying it — and <b>filtered by era</b>: an entry is consulted
- *       only for a bot pinned at or below the version the entry records, since a bot already past that
- *       release cannot still be spelling it the old way.</li>
- * </ul>
+ * <p><b>There was a second source until 2026-09-15 and its removal is worth knowing.</b> A back edge,
+ * {@code @Replaces} on the survivor, filtered by era, answered the one question a forward pointer cannot:
+ * where an element went once it has been <em>deleted</em>, leaving nothing to carry a pointer. It goes
+ * because nothing writes it — the contract declares only {@code ReplacedBy} — and because the premise that
+ * closes the gap is enforced rather than trusted: japicmp refuses a removal from a plugin's published API,
+ * so the target jar still carries the deprecated element and its own forward pointer.
  *
  * <p>The walk follows edges until it reaches a spelling the target jar actually has, which is what makes
  * a <b>chain</b> resolve: {@code a}→{@code b} announced in 2.0 and {@code b}→{@code c} in 3.0 lands a bot
  * still spelling it {@code a} on {@code c}, with the 2.0 jar never fetched. A visited set bounds it — a
  * rename undone by a later release is a cycle, and a cycle that reaches nothing live is simply unpaired.
  *
- * <p>Three things it deliberately does not do. It does not follow a pointer for a spelling the target
- * <em>still has</em>: the live element wins, which is why an accumulated entry can never go stale into a
- * wrong answer. It does not resolve an ambiguous claim — two survivors claiming one old spelling at one
- * version leave it unpaired, with a line in {@code Report.problems()}. And it never invents a pairing:
- * unpaired is an answer, and a wrongly paired element is a bot that compiles and does something else.
+ * <p>Two things it deliberately does not do. It does not follow a pointer for a spelling the target
+ * <em>still has</em>: the live element wins, which is why an accumulated pointer can never go stale into a
+ * wrong answer. And it never invents a pairing: unpaired is an answer, and a wrongly paired element is a
+ * bot that compiles and does something else.
  *
  * <p><b>Members are paired independently of types</b>, and a member pointer may cross types. Two readers
  * ask for different halves of that, deliberately: {@link #memberName} answers "what is this called on the
@@ -61,13 +56,12 @@ record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>
      */
     record Member(String type, String name, String when) {}
 
-    /** One edge, and the {@code whens()} sentence the author wrote beside it. Blank for a back edge. */
+    /** One edge, and the {@code whens()} sentence the author wrote beside it, blank when there is none. */
     private record Target(String spelling, String when) {}
 
-    static SdkPairing of(Map<String, ApiClass> before, Map<String, ApiClass> after, String botVersion,
-                         List<String> problems, boolean throughDeprecations) {
+    static SdkPairing of(Map<String, ApiClass> before, Map<String, ApiClass> after,
+                         boolean throughDeprecations) {
         Map<String, List<Target>> edges = forwardEdges(before);
-        backwardEdges(after, botVersion, problems).forEach(edges::putIfAbsent);
         // Modernising walks one hop further than an upgrade does, so it needs the pointers the *target*
         // jar's own deprecated elements carry. They are the same shape of edge; only the stopping rule
         // below differs, which is the whole of what "also move off deprecated members" means.
@@ -146,69 +140,6 @@ record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>
                     i < pointer.whens().size() ? pointer.whens().get(i) : ""));
         }
         return out;
-    }
-
-    /**
-     * What the target jar's survivors claim, read as edges pointing forward in time. Entries are grouped
-     * by the old spelling they name; only those from the bot's own era or later can apply to it, and of
-     * those the <b>earliest</b> is the next hop — a later one describes a rename this bot has not reached.
-     *
-     * <p><b>Two survivors claiming one old member is a split, not an error.</b> The back edge is the only
-     * place a split survives the deletion of the element it split from, which is the entire reason
-     * {@code @Replaces} exists — so a double claim on a <em>member</em> becomes both edges and the user is
-     * asked per call site. A double claim on a <b>type</b> stays a {@code Report.problems()} line: a type
-     * rename is applied file-wide ({@code CallMigrator.renameTypeIn}), so there is no per-site question to
-     * ask and no way for one file to write two answers.
-     */
-    private static Map<String, List<Target>> backwardEdges(Map<String, ApiClass> after, String botVersion,
-                                                           List<String> problems) {
-        Map<String, Map<String, Set<String>>> claims = new LinkedHashMap<>();
-        for (ApiClass now : after.values()) {
-            for (Claim claim : now.replaces()) claim(claims, claim, now.name());
-            now.byName().forEach((member, overloads) -> {
-                for (ApiMember overload : overloads) {
-                    for (Claim claim : overload.replaces()) {
-                        claim(claims, claim, now.name() + "#" + member);
-                    }
-                }
-            });
-        }
-
-        Map<String, List<Target>> edges = new LinkedHashMap<>();
-        claims.forEach((oldSpelling, byVersion) -> byVersion.entrySet().stream()
-                .filter(e -> appliesTo(botVersion, e.getKey()))
-                .min(Map.Entry.comparingByKey(SdkApiModel::compareVersions))
-                .ifPresent(e -> {
-                    if (e.getValue().size() > 1 && !oldSpelling.contains("#")) {
-                        problems.add("\"" + oldSpelling + "\" is claimed by more than one element of the "
-                                + "target SDK (" + String.join(", ", e.getValue()) + "), so there is no "
-                                + "one answer to what it became. Uses of it are left for you to change.");
-                        return;
-                    }
-                    // A back edge carries no sentence: the survivor knows what it replaced, not why one
-                    // call meant it rather than the other. A split read only backwards therefore reaches
-                    // the user as a menu of member names, which is still a choice they can make.
-                    edges.put(oldSpelling, e.getValue().stream().map(c -> new Target(c, "")).toList());
-                }));
-        return edges;
-    }
-
-    private static void claim(Map<String, Map<String, Set<String>>> claims, Claim claim, String claimant) {
-        claims.computeIfAbsent(claim.name(), k -> new LinkedHashMap<>())
-                .computeIfAbsent(strip(claim.version()), k -> new LinkedHashSet<>())
-                .add(claimant);
-    }
-
-    /**
-     * Whether an entry recorded as last existing in {@code entryVersion} can still describe a bot pinned
-     * at {@code botVersion}. When either is not a version {@link SemVer} understands —
-     * {@code 0.0.0-SNAPSHOT}, most often — the entry is consulted rather than dropped: a pointer for a
-     * rename the bot has already had applied costs nothing, since the old name appears nowhere in it.
-     */
-    private static boolean appliesTo(String botVersion, String entryVersion) {
-        String bot = strip(botVersion);
-        if (!SemVer.isValid(bot) || !SemVer.isValid(entryVersion)) return true;
-        return SemVer.compare(bot, entryVersion) <= 0;
     }
 
     /**

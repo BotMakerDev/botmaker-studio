@@ -6,6 +6,24 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — the upgrade engine: the back edge deleted, and the scan filter repaired.** Phase 1 of making
+  the SDK upgrade every plugin's upgrade. Two dead things, both invisible, both found by running the suite.
+  **`@Replaces` is gone** — `SdkApiModel.Claim`, `SdkPairing.backwardEdges` and its era filter,
+  `SdkRedirects.adviceFor`'s backward half. Nothing writes it: the contract declares `ReplacedBy` and nothing
+  else, and `com.botmaker.plugin.api.meta.Replaces` has never existed, so the reader had been asking for an
+  annotation no plugin could produce since 2026-09-02. Nothing needs to, either — japicmp refuses a removal
+  from a plugin's published API, so the target jar still carries the deprecated element and its own forward
+  pointer. A **chain** therefore stops at the intermediate rather than skipping it, and Modernise is the hop
+  past a deprecation. **And `SdkApiModel.snapshot` scans with `TypeSummaryManager.overEverything()`**: the
+  default manager filters to what the plugins bound *right now* catalogue, which headless is the empty set,
+  so every scan read empty and the report said *"this jar has no public API at all"*. Production never saw it
+  (a bound SDK answers its own package); **57 tests had been red for thirteen days** and read as one
+  pre-existing failure. Suite: 71 failing → 14, none of them new, the remainder pre-existing and in the
+  palette rather than the upgrade. Recorded but **not** acted on: `Report.scaffolding()` can no longer be
+  anything but empty — `@Scaffolding` went with the generators on 2026-08-25 and `apiClassOf` passes a
+  literal `false` — yet the record component, `SdkUpgradeDiff.scaffolding` and a `SdkUpgradeDialog` warning
+  block that cannot render are all still wired.
+
 - **2026-09-15 — block reuse, phase 6: the workaround sweep deleted nothing, and that is the finding.**
   Both workarounds reuse was meant to retire survive, for unrelated reasons. `EditorCanvas`'s `vvalue`
   restore is still load-bearing because **members are never reused** — `parseRoot` rebuilds the root every

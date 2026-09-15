@@ -87,23 +87,22 @@ import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
  * {@code void}, and a review mark either way. <b>The repair's job is to make the bot compile; the user's job
  * is to make it correct.</b>
  *
- * <p>What says where a member went is a <b>pointer written at both ends</b> — and the two ends are why it
- * needs no jar but the two already in hand:
+ * <p>What says where a member went is <b>one annotation, at one end</b>: {@code @ReplacedBy}, read out of
+ * the bot's <em>own</em> jar, on the deprecated element, naming what to use instead. The bot still spells
+ * the element the old way, so that is where the pointer to the new spelling has to be. An <em>empty</em>
+ * value is the author saying outright that nothing takes its place.
  *
- * <ol>
- *   <li><b>{@code @ReplacedBy}</b>, read out of the bot's <em>own</em> jar: the forward half, on the
- *       deprecated element, naming what to use instead. The bot still spells the element the old way, so
- *       that is where the pointer to the new spelling has to be. An <em>empty</em> value is the author
- *       saying outright that nothing takes its place.</li>
- *   <li><b>{@code @Replaces}</b>, read out of the <em>target</em> jar: the backward half, on the survivor,
- *       naming every older spelling it took over and the last version each of those spellings existed in.
- *       It is the only place the answer survives once the deprecated element is finally deleted.</li>
- * </ol>
+ * <p><b>There is no back edge, and the premise that makes one unnecessary is enforced.</b> A second
+ * annotation on the survivor — {@code @Replaces} — was read here until 2026-09-15, for the one case a
+ * forward pointer cannot answer: an element that has been <em>deleted</em> carries no pointer. Nothing
+ * writes it (the contract declares only {@code ReplacedBy}), and nothing needs to: japicmp refuses a
+ * removal from a plugin's published API, so the target jar still carries the deprecated element and its own
+ * pointer.
  *
- * <p>Either half alone resolves one hop. <b>Composed</b>, they resolve a chain — {@code a}→{@code b}
- * announced in 2.0 and {@code b}→{@code c} in 3.0 lands a bot still spelling it {@code a} on {@code c},
- * with no intermediate jar ever fetched. Absence of a pointer is an answer and not a gap: nothing is ever
- * paired by guesswork, because a wrong pairing is a bot that compiles and behaves differently.
+ * <p>That is also what resolves a <b>chain</b> with no intermediate jar fetched — {@code a}→{@code b}
+ * announced in 2.0 and {@code b}→{@code c} in 3.0 lands a bot still spelling it {@code a} on {@code c}.
+ * Absence of a pointer is an answer and not a gap: nothing is ever paired by guesswork, because a wrong
+ * pairing is a bot that compiles and behaves differently.
  *
  * <p><b>Types and members pair independently.</b> A member pointer may cross types, and a paired type does
  * not vouch for its members: each one is still resolved on its own, so a pointer kept across a redesign
@@ -535,9 +534,7 @@ public final class SdkUpgradeService {
         Set<String> known = new LinkedHashSet<>(before.keySet());
         known.addAll(after.keySet());
         Uses uses = usesIn(known, SdkApiModel.fieldOwners(before, after), problems);
-        // Writes into problems too — an old spelling two survivors both claim is a question this cannot
-        // answer, and it is recorded before the list is frozen.
-        SdkPairing pairing = SdkPairing.of(before, after, from, problems, throughDeprecations);
+        SdkPairing pairing = SdkPairing.of(before, after, throughDeprecations);
 
         List<Deprecation> deprecated = SdkUpgradeDiff.deprecations(before, after, uses.calls(), pairing);
         List<Break> breaks = SdkUpgradeDiff.breaks(before, after, uses, pairing);
@@ -682,11 +679,11 @@ public final class SdkUpgradeService {
         Set<String> known = new LinkedHashSet<>(before.keySet());
         known.addAll(after.keySet());
         Map<String, List<String>> fieldOwners = SdkApiModel.fieldOwners(before, after);
-        SdkPairing pairing = SdkPairing.of(before, after, from, problems, throughDeprecations);
+        SdkPairing pairing = SdkPairing.of(before, after, throughDeprecations);
 
         Uses uses = usesIn(known, fieldOwners, problems);
         // The same all-or-nothing rule the report states: anything the scan could not answer — a file that
-        // does not parse, an old name two survivors both claim — stops the rewrite before it writes.
+        // does not parse, a bare constant name two types both declare — stops the rewrite before it writes.
         if (!problems.isEmpty()) throw new IllegalStateException(problems.getFirst());
 
         List<Break> breaks = SdkUpgradeDiff.breaks(before, after, uses, pairing);

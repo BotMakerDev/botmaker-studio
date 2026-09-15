@@ -49,9 +49,6 @@ class SplitPointerTest {
                         whens = {"when notches is positive", "when notches is negative"})
             """;
 
-    /** The back edge each survivor carries: the old spelling, and the last release it existed in. */
-    private static final String CLAIMS_SCROLL = "@Replaces(\"com.botmaker.sdk.api.Mouse#scroll@1.0.0\")";
-
     /** Three calls of one split member, two of which plainly meant different candidates. */
     private static final String SCROLLING_BOT = """
             package com.mybot;
@@ -89,17 +86,15 @@ class SplitPointerTest {
     }
 
     /** 2.0.0: {@code scroll} is <b>gone</b> and two members stand where it did. */
-    private static Map<String, String> newMouse(String claim) {
+    private static Map<String, String> newMouse() {
         Map<String, String> m = new HashMap<>(SdkFixtures.withPointers(Map.of()));
         m.put("Mouse", """
                 package %s;
                 public class Mouse {
-                    %s
                     public static void scrollUp(int notches) {}
-                    %s
                     public static void scrollDown(int notches) {}
                 }
-                """.formatted(PKG, claim, claim));
+                """.formatted(PKG));
         return m;
     }
 
@@ -136,7 +131,7 @@ class SplitPointerTest {
 
     @Test
     void aSplitIsOneChoiceCarryingEveryCallOfTheMember(@TempDir Path tmp) throws IOException {
-        Report r = reportOver(tmp, oldMouse(SPLIT_POINTER), newMouse(CLAIMS_SCROLL), SCROLLING_BOT);
+        Report r = reportOver(tmp, oldMouse(SPLIT_POINTER), newMouse(), SCROLLING_BOT);
 
         assertEquals(1, r.splits().size(), "one member split, so one question: " + r.splits());
         Choice choice = r.splits().getFirst();
@@ -156,7 +151,7 @@ class SplitPointerTest {
 
     @Test
     void aSplitLeavesTheOtherVerdictsAlone(@TempDir Path tmp) throws IOException {
-        Report r = reportOver(tmp, oldMouse(SPLIT_POINTER), newMouse(CLAIMS_SCROLL), SCROLLING_BOT);
+        Report r = reportOver(tmp, oldMouse(SPLIT_POINTER), newMouse(), SCROLLING_BOT);
 
         // The member is still gone, and is still reported as gone. `splits` is the question that goes with
         // that finding, not a third kind of finding — which is what keeps canMigrate() meaning what it did.
@@ -198,17 +193,13 @@ class SplitPointerTest {
     }
 
     @Test
-    void aDoubleClaimWithNoForwardPointerIsStillASplit(@TempDir Path tmp) throws IOException {
-        // The old member carries nothing at all: it was deleted, and the split is readable only backwards.
-        // This is the case the back-edge decision exists for — without it the two claims are an error.
-        Report r = reportOver(tmp, oldMouse(""), newMouse(CLAIMS_SCROLL), SCROLLING_BOT);
+    void aMemberCarryingNoPointerAtAllIsNoSplit(@TempDir Path tmp) throws IOException {
+        // The control for every case above: two survivors and nothing saying either of them took `scroll`
+        // over. Nothing is paired and nobody is asked — a split is something an author declares, never
+        // something inferred from two members that happen to look alike.
+        Report r = reportOver(tmp, oldMouse(""), newMouse(), SCROLLING_BOT);
 
-        assertEquals(1, r.splits().size(), "read off @Replaces alone: " + r.splits());
-        Choice choice = r.splits().getFirst();
-        assertEquals(2, choice.candidates().size());
-        assertTrue(choice.candidates().stream().allMatch(c -> c.when().isBlank()),
-                "a survivor knows what it replaced, not why one call meant it: " + choice.candidates());
-        assertTrue(r.problems().isEmpty(), "and it is not reported as an ambiguity: " + r.problems());
+        assertTrue(r.splits().isEmpty(), "nothing declared a split: " + r.splits());
     }
 
     @Test
@@ -221,7 +212,6 @@ class SplitPointerTest {
         after.put("Mouse", """
                 package %s;
                 public class Mouse {
-                    @Replaces("com.botmaker.sdk.api.Mouse#scroll@1.0.0")
                     public static void wheel(int notches) {}
                 }
                 """.formatted(PKG));
@@ -241,7 +231,7 @@ class SplitPointerTest {
     @Test
     void withNoChoicesEveryCallTakesThePreferredCandidate(@TempDir Path tmp) throws IOException {
         // Modernise, the tests and every headless path pass nothing, and must migrate as they always have.
-        String rewritten = rewriteOver(tmp, oldMouse(SPLIT_POINTER), newMouse(CLAIMS_SCROLL),
+        String rewritten = rewriteOver(tmp, oldMouse(SPLIT_POINTER), newMouse(),
                 SCROLLING_BOT, Map.of());
 
         assertEquals(3, occurrences(rewritten, "Mouse.scrollUp("), rewritten);
@@ -252,7 +242,7 @@ class SplitPointerTest {
     @Test
     void eachSiteIsRewrittenToWhatWasChosenThere(@TempDir Path tmp) throws IOException {
         Map<String, String> before = oldMouse(SPLIT_POINTER);
-        Map<String, String> after = newMouse(CLAIMS_SCROLL);
+        Map<String, String> after = newMouse();
         Report r = reportOver(tmp, before, after, SCROLLING_BOT);
 
         // The site key is positional and the report and the rewrite parse the sources twice, so this also
@@ -269,7 +259,7 @@ class SplitPointerTest {
     @Test
     void aPickThatMatchesNoSiteLeavesThatSiteOnItsDefault(@TempDir Path tmp) throws IOException {
         Map<String, String> before = oldMouse(SPLIT_POINTER);
-        Map<String, String> after = newMouse(CLAIMS_SCROLL);
+        Map<String, String> after = newMouse();
 
         // A key from a file that is not in this project: the correct degradation is the upgrade the user
         // would have got by not choosing, and it is asserted rather than assumed.
@@ -306,9 +296,7 @@ class SplitPointerTest {
         m.put("Text", """
                 package %s;
                 public class Text {
-                    @Replaces("com.botmaker.sdk.api.Text#read@1.0.0")
                     public static %s line() { return %s; }
-                    @Replaces("com.botmaker.sdk.api.Text#read@1.0.0")
                     public static %s count() { return %s; }
                 }
                 """.formatted(PKG, lineReturns, zeroOf(lineReturns), countReturns, zeroOf(countReturns)));

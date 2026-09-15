@@ -43,6 +43,12 @@ public class TypeSummaryManager {
     private final Set<String> allowedPackagePrefixes;
 
     /**
+     * Whether {@link #getAllTypes()} hands back everything indexed, ignoring {@link #allowedPackagePrefixes}
+     * entirely. Only {@link #overEverything()} sets it.
+     */
+    private final boolean everything;
+
+    /**
      * jar path → its (non-anonymous) classes. The scans are intentionally not closed: the
      * {@link ClassInfo} objects are read for the lifetime of the manager.
      */
@@ -65,11 +71,35 @@ public class TypeSummaryManager {
     }
 
     public TypeSummaryManager(Set<String> allowedPackagePrefixes) {
+        this(allowedPackagePrefixes, false);
+    }
+
+    private TypeSummaryManager(Set<String> allowedPackagePrefixes, boolean everything) {
         this.allowedPackagePrefixes = Set.copyOf(allowedPackagePrefixes);
+        this.everything = everything;
+    }
+
+    /**
+     * An index over whatever it is given, with no package filter at all — for a reader asking what a jar
+     * <em>contains</em> rather than what a user should be offered.
+     *
+     * <p>The distinction is the whole reason this exists. {@link #defaultAllowedPackagePrefixes()} answers
+     * <i>which packages do the plugins bound right now catalogue</i>, which is the right question for a menu
+     * and the wrong one for a compatibility scan: the jar being read may belong to a plugin that is not
+     * bound, has never been installed, or failed to load, and every one of those answers the empty set. A
+     * scan filtered to nothing reads as <i>this jar has no public API</i> — which is what
+     * {@code SdkApiModel.snapshot} reported for two weeks in every headless caller, since with no project
+     * open nothing is bound.
+     *
+     * <p>What a jar contains is a property of the jar, so nothing here needs a project, a binding or a list.
+     */
+    public static TypeSummaryManager overEverything() {
+        return new TypeSummaryManager(Set.of(), true);
     }
 
     /** True when {@code ci}'s package is under one of the {@link #allowedPackagePrefixes}. */
     private boolean isAllowed(ClassInfo ci) {
+        if (everything) return true;
         String pkg = ci.getPackageName();
         for (String prefix : allowedPackagePrefixes) {
             if (pkg.equals(prefix) || pkg.startsWith(prefix + ".")) return true;
