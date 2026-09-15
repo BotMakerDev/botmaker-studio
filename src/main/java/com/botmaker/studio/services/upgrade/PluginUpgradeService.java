@@ -377,7 +377,36 @@ public final class PluginUpgradeService {
      * <b>first</b> is the preselection. An <b>empty</b> list is not a new outcome — it is today's default
      * value plus {@code @NeedsReview}, and the dialog says so rather than offering an empty menu.
      */
-    public record Site(CallSite site, List<Candidate> candidates) {}
+    public record Site(CallSite site, List<Candidate> candidates, boolean statement) {}
+
+    /**
+     * What the user asked for at one call site — the widened form of "which candidate", since 2026-09-15.
+     *
+     * <p>Three actions, and they are three because they are the three things that can be written without a
+     * compile error: point the call somewhere ({@code REDIRECT}, naming which candidate), stand a default
+     * value in and mark the function ({@code DEFAULT}), or delete the call ({@code DISCARD}). <b>There is no
+     * "leave it"</b>: a call whose member is gone does not compile, so skipping is not on offer — discard is
+     * what a user who does not want the call means.
+     *
+     * <p>{@code REDIRECT} with {@code candidate == 0} is the engine's own answer, so it is the value every
+     * site arrives on and a window closed without a click migrates exactly as one closed before any of this
+     * existed.
+     */
+    public record Decision(Kind kind, int candidate) {
+
+        public enum Kind { REDIRECT, DEFAULT, DISCARD }
+
+        /** The engine's own answer: the author's preferred candidate. */
+        public static final Decision PREFERRED = new Decision(Kind.REDIRECT, 0);
+        public static final Decision DEFAULT = new Decision(Kind.DEFAULT, 0);
+        /** Only offered where the call stands as a statement — see {@link Site#statement()}. */
+        public static final Decision DISCARD = new Decision(Kind.DISCARD, 0);
+
+        /** The candidate at {@code index} of <em>that site's</em> own list. */
+        public static Decision redirect(int index) {
+            return new Decision(Kind.REDIRECT, index);
+        }
+    }
 
     /**
      * One release's own account of itself: a section of the target jar's {@code CHANGELOG.md}.
@@ -663,16 +692,16 @@ public final class PluginUpgradeService {
     }
 
     /**
-     * The same, carrying the per-site answers a {@link Choice} asked for: the report's own {@link CallSite}
-     * mapped to the index the user picked in <em>that site's</em> candidate list. An empty map — every
-     * headless caller, and a dialog the user simply accepted — takes the preferred candidate everywhere.
+     * The same, carrying the per-site answers the window collected: the report's own {@link CallSite} mapped
+     * to a {@link Decision}. An empty map — every headless caller, and a window the user simply accepted —
+     * takes the engine's own answer everywhere.
      *
-     * <p>The indices are all that crosses the dialog boundary. What each one <em>means</em> is worked out
+     * <p>The decisions are all that crosses the dialog boundary. What each one <em>means</em> is worked out
      * again from the two jars at the moment of writing, for the same reason the rest of the repair is: a
      * value that crossed an FX thread is not evidence about the files on disk right now.
      */
     public CompletableFuture<Void> apply(String targetVersion, boolean repairSources, boolean alsoModernise,
-                                         Map<CallSite, Integer> picks) {
+                                         Map<CallSite, Decision> picks) {
         return CompletableFuture
                 .runAsync(() -> {
                     snapshot("Before " + name() + " upgrade to " + targetVersion);
@@ -738,7 +767,7 @@ public final class PluginUpgradeService {
      * blocks, for the same reasons {@link #compare(String)} does.
      */
     public void repair(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
-                       Map<CallSite, Integer> picks) {
+                       Map<CallSite, Decision> picks) {
         String from = currentVersion();
         Optional<Path> oldJar = resolve(from);
         Optional<Path> newJar = resolve(targetVersion);
@@ -773,7 +802,7 @@ public final class PluginUpgradeService {
      */
     ApiMigrationRunner.Outcome migrate(Path oldJar, Path newJar, String from, String targetVersion,
                                        boolean throughDeprecations, boolean allowDefaults,
-                                       Map<CallSite, Integer> picks) {
+                                       Map<CallSite, Decision> picks) {
         List<String> problems = new ArrayList<>();
         Map<String, ApiClass> before = ApiModel.snapshot(oldJar);
         Map<String, ApiClass> after = ApiModel.snapshot(newJar);
@@ -877,31 +906,50 @@ public final class PluginUpgradeService {
     }
 
     /**
-     * Turns the dialog's per-site picks into the redirects the runner will apply — see {@link Choice}.
+     * Turns the window's per-site decisions into the actions the runner will apply — see {@link Decision}.
      *
-     * <p>An index is looked up in the same list {@link UpgradeDiff#splits} built for that site, worked out
-     * here from the jars rather than carried over from the report. Anything that does not line up — a site
-     * nobody was asked about, a member that no longer splits, an index past the end — is simply left out, and
-     * the site takes the preferred candidate that {@link #repairsFor} already recorded. A key that misses is
-     * the correct degradation, not a failure: it produces the upgrade the user would have got by not choosing.
+     * <p>A redirect's index is looked up in the same list {@link UpgradeDiff#splits} built for that site,
+     * worked out here from the jars rather than carried over from the report. Anything that does not line up
+     * — a site nobody was asked about, a member that no longer splits, an index past the end — is simply left
+     * out, and the site takes the preferred candidate that {@link #repairsFor} already recorded. A key that
+     * misses is the correct degradation, not a failure: it produces the upgrade the user would have got by
+     * not choosing.
+     *
+     * <p><b>A discard asked for where the call is not a statement becomes a default</b>, decided here rather
+     * than left to the runner's own guard, because this is the layer that knows the call's position. Both
+     * layers refuse it, for the reason the whole feature has one rule: nothing may write a file that does
+     * not compile, and a deleted expression leaves a hole.
      */
     private static ApiMigrationRunner.Choices choicesFor(Map<String, ApiClass> before,
                                                          Map<String, ApiClass> after, Uses uses,
-                                                         Pairing pairing, Map<CallSite, Integer> picks) {
-        if (picks.isEmpty()) return ApiMigrationRunner.Choices.NONE;
+                                                         Pairing pairing, Map<CallSite, Decision> decisions) {
+        if (decisions.isEmpty()) return ApiMigrationRunner.Choices.NONE;
 
-        Map<ApiMigrationRunner.SiteKey, ApiMigrationRunner.Redirect> out = new LinkedHashMap<>();
+        Map<ApiMigrationRunner.SiteKey, ApiMigrationRunner.Action> out = new LinkedHashMap<>();
         for (Call call : uses.calls()) {
-            Integer pick = picks.get(call.site());
-            if (pick == null || pick == 0) continue;        // 0 is the default the repairs already carry
+            Decision decision = decisions.get(call.site());
+            if (decision == null || Decision.PREFERRED.equals(decision)) continue;
+
+            if (decision.kind() == Decision.Kind.DISCARD) {
+                out.put(call.key(), call.statement()
+                        ? ApiMigrationRunner.Action.DISCARD
+                        : ApiMigrationRunner.Action.DEFAULT);
+                continue;
+            }
+            if (decision.kind() == Decision.Kind.DEFAULT) {
+                out.put(call.key(), ApiMigrationRunner.Action.DEFAULT);
+                continue;
+            }
+
             ApiClass then = before.get(call.type());
             if (then == null || !declares(then, call.isField(), call.member())) continue;
             ApiClass now = pairing.pairedTo(then, after);
             if (now == null) continue;
 
             List<Candidate> fitting = fittingAt(redirectsFor(then, now, call, after, pairing), call);
+            int pick = decision.candidate();
             if (pick < 0 || pick >= fitting.size()) continue;
-            out.put(call.key(), fitting.get(pick).redirect());
+            out.put(call.key(), new ApiMigrationRunner.Action.Redirected(fitting.get(pick).redirect()));
         }
         return new ApiMigrationRunner.Choices(out);
     }

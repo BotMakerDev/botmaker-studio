@@ -258,26 +258,63 @@ public final class ApiMigrationRunner {
     public record SiteKey(String file, int offset) {}
 
     /**
-     * Which candidate the user picked, per call site — the only thing in the upgrade that is a decision
-     * rather than a fact.
+     * What the user asked for at one call site. Three actions and no fourth, because these are the three
+     * things that can be written without a compile error.
      *
-     * <p>It exists because a <b>split</b> is a property of the call, not of the member: {@code scroll(3)} and
-     * {@code scroll(-3)} in one bot want different answers, so no project-wide pick can be right in both.
-     * Every site absent from the map takes {@link Repairs}' own redirect, which is the author's first
-     * candidate — so {@link #NONE} reproduces the behaviour of every caller that never asks: Modernise, the
-     * tests, and any headless path.
+     * <p>It was a {@link Redirect} alone until 2026-09-15 — <i>which candidate of a split did this call
+     * mean</i> — and the widening is the same question asked of the other two outcomes the engine already
+     * produces on its own: a default value, or a deleted statement. <b>Nothing new is written</b>; what
+     * changes is who decides. An absent site takes the engine's own answer, so {@link Choices#NONE}
+     * reproduces every headless caller exactly.
+     *
+     * <p>There is deliberately no <i>leave it alone</i>: a call whose member is gone does not compile, so
+     * "skip" is not an action this can offer. Discard is what a user who does not want the call means.
      */
-    public record Choices(Map<SiteKey, Redirect> bySite) {
+    public sealed interface Action {
 
-        /** Ask nobody: every site takes the preferred candidate. */
+        /** Take this candidate — the split's original question. */
+        record Redirected(Redirect redirect) implements Action {}
+
+        /**
+         * Write a literal default of what the old member gave back, and mark the function for review. This
+         * is the engine's own fallback, chosen deliberately: the user is saying <i>do not point this
+         * anywhere, I will come back to it</i>.
+         */
+        record Defaulted() implements Action {}
+
+        /**
+         * Delete the call outright. Legal only where it stands as a <b>statement</b> — anywhere else there
+         * would be nothing where the value sat, which is the one thing no action may produce. A discard
+         * asked for in expression position is treated as {@link Defaulted}, so a wrong caller still writes
+         * a project that compiles.
+         */
+        record Discarded() implements Action {}
+
+        /** The two that carry no data, as constants — there is nothing to distinguish two of either. */
+        Action DEFAULT = new Defaulted();
+        Action DISCARD = new Discarded();
+    }
+
+    /**
+     * What the user chose, per call site — the only thing in the upgrade that is a decision rather than a
+     * fact.
+     *
+     * <p>It exists because the question is a property of the call, not of the member: {@code scroll(3)} and
+     * {@code scroll(-3)} in one bot want different answers, so no project-wide choice can be right in both.
+     * Every site absent from the map takes the engine's own answer — {@link Repairs}' redirect, the author's
+     * first candidate — so {@link #NONE} is what Modernise, the tests and any headless path get.
+     */
+    public record Choices(Map<SiteKey, Action> bySite) {
+
+        /** Ask nobody: every site takes the engine's own answer. */
         public static final Choices NONE = new Choices(Map.of());
 
-        public Choices(Map<SiteKey, Redirect> bySite) {
+        public Choices(Map<SiteKey, Action> bySite) {
             this.bySite = Map.copyOf(bySite);
         }
 
-        /** The redirect chosen at this reference, or null when the user was never asked about it. */
-        Redirect at(ProjectFile file, ApiReferences.Reference reference) {
+        /** The action chosen at this reference, or null when the user was never asked about it. */
+        Action at(ProjectFile file, ApiReferences.Reference reference) {
             return bySite.get(new SiteKey(file.getPath().toString(),
                     reference.site().node().getStartPosition()));
         }
@@ -377,6 +414,19 @@ public final class ApiMigrationRunner {
         // at, and the review list should say so once.
         Map<MethodDeclaration, Set<String>> marks = new LinkedHashMap<>();
         for (ApiReferences.Reference reference : scan.references()) {
+            Action action = choices.at(file, reference);
+            // Discard is the one action with no engine equivalent, so it is answered before anything is
+            // looked up: the call goes, whatever the jars say became of the member. Only in statement
+            // position — elsewhere it falls through and is defaulted, which is what keeps a wrong caller
+            // from producing a file that does not compile.
+            if (action instanceof Action.Discarded && reference.site().isStatement()) {
+                changes.add(new CallChange.CallDeleted(reference.site()));
+                note(marks, reference, reference.type(), reference.member(), "the call was discarded");
+                continue;
+            }
+            boolean defaultIsWhatWasAsked = action instanceof Action.Defaulted
+                    || action instanceof Action.Discarded;
+
             Removal removal = repairs.removals().stream().filter(r -> r.matches(reference))
                     .findFirst().orElse(null);
             if (removal != null) {
@@ -403,26 +453,41 @@ public final class ApiMigrationRunner {
             // chosen one is re-checked against this reference so a key that landed on the wrong call — which
             // nothing edits the files to allow, but which no assertion here could rule out — degrades to the
             // default rather than rewriting a site into something it never offered.
-            Redirect chosen = choices.at(file, reference);
-            Redirect redirect = chosen != null && chosen.matches(reference)
+            Redirect chosen = action instanceof Action.Redirected(Redirect picked) && picked.matches(reference)
+                    ? picked
+                    : null;
+            Redirect redirect = chosen != null
                     ? chosen
                     : repairs.redirects().stream().filter(r -> r.matches(reference))
                             .findFirst().orElse(null);
             if (redirect == null) continue;
-            // The position decides. A statement discards the value, so nothing the target gives back can be
-            // wrong there; anywhere else the fit had to be checked against the target jar, and a redirect
-            // that did not pass falls back to the same default a removal gets.
-            if (reference.site().isStatement() || redirect.expressionSafe()) {
+            if (defaultIsWhatWasAsked && "void".equals(redirect.returnType())) {
+                // Defaulting a void call means deleting it: there is no value to stand in for. In statement
+                // position that is legal; anywhere else — a one-line lambda body — there is nothing to write
+                // at all, so the site keeps the redirect it would have had.
+                if (reference.site().isStatement()) {
+                    changes.add(new CallChange.CallDeleted(reference.site()));
+                    note(marks, reference, redirect.type(), redirect.member(), "the call was discarded");
+                    continue;
+                }
+                defaultIsWhatWasAsked = false;
+            }
+            // The position decides, unless the user overruled it. A statement discards the value, so nothing
+            // the target gives back can be wrong there; anywhere else the fit had to be checked against the
+            // target jar, and a redirect that did not pass falls back to the same default a removal gets.
+            if (!defaultIsWhatWasAsked && (reference.site().isStatement() || redirect.expressionSafe())) {
                 changes.add(redirect.changeAt(reference.site()));
                 if (redirect.needsReview()) noteRedirect(marks, reference, redirect);
             } else {
                 changes.add(new CallChange.ValueDefaulted(reference.site(), redirect.returnType(),
                         redirect.returnTypeFqn()));
-                note(marks, reference, redirect.type(), redirect.member(),
-                        "it is now " + redirect.display() + ", whose result does not fit where this uses it, "
-                                + "and the value it produced is now "
-                                + CallMigrator.literalDefaultText(redirect.returnType(),
-                                redirect.returnTypeFqn(), reference.site().node()));
+                String stood = CallMigrator.literalDefaultText(redirect.returnType(),
+                        redirect.returnTypeFqn(), reference.site().node());
+                note(marks, reference, redirect.type(), redirect.member(), defaultIsWhatWasAsked
+                        ? "it is now " + redirect.display() + ", which you chose not to point this call at, "
+                        + "so the value it produced is now " + stood
+                        : "it is now " + redirect.display() + ", whose result does not fit where this uses "
+                        + "it, and the value it produced is now " + stood);
             }
         }
         if (changes.isEmpty()) return Applied.unchanged();

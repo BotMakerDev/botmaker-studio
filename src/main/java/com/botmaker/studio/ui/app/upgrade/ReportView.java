@@ -2,7 +2,9 @@ package com.botmaker.studio.ui.app.upgrade;
 
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Candidate;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Deprecation;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
@@ -29,9 +31,15 @@ import java.util.Map;
  * changes. The project upgrade window renders the same records for every plugin, so the second copy would
  * have been a second answer to <i>what happens to my bot</i>.
  *
- * <p>It <b>collects one thing</b> rather than only displaying: {@link #picks()} is which candidate of a split
- * each call site meant, filled in as each card is built. So the map is complete before the user has touched
- * anything, and closing the window without a click produces exactly the upgrade an empty map would.
+ * <p>It <b>collects one thing</b> rather than only displaying: {@link #picks()} is what the user asked for at
+ * each call site — a {@link Decision}, filled in as each card is built. So the map is complete before the
+ * user has touched anything, and closing the window without a click produces exactly the upgrade an empty map
+ * would.
+ *
+ * <p>The menu at a site offers what can be written there and nothing else: the candidates that fit,
+ * <b>Default it out</b> always, and <b>Discard this call</b> only where the call stands as a statement —
+ * deleting an expression would leave a hole where its value sat, which is the one thing no action may
+ * produce. There is no <i>leave it alone</i>, because a call whose member is gone does not compile.
  *
  * <p>It owns no buttons, no version control and no status line. Whether the apply button is enabled is the
  * window's question — {@link Report#canMigrate()} and {@link Report#canModernise()} answer it — because the
@@ -48,7 +56,7 @@ public final class ReportView {
     }
 
     private final VBox box = new VBox(14);
-    private final Map<CallSite, Integer> picks = new LinkedHashMap<>();
+    private final Map<CallSite, Decision> picks = new LinkedHashMap<>();
 
     public ReportView() {
         box.setPadding(new Insets(4, 2, 4, 2));
@@ -59,8 +67,8 @@ public final class ReportView {
         return box;
     }
 
-    /** The per-site answers the splits collected. A copy — the caller hands it to the service. */
-    public Map<CallSite, Integer> picks() {
+    /** The per-site answers the cards collected. A copy — the caller hands it to the service. */
+    public Map<CallSite, Decision> picks() {
         return Map.copyOf(picks);
     }
 
@@ -180,37 +188,57 @@ public final class ReportView {
             card.getChildren().add(note);
         }
         Label why = new Label("Each call is already answered with the first choice. Change one only where "
-                + "that is not what the call meant.");
+                + "that is not what the call meant — or say what to do with the call instead.");
         why.setWrapText(true);
         why.getStyleClass().add("sdk-upgrade-empty");
         card.getChildren().add(why);
 
-        for (Site site : choice.sites()) {
-            HBox row = new HBox(8);
-            row.setAlignment(Pos.CENTER_LEFT);
-            Label where = new Label(site.site() + "   " + site.site().text());
-            where.getStyleClass().add("sdk-upgrade-detail");
-            row.getChildren().add(where);
-
-            if (site.candidates().isEmpty()) {
-                Label none = new Label("— nothing that fits here, so a default value is written and the "
-                        + "function is marked for review");
-                none.setWrapText(true);
-                none.getStyleClass().add("sdk-upgrade-empty");
-                row.getChildren().add(none);
-            } else {
-                ComboBox<String> combo = new ComboBox<>();
-                site.candidates().forEach(c -> combo.getItems().add(c.display()));
-                combo.getSelectionModel().select(0);
-                picks.put(site.site(), 0);
-                combo.getSelectionModel().selectedIndexProperty().addListener(
-                        (o, was, now) -> picks.put(site.site(), now.intValue()));
-                row.getChildren().add(combo);
-            }
-            card.getChildren().add(row);
-        }
+        for (Site site : choice.sites()) card.getChildren().add(siteRow(site));
         card.getStyleClass().add("sdk-upgrade-card");
         return card;
+    }
+
+    /**
+     * One call, and the menu of what may be written there.
+     *
+     * <p>The order is the order of preference and it is deliberate: the candidates that fit, then the
+     * engine's own fallback, then deleting the call. A site with no fitting candidate still gets a menu —
+     * it is <em>already</em> going to be defaulted, and offering the discard beside that is the whole point
+     * of asking per site rather than per member.
+     */
+    private Node siteRow(Site site) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        Label where = new Label(site.site() + "   " + site.site().text());
+        where.getStyleClass().add("sdk-upgrade-detail");
+        row.getChildren().add(where);
+
+        List<Decision> values = new ArrayList<>();
+        ComboBox<String> combo = new ComboBox<>();
+        for (int i = 0; i < site.candidates().size(); i++) {
+            Candidate candidate = site.candidates().get(i);
+            combo.getItems().add(candidate.display());
+            values.add(Decision.redirect(i));
+        }
+        combo.getItems().add(site.candidates().isEmpty()
+                // Said as a fact rather than as an option, because it is what happens either way here.
+                ? "Default it out — nothing that fits, so a default value is written and the function is "
+                + "marked for review"
+                : "Default it out — write a default value and mark the function for review");
+        values.add(Decision.DEFAULT);
+        if (site.statement()) {
+            combo.getItems().add("Discard this call — delete the line");
+            values.add(Decision.DISCARD);
+        }
+
+        combo.getSelectionModel().select(0);
+        picks.put(site.site(), values.getFirst());
+        combo.getSelectionModel().selectedIndexProperty().addListener((o, was, now) -> {
+            int index = now.intValue();
+            if (index >= 0 && index < values.size()) picks.put(site.site(), values.get(index));
+        });
+        row.getChildren().add(combo);
+        return row;
     }
 
     /**

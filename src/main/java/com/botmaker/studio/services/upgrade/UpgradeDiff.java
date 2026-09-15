@@ -318,7 +318,7 @@ final class UpgradeDiff {
             if (candidates.size() < 2) return;
 
             List<Site> sites = calls.stream()
-                    .map(call -> new Site(call.site(), fittingAt(candidates, call)))
+                    .map(call -> new Site(call.site(), fittingAt(candidates, call), call.statement()))
                     .sorted(Comparator.comparing(s -> s.site().toString()))
                     .toList();
             out.add(new Choice(first.type(), first.member(), first.argCount(), candidates,

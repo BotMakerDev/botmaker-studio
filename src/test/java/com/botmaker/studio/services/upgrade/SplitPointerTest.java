@@ -5,6 +5,7 @@ import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
 import org.junit.jupiter.api.BeforeAll;
@@ -107,7 +108,7 @@ class SplitPointerTest {
 
     /** The rewrite the same jars produce, given the picks a dialog would have collected. */
     private static String rewriteOver(Path tmp, Map<String, String> before, Map<String, String> after,
-                                      String bot, Map<CallSite, Integer> picks) throws IOException {
+                                      String bot, Map<CallSite, Decision> picks) throws IOException {
         PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, bot);
         ApiMigrationRunner.Outcome outcome = service.migrate(
                 UpgradeFixtures.jarOf(tmp, "old", before, Map.of()),
@@ -247,8 +248,8 @@ class SplitPointerTest {
 
         // The site key is positional and the report and the rewrite parse the sources twice, so this also
         // asserts the one thing nothing else would notice: that the key survives the second parse.
-        Map<CallSite, Integer> picks = new HashMap<>();
-        picks.put(siteWhoseTextContains(r.splits().getFirst(), "-3").site(), 1);
+        Map<CallSite, Decision> picks = new HashMap<>();
+        picks.put(siteWhoseTextContains(r.splits().getFirst(), "-3").site(), Decision.redirect(1));
 
         String rewritten = rewriteOver(tmp, before, after, SCROLLING_BOT, picks);
         assertTrue(rewritten.contains("Mouse.scrollUp(3);"), rewritten);
@@ -263,7 +264,8 @@ class SplitPointerTest {
 
         // A key from a file that is not in this project: the correct degradation is the upgrade the user
         // would have got by not choosing, and it is asserted rather than assumed.
-        Map<CallSite, Integer> picks = Map.of(new CallSite("Nowhere.java", 4, "Mouse.scroll(-3)", 77), 1);
+        Map<CallSite, Decision> picks =
+                Map.of(new CallSite("Nowhere.java", 4, "Mouse.scroll(-3)", 77), Decision.redirect(1));
 
         String rewritten = rewriteOver(tmp, before, after, SCROLLING_BOT, picks);
         assertEquals(3, occurrences(rewritten, "Mouse.scrollUp("), rewritten);
@@ -331,6 +333,97 @@ class SplitPointerTest {
                 }
             }
             """;
+
+    // -------------------------------------------------------------------------
+    // What the user chose, when it is not a candidate (2026-09-15)
+    // -------------------------------------------------------------------------
+
+    /**
+     * The site knows whether the call stands as a statement, because that is what decides whether discarding
+     * it is legal Java at all — and the window may only offer what can be written.
+     */
+    @Test
+    void aSiteSaysWhetherTheCallStandsOnItsOwn(@TempDir Path tmp) throws IOException {
+        Report r = reportOver(tmp, oldTextSplit(), newTextSplit("int"), TEXT_BOT);
+        Choice choice = r.splits().getFirst();
+
+        assertTrue(siteAtLine(choice, 4).statement(), "Text.read(); is a line of its own");
+        assertFalse(siteAtLine(choice, 5).statement(), "String s = Text.read(); consumes the value");
+    }
+
+    @Test
+    void discardingAStatementDeletesIt(@TempDir Path tmp) throws IOException {
+        Map<String, String> before = oldMouse(SPLIT_POINTER);
+        Map<String, String> after = newMouse();
+        Report r = reportOver(tmp, before, after, SCROLLING_BOT);
+
+        Map<CallSite, Decision> picks = Map.of(
+                siteWhoseTextContains(r.splits().getFirst(), "-3").site(), Decision.DISCARD);
+
+        String rewritten = rewriteOver(tmp, before, after, SCROLLING_BOT, picks);
+        assertFalse(rewritten.contains("-3"), "the discarded call is gone: " + rewritten);
+        assertEquals(2, occurrences(rewritten, "Mouse.scrollUp("),
+                "the two calls nobody discarded still move: " + rewritten);
+    }
+
+    /**
+     * Defaulting a call whose value is used writes a literal of the type the <b>old</b> member gave back —
+     * the type the code around it was written for — and marks the function, exactly as an unrepairable
+     * break does. Choosing it is saying <i>do not point this anywhere, I will come back to it</i>.
+     */
+    @Test
+    void defaultingACallWhoseValueIsUsedStandsALiteralIn(@TempDir Path tmp) throws IOException {
+        Map<String, String> before = oldTextSplit();
+        Map<String, String> after = newTextSplit("int");
+        Report r = reportOver(tmp, before, after, STORED_TEXT_BOT);
+
+        Map<CallSite, Decision> picks = Map.of(
+                siteAtLine(r.splits().getFirst(), 4).site(), Decision.DEFAULT);
+
+        String rewritten = rewriteOver(tmp, before, after, STORED_TEXT_BOT, picks);
+        assertTrue(rewritten.contains("String s = \"\";"), rewritten);
+        assertFalse(rewritten.contains("Text.line()"), "the candidate was declined: " + rewritten);
+        assertTrue(rewritten.contains("@NeedsReview"), "a default always marks the function: " + rewritten);
+    }
+
+    /**
+     * And the rule that bounds the whole vocabulary: <b>a discard where the value is used is written as a
+     * default</b>, never as a deletion. Deleting it would leave nothing where the value sat, which is the one
+     * outcome no action may produce — so a caller that offers the action anyway still writes a file that
+     * compiles.
+     */
+    @Test
+    void discardingACallWhoseValueIsUsedBecomesADefaultInstead(@TempDir Path tmp) throws IOException {
+        Map<String, String> before = oldTextSplit();
+        Map<String, String> after = newTextSplit("int");
+        Report r = reportOver(tmp, before, after, STORED_TEXT_BOT);
+
+        Map<CallSite, Decision> picks = Map.of(
+                siteAtLine(r.splits().getFirst(), 4).site(), Decision.DISCARD);
+
+        String rewritten = rewriteOver(tmp, before, after, STORED_TEXT_BOT, picks);
+        assertTrue(rewritten.contains("String s = \"\";"), rewritten);
+        assertFalse(rewritten.contains("String s = ;"), "nothing may be left with a hole in it: " + rewritten);
+    }
+
+    /**
+     * Defaulting a {@code void} call is deleting it: there is no value to stand in for. So the two actions
+     * meet on a void statement, and neither writes {@code void x = …}.
+     */
+    @Test
+    void defaultingAVoidStatementDeletesItRatherThanWritingNothing(@TempDir Path tmp) throws IOException {
+        Map<String, String> before = oldMouse(SPLIT_POINTER);
+        Map<String, String> after = newMouse();
+        Report r = reportOver(tmp, before, after, SCROLLING_BOT);
+
+        Map<CallSite, Decision> picks = Map.of(
+                siteWhoseTextContains(r.splits().getFirst(), "-3").site(), Decision.DEFAULT);
+
+        String rewritten = rewriteOver(tmp, before, after, SCROLLING_BOT, picks);
+        assertFalse(rewritten.contains("-3"), rewritten);
+        assertFalse(rewritten.contains("= Mouse."), "a void call has no value to stand in for: " + rewritten);
+        assertEquals(2, occurrences(rewritten, "Mouse.scrollUp("), rewritten);
+    }
 
     private static Site siteWhoseTextContains(Choice choice, String fragment) {
         List<Site> matching = choice.sites().stream()

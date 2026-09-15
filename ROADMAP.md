@@ -6,6 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — three actions per call site: redirect, default it out, discard.** Phase 5. The per-site
+  question was *which candidate of a split did this call mean*, an `int` index; it is
+  `PluginUpgradeService.Decision` now — `REDIRECT(candidate)`, `DEFAULT`, `DISCARD` — reaching the rewriter as
+  `ApiMigrationRunner.Action`. **Nothing new is written**: the last two are the engine's own two outcomes
+  (a literal default of what the old member gave back plus `@NeedsReview`, or a deleted statement), and what
+  changed is who decides. `Decision.PREFERRED` is what every site arrives on, so a window closed without a
+  click migrates byte-for-byte as it did before. Three actions and no fourth, because **three are what can be
+  written without a compile error** — there is deliberately no *leave it alone*, since a call whose member is
+  gone does not compile and skipping is not something anybody can be offered. **Discard is legal only where
+  the call stands as a statement**, which is why `Site` gained `statement()`; asked for anywhere else it is
+  written as a default, and that is refused twice — in `choicesFor`, which knows the position, and again in
+  the runner, which must be safe for any caller. Defaulting a `void` call deletes it, so the two actions meet
+  there. The menu in `ReportView` lists the candidates that fit, then *Default it out*, then *Discard this
+  call* where it is legal. 5 new tests in `SplitPointerTest`; suite 1030 → 1035 with the same 14 pre-existing
+  failures.
+
 - **2026-09-15 — *Project ▸ Upgrade…*: every plugin's version, one pass.** Phase 4, and the phase that makes
   the three before it reachable. `ui/app/ProjectUpgradeDialog` is one table over
   `InstalledPlugin` — name, installed version, a `ComboBox` of every version JitPack can build, a per-row

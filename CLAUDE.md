@@ -528,6 +528,20 @@ point of it.**
     offset)* — never node identity: the report pass and the apply pass parse the sources twice, so the AST
     node in the report is not the node the rewriter holds. Nothing edits the files between the passes, and a
     key that misses falls back to that site's default.
+  - **The question at a site widened from *which candidate* to *what should happen here* (2026-09-15), and it
+    is three actions because three are what can be written without a compile error.** `PluginUpgradeService
+    .Decision` is `REDIRECT` (naming the candidate), `DEFAULT` (a literal of what the old member gave back,
+    plus `@NeedsReview`) or `DISCARD` (delete the call); it reaches the rewriter as
+    `ApiMigrationRunner.Action`. **Nothing new is written** — the last two are the engine's own two outcomes,
+    and what changed is who decides. `Decision.PREFERRED` is what every site arrives on, so a window closed
+    without a click migrates byte-for-byte as before. **There is deliberately no *leave it alone***: a call
+    whose member is gone does not compile, so skipping is not an action anybody can be offered — discard is
+    what a user who does not want the call means. **Discard is legal only where the call stands as a
+    statement** (`Site.statement()`, which is why the record carries it), because deleting an expression
+    leaves a hole where its value sat; asked for anywhere else it is written as a default, refused twice —
+    once in `choicesFor`, which knows the position, and once in the runner, which must be safe for any
+    caller. Defaulting a **void** call is deleting it, since there is no value to stand in for, so the two
+    actions meet there.
   - **The dialog opens with what the release *gives* you.** `Report.added` is a diff-derived list of API
     names, which is not a reason to upgrade. The SDK ships its whole `CHANGELOG.md` inside its jar as
     `META-INF/botmaker/whats-new.md`; `Report.highlights()` holds the sections in `(from, to]`, newest first,

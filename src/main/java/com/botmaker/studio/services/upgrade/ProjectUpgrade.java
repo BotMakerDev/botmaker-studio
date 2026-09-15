@@ -2,6 +2,7 @@ package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 
 import java.util.ArrayList;
@@ -54,10 +55,11 @@ public final class ProjectUpgrade {
      * @param targetVersion  the version the row's combo box is on — older than the installed one for a
      *                       downgrade, which is the same operation and the same control
      * @param alsoModernise  whether to read through the target's own deprecations, the dialog's checkbox
-     * @param picks          the per-site answers a split asked for; empty takes the preferred candidate
+     * @param picks          the per-site {@link Decision}s the window collected; empty takes the engine's own
+     *                       answer at every site
      */
     public record Row(PluginUpgradeService upgrades, String targetVersion, boolean alsoModernise,
-                      Map<CallSite, Integer> picks) {
+                      Map<CallSite, Decision> picks) {
 
         public Row {
             picks = picks == null ? Map.of() : Map.copyOf(picks);
