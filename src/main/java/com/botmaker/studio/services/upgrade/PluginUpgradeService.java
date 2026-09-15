@@ -420,6 +420,35 @@ public final class PluginUpgradeService {
     public record Highlight(String version, String date, List<String> lines) {}
 
     /**
+     * Which question a {@link Report} answers — four operations over one engine.
+     *
+     * <p>They are not four code paths. Each is the same jar-to-jar diff with the jars chosen differently:
+     * an upgrade compares the pinned version with a newer one, a downgrade compares it with an older one by
+     * passing them the other way round, modernising compares the pinned jar with itself, and a removal
+     * compares it with nothing at all. The distinction is carried so the window can say what it is doing;
+     * the diff itself never reads it.
+     */
+    public enum Operation {
+
+        /** The target is newer than what the pom pins. */
+        UPGRADE,
+
+        /**
+         * The target is older. {@code @ReplacedBy} points <b>forward</b>, so nothing pairs in this
+         * direction: every member the bot uses that the older jar lacks is an unpaired break, and the
+         * actions left are a default value or a discard. A silent zero-redirect run would read as success,
+         * which is why this is stated in the report's own header rather than inferred from an empty list.
+         */
+        DOWNGRADE,
+
+        /** No version change at all — the plugin's own deprecations, read out of the jar already pinned. */
+        MODERNISE,
+
+        /** The plugin goes. Every type it declares is unpaired, because there is no target jar. */
+        REMOVAL
+    }
+
+    /**
      * The whole answer to "what happens if I move to this version".
      *
      * <p>{@code problems} is what the scan could <em>not</em> determine — an unresolvable jar, a file that
@@ -446,8 +475,14 @@ public final class PluginUpgradeService {
      * <p>{@code splits} are the members that became two — see {@link Choice}. They sit beside the two verdict
      * lists rather than inside them, deliberately: a split member is already reported there as deprecated or
      * as a break, and this is the question that goes with it, not a third kind of finding.
+     *
+     * <p>{@code operation} is which of the four questions this report answers. Every one of them runs the
+     * same diff over the same two jars, so nothing downstream branches on it — it exists because the
+     * <em>sentence</em> above the lists differs, and a downgrade in particular reads as a suspiciously quiet
+     * upgrade unless the window says why nothing could be pointed anywhere.
      */
     public record Report(String from, String to,
+                         Operation operation,
                          List<Highlight> highlights,
                          Map<String, List<String>> addedBySince,
                          List<Deprecation> deprecated,
@@ -509,8 +544,24 @@ public final class PluginUpgradeService {
         }
 
         static Report unavailable(String from, String to, String problem) {
-            return new Report(from, to, List.of(), Map.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(problem));
+            return unavailable(from, to, operationFor(from, to), problem);
+        }
+
+        static Report unavailable(String from, String to, Operation operation, String problem) {
+            return new Report(from, to, operation, List.of(), Map.of(), List.of(), List.of(), List.of(),
+                    List.of(), List.of(problem));
+        }
+
+        /**
+         * Which way this pair of versions goes — {@link Operation#REMOVAL} is never derived, because it is
+         * the one case that is not about a pair of versions at all and its caller says so outright.
+         */
+        static Operation operationFor(String from, String to) {
+            if (from.equals(to)) return Operation.MODERNISE;
+            if (from.isBlank() || to.isBlank()) return Operation.UPGRADE;
+            return ApiModel.compareVersions(ApiModel.strip(to), ApiModel.strip(from)) < 0
+                    ? Operation.DOWNGRADE
+                    : Operation.UPGRADE;
         }
     }
 
@@ -626,6 +677,64 @@ public final class PluginUpgradeService {
     }
 
     /**
+     * What taking this plugin <b>out</b> of the project would do — the same question with <em>no</em> target
+     * jar.
+     *
+     * <p>Until now removing a plugin rewrote one line of the pom and said nothing, which is the operation
+     * this whole service exists to replace: a bot calling a plugin that is no longer resolved does not open
+     * with a warning, it opens as a file that will not compile. So a removal is a report first, exactly like
+     * a version change, and it is built by the same diff — this plugin's own jar as <em>old</em>, an empty
+     * model as <em>new</em>.
+     *
+     * <p>Two verdicts come out of it and the difference is the whole design. A type the bot only
+     * <b>calls</b> is repairable: the call becomes a literal default or a deleted statement, the type name
+     * goes with it, and the import line is dropped, so what is left compiles with no trace of the plugin. A
+     * type the bot <b>holds</b> — a field, a parameter, a cast, a type argument — is
+     * {@link BreakKind#TYPE_REMOVED} and <b>refuses the removal</b>, naming the type and every place it is
+     * written. There is no value to stand in for a declaration, and inventing {@code Object} there would be
+     * the one outcome worse than a compile error.
+     *
+     * <p><b>Blocking</b>, for the same reasons {@link #compare(String)} is.
+     */
+    public Report removal() {
+        String version = currentVersion();
+        Optional<Path> jar = resolve(version);
+        if (jar.isEmpty()) {
+            return Report.unavailable(version, "", Operation.REMOVAL,
+                    "The " + name() + " this project pins (" + version + ") could not be resolved, so there "
+                            + "is nothing to read what removing it would break out of.");
+        }
+        return removal(jar.get(), version);
+    }
+
+    /**
+     * The removal comparison itself, given the jar — split out for the same reason
+     * {@link #compare(Path, Path, String, String)} is.
+     */
+    Report removal(Path jar, String version) {
+        Map<String, ApiClass> before = ApiModel.snapshot(jar);
+        if (before.isEmpty()) {
+            return Report.unavailable(version, "", Operation.REMOVAL,
+                    "The " + name() + " jar scanned to no public API at all, so what this bot calls in it "
+                            + "cannot be told — which would make an empty answer a guess rather than a fact.");
+        }
+
+        List<String> problems = new ArrayList<>();
+        Map<String, ApiClass> after = Map.of();
+        Uses uses = usesIn(before.keySet(), ApiModel.fieldOwners(before, after), problems);
+        Pairing pairing = Pairing.of(before, after, false);
+
+        // No highlights, no additions and no deprecations: each of those is a statement about a release the
+        // user is moving to, and there is none. The breaks are the whole answer.
+        return new Report(version, "", Operation.REMOVAL,
+                List.of(), Map.of(), List.of(),
+                UpgradeDiff.breaks(before, after, uses, pairing, true),
+                List.of(),
+                List.of(),
+                List.copyOf(problems));
+    }
+
+    /**
      * The comparison itself, given the two jars — everything except resolving them.
      *
      * <p>Split out so the diff can be tested against jars built on the spot rather than against whatever
@@ -653,7 +762,7 @@ public final class PluginUpgradeService {
 
         List<Deprecation> deprecated = UpgradeDiff.deprecations(before, after, uses.calls(), pairing);
         List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing);
-        return new Report(from, to,
+        return new Report(from, to, Report.operationFor(from, to),
                 // Read from the target jar, not diffed out of the two: a release's reason for existing is
                 // not a property of its API surface. A span of (from, from] — which is what modernising
                 // passes — is empty by construction, and correctly so: nothing is being moved to.
@@ -737,6 +846,53 @@ public final class PluginUpgradeService {
             snapshot("Before modernising");
             repair(currentVersion(), true, false, Map.of());
         });
+    }
+
+    /**
+     * Takes this plugin out of the project: snapshot → repair the source → drop it from the pom.
+     *
+     * <p>The same three steps an upgrade takes, in the same order and for the same reason — the source is
+     * repaired first because a pom that no longer declares the plugin is a project that no longer resolves
+     * the jar the repair has to read. What differs is the last step, which removes a dependency instead of
+     * re-versioning one, and which takes the plugin's {@code editorDependencies} with it: those were
+     * declared {@code provided} beside it by {@code MavenService.installPlugin} and belong to nobody else.
+     *
+     * <p>{@code repairSources} is {@link Report#canMigrate()}, read the same way {@link #apply} reads it: a
+     * removal whose report found nothing to repair still has a pom edit to make.
+     */
+    public CompletableFuture<Void> remove(List<UserLibrary> editorDependencies, boolean repairSources,
+                                          Map<CallSite, Decision> picks) {
+        return CompletableFuture
+                .runAsync(() -> {
+                    snapshot("Before removing " + name());
+                    if (repairSources) repairRemoval(picks);
+                })
+                .thenCompose(v -> libraryService.removePlugin(
+                        artifact.groupId(), artifact.artifactId(), editorDependencies));
+    }
+
+    /**
+     * Repairs the project's own files for this plugin's <b>departure</b>, or throws saying why it will not —
+     * the removal's half of {@link #repair}, and public for the same reason: it writes the files and not the
+     * pom.
+     */
+    public void repairRemoval(Map<CallSite, Decision> picks) {
+        String version = currentVersion();
+        Optional<Path> jar = resolve(version);
+        if (jar.isEmpty()) {
+            throw new IllegalStateException("The " + name() + " jar could not be resolved again, so the "
+                    + "removal stopped before changing anything. Check the report and try once more.");
+        }
+
+        ApiMigrationRunner.Outcome outcome = migrateRemoval(jar.get(), picks);
+        if (outcome == null) return;                        // nothing named it
+        if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
+        try {
+            ReviewMarks.ensureFile(config.mainPackageDir(), config.mainPackage());
+            CallMigrator.commit(outcome.files());
+        } catch (IOException e) {
+            throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -827,7 +983,49 @@ public final class PluginUpgradeService {
                     + ". Nothing has been changed.");
         }
 
-        ApiMigrationRunner.Repairs repairs = repairsFor(before, after, uses, pairing, allowDefaults);
+        return rewrite(before, after, uses, pairing, known, fieldOwners, allowDefaults, false, picks);
+    }
+
+    /**
+     * The rewrite that takes this plugin <b>out</b> — the same pass with no target jar, so every call it
+     * finds becomes a default value or a deleted statement and every import of one of its classes is dropped.
+     *
+     * <p>It refuses on a held type before writing anything, exactly as {@link #removal()} predicted it
+     * would: the check runs twice on purpose, because the report the user read is a value and the files on
+     * disk may have moved under it.
+     */
+    ApiMigrationRunner.Outcome migrateRemoval(Path jar, Map<CallSite, Decision> picks) {
+        List<String> problems = new ArrayList<>();
+        Map<String, ApiClass> before = ApiModel.snapshot(jar);
+        Map<String, ApiClass> after = Map.of();
+        Map<String, List<String>> fieldOwners = ApiModel.fieldOwners(before, after);
+        Pairing pairing = Pairing.of(before, after, false);
+
+        Uses uses = usesIn(before.keySet(), fieldOwners, problems);
+        if (!problems.isEmpty()) throw new IllegalStateException(problems.getFirst());
+
+        List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing, true);
+        Break refused = breaks.stream().filter(b -> !b.isRepairable()).findFirst().orElse(null);
+        if (refused != null) throw new IllegalStateException(removalRefusal(refused));
+
+        return rewrite(before, after, uses, pairing, before.keySet(), fieldOwners, true, true, picks);
+    }
+
+    /** Why a removal will not be made — the type the bot writes down, and every place it writes it. */
+    private String removalRefusal(Break refused) {
+        return "\"" + refused.type() + "\" comes from " + name() + ", and this bot writes the type itself "
+                + "rather than only calling it — so removing the plugin leaves nothing to put in its place. "
+                + "Change these by hand, then remove it: "
+                + String.join(", ", refused.sites().stream().map(CallSite::toString).toList())
+                + ". Nothing has been changed.";
+    }
+
+    /** The last third of both passes: what to write, over which files, through the shared runner. */
+    private ApiMigrationRunner.Outcome rewrite(Map<String, ApiClass> before, Map<String, ApiClass> after,
+                                               Uses uses, Pairing pairing, Set<String> known,
+                                               Map<String, List<String>> fieldOwners, boolean allowDefaults,
+                                               boolean removing, Map<CallSite, Decision> picks) {
+        ApiMigrationRunner.Repairs repairs = repairsFor(before, after, uses, pairing, allowDefaults, removing);
         if (repairs.isEmpty()) return null;
 
         List<ProjectFile> editable = new ArrayList<>();
@@ -854,11 +1052,15 @@ public final class PluginUpgradeService {
      * in for something that is <em>gone</em>, and nothing is gone when the two jars are the same one: a
      * deprecated member is still there and still compiles, so a modernisation that cannot be made cleanly is
      * left alone rather than replaced by {@code false}.
+     *
+     * <p>{@code removing} is on for exactly one caller — {@link #migrateRemoval}. Nothing is renamed and
+     * nothing is redirected, because there is no jar to rename or redirect <em>to</em>: every call becomes a
+     * removal, and every one of the plugin's own class names is handed over as an import to drop.
      */
     private static ApiMigrationRunner.Repairs repairsFor(Map<String, ApiClass> before,
                                                          Map<String, ApiClass> after,
                                                          Uses uses, Pairing pairing,
-                                                         boolean allowDefaults) {
+                                                         boolean allowDefaults, boolean removing) {
         Map<String, ApiMigrationRunner.TypeRename> types = new LinkedHashMap<>();
         Map<String, ApiMigrationRunner.Redirect> redirects = new LinkedHashMap<>();
         Map<String, ApiMigrationRunner.Removal> removals = new LinkedHashMap<>();
@@ -879,6 +1081,16 @@ public final class PluginUpgradeService {
         for (Call call : uses.calls()) {
             ApiClass then = before.get(call.type());
             if (then == null || !declares(then, call.isField(), call.member())) continue;
+
+            if (removing) {
+                String gone = returnTypeOf(then, call);
+                // No returnTypeFqn: that is the cast a default needs to be spelled in the *target* jar, and
+                // there is none. The cast is only ever wanted for a type the target still has.
+                removals.putIfAbsent(then.simpleName() + "#" + call.member() + "#" + call.argCount(),
+                        new ApiMigrationRunner.Removal(then.simpleName(), call.member(), call.argCount(),
+                                gone));
+                continue;
+            }
 
             ApiClass now = pairing.pairedTo(then, after);
             if (now == null) continue;                      // refused above; nothing to write
@@ -901,8 +1113,14 @@ public final class PluginUpgradeService {
                     new ApiMigrationRunner.Removal(then.simpleName(), call.member(), call.argCount(),
                             removed, returnTypeFqn(removed, after)));
         }
+        // Every class the plugin declares, so the runner can drop the import lines that name them. It is the
+        // whole set rather than the ones the bot calls: an import of a class the bot no longer uses still
+        // stops resolving once the jar leaves the classpath, and the runner asks each file for itself.
+        List<String> dropped = removing
+                ? before.values().stream().map(ApiClass::name).sorted().toList()
+                : List.of();
         return new ApiMigrationRunner.Repairs(List.copyOf(types.values()), List.copyOf(redirects.values()),
-                List.copyOf(removals.values()));
+                List.copyOf(removals.values()), dropped);
     }
 
     /**

@@ -6,6 +6,7 @@ import com.botmaker.studio.services.upgrade.PluginUpgradeService.Candidate;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Deprecation;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
@@ -49,10 +50,21 @@ public final class ReportView {
 
     /** Which question the report is answering, which is the only thing that changes the layout. */
     public enum Mode {
-        /** Moving to another version: what breaks, what is new, what will be repaired. */
+        /**
+         * Moving to another version: what breaks, what is new, what will be repaired. A <b>downgrade</b> is
+         * this mode too — it is the same report with the jars the other way round, and what it needs is one
+         * sentence saying so rather than a layout of its own. See {@link Report#operation()}.
+         */
         UPGRADE,
         /** Moving off what the pinned version already deprecates. Nothing here is broken, so no break list. */
-        MODERNISE
+        MODERNISE,
+        /**
+         * Taking the plugin out. There is no version to move to, so every list that describes one — what is
+         * new, what is deprecated there, the release's own changelog — is empty by construction and would
+         * render as a wall of "nothing between 1.2.0 and ". What is left is the break list, which is the
+         * whole answer.
+         */
+        REMOVAL
     }
 
     private final VBox box = new VBox(14);
@@ -105,6 +117,23 @@ public final class ReportView {
         if (mode == Mode.MODERNISE) {
             renderModernise(r);
             return;
+        }
+        if (mode == Mode.REMOVAL) {
+            renderRemoval(r);
+            return;
+        }
+        // A downgrade runs the same diff with the jars swapped, and the difference has to be said rather than
+        // inferred: @ReplacedBy points forward, so nothing pairs in this direction and every member the older
+        // release lacks arrives with no redirect. A report full of defaults and no moves reads as the engine
+        // having given up, when it is in fact the correct answer.
+        if (r.operation() == PluginUpgradeService.Operation.DOWNGRADE) {
+            Label note = new Label("Going back to " + r.to() + ". A plugin's pointers say where something "
+                    + "went, never where it came from, so nothing can be redirected in this direction: each "
+                    + "call the older release does not have gets a default value or is discarded, and its "
+                    + "function is marked for review.");
+            note.setWrapText(true);
+            note.getStyleClass().add("sdk-upgrade-card");
+            box.getChildren().add(note);
         }
 
         List<String> breaks = new ArrayList<>();
@@ -249,6 +278,49 @@ public final class ReportView {
      * the plugin answered and what it only warned about, because the second list is the one addressed to the
      * user rather than to the button.
      */
+    /**
+     * What taking the plugin out would do — the break list and nothing else.
+     *
+     * <p>Two sections, and the split between them is the operation's one rule. Anything Studio can repair is
+     * a call, and a call goes: a literal default where its value is used, a deleted line where it is not. A
+     * type the bot writes <b>down</b> is not repairable and refuses the removal outright, because a
+     * declaration has no value to stand in for — so that list is not a warning, it is the reason the button
+     * will not run.
+     */
+    private void renderRemoval(Report r) {
+        List<String> going = new ArrayList<>();
+        for (Break b : r.repairable()) {
+            going.add(b.display() + " — " + b.repair());
+            for (var site : b.sites()) going.add("        " + site);
+        }
+        box.getChildren().add(section("What Studio will rewrite", going,
+                r.isIncomplete()
+                        ? "Nothing in the files that could be read."
+                        : "Nothing — this bot never calls this plugin, so removing it changes no source."));
+
+        if (!r.unrepairable().isEmpty()) {
+            List<String> byHand = new ArrayList<>();
+            for (Break b : r.unrepairable()) {
+                byHand.add(b.display() + " — this bot writes the type itself, and once the plugin is gone "
+                        + "there is no type to write. Change these, then remove it.");
+                for (var site : b.sites()) byHand.add("        " + site);
+            }
+            box.getChildren().add(section("Why this removal is refused", byHand));
+        }
+
+        Label note = new Label(!r.unrepairable().isEmpty()
+                ? "The plugin stays until every use above is gone from your source. Nothing has been changed."
+                : r.isIncomplete()
+                ? "Some of this project could not be read, so nothing will be rewritten."
+                : "Removing commits your project to Project History first, so all of this is one revert "
+                + "away. Every call above is replaced by a default value or deleted, the import lines that "
+                + "name this plugin go with them, and each function that changed is marked for you to "
+                + "review.");
+        note.setWrapText(true);
+        note.getStyleClass().add("sdk-upgrade-card");
+        box.getChildren().add(note);
+    }
+
     private void renderModernise(Report r) {
         List<String> moving = new ArrayList<>();
         for (Deprecation d : r.movable()) {

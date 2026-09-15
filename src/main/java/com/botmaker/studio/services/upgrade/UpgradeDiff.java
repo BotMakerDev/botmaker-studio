@@ -229,6 +229,24 @@ final class UpgradeDiff {
      */
     static List<Break> breaks(Map<String, ApiClass> before, Map<String, ApiClass> after,
                               Uses uses, Pairing pairing) {
+        return breaks(before, after, uses, pairing, false);
+    }
+
+    /**
+     * The same, told whether the plugin is being <b>removed</b> rather than moved to another version.
+     *
+     * <p>Removal is the one case where the two verdicts have to part company, and the reason is what the
+     * repair can actually write. A type the bot merely <em>holds</em> — {@code ImageTemplate t;}, a
+     * parameter, a cast — is {@link BreakKind#TYPE_REMOVED} either way: there is no value to stand in for a
+     * declaration, so the operation is refused and the user is told which type and where. A type the bot only
+     * <em>calls</em> is different: the type name at {@code Mouse.click()} disappears along with the call, so
+     * the ordinary default-or-delete repair leaves a file that compiles with no mention of the plugin left in
+     * it. An upgrade still reads such a call as {@code TYPE_REMOVED}, because there the class going missing
+     * out of a release the user did not write is evidence that something larger went wrong; removing a plugin
+     * is the user saying outright that it should go.
+     */
+    static List<Break> breaks(Map<String, ApiClass> before, Map<String, ApiClass> after,
+                              Uses uses, Pairing pairing, boolean removing) {
         Map<String, Break> found = new LinkedHashMap<>();
         Map<String, List<CallSite>> sites = new LinkedHashMap<>();
 
@@ -246,6 +264,14 @@ final class UpgradeDiff {
             // this file's `Foo.NAME` was ever SDK, and vice versa.
             if (then == null || !declares(then, call.isField(), call.member())) continue;
 
+            if (removing) {
+                // Nothing is paired and nothing is renamed: the whole library goes. What is left is the one
+                // repair that needs no destination — a default value, or a deleted statement.
+                record(found, sites, new Break(call.type(), call.member(),
+                        call.isField() ? BreakKind.FIELD_REMOVED : BreakKind.MEMBER_REMOVED, "",
+                        repairText(returnTypeOf(then, call)), List.of()), call.site());
+                continue;
+            }
             if (typeVerdict(found, sites, then, after, pairing, call.site())) continue;
             ApiClass now = pairing.pairedTo(then, after);
 

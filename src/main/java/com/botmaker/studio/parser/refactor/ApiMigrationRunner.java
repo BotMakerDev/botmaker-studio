@@ -236,11 +236,26 @@ public final class ApiMigrationRunner {
         }
     }
 
-    /** Everything the upgrade has to write, worked out from the two jars before a character is changed. */
-    public record Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals) {
+    /**
+     * Everything the upgrade has to write, worked out from the two jars before a character is changed.
+     *
+     * <p>{@code droppedImports} is fully-qualified type names whose <em>import lines</em> must go, and it is
+     * only ever non-empty for a plugin being <b>removed</b>. Every other operation leaves the library on the
+     * classpath, so an import that survives a rewrite still resolves; a removed plugin's does not, and an
+     * unused import of a class that is no longer there is a compile error like any other. It is a separate
+     * list rather than a {@link TypeRename} with no destination because the two edits are not the same shape:
+     * a rename rewrites the uses and moves the import, while this one rewrites nothing and only ever runs
+     * once the member sweep has already erased every use.
+     */
+    public record Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals,
+                          List<String> droppedImports) {
+
+        public Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals) {
+            this(types, redirects, removals, List.of());
+        }
 
         public boolean isEmpty() {
-            return types.isEmpty() && redirects.isEmpty() && removals.isEmpty();
+            return types.isEmpty() && redirects.isEmpty() && removals.isEmpty() && droppedImports.isEmpty();
         }
     }
 
@@ -596,10 +611,17 @@ public final class ApiMigrationRunner {
         List<TypeRename> here = repairs.types().stream()
                 .filter(rename -> ApiReferences.mentions(unit, rename.from()))
                 .toList();
-        if (here.isEmpty()) return Applied.unchanged();
+        // A drop is decided from the import list rather than from the body: by the time this sweep runs the
+        // member sweep has erased every use, so `mentions` would answer no for exactly the file that still
+        // carries the line which stops compiling.
+        List<String> drops = repairs.droppedImports().stream()
+                .filter(fqn -> CallMigrator.importsType(unit, fqn))
+                .toList();
+        if (here.isEmpty() && drops.isEmpty()) return Applied.unchanged();
 
         EditContext ctx = EditContext.of(unit, analyzer, state);
         for (TypeRename rename : here) CallMigrator.renameTypeIn(ctx, rename.fromFqn(), rename.toFqn());
+        for (String fqn : drops) CallMigrator.dropTypeIn(ctx, fqn);
         return finish(ctx, file, text);
     }
 

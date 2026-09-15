@@ -1158,4 +1158,37 @@ class PluginUpgradeServiceTest {
                 WhatsNew.parse(jumbled, "1.0.0", "2.0.0").stream()
                         .map(PluginUpgradeService.Highlight::version).toList());
     }
+
+    // =========================================================================
+    // WHICH WAY THE MOVE GOES
+    // =========================================================================
+
+    /**
+     * A downgrade is the same report with the jars the other way round, and it has to <em>say</em> so.
+     *
+     * <p>Nothing about the diff changes — which is the point of there being no second code path — but the
+     * sentence above it does: pointers face forward, so an older release's missing members arrive with no
+     * redirect, and a report full of defaults reads as a failure unless the window says why.
+     */
+    @Test
+    void aTargetOlderThanThePinnedVersionIsADowngrade(@TempDir Path tmp) throws IOException {
+        Report report = serviceOver(tmp, FINDER_BOT).compare(
+                jarOf(tmp, "old", withPointers(finderPointingAt(PKG + ".Finder#locate")), Map.of()),
+                jarOf(tmp, "new", withPointers(finderPointingAt(PKG + ".Finder#locate")), Map.of()),
+                "2.0.0", "1.0.0");
+
+        assertEquals(PluginUpgradeService.Operation.DOWNGRADE, report.operation());
+    }
+
+    @Test
+    void aTargetNewerThanThePinnedVersionIsAnUpgradeAndTheSameVersionIsAModernisation(@TempDir Path tmp)
+            throws IOException {
+        Map<String, String> jar = withPointers(finderPointingAt(PKG + ".Finder#locate"));
+        assertEquals(PluginUpgradeService.Operation.UPGRADE,
+                serviceOver(tmp, FINDER_BOT).compare(jarOf(tmp, "old", jar, Map.of()),
+                        jarOf(tmp, "new", jar, Map.of()), "1.0.0", "2.0.0").operation());
+        assertEquals(PluginUpgradeService.Operation.MODERNISE,
+                serviceOver(tmp, FINDER_BOT).compare(jarOf(tmp, "old", jar, Map.of()),
+                        jarOf(tmp, "new", jar, Map.of()), "1.0.0", "1.0.0").operation());
+    }
 }

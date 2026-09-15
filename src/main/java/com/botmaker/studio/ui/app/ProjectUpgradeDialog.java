@@ -18,6 +18,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
@@ -52,8 +53,19 @@ import java.util.Set;
  * round and reports what an older release lacks, which needs no new code path. Check is per row because the
  * report is per plugin: what a bot calls of plugin A says nothing about plugin B.
  *
- * <p>It is <b>not</b> a second install/remove surface. Adding and removing a plugin is
- * {@link ManagePluginsDialog}'s, and this window changes only versions of things the pom already declares.
+ * <h2>Four operations, one report</h2>
+ *
+ * <p>Upgrade, downgrade, remove and install. The first two are the same control and the same engine run with
+ * the jars in a different order. <b>Remove is the same report with no target jar at all</b> — every call into
+ * the plugin becomes a default value or a deleted line, every import of it is dropped, and a type the bot
+ * writes <em>down</em> refuses the removal by name, because a declaration has no value to stand in for. That
+ * refusal is the maintainer's constraint working rather than a gap: no operation here may leave the project
+ * with a compilation error.
+ *
+ * <p><b>Install is the one operation with no report</b>, and needs none: nothing is migrated by adding a
+ * dependency. It stays {@link ManagePluginsDialog}'s — the catalogue, the descriptions and the editor
+ * dependencies live there — and is reached from this window's own button, so a user deciding what this
+ * project should run does it in one place.
  *
  * <h2>One pass, not one pass per row</h2>
  *
@@ -141,10 +153,18 @@ public final class ProjectUpgradeDialog {
         close.setCancelButton(true);
         close.setOnAction(e -> stage.close());
 
+        // Install has no report and needs none, so it is a door to the catalogue rather than a fifth control
+        // here: the descriptions, the editor dependencies and the id check all already live there.
+        Button add = new Button("Add a plugin…");
+        add.setOnAction(e -> {
+            stage.close();
+            new ManagePluginsDialog(owner, libraryService, registry, jitpack).show();
+        });
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(8, spacer, applyButton, close);
+        HBox bar = new HBox(8, add, spacer, applyButton, close);
         bar.setAlignment(Pos.CENTER_RIGHT);
         return bar;
     }
@@ -186,7 +206,7 @@ public final class ProjectUpgradeDialog {
         if (found.isEmpty()) {
             status("");
             table.add(new Label("This project declares no plugins, so there is nothing to upgrade. "
-                    + "Project ▸ Manage Plugins… is where one is installed."), 0, 0, 5, 1);
+                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 6, 1);
             return;
         }
 
@@ -204,7 +224,8 @@ public final class ProjectUpgradeDialog {
             table.add(row.installed, 1, line);
             table.add(row.versions, 2, line);
             table.add(row.check, 3, line);
-            table.add(row.verdict, 4, line);
+            table.add(row.remove, 4, line);
+            table.add(row.verdict, 5, line);
             line++;
             row.loadVersions();
         }
@@ -226,6 +247,7 @@ public final class ProjectUpgradeDialog {
         private final Label installed;
         private final ComboBox<String> versions = new ComboBox<>();
         private final Button check = new Button("Check");
+        private final Button remove = new Button("Remove…");
         private final Label verdict = new Label();
 
         private Report report;
@@ -253,6 +275,7 @@ public final class ProjectUpgradeDialog {
 
             check.setOnAction(e -> runCheck());
             check.setDisable(true);
+            remove.setOnAction(e -> runRemovalCheck());
             verdict.setWrapText(true);
         }
 
@@ -318,6 +341,98 @@ public final class ProjectUpgradeDialog {
             }, "plugin-upgrade-check");
             worker.setDaemon(true);
             worker.start();
+        }
+
+        /**
+         * The removal pre-flight: the same report with no target jar, shown before anything is asked.
+         *
+         * <p>It is never one button. The user reads what removing the plugin would rewrite, and only then
+         * confirms — because the rewrite is destructive in a way an upgrade is not: a call that used to do
+         * something becomes a default value or disappears, and no later version will bring it back.
+         */
+        void runRemovalCheck() {
+            remove.setDisable(true);
+            progress.setVisible(true);
+            status("Reading what removing " + plugin.displayName() + " would break…");
+
+            Thread worker = new Thread(() -> {
+                Report result;
+                try {
+                    result = upgrades.removal();
+                } catch (RuntimeException e) {
+                    String message = e.getMessage();
+                    Platform.runLater(() -> {
+                        progress.setVisible(false);
+                        remove.setDisable(false);
+                        status("The check for removing " + plugin.displayName() + " failed: " + message);
+                    });
+                    return;
+                }
+                Report done = result;
+                Platform.runLater(() -> {
+                    progress.setVisible(false);
+                    remove.setDisable(false);
+                    report = null;                           // this one is not about a version change
+                    showing = Row.this;
+                    reportView.render(done, ReportView.Mode.REMOVAL);
+                    status("");
+                    confirmRemoval(done);
+                });
+            }, "plugin-removal-check");
+            worker.setDaemon(true);
+            worker.start();
+        }
+
+        /** The report is on screen; this is the question that follows it. */
+        private void confirmRemoval(Report r) {
+            if (r.isIncomplete()) {
+                ThemedWindows.alert(Alert.AlertType.ERROR, "Some of this project could not be read, so what "
+                        + "removing " + plugin.displayName() + " would break cannot be told:\n\n"
+                        + r.problems().getFirst()).showAndWait();
+                return;
+            }
+            if (!r.unrepairable().isEmpty()) {
+                ThemedWindows.alert(Alert.AlertType.ERROR, "\"" + r.unrepairable().getFirst().type()
+                        + "\" is written down in this bot, not only called — so removing "
+                        + plugin.displayName() + " would leave a type name with nothing behind it. The "
+                        + "report below lists every place. Change those first.").showAndWait();
+                return;
+            }
+
+            String what = r.breaks().isEmpty()
+                    ? "This bot calls nothing in it, so only the pom changes."
+                    : r.breaks().size() + " call(s) will be replaced by a default value or deleted, and the "
+                    + "functions they are in will be marked for review.";
+            Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
+                    "Remove " + plugin.displayName() + " from this project?\n\n" + what
+                            + "\n\nA snapshot is committed to Project History first.");
+            if (ask.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
+            runRemoval(r);
+        }
+
+        private void runRemoval(Report r) {
+            remove.setDisable(true);
+            progress.setVisible(true);
+            status("Committing a snapshot, repairing your call sites and removing "
+                    + plugin.displayName() + "…");
+
+            upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks())
+                    .whenComplete((ignored, error) -> Platform.runLater(() -> {
+                        progress.setVisible(false);
+                        remove.setDisable(false);
+                        if (error != null) {
+                            Throwable cause = error.getCause() != null ? error.getCause() : error;
+                            status("");
+                            ThemedWindows.alert(Alert.AlertType.ERROR,
+                                    "The removal did not run:\n\n" + cause.getMessage()).showAndWait();
+                            return;
+                        }
+                        status("Removed. The previous state is one revert away in Project History.");
+                        // The table it was a row of is now wrong, and the clash set with it: one plugin
+                        // fewer can make a name that was ambiguous answerable again.
+                        progress.setVisible(true);
+                        load();
+                    }));
         }
 
         /** Whether this row is asking for anything at all. A row on its installed version is not. */

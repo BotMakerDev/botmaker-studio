@@ -395,7 +395,7 @@ point of it.**
   never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
   (file + line), and where each break went — read from the **one pointer the old jar carries**
-  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Nine things about it are load-bearing:
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Ten things about it are load-bearing:
   - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what
     "generalising the upgrade" required.** The six engine classes moved from `services/` to
     `services/upgrade/` and lost their `Sdk` prefix — `ApiModel`, `Pairing`, `Redirects`, `UpgradeDiff`,
@@ -453,6 +453,25 @@ point of it.**
     of the revert the VCS panel already offers would be the worse one. The version control is a `ComboBox` of
     every version JitPack can build, seeded with what is already known — so a **downgrade is the same
     operation and the same control**, and a row stays usable when JitPack never answers.
+  - **Four operations, one report, and the fourth is the one worth knowing (2026-09-16).** Upgrade and
+    downgrade are the same control and the same engine with the jars in a different order;
+    `Report.operation()` says which, and a **downgrade says so in its own sentence** rather than leaving an
+    all-defaults report to read as a failure — `@ReplacedBy` points forward, so nothing pairs going
+    backwards and that is the correct answer, not a gap. **Remove is the same report with no target jar at
+    all** (`PluginUpgradeService.removal()` / `remove()`): the empty model makes every type unpaired, and the
+    one place removal and an upgrade must disagree is what that means for a **call**. An upgrade reads a call
+    on a vanished type as `TYPE_REMOVED` and refuses, because a class disappearing out of a release the user
+    did not write is evidence something larger went wrong. A removal repairs it — the call becomes a literal
+    default or a deleted line and the type name goes with it — because the user has said outright that the
+    plugin should go. What still refuses is a type the bot writes **down** (`ImageTemplate t;`, a parameter,
+    a cast): there is no value to stand in for a declaration, so the removal is refused naming the type and
+    every site, which is the constraint working rather than a gap. **Removal is also the only operation that
+    drops import lines** (`Repairs.droppedImports` → `CallMigrator.dropTypeIn`): every other operation leaves
+    the jar on the classpath, so an import that survives a rewrite still resolves, and a removed plugin's
+    does not — including one naming a class the bot never called, which no call scan or type sweep would ever
+    reach. **Install has no report and needs none** — nothing is migrated by adding a dependency — so it
+    stays `ManagePluginsDialog`'s and is reached from the upgrade window's own button, rather than becoming a
+    second install path to keep in step.
   - **The report layout is `ui/app/upgrade/ReportView`, shared by both windows.** It was
     `SdkUpgradeDialog`'s own `render` until the project window existed, and it moved for the reason that
     dialog's javadoc already gave for its own two modes: every sentence in it describes what the repair will

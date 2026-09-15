@@ -490,6 +490,49 @@ public final class CallMigrator {
         ctx.addImport(toFqn);
     }
 
+    /**
+     * Whether this file has an import line naming {@code fqn} — the plain one, or a static import of one of
+     * its members.
+     *
+     * <p>Asked before an edit is planned, because a file that never imported the type needs no edit and
+     * rewriting it to itself would churn it for nothing.
+     */
+    public static boolean importsType(CompilationUnit cu, String fqn) {
+        for (Object each : cu.imports()) {
+            if (namesType((ImportDeclaration) each, fqn)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Deletes every import line naming {@code fqn}, leaving the body alone.
+     *
+     * <p>The mirror of {@link #renameTypeIn} for the one operation that has no destination: a plugin being
+     * <b>removed</b>. Its jar leaves the classpath, so an import of one of its classes stops resolving
+     * whether or not anything still uses it — and by the time this runs, nothing does, because a use the
+     * removal could not repair refuses the whole operation before a character is written.
+     *
+     * <p>On-demand imports ({@code import a.b.*;}) are deliberately untouched: the line names a package
+     * rather than a class, and other classes of that package may be another plugin's.
+     */
+    public static void dropTypeIn(EditContext ctx, String fqn) {
+        ListRewrite imports = ctx.rewriter().getListRewrite(ctx.cu(), CompilationUnit.IMPORTS_PROPERTY);
+        for (Object each : ctx.cu().imports()) {
+            ImportDeclaration imp = (ImportDeclaration) each;
+            if (namesType(imp, fqn)) imports.remove(imp, null);
+        }
+    }
+
+    /** {@code import a.b.Key;} or {@code import static a.b.Key.ENTER;} — never {@code import a.b.*;}. */
+    private static boolean namesType(ImportDeclaration imp, String fqn) {
+        if (imp.isOnDemand()) return false;
+        String name = imp.getName().getFullyQualifiedName();
+        return imp.isStatic()
+                ? imp.getName() instanceof QualifiedName qualified
+                && qualified.getQualifier().getFullyQualifiedName().equals(fqn)
+                : name.equals(fqn);
+    }
+
     private static boolean isCaseLabel(ASTNode node) {
         return node.getLocationInParent() == SwitchCase.EXPRESSIONS2_PROPERTY;
     }

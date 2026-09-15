@@ -6,6 +6,24 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-16 — remove, downgrade and install: four operations over one report.** Phase 6, the last of the
+  project-upgrade plan. **Remove is the same report with no target jar** — `PluginUpgradeService.removal()`
+  scans the plugin's own jar against an empty model, so every type is unpaired, and `remove()` carries it out
+  as snapshot → repair → drop the dependency and its `provided` editor dependencies. The one place removal
+  and an upgrade had to disagree is what an unpaired type means for a **call**: an upgrade reads it as
+  `TYPE_REMOVED` and refuses (a class vanishing from a release the user did not write is evidence something
+  larger went wrong), while a removal repairs it, because the call and the type name go together and the user
+  has said the plugin should go. A type the bot writes **down** still refuses, naming it and every site —
+  there is no value to stand in for a declaration. **Removal is the only operation that drops import lines**
+  (`Repairs.droppedImports` → the new `CallMigrator.dropTypeIn`): every other one leaves the jar resolvable,
+  and this one does not, including for a class the bot never called. **Downgrade needed no code path** — it
+  was already the same control and the same engine with the jars reversed — only a sentence: `Report
+  .operation()` distinguishes upgrade, downgrade, modernise and removal, and the window says outright that
+  pointers face forward, so an all-defaults report is the right answer rather than a failure. **Install has
+  no report and needs none**; it stays `ManagePluginsDialog`'s and is reached from the upgrade window's own
+  button, so nothing is a second install path. 9 new tests (`PluginRemovalTest`, plus the direction pair in
+  `PluginUpgradeServiceTest`); suite 1035 → 1044 with the same 14 pre-existing failures.
+
 - **2026-09-15 — three actions per call site: redirect, default it out, discard.** Phase 5. The per-site
   question was *which candidate of a split did this call mean*, an `int` index; it is
   `PluginUpgradeService.Decision` now — `REDIRECT(candidate)`, `DEFAULT`, `DISCARD` — reaching the rewriter as
