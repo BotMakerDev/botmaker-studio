@@ -1,10 +1,13 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
+import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
+import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
+import com.botmaker.studio.core.render.ReadOnlyDecorator;
 import com.botmaker.studio.project.InsertionCursor;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.validation.BlockValidator;
@@ -206,8 +209,7 @@ final class OverlayTreeView {
         // one line. One that declares none falls back to its source text, which is what every row was until
         // a block first declared a spec, and what most rows still are. The fallback is not a degraded mode:
         // the text is also this row's tooltip either way.
-        List<Node> declared = CompactSpecRow.nodes(
-                spec(stmt), locked, stmt instanceof com.botmaker.studio.core.BranchingBlock);
+        List<Node> declared = compactNodes(stmt, locked);
         if (declared.isEmpty()) node.getChildren().add(text);
         else node.getChildren().addAll(declared);
         Tooltip.install(node, new Tooltip(rowTooltip(stmt, locked, broken)));
@@ -246,6 +248,40 @@ final class OverlayTreeView {
             node.getChildren().add(remove);
         }
         return node;
+    }
+
+    /**
+     * {@code stmt}'s components at HUD density, kept across a re-parse whenever the block itself was.
+     *
+     * <p>The canvas has had this since block reuse landed — a surviving block keeps its {@code uiNode}, so a
+     * half-typed field survives an edit elsewhere. The HUD rebuilt its widgets on every pulse regardless,
+     * which is the same loss on the surface a user is most often editing <em>through</em>: the overlay is the
+     * only place a bot can be authored without leaving the game.
+     *
+     * <p><b>Only the declared components are cached, never the row.</b> The row's indent, fold arrow, focus
+     * ring and reorder buttons all read the row model, and the row model moves while the block stands still.
+     *
+     * <p>The lock stamp is re-applied <b>both ways</b> on every call. A surviving block's verdict cannot
+     * actually have moved — {@code BlockReuse} refuses every subtree when it does — but this is the shape
+     * phase 4's breakpoint bug had, and a one-way stamp beside a cache is the same trap set again.
+     *
+     * <p>Safe to hand back the same nodes each pulse because there is one HUD at a time
+     * ({@code ProgramShapeOverlay.active}) and its canvas twin is a different object: a block builds fresh
+     * suppliers per {@code componentSpec} call, so the two surfaces never contend for one node's parent.
+     */
+    private List<Node> compactNodes(StatementBlock stmt, boolean locked) {
+        List<Node> nodes;
+        if (stmt instanceof AbstractCodeBlock block) {
+            nodes = block.getCompactNodes();
+            if (nodes == null) {
+                nodes = CompactSpecRow.nodes(spec(stmt), locked, stmt instanceof BranchingBlock);
+                block.setCompactNodes(nodes);
+            }
+        } else {
+            nodes = CompactSpecRow.nodes(spec(stmt), locked, stmt instanceof BranchingBlock);
+        }
+        for (Node n : nodes) n.pseudoClassStateChanged(ReadOnlyDecorator.READ_ONLY, locked);
+        return nodes;
     }
 
     /**

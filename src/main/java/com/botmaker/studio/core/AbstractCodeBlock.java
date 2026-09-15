@@ -32,6 +32,25 @@ public abstract class AbstractCodeBlock implements CodeBlock {
     protected ASTNode astNode;
 
     protected Node uiNode;
+
+    /**
+     * The HUD's widgets for this block, cached like {@link #uiNode} and for the same reason (2026-09-15).
+     *
+     * <p><b>It holds the declared components, not the row.</b> A row in {@code OverlayTreeView} is a function
+     * of the <em>row model</em> as well as of the block — its indent, its fold arrow, whether the caret is on
+     * it, which reorder buttons it offers — and every one of those can change while the block does not.
+     * Caching the row would freeze the focus highlight onto whichever row had it when the block was last
+     * built. What is genuinely the block's is the list {@code CompactSpecRow.nodes} returns, and that is what
+     * a text field mid-edit or an open dropdown lives inside.
+     *
+     * <p>Separate from {@code uiNode} because it is a different drawing of the same block — 340px, bodies
+     * dropped — not a second reference to one. A block that survives a re-parse keeps both; a block that was
+     * rebuilt is a new object and so starts with neither.
+     *
+     * <p>See {@code docs/refactor/30-block-reuse.md} §9.
+     */
+    private List<Node> compactNodes;
+
     private Tooltip errorTooltip;
 
     // Breakpoint state — exposed as a property so the gutter circle and the :breakpoint pseudo-class
@@ -140,6 +159,11 @@ public abstract class AbstractCodeBlock implements CodeBlock {
 
     @Override
     public Node getUINode() { return uiNode; }
+
+    /** This block's HUD components, or null if the HUD has never drawn it. See {@link #compactNodes}. */
+    public List<Node> getCompactNodes() { return compactNodes; }
+
+    public void setCompactNodes(List<Node> nodes) { this.compactNodes = nodes; }
 
     @Override
     public void highlight() {

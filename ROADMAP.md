@@ -6,6 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse, phase 5: the HUD keeps its widgets too.** `AbstractCodeBlock.compactNodes`
+  caches what `CompactSpecRow` drew, and `OverlayTreeView` consults it — so an overlay row's half-typed field
+  survives an edit elsewhere, on the one surface a bot can be authored from without leaving the game. **It
+  caches the components, not the row**: a row is a function of the caret, the fold and the indent as much as
+  of the block, so a cached row would freeze the focus ring where it was. *Cache what is the block's; draw
+  again what is the surface's.* `OverlayReuseTest` holds both halves. Also recorded: the plan expected this
+  to make `ProgramShapeOverlay.pendingInsert` redundant and it does not — that field focuses a block that was
+  just **inserted**, which by definition never survived a re-parse.
+
 - **2026-09-15 — block reuse, phase 4: the wide policy.** `reuseForThisEdit` is `block -> true`: every
   subtree whose text is unchanged keeps its blocks and its widgets, so a one-statement edit no longer
   rebuilds a whole file. `focusedBlockId` goes with the narrowing — the focused subtree is kept like any
