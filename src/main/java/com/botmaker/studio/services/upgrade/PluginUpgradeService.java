@@ -500,6 +500,16 @@ public final class PluginUpgradeService {
                 config.projectPath(), artifact.groupId(), artifact.artifactId()).orElse("");
     }
 
+    /** {@code groupId:artifactId} — what this service is pointed at, and the key its pom write is made by. */
+    public String coordinate() {
+        return artifact.groupId() + ":" + artifact.artifactId();
+    }
+
+    /** What to call this plugin in a sentence — "SDK" for plugin #1, the artifact id for everybody else. */
+    public String displayName() {
+        return name();
+    }
+
     /** Every version JitPack can build of it, newest first. Best-effort: an empty list on any failure. */
     public CompletableFuture<List<String>> availableVersions() {
         return jitpack.fetchVersions(artifact.groupId(), artifact.artifactId());
@@ -663,25 +673,19 @@ public final class PluginUpgradeService {
      */
     public CompletableFuture<Void> apply(String targetVersion, boolean repairSources, boolean alsoModernise,
                                          Map<CallSite, Integer> picks) {
-        if (!MavenService.SDK_ARTIFACT_ID.equals(artifact.artifactId())) {
-            return CompletableFuture.failedFuture(new UnsupportedOperationException(
-                    "Writing a pin for " + artifact.groupId() + ":" + artifact.artifactId() + " is not wired "
-                            + "yet — the report and the repair are, the pom write is the project upgrade "
-                            + "window's."));
-        }
         return CompletableFuture
                 .runAsync(() -> {
                     snapshot("Before " + name() + " upgrade to " + targetVersion);
                     if (repairSources || alsoModernise) {
-                        migrateSources(targetVersion, alsoModernise, true, picks);
+                        repair(targetVersion, alsoModernise, true, picks);
                     }
                 })
-                // The pom write is still the SDK-shaped one, deliberately: this phase is a rename and a
-                // coordinate parameter, and a per-coordinate write is Phase 4's, where the window drives
-                // several rows under ONE write. Reaching it with any other artifact would silently bump the
-                // SDK instead, so the caller is refused above rather than discovering it in the pom.
-                .thenCompose(v -> libraryService.updateLibraries(libraryService.currentLibraries(),
-                        targetVersion));
+                // Since 2026-09-15 the write is keyed by THIS service's coordinate rather than by the SDK's,
+                // which is what lets a second plugin reach it at all. It re-versions a dependency the pom
+                // already declares and adds none — see MavenService.setDependencyVersions — so it is the same
+                // write updateLibraries did for the SDK, with the name of the artifact supplied rather than
+                // assumed.
+                .thenCompose(v -> libraryService.updateVersions(Map.of(coordinate(), targetVersion)));
         // There is no re-render step after the pom moves, and there is nothing left for one to do.
         // `regenerateScaffolding` produced Activities, Parameters, ActivityRegistry, FlowDriver and
         // Templates again against the new jar, because the migrator deliberately never rewrote a generated
@@ -702,12 +706,18 @@ public final class PluginUpgradeService {
     public CompletableFuture<Void> modernise() {
         return CompletableFuture.runAsync(() -> {
             snapshot("Before modernising");
-            migrateSources(currentVersion(), true, false, Map.of());
+            repair(currentVersion(), true, false, Map.of());
         });
     }
 
-    /** The one revert away everything here promises. */
-    private void snapshot(String message) {
+    /**
+     * The one revert away everything here promises.
+     *
+     * <p>Public since 2026-09-15 because the project upgrade window takes <b>one</b> snapshot across every
+     * row it is about to move: a commit per plugin would describe a state the user never chose to be in, and
+     * reverting it would undo one plugin's repair while leaving another's.
+     */
+    public void snapshot(String message) {
         try {
             new ProjectVcs(config.projectPath()).commit(message);
         } catch (IOException e) {
@@ -721,9 +731,14 @@ public final class PluginUpgradeService {
      *
      * <p>Everything it needs it works out again from the two jars: the report the user read is a value, and a
      * value that crossed a dialog and an FX thread is not evidence about the files on disk right now.
+     *
+     * <p><b>Public, and it writes the files but not the pom</b> — which is what a window moving several
+     * plugins needs: one snapshot, then this once per row (each pass re-reading {@code ProjectFile}'s current
+     * content, so the second plugin sees the first one's output), then one pom write for all of them. It
+     * blocks, for the same reasons {@link #compare(String)} does.
      */
-    private void migrateSources(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
-                                Map<CallSite, Integer> picks) {
+    public void repair(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
+                       Map<CallSite, Integer> picks) {
         String from = currentVersion();
         Optional<Path> oldJar = resolve(from);
         Optional<Path> newJar = resolve(targetVersion);

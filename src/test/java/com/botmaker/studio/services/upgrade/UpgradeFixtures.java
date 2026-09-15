@@ -27,17 +27,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Two real SDK jars and a project to point them at — the fixture every upgrade test is built on.
+ * Two real plugin jars and a project to point them at — the fixture every upgrade test is built on.
  *
  * <p>The jars are <b>compiled here rather than mocked</b>, for the reason the whole feature exists: the
  * question is about bytecode, and the interesting cases — a method gone, an overload's arity changed, a
- * pointer split across two survivors — are exactly the ones no pair of published SDK versions exhibits yet.
- * A fixture that only ever encoded what already shipped would pass forever without proving the diff works.
+ * pointer split across two survivors — are exactly the ones no pair of published versions exhibits yet. A
+ * fixture that only ever encoded what already shipped would pass forever without proving the diff works.
  *
  * <p>Shared rather than copied because two harnesses that build jars slightly differently is a way to get
  * two tests disagreeing about a jar neither of them is really testing.
+ *
+ * <p><b>{@code SdkFixtures} until 2026-09-15</b>, and the name was the last thing here still saying the
+ * engine is the SDK's. It builds any plugin's jar — {@link #jarOf} takes the package, and
+ * {@link #serviceOver} the clashing names of a <em>second</em> plugin — so the SDK survives only as the
+ * default {@link #PKG} that the tests written first happen to pass.
  */
-final class SdkFixtures {
+final class UpgradeFixtures {
 
     /**
      * The package a bare class key lands in — one plugin's API package, and the SDK's because that is the
@@ -57,7 +62,7 @@ final class SdkFixtures {
      */
     private static final AtomicInteger UNIQUE = new AtomicInteger();
 
-    private SdkFixtures() {
+    private UpgradeFixtures() {
     }
 
     /** Compiles {@code classes} into a jar, optionally carrying {@code resources} under {@code META-INF}. */
@@ -109,7 +114,7 @@ final class SdkFixtures {
             Files.writeString(file, e.getValue());
         }
 
-        Path jar = dir.resolve("botmaker-sdk-" + label + "-" + UNIQUE.incrementAndGet() + ".jar");
+        Path jar = dir.resolve("plugin-" + label + "-" + UNIQUE.incrementAndGet() + ".jar");
         try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jar));
              Stream<Path> walk = Files.walk(out)) {
             for (Path p : walk.filter(Files::isRegularFile).toList()) {

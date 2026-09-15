@@ -417,6 +417,53 @@ class MavenServiceSdkTest {
         }
     }
 
+    // ---- re-pinning several plugins at once (the project upgrade window's write) -----------------------
+
+    /**
+     * The window moves several rows under one snapshot, so the pom moves once. Everything it does not name
+     * stays exactly as it was — which is the difference between this and {@code writeUserLibraries}, whose
+     * job is to <em>replace</em> the user-added list.
+     */
+    @Test
+    void setDependencyVersionsMovesEveryNamedCoordinateInOneWrite() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("TestBot", projectsRoot);
+        Path projectDir = cfg.projectPath();
+        MavenService.writePom(projectDir, cfg, "1.1.5");
+        MavenService.installPlugin(projectDir,
+                new UserLibrary("com.example", "shapes", "0.1.0"), List.of());
+
+        MavenService.setDependencyVersions(projectDir, java.util.Map.of(
+                "com.github.LiQiyeDev:botmaker-sdk", "1.2.0",
+                "com.example:shapes", "0.2.0"));
+
+        assertEquals("1.2.0", MavenService.readSdkVersion(projectDir).orElse(""));
+        assertEquals("0.2.0",
+                MavenService.readDependencyVersion(projectDir, "com.example", "shapes").orElse(""));
+        assertTrue(groupArtifacts(projectDir).contains("org.junit.jupiter:junit-jupiter"),
+                "a re-pin must leave every other dependency the pom declares alone");
+    }
+
+    /**
+     * A coordinate the pom does not declare is skipped, never added. The window's rows are built <em>from</em>
+     * the pom, so a name it does not recognise means the pom moved underneath the window — and quietly
+     * acquiring a dependency is the wrong answer to that.
+     */
+    @Test
+    void setDependencyVersionsAddsNothingAndSkipsABlankVersion() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("TestBot", projectsRoot);
+        Path projectDir = cfg.projectPath();
+        MavenService.writePom(projectDir, cfg, "1.1.5");
+        List<String> before = groupArtifacts(projectDir);
+
+        MavenService.setDependencyVersions(projectDir, java.util.Map.of(
+                "com.example:never-installed", "9.9.9",
+                "com.github.LiQiyeDev:botmaker-sdk", "   "));
+
+        assertEquals(before, groupArtifacts(projectDir));
+        assertEquals("1.1.5", MavenService.readSdkVersion(projectDir).orElse(""),
+                "a blank version pins nothing, the same rule writeUserLibraries has always had");
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------
 
     private static void writeModel(Path projectDir, Model model) throws Exception {

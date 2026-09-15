@@ -108,6 +108,7 @@ final class StudioActions {
         menuBar.setOnManageLibraries(this::openManageLibraries);
         menuBar.setOnManagePlugins(this::openManagePlugins);
         menuBar.setOnReloadPlugins(this::reloadPlugins);
+        menuBar.setOnUpgradeProject(this::openProjectUpgrade);
         menuBar.setOnUpgradeSdk(this::openSdkUpgrade);
         menuBar.setOnModernise(this::openModernise);
         // Nothing to wire for Project Setup: that checklist is the SDK plugin's 📋 Project Setup item since
@@ -224,6 +225,16 @@ final class StudioActions {
             ThemedWindows.alert(Alert.AlertType.INFORMATION,
                     plugins.size() + " plugin(s) loaded:\n" + names).showAndWait();
         }));
+    }
+
+    /**
+     * The same report as {@link #openSdkUpgrade}, for every plugin the project declares rather than for one
+     * of them — one table, one snapshot, one pom write. The SDK is a row in it like any other plugin, which
+     * is the whole point: a checked migration was plugin #1's privilege until 2026-09-15.
+     */
+    void openProjectUpgrade() {
+        new ProjectUpgradeDialog(primaryStage, config, state, libraryService, pluginRegistry, jitPackSearch)
+                .show();
     }
 
     /**

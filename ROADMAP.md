@@ -6,6 +6,32 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — *Project ▸ Upgrade…*: every plugin's version, one pass.** Phase 4, and the phase that makes
+  the three before it reachable. `ui/app/ProjectUpgradeDialog` is one table over
+  `InstalledPlugin` — name, installed version, a `ComboBox` of every version JitPack can build, a per-row
+  **Check** and a one-line verdict chip — with the selected row's report below it. **The SDK is a row in it
+  like any other plugin**, which is the whole point: a checked migration was plugin #1's privilege until
+  today. The combo is why a **downgrade needs no new code path** — it is the same control, and the engine
+  runs with the jars the other way round.
+  **`services/upgrade/ProjectUpgrade` owns the pass, not the window**, because the rule is not a layout
+  decision: check every row → one snapshot → repair each row in sequence, *each committed to disk before the
+  next starts* → one pom write. Checking first is what makes a refusal cost nothing — one row that cannot be
+  repaired stops the rows beside it, since the versions are written together and a project on plugin A's new
+  version with plugin B's old source compiles against neither. Repairing in sequence with each write landing
+  is what lets plugin B be migrated against the files plugin A already rewrote. A failure *after* the
+  snapshot is deliberately not rolled back here: that is what the snapshot is for.
+  **The pom write is coordinate-keyed now** — `MavenService.setDependencyVersions(projectDir, Map<coordinate,
+  version>)` through the new `LibraryService.updateVersions`, one read and one write for every row — which
+  lifts the non-SDK refusal `apply` carried for one phase. It re-versions only what the pom already declares
+  and adds nothing.
+  **`ui/app/upgrade/ReportView`** is `SdkUpgradeDialog`'s report layout extracted whole, so the two windows
+  cannot drift on what the repair promises; the dialog keeps the version row, the modernise checkbox and the
+  buttons. `PluginUpgradeService.repair`/`snapshot` are public for the same reason — the window needs the
+  pieces `apply` composes, in its own order.
+  **`SdkFixtures` is `UpgradeFixtures`**, the last thing in the test tree still saying the engine is the
+  SDK's. 6 new tests (`ProjectUpgradeTest`, plus the two pom-write cases in `MavenServiceSdkTest`); suite
+  1024 → 1030 with the same 14 pre-existing failures.
+
 - **2026-09-15 — `InstalledPlugin`: the model that has two versions, and the collision that has none.**
   Phase 3. `services/upgrade/InstalledPlugin` is one row of the project upgrade window — artifact, display
   name, installed version, available version, `Source`, editor dependencies — and **installed means the pom

@@ -977,6 +977,35 @@ public final class MavenService {
         writeModel(projectDir, model);
     }
 
+    /**
+     * Re-pins every coordinate in {@code versionsByCoordinate} — {@code "groupId:artifactId"} to the version
+     * it should now declare — in one read and one write of the pom.
+     *
+     * <p><b>One write, several rows.</b> That is the whole reason it takes a map: the project upgrade window
+     * moves several plugins in one pass, and a pom rewritten once per row would leave the project in a state
+     * no row describes if the second write failed. Everything else about the pom — the other dependencies,
+     * the repositories, the properties — is untouched, exactly as {@link #installPlugin} leaves them.
+     *
+     * <p><b>It only ever re-versions what the pom already declares</b>, the same rule
+     * {@link #setManagedDependencyVersion} has always had. A coordinate that is not there is silently
+     * skipped rather than added: the window's rows are built from the pom, so a missing one means the pom
+     * moved underneath the window, and quietly acquiring a dependency is the wrong answer to that.
+     *
+     * <p>A blank version is skipped for the same reason a blank {@code sdkVersion} pins nothing.
+     */
+    public static void setDependencyVersions(Path projectDir, Map<String, String> versionsByCoordinate)
+            throws IOException {
+        Model model = requireModel(projectDir);
+        versionsByCoordinate.forEach((coordinate, version) -> {
+            if (version == null || version.isBlank()) return;
+            int colon = coordinate.indexOf(':');
+            if (colon <= 0 || colon == coordinate.length() - 1) return;
+            setManagedDependencyVersion(model, coordinate.substring(0, colon),
+                    coordinate.substring(colon + 1), version.trim());
+        });
+        writeModel(projectDir, model);
+    }
+
     /** Sets the version of the matching dependency already present in the model (no-op if absent). */
     private static void setManagedDependencyVersion(Model model, String groupId, String artifactId,
                                                     String version) {

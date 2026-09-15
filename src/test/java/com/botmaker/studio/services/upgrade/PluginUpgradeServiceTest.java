@@ -27,12 +27,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * question is about bytecode, and the interesting cases — a method gone, an overload's arity changed, a class
  * that disappeared, a survivor now {@code @Deprecated} — are exactly the ones no pair of published SDK
  * versions exhibits yet. A fixture that only ever encodes what already shipped would pass forever without
- * proving the diff works. The machinery that builds them is {@link SdkFixtures}, shared with
+ * proving the diff works. The machinery that builds them is {@link UpgradeFixtures}, shared with
  * {@link SplitPointerTest}; what stays here is the fixture SDK <em>content</em> these cases diff.
  */
 class PluginUpgradeServiceTest {
 
-    private static final String PKG = SdkFixtures.PKG;
+    private static final String PKG = UpgradeFixtures.PKG;
 
     @BeforeAll
     static void theCacheDirIsRedirectedIntoTheBuild() {
@@ -118,7 +118,7 @@ class PluginUpgradeServiceTest {
     /** Compiles {@code classes} into a jar, optionally carrying the two {@code META-INF} files. */
     private static Path jarOf(Path dir, String label, Map<String, String> classes,
                               Map<String, String> resources) throws IOException {
-        return SdkFixtures.jarOf(dir, label, classes, resources);
+        return UpgradeFixtures.jarOf(dir, label, classes, resources);
     }
 
     // -------------------------------------------------------------------------
@@ -141,7 +141,7 @@ class PluginUpgradeServiceTest {
             """;
 
     private static PluginUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
-        return SdkFixtures.serviceOver(tmp, sources);
+        return UpgradeFixtures.serviceOver(tmp, sources);
     }
 
     private static Report reportFor(Path tmp, String... sources) throws IOException {
@@ -478,7 +478,7 @@ class PluginUpgradeServiceTest {
      * is the default, which is exactly what the real ones declare — and what makes them readable off a jar.
      */
     private static Map<String, String> withPointers(Map<String, String> base) {
-        return SdkFixtures.withPointers(base);
+        return UpgradeFixtures.withPointers(base);
     }
 
     /**

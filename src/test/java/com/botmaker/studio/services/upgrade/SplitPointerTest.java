@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class SplitPointerTest {
 
-    private static final String PKG = SdkFixtures.PKG;
+    private static final String PKG = UpgradeFixtures.PKG;
 
     /** What the author writes on the old member: two candidates, in preference order, each with its sentence. */
     private static final String SPLIT_POINTER = """
@@ -74,7 +74,7 @@ class SplitPointerTest {
 
     /** 1.0.0: one {@code Mouse.scroll(int)}, carrying whatever the case under test puts on it. */
     private static Map<String, String> oldMouse(String annotation) {
-        Map<String, String> m = new HashMap<>(SdkFixtures.withPointers(Map.of()));
+        Map<String, String> m = new HashMap<>(UpgradeFixtures.withPointers(Map.of()));
         m.put("Mouse", """
                 package %s;
                 public class Mouse {
@@ -87,7 +87,7 @@ class SplitPointerTest {
 
     /** 2.0.0: {@code scroll} is <b>gone</b> and two members stand where it did. */
     private static Map<String, String> newMouse() {
-        Map<String, String> m = new HashMap<>(SdkFixtures.withPointers(Map.of()));
+        Map<String, String> m = new HashMap<>(UpgradeFixtures.withPointers(Map.of()));
         m.put("Mouse", """
                 package %s;
                 public class Mouse {
@@ -100,18 +100,18 @@ class SplitPointerTest {
 
     private static Report reportOver(Path tmp, Map<String, String> before, Map<String, String> after,
                                      String bot) throws IOException {
-        return SdkFixtures.serviceOver(tmp, bot).compare(
-                SdkFixtures.jarOf(tmp, "old", before, Map.of()),
-                SdkFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0");
+        return UpgradeFixtures.serviceOver(tmp, bot).compare(
+                UpgradeFixtures.jarOf(tmp, "old", before, Map.of()),
+                UpgradeFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0");
     }
 
     /** The rewrite the same jars produce, given the picks a dialog would have collected. */
     private static String rewriteOver(Path tmp, Map<String, String> before, Map<String, String> after,
                                       String bot, Map<CallSite, Integer> picks) throws IOException {
-        PluginUpgradeService service = SdkFixtures.serviceOver(tmp, bot);
+        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, bot);
         ApiMigrationRunner.Outcome outcome = service.migrate(
-                SdkFixtures.jarOf(tmp, "old", before, Map.of()),
-                SdkFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0", false, true, picks);
+                UpgradeFixtures.jarOf(tmp, "old", before, Map.of()),
+                UpgradeFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0", false, true, picks);
         assertNotNull(outcome, "the upgrade had nothing to repair, so there is no rewrite to read");
         assertFalse(outcome.isRefusal(), () -> "the upgrade refused: " + outcome.refusal());
         return outcome.files().stream()
@@ -208,7 +208,7 @@ class SplitPointerTest {
                 @Deprecated
                 @ReplacedBy("com.botmaker.sdk.api.Mouse#wheel")
                 """);
-        Map<String, String> after = new HashMap<>(SdkFixtures.withPointers(Map.of()));
+        Map<String, String> after = new HashMap<>(UpgradeFixtures.withPointers(Map.of()));
         after.put("Mouse", """
                 package %s;
                 public class Mouse {
@@ -276,7 +276,7 @@ class SplitPointerTest {
 
     /** {@code Text.read()} returns a String and splits into one that still does and one that does not. */
     private static Map<String, String> oldTextSplit() {
-        Map<String, String> m = new HashMap<>(SdkFixtures.withPointers(Map.of()));
+        Map<String, String> m = new HashMap<>(UpgradeFixtures.withPointers(Map.of()));
         m.put("Text", """
                 package %s;
                 public class Text {
@@ -291,7 +291,7 @@ class SplitPointerTest {
 
     /** The survivors. {@code lineReturns} is what the first one gives back — String for a candidate that fits. */
     private static Map<String, String> newTextSplit(String countReturns) {
-        Map<String, String> m = new HashMap<>(SdkFixtures.withPointers(Map.of()));
+        Map<String, String> m = new HashMap<>(UpgradeFixtures.withPointers(Map.of()));
         String lineReturns = "boolean".equals(countReturns) ? "boolean" : "String";
         m.put("Text", """
                 package %s;

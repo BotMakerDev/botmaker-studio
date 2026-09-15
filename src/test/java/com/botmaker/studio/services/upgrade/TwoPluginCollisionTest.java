@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.botmaker.studio.services.upgrade.SdkFixtures.jarOf;
+import static com.botmaker.studio.services.upgrade.UpgradeFixtures.jarOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class TwoPluginCollisionTest {
 
-    private static final String SDK_PKG = SdkFixtures.PKG;
+    private static final String SDK_PKG = UpgradeFixtures.PKG;
     private static final String OTHER_PKG = "com.example.shapes";
 
     @BeforeAll
@@ -108,7 +108,7 @@ class TwoPluginCollisionTest {
 
     @Test
     void aClashRefusesTheReportInsteadOfAttributingTheCall(@TempDir Path tmp) throws IOException {
-        PluginUpgradeService service = SdkFixtures.serviceOver(tmp, clashesBetween(tmp), BOT);
+        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, clashesBetween(tmp), BOT);
         Report report = service.compare(
                 jarOf(tmp, SDK_PKG, "old", sdkJar(), Map.of()),
                 jarOf(tmp, SDK_PKG, "new", sdkJar(), Map.of()), "1.0.0", "2.0.0");
@@ -128,7 +128,7 @@ class TwoPluginCollisionTest {
      */
     @Test
     void aPluginWhoseNamesAreItsOwnIsUnaffectedByAClashElsewhere(@TempDir Path tmp) throws IOException {
-        PluginUpgradeService service = SdkFixtures.serviceOver(tmp, Set.of("Widget", "Sprite"), BOT);
+        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, Set.of("Widget", "Sprite"), BOT);
         Report report = service.compare(
                 jarOf(tmp, SDK_PKG, "old", sdkJar(), Map.of()),
                 jarOf(tmp, SDK_PKG, "new", sdkJar(), Map.of()), "1.0.0", "2.0.0");
@@ -144,7 +144,7 @@ class TwoPluginCollisionTest {
      */
     @Test
     void theRewriteIsRefusedToo(@TempDir Path tmp) throws IOException {
-        PluginUpgradeService service = SdkFixtures.serviceOver(tmp, clashesBetween(tmp), BOT);
+        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, clashesBetween(tmp), BOT);
         Path old = jarOf(tmp, SDK_PKG, "old", sdkJar(), Map.of());
         Path now = jarOf(tmp, SDK_PKG, "new", sdkJar(), Map.of());
 

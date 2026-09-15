@@ -10,6 +10,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -132,6 +133,29 @@ public final class LibraryService {
 
             // The SDK pin may have just moved, so the plugins answering for this project have to move with
             // it — a palette built from the previous jar would offer members the new one may not have.
+            rebind();
+        });
+    }
+
+    /**
+     * Re-pins several coordinates at once — {@code "groupId:artifactId"} to its new version — then
+     * re-resolves, re-binds and re-indexes.
+     *
+     * <p>What the <b>project upgrade window</b> writes with, and the reason it is a map rather than a call
+     * per row: the window moves several plugins under one snapshot, so the pom must move once. It is also
+     * the generalisation of {@link #updateLibraries}'s {@code sdkVersion} parameter — that one can pin
+     * exactly one artifact, the SDK, which is the last place in this service that knew a plugin by name.
+     *
+     * <p>Only coordinates the pom already declares are touched; see
+     * {@link MavenService#setDependencyVersions}.
+     */
+    public CompletableFuture<Void> updateVersions(Map<String, String> versionsByCoordinate) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                MavenService.setDependencyVersions(config.projectPath(), versionsByCoordinate);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
+            }
             rebind();
         });
     }

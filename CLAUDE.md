@@ -395,7 +395,7 @@ point of it.**
   never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
   (file + line), and where each break went — read from the **one pointer the old jar carries**
-  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Seven things about it are load-bearing:
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Nine things about it are load-bearing:
   - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what
     "generalising the upgrade" required.** The six engine classes moved from `services/` to
     `services/upgrade/` and lost their `Sdk` prefix — `ApiModel`, `Pairing`, `Redirects`, `UpgradeDiff`,
@@ -408,10 +408,13 @@ point of it.**
     `readDependencyVersion(projectDir, groupId, artifactId)` with the SDK-named entry points left as
     two-line delegations — `SdkDocsService` and `SdkSurfaceService` ask a *palette* question, not an upgrade
     one, and have no coordinate to hand. `PluginUpgradeService.SDK` is the coordinate `StudioActions` passes,
-    and it is the only place left in the UI that says "the SDK". **`apply` still refuses any other
-    coordinate**, deliberately: the pom write is still `LibraryService.updateLibraries`, which writes the SDK
-    pin, and a per-coordinate write belongs with the window that drives several rows under *one* write. The
-    report and the repair are already coordinate-blind; only the write is not.
+    and it is the only place left in the UI that says "the SDK". **The pom write is coordinate-keyed too
+    since the window landed** — `MavenService.setDependencyVersions(projectDir, Map<coordinate, version>)`
+    through `LibraryService.updateVersions`, one read and one write for every row at once. It only ever
+    re-versions a dependency the pom already declares and adds none: the rows are built *from* the pom, so a
+    coordinate it does not name means the pom moved underneath the window, and quietly acquiring a dependency
+    is the wrong answer to that. `apply` refused any non-SDK coordinate for one phase, while the write was
+    still `updateLibraries`' SDK pin.
   - **A row of the project upgrade window is `services/upgrade/InstalledPlugin`, and *installed* means the
     pom declares it.** Same rule as `PluginRegistry.isInstalledIn`, and the only defensible one: a plugin
     that arrives transitively is something another plugin brought, so writing a pin for it would overrule
@@ -436,6 +439,26 @@ point of it.**
     a class the bot never touched, it **rewrites it there**. The refusal is scoped to the clashing names, so
     one bad pair does not freeze every row; and a problem stops the report *and* the rewrite, which is the
     same all-or-nothing rule a file that does not parse already gets.
+  - **The window is `ui/app/ProjectUpgradeDialog` (*Project ▸ Upgrade…*), and applying is one pass, not one
+    pass per row** (`services/upgrade/ProjectUpgrade`). The order is **check every row → one snapshot →
+    repair each row in sequence, each committed to disk before the next starts → one pom write**, and each
+    step is where it is for a reason that is not layout. Checking first means a row that refuses does so
+    while the project is untouched and there is nothing to undo — one plugin's refusal stops the plugins
+    beside it, because the versions are written together and a project sitting on plugin A's new version with
+    plugin B's old source compiles against neither. One snapshot because a commit per plugin describes a
+    state the user never chose, and reverting it would undo one repair while leaving another. Repairing in
+    sequence *with each write landing* because every pass re-reads the project's current content, so plugin B
+    is migrated against the files plugin A already rewrote. **What it deliberately does not promise** is a
+    rollback of a failure *after* the snapshot: that is what the snapshot is for, and a second implementation
+    of the revert the VCS panel already offers would be the worse one. The version control is a `ComboBox` of
+    every version JitPack can build, seeded with what is already known — so a **downgrade is the same
+    operation and the same control**, and a row stays usable when JitPack never answers.
+  - **The report layout is `ui/app/upgrade/ReportView`, shared by both windows.** It was
+    `SdkUpgradeDialog`'s own `render` until the project window existed, and it moved for the reason that
+    dialog's javadoc already gave for its own two modes: every sentence in it describes what the repair will
+    do, and two copies of that description drift the first time the repair changes. It also *collects* one
+    thing — the per-call-site answer a split asks for — and owns no button: whether Apply is enabled is the
+    window's question, because the project window asks it across several reports at once.
   - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
     (2026-09-15). The default filters to `PluginHost.cataloguedPackages()` — the packages the plugins bound
     *right now* catalogue — which is the right question for a menu and the wrong one here: the jar being read

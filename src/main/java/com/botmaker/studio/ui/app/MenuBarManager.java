@@ -31,6 +31,7 @@ public class MenuBarManager {
     private Runnable onManageLibraries;
     private Runnable onManagePlugins;
     private Runnable onReloadPlugins;
+    private Runnable onUpgradeProject;
     private Runnable onUpgradeSdk;
     private Runnable onModernise;
     private Runnable onManageImports;
@@ -212,6 +213,14 @@ public class MenuBarManager {
             if (onReloadPlugins != null) onReloadPlugins.run();
         });
 
+        // The same report, for every plugin the pom declares rather than for one of them. It leads the two
+        // below because it is the general case: the SDK is a row in this window, and Upgrade SDK... is that
+        // row on its own.
+        MenuItem upgradeProjectItem = new MenuItem("Upgrade...");
+        upgradeProjectItem.setOnAction(e -> {
+            if (onUpgradeProject != null) onUpgradeProject.run();
+        });
+
         // Beside Manage Libraries, not inside it: the SDK version is the one library whose change can stop
         // the bot compiling, and that deserves a report rather than a cell edit.
         MenuItem upgradeSdkItem = new MenuItem("Upgrade SDK...");
@@ -288,7 +297,8 @@ public class MenuBarManager {
         });
 
         projectMenu.getItems().addAll(
-                manageLibrariesItem, managePluginsItem, reloadPluginsItem, upgradeSdkItem, moderniseItem,
+                manageLibrariesItem, managePluginsItem, reloadPluginsItem, upgradeProjectItem,
+                upgradeSdkItem, moderniseItem,
                 manageImportsItem,
                 new SeparatorMenuItem(),
                 parametersItem,
@@ -696,6 +706,11 @@ public class MenuBarManager {
     /** Sets the callback for when "Reload Plugins" is clicked — re-resolve and re-bind, no pom write. */
     public void setOnReloadPlugins(Runnable callback) {
         this.onReloadPlugins = callback;
+    }
+
+    /** Sets the callback for "Upgrade..." — the same report, for every plugin the project declares. */
+    public void setOnUpgradeProject(Runnable callback) {
+        this.onUpgradeProject = callback;
     }
 
     /**
