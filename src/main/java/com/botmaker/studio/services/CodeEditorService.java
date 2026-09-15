@@ -6,7 +6,6 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.core.component.ComponentNodes;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
@@ -33,8 +32,6 @@ import com.botmaker.studio.ui.dnd.MoveBlockInfo;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
-import javafx.scene.Node;
-import javafx.scene.Scene;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -762,47 +759,27 @@ public class CodeEditorService {
     /**
      * Which blocks of the parse now on screen this edit is willing to keep.
      *
-     * <p><b>Narrow by design: only the subtree the user is actually in.</b> A block kept anywhere else buys
-     * nothing a rebuild does not — the widgets are equivalent — while a block kept where the user is typing
-     * keeps the caret, the selection, an open popup and the scroll position inside it. So the blast radius of
-     * a bug here is one subtree, next to the thing the user was doing, rather than the whole file. Widening
-     * it to {@code block -> true} is the later phase and is a one-line change; see
-     * {@code docs/refactor/30-block-reuse.md} §7.
+     * <p><b>Wide since 2026-09-15: every subtree whose source text is unchanged keeps its blocks and its
+     * widgets.</b> The narrow phase this replaces offered reuse only for the focused or highlighted subtree,
+     * which bought the caret, the selection and an open popup; widening adds the other half of the point —
+     * a one-statement edit stops rebuilding a whole file's widgets.
      *
-     * <p>Answers {@link BlockReuse#NONE} whenever the answer is not obvious: no previous parse, or nothing
-     * focused and nothing highlighted. The lock verdict is <em>not</em> checked here — it is passed down and
-     * refused inside {@link BlockReuse#take}, so no future caller of this mechanism can forget it.
+     * <p>It was staged behind the narrow phase deliberately, and behind the eager-capture audit in
+     * particular. The narrow policy's failure mode is one subtree misbehaving next to what the user was
+     * doing; this one's is file-wide, which is not the failure to meet while the mechanism is new. What makes
+     * it safe to take now is that the audit established that nothing a reusable block computes at render time
+     * outlives the parse it was computed for — see {@code docs/refactor/30-block-reuse.md} §6.
+     *
+     * <p>Answers {@link BlockReuse#NONE} when there is no previous parse to offer. The lock verdict is
+     * <em>not</em> checked here: it is passed down and refused inside {@link BlockReuse#take}, so no future
+     * caller of this mechanism can forget it.
      */
     private BlockReuse reuseForThisEdit() {
         Map<ASTNode, CodeBlock> previous = state.getNodeToBlockMap();
         String previousSource = state.getCurrentCode();
         if (previous == null || previous.isEmpty() || previousSource == null) return BlockReuse.NONE;
 
-        String keepUnder = focusedBlockId();
-        if (keepUnder == null) return BlockReuse.NONE;
-
-        return BlockReuse.of(previous, previousSource, lastRenderWasReadOnly,
-                block -> keepUnder.equals(block.getId()));
-    }
-
-    /**
-     * The id of the block the user is in — the focus owner's, or failing that the highlighted block's.
-     *
-     * <p>{@code ComponentNodes.blockIdOf} walks up from the focused widget to the nearest node carrying a
-     * block id, which {@code AbstractCodeBlock.getUINode} stamps on every block root. A text field several
-     * containers deep can therefore name the block it belongs to with nothing keeping a map of which widget
-     * is whose.
-     *
-     * <p>The highlight is the fallback rather than an equal, and that ordering matters: almost every text
-     * editor in this layer commits on <em>focus-lost</em>, so by the time the re-parse runs the focus has
-     * often already left. The highlight is what still names where the user was.
-     */
-    private String focusedBlockId() {
-        Node root = lastRootBlock == null ? null : lastRootBlock.getUINode();
-        Scene scene = root == null ? null : root.getScene();
-        String fromFocus = scene == null ? null : ComponentNodes.blockIdOf(scene.getFocusOwner());
-        if (fromFocus != null) return fromFocus;
-        return state.getHighlightedBlock().map(CodeBlock::getId).orElse(null);
+        return BlockReuse.of(previous, previousSource, lastRenderWasReadOnly, block -> true);
     }
 
     /**
@@ -863,11 +840,13 @@ public class CodeEditorService {
         // Put the breakpoints back onto the freshly built blocks. This is the one reader of a block id that
         // crosses a re-parse, and the reason BlockId is a structural path rather than a character offset:
         // with offsets, every block below an edit answered to a new id here and silently lost its mark.
+        // Set both ways, which it did not have to be until blocks started surviving (2026-09-15). A freshly
+        // built block defaults to no breakpoint, so setting only the true case was total; a block that
+        // survived the re-parse carries the mark it had, and a breakpoint the user removed would come back
+        // on the next unrelated edit.
         Path breakpointFile = activeFilePath();
         for (CodeBlock block : state.getNodeToBlockMap().values()) {
-            if (state.hasBreakpoint(breakpointFile, block.getId())) {
-                block.setBreakpoint(true);
-            }
+            block.setBreakpoint(state.hasBreakpoint(breakpointFile, block.getId()));
         }
 
         state.setCompilationUnit(result.cu());

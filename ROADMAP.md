@@ -6,6 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse, phase 4: the wide policy.** `reuseForThisEdit` is `block -> true`: every
+  subtree whose text is unchanged keeps its blocks and its widgets, so a one-statement edit no longer
+  rebuilds a whole file. `focusedBlockId` goes with the narrowing — the focused subtree is kept like any
+  other. **Widening found one bug and its shape is the thing to carry**: `render` restored breakpoints with a
+  one-way loop, total only because a freshly built block defaults to none, so a breakpoint the user removed
+  came back on the next unrelated edit. It sets both ways now. Errors were already two-way
+  (`DiagnosticsManager` holds block references), and the highlight is *more* correct under reuse. The rule:
+  anything applied to blocks after a parse must be idempotent in both directions.
+
 - **2026-09-15 — block reuse, phase 3: the eager-capture audit.** Swept the 30 reusable blocks for state
   computed at render time that a survivor would carry stale. Two fixes. `MethodInvocationBlock.imageVarargsRow`
   captured `(MethodInvocation) this.astNode` into a `Supplier` whose whole purpose is to defeat capture —

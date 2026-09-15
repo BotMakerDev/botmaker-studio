@@ -12,9 +12,11 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,6 +119,59 @@ class BlockReuseRenderTest extends FxHeadlessTest {
     }
 
     @Test
+    void an_unchanged_block_keeps_its_javafx_node_wherever_it_is() throws Exception {
+        // The wide policy (2026-09-15): no focus, no highlight, nothing naming this block as special. Its
+        // text did not change, so it keeps the widgets it had -- which is what stops a one-statement edit
+        // rebuilding a whole file.
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        renderInto(fixture);
+
+        Node keptNode = statement(fixture, 1).getUINode();
+        onFx(this::focusOutsideAnyBlock);
+
+        edit(fixture, source("int a = 99;", "int b = 2;"));
+
+        assertSame(keptNode, statement(fixture, 1).getUINode(),
+                "an unchanged statement keeps its node with nothing naming it as the one to keep");
+    }
+
+    @Test
+    void a_block_whose_text_changed_still_gets_a_new_node() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        renderInto(fixture);
+
+        Node changedNode = statement(fixture, 0).getUINode();
+
+        edit(fixture, source("int a = 99;", "int b = 2;"));
+
+        assertNotSame(changedNode, statement(fixture, 0).getUINode(),
+                "widening what is kept must not keep a block whose own text moved");
+    }
+
+    @Test
+    void a_breakpoint_the_user_removed_is_not_resurrected_by_a_later_edit() throws Exception {
+        // render() restored breakpoints with a one-way loop -- total only because a freshly built block
+        // defaults to none. A block that survives carries the mark it had, so the clearing arm has to exist.
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        renderInto(fixture);
+
+        CodeBlock marked = statement(fixture, 1);
+        Path file = fixture.state.getActiveFile().getPath();
+        onFx(() -> {
+            fixture.state.addBreakpoint(file, marked.getId());
+            marked.setBreakpoint(true);
+        });
+
+        onFx(() -> fixture.state.removeBreakpoint(file, marked.getId()));
+        edit(fixture, source("int a = 99;", "int b = 2;"));
+
+        CodeBlock after = statement(fixture, 1);
+        assertSame(marked, after, "the block is unchanged, so this test is only meaningful if it survived");
+        assertFalse(after.isBreakpoint(),
+                "the breakpoint was removed, so the surviving block must not still carry it");
+    }
+
+    @Test
     void the_focused_block_keeps_its_javafx_node_across_an_edit_elsewhere() throws Exception {
         EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
         renderInto(fixture);
@@ -154,33 +209,25 @@ class BlockReuseRenderTest extends FxHeadlessTest {
     }
 
     @Test
-    void a_block_outside_the_kept_subtree_is_rebuilt() throws Exception {
+    void a_statement_that_moved_still_gets_a_new_node() throws Exception {
+        // The limit the wide policy does not lift, and the one the maintainer accepted when this was
+        // designed: a BlockId is a structural path, so an insert renumbers every sibling after it and those
+        // blocks are rebuilt. They did move.
         EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
         renderInto(fixture);
 
-        CodeBlock kept = statement(fixture, 1);
-        Node otherNode = statement(fixture, 0).getUINode();
-        onFx(() -> focusInside(kept));
+        Node movedNode = statement(fixture, 1).getUINode();
 
-        // The first statement is not edited at all, and is rebuilt anyway: the narrow policy allows exactly
-        // one subtree, which is what keeps a bug here next to the thing the user was doing.
-        edit(fixture, source("int a = 1;", "int b = 222;"));
+        edit(fixture, "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    public void run() {\n"
+                + "        int a = 1;\n"
+                + "        int inserted = 0;\n"
+                + "        int b = 2;\n"
+                + "    }\n"
+                + "}\n");
 
-        assertNotSame(otherNode, statement(fixture, 0).getUINode(),
-                "the narrow policy keeps one subtree; every other block rebuilds as it always did");
-    }
-
-    @Test
-    void a_render_with_no_highlight_and_no_focus_keeps_nothing() throws Exception {
-        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
-        renderInto(fixture);
-
-        Node beforeNode = statement(fixture, 1).getUINode();
-        onFx(this::focusOutsideAnyBlock);
-
-        edit(fixture, source("int a = 99;", "int b = 2;"));
-
-        assertNotSame(beforeNode, statement(fixture, 1).getUINode(),
-                "with nowhere named as where the user is, reuseForThisEdit answers NONE");
+        assertNotSame(movedNode, statement(fixture, 2).getUINode(),
+                "a statement whose path changed is rebuilt, wide policy or not");
     }
 }
