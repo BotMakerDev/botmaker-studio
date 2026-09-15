@@ -41,16 +41,19 @@ public final class BlockReuse {
      * <p>A parse under this instance is byte for byte the parse this project has always done, which is what
      * makes the existing suite the regression guard for the whole feature.
      */
-    public static final BlockReuse NONE = new BlockReuse(Map.of(), null, block -> false);
+    public static final BlockReuse NONE = new BlockReuse(Map.of(), null, false, block -> false);
 
     private final Map<ASTNode, CodeBlock> previous;
     private final Map<String, CodeBlock> byId;
     private final String previousSource;
+    private final boolean previousReadOnly;
     private final Predicate<CodeBlock> policy;
 
-    private BlockReuse(Map<ASTNode, CodeBlock> previous, String previousSource, Predicate<CodeBlock> policy) {
+    private BlockReuse(Map<ASTNode, CodeBlock> previous, String previousSource, boolean previousReadOnly,
+                       Predicate<CodeBlock> policy) {
         this.previous = previous;
         this.previousSource = previousSource;
+        this.previousReadOnly = previousReadOnly;
         this.policy = policy;
         this.byId = new HashMap<>();
         for (CodeBlock block : previous.values()) {
@@ -65,27 +68,39 @@ public final class BlockReuse {
     /**
      * An oracle over the tree that is about to be replaced.
      *
-     * @param previous       the outgoing {@code ASTNode -> CodeBlock} registry, read before it is cleared
-     * @param previousSource the source those nodes' offsets index into — <b>not</b> the new source
-     * @param policy         which surviving blocks this parse is willing to keep; see
-     *                       {@code docs/refactor/30-block-reuse.md} §7, where the narrow phase allows one
-     *                       subtree and the wide phase allows everything
+     * @param previous         the outgoing {@code ASTNode -> CodeBlock} registry, read before it is cleared
+     * @param previousSource   the source those nodes' offsets index into — <b>not</b> the new source
+     * @param previousReadOnly the lock verdict those blocks were parsed under, so a parse whose verdict
+     *                         differs can refuse reuse wholesale; see {@link #take}
+     * @param policy           which surviving blocks this parse is willing to keep; see
+     *                         {@code docs/refactor/30-block-reuse.md} §7, where the narrow phase allows one
+     *                         subtree and the wide phase allows everything
      */
     public static BlockReuse of(Map<ASTNode, CodeBlock> previous, String previousSource,
-                                Predicate<CodeBlock> policy) {
+                                boolean previousReadOnly, Predicate<CodeBlock> policy) {
         if (previous == null || previous.isEmpty() || previousSource == null || policy == null) return NONE;
-        return new BlockReuse(Map.copyOf(previous), previousSource, policy);
+        return new BlockReuse(Map.copyOf(previous), previousSource, previousReadOnly, policy);
     }
 
     /**
      * The block that may keep {@code newNode}, or null to build a fresh one.
      *
-     * <p>Four refusals, each one a way reuse could edit the <b>wrong code</b> rather than merely fail to
-     * help: nothing was drawn at this path; the text there changed; this parse's policy declines; or the
-     * previous block has no node to compare against.
+     * <p>Five refusals, each one a way reuse could edit the <b>wrong code</b> rather than merely fail to
+     * help: the file's lock verdict moved; nothing was drawn at this path; the text there changed; this
+     * parse's policy declines; or the previous block has no node to compare against.
+     *
+     * <p><b>The lock verdict is checked first and refuses every subtree, not one.</b> A survivor keeps the
+     * {@code isReadOnly} it was parsed with — {@link BlockConverter} stamps that verdict on a block it
+     * <em>builds</em>, and a block handed back here is never built — so a re-parse that toggled reader mode,
+     * or that switched a file between the user's own source and bundled library source, would otherwise draw
+     * an editable block over code the parse had just declared locked. Re-stamping the survivor instead would
+     * be half a fix: {@code applyReadOnly} only ever sets the flag, so it could lock a block and never unlock
+     * one. See {@code docs/refactor/30-block-reuse.md} §10.
      */
     public CodeBlock take(ASTNode newNode, ParseContext ctx) {
         if (this == NONE || newNode == null || ctx == null) return null;
+
+        if (ctx.readOnly() != previousReadOnly) return null;
 
         CodeBlock old = byId.get(BlockId.of(newNode));
         if (old == null) return null;

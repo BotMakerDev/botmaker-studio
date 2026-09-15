@@ -121,9 +121,17 @@ public final class EditorFixture {
      * <p>Pass {@link BlockReuse#NONE} to assert that reuse-off is unchanged.
      */
     public BlockConverter.ConvertResult reparse(String newSource, BlockReuse reuse) {
+        return reparse(newSource, reuse, false);
+    }
+
+    /**
+     * As above, under an explicit lock verdict — for the one refusal that is about the parse rather than
+     * about a block: a re-parse whose verdict differs from the previous one keeps nothing.
+     */
+    public BlockConverter.ConvertResult reparse(String newSource, BlockReuse reuse, boolean readOnly) {
         java.util.Map<org.eclipse.jdt.core.dom.ASTNode, CodeBlock> registry = new java.util.HashMap<>();
         BlockConverter.ConvertResult result = converter.convert(
-                null, newSource, registry, dragAndDrop, false, false, reuse);
+                null, newSource, registry, dragAndDrop, readOnly, false, reuse);
         state.setNodeToBlockMap(registry);
         state.setCompilationUnit(result.cu());
         state.setCurrentCode(newSource);

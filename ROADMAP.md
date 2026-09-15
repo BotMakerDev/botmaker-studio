@@ -6,6 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse: a parse whose lock verdict moved keeps nothing.** `BlockReuse.take` gains a
+  fifth refusal, checked first and refusing every subtree at once: `BlockConverter` stamps the read-only
+  verdict on a block it *builds*, and a survivor is never built, so reader mode being switched on would
+  otherwise leave editable blocks over a file the parse had just locked. The verdict compared is the
+  effective one (`LockResolver`'s), and it is in the mechanism rather than in the caller so no future caller
+  can forget it. `BlockReuse.of` takes it; `docs/refactor/30-block-reuse.md` §10 marked solved.
+
 - **2026-09-14 — block reuse, phase 1: the mechanism, with no caller.** `AbstractCodeBlock.astNode` is no
   longer final and gains `adopt(ASTNode)`; `parser/BlockReuse` decides which blocks of the previous parse may
   be kept (four refusals) and re-points the survivors in a lockstep walk over JDT's structural properties,
