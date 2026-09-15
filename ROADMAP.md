@@ -6,6 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse, phase 3: the eager-capture audit.** Swept the 30 reusable blocks for state
+  computed at render time that a survivor would carry stale. Two fixes. `MethodInvocationBlock.imageVarargsRow`
+  captured `(MethodInvocation) this.astNode` into a `Supplier` whose whole purpose is to defeat capture —
+  `HostSlotRun`'s javadoc says so — and now derefs when it fires. `ReturnBlock.deleteAction` decided
+  *"is this the pinned trailing return"* at render time from the **enclosing method's** return type, which is
+  outside its own subtree, so a function set to give nothing back left its `return` refusing deletion on a
+  signature that no longer existed; the verdict is taken on click now. **The generalised rule**: reuse proves
+  the subtree's text unchanged and nothing about its surroundings.
+  `every_block_in_a_surviving_subtree_points_at_the_new_tree` holds the invariant the rest relies on.
+
 - **2026-09-15 — block reuse, phase 2: the narrow policy, canvas only.** `CodeEditorService` builds the
   oracle on the `CodeUpdatedEvent` path — before `adopt()`, which replaces the state's source — and offers
   reuse for one subtree: the focused block's, or the highlighted one's once focus has left (every text editor

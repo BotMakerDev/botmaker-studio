@@ -812,12 +812,16 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
      * per-argument slots: a host with no picture plugin loaded is an ordinary state, not a broken block.
      */
     private Node imageVarargsRow(CodeEditorService context, int from, ResolvedType element) {
-        MethodInvocation call = (MethodInvocation) this.astNode;
         // An empty tail has no argument to anchor on, and that is the case the row exists for most: the whole
         // point is being able to add a first picture where the call has none.
         ValueSlot anchor = from < arguments.size() ? ValueSlot.of(arguments.get(from)) : ValueSlot.empty();
         PickerContext slot = new PickerContext(context, anchor, element, null, methodName, from);
-        return PickerRegistry.runNodeFor(slot, HostSlotRun.of(context, () -> call, from));
+        // The supplier reads this.astNode when it fires, never a node captured here. HostSlotRun takes a
+        // Supplier precisely so the call can be resolved on every use, and handing it an already-resolved
+        // local defeats that: since block reuse (2026-09-14) this block can outlive the parse it was drawn
+        // for, and a node from the discarded tree is what ASTRewrite refuses.
+        return PickerRegistry.runNodeFor(slot,
+                HostSlotRun.of(context, () -> (MethodInvocation) this.astNode, from));
     }
 
     /**

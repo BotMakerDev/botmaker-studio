@@ -1,9 +1,13 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -143,6 +147,44 @@ class BlockReuseTest {
 
         assertNotSame(before, statement(fixture, 1));
         assertNull(BlockReuse.NONE.take(null, null));
+    }
+
+    @Test
+    void every_block_in_a_surviving_subtree_points_at_the_new_tree() {
+        // The invariant the eager-capture audit rests on. A handler that reads this.astNode WHEN IT FIRES is
+        // correct after reuse only if adopt() reached it -- not just the subtree's root. So this asserts the
+        // whole subtree, at every depth: the if, its condition, its body, and the statement inside it.
+        String before = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    public void run() {\n"
+                + "        int a = 1;\n"
+                + "        if (a > 0) {\n"
+                + "            int b = 2;\n"
+                + "        }\n"
+                + "    }\n"
+                + "}\n";
+        EditorFixture fixture = new EditorFixture(before);
+        List<CodeBlock> subtree = descendants(statement(fixture, 1));
+        assertTrue(subtree.size() > 3, "the fixture should give the walk something to walk");
+
+        var result = fixture.reparse(before.replace("int a = 1;", "int a = 99999;"), reuseAll(fixture));
+
+        for (CodeBlock block : subtree) {
+            assertSame(result.cu(), block.getAstNode().getRoot(),
+                    block.getClass().getSimpleName() + " kept a node from the discarded tree");
+            assertSame(block, fixture.state.getNodeToBlockMap().get(block.getAstNode()),
+                    block.getClass().getSimpleName() + " is not reachable through the node it was re-pointed at");
+        }
+    }
+
+    /** {@code from} and every block beneath it. */
+    private static List<CodeBlock> descendants(CodeBlock from) {
+        List<CodeBlock> out = new ArrayList<>();
+        out.add(from);
+        if (from instanceof BlockWithChildren parent) {
+            for (CodeBlock child : parent.getChildren()) out.addAll(descendants(child));
+        }
+        return out;
     }
 
     @Test

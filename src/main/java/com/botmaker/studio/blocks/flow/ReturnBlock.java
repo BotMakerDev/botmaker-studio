@@ -101,11 +101,22 @@ public class ReturnBlock extends AbstractStatementBlock {
      * deletes normally, so a cross that is simply missing here would read as a rendering bug rather than a
      * rule.
      */
+    /**
+     * <p><b>The verdict is taken when the cross is clicked, not when it is drawn</b> (2026-09-15). It depends
+     * on the enclosing method's return type, which is <em>outside</em> this block's own subtree — and block
+     * reuse proves only that the subtree's text is unchanged. So a {@code return x;} is byte-identical at an
+     * identical path after the function around it is set to give nothing back, is therefore kept, and would
+     * have gone on refusing deletion on the strength of a signature that no longer exists. Deciding late
+     * costs one tree walk per click and cannot go stale.
+     */
     @Override
     protected Runnable deleteAction(CodeEditorService context) {
         Runnable delete = super.deleteAction(context);
-        if (delete == null || !closesAFunctionThatGivesSomethingBack()) return delete;
-        return this::explainPinnedBySignature;
+        if (delete == null) return null;
+        return () -> {
+            if (closesAFunctionThatGivesSomethingBack()) explainPinnedBySignature();
+            else delete.run();
+        };
     }
 
     /** Whether this is the trailing {@code return} of a non-{@code void} function — the one it cannot lose. */
