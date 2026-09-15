@@ -6,6 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — `InstalledPlugin`: the model that has two versions, and the collision that has none.**
+  Phase 3. `services/upgrade/InstalledPlugin` is one row of the project upgrade window — artifact, display
+  name, installed version, available version, `Source`, editor dependencies — and **installed means the pom
+  declares it**, the same rule `PluginRegistry.isInstalledIn` uses, because a plugin that arrives
+  transitively is one another plugin brought and pinning it would overrule Maven's mediation. Three sources
+  in order of how much each knows: `REGISTRY` (`available` = `verifiedVersion`, not JitPack's newest),
+  `LOCAL_BUILD` (wins the version, keeps the entry's editor dependencies — `ManagePluginsDialog.merge`'s own
+  rule), `UNLISTED`. **`MavenService.declaresPlugin` became public and is now the project's single
+  definition of "is this a plugin"** — the `META-INF/services` entry `ServiceLoader` reads — with two
+  readers instead of one; a registry lookup treated as definitive would have been a second, weaker rule that
+  answers wrongly for the first hand-published plugin. `of` reaches **no network**: registry answer,
+  `~/.m2` and a predicate go in, so an unreachable registry blanks one field rather than emptying the table.
+  **The one hazard two plugins introduce is answered here rather than later**: attribution is by simple
+  name, so two plugins declaring `Point` make `Point.of(…)` unanswerable, and
+  `InstalledPlugin.ambiguousTypeNames` feeds `PluginUpgradeService`'s new `ambiguous` set, which puts a line
+  in `problems()` from `usesIn` **before anything is scanned**. A guess there would not merely report a
+  break in the wrong class, it would rewrite it there. Refusal is scoped to the clashing names, so one bad
+  pair does not freeze every row, and it stops the rewrite as well as the report. 11 new tests, both classes
+  offline; suite 1013 → 1024 with the same 14 pre-existing failures.
+
 - **2026-09-15 — the upgrade engine stops naming the SDK.** Phase 2, and behaviour-preserving by
   construction: the suite is the verification, 1013 tests with the same 14 pre-existing failures as before.
   `services/{SdkApiModel, SdkPairing, SdkRedirects, SdkUpgradeDiff, SdkWhatsNew, SdkUpgradeService}` became

@@ -395,7 +395,7 @@ point of it.**
   never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
   (file + line), and where each break went — read from the **one pointer the old jar carries**
-  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Five things about it are load-bearing:
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Seven things about it are load-bearing:
   - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what
     "generalising the upgrade" required.** The six engine classes moved from `services/` to
     `services/upgrade/` and lost their `Sdk` prefix — `ApiModel`, `Pairing`, `Redirects`, `UpgradeDiff`,
@@ -412,6 +412,30 @@ point of it.**
     coordinate**, deliberately: the pom write is still `LibraryService.updateLibraries`, which writes the SDK
     pin, and a per-coordinate write belongs with the window that drives several rows under *one* write. The
     report and the repair are already coordinate-blind; only the write is not.
+  - **A row of the project upgrade window is `services/upgrade/InstalledPlugin`, and *installed* means the
+    pom declares it.** Same rule as `PluginRegistry.isInstalledIn`, and the only defensible one: a plugin
+    that arrives transitively is something another plugin brought, so writing a pin for it would overrule
+    Maven's own mediation. The list is `LibraryService.declaredLibraries()` ∩ three sources, tried in order
+    of how much each knows — `REGISTRY` (name, description, `editorDependencies`, and `available` =
+    **`verifiedVersion`**, not JitPack's newest, since the newest tag may be one nothing has ever loaded),
+    `LOCAL_BUILD` (a `*SNAPSHOT` in `~/.m2`; it wins the version and keeps the registry entry's editor
+    dependencies, exactly as `ManagePluginsDialog.merge` already does), `UNLISTED` (the pom declares a
+    plugin nothing else accounts for). **What makes a dependency a plugin is `MavenService.declaresPlugin`**
+    — the `META-INF/services/com.botmaker.plugin.api.StudioPlugin` entry `ServiceLoader` itself reads, made
+    public for this and previously the local-build scan's alone. A second rule would answer differently for
+    the first hand-published plugin, which is the case `UNLISTED` exists for. **`InstalledPlugin.of` reaches
+    no network**: it is handed the registry's answer, `~/.m2`'s and a predicate, so an unreachable registry
+    leaves `available` blank on a row rather than emptying the table, and `withAvailable` is how an async
+    lookup lands on a built row.
+  - **Two plugins declaring one simple name is refused, never guessed** (`InstalledPlugin.ambiguousTypeNames`
+    → `PluginUpgradeService`'s `ambiguous` set → a line in `problems()` from `usesIn`, before anything is
+    scanned). Attribution is by the simple name the source writes, because there are no bindings, so
+    `Point.of(…)` in a project holding two plugins that both declare a `Point` is genuinely unanswerable —
+    the source does not contain the answer. It is `MethodReferences`' three-way verdict applied one level
+    up, and the reason it must be a refusal is that a wrong attribution does not merely *report* a break in
+    a class the bot never touched, it **rewrites it there**. The refusal is scoped to the clashing names, so
+    one bad pair does not freeze every row; and a problem stops the report *and* the rewrite, which is the
+    same all-or-nothing rule a file that does not parse already gets.
   - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
     (2026-09-15). The default filters to `PluginHost.cataloguedPackages()` — the packages the plugins bound
     *right now* catalogue — which is the right question for a menu and the wrong one here: the jar being read

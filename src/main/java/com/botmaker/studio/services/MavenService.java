@@ -220,8 +220,17 @@ public final class MavenService {
         }
     }
 
-    /** Whether {@code jar} declares a {@code StudioPlugin} the way {@code ServiceLoader} finds one. */
-    private static boolean declaresPlugin(Path jar) {
+    /**
+     * Whether {@code jar} declares a {@code StudioPlugin} the way {@code ServiceLoader} finds one.
+     *
+     * <p><b>This is the project's only definition of "is this a plugin", and it has two readers since
+     * 2026-09-15.</b> {@link #localPluginBuilds} asks it of a {@code ~/.m2} candidate, and
+     * {@code services/upgrade/InstalledPlugin} asks it of a dependency the pom declares that no registry
+     * entry and no local build accounts for. A second rule — a naming convention, a registry lookup treated
+     * as definitive — would answer differently the first time somebody published a plugin the registry has
+     * not seen, which is precisely the case the second reader exists for.
+     */
+    public static boolean declaresPlugin(Path jar) {
         try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
             return zip.getEntry("META-INF/services/com.botmaker.plugin.api.StudioPlugin") != null;
         } catch (IOException | RuntimeException e) {

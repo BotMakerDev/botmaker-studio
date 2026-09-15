@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -140,6 +141,15 @@ final class SdkFixtures {
 
     /** A service over a throwaway project holding {@code sources} as {@code Subject.java}, {@code Subject1}… */
     static PluginUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
+        return serviceOver(tmp, Set.of(), sources);
+    }
+
+    /**
+     * The same, told which simple type names a <em>second</em> installed plugin also declares — the only
+     * thing a project with two plugins in it can say that a project with one cannot.
+     */
+    static PluginUpgradeService serviceOver(Path tmp, Set<String> ambiguous, String... sources)
+            throws IOException {
         Path project = tmp.resolve("project");
         Files.createDirectories(project.resolve("src/main/java/com/mybot"));
 
@@ -156,7 +166,7 @@ final class SdkFixtures {
         EventBus bus = new EventBus(false);
         LibraryService libraries = new LibraryService(config, state, new TypeSummaryManager(), bus);
         return new PluginUpgradeService(config, state, libraries, new JitPackSearch(),
-                PluginUpgradeService.SDK);
+                PluginUpgradeService.SDK, ambiguous);
     }
 
     /**

@@ -195,6 +195,13 @@ public final class PluginUpgradeService {
      */
     private final UserLibrary artifact;
 
+    /**
+     * Simple type names another installed plugin also declares — every name this report must <b>refuse</b>
+     * rather than attribute. See {@link InstalledPlugin#ambiguousTypeNames} for why the set exists and
+     * {@link #usesIn} for what refusing looks like.
+     */
+    private final Set<String> ambiguous;
+
     /** The SDK coordinate, which is what every caller passed implicitly until 2026-09-15. */
     public static final UserLibrary SDK =
             new UserLibrary(MavenService.SDK_GROUP_ID, MavenService.SDK_ARTIFACT_ID, "");
@@ -202,11 +209,26 @@ public final class PluginUpgradeService {
     public PluginUpgradeService(ProjectConfig config, ProjectState state,
                                 LibraryService libraryService, JitPackSearch jitpack,
                                 UserLibrary artifact) {
+        this(config, state, libraryService, jitpack, artifact, Set.of());
+    }
+
+    /**
+     * The same, told which simple type names are <b>shared with another installed plugin</b>.
+     *
+     * <p>Empty for every caller with one plugin in hand, which is what the four-argument form passes and
+     * what every test that is not about collisions uses. The project upgrade window fills it, because it is
+     * the only thing that holds every installed plugin's jar at once — a clash is a property of what two
+     * plugins declare, and one service reading one jar pair cannot see it.
+     */
+    public PluginUpgradeService(ProjectConfig config, ProjectState state,
+                                LibraryService libraryService, JitPackSearch jitpack,
+                                UserLibrary artifact, Set<String> ambiguousTypeNames) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
         this.jitpack = jitpack;
         this.artifact = artifact;
+        this.ambiguous = Set.copyOf(ambiguousTypeNames);
     }
 
     // =========================================================================
@@ -906,9 +928,31 @@ public final class PluginUpgradeService {
     /** Everything one pass over the bot's sources found, which is what every reader downstream needs. */
     record Uses(List<Call> calls, List<TypeUse> types) {}
 
+    /**
+     * One pass over the bot's sources — the only part of the report that needs the project.
+     *
+     * <p><b>A type name another installed plugin also declares is refused here, before anything is
+     * scanned.</b> Attribution is by the simple name the source writes, so {@code Point.of(…)} in a project
+     * holding two plugins that both declare a {@code Point} is genuinely unanswerable — and the answer is a
+     * line in {@code problems()}, which stops the whole report and the whole rewrite, rather than a guess.
+     * That is {@code MethodReferences}' own three-way verdict: one owner is a match, several is a problem,
+     * none is not a reference. Guessing would report a break in a class the bot never touched and then
+     * rewrite it there, which is the one outcome worse than a compile error. The refusal is the same
+     * all-or-nothing rule as a file that does not parse, one level up.
+     */
     private Uses usesIn(Set<String> apiTypes, Map<String, List<String>> fieldOwners, List<String> problems) {
         List<Call> calls = new ArrayList<>();
         List<TypeUse> types = new ArrayList<>();
+
+        List<String> clashes = apiTypes.stream().filter(ambiguous::contains).sorted().toList();
+        if (!clashes.isEmpty()) {
+            problems.add("Another installed plugin also declares " + String.join(", ", clashes)
+                    + ", so a call written on that name cannot be attributed to either without bindings. "
+                    + "Change one project's spelling, or upgrade the plugins one at a time by removing the "
+                    + "other first.");
+            return new Uses(List.of(), List.of());
+        }
+
         for (ProjectFile file : state.getAllFiles()) {
             String path = relativePath(file.getPath());
             CompilationUnit cu = SourceParser.parse(file.getContent());
