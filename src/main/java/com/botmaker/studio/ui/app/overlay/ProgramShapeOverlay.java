@@ -206,8 +206,13 @@ public final class ProgramShapeOverlay {
     /**
      * A just-requested edit whose result must be focused after the next {@link UIBlocksUpdatedEvent}.
      *
-     * @param at    where the block landed — a {@link BlockTree.Position} rather than a block reference because
-     *              the pre-edit block objects are all replaced on re-parse
+     * <p><b>Block reuse does not make this redundant</b> (2026-09-15), which the plan for it expected. What
+     * this focuses is a block that was just <em>inserted</em> — one that by definition did not exist before
+     * the re-parse and so cannot have survived it. See {@code docs/refactor/30-block-reuse.md} §9.
+     *
+     * @param at    where the block landed — a {@link BlockTree.Position} rather than a block reference. Since
+     *              reuse an unchanged block does survive, but the one this record is about never does, and a
+     *              position is also what {@code fresh} needs to find the statement that took the slot
      * @param fresh whether the block that lands there is <em>new</em>. Only a new one may have its argument
      *              popover opened for it: a moved block is already configured, and re-opening its editor after
      *              every Alt+↓ would make reordering a call unusable.

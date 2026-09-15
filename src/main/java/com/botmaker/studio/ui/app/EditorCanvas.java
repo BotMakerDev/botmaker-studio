@@ -170,6 +170,12 @@ final class EditorCanvas {
      * {@code ScrollPane}'s content height to zero, and {@code vvalue} is clamped against that height — so the
      * canvas silently jumped back to the top after every single edit. The restore runs on the next pulse,
      * once the new root node has been laid out and the scrollable range exists again.
+     *
+     * <p><b>Block reuse did not make this redundant</b> (2026-09-15), which the plan for it expected. Member
+     * blocks are deliberately never reused — {@code BlockConverter.parseRoot} builds them fresh — so the node
+     * swapped in here is always new and always unlaid-out, whatever survives underneath it. Deleting the two
+     * lines was tried and measured: the canvas jumps to the top. {@code CanvasScrollTest} holds both that and
+     * its cause. See {@code docs/refactor/30-block-reuse.md} §10.
      */
     void handleBlocksUpdate(CoreApplicationEvents.UIBlocksUpdatedEvent event) {
         double vvalue = scrollPane.getVvalue();

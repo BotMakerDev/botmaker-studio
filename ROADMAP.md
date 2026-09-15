@@ -6,6 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — block reuse, phase 6: the workaround sweep deleted nothing, and that is the finding.**
+  Both workarounds reuse was meant to retire survive, for unrelated reasons. `EditorCanvas`'s `vvalue`
+  restore is still load-bearing because **members are never reused** — `parseRoot` rebuilds the root every
+  parse, so the canvas always swaps in an unlaid-out node and the scroll range still collapses; deleting the
+  two lines was measured, not reasoned (`expected: 0.8 but was: 0.0`), and folding `clear()`+`add` into one
+  `setAll` did not help. `ProgramShapeOverlay.pendingInsert` focuses a block that was just *inserted*, which
+  by definition never survived a re-parse. What landed: `CanvasScrollTest` (the behaviour **and** its cause)
+  and two corrected javadocs, one of which had been made false by reuse.
+
 - **2026-09-15 — block reuse, phase 5: the HUD keeps its widgets too.** `AbstractCodeBlock.compactNodes`
   caches what `CompactSpecRow` drew, and `OverlayTreeView` consults it — so an overlay row's half-typed field
   survives an edit elsewhere, on the one surface a bot can be authored from without leaving the game. **It
