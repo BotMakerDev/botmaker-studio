@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.services.SdkUpgradeService;
-import com.botmaker.studio.services.SdkUpgradeService.Break;
-import com.botmaker.studio.services.SdkUpgradeService.CallSite;
-import com.botmaker.studio.services.SdkUpgradeService.Choice;
-import com.botmaker.studio.services.SdkUpgradeService.Deprecation;
-import com.botmaker.studio.services.SdkUpgradeService.Highlight;
-import com.botmaker.studio.services.SdkUpgradeService.Report;
-import com.botmaker.studio.services.SdkUpgradeService.Site;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Deprecation;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -39,7 +39,7 @@ import java.util.function.Supplier;
  *
  * <p>Changing the SDK version used to be a cell edit in <b>Manage Libraries</b>: it rewrote the pom and the
  * user found out what that cost by opening their project afterwards. This is the same operation with the
- * answer shown first — {@link SdkUpgradeService} does the reading, this only lays it out.
+ * answer shown first — {@link PluginUpgradeService} does the reading, this only lays it out.
  *
  * <p><b>The span is split into what Studio can repair and what needs you</b>, because those two lists ask
  * completely different things. The first is a button; the second is reading. Mixing them into one "what
@@ -47,7 +47,7 @@ import java.util.function.Supplier;
  *
  * <p>This replaced a card that printed an {@code mvn rewrite:run} command to paste. The ordering that card
  * had to teach — rewrite first, with the pom still on the old version, then bump — was imposed by
- * OpenRewrite type-attributing against the old SDK, and went away with it (see {@link SdkUpgradeService}).
+ * OpenRewrite type-attributing against the old SDK, and went away with it (see {@link PluginUpgradeService}).
  *
  * <h2>Two windows, one class</h2>
  *
@@ -61,7 +61,7 @@ import java.util.function.Supplier;
 public final class SdkUpgradeDialog {
 
     private final Window owner;
-    private final SdkUpgradeService upgrades;
+    private final PluginUpgradeService upgrades;
 
     private final ComboBox<String> versionCombo = new ComboBox<>();
     private final Button checkButton = new Button("Check");
@@ -83,7 +83,7 @@ public final class SdkUpgradeDialog {
     private Report report;
     private boolean modernising;
 
-    public SdkUpgradeDialog(Window owner, SdkUpgradeService upgrades) {
+    public SdkUpgradeDialog(Window owner, PluginUpgradeService upgrades) {
         this.owner = owner;
         this.upgrades = upgrades;
     }

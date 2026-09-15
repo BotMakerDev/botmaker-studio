@@ -1,12 +1,12 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.config.CacheDirs;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.CallMigrator;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner;
-import com.botmaker.studio.services.SdkUpgradeService.CallSite;
-import com.botmaker.studio.services.SdkUpgradeService.Choice;
-import com.botmaker.studio.services.SdkUpgradeService.Report;
-import com.botmaker.studio.services.SdkUpgradeService.Site;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,8 +29,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>Which candidate a call meant is a property of <em>that call</em> — {@code scroll(3)} and
  * {@code scroll(-3)} want different answers — so this is the only place in the whole upgrade where the user
  * decides rather than reads. The two halves are tested through the two seams the service exposes for exactly
- * this reason: {@link SdkUpgradeService#compare} for what the dialog is shown, and
- * {@link SdkUpgradeService#migrate} for what is actually written, neither of which needs a pom, a resolver or
+ * this reason: {@link PluginUpgradeService#compare} for what the dialog is shown, and
+ * {@link PluginUpgradeService#migrate} for what is actually written, neither of which needs a pom, a resolver or
  * a network round trip.
  *
  * <p>The fixture is {@code Mouse.scroll(int)} — the case that revealed the gap in the pointer model. Nothing
@@ -108,8 +108,8 @@ class SplitPointerTest {
     /** The rewrite the same jars produce, given the picks a dialog would have collected. */
     private static String rewriteOver(Path tmp, Map<String, String> before, Map<String, String> after,
                                       String bot, Map<CallSite, Integer> picks) throws IOException {
-        SdkUpgradeService service = SdkFixtures.serviceOver(tmp, bot);
-        SdkMigrationRunner.Outcome outcome = service.migrate(
+        PluginUpgradeService service = SdkFixtures.serviceOver(tmp, bot);
+        ApiMigrationRunner.Outcome outcome = service.migrate(
                 SdkFixtures.jarOf(tmp, "old", before, Map.of()),
                 SdkFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0", false, true, picks);
         assertNotNull(outcome, "the upgrade had nothing to repair, so there is no rewrite to read");

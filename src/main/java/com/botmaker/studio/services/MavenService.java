@@ -806,10 +806,22 @@ public final class MavenService {
      * offered, no version reported.
      */
     public static Optional<String> readSdkVersion(Path projectDir) {
+        return readDependencyVersion(projectDir, SDK_GROUP_ID, SDK_ARTIFACT_ID);
+    }
+
+    /**
+     * The version {@code projectDir/pom.xml} declares for one coordinate — <b>empty when it declares none</b>.
+     *
+     * <p>The general form of {@link #readSdkVersion}, and the one the project upgrade window asks per row:
+     * a plugin is installed because its coordinate is in the pom, so this is the same question for every
+     * plugin, plugin #1 included. Empty is not an error anywhere here — a project that does not declare a
+     * plugin is an ordinary project, and every caller degrades rather than refusing.
+     */
+    public static Optional<String> readDependencyVersion(Path projectDir, String groupId, String artifactId) {
         Model model = readModel(projectDir);
         if (model == null) return Optional.empty();
         return model.getDependencies().stream()
-                .filter(d -> SDK_GROUP_ID.equals(d.getGroupId()) && SDK_ARTIFACT_ID.equals(d.getArtifactId()))
+                .filter(d -> groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId()))
                 .map(Dependency::getVersion)
                 .filter(v -> v != null && !v.isBlank())
                 .findFirst();
@@ -829,7 +841,7 @@ public final class MavenService {
 
     /**
      * Resolves the SDK's own (classifier-less) jar for an <em>arbitrary</em> version — not necessarily the
-     * one this project pins. That is what {@link SdkUpgradeService} compares against: answering "what breaks
+     * one this project pins. That is what {@code services/upgrade/PluginUpgradeService} compares against: answering "what breaks
      * if I move to v2.0.0" means reading v2.0.0's bytecode, which nothing else in Studio ever needs.
      *
      * <p>The project's own pom is still consulted, for its {@code <repositories>} — JitPack is declared
@@ -859,17 +871,38 @@ public final class MavenService {
      * May block on the network — call off the FX thread.
      */
     public static Optional<Path> resolveSdkArtifact(Path projectDir, String version, String classifier) {
+        return resolveArtifact(projectDir, SDK_GROUP_ID, SDK_ARTIFACT_ID, classifier, version);
+    }
+
+    /**
+     * The same for <b>any</b> coordinate — what the project upgrade window resolves a plugin's two jars with.
+     *
+     * <p>The SDK-named entry points above are two-line delegations to this since 2026-09-15. They stay
+     * because their callers ask a different question: {@code SdkDocsService} and {@code SdkSurfaceService}
+     * are about the palette, not about an upgrade, and neither has a coordinate to hand.
+     *
+     * <p>The project's own pom is read for its {@code <repositories>} — JitPack is declared there — so a
+     * version that has never been resolved on this machine downloads on demand. Best-effort throughout:
+     * empty for a missing pom, a blank version, an unresolvable artifact or no network. May block — call it
+     * off the FX thread.
+     */
+    public static Optional<Path> resolveArtifact(Path projectDir, String groupId, String artifactId,
+                                                 String classifier, String version) {
         Model model = readModel(projectDir);
         if (model == null) return Optional.empty();
-        return resolveSdkArtifact(model, version, classifier);
+        return resolveArtifact(model, groupId, artifactId, classifier, version);
     }
 
     private static Optional<Path> resolveSdkArtifact(Model model, String version, String classifier) {
+        return resolveArtifact(model, SDK_GROUP_ID, SDK_ARTIFACT_ID, classifier, version);
+    }
+
+    private static Optional<Path> resolveArtifact(Model model, String groupId, String artifactId,
+                                                  String classifier, String version) {
         if (version == null || version.isBlank()) {
             return Optional.empty();
         }
-        Artifact artifact = new DefaultArtifact(
-                SDK_GROUP_ID, SDK_ARTIFACT_ID, classifier, "jar", version.trim());
+        Artifact artifact = new DefaultArtifact(groupId, artifactId, classifier, "jar", version.trim());
 
         RepositorySystem system = new RepositorySystemSupplier().get();
         DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
@@ -886,7 +919,7 @@ public final class MavenService {
             var file = result.getArtifact().getFile();
             return file != null ? Optional.of(file.toPath()) : Optional.empty();
         } catch (ArtifactResolutionException e) {
-            System.err.println("Could not resolve SDK artifact " + artifact + ": " + e.getMessage());
+            System.err.println("Could not resolve artifact " + artifact + ": " + e.getMessage());
             return Optional.empty();
         }
     }

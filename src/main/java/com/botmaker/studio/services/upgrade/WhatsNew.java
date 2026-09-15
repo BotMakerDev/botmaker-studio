@@ -1,7 +1,7 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
-import com.botmaker.studio.services.SdkUpgradeService.Highlight;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,7 +19,7 @@ import java.util.jar.JarFile;
  * <p>Every other list on the upgrade report is <b>derived</b> — a diff of two jars, stated as API names.
  * That is a cost sheet, and a cost sheet is not a reason to upgrade: "{@code Mouse.dragTo(…)} is new" tells
  * the user a symbol appeared, never why anybody added it. The one thing that can answer *that* is the
- * author's own sentence, and it exists — in {@code CHANGELOG.md} — so the SDK's build copies that file whole
+ * author's own sentence, and it exists — in {@code CHANGELOG.md} — so a plugin's build copies that file whole
  * into its own jar as {@value #ENTRY}. Studio already downloads the target jar to diff it, so the answer
  * arrives with no second fetch and, crucially, <b>offline</b>.
  *
@@ -38,12 +38,15 @@ import java.util.jar.JarFile;
  * unparseable {@code from} shows every section up to the target rather than none. Showing too much is a
  * readable failure; showing nothing looks like a release that changed nothing.
  */
-final class SdkWhatsNew {
+final class WhatsNew {
 
-    /** Where the SDK's own build puts its {@code CHANGELOG.md}. See {@code botmaker-sdk/pom.xml}. */
+    /**
+     * Where a plugin's own build puts its {@code CHANGELOG.md}. See {@code botmaker-sdk/pom.xml} for the
+     * {@code antrun} copy that does it — the path is the convention any plugin may follow, not the SDK's.
+     */
     static final String ENTRY = "META-INF/botmaker/whats-new.md";
 
-    private SdkWhatsNew() {
+    private WhatsNew() {
     }
 
     /**
@@ -95,7 +98,7 @@ final class SdkWhatsNew {
         int close = heading.indexOf(']', open + 1);
         if (open < 0 || close < 0) return null;
         String inside = heading.substring(open + 1, close).trim();
-        return SemVer.isValid(inside) ? SdkApiModel.strip(inside) : null;
+        return SemVer.isValid(inside) ? ApiModel.strip(inside) : null;
     }
 
     /** Everything after the {@code ]}, minus the dash the changelog separates them with. May be blank. */
@@ -138,8 +141,8 @@ final class SdkWhatsNew {
      * section in the file the moment its target was a snapshot. Each bound is now dropped on its own.
      */
     private static boolean inRange(String version, String from, String to) {
-        String lo = SdkApiModel.strip(from);
-        String hi = SdkApiModel.strip(to);
+        String lo = ApiModel.strip(from);
+        String hi = ApiModel.strip(to);
         if (SemVer.isValid(lo) && SemVer.compare(version, lo) <= 0) return false;
         return !SemVer.isValid(hi) || SemVer.compare(version, hi) <= 0;
     }

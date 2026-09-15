@@ -10,13 +10,14 @@ import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
-import com.botmaker.studio.services.SdkUpgradeService;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
@@ -231,8 +232,16 @@ final class StudioActions {
      * the canvas banner is a second, non-menu route to it.
      */
     public void openSdkUpgrade() {
-        new SdkUpgradeDialog(primaryStage,
-                new SdkUpgradeService(config, state, libraryService, jitPackSearch)).show();
+        new SdkUpgradeDialog(primaryStage, upgradesFor(PluginUpgradeService.SDK)).show();
+    }
+
+    /**
+     * The upgrade engine pointed at one coordinate. Since 2026-09-15 the SDK is not a constant inside the
+     * service but an argument handed to it, so this is the only place in the UI that still says "the SDK" —
+     * and the project upgrade window will call it once per installed plugin instead.
+     */
+    private PluginUpgradeService upgradesFor(UserLibrary artifact) {
+        return new PluginUpgradeService(config, state, libraryService, jitPackSearch, artifact);
     }
 
     /**
@@ -241,8 +250,7 @@ final class StudioActions {
      * today.
      */
     private void openModernise() {
-        new SdkUpgradeDialog(primaryStage,
-                new SdkUpgradeService(config, state, libraryService, jitPackSearch)).showModernise();
+        new SdkUpgradeDialog(primaryStage, upgradesFor(PluginUpgradeService.SDK)).showModernise();
     }
 
     private void openManageImports() {

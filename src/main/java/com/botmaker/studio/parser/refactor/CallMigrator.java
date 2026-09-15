@@ -349,7 +349,7 @@ public final class CallMigrator {
                     "this used the result of \"" + calledName(replaced.site())
                             + "\", which no longer fits here — it now reads "
                             + replaced.expected().defaultText() + ".");
-            // The three SDK-upgrade shapes. SdkMigrationRunner writes its own marks, naming the member that
+            // The three upgrade shapes. ApiMigrationRunner writes its own marks, naming the member that
             // was removed or where it went — which it knows and this does not — so there is nothing to add
             // here.
             case CallChange.ValueDefaulted ignored -> List.of();

@@ -1,31 +1,31 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
-import com.botmaker.studio.services.SdkApiModel.Advice;
-import com.botmaker.studio.services.SdkApiModel.ApiClass;
-import com.botmaker.studio.services.SdkApiModel.ApiMember;
-import com.botmaker.studio.services.SdkUpgradeService.Call;
-import com.botmaker.studio.services.SdkUpgradeService.Candidate;
+import com.botmaker.studio.services.upgrade.ApiModel.Advice;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiClass;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiMember;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Call;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Candidate;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.botmaker.studio.services.SdkApiModel.CTOR;
+import static com.botmaker.studio.services.upgrade.ApiModel.CTOR;
 
 /**
  * Where one call of the old jar could point in the new one, checked rather than hoped.
  *
  * <p>This is the <b>one</b> place that decides a redirect, and every reader goes through it —
- * {@link SdkUpgradeDiff} for the sentence the dialog shows and the menu it offers, {@link SdkUpgradeService}
+ * {@link UpgradeDiff} for the sentence the dialog shows and the menu it offers, {@link PluginUpgradeService}
  * for the edit. Two answers to one question would eventually be a dialog promising a rewrite the rewriter
  * does not make.
  */
-final class SdkRedirects {
+final class Redirects {
 
-    private SdkRedirects() {
+    private Redirects() {
     }
 
     /**
@@ -35,7 +35,7 @@ final class SdkRedirects {
      * <p>The list has more than one element only for a <b>split</b>, and each element is a candidate that
      * survived the checks below on its own. Whether a candidate also <em>fits where the value is used</em> is
      * not decided here: that is a property of the call <em>site</em>, since a call standing as a statement
-     * discards its result and any candidate fits — see {@link SdkUpgradeService.Choice} and
+     * discards its result and any candidate fits — see {@link PluginUpgradeService.Choice} and
      * {@link #fittingAt}.
      *
      * <p>It answers empty for three quite different things, all of which end the same way (a default value
@@ -56,15 +56,15 @@ final class SdkRedirects {
      * {@code SignatureMigration}'s own machinery, doing here what it does for a hand-edited signature.
      */
     static List<Candidate> redirectsFor(ApiClass then, ApiClass now, Call call,
-                                        Map<String, ApiClass> after, SdkPairing pairing) {
-        List<SdkPairing.Member> targets = pairing.targetOf(then, call.member());
+                                        Map<String, ApiClass> after, Pairing pairing) {
+        List<Pairing.Member> targets = pairing.targetOf(then, call.member());
         if (targets.isEmpty()) {
-            SdkMigrationRunner.Redirect only = redirectTo(then, now, call, after, null);
+            ApiMigrationRunner.Redirect only = redirectTo(then, now, call, after, null);
             return only == null ? List.of() : List.of(new Candidate(only, ""));
         }
         List<Candidate> out = new ArrayList<>();
-        for (SdkPairing.Member target : targets) {
-            SdkMigrationRunner.Redirect redirect = redirectTo(then, now, call, after, target);
+        for (Pairing.Member target : targets) {
+            ApiMigrationRunner.Redirect redirect = redirectTo(then, now, call, after, target);
             if (redirect != null) out.add(new Candidate(redirect, target.when()));
         }
         return List.copyOf(out);
@@ -74,8 +74,8 @@ final class SdkRedirects {
      * The first candidate {@link #redirectsFor} offers, or null. The answer every reader that does not ask
      * the user wants — and the whole answer whenever the pointer named one target, which is nearly always.
      */
-    static SdkMigrationRunner.Redirect redirectFor(ApiClass then, ApiClass now, Call call,
-                                                   Map<String, ApiClass> after, SdkPairing pairing) {
+    static ApiMigrationRunner.Redirect redirectFor(ApiClass then, ApiClass now, Call call,
+                                                   Map<String, ApiClass> after, Pairing pairing) {
         List<Candidate> all = redirectsFor(then, now, call, after, pairing);
         return all.isEmpty() ? null : all.getFirst().redirect();
     }
@@ -95,9 +95,9 @@ final class SdkRedirects {
     }
 
     /** One candidate, checked. {@code target} is null for "no pointer led anywhere" — see the doc above. */
-    private static SdkMigrationRunner.Redirect redirectTo(ApiClass then, ApiClass now, Call call,
+    private static ApiMigrationRunner.Redirect redirectTo(ApiClass then, ApiClass now, Call call,
                                                           Map<String, ApiClass> after,
-                                                          SdkPairing.Member target) {
+                                                          Pairing.Member target) {
         ApiClass owner = target == null ? now : after.get(target.type());
         String name = target == null ? call.member() : target.name();
         if (owner == null) return null;
@@ -113,7 +113,7 @@ final class SdkRedirects {
             if (!owner.declaresField(name)) return null;
             if (!moved && name.equals(call.member())) return null;      // still there, still spelled the same
             String newReturn = typeOfField(owner, name);
-            return new SdkMigrationRunner.Redirect(then.simpleName(), call.member(), call.argCount(),
+            return new ApiMigrationRunner.Redirect(then.simpleName(), call.member(), call.argCount(),
                     moved ? owner.name() : null, name, List.of(), oldReturn, newReturn,
                     fits(oldReturn, newReturn, after), returnTypeFqn(oldReturn, after),
                     advice.note(), advice.behaviourChanged());
@@ -132,7 +132,7 @@ final class SdkRedirects {
             if (overloads.size() != 1) return null;
             chosen = overloads.getFirst();
         }
-        return new SdkMigrationRunner.Redirect(then.simpleName(), call.member(), call.argCount(),
+        return new ApiMigrationRunner.Redirect(then.simpleName(), call.member(), call.argCount(),
                 moved ? owner.name() : null, name, argumentsFor(call.argCount(), chosen),
                 oldReturn, chosen.type(), fits(oldReturn, chosen.type(), after),
                 returnTypeFqn(oldReturn, after), advice.note(), advice.behaviourChanged());
@@ -150,7 +150,7 @@ final class SdkRedirects {
     /**
      * What the plugin's own author said about this move: the {@code @ReplacedBy} on the element in the
      * <em>old</em> jar, the one the bot still calls. That is the only end there is — see
-     * {@code SdkApiModel.Pointer} — and it is the right one anyway, being the author speaking on the member
+     * {@code ApiModel.Pointer} — and it is the right one anyway, being the author speaking on the member
      * the user actually wrote.
      */
     private static Advice pointerAdvice(ApiMember member) {
@@ -237,7 +237,7 @@ final class SdkRedirects {
      * source will name, and naming a class the release just dropped would trade one compile error for
      * another. Where it answers null the repair writes the bare literal, exactly as it did before — and the
      * one case that would leave uncompilable ({@code ImageTemplate t;} against a jar without it) is a
-     * {@link SdkUpgradeService.BreakKind#TYPE_REMOVED} break, which has already refused the upgrade.
+     * {@link PluginUpgradeService.BreakKind#TYPE_REMOVED} break, which has already refused the upgrade.
      */
     static String returnTypeFqn(String returnType, Map<String, ApiClass> after) {
         ApiClass klass = after.get(returnType);

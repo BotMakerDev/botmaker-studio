@@ -1,20 +1,20 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.CallMigrator;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
-import com.botmaker.studio.services.SdkApiModel.ApiClass;
-import com.botmaker.studio.services.SdkApiModel.ApiMember;
-import com.botmaker.studio.services.SdkUpgradeService.Break;
-import com.botmaker.studio.services.SdkUpgradeService.BreakKind;
-import com.botmaker.studio.services.SdkUpgradeService.Call;
-import com.botmaker.studio.services.SdkUpgradeService.CallSite;
-import com.botmaker.studio.services.SdkUpgradeService.Candidate;
-import com.botmaker.studio.services.SdkUpgradeService.Choice;
-import com.botmaker.studio.services.SdkUpgradeService.Deprecation;
-import com.botmaker.studio.services.SdkUpgradeService.Site;
-import com.botmaker.studio.services.SdkUpgradeService.TypeUse;
-import com.botmaker.studio.services.SdkUpgradeService.Uses;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiClass;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiMember;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.BreakKind;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Call;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Candidate;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Deprecation;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.TypeUse;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Uses;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,27 +26,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static com.botmaker.studio.services.SdkApiModel.CTOR;
-import static com.botmaker.studio.services.SdkApiModel.compareVersions;
-import static com.botmaker.studio.services.SdkApiModel.declares;
-import static com.botmaker.studio.services.SdkApiModel.offers;
-import static com.botmaker.studio.services.SdkApiModel.signatures;
-import static com.botmaker.studio.services.SdkApiModel.strip;
-import static com.botmaker.studio.services.SdkRedirects.fittingAt;
-import static com.botmaker.studio.services.SdkRedirects.redirectFor;
-import static com.botmaker.studio.services.SdkRedirects.redirectsFor;
-import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
+import static com.botmaker.studio.services.upgrade.ApiModel.CTOR;
+import static com.botmaker.studio.services.upgrade.ApiModel.compareVersions;
+import static com.botmaker.studio.services.upgrade.ApiModel.declares;
+import static com.botmaker.studio.services.upgrade.ApiModel.offers;
+import static com.botmaker.studio.services.upgrade.ApiModel.signatures;
+import static com.botmaker.studio.services.upgrade.ApiModel.strip;
+import static com.botmaker.studio.services.upgrade.Redirects.fittingAt;
+import static com.botmaker.studio.services.upgrade.Redirects.redirectFor;
+import static com.botmaker.studio.services.upgrade.Redirects.redirectsFor;
+import static com.botmaker.studio.services.upgrade.Redirects.returnTypeOf;
 
 /**
- * The two jars intersected with this bot's own source — every list a {@link SdkUpgradeService.Report}
+ * The two jars intersected with this bot's own source — every list a {@link PluginUpgradeService.Report}
  * carries, and the sentences the dialog shows beside them.
  *
- * <p>Nothing here decides a redirect: it asks {@link SdkRedirects}, which is the single place that does,
+ * <p>Nothing here decides a redirect: it asks {@link Redirects}, which is the single place that does,
  * so a row promising a move is a row the repair pass will actually make.
  */
-final class SdkUpgradeDiff {
+final class UpgradeDiff {
 
-    private SdkUpgradeDiff() {
+    private UpgradeDiff() {
     }
 
     /**
@@ -59,7 +59,7 @@ final class SdkUpgradeDiff {
      * {@code @Since} therefore produces exactly the flat alphabetical list this used to return.
      *
      * <p><b>This is the one list that shows a name the bot never wrote, so it is the one that filters.</b>
-     * {@code SdkApiModel.snapshot} reads the whole jar, because what a jar contains must be answerable with
+     * {@code ApiModel.snapshot} reads the whole jar, because what a jar contains must be answerable with
      * no plugin bound; every other list here is already intersected with the bot's own call sites, which hides
      * a class no bot can name by construction. Here nothing intersects, so {@link #offerable} drops the
      * package a plugin keeps its implementation in.
@@ -121,7 +121,7 @@ final class SdkUpgradeDiff {
      *
      * <p>Those files are never migrated — they are rendered from Studio's own templates, so rewriting one
      * would be overwritten at the next regeneration and regenerating it would reproduce the same old-SDK code.
-     * When a repair touches one, {@code SdkMigrationRunner} refuses the whole upgrade, and until now it did so
+     * When a repair touches one, {@code ApiMigrationRunner} refuses the whole upgrade, and until now it did so
      * <b>mid-apply</b>: the user read a report, pressed the button and only then learned the answer was no.
      * This is the same fact, stated before they commit to anything.
      *
@@ -151,17 +151,17 @@ final class SdkUpgradeDiff {
     }
 
     /**
-     * Members this bot calls that the target marks {@code @Deprecated}, each with what the SDK itself says
+     * Members this bot calls that the target marks {@code @Deprecated}, each with what the plugin itself says
      * to use instead.
      *
      * <p>The replacement is read the same way every other answer here is — through
-     * {@link SdkRedirects#redirectFor}, against the same jar — so a row that promises a move is a row the
+     * {@link Redirects#redirectFor}, against the same jar — so a row that promises a move is a row the
      * repair pass will actually make. It is empty in two cases that read alike and are not alike: the member
      * points nowhere, or it points somewhere the shapes refuse. Both leave the user to it, which is what a
      * deprecation is for.
      */
     static List<Deprecation> deprecations(Map<String, ApiClass> before, Map<String, ApiClass> after,
-                                          List<Call> calls, SdkPairing pairing) {
+                                          List<Call> calls, Pairing pairing) {
         Map<String, List<CallSite>> sites = new LinkedHashMap<>();
         Map<String, String[]> moves = new LinkedHashMap<>();
         for (Call call : calls) {
@@ -203,8 +203,8 @@ final class SdkUpgradeDiff {
      * answer the user wants to read, so it is written here in the type sweep's own words.
      */
     private static String[] moveText(ApiClass then, ApiClass now, Call call,
-                                     Map<String, ApiClass> after, SdkPairing pairing) {
-        SdkMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
+                                     Map<String, ApiClass> after, Pairing pairing) {
+        ApiMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
         if (redirect != null) return new String[]{redirect.display(), repairText(redirect)};
         if (!now.simpleName().equals(then.simpleName())) {
             return new String[]{now.simpleName(),
@@ -228,7 +228,7 @@ final class SdkUpgradeDiff {
      * exactly what the {@code repair} sentence is for.
      */
     static List<Break> breaks(Map<String, ApiClass> before, Map<String, ApiClass> after,
-                              Uses uses, SdkPairing pairing) {
+                              Uses uses, Pairing pairing) {
         Map<String, Break> found = new LinkedHashMap<>();
         Map<String, List<CallSite>> sites = new LinkedHashMap<>();
 
@@ -254,7 +254,7 @@ final class SdkUpgradeDiff {
             // only somewhere else is a break with a redirect for a repair, and is still listed, because the
             // bot does not compile until the redirect is made.
             if (offers(now, call.member(), call.argCount())) continue;
-            SdkMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
+            ApiMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
 
             BreakKind kind;
             String detail = "";
@@ -297,7 +297,7 @@ final class SdkUpgradeDiff {
      * neither of their verdicts moves.
      */
     static List<Choice> splits(Map<String, ApiClass> before, Map<String, ApiClass> after,
-                               Uses uses, SdkPairing pairing) {
+                               Uses uses, Pairing pairing) {
         Map<String, List<Call>> byMember = new LinkedHashMap<>();
         for (Call call : uses.calls()) {
             byMember.computeIfAbsent(call.type() + "#" + call.member() + "#" + call.argCount(),
@@ -336,7 +336,7 @@ final class SdkUpgradeDiff {
      * into the same finding and the sites simply accumulate.
      */
     private static boolean typeVerdict(Map<String, Break> found, Map<String, List<CallSite>> sites,
-                                       ApiClass then, Map<String, ApiClass> after, SdkPairing pairing,
+                                       ApiClass then, Map<String, ApiClass> after, Pairing pairing,
                                        CallSite site) {
         ApiClass now = pairing.pairedTo(then, after);
         if (now == null) {
@@ -375,13 +375,13 @@ final class SdkUpgradeDiff {
      * Everything above it is Studio restating what the diff already showed; the note is the one thing in the
      * dialog that says <em>why</em>, and it is the only text here Studio did not write.
      */
-    static String repairText(SdkMigrationRunner.Redirect redirect) {
+    static String repairText(ApiMigrationRunner.Redirect redirect) {
         String repair = mechanicsOf(redirect);
         return redirect.note().isBlank() ? repair : repair + " — " + redirect.note();
     }
 
-    /** The half of {@link #repairText(SdkMigrationRunner.Redirect)} that is Studio's own reading of the jars. */
-    private static String mechanicsOf(SdkMigrationRunner.Redirect redirect) {
+    /** The half of {@link #repairText(ApiMigrationRunner.Redirect)} that is Studio's own reading of the jars. */
+    private static String mechanicsOf(ApiMigrationRunner.Redirect redirect) {
         String was = CTOR.equals(redirect.member())
                 ? "new " + redirect.type() : redirect.type() + "." + redirect.member();
         List<String> what = new ArrayList<>();

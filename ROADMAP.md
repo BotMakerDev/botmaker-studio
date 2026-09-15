@@ -6,6 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-15 — the upgrade engine stops naming the SDK.** Phase 2, and behaviour-preserving by
+  construction: the suite is the verification, 1013 tests with the same 14 pre-existing failures as before.
+  `services/{SdkApiModel, SdkPairing, SdkRedirects, SdkUpgradeDiff, SdkWhatsNew, SdkUpgradeService}` became
+  `services/upgrade/{ApiModel, Pairing, Redirects, UpgradeDiff, WhatsNew, PluginUpgradeService}`, and
+  `parser/refactor/{SdkReferences, SdkMigrationRunner}` became `{ApiReferences, ApiMigrationRunner}`. The
+  three upgrade test classes moved with them into `services/upgrade/`, which is the honest reason to move
+  code rather than widen it: they read package-private internals (`WhatsNew.ENTRY`, `ApiModel.snapshot`), and
+  leaving them behind would have meant making six classes public to satisfy a rename. **The only real change
+  is the coordinate.** `MavenService` grew `resolveArtifact(projectDir, groupId, artifactId, classifier,
+  version)` and `readDependencyVersion(projectDir, groupId, artifactId)`; `resolveSdkJar`,
+  `resolveSdkArtifact` and `readSdkVersion` are two-line delegations to them, so `SdkDocsService` and
+  `SdkSurfaceService` — which ask a palette question, not an upgrade one — are untouched.
+  `PluginUpgradeService` takes a `UserLibrary artifact` and reads its pin off the pom per call;
+  `PluginUpgradeService.SDK` is what `StudioActions` passes, and is now the only place in the UI that names
+  the SDK. `SdkFixtures.jarOf` takes the package as a parameter, so a later phase can compile a second
+  plugin's jar beside the first. **`apply` still refuses any coordinate but the SDK**, deliberately and
+  loudly: the pom write is `LibraryService.updateLibraries`, which writes the SDK pin, and a coordinate-keyed
+  write belongs with the window that drives several rows under one write (phase 4). The report and the repair
+  are already coordinate-blind — they always were, which is what made this phase a rename.
+
 - **2026-09-15 — the upgrade engine: the back edge deleted, and the scan filter repaired.** Phase 1 of making
   the SDK upgrade every plugin's upgrade. Two dead things, both invisible, both found by running the suite.
   **`@Replaces` is gone** — `SdkApiModel.Claim`, `SdkPairing.backwardEdges` and its era filter,
@@ -5933,6 +5953,18 @@ suggest**, which is the second finding.
 the code — six of the eight classes need only a rename — it is that **no second plugin has a release train**,
 so there is nothing to test a generalization against. Do it when one does, and do it by threading a
 coordinate through `SdkUpgradeService`, not by lifting anything.
+
+> **Done on 2026-09-15, and the table's own predictions held exactly.** The six "rename only" classes were
+> renamed and nothing else changed in them; `SdkUpgradeService` was generalized precisely as prescribed — a
+> `UserLibrary` constructor argument, `jitpack.fetchVersions` and every jar resolve reading it — and the two
+> new `MavenService` entry points (`resolveArtifact`, `readDependencyVersion`) are where the coordinate
+> actually enters. Two items are **not** closed. `WhatsNew`'s contract question stands untouched: the
+> `META-INF/botmaker/whats-new.md` path is still a convention only the SDK's pom implements, so a second
+> plugin's report has no "What's new" and degrades to an empty list, exactly as a jar with no entry always
+> has. And `SdkUpgradeDialog` is still the SDK's dialog — the "generalize last" verdict, which phase 4's
+> project upgrade window is. The one thing the table did not foresee: `apply` writes the pom through
+> `LibraryService.updateLibraries`, which is SDK-keyed, so it **refuses** any other coordinate until that
+> write is per-coordinate. Names in the table above are the pre-rename ones and are left as written.
 
 ### The documentation stack
 

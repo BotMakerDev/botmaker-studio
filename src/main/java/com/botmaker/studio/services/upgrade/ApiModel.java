@@ -1,8 +1,8 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.studio.index.TypeSummaryManager;
-import com.botmaker.studio.parser.refactor.SdkReferences;
+import com.botmaker.studio.parser.refactor.ApiReferences;
 import io.github.classgraph.AnnotationInfo;
 import io.github.classgraph.AnnotationInfoList;
 import io.github.classgraph.ClassInfo;
@@ -21,19 +21,23 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * One SDK jar, reduced to what a compatibility question can be asked of — and the grammar the pointers
+ * One plugin jar, reduced to what a compatibility question can be asked of — and the grammar the pointers
  * between two such jars are written in.
  *
- * <p>This is the <b>model half</b> of {@link SdkUpgradeService}: it reads bytecode and answers questions
+ * <p>This is the <b>model half</b> of {@link PluginUpgradeService}: it reads bytecode and answers questions
  * about a single jar. It knows nothing about the bot's own source, about pairing two jars, or about what
- * the user is told — those are {@link SdkPairing}, {@link SdkRedirects} and {@link SdkUpgradeDiff}, each of
+ * the user is told — those are {@link Pairing}, {@link Redirects} and {@link UpgradeDiff}, each of
  * which is written in terms of the records here.
  *
  * <p>Everything is read from the <b>class file</b> rather than by reflection, which is why both annotations
  * are {@code @Retention(CLASS)}: the jar being read is on no classpath, and may be a version of the plugin
  * this Studio has never run against.
+ *
+ * <p><b>It was {@code services.SdkApiModel} until 2026-09-15.</b> The name said SDK; the code never did —
+ * the only vocabulary it reads is {@code com.botmaker.plugin.api.meta}, which is the contract's and which
+ * every plugin may write. The rename is what makes the class truthful about the jar it is handed.
  */
-final class SdkApiModel {
+final class ApiModel {
 
     /**
      * The forward pointer, on the deprecated element. Class-retained, so it survives into the jar.
@@ -67,9 +71,9 @@ final class SdkApiModel {
     // was already dead — Studio has generated no scaffold since 2026-08-25.
 
     /** A constructor has no name of its own; this is how the pointer grammar spells one. */
-    static final String CTOR = SdkReferences.CTOR;
+    static final String CTOR = ApiReferences.CTOR;
 
-    private SdkApiModel() {
+    private ApiModel() {
     }
 
     // =========================================================================
@@ -136,8 +140,8 @@ final class SdkApiModel {
      *
      * <p>{@code supertypes} is every class and interface above it, by simple name — the one question the diff
      * asks that a member cannot answer for itself: whether a redirect's new return value may stand where the
-     * old one did. It is read from the same scan, so it covers the SDK's own hierarchy and stops at the edge
-     * of the jar, which is all a check between two SDK types needs.
+     * old one did. It is read from the same scan, so it covers the plugin's own hierarchy and stops at the edge
+     * of the jar, which is all a check between two of that plugin's types needs.
      *
      * <p>{@code replacedBy} is the {@code @ReplacedBy} read whole (see {@link Pointer}), null when there is no
      * annotation at all. {@code since} is the release it first appeared in, {@code ""}
@@ -204,7 +208,7 @@ final class SdkApiModel {
      *
      * <p>The extra classes cost nothing where it matters. Attribution is by the type name the bot's own
      * source writes, so a class no bot can name is never a call site, never a break and never rewritten. The
-     * one reader that lists unintersected names is {@code SdkUpgradeDiff.additions}, which filters for
+     * one reader that lists unintersected names is {@code UpgradeDiff.additions}, which filters for
      * itself.
      */
     static Map<String, ApiClass> snapshot(Path jar) {
@@ -295,7 +299,7 @@ final class SdkApiModel {
     }
 
     /**
-     * Constant name → the SDK types declaring it, across <em>both</em> jars. The union is deliberate: an
+     * Constant name → the plugin types declaring it, across <em>both</em> jars. The union is deliberate: an
      * unqualified use of a constant the target removed still has to be recognised, and only the old jar
      * knows it ever existed.
      */
@@ -343,7 +347,7 @@ final class SdkApiModel {
      * the map but has no parameter list at all, so it must not answer for arity 0.
      */
     static boolean offers(ApiClass klass, String member, int argCount) {
-        if (argCount == SdkReferences.FIELD_READ) return klass.declaresField(member);
+        if (argCount == ApiReferences.FIELD_READ) return klass.declaresField(member);
         return klass.byName().getOrDefault(member, List.of()).stream()
                 .anyMatch(m -> !m.field() && m.params().size() == argCount);
     }

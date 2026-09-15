@@ -389,13 +389,29 @@ point of it.**
   stays — what a *newly created* pom pins is a separate question. When the SDK's own generator lands
   (inversion phase 2), whether it can serve a given pinned version is the **generator's** answer to give,
   from its per-version catalog, not a constant here.
-- **Changing the SDK version is a report, not a cell edit — `services/SdkUpgradeService`** (*Project ▸ Upgrade
-  SDK…*, and where the floor banner's button goes). It resolves the **target** version's jar
-  (`MavenService.resolveSdkJar`, any version — the project pom's JitPack repo means it need never have been on
-  this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
+- **Changing an installed plugin's version is a report, not a cell edit — `services/upgrade/PluginUpgradeService`**
+  (*Project ▸ Upgrade SDK…*, and where the floor banner's button goes). It resolves the **target** version's jar
+  (`MavenService.resolveArtifact`, any coordinate and any version — the project pom's JitPack repo means it need
+  never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
   (file + line), and where each break went — read from the **one pointer the old jar carries**
-  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Four things about it are load-bearing:
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Five things about it are load-bearing:
+  - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what
+    "generalising the upgrade" required.** The six engine classes moved from `services/` to
+    `services/upgrade/` and lost their `Sdk` prefix — `ApiModel`, `Pairing`, `Redirects`, `UpgradeDiff`,
+    `WhatsNew`, `PluginUpgradeService` — as did `parser/refactor/{ApiReferences, ApiMigrationRunner}`.
+    **Nothing but the names and one driver changed**, because nothing under here ever read an SDK-shaped
+    fact: the pointer vocabulary is the contract's `com.botmaker.plugin.api.meta`, which any plugin may
+    write, and `ApiMigrationRunner.run` already took its type set and field owners as parameters. What *was*
+    SDK-shaped was `MavenService.SDK_GROUP_ID`/`SDK_ARTIFACT_ID` plus `resolveSdkJar`/`readSdkVersion`, so
+    `MavenService` grew `resolveArtifact(projectDir, groupId, artifactId, classifier, version)` and
+    `readDependencyVersion(projectDir, groupId, artifactId)` with the SDK-named entry points left as
+    two-line delegations — `SdkDocsService` and `SdkSurfaceService` ask a *palette* question, not an upgrade
+    one, and have no coordinate to hand. `PluginUpgradeService.SDK` is the coordinate `StudioActions` passes,
+    and it is the only place left in the UI that says "the SDK". **`apply` still refuses any other
+    coordinate**, deliberately: the pom write is still `LibraryService.updateLibraries`, which writes the SDK
+    pin, and a per-coordinate write belongs with the window that drives several rows under *one* write. The
+    report and the repair are already coordinate-blind; only the write is not.
   - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
     (2026-09-15). The default filters to `PluginHost.cataloguedPackages()` — the packages the plugins bound
     *right now* catalogue — which is the right question for a menu and the wrong one here: the jar being read
@@ -406,7 +422,7 @@ point of it.**
     SDK answers its own package) and 57 tests did, silently, for thirteen days. What a jar contains is a
     property of the jar. The extra classes cost nothing downstream — attribution is by the type name the
     bot's own source writes, so a class no bot can name is never a call site — and the one list that shows
-    unintersected names, `SdkUpgradeDiff.additions`, filters for itself.
+    unintersected names, `UpgradeDiff.additions`, filters for itself.
   - **A redirect where the jars confirm it, a default where they do not.** The SDK once shipped a repair per
     break (a `fix` in `migrations.json`) and it was guessing — nothing checked that two members shared a
     return type, an arity or any semantics. What replaced it is not the absence of a redirect but a
@@ -424,7 +440,7 @@ point of it.**
     (`CallChange.CallDeleted`, because `0;` is not a statement), and `@NeedsReview` on the enclosing function
     **in the same rewrite** — see the review-marks bullet below. *The repair makes the bot compile; the user
     makes it correct.*
-  - **`services/SdkPairing` follows edges, and pairs members independently of types.** One edge map, built
+  - **`services/upgrade/Pairing` follows edges, and pairs members independently of types.** One edge map, built
     from one annotation: the **old** jar's `@ReplacedBy`, the author of the element the bot actually calls
     saying where it went. The walk follows edges until it reaches a spelling the target jar actually has; a
     visited set bounds it, and a cycle reaching nothing live is simply unpaired. Two deliberate refusals: a
@@ -438,7 +454,7 @@ point of it.**
     the version it records — was read here until then, for the one case a forward pointer cannot answer: a
     **deleted** element carries no pointer. Two facts retired it. Nothing writes it: the contract declares
     `ReplacedBy` and nothing else, and `com.botmaker.plugin.api.meta.Replaces` has never existed, so for two
-    weeks `SdkApiModel` read an annotation no plugin could produce. And nothing needs to: japicmp refuses a
+    weeks `ApiModel` (then `SdkApiModel`) read an annotation no plugin could produce. And nothing needs to: japicmp refuses a
     removal from a plugin's published API, so the target jar still carries the deprecated element and its own
     forward pointer. What that changes about a **chain** is worth stating, because it is not nothing — the
     intermediate is now *present* in the target jar rather than absent from both, so an upgrade stops there
@@ -446,7 +462,7 @@ point of it.**
     way, which is the property that matters.
   - **The graph is multi-valued, because a member can become two.** `forwardEdges` is
     `Map<String, List<String>>`, `follow` returns a *list* expanded in declared order and depth-first through
-    chains, and `SdkRedirects.redirectsFor` returns `List<Candidate>` in preference order — `redirectFor`
+    chains, and `Redirects.redirectsFor` returns `List<Candidate>` in preference order — `redirectFor`
     survives as the one-line "first candidate, or null", which is the whole answer for every reader that does
     not ask the user. Today's `null` is an empty list, so **every one-target pointer is
     the degenerate case** and the almost-always path is byte-for-byte what it was. A split composes with a
@@ -521,7 +537,7 @@ point of it.**
     with it** — a removed `void` member in a one-line lambda body, or a constant used as a `case` label whose
     enum cannot be told. That is the same all-or-nothing `rewriteOthers` already enforced for a rewrite that
     will not parse.
-  - **Applying is `parser/refactor/SdkMigrationRunner`: one pass over resolved endpoints, two sweeps per
+  - **Applying is `parser/refactor/ApiMigrationRunner`: one pass over resolved endpoints, two sweeps per
     file.** There is no replay — `Pairing` has already walked the edges to an endpoint the target jar has, so
     `foo`→`bar` (2.0) and `bar`→`baz` (3.0) reach the runner as the single fact `foo`→`baz`, which is what a
     bot that has run neither pass actually needs, and `a`→`b` + `b`→`a` reaches nothing live and is dropped
@@ -563,7 +579,7 @@ point of it.**
       name. Both the caller and the rule are the SDK plugin's now (`internal/plugin/templates/TemplateUses`
       and `ResourceManagerDialog`); what Studio kept is the `reviewNote` parameter of the `Sources`
       capability, which is how a plugin asks for the mark without knowing what a picture is.
-    - `SdkMigrationRunner`, as above.
+    - `ApiMigrationRunner`, as above.
   - **`prepare` may answer null, and that is not a failure.** A mark is a reference to a generated annotation,
     so if the annotation cannot be written the choice is between refusing the refactor and doing it unmarked
     — and unmarked is plainly better: the user asked for the rename, not the bookkeeping. It has to be called
@@ -594,13 +610,13 @@ point of it.**
     everything else or the bot stops compiling, but the file is regenerated on the next save, which would
     silently erase the mark. A review row that disappears on its own is worse than no row: the user is never
     told the thing they were meant to look at has stopped being listed.
-  - **One scanner, two readers: `parser/refactor/SdkReferences`.** The report asks it what the bot calls; the
+  - **One scanner, two readers: `parser/refactor/ApiReferences`.** The report asks it what the bot calls; the
     runner asks it the same question to know what to rewrite. Two scans would eventually disagree, and the
     disagreement's shape is the worst available — a dialog listing three call sites beside a button that
     repairs two. A `Reference` therefore carries a `MethodReferences.CallSite` (file, parse, **node**); the
     report keeps the line and drops the node, the runner keeps the node.
-  - **A member is not the only thing a bot can lose: `SdkReferences.typeUses` is the other half.** It yields
-    every place the source *writes* an SDK type without calling it — a field, a parameter, a return type, a
+  - **A member is not the only thing a bot can lose: `ApiReferences.typeUses` is the other half.** It yields
+    every place the source *writes* one of the plugin's types without calling it — a field, a parameter, a return type, a
     local, a cast, a type argument, an `instanceof`, a catch clause — and `breaks()` reads it, so a removed
     unpaired type is a `TYPE_REMOVED` break **even in a bot with zero calls**, and a `TYPE_RENAMED` one lists
     those places too. Until 2026-08-23 such a bot got *no finding at all* and was upgraded into something
@@ -611,14 +627,14 @@ point of it.**
   - **Every file in the project is migrated, since 2026-08-30.** The split survives in the runner's two
     lists — only `FileRole.EDITABLE` files are rewritten — but the second list now holds bundled library
     source alone and is empty in an ordinary project. What follows described the arrangement it replaced, in
-    which a generated file was re-rendered rather than rewritten: `SdkUpgradeService.regenerateScaffolding` called
+    which a generated file was re-rendered rather than rewritten: the upgrade service's `regenerateScaffolding` called
     `Regeneration.write` **after the pom has moved** — the render has to see the SDK the project actually
     pins now — falling back to `Regeneration.writeTemplatesClass` for an empty project, which has no
     model-derived file but does have a `Templates` class. For one day (phase 0b) it re-rendered only that
     last file, because Studio had no generator at all and **an upgrade left the generated Java pinned to the
     old SDK's spelling**; that cost is paid off. An `IOException` here is a printed sentence and not a failed
     upgrade: the sources are repaired and the pom is moved, so undoing it is the destructive answer and the
-    pre-upgrade snapshot is the way back. `SdkMigrationRunner.scaffoldingInTheWay` deliberately stays
+    pre-upgrade snapshot is the way back. `ApiMigrationRunner.scaffoldingInTheWay` deliberately stays
     conservative even so — relaxing it wants the per-version catalog, not just a working re-render.
   - **`apply(target, repairSources)` is snapshot → migrate → bump, and `repairSources` gates only the middle.**
     A span carrying a removed type nothing pairs with must still be *switchable* — the user reads which type
@@ -645,7 +661,7 @@ point of it.**
     `writeTemplatesClass`, `restore`, `renderEverything`), `project/seed/` (`SeedWriter`, `SeedReconciler`,
     `SeedLedger`, `SeedSync`), `project/ScaffoldMigration`, `ProjectSpecs.generatedFileNames`/
     `generatedSource`, `PluginHost.seedPlan`/`seedFiles`, `ImageTemplateLibrary.regenerateTemplatesClass`
-    and its six call sites, `SdkUpgradeService.regenerateScaffolding`, and `ProjectRepair`'s whole
+    and its six call sites, the upgrade service's `regenerateScaffolding`, and `ProjectRepair`'s whole
     damaged-locked-method half. `project/scaffold/` and `TemplateStore` had already gone on 2026-08-26.
   - **The lineage, because each step was defended and each was superseded within days.** Studio owned the
     generators; then the SDK did and Studio spliced fences into its templates; then the templates went and

@@ -23,12 +23,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Every place one file reaches into the SDK — the single scan behind both halves of an SDK upgrade.
+ * Every place one file reaches into a given set of library types — the single scan behind both halves of a
+ * plugin upgrade.
  *
- * <p><b>One scanner, two readers, and that is the point.</b> {@code services/SdkUpgradeService} asks it what
- * the bot calls so the report can say what breaks; {@link SdkMigrationRunner} asks it the same question so the
- * rewrite knows what to change. Two scans would eventually disagree, and the shape of that disagreement is the
- * worst one available: a dialog that lists three call sites and a button that rewrites two of them.
+ * <p><b>One scanner, two readers, and that is the point.</b> {@code services/upgrade/PluginUpgradeService}
+ * asks it what the bot calls so the report can say what breaks; {@link ApiMigrationRunner} asks it the same
+ * question so the rewrite knows what to change. Two scans would eventually disagree, and the shape of that
+ * disagreement is the worst one available: a dialog that lists three call sites and a button that rewrites
+ * two of them.
+ *
+ * <p><b>It was {@code SdkReferences} until 2026-09-15</b>, and the name was the only SDK-shaped thing about
+ * it: the type set arrives as a parameter, so this has always scanned whatever jar it was pointed at.
  *
  * <p>So a {@link Reference} carries a {@link CallSite} — file, parse and <em>node</em> — rather than a line
  * number. The report throws the node away and keeps the line; the runner keeps the node. Neither re-derives
@@ -37,23 +42,23 @@ import java.util.Set;
  * <h2>No bindings, so five shapes and one refusal</h2>
  *
  * <p>Judged from source alone, for the reason {@link MethodReferences} is: a project mid-edit is on no
- * classpath Studio owns. A reference is attributed to the SDK when the source itself names the type —
+ * classpath Studio owns. A reference is attributed to the plugin when the source itself names the type —
  * {@code Mouse.click(…)}, {@code new ImageTemplate(…)}, {@code Key.ENTER} — which is how every generated block
  * writes them. A call through a variable is not attributed, and so is neither reported nor rewritten.
  *
  * <p>A member is not the only thing a file can lose. {@link #typeUses} answers the other half — every place
- * the source writes an SDK <em>type</em> without calling it — because a removed type has no value to stand in
+ * the source writes such a <em>type</em> without calling it — because a removed type has no value to stand in
  * for and so is the one break that refuses an upgrade; a scan that only saw calls reported none of it.
  *
  * <p>Two shapes name no type at all and are resolved from elsewhere in the file: a bare name reaching an
  * {@code import static …Key.ENTER}, and a {@code case} label, whose enum type lives on the switch expression.
- * The label is the one that can be genuinely ambiguous — {@code case UP ->} where two SDK enums declare
+ * The label is the one that can be genuinely ambiguous — {@code case UP ->} where two of the plugin's enums declare
  * {@code UP} — and that is a {@link Scan#problems() problem}, never a guess: naming the wrong enum reports a
  * break in a class the bot never touched, and would rewrite it there too.
  */
-public final class SdkReferences {
+public final class ApiReferences {
 
-    private SdkReferences() {}
+    private ApiReferences() {}
 
     /** {@link Reference#argCount()} for a field read: not "zero arguments", but "no argument list at all". */
     public static final int FIELD_READ = -1;
@@ -101,16 +106,16 @@ public final class SdkReferences {
     public record Scan(List<Reference> references, List<String> problems) {}
 
     /**
-     * Scans {@code unit} for references to any of {@code sdkTypes}.
+     * Scans {@code unit} for references to any of {@code apiTypes}.
      *
      * @param pathLabel how a problem line should name this file — the report wants a project-relative path,
      *                  the runner the class name
-     * @param sdkTypes    every SDK class simple name worth recognising
+     * @param apiTypes    every class simple name of the library being read that is worth recognising
      * @param fieldOwners constant name → the SDK types declaring it, which is the only way an unqualified
      *                    {@code case} label can be attributed at all
      */
     public static Scan in(ProjectFile file, CompilationUnit unit, String pathLabel,
-                          Set<String> sdkTypes, Map<String, List<String>> fieldOwners) {
+                          Set<String> apiTypes, Map<String, List<String>> fieldOwners) {
         List<Reference> references = new ArrayList<>();
         List<String> problems = new ArrayList<>();
 
@@ -123,7 +128,7 @@ public final class SdkReferences {
             @Override
             public boolean visit(MethodInvocation node) {
                 if (node.getExpression() instanceof SimpleName receiver
-                        && sdkTypes.contains(receiver.getIdentifier())) {
+                        && apiTypes.contains(receiver.getIdentifier())) {
                     references.add(new Reference(receiver.getIdentifier(), node.getName().getIdentifier(),
                             node.arguments().size(), new CallSite(file, unit, node)));
                 }
@@ -133,7 +138,7 @@ public final class SdkReferences {
             @Override
             public boolean visit(ClassInstanceCreation node) {
                 String type = simpleTypeName(node.getType());
-                if (type != null && sdkTypes.contains(type)) {
+                if (type != null && apiTypes.contains(type)) {
                     references.add(new Reference(type, CTOR, node.arguments().size(),
                             new CallSite(file, unit, node)));
                 }
@@ -145,7 +150,7 @@ public final class SdkReferences {
             public boolean visit(QualifiedName node) {
                 if (withinImport(node)) return true;
                 if (node.getQualifier() instanceof SimpleName owner
-                        && sdkTypes.contains(owner.getIdentifier())) {
+                        && apiTypes.contains(owner.getIdentifier())) {
                     references.add(new Reference(owner.getIdentifier(), node.getName().getIdentifier(),
                             FIELD_READ, new CallSite(file, unit, node)));
                 }
@@ -223,16 +228,16 @@ public final class SdkReferences {
     }
 
     /**
-     * Every SDK type this file writes without calling it — see {@link TypeUse}.
+     * Every one of those types this file writes without calling it — see {@link TypeUse}.
      *
      * <p>A {@code new ImageTemplate(…)} is left out although its class name is a {@link SimpleType}: the same
      * line is already a constructor {@link Reference}, and a break that listed it twice would be telling the
      * user about one place in their source as if it were two.
      */
-    public static List<TypeUse> typeUses(ProjectFile file, CompilationUnit unit, Set<String> sdkTypes) {
+    public static List<TypeUse> typeUses(ProjectFile file, CompilationUnit unit, Set<String> apiTypes) {
         List<TypeUse> out = new ArrayList<>();
         typeNames(unit).forEach((name, nodes) -> {
-            if (!sdkTypes.contains(name)) return;
+            if (!apiTypes.contains(name)) return;
             for (SimpleName node : nodes) {
                 if (node.getLocationInParent() != SimpleType.NAME_PROPERTY) continue;
                 if (node.getParent().getLocationInParent() == ClassInstanceCreation.TYPE_PROPERTY) continue;

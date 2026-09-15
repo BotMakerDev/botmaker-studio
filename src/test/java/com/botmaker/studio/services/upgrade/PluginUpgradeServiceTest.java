@@ -1,10 +1,10 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.config.CacheDirs;
-import com.botmaker.studio.services.SdkUpgradeService.Break;
-import com.botmaker.studio.services.SdkUpgradeService.BreakKind;
-import com.botmaker.studio.services.SdkUpgradeService.Deprecation;
-import com.botmaker.studio.services.SdkUpgradeService.Report;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.BreakKind;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Deprecation;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * proving the diff works. The machinery that builds them is {@link SdkFixtures}, shared with
  * {@link SplitPointerTest}; what stays here is the fixture SDK <em>content</em> these cases diff.
  */
-class SdkUpgradeServiceTest {
+class PluginUpgradeServiceTest {
 
     private static final String PKG = SdkFixtures.PKG;
 
@@ -140,12 +140,12 @@ class SdkUpgradeServiceTest {
             }
             """;
 
-    private static SdkUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
+    private static PluginUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
         return SdkFixtures.serviceOver(tmp, sources);
     }
 
     private static Report reportFor(Path tmp, String... sources) throws IOException {
-        SdkUpgradeService service = serviceOver(tmp, sources);
+        PluginUpgradeService service = serviceOver(tmp, sources);
         Path oldJar = jarOf(tmp, "old", oldSdk(), Map.of());
         Path newJar = jarOf(tmp, "new", newSdk(), Map.of());
         return service.compare(oldJar, newJar, "1.0.0", "2.0.0");
@@ -209,7 +209,7 @@ class SdkUpgradeServiceTest {
         // Point survives here, so the proof is the other direction: drop it from the target and the
         // `new Point(1, 2)` in the bot must be found. A constructor scanning as zero call sites is the
         // failure mode MethodReferences was written to close, and it is just as wrong here.
-        SdkUpgradeService service = serviceOver(tmp, BOT);
+        PluginUpgradeService service = serviceOver(tmp, BOT);
         Map<String, String> without = new java.util.HashMap<>(newSdk());
         without.remove("Point");
         Report r = service.compare(jarOf(tmp, "old", oldSdk(), Map.of()),
@@ -255,7 +255,7 @@ class SdkUpgradeServiceTest {
         assertFalse(r.canMigrate(), "there is no value to stand in for a type in a declaration");
         // The declaration, the parameter, the type argument, and the cast — which writes the name twice on
         // one line and is one place to look, since the sites are deduplicated.
-        assertEquals(List.of(4, 5, 6, 8), gone.sites().stream().map(SdkUpgradeService.CallSite::line).toList(),
+        assertEquals(List.of(4, 5, 6, 8), gone.sites().stream().map(PluginUpgradeService.CallSite::line).toList(),
                 gone.sites().toString());
     }
 
@@ -279,7 +279,7 @@ class SdkUpgradeServiceTest {
         assertEquals(BreakKind.TYPE_RENAMED, renamed.kind(), r.breaks() + " " + r.problems());
         assertTrue(r.canMigrate(), "the rename is file-wide and always covered these places: " + r.problems());
         assertEquals(List.of(4, 5, 6, 8),
-                renamed.sites().stream().map(SdkUpgradeService.CallSite::line).toList(),
+                renamed.sites().stream().map(PluginUpgradeService.CallSite::line).toList(),
                 "the report has to name every one, since the rewrite touches every one: " + renamed.sites());
     }
 
@@ -356,7 +356,7 @@ class SdkUpgradeServiceTest {
             """;
 
     private static Report constantsReport(Path tmp, Map<String, String> after) throws IOException {
-        SdkUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
+        PluginUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
         return service.compare(jarOf(tmp, "old", oldConstants(), Map.of()),
                 jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0");
     }
@@ -403,7 +403,7 @@ class SdkUpgradeServiceTest {
         // type is unreadable, and naming the wrong class is worse than admitting it.
         Map<String, String> before = new java.util.HashMap<>(oldConstants());
         before.put("Axis", "package %s; public enum Axis { UP, SIDEWAYS }".formatted(PKG));
-        SdkUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
+        PluginUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
         Report r = service.compare(jarOf(tmp, "old", before, Map.of()),
                 jarOf(tmp, "new", newConstants(), Map.of()), "1.0.0", "2.0.0");
 
@@ -417,7 +417,7 @@ class SdkUpgradeServiceTest {
     void aBotUsingOnlyConstantsNoLongerReportsThatNothingBreaks(@TempDir Path tmp) throws IOException {
         // The regression this phase exists for: before fields were scanned, a release deleting every
         // constant this bot reads answered "nothing breaks".
-        SdkUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
+        PluginUpgradeService service = serviceOver(tmp, CONSTANTS_BOT);
         Report r = service.compare(jarOf(tmp, "old", oldConstants(), Map.of()),
                 jarOf(tmp, "new", newConstants(), Map.of()), "1.0.0", "2.0.0");
 
@@ -460,7 +460,7 @@ class SdkUpgradeServiceTest {
 
     @Test
     void anUnchangedSdkBreaksNothingAndSaysSoCleanly(@TempDir Path tmp) throws IOException {
-        SdkUpgradeService service = serviceOver(tmp, BOT);
+        PluginUpgradeService service = serviceOver(tmp, BOT);
         Report r = service.compare(jarOf(tmp, "old", oldSdk(), Map.of()),
                 jarOf(tmp, "same", oldSdk(), Map.of()), "1.0.0", "1.0.1");
 
@@ -1041,10 +1041,10 @@ class SdkUpgradeServiceTest {
      * <p>It listed the members Studio's own <em>generated</em> files wrote, so that an upgrade those files
      * blocked said so before the user committed to it. The flag came from {@code @Scaffolding}, which was
      * deleted from the SDK on 2026-08-25 along with every generator Studio had — and
-     * {@code SdkApiModel.apiClassOf} has passed the literal {@code false} for both the class and the member
+     * {@code ApiModel.apiClassOf} has passed the literal {@code false} for both the class and the member
      * ever since, so nothing can set it.
      *
-     * <p>The plumbing is still wired end to end — the record component, {@code SdkUpgradeDiff.scaffolding},
+     * <p>The plumbing is still wired end to end — the record component, {@code UpgradeDiff.scaffolding},
      * and a warning block in {@code SdkUpgradeDialog} that cannot render. It is left standing rather than
      * demolished here, because that is a decision of its own and this pass is about the pointer vocabulary;
      * what must not stand is a test that passes only if a deleted annotation comes back.
@@ -1088,11 +1088,11 @@ class SdkUpgradeServiceTest {
     void theReportCarriesTheReleasesTheBotIsMovingThrough(@TempDir Path tmp) throws IOException {
         Report r = serviceOver(tmp, BOT).compare(
                 jarOf(tmp, "old", oldSdk(), Map.of()),
-                jarOf(tmp, "new", newSdk(), Map.of(SdkWhatsNew.ENTRY, CHANGELOG)),
+                jarOf(tmp, "new", newSdk(), Map.of(WhatsNew.ENTRY, CHANGELOG)),
                 "1.0.0", "2.0.0");
 
         assertEquals(List.of("2.0.0", "1.5.0"),
-                r.highlights().stream().map(SdkUpgradeService.Highlight::version).toList(),
+                r.highlights().stream().map(PluginUpgradeService.Highlight::version).toList(),
                 "the span is (from, to], newest first: " + r.highlights());
         assertEquals("2026-08-24", r.highlights().get(0).date());
         // The emphasis markers go because a Label renders them literally; the bullet, the wording and the
@@ -1110,7 +1110,7 @@ class SdkUpgradeServiceTest {
 
     @Test
     void modernisingIsMovingToNothingAndSaysNothing(@TempDir Path tmp) throws IOException {
-        Path jar = jarOf(tmp, "same", newSdk(), Map.of(SdkWhatsNew.ENTRY, CHANGELOG));
+        Path jar = jarOf(tmp, "same", newSdk(), Map.of(WhatsNew.ENTRY, CHANGELOG));
         Report r = serviceOver(tmp, BOT).compare(jar, jar, "2.0.0", "2.0.0", true);
 
         assertTrue(r.highlights().isEmpty(),
@@ -1120,18 +1120,18 @@ class SdkUpgradeServiceTest {
     @Test
     void theReleaseTheBotIsAlreadyOnIsNotNews() {
         assertEquals(List.of("2.0.0"),
-                SdkWhatsNew.parse(CHANGELOG, "1.5.0", "2.0.0").stream()
-                        .map(SdkUpgradeService.Highlight::version).toList());
+                WhatsNew.parse(CHANGELOG, "1.5.0", "2.0.0").stream()
+                        .map(PluginUpgradeService.Highlight::version).toList());
     }
 
     @Test
     void anUnreleasedSectionIsNeverInRange() {
         // It has no version, so it cannot be in a span — which is the whole of the special case it needs.
-        assertTrue(SdkWhatsNew.parse(CHANGELOG, "0.0.1", "9.9.9").stream()
+        assertTrue(WhatsNew.parse(CHANGELOG, "0.0.1", "9.9.9").stream()
                 .noneMatch(h -> h.version().contains("Unrelease")));
         assertEquals(List.of("2.0.0", "1.5.0", "1.0.0"),
-                SdkWhatsNew.parse(CHANGELOG, "0.0.1", "9.9.9").stream()
-                        .map(SdkUpgradeService.Highlight::version).toList());
+                WhatsNew.parse(CHANGELOG, "0.0.1", "9.9.9").stream()
+                        .map(PluginUpgradeService.Highlight::version).toList());
     }
 
     @Test
@@ -1139,8 +1139,8 @@ class SdkUpgradeServiceTest {
         // A project pinned to a local 0.0.0-SNAPSHOT build is the case that actually happens. Showing every
         // section up to the target is a readable failure; showing none looks like a release that did nothing.
         assertEquals(List.of("2.0.0", "1.5.0", "1.0.0"),
-                SdkWhatsNew.parse(CHANGELOG, "0.0.0-SNAPSHOT", "2.0.0").stream()
-                        .map(SdkUpgradeService.Highlight::version).toList());
+                WhatsNew.parse(CHANGELOG, "0.0.0-SNAPSHOT", "2.0.0").stream()
+                        .map(PluginUpgradeService.Highlight::version).toList());
     }
 
     @Test
@@ -1155,7 +1155,7 @@ class SdkUpgradeServiceTest {
                 - newer, written second.
                 """;
         assertEquals(List.of("2.0.0", "1.5.0"),
-                SdkWhatsNew.parse(jumbled, "1.0.0", "2.0.0").stream()
-                        .map(SdkUpgradeService.Highlight::version).toList());
+                WhatsNew.parse(jumbled, "1.0.0", "2.0.0").stream()
+                        .map(PluginUpgradeService.Highlight::version).toList());
     }
 }

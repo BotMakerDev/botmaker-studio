@@ -1,7 +1,7 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.services.SdkApiModel.ApiClass;
-import com.botmaker.studio.services.SdkApiModel.Pointer;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiClass;
+import com.botmaker.studio.services.upgrade.ApiModel.Pointer;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.botmaker.studio.services.SdkApiModel.lastSegment;
-import static com.botmaker.studio.services.SdkApiModel.memberPart;
-import static com.botmaker.studio.services.SdkApiModel.typePart;
+import static com.botmaker.studio.services.upgrade.ApiModel.lastSegment;
+import static com.botmaker.studio.services.upgrade.ApiModel.memberPart;
+import static com.botmaker.studio.services.upgrade.ApiModel.typePart;
 
 /**
  * Which type in the target jar takes each old type's place, and what each member is now called.
@@ -45,10 +45,10 @@ import static com.botmaker.studio.services.SdkApiModel.typePart;
  * <p><b>Members are paired independently of types</b>, and a member pointer may cross types. Two readers
  * ask for different halves of that, deliberately: {@link #memberName} answers "what is this called on the
  * type this one paired with", so nothing but the type pairing decides which type a site writes, while
- * {@link #targetOf} hands back the endpoint whole — for {@link SdkRedirects}, which is about to move the
+ * {@link #targetOf} hands back the endpoint whole — for {@link Redirects}, which is about to move the
  * receiver as well and is the only caller entitled to see a member that left.
  */
-record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>> members) {
+record Pairing(Map<String, String> types, Map<String, List<Pairing.Member>> members) {
 
     /**
      * Where a member pointer ended up: the simple name of the owning type, the member's own name, and
@@ -59,8 +59,8 @@ record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>
     /** One edge, and the {@code whens()} sentence the author wrote beside it, blank when there is none. */
     private record Target(String spelling, String when) {}
 
-    static SdkPairing of(Map<String, ApiClass> before, Map<String, ApiClass> after,
-                         boolean throughDeprecations) {
+    static Pairing of(Map<String, ApiClass> before, Map<String, ApiClass> after,
+                      boolean throughDeprecations) {
         Map<String, List<Target>> edges = forwardEdges(before);
         // Modernising walks one hop further than an upgrade does, so it needs the pointers the *target*
         // jar's own deprecated elements carry. They are the same shape of edge; only the stopping rule
@@ -96,7 +96,7 @@ record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>
                 if (!ends.isEmpty()) members.put(then.simpleName() + "#" + member, List.copyOf(ends));
             }
         }
-        return new SdkPairing(Map.copyOf(types), Map.copyOf(members));
+        return new Pairing(Map.copyOf(types), Map.copyOf(members));
     }
 
     /**
@@ -128,7 +128,7 @@ record SdkPairing(Map<String, String> types, Map<String, List<SdkPairing.Member>
      * A pointer's candidates paired with the sentence declared beside each, in the author's own order.
      * Empty for no annotation and for one that named nowhere — the two are the same edge, namely none.
      *
-     * <p>The two arrays are index-aligned by the SDK's gate ({@code whens()} is empty or exactly
+     * <p>The two arrays are index-aligned by the declaring plugin's own pointer gate ({@code whens()} is empty or exactly
      * {@code value()}'s length, and a blank target may not be mixed with non-blank ones), so a missing
      * sentence is read as "this candidate has none" rather than as a misalignment to repair.
      */

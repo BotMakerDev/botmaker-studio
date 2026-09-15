@@ -1,12 +1,12 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.studio.parser.helpers.SourceParser;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner.Redirect;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner.Redirect;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner.Outcome;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner.Removal;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner.Repairs;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner.TypeRename;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner.Outcome;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner.Removal;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner.Repairs;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner.TypeRename;
 import com.botmaker.studio.project.ProjectFile;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The applier: what an SDK upgrade actually does to a bot's source.
+ * The applier: what a plugin upgrade actually does to a bot's source.
  *
  * <p>The model under test is "make it compile, then have the user review it". A renamed type is renamed
  * file-wide; a member that is simply gone becomes a default value where its result was used, and a deleted
@@ -36,11 +36,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>The refusals get as much room as the successes, deliberately. A migration that half-lands is worse than
  * one that never starts, so "this returned a reason and wrote nothing" is a result worth pinning down.
  */
-class SdkMigrationRunnerTest {
+class ApiMigrationRunnerTest {
 
     private static final String PKG = "com.botmaker.sdk.api";
 
-    private static final Set<String> SDK_TYPES =
+    private static final Set<String> API_TYPES =
             Set.of("Mouse", "Key", "Tolerance", "Precision", "Vision", "Direction");
 
     private static final Map<String, List<String>> FIELD_OWNERS = Map.of(
@@ -62,13 +62,13 @@ class SdkMigrationRunnerTest {
      * it out of the default harness is what lets these assertions be about the code the bot ends up with.
      */
     private static Outcome run(Repairs repairs, ProjectFile... editable) {
-        return SdkMigrationRunner.run(repairs, List.of(editable), List.of(), SDK_TYPES, FIELD_OWNERS,
+        return ApiMigrationRunner.run(repairs, List.of(editable), List.of(), API_TYPES, FIELD_OWNERS,
                 null, null, null);
     }
 
     /** The same run with marking on, as the upgrade really calls it. */
     private static Outcome marked(Repairs repairs, ProjectFile... editable) {
-        return SdkMigrationRunner.run(repairs, List.of(editable), List.of(), SDK_TYPES, FIELD_OWNERS,
+        return ApiMigrationRunner.run(repairs, List.of(editable), List.of(), API_TYPES, FIELD_OWNERS,
                 "com.mybot", null, null);
     }
 
@@ -146,7 +146,7 @@ class SdkMigrationRunnerTest {
                 }
                 """);
         String source = rewritten(run(removals(
-                new Removal("Key", "ENTER", SdkReferences.FIELD_READ, "Key")), bot), bot);
+                new Removal("Key", "ENTER", ApiReferences.FIELD_READ, "Key")), bot), bot);
         assertTrue(source.contains("Object held = null;"), source);
     }
 
@@ -379,7 +379,7 @@ class SdkMigrationRunnerTest {
                     Object held = ENTER;
                 }
                 """.formatted(PKG));
-        Outcome outcome = run(redirects(new Redirect("Key", "ENTER", SdkReferences.FIELD_READ,
+        Outcome outcome = run(redirects(new Redirect("Key", "ENTER", ApiReferences.FIELD_READ,
                 PKG + ".Direction", "ENTER", List.of(), "Key", "Direction", true)), bot);
 
         assertTrue(outcome.isRefusal(), "there is no receiver written here to point elsewhere");
@@ -394,7 +394,7 @@ class SdkMigrationRunnerTest {
                     Object held = Key.ENTER;
                 }
                 """);
-        String source = rewritten(run(redirects(new Redirect("Key", "ENTER", SdkReferences.FIELD_READ,
+        String source = rewritten(run(redirects(new Redirect("Key", "ENTER", ApiReferences.FIELD_READ,
                 PKG + ".Direction", "UP", List.of(), "Key", "Key", true)), bot), bot);
 
         assertTrue(source.contains("Direction.UP"), source);
@@ -450,8 +450,8 @@ class SdkMigrationRunnerTest {
                 }
                 """);
         Map<String, List<String>> ambiguous = Map.of("UP", List.of("Direction", "Heading"));
-        Outcome outcome = SdkMigrationRunner.run(removals(new Removal("Direction", "UP", -1, "Direction")),
-                List.of(bot), List.of(), SDK_TYPES, ambiguous, null, null, null);
+        Outcome outcome = ApiMigrationRunner.run(removals(new Removal("Direction", "UP", -1, "Direction")),
+                List.of(bot), List.of(), API_TYPES, ambiguous, null, null, null);
         assertTrue(outcome.isRefusal(), "which enum the label names cannot be told from the source");
         assertTrue(outcome.files().isEmpty());
     }
@@ -471,8 +471,8 @@ class SdkMigrationRunnerTest {
         ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { void run() { Mouse.click(1, 2); } }\n");
         ProjectFile driver = file("FlowDriver",
                 "package com.mybot;\nclass FlowDriver { void run() { Mouse.click(0, 0); } }\n");
-        Outcome outcome = SdkMigrationRunner.run(removals(new Removal("Mouse", "click", 2, "void")),
-                List.of(bot), List.of(driver), SDK_TYPES, FIELD_OWNERS, null, null, null);
+        Outcome outcome = ApiMigrationRunner.run(removals(new Removal("Mouse", "click", 2, "void")),
+                List.of(bot), List.of(driver), API_TYPES, FIELD_OWNERS, null, null, null);
         assertTrue(outcome.isRefusal(), "scaffolding is Studio's to write, not an upgrade's");
         assertTrue(outcome.refusal().contains("FlowDriver"), outcome.refusal());
         assertTrue(outcome.files().isEmpty());
@@ -483,9 +483,9 @@ class SdkMigrationRunnerTest {
         ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { Object t = Tolerance.TIGHT; }\n");
         ProjectFile templates = file("Templates",
                 "package com.mybot;\nclass Templates { Object t = Tolerance.TIGHT; }\n");
-        Outcome outcome = SdkMigrationRunner.run(
+        Outcome outcome = ApiMigrationRunner.run(
                 renames(new TypeRename(PKG + ".Tolerance", PKG + ".Precision")),
-                List.of(bot), List.of(templates), SDK_TYPES, FIELD_OWNERS, null, null, null);
+                List.of(bot), List.of(templates), API_TYPES, FIELD_OWNERS, null, null, null);
         assertTrue(outcome.isRefusal(), outcome.refusal());
         assertTrue(outcome.refusal().contains("Templates"), outcome.refusal());
     }

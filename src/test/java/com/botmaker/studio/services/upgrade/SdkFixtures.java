@@ -1,10 +1,12 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.studio.services.LibraryService;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -36,6 +38,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 final class SdkFixtures {
 
+    /**
+     * The package a bare class key lands in — one plugin's API package, and the SDK's because that is the
+     * plugin these tests were written against. It is a {@link #jarOf} <em>parameter</em> since 2026-09-15,
+     * so a test may build a second plugin's jar beside this one; this constant is what the overload that
+     * does not care passes.
+     */
     static final String PKG = "com.botmaker.sdk.api";
 
     /** Where the pointer vocabulary really lives — the plugin contract's, not any one plugin's. */
@@ -54,23 +62,33 @@ final class SdkFixtures {
     /** Compiles {@code classes} into a jar, optionally carrying {@code resources} under {@code META-INF}. */
     static Path jarOf(Path dir, String label, Map<String, String> classes,
                       Map<String, String> resources) throws IOException {
+        return jarOf(dir, PKG, label, classes, resources);
+    }
+
+    /**
+     * The same, for a jar whose bare class keys belong to {@code pkg} rather than to {@link #PKG} — which is
+     * how a test builds a <em>second</em> plugin's jar and asks what happens when two of them declare a type
+     * of the same simple name.
+     */
+    static Path jarOf(Path dir, String pkg, String label, Map<String, String> classes,
+                      Map<String, String> resources) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         assumeTrue(compiler != null, "no platform compiler on this JRE; the fixture jars cannot be built");
 
         Path root = dir.resolve("src-" + label + "-" + UNIQUE.get());
-        Path src = root.resolve(PKG.replace('.', '/'));
+        Path src = root.resolve(pkg.replace('.', '/'));
         Files.createDirectories(src);
         List<String> paths = new ArrayList<>();
         for (Map.Entry<String, String> e : classes.entrySet()) {
-            // A bare key is a class of PKG, which is every class fixture. A dotted key is a fully-qualified
+            // A bare key is a class of `pkg`, which is every class fixture. A dotted key is a fully-qualified
             // name, which is how the pointer annotations land in the contract's package rather than this
-            // plugin's — the vocabulary is every plugin's, and a fixture that put it under PKG would be
+            // plugin's — the vocabulary is every plugin's, and a fixture that put it under `pkg` would be
             // testing a jar shape no plugin produces.
             String key = e.getKey();
             int dot = key.lastIndexOf('.');
-            String pkg = dot < 0 ? PKG : key.substring(0, dot);
+            String owner = dot < 0 ? pkg : key.substring(0, dot);
             String simple = key.substring(dot + 1);
-            Path pkgDir = root.resolve(pkg.replace('.', '/'));
+            Path pkgDir = root.resolve(owner.replace('.', '/'));
             Files.createDirectories(pkgDir);
             Path file = pkgDir.resolve(simple + ".java");
             Files.writeString(file, withMetaImport(e.getValue()));
@@ -121,7 +139,7 @@ final class SdkFixtures {
     }
 
     /** A service over a throwaway project holding {@code sources} as {@code Subject.java}, {@code Subject1}… */
-    static SdkUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
+    static PluginUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
         Path project = tmp.resolve("project");
         Files.createDirectories(project.resolve("src/main/java/com/mybot"));
 
@@ -137,7 +155,8 @@ final class SdkFixtures {
         ProjectConfig config = ProjectConfig.forProject("fixture", project);
         EventBus bus = new EventBus(false);
         LibraryService libraries = new LibraryService(config, state, new TypeSummaryManager(), bus);
-        return new SdkUpgradeService(config, state, libraries, new JitPackSearch());
+        return new PluginUpgradeService(config, state, libraries, new JitPackSearch(),
+                PluginUpgradeService.SDK);
     }
 
     /**
@@ -145,7 +164,7 @@ final class SdkFixtures {
      * which is exactly what the real ones declare — and what makes them readable off a jar.
      *
      * <p><b>They are declared in {@link #META}, the plugin contract's own package, because that is the only
-     * spelling {@code SdkApiModel} reads.</b> They were declared under {@code com.botmaker.sdk.api} until
+     * spelling {@code ApiModel} reads.</b> They were declared under {@code com.botmaker.sdk.api} until
      * 2026-09-15, which was where a pre-1.1.0 SDK jar kept them — and the reader stopped accepting that
      * spelling on 2026-09-02, when the four historical package names were dropped. Nothing failed loudly:
      * the fixture went on compiling, the jars went on carrying annotations, and every pointer test simply

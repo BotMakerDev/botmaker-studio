@@ -19,19 +19,23 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Makes the bot compile against the new SDK — the half of the upgrade that writes.
+ * Makes the bot compile against the new jar — the half of a plugin upgrade that writes.
  *
- * <p>{@code services/SdkUpgradeService} diffs the two jars, pairs the types, and hands over three lists of
- * facts. This turns them into edits, through the same {@link CallMigrator} a signature change goes through,
- * and hands back the new source of every file — or a sentence saying why it will not.
+ * <p>{@code services/upgrade/PluginUpgradeService} diffs the two jars, pairs the types, and hands over three
+ * lists of facts. This turns them into edits, through the same {@link CallMigrator} a signature change goes
+ * through, and hands back the new source of every file — or a sentence saying why it will not.
+ *
+ * <p><b>It was {@code SdkMigrationRunner} until 2026-09-15</b>, and nothing about it was ever SDK-shaped:
+ * every fact it acts on arrives as a parameter, which is precisely what made the driver the only thing that
+ * had to be generalised.
  *
  * <h2>Redirect where it is checked, default where it is not</h2>
  *
  * <p>A member the target still offers somewhere — under a new name, on another type, through a different
  * argument list — is {@linkplain Redirect redirected} to it. Nothing here decides that: the redirect is
- * declared by the SDK at both ends ({@code @ReplacedBy} / {@code @Replaces}) and <em>checked</em> against the
- * target jar by {@code services/SdkUpgradeService} before it arrives, which is what separates it from the
- * guess this used to refuse. Two positions, two answers:
+ * declared by the plugin's author on the deprecated element ({@code @ReplacedBy}) and <em>checked</em>
+ * against the target jar by {@code services/upgrade/PluginUpgradeService} before it arrives, which is what
+ * separates it from the guess this used to refuse. Two positions, two answers:
  *
  * <ul>
  *   <li>a call standing as a <b>statement</b> is always redirected — nothing consumes its value, so the
@@ -85,12 +89,12 @@ import java.util.Set;
  * would have touched a scaffold file, the migration is refused and says so: that upgrade needs a newer Studio,
  * not a cleverer rewrite.
  */
-public final class SdkMigrationRunner {
+public final class ApiMigrationRunner {
 
-    private SdkMigrationRunner() {}
+    private ApiMigrationRunner() {}
 
     /**
-     * A type that changed name — paired by the two-ended pointer the SDK declares, and applied file-wide.
+     * A type that changed name — paired by the forward pointer the plugin declares, and applied file-wide.
      *
      * <p>Fully-qualified on both sides, so a package move is the same edit as a rename and the imports move
      * with it.
@@ -116,7 +120,7 @@ public final class SdkMigrationRunner {
      * position the value is discarded, so the target's return type cannot matter and the call is always
      * redirected — that is the case that is <em>deleted</em> under a pure default repair, losing work the bot
      * did. In <b>expression</b> position something consumes the value, so the redirect is taken only when
-     * {@code SdkUpgradeService} has checked against the target jar that what comes back still fits where the
+     * {@code PluginUpgradeService} has checked against the target jar that what comes back still fits where the
      * old value sat; otherwise the site falls back to a literal default of {@code returnType}, exactly as a
      * {@link Removal} does.
      *
@@ -170,7 +174,7 @@ public final class SdkMigrationRunner {
             return shapeChanged() || behaviourChanged;
         }
 
-        boolean matches(SdkReferences.Reference reference) {
+        boolean matches(ApiReferences.Reference reference) {
             return reference.type().equals(type)
                     && reference.member().equals(member)
                     && reference.argCount() == argCount;
@@ -179,7 +183,7 @@ public final class SdkMigrationRunner {
         /** How the user reads where it went: {@code IClicker.tap}, or {@code new Point} for a constructor. */
         public String display() {
             String owner = toTypeFqn == null ? type : simpleNameOf(toTypeFqn);
-            return SdkReferences.CTOR.equals(toMember) ? "new " + owner : owner + "." + toMember;
+            return ApiReferences.CTOR.equals(toMember) ? "new " + owner : owner + "." + toMember;
         }
 
         /** True when nothing about the call changes but its name and place — see the class Javadoc. */
@@ -207,7 +211,7 @@ public final class SdkMigrationRunner {
      * A member the target no longer offers in the shape this bot uses it — so, at every such call site, a
      * default value or a deleted statement.
      *
-     * <p>{@code argCount} is {@link SdkReferences#FIELD_READ} for a constant and the exact argument count
+     * <p>{@code argCount} is {@link ApiReferences#FIELD_READ} for a constant and the exact argument count
      * otherwise: overloads are matched by arity, so removing {@code click(int)} must not touch {@code click()}.
      * {@code returnType} is the <b>old</b> jar's answer, because that is the type the code around the call
      * site was written for. {@code returnTypeFqn} is the same type spelled fully in the <b>target</b> jar, or
@@ -221,7 +225,7 @@ public final class SdkMigrationRunner {
             this(type, member, argCount, returnType, null);
         }
 
-        boolean matches(SdkReferences.Reference reference) {
+        boolean matches(ApiReferences.Reference reference) {
             return reference.type().equals(type)
                     && reference.member().equals(member)
                     && reference.argCount() == argCount;
@@ -273,7 +277,7 @@ public final class SdkMigrationRunner {
         }
 
         /** The redirect chosen at this reference, or null when the user was never asked about it. */
-        Redirect at(ProjectFile file, SdkReferences.Reference reference) {
+        Redirect at(ProjectFile file, ApiReferences.Reference reference) {
             return bySite.get(new SiteKey(file.getPath().toString(),
                     reference.site().node().getStartPosition()));
         }
@@ -300,24 +304,24 @@ public final class SdkMigrationRunner {
      *
      * @param editable    the files that may be rewritten ({@code FileRole.EDITABLE})
      * @param generated   the files that may not, scanned only so a repair that would have touched one is caught
-     * @param sdkTypes    every SDK class simple name, for {@link SdkReferences}
-     * @param fieldOwners constant name → declaring SDK types, likewise
+     * @param apiTypes    every class simple name of the library being migrated, for {@link ApiReferences}
+     * @param fieldOwners constant name → the types of that library declaring it, likewise
      * @param markerPackage the bot's own package, holding the generated {@code NeedsReview} — null to skip
      *                      marking altogether, which only a test that is asserting about the code wants
      */
     public static Outcome run(Repairs repairs, List<ProjectFile> editable, List<ProjectFile> generated,
-                              Set<String> sdkTypes, Map<String, List<String>> fieldOwners,
+                              Set<String> apiTypes, Map<String, List<String>> fieldOwners,
                               String markerPackage, ProjectAnalyzer analyzer, ProjectState state) {
-        return run(repairs, Choices.NONE, editable, generated, sdkTypes, fieldOwners, markerPackage,
+        return run(repairs, Choices.NONE, editable, generated, apiTypes, fieldOwners, markerPackage,
                 analyzer, state);
     }
 
     /** As above, with the per-site decisions a split asked the user for. See {@link Choices}. */
     public static Outcome run(Repairs repairs, Choices choices, List<ProjectFile> editable,
-                              List<ProjectFile> generated, Set<String> sdkTypes,
+                              List<ProjectFile> generated, Set<String> apiTypes,
                               Map<String, List<String>> fieldOwners, String markerPackage,
                               ProjectAnalyzer analyzer, ProjectState state) {
-        String blocked = scaffoldingInTheWay(generated, repairs, sdkTypes, fieldOwners);
+        String blocked = scaffoldingInTheWay(generated, repairs, apiTypes, fieldOwners);
         if (blocked != null) return Outcome.refused(blocked);
 
         List<CallMigrator.Rewritten> changed = new ArrayList<>();
@@ -325,7 +329,7 @@ public final class SdkMigrationRunner {
             String original = file.getContent();
             if (original == null) continue;
 
-            Applied members = rewriteMembers(file, original, repairs, choices, sdkTypes, fieldOwners,
+            Applied members = rewriteMembers(file, original, repairs, choices, apiTypes, fieldOwners,
                     markerPackage, analyzer, state);
             if (members.refusal() != null) return Outcome.refused(members.refusal());
             String afterMembers = members.text() == null ? original : members.text();
@@ -358,21 +362,21 @@ public final class SdkMigrationRunner {
      * statement — for what did not.
      */
     private static Applied rewriteMembers(ProjectFile file, String text, Repairs repairs, Choices choices,
-                                          Set<String> sdkTypes, Map<String, List<String>> fieldOwners,
+                                          Set<String> apiTypes, Map<String, List<String>> fieldOwners,
                                           String markerPackage, ProjectAnalyzer analyzer, ProjectState state) {
         CompilationUnit unit = SourceParser.parse(text);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) {
             return Applied.refused("\"" + file.getClassName() + "\" does not parse, so it could not be "
                     + "migrated. Fix that file first — nothing has been changed.");
         }
-        SdkReferences.Scan scan = SdkReferences.in(file, unit, file.getClassName(), sdkTypes, fieldOwners);
+        ApiReferences.Scan scan = ApiReferences.in(file, unit, file.getClassName(), apiTypes, fieldOwners);
         if (!scan.problems().isEmpty()) return Applied.refused(scan.problems().getFirst());
 
         List<CallChange> changes = new ArrayList<>();
         // Insertion-ordered per function, and a set: two identical calls in one function are one thing to look
         // at, and the review list should say so once.
         Map<MethodDeclaration, Set<String>> marks = new LinkedHashMap<>();
-        for (SdkReferences.Reference reference : scan.references()) {
+        for (ApiReferences.Reference reference : scan.references()) {
             Removal removal = repairs.removals().stream().filter(r -> r.matches(reference))
                     .findFirst().orElse(null);
             if (removal != null) {
@@ -382,7 +386,7 @@ public final class SdkMigrationRunner {
                     changes.add(new CallChange.CallDeleted(reference.site()));
                     note(marks, reference, removal.type(), removal.member(), "the call was removed");
                 } else if (removal.isVoid()) {
-                    return Applied.refused("SDK removed " + removal.type() + "." + removal.member()
+                    return Applied.refused("The upgrade removed " + removal.type() + "." + removal.member()
                             + ", which \"" + file.getClassName() + "\" uses somewhere that is not a line of "
                             + "its own — most often the body of a one-line lambda. There is nothing to put "
                             + "in its place, so nothing has been changed.");
@@ -448,7 +452,7 @@ public final class SdkMigrationRunner {
      * <p>A reference outside any function — a field initializer at class level — is silently unmarked rather
      * than refused. It is still repaired; there is simply nowhere to hang a {@code @Target(METHOD)} annotation.
      */
-    private static void note(Map<MethodDeclaration, Set<String>> marks, SdkReferences.Reference reference,
+    private static void note(Map<MethodDeclaration, Set<String>> marks, ApiReferences.Reference reference,
                              String type, String member, String what) {
         MethodDeclaration method = ReviewMarks.enclosingMethod(reference.site().node());
         if (method == null) return;
@@ -473,7 +477,7 @@ public final class SdkMigrationRunner {
      * say, and the note is then the whole entry.
      */
     private static void noteRedirect(Map<MethodDeclaration, Set<String>> marks,
-                                     SdkReferences.Reference reference, Redirect redirect) {
+                                     ApiReferences.Reference reference, Redirect redirect) {
         MethodDeclaration method = ReviewMarks.enclosingMethod(reference.site().node());
         if (method == null) return;
 
@@ -525,7 +529,7 @@ public final class SdkMigrationRunner {
                     + "parse, so nothing has been changed.");
         }
         List<TypeRename> here = repairs.types().stream()
-                .filter(rename -> SdkReferences.mentions(unit, rename.from()))
+                .filter(rename -> ApiReferences.mentions(unit, rename.from()))
                 .toList();
         if (here.isEmpty()) return Applied.unchanged();
 
@@ -562,7 +566,7 @@ public final class SdkMigrationRunner {
      * scaffold contract and went with it (2026-08-25).
      *
      * <p><b>The refusal is now stricter than the facts require, and that is knowingly left standing.</b>
-     * Since the generator became the <em>bot's own</em> SDK (inversion phase 2), {@code SdkUpgradeService}
+     * Since the generator became the <em>bot's own</em> SDK (inversion phase 2), {@code PluginUpgradeService}
      * does re-render all five files after the pom has moved — against the new jar — so an upgrade blocked
      * here would in fact have healed itself. Lifting the block needs the thing that was deleted: a way to ask
      * the <em>target</em> jar, before the upgrade starts, whether it can still emit what it is about to be
@@ -570,7 +574,7 @@ public final class SdkMigrationRunner {
      * waits for the per-version catalog. Until then the sentence shown is the one it has always shown.
      */
     private static String scaffoldingInTheWay(List<ProjectFile> generated, Repairs repairs,
-                                              Set<String> sdkTypes, Map<String, List<String>> fieldOwners) {
+                                              Set<String> apiTypes, Map<String, List<String>> fieldOwners) {
         for (ProjectFile file : generated) {
             String text = file.getContent();
             if (text == null) continue;
@@ -578,13 +582,13 @@ public final class SdkMigrationRunner {
             if (unit == null || SourceParser.hasSyntaxErrors(unit)) continue;
 
             for (TypeRename rename : repairs.types()) {
-                if (SdkReferences.mentions(unit, rename.from())) {
+                if (ApiReferences.mentions(unit, rename.from())) {
                     return blocked(file, rename.from(), "");
                 }
             }
-            List<SdkReferences.Reference> references =
-                    SdkReferences.in(file, unit, file.getClassName(), sdkTypes, fieldOwners).references();
-            for (SdkReferences.Reference reference : references) {
+            List<ApiReferences.Reference> references =
+                    ApiReferences.in(file, unit, file.getClassName(), apiTypes, fieldOwners).references();
+            for (ApiReferences.Reference reference : references) {
                 if (repairs.removals().stream().anyMatch(r -> r.matches(reference))
                         || repairs.redirects().stream().anyMatch(r -> r.matches(reference))) {
                     return blocked(file, reference.type(), reference.member());

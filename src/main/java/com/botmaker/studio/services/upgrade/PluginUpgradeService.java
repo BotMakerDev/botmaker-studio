@@ -1,16 +1,20 @@
-package com.botmaker.studio.services;
+package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
+import com.botmaker.studio.parser.refactor.ApiReferences;
 import com.botmaker.studio.parser.refactor.CallMigrator;
-import com.botmaker.studio.parser.refactor.SdkMigrationRunner;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
-import com.botmaker.studio.parser.refactor.SdkReferences;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.services.SdkApiModel.ApiClass;
+import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.studio.services.LibraryService;
+import com.botmaker.studio.services.MavenService;
+import com.botmaker.studio.services.upgrade.ApiModel.ApiClass;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.io.IOException;
@@ -24,30 +28,41 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-import static com.botmaker.studio.services.SdkApiModel.CTOR;
-import static com.botmaker.studio.services.SdkApiModel.declares;
-import static com.botmaker.studio.services.SdkApiModel.offers;
-import static com.botmaker.studio.services.SdkRedirects.fittingAt;
-import static com.botmaker.studio.services.SdkRedirects.redirectFor;
-import static com.botmaker.studio.services.SdkRedirects.redirectsFor;
-import static com.botmaker.studio.services.SdkRedirects.returnTypeFqn;
-import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
+import static com.botmaker.studio.services.upgrade.ApiModel.CTOR;
+import static com.botmaker.studio.services.upgrade.ApiModel.declares;
+import static com.botmaker.studio.services.upgrade.ApiModel.offers;
+import static com.botmaker.studio.services.upgrade.Redirects.fittingAt;
+import static com.botmaker.studio.services.upgrade.Redirects.redirectFor;
+import static com.botmaker.studio.services.upgrade.Redirects.redirectsFor;
+import static com.botmaker.studio.services.upgrade.Redirects.returnTypeFqn;
+import static com.botmaker.studio.services.upgrade.Redirects.returnTypeOf;
 
 /**
- * What changing this bot's SDK version would actually do to <em>this bot</em>.
+ * What changing one installed plugin's version would actually do to <em>this bot</em>.
  *
- * <p>Until now, changing the SDK version rewrote one line of the pom and nothing else — no warning, no list
+ * <p>Until now, changing the version rewrote one line of the pom and nothing else — no warning, no list
  * of what breaks, no way back. That is a fine operation for a library nobody depends on and a terrible one
  * for a bot whose source is the model: {@code parser/BlockConverter} parses blocks <em>out of</em> Java on
- * every open, so a renamed SDK method does not become a red block, it becomes a file that no longer parses
+ * every open, so a renamed method does not become a red block, it becomes a file that no longer parses
  * into the shape the editor expects. The user finds out by opening their project.
  *
  * <p>This service answers the question first. It resolves the <b>target</b> version's jar (which need never
  * have been on this machine — the project pom's JitPack repository is used), ClassGraph-scans it beside the
  * one the project currently pins, and intersects the difference with the call sites in the project's own
  * source. The result is a {@link Report}: what is new, what the bot calls that is now deprecated, what the
- * bot calls that is <em>gone</em> (with file and line), and what the SDK itself says cannot be migrated
+ * bot calls that is <em>gone</em> (with file and line), and what the plugin itself says cannot be migrated
  * automatically.
+ *
+ * <h2>One coordinate, handed in</h2>
+ *
+ * <p><b>It was {@code SdkUpgradeService} until 2026-09-15, and the SDK was not a parameter but a
+ * constant.</b> Nothing under this package ever read an SDK-shaped fact: the pointer vocabulary is the
+ * contract's {@code com.botmaker.plugin.api.meta}, which every plugin may write, and the jar scan, the
+ * pairing walk and the rewrite are about bytecode and Java source. What was SDK-shaped was the
+ * <em>driver</em> — four constants and a resolver. So the coordinate is now a constructor argument,
+ * {@link #artifact}, and plugin #1 goes through the path every other plugin goes through. The SDK-named
+ * entry points on {@code MavenService} survive as delegations for the palette-side readers, which ask a
+ * different question and stay SDK-shaped for now.
  *
  * <h2>Where the work lives</h2>
  *
@@ -57,16 +72,17 @@ import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
  * ever names:
  *
  * <ul>
- *   <li>{@link SdkApiModel} — the two jars reduced to what the questions need, and the pointer grammar;</li>
- *   <li>{@link SdkPairing} — the edges, and the walk that follows them to something the target jar has;</li>
- *   <li>{@link SdkRedirects} — the one place a redirect is decided, and the checks it has to pass;</li>
- *   <li>{@link SdkUpgradeDiff} — the lists a report carries, and the sentences shown beside them;</li>
- *   <li>{@link SdkWhatsNew} — the one thing not derived from the bytecode: the release's own changelog.</li>
+ *   <li>{@link ApiModel} — the two jars reduced to what the questions need, and the pointer grammar;</li>
+ *   <li>{@link Pairing} — the edges, and the walk that follows them to something the target jar has;</li>
+ *   <li>{@link Redirects} — the one place a redirect is decided, and the checks it has to pass;</li>
+ *   <li>{@link UpgradeDiff} — the lists a report carries, and the sentences shown beside them;</li>
+ *   <li>{@link WhatsNew} — the one thing not derived from the bytecode: the release's own changelog.</li>
  * </ul>
  *
  * <h2>A redirect where the jars confirm it, a default where they do not</h2>
  *
  * <p>The SDK once shipped a repair per break — a {@code fix} in {@code META-INF/botmaker/migrations.json}
+ * — and that lineage is the SDK's because it is the only plugin old enough to have one.
  * naming another member to point the call at — and it was guessing, because nothing checked it: two members
  * need not share a return type, an arity or any semantics. What replaced it is not the absence of a redirect
  * but a <b>checked</b> one. Studio holds both jars, so it can ask the questions that objection was really
@@ -109,7 +125,7 @@ import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
  * degrades to defaults plus review marks rather than a silently wrong rewrite.
  *
  * <p>{@link #apply} then carries it out: snapshot → repair the source
- * ({@code parser/refactor/SdkMigrationRunner}) → bump the pom, one button and one revert away.
+ * ({@code parser/refactor/ApiMigrationRunner}) → bump the pom, one button and one revert away.
  *
  * <h2>Modernising: the same walk, one hop further, no version change</h2>
  *
@@ -138,13 +154,13 @@ import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
  * <p>A <b>removed type with no pairing</b> refuses the upgrade, naming the type and its uses. A default has
  * nowhere to go in {@code ImageTemplate t = …;} and {@code Object} would be silently wrong. Everything else
  * is repairable, which is why {@link Report#canMigrate()} is now a question about the jars rather than about
- * what the SDK author remembered to declare.
+ * what the plugin's author remembered to declare.
  *
  * <h2>What it cannot see</h2>
  *
  * <p>Call sites are judged from source alone, without bindings — the same constraint
  * {@code parser/refactor/MethodReferences} works under, for the same reason (half a mid-edit project is on
- * no classpath Studio owns). A call is attributed to the SDK when its receiver is written as the class name
+ * no classpath Studio owns). A call is attributed to the plugin when its receiver is written as the class name
  * ({@code Mouse.click(…)}, {@code new ImageTemplate(…)}), which is how every generated block writes them; a
  * call through a variable is not attributed and so is not reported. A file that does not parse is named in
  * {@link Report#problems()} rather than skipped silently: "nothing breaks" must never be the answer given by
@@ -161,23 +177,36 @@ import static com.botmaker.studio.services.SdkRedirects.returnTypeOf;
  * label at all.
  *
  * <p>That last one is why the unqualified shapes follow {@code MethodReferences}' three-way verdict rather
- * than a simple match: a bare {@code UP} that names a constant on exactly one known SDK type is attributed,
+ * than a simple match: a bare {@code UP} that names a constant on exactly one known plugin type is attributed,
  * one that could be a constant on several is a line in {@link Report#problems()}, and one that matches
- * nothing is not an SDK reference. Guessing between two enums would report a break in the wrong class.
+ * nothing is not a plugin reference. Guessing between two enums would report a break in the wrong class.
  */
-public final class SdkUpgradeService {
+public final class PluginUpgradeService {
 
     private final ProjectConfig config;
     private final ProjectState state;
     private final LibraryService libraryService;
     private final JitPackSearch jitpack;
 
-    public SdkUpgradeService(ProjectConfig config, ProjectState state,
-                             LibraryService libraryService, JitPackSearch jitpack) {
+    /**
+     * Which plugin this service is about — the coordinate its jars are resolved at and whose pin the pom
+     * carries. Its {@link UserLibrary#version()} is ignored: what the project currently pins is read from
+     * the pom on every call, because the window may have written it since.
+     */
+    private final UserLibrary artifact;
+
+    /** The SDK coordinate, which is what every caller passed implicitly until 2026-09-15. */
+    public static final UserLibrary SDK =
+            new UserLibrary(MavenService.SDK_GROUP_ID, MavenService.SDK_ARTIFACT_ID, "");
+
+    public PluginUpgradeService(ProjectConfig config, ProjectState state,
+                                LibraryService libraryService, JitPackSearch jitpack,
+                                UserLibrary artifact) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
         this.jitpack = jitpack;
+        this.artifact = artifact;
     }
 
     // =========================================================================
@@ -263,9 +292,9 @@ public final class SdkUpgradeService {
     }
 
     /**
-     * A member this bot calls that is {@code @Deprecated} in the SDK being read. Compiles; will not forever.
+     * A member this bot calls that is {@code @Deprecated} in the jar being read. Compiles; will not forever.
      *
-     * <p>{@code becomes} and {@code repair} are the two halves of the answer <em>the SDK itself</em> gives:
+     * <p>{@code becomes} and {@code repair} are the two halves of the answer <em>the plugin itself</em> gives:
      * the {@code @ReplacedBy} target resolved against that same jar, and the sentence saying what moving
      * there would cost. Both are empty when the member points nowhere — a deprecation the author has not
      * said what to do about is a deprecation nothing can act on, and saying so is the point of the pair
@@ -284,11 +313,11 @@ public final class SdkUpgradeService {
     }
 
     /**
-     * One place a redirect could go, and the sentence the SDK's author wrote to distinguish it from the
-     * others. {@code when} is blank for a candidate read only off the back edge, where the survivor knows
-     * what it replaced but not why one call meant it rather than the other.
+     * One place a redirect could go, and the sentence the plugin's author wrote to distinguish it from the
+     * others. {@code when} is blank where the author declared no {@code whens()} beside that candidate,
+     * which is every pointer naming a single target and so nearly all of them.
      */
-    public record Candidate(SdkMigrationRunner.Redirect redirect, String when) {
+    public record Candidate(ApiMigrationRunner.Redirect redirect, String when) {
 
         /** How the user reads it in the menu: {@code Mouse.scrollUp — when notches is positive}. */
         public String display() {
@@ -335,7 +364,7 @@ public final class SdkUpgradeService {
      * identified by its version, never by its date. {@code lines} is the section body with the emphasis
      * markers removed and nothing else touched, so the author's wording reaches the user verbatim.
      *
-     * @see SdkWhatsNew
+     * @see WhatsNew
      */
     public record Highlight(String version, String date, List<String> lines) {}
 
@@ -350,7 +379,7 @@ public final class SdkUpgradeService {
      * own {@code CHANGELOG.md} sections for the span being crossed, newest first, read out of the target jar
      * itself. Every other list states a <em>cost</em>; this one is the only thing that can state a reason,
      * which is why the dialog leads with it. Empty for a jar that carries no changelog — see
-     * {@link SdkWhatsNew}.
+     * {@link WhatsNew}.
      *
      * <p>{@code addedBySince} is the new API <b>grouped by the release it arrived in</b>, newest first, read
      * from {@code @Since}. A flat alphabetical list of names is a cost sheet, not a reason to upgrade: what
@@ -360,7 +389,7 @@ public final class SdkUpgradeService {
      *
      * <p>{@code scaffolding} is the release's contact with the members <em>Studio's own generated files</em>
      * write. It is stated up front rather than discovered mid-apply, which is where
-     * {@code SdkMigrationRunner.scaffoldingInTheWay} finds it: a refusal that arrives after the user has
+     * {@code ApiMigrationRunner.scaffoldingInTheWay} finds it: a refusal that arrives after the user has
      * committed to the upgrade is the same information delivered at the worst possible moment.
      *
      * <p>{@code splits} are the members that became two — see {@link Choice}. They sit beside the two verdict
@@ -438,14 +467,20 @@ public final class SdkUpgradeService {
     // ENTRY POINTS
     // =========================================================================
 
-    /** The SDK version the project pom pins right now. */
+    /**
+     * The version of {@link #artifact} the project pom pins right now, {@code ""} when it pins none.
+     *
+     * <p>Read from the pom on every call rather than cached: this is what the window's rows are compared
+     * against, and a stale answer would offer an upgrade the project has already had.
+     */
     public String currentVersion() {
-        return libraryService.currentSdkVersion();
+        return MavenService.readDependencyVersion(
+                config.projectPath(), artifact.groupId(), artifact.artifactId()).orElse("");
     }
 
-    /** Every SDK version JitPack can build, newest first. Best-effort: an empty list on any failure. */
+    /** Every version JitPack can build of it, newest first. Best-effort: an empty list on any failure. */
     public CompletableFuture<List<String>> availableVersions() {
-        return jitpack.fetchVersions(MavenService.SDK_GROUP_ID, MavenService.SDK_ARTIFACT_ID);
+        return jitpack.fetchVersions(artifact.groupId(), artifact.artifactId());
     }
 
     /**
@@ -473,26 +508,45 @@ public final class SdkUpgradeService {
             return Report.unavailable(from, to, "No target version was chosen.");
         }
 
-        Optional<Path> oldJar = MavenService.resolveSdkJar(config.projectPath(), from);
-        Optional<Path> newJar = MavenService.resolveSdkJar(config.projectPath(), to);
+        Optional<Path> oldJar = resolve(from);
+        Optional<Path> newJar = resolve(to);
         if (newJar.isEmpty()) {
-            return Report.unavailable(from, to,
-                    "SDK " + to + " could not be resolved. It may not be published yet, or you are offline.");
+            return Report.unavailable(from, to, name() + " " + to + " could not be resolved. It may not be "
+                    + "published yet, or you are offline.");
         }
         if (oldJar.isEmpty()) {
             return Report.unavailable(from, to,
-                    "The SDK this project currently pins (" + from + ") could not be resolved, so there is "
-                            + "nothing to compare the target against.");
+                    "The " + name() + " this project currently pins (" + from + ") could not be resolved, so "
+                            + "there is nothing to compare the target against.");
         }
 
         return compare(oldJar.get(), newJar.get(), from, to, alsoModernise);
     }
 
     /**
-     * What moving off this SDK's own deprecated members would do — the same question with <b>one</b> jar.
+     * That jar, at one version — {@link #artifact}'s coordinate with the version filled in.
+     *
+     * <p>The project's own pom is consulted for its {@code <repositories>}, which is what lets a version
+     * that has never been on this machine download on demand.
+     */
+    private Optional<Path> resolve(String version) {
+        return MavenService.resolveArtifact(
+                config.projectPath(), artifact.groupId(), artifact.artifactId(), "", version);
+    }
+
+    /**
+     * What this plugin is called in a sentence shown to the user — its artifact id, except for the SDK,
+     * which everything in this project has always called "SDK" rather than "botmaker-sdk".
+     */
+    private String name() {
+        return MavenService.SDK_ARTIFACT_ID.equals(artifact.artifactId()) ? "SDK" : artifact.artifactId();
+    }
+
+    /**
+     * What moving off this plugin's own deprecated members would do — the same question with <b>one</b> jar.
      *
      * <p>There is no version change and so no diff: the jar is compared with itself, and the only thing that
-     * moves is what the SDK's authors have already said should move. Every finding therefore lands in
+     * moves is what the plugin's authors have already said should move. Every finding therefore lands in
      * {@link Report#deprecated()} and {@link Report#breaks()} comes back empty, because nothing here is
      * broken — that is the whole difference between this and an upgrade, and why it has a question of its
      * own ({@link Report#canModernise()}) rather than borrowing {@link Report#canMigrate()}.
@@ -501,11 +555,11 @@ public final class SdkUpgradeService {
      */
     public Report modernisations() {
         String version = currentVersion();
-        Optional<Path> jar = MavenService.resolveSdkJar(config.projectPath(), version);
+        Optional<Path> jar = resolve(version);
         if (jar.isEmpty()) {
             return Report.unavailable(version, version,
-                    "The SDK this project pins (" + version + ") could not be resolved, so there is nothing "
-                            + "to read its deprecations out of.");
+                    "The " + name() + " this project pins (" + version + ") could not be resolved, so there "
+                            + "is nothing to read its deprecations out of.");
         }
         return compare(jar.get(), jar.get(), version, version, true);
     }
@@ -522,32 +576,32 @@ public final class SdkUpgradeService {
     }
 
     Report compare(Path oldJar, Path newJar, String from, String to, boolean throughDeprecations) {
-        Map<String, ApiClass> before = SdkApiModel.snapshot(oldJar);
-        Map<String, ApiClass> after = SdkApiModel.snapshot(newJar);
+        Map<String, ApiClass> before = ApiModel.snapshot(oldJar);
+        Map<String, ApiClass> after = ApiModel.snapshot(newJar);
         if (before.isEmpty() || after.isEmpty()) {
             return Report.unavailable(from, to,
-                    "One of the two SDK jars scanned to no public API at all, which means the comparison "
-                            + "would be meaningless rather than empty.");
+                    "One of the two " + name() + " jars scanned to no public API at all, which means the "
+                            + "comparison would be meaningless rather than empty.");
         }
 
         List<String> problems = new ArrayList<>();
         Set<String> known = new LinkedHashSet<>(before.keySet());
         known.addAll(after.keySet());
-        Uses uses = usesIn(known, SdkApiModel.fieldOwners(before, after), problems);
-        SdkPairing pairing = SdkPairing.of(before, after, throughDeprecations);
+        Uses uses = usesIn(known, ApiModel.fieldOwners(before, after), problems);
+        Pairing pairing = Pairing.of(before, after, throughDeprecations);
 
-        List<Deprecation> deprecated = SdkUpgradeDiff.deprecations(before, after, uses.calls(), pairing);
-        List<Break> breaks = SdkUpgradeDiff.breaks(before, after, uses, pairing);
+        List<Deprecation> deprecated = UpgradeDiff.deprecations(before, after, uses.calls(), pairing);
+        List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing);
         return new Report(from, to,
                 // Read from the target jar, not diffed out of the two: a release's reason for existing is
                 // not a property of its API surface. A span of (from, from] — which is what modernising
                 // passes — is empty by construction, and correctly so: nothing is being moved to.
-                SdkWhatsNew.between(newJar, from, to),
-                SdkUpgradeDiff.additions(before, after),
+                WhatsNew.between(newJar, from, to),
+                UpgradeDiff.additions(before, after),
                 deprecated,
                 breaks,
-                SdkUpgradeDiff.splits(before, after, uses, pairing),
-                SdkUpgradeDiff.scaffolding(before, deprecated, breaks),
+                UpgradeDiff.splits(before, after, uses, pairing),
+                UpgradeDiff.scaffolding(before, deprecated, breaks),
                 List.copyOf(problems));
     }
 
@@ -555,12 +609,12 @@ public final class SdkUpgradeService {
      * The whole upgrade, in one button: snapshot → repair the source → bump the pom.
      *
      * <p>The snapshot comes first so all of it is one revert away in the VCS panel — which is the point, since
-     * what a changed SDK does to a bot is only fully visible once the project is reopened.
+     * what a changed library does to a bot is only fully visible once the project is reopened.
      *
-     * <p>The three steps used to be two, and the missing one was the whole reason the SDK ships repairs at all.
-     * The ordering carries no constraint of its own any more: {@code mvn rewrite:run} had to run <em>before</em>
-     * the bump because OpenRewrite type-attributed against the old SDK, and {@link SdkMigrationRunner} resolves
-     * the SDK not at all.
+     * <p>The three steps used to be two, and the missing one was the whole reason a plugin ships pointers at
+     * all. The ordering carries no constraint of its own any more: {@code mvn rewrite:run} had to run
+     * <em>before</em> the bump because OpenRewrite type-attributed against the old jar, and
+     * {@link ApiMigrationRunner} resolves nothing at all.
      *
      * <p>Any refusal from the migration aborts before the pom is touched, with nothing written anywhere — so a
      * failed upgrade leaves a project that still compiles against the version it already had.
@@ -587,13 +641,23 @@ public final class SdkUpgradeService {
      */
     public CompletableFuture<Void> apply(String targetVersion, boolean repairSources, boolean alsoModernise,
                                          Map<CallSite, Integer> picks) {
+        if (!MavenService.SDK_ARTIFACT_ID.equals(artifact.artifactId())) {
+            return CompletableFuture.failedFuture(new UnsupportedOperationException(
+                    "Writing a pin for " + artifact.groupId() + ":" + artifact.artifactId() + " is not wired "
+                            + "yet — the report and the repair are, the pom write is the project upgrade "
+                            + "window's."));
+        }
         return CompletableFuture
                 .runAsync(() -> {
-                    snapshot("Before SDK upgrade to " + targetVersion);
+                    snapshot("Before " + name() + " upgrade to " + targetVersion);
                     if (repairSources || alsoModernise) {
                         migrateSources(targetVersion, alsoModernise, true, picks);
                     }
                 })
+                // The pom write is still the SDK-shaped one, deliberately: this phase is a rename and a
+                // coordinate parameter, and a per-coordinate write is Phase 4's, where the window drives
+                // several rows under ONE write. Reaching it with any other artifact would silently bump the
+                // SDK instead, so the caller is refused above rather than discovering it in the pom.
                 .thenCompose(v -> libraryService.updateLibraries(libraryService.currentLibraries(),
                         targetVersion));
         // There is no re-render step after the pom moves, and there is nothing left for one to do.
@@ -605,9 +669,9 @@ public final class SdkUpgradeService {
     }
 
     /**
-     * Moves this bot off the deprecated members of the SDK it already pins — snapshot, then rewrite. No pom
-     * is touched, because there is no version change: this is the same repair machinery answering the
-     * question the SDK's own {@code @ReplacedBy} pointers pose, at any moment the user chooses.
+     * Moves this bot off the deprecated members of the version it already pins — snapshot, then rewrite. No
+     * pom is touched, because there is no version change: this is the same repair machinery answering the
+     * question the plugin's own {@code @ReplacedBy} pointers pose, at any moment the user chooses.
      *
      * <p>It is the one entry point that is not an upgrade, and the one place a <em>default value</em> is
      * never written: a deprecated member is still there, so there is nothing to stand in for. Anything the
@@ -639,14 +703,14 @@ public final class SdkUpgradeService {
     private void migrateSources(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
                                 Map<CallSite, Integer> picks) {
         String from = currentVersion();
-        Optional<Path> oldJar = MavenService.resolveSdkJar(config.projectPath(), from);
-        Optional<Path> newJar = MavenService.resolveSdkJar(config.projectPath(), targetVersion);
+        Optional<Path> oldJar = resolve(from);
+        Optional<Path> newJar = resolve(targetVersion);
         if (oldJar.isEmpty() || newJar.isEmpty()) {
-            throw new IllegalStateException("The SDK jars could not be resolved again, so the upgrade stopped "
-                    + "before changing anything. Check the report and try once more.");
+            throw new IllegalStateException("The " + name() + " jars could not be resolved again, so the "
+                    + "upgrade stopped before changing anything. Check the report and try once more.");
         }
 
-        SdkMigrationRunner.Outcome outcome = migrate(oldJar.get(), newJar.get(), from, targetVersion,
+        ApiMigrationRunner.Outcome outcome = migrate(oldJar.get(), newJar.get(), from, targetVersion,
                 throughDeprecations, allowDefaults, picks);
         if (outcome == null) return;                        // nothing needed repairing
         if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
@@ -670,33 +734,34 @@ public final class SdkUpgradeService {
      * It is also the only seam through which a per-site {@linkplain Choice choice} can be exercised without
      * a pom, a VCS repository and a network round trip standing between the test and the answer.
      */
-    SdkMigrationRunner.Outcome migrate(Path oldJar, Path newJar, String from, String targetVersion,
+    ApiMigrationRunner.Outcome migrate(Path oldJar, Path newJar, String from, String targetVersion,
                                        boolean throughDeprecations, boolean allowDefaults,
                                        Map<CallSite, Integer> picks) {
         List<String> problems = new ArrayList<>();
-        Map<String, ApiClass> before = SdkApiModel.snapshot(oldJar);
-        Map<String, ApiClass> after = SdkApiModel.snapshot(newJar);
+        Map<String, ApiClass> before = ApiModel.snapshot(oldJar);
+        Map<String, ApiClass> after = ApiModel.snapshot(newJar);
         Set<String> known = new LinkedHashSet<>(before.keySet());
         known.addAll(after.keySet());
-        Map<String, List<String>> fieldOwners = SdkApiModel.fieldOwners(before, after);
-        SdkPairing pairing = SdkPairing.of(before, after, throughDeprecations);
+        Map<String, List<String>> fieldOwners = ApiModel.fieldOwners(before, after);
+        Pairing pairing = Pairing.of(before, after, throughDeprecations);
 
         Uses uses = usesIn(known, fieldOwners, problems);
         // The same all-or-nothing rule the report states: anything the scan could not answer — a file that
         // does not parse, a bare constant name two types both declare — stops the rewrite before it writes.
         if (!problems.isEmpty()) throw new IllegalStateException(problems.getFirst());
 
-        List<Break> breaks = SdkUpgradeDiff.breaks(before, after, uses, pairing);
+        List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing);
         Break refused = breaks.stream().filter(b -> !b.isRepairable()).findFirst().orElse(null);
         if (refused != null) {
-            throw new IllegalStateException("\"" + refused.type() + "\" is gone from SDK " + targetVersion
+            throw new IllegalStateException("\"" + refused.type() + "\" is gone from " + name() + " "
+                    + targetVersion
                     + " and nothing in that release takes its place, so there is no value to stand in for it "
                     + "where this bot writes the type itself. Change these by hand, then upgrade: "
                     + String.join(", ", refused.sites().stream().map(CallSite::toString).toList())
                     + ". Nothing has been changed.");
         }
 
-        SdkMigrationRunner.Repairs repairs = repairsFor(before, after, uses, pairing, allowDefaults);
+        ApiMigrationRunner.Repairs repairs = repairsFor(before, after, uses, pairing, allowDefaults);
         if (repairs.isEmpty()) return null;
 
         List<ProjectFile> editable = new ArrayList<>();
@@ -709,7 +774,7 @@ public final class SdkUpgradeService {
             (FileRole.of(file.getPath()) == FileRole.EDITABLE ? editable : generated).add(file);
         }
 
-        return SdkMigrationRunner.run(repairs, choicesFor(before, after, uses, pairing, picks),
+        return ApiMigrationRunner.run(repairs, choicesFor(before, after, uses, pairing, picks),
                 editable, generated, known, fieldOwners, config.mainPackage(), null, state);
     }
 
@@ -724,13 +789,13 @@ public final class SdkUpgradeService {
      * deprecated member is still there and still compiles, so a modernisation that cannot be made cleanly is
      * left alone rather than replaced by {@code false}.
      */
-    private static SdkMigrationRunner.Repairs repairsFor(Map<String, ApiClass> before,
+    private static ApiMigrationRunner.Repairs repairsFor(Map<String, ApiClass> before,
                                                          Map<String, ApiClass> after,
-                                                         Uses uses, SdkPairing pairing,
+                                                         Uses uses, Pairing pairing,
                                                          boolean allowDefaults) {
-        Map<String, SdkMigrationRunner.TypeRename> types = new LinkedHashMap<>();
-        Map<String, SdkMigrationRunner.Redirect> redirects = new LinkedHashMap<>();
-        Map<String, SdkMigrationRunner.Removal> removals = new LinkedHashMap<>();
+        Map<String, ApiMigrationRunner.TypeRename> types = new LinkedHashMap<>();
+        Map<String, ApiMigrationRunner.Redirect> redirects = new LinkedHashMap<>();
+        Map<String, ApiMigrationRunner.Removal> removals = new LinkedHashMap<>();
 
         // A type the bot only *writes* — `ImageTemplate t;`, a parameter, a type argument — is renamed on
         // the same evidence as one it calls. The rename itself was always file-wide and so always covered
@@ -741,7 +806,7 @@ public final class SdkUpgradeService {
             ApiClass now = pairing.pairedTo(then, after);
             if (now != null && !now.simpleName().equals(then.simpleName())) {
                 types.putIfAbsent(then.simpleName(),
-                        new SdkMigrationRunner.TypeRename(then.name(), now.name()));
+                        new ApiMigrationRunner.TypeRename(then.name(), now.name()));
             }
         }
 
@@ -752,12 +817,12 @@ public final class SdkUpgradeService {
             ApiClass now = pairing.pairedTo(then, after);
             if (now == null) continue;                      // refused above; nothing to write
             if (!now.simpleName().equals(then.simpleName())) {
-                types.putIfAbsent(then.simpleName(), new SdkMigrationRunner.TypeRename(
+                types.putIfAbsent(then.simpleName(), new ApiMigrationRunner.TypeRename(
                         then.name(), now.name()));
             }
 
             String key = then.simpleName() + "#" + call.member() + "#" + call.argCount();
-            SdkMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
+            ApiMigrationRunner.Redirect redirect = redirectFor(then, now, call, after, pairing);
             if (redirect != null) {
                 redirects.putIfAbsent(key, redirect);
                 continue;
@@ -767,28 +832,28 @@ public final class SdkUpgradeService {
             if (!allowDefaults || offers(now, call.member(), call.argCount())) continue;
             String removed = returnTypeOf(then, call);
             removals.putIfAbsent(key,
-                    new SdkMigrationRunner.Removal(then.simpleName(), call.member(), call.argCount(),
+                    new ApiMigrationRunner.Removal(then.simpleName(), call.member(), call.argCount(),
                             removed, returnTypeFqn(removed, after)));
         }
-        return new SdkMigrationRunner.Repairs(List.copyOf(types.values()), List.copyOf(redirects.values()),
+        return new ApiMigrationRunner.Repairs(List.copyOf(types.values()), List.copyOf(redirects.values()),
                 List.copyOf(removals.values()));
     }
 
     /**
      * Turns the dialog's per-site picks into the redirects the runner will apply — see {@link Choice}.
      *
-     * <p>An index is looked up in the same list {@link SdkUpgradeDiff#splits} built for that site, worked out
+     * <p>An index is looked up in the same list {@link UpgradeDiff#splits} built for that site, worked out
      * here from the jars rather than carried over from the report. Anything that does not line up — a site
      * nobody was asked about, a member that no longer splits, an index past the end — is simply left out, and
      * the site takes the preferred candidate that {@link #repairsFor} already recorded. A key that misses is
      * the correct degradation, not a failure: it produces the upgrade the user would have got by not choosing.
      */
-    private static SdkMigrationRunner.Choices choicesFor(Map<String, ApiClass> before,
+    private static ApiMigrationRunner.Choices choicesFor(Map<String, ApiClass> before,
                                                          Map<String, ApiClass> after, Uses uses,
-                                                         SdkPairing pairing, Map<CallSite, Integer> picks) {
-        if (picks.isEmpty()) return SdkMigrationRunner.Choices.NONE;
+                                                         Pairing pairing, Map<CallSite, Integer> picks) {
+        if (picks.isEmpty()) return ApiMigrationRunner.Choices.NONE;
 
-        Map<SdkMigrationRunner.SiteKey, SdkMigrationRunner.Redirect> out = new LinkedHashMap<>();
+        Map<ApiMigrationRunner.SiteKey, ApiMigrationRunner.Redirect> out = new LinkedHashMap<>();
         for (Call call : uses.calls()) {
             Integer pick = picks.get(call.site());
             if (pick == null || pick == 0) continue;        // 0 is the default the repairs already carry
@@ -801,7 +866,7 @@ public final class SdkUpgradeService {
             if (pick < 0 || pick >= fitting.size()) continue;
             out.put(call.key(), fitting.get(pick).redirect());
         }
-        return new SdkMigrationRunner.Choices(out);
+        return new ApiMigrationRunner.Choices(out);
     }
 
     // =========================================================================
@@ -809,27 +874,27 @@ public final class SdkUpgradeService {
     // =========================================================================
 
     /**
-     * One reference in the bot's source to something that looks like an SDK member, reduced to what the report
-     * asks of it: which member, how many arguments, and where the user would find it.
+     * One reference in the bot's source to something that looks like a member of the plugin being read,
+     * reduced to what the report asks of it: which member, how many arguments, and where the user finds it.
      *
-     * <p>The finding itself is {@link SdkReferences}' — the same scan {@code SdkMigrationRunner} rewrites from.
+     * <p>The finding itself is {@link ApiReferences}' — the same scan {@code ApiMigrationRunner} rewrites from.
      * That sharing is the point: two scans would eventually disagree, and the shape of the disagreement would
      * be a dialog listing three call sites next to a button that repairs two.
      */
     record Call(String type, String member, int argCount, CallSite site, Path file,
                 boolean statement) {
         boolean isField() {
-            return argCount == SdkReferences.FIELD_READ;
+            return argCount == ApiReferences.FIELD_READ;
         }
 
         /** The key a per-site decision is looked up under — see {@link CallSite#offset()}. */
-        SdkMigrationRunner.SiteKey key() {
-            return new SdkMigrationRunner.SiteKey(file.toString(), site.offset());
+        ApiMigrationRunner.SiteKey key() {
+            return new ApiMigrationRunner.SiteKey(file.toString(), site.offset());
         }
     }
 
     /**
-     * One place the bot writes an SDK type's name without calling it — {@code ImageTemplate t;}, a parameter,
+     * One place the bot writes such a type's name without calling it — {@code ImageTemplate t;}, a parameter,
      * a {@code List<ImageTemplate>}, a cast.
      *
      * <p>It carries no member because there is none: this is the bot depending on a type <em>existing</em>.
@@ -841,7 +906,7 @@ public final class SdkUpgradeService {
     /** Everything one pass over the bot's sources found, which is what every reader downstream needs. */
     record Uses(List<Call> calls, List<TypeUse> types) {}
 
-    private Uses usesIn(Set<String> sdkTypes, Map<String, List<String>> fieldOwners, List<String> problems) {
+    private Uses usesIn(Set<String> apiTypes, Map<String, List<String>> fieldOwners, List<String> problems) {
         List<Call> calls = new ArrayList<>();
         List<TypeUse> types = new ArrayList<>();
         for (ProjectFile file : state.getAllFiles()) {
@@ -851,16 +916,16 @@ public final class SdkUpgradeService {
                 problems.add(path + " does not parse, so its calls were not checked.");
                 continue;
             }
-            SdkReferences.Scan scan = SdkReferences.in(file, cu, path, sdkTypes, fieldOwners);
+            ApiReferences.Scan scan = ApiReferences.in(file, cu, path, apiTypes, fieldOwners);
             problems.addAll(scan.problems());
-            for (SdkReferences.Reference reference : scan.references()) {
+            for (ApiReferences.Reference reference : scan.references()) {
                 int offset = reference.site().node().getStartPosition();
                 calls.add(new Call(reference.type(), reference.member(), reference.argCount(),
                         new CallSite(path, cu.getLineNumber(offset),
                                 CallSite.elide(reference.site().node().toString()), offset),
                         file.getPath(), reference.site().isStatement()));
             }
-            for (SdkReferences.TypeUse use : SdkReferences.typeUses(file, cu, sdkTypes)) {
+            for (ApiReferences.TypeUse use : ApiReferences.typeUses(file, cu, apiTypes)) {
                 int offset = use.site().node().getStartPosition();
                 types.add(new TypeUse(use.type(), new CallSite(path, cu.getLineNumber(offset),
                         CallSite.elide(use.site().node().toString()), offset)));

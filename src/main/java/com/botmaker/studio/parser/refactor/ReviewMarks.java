@@ -31,7 +31,7 @@ import java.util.Set;
  * <h2>Why the source, and not a sidecar</h2>
  *
  * <p>An SDK upgrade's repair is deliberately incomplete — a call to a member the new jar no longer offers
- * becomes a default value, which compiles and is very often wrong (see {@link SdkMigrationRunner}). Something
+ * becomes a default value, which compiles and is very often wrong (see {@link ApiMigrationRunner}). Something
  * has to survive the dialog closing and tell the user which functions those were, and the diff cannot: once
  * the pom is bumped the old jar is out of the picture and re-diffing the project finds nothing at all. So the
  * mark goes where the change went.

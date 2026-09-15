@@ -88,7 +88,7 @@ public class TypeSummaryManager {
      * and the wrong one for a compatibility scan: the jar being read may belong to a plugin that is not
      * bound, has never been installed, or failed to load, and every one of those answers the empty set. A
      * scan filtered to nothing reads as <i>this jar has no public API</i> — which is what
-     * {@code SdkApiModel.snapshot} reported for two weeks in every headless caller, since with no project
+     * {@code upgrade/ApiModel.snapshot} reported for two weeks in every headless caller, since with no project
      * open nothing is bound.
      *
      * <p>What a jar contains is a property of the jar, so nothing here needs a project, a binding or a list.
