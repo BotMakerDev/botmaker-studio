@@ -1283,28 +1283,64 @@ belongs here.*
   rule now spans two repositories, so signing into Google must still not wipe the GitHub token.
 
 
-`sharing/GitHubGallery` **reads** `index.json` from the gallery's raw-CDN URL; `sharing/BotPublisher`
+`sharing/GitHubGallery` **reads** `catalog.json` (since 2026-09-16; `index.json` before, and still as its
+fallback) from the gallery's raw-CDN URL; `sharing/BotPublisher`
 **writes** `bots/<owner>-<repo>.json` and nothing else. Since 2026-08-28 `index.json` is *generated* by the
 gallery's own CI from those entry files, and a pull request that edits it is refused — so the read path and
 the write path no longer touch the same file, and that asymmetry is the design rather than an accident:
 
 - **The read URL is a compatibility promise.** Every Studio already installed has it compiled in, so the
-  generated array stays byte-compatible with `GalleryEntry` and the path never moves.
+  generated array stays byte-compatible with `GalleryEntry` and the path never moves. Since 2026-09-16 it
+  holds Vetted bots only — see *Tiers* below.
 - **The write path was the problem.** Appending to a shared array made every concurrent submission a merge
   conflict and each publish a read-modify-write against a base SHA somebody else may have moved; unpublishing
   rewrote the whole file for a one-line removal. `GitHubConfig.entryPath` is where a bot's identity becomes a
   path, and re-publishing is idempotent because that path is the identity.
-- **Publishing from a Studio older than that release breaks, deliberately** — the gate refuses the pull
+- **Publishing from a Studio older than that release broke, deliberately** — the gate refused the pull
   request with a message naming the update. The alternative (a CI job converting an index-only PR) means
   maintaining both shapes indefinitely.
 - `GitHubClient.delete(url, body, token)` exists for this: GitHub's Contents API needs a body to delete a
   file and `HttpRequest.DELETE()` sends none. The bodyless `delete(url, token)` stays for the endpoints that
   reject one.
 
+### Tiers, and a publish that resumes (2026-09-16)
+
+**The gallery lists as Vetted or Community, and nobody merges a Community listing by hand.** The gallery's CI
+runs `botmaker-cli`'s `GalleryGate` on a listing pull request and its `ListingPolicy` merges it, unless the
+author is over 3 new listings in 24 hours (`waiting`) or the change needs a maintainer (`needs-maintainer`).
+Vetted is a maintainer's `vetted/<owner>-<repo>.json` pinning one release, written from the dashboard. Every
+rule is the CLI's; Studio reads the outcome.
+
+- **The read side is `catalog.json`, with `index.json` as its fallback.** `GitHubGallery.parseCatalog` reads
+  `{"schemaVersion", "bots": [...]}`; anything unreadable falls back to `parseLegacyIndex`, which marks every
+  entry Vetted because since this date that file holds nothing else — it is Vetted-only *so that* Studios
+  already installed, which cannot show a tier, show only bots somebody looked at. `GalleryTier.fromId` is
+  total and falls to Community: an unknown tier must never read as more trusted.
+- **A Vetted bot installs and updates to its vetted release.** `GalleryEntry.installTag` and `updateTarget`
+  are the two rules, pure and tested (`GalleryCatalogReadTest`); an update never moves an installed copy to a
+  release older than the one it has. The accepted cost, stated in the gallery's README: an older Studio
+  installs a Vetted bot's newest release, because it never learnt `vettedVersion`.
+- **A publish is `BotPublisher.Run` over a `PublishPlan`** — REPO, PUSH, RELEASE, ARCHIVE, LISTING — and a
+  retry resumes at the failed step. Each step is safe to run twice: the repository is found, a release whose
+  tag exists counts as cut, a listing identical to the gallery's entry is not resubmitted. ARCHIVE downloads
+  the zipball **without** a token, because that is what the gallery's gate does and what an installer has.
+- **The entry is `PublishRequest.entry`: schema 2, the CLI's field order, and `requires`** — the pom's
+  dependencies the plugin registry knows, by id, properties interpolated. Keyed by the registry exactly as
+  `botmaker-cli`'s `Requirements` is, so Studio and `botmaker bot publish` write the same file.
+- **A listing is a pull request from `listing/<repo>` on the author's fork, reset to the gallery's tip.** Not
+  from the fork's `main`: that diverges from the gallery the first time a listing is squash-merged, and a
+  second pull request from it would carry the first listing again. An open pull request from the branch is
+  updated in place. The gallery's owner still commits straight to `main`.
+- **`ListingStatus` is the workflows' words, not Studio's**: the `validate` check run, the two labels and the
+  comment starting `<!-- botmaker-listing -->`, whose sentence is shown verbatim.
+- **`ui/app/gallery/GalleryCard` is the one card**, drawn by Browse Bots and by `PublishDialog`'s preview, so
+  the preview cannot promise a row the gallery does not show.
+
 ### Templates — a starting point is a published bot (2026-08-30)
 
 **New Project lists the gallery.** An entry whose `tags` carry `GalleryEntry.TEMPLATE_TAG` (`"template"`) is
-a starting template rather than a bot to install: `ProjectSelectionScreen` lists exactly those, and
+a starting template rather than a bot to install: `ProjectSelectionScreen` lists exactly those (Vetted ones,
+and Community ones behind *Show community templates* since 2026-09-16), and
 `GalleryDialog` (Browse Bots) filters exactly those out. Nothing else about the gallery changes — same
 `index.json`, same `bots/<owner>-<repo>.json`, same release zip, same `BotInstaller`.
 
