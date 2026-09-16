@@ -10,6 +10,10 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No `## [Unreleased]` section exists — v1.1.0 is HEAD, tagged, no commits since. Nothing to write; an Unreleased section would be empty.
+
 ## [1.1.0] — 2026-09-16
 
 ### Added
