@@ -10,6 +10,7 @@ import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
@@ -227,41 +228,8 @@ public class GalleryDialog {
                 setGraphic(null);
                 return;
             }
-            Label name = new Label(entry.name());
-            name.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
-            HBox title = new HBox(8, name, tierBadge(entry));
-            title.setAlignment(Pos.CENTER_LEFT);
-            Label meta = new Label("by " + entry.owner()
-                    + (entry.description().isBlank() ? "" : " — " + entry.description()));
-            meta.setStyle("-fx-text-fill: gray; -fx-font-size: 11px;");
-            meta.setWrapText(true);
-            VBox text = new VBox(2, title, meta);
-            // Only when the entry says: an empty list is every entry written before the field existed, and
-            // reads as "unknown", which is not worth a line saying "Requires: nothing".
-            if (!entry.requires().isEmpty()) {
-                Label requires = new Label("Requires: " + entry.requires().stream()
-                        .map(GalleryEntry.Requirement::describe)
-                        .collect(java.util.stream.Collectors.joining(", ")));
-                requires.getStyleClass().add("gallery-card-note");
-                requires.setWrapText(true);
-                text.getChildren().add(requires);
-            }
-            // Only shown when the author declared something: "tested on: any launch target" would be noise on
-            // every entry published before the field existed, which is most of them. "Tested on" rather than
-            // "runs on" because installing never restricts what you may launch — see LaunchTargetDialog.
-            if (entry.launchTargets().declared()) {
-                Label runsOn = new Label("Tested on: " + entry.launchTargets().describe());
-                runsOn.setStyle("-fx-text-fill: gray; -fx-font-size: 11px;");
-                runsOn.setWrapText(true);
-                text.getChildren().add(runsOn);
-            }
-            // The one way to read what you are about to run before running it. A Hyperlink rather than a
-            // button: it leaves Studio, and a button reads as something done to the bot.
-            Hyperlink repoLink = new Hyperlink("Open on GitHub");
-            repoLink.getStyleClass().add("gallery-repo-link");
-            repoLink.setTooltip(new javafx.scene.control.Tooltip(entry.htmlUrl()));
-            repoLink.setOnAction(e -> BrowserLauncher.open(entry.htmlUrl()));
-            text.getChildren().add(repoLink);
+            // The same card the publish dialog previews, so an author sees the row a browser will.
+            VBox text = GalleryCard.of(entry);
 
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -282,24 +250,6 @@ public class GalleryDialog {
             row.setAlignment(Pos.CENTER_LEFT);
             setGraphic(row);
         }
-    }
-
-    /**
-     * The tier as a small badge, with the sentence behind it on hover. A Vetted badge names the release that
-     * was looked at, because that — not the bot — is what a maintainer vouched for.
-     */
-    private static Label tierBadge(GalleryEntry entry) {
-        Label badge = new Label(entry.tier().displayName());
-        badge.getStyleClass().addAll("gallery-tier-badge",
-                entry.isVetted() ? "gallery-tier-vetted" : "gallery-tier-community");
-        String tip = entry.isVetted()
-                ? "A maintainer looked at "
-                        + (entry.vettedVersion().isEmpty() ? "a release" : "release " + entry.vettedVersion())
-                        + " and chose to list it. Not a security review."
-                : "Listed automatically: its author owns the repository and its release downloads. "
-                        + "Nobody reviewed its code.";
-        badge.setTooltip(new javafx.scene.control.Tooltip(tip));
-        return badge;
     }
 
     /** Reflects whether the signed-in user has starred this bot (best-effort; leaves "Star" when signed out). */

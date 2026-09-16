@@ -772,6 +772,47 @@
     -fx-background-color: -bm-divider;
 }
 
+.gallery-card-name {
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}
+
+/* The publish dialog's preview: the Browse Bots card, framed so it reads as a sample rather than a control. */
+.gallery-card-preview {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-radius: 5;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 5;
+    -fx-padding: 10;
+}
+
+/* A section heading in a form window (the publish dialog). */
+.form-section-title {
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-padding: 6 0 0 0;
+}
+
+/* A form problem the author can fix where it is shown: a template whose package has no sources, say. */
+.form-problem {
+    -fx-text-fill: -bm-danger;
+    -fx-font-size: 11px;
+}
+
+/* One row of a step checklist: the mark column is fixed so the labels line up. */
+.publish-step-mark {
+    -fx-min-width: 18;
+    -fx-font-weight: bold;
+}
+.publish-step-done .publish-step-mark { -fx-text-fill: -bm-accent-dark; }
+.publish-step-failed .publish-step-mark,
+.publish-step-failed .publish-step-detail { -fx-text-fill: -bm-danger; }
+.publish-step-pending, .publish-step-skipped { -fx-opacity: 0.6; }
+.publish-step-detail {
+    -fx-font-size: 11px;
+    -fx-text-fill: -bm-muted;
+}
+
 /* A secondary line on a gallery card: what the bot requires, what New Project's toggle does. */
 .gallery-card-note {
     -fx-text-fill: -bm-muted;

@@ -20,6 +20,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Open on GitHub** on every Browse Bots row, and a *Requires* line naming the plugins a bot declares.
 - **New Project lists Vetted templates.** *Show community templates* adds the rest, and appears only when there
   are any.
+- **A new Publish window.** One page in sections — Kind (bot or template), Listing, Details, Release — beside a
+  live preview of the Browse Bots card, a checklist of the publish's five steps, and your listing as the gallery
+  has it: tier, pull request, whether it is waiting or needs a maintainer, and Unpublish.
+- **A failed publish resumes.** *Retry* continues from the step that failed; the repository, upload and release
+  already done are not repeated.
+- **Listing no longer waits for a maintainer.** The entry goes to the gallery as a pull request its checks merge
+  by themselves, and it names the plugins your bot requires. Re-publishing updates your listing; it used to say
+  "already listed" and change nothing.
 
 ### Changed
 

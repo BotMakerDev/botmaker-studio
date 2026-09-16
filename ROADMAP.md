@@ -6,6 +6,17 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-16 — publishing is a resumable plan, and the dialog shows it (gallery v2, phase 4).**
+  `BotPublisher.publish` became `start(PublishRequest)` → `Run.resume`, five steps recorded in a pure
+  `PublishPlan` (REPO, PUSH, RELEASE, ARCHIVE, LISTING), each safe to re-run: a release whose tag exists counts
+  as cut, and ARCHIVE downloads the zipball *without* a token, which is what the gallery's gate checks. The
+  listing is `bots/<owner>-<repo>.json` at `schemaVersion` 2 with `requires` (pom ∩ plugin registry,
+  properties interpolated — `MavenService.readProperties`), written on a fork branch `listing/<repo>` reset to
+  the gallery's tip, because a fork's `main` diverges after the first squash merge. An entry identical to the
+  gallery's is not resubmitted. `ListingStatus` reads the PR back through the `validate` check run, the
+  `waiting`/`needs-maintainer` labels and the `<!-- botmaker-listing -->` comment. `PublishDialog` is rebuilt
+  in sections with a preview from the new `ui/app/gallery/GalleryCard` (Browse Bots uses it too), a step
+  checklist with Retry, and a *Your listing* area. `PublishFlowTest` holds the plan, entry and status rules.
 - **2026-09-16 — the gallery is read with its tiers (gallery v2, phase 3).** `GitHubGallery.browse` reads
   `catalog.json` and falls back to `index.json`, marking those entries Vetted because that file holds nothing
   else. `GalleryEntry` gained `tier` (`GalleryTier`, total parse to Community), `vettedVersion` and `requires`;

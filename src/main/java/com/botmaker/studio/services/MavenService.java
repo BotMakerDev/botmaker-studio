@@ -704,6 +704,20 @@ public final class MavenService {
     }
 
     /**
+     * The {@code <properties>} of {@code projectDir/pom.xml}, empty when the pom is missing or unreadable.
+     *
+     * <p>For reading a pin {@link #readDeclaredLibraries} hands back as {@code ${property}} text, which is
+     * meaningless to anybody outside this project — a gallery entry naming the plugins a bot requires, say.
+     */
+    public static Map<String, String> readProperties(Path projectDir) {
+        Model model = readModel(projectDir);
+        if (model == null) return Map.of();
+        Map<String, String> out = new LinkedHashMap<>();
+        model.getProperties().forEach((k, v) -> out.put(String.valueOf(k), String.valueOf(v)));
+        return out;
+    }
+
+    /**
      * Declares {@code plugin} in {@code projectDir/pom.xml}, replacing any dependency already on that
      * {@code groupId:artifactId}, and declares at {@code provided} whatever that plugin's registry entry
      * says it needs to load in the editor at all.
