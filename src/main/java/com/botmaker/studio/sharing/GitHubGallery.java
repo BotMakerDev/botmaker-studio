@@ -4,15 +4,18 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Read side of the federated gallery (no GitHub account required).
  *
- * <p>The catalog is the curated {@code index.json} fetched from the index repo's raw CDN URL — a single
- * request with no API rate limit. Per-bot version / update information is fetched live from each author's
+ * <p>The catalog is the generated {@code catalog.json} fetched from the gallery repo's raw CDN URL — a single
+ * request with no API rate limit — with the legacy {@code index.json} as its fallback. Per-bot version / update information is fetched live from each author's
  * own repo via the Releases API, so the index only ever needs one entry per bot.
  *
  * <p>Those per-bot calls are sent <em>with</em> the signed-in token when there is one. Anonymously they are
@@ -35,20 +38,64 @@ public final class GitHubGallery {
         return (auth != null && auth.isAuthenticated()) ? auth.token() : null;
     }
 
-    /** Fetches the full curated catalog (empty if the index repo is unset/unreachable or malformed). */
+    /**
+     * Fetches every listing with its tier: {@code catalog.json}, or — when that cannot be fetched or read —
+     * the legacy {@code index.json}, whose entries are all Vetted. Empty if neither can be had.
+     *
+     * <p>The fallback is what keeps Browse Bots working against a gallery that has not published a catalog
+     * yet, and through a CDN hiccup on one file. It costs a Community bot nothing: the legacy index does not
+     * hold any.
+     */
     public CompletableFuture<List<GalleryEntry>> browse() {
         if (!GitHubConfig.isGalleryConfigured()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        return client.getString(GitHubConfig.indexRawUrl()).thenApply(body -> {
-            if (body == null || body.isBlank()) return List.<GalleryEntry>of();
-            try {
-                return List.of(client.mapper().readValue(body, GalleryEntry[].class));
-            } catch (Exception e) {
-                System.err.println("Failed to parse gallery index.json: " + e.getMessage());
-                return List.<GalleryEntry>of();
-            }
+        return client.getString(GitHubConfig.catalogRawUrl()).thenCompose(body -> {
+            Optional<List<GalleryEntry>> catalog = parseCatalog(client.mapper(), body);
+            if (catalog.isPresent()) return CompletableFuture.completedFuture(catalog.get());
+            return client.getString(GitHubConfig.indexRawUrl())
+                    .thenApply(index -> parseLegacyIndex(client.mapper(), index));
         });
+    }
+
+    /**
+     * Reads {@code catalog.json}: {@code {"schemaVersion": n, "bots": [...]}}. Empty when the body is absent,
+     * does not parse, or has no {@code bots} array — the three cases the legacy index is the better answer to.
+     *
+     * <p>A {@code schemaVersion} newer than this Studio knows is read anyway. The catalog's versions only ever
+     * add fields, and {@link GalleryEntry} ignores the ones it does not know, so a lagging Studio shows less
+     * rather than nothing.
+     */
+    static Optional<List<GalleryEntry>> parseCatalog(ObjectMapper mapper, String body) {
+        if (body == null || body.isBlank()) return Optional.empty();
+        try {
+            JsonNode bots = mapper.readTree(body).get("bots");
+            if (bots == null || !bots.isArray()) return Optional.empty();
+            return Optional.of(List.of(mapper.treeToValue(bots, GalleryEntry[].class)));
+        } catch (Exception e) {
+            System.err.println("Failed to parse gallery " + GitHubConfig.CATALOG_PATH + ": " + e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Reads the legacy {@code index.json} array, marking every entry Vetted — which is all that file holds. */
+    static List<GalleryEntry> parseLegacyIndex(ObjectMapper mapper, String body) {
+        if (body == null || body.isBlank()) return List.of();
+        try {
+            return Arrays.stream(mapper.readValue(body, GalleryEntry[].class))
+                    .map(e -> e.withTier(GalleryTier.VETTED))
+                    .toList();
+        } catch (Exception e) {
+            System.err.println("Failed to parse gallery " + GitHubConfig.INDEX_PATH + ": " + e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** The listing for {@code owner/repo} in {@code catalog}, compared as GitHub does, without case. */
+    public static Optional<GalleryEntry> find(List<GalleryEntry> catalog, String owner, String repo) {
+        return catalog.stream()
+                .filter(e -> e.owner().equalsIgnoreCase(owner) && e.repo().equalsIgnoreCase(repo))
+                .findFirst();
     }
 
     /**
@@ -62,6 +109,17 @@ public final class GitHubGallery {
             JsonNode tag = node.get("tag_name");
             return tag == null ? "" : tag.asText("");
         });
+    }
+
+    /**
+     * The release installing {@code entry} downloads — see {@link GalleryEntry#installTag}. The newest
+     * release is asked for only when the entry pins none, so a Vetted bot installs with no API call at all.
+     * {@code ""} when there is nothing to install.
+     */
+    public CompletableFuture<String> installTag(GalleryEntry entry) {
+        String pinned = entry.installTag("");
+        if (!pinned.isEmpty()) return CompletableFuture.completedFuture(pinned);
+        return latestReleaseTag(entry.owner(), entry.repo());
     }
 
     /**

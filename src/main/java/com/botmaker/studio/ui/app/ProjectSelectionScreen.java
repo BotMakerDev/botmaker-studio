@@ -485,7 +485,15 @@ public class ProjectSelectionScreen implements ProjectWindow {
             }
             @Override public TemplateChoice fromString(String s) { return null; }
         });
-        loadTemplates(templateCombo);
+        // Vetted templates only, until asked. A template is somebody's project you start from and build, so
+        // New Project leads with the ones a maintainer looked at. The toggle stays hidden until the gallery has
+        // a Community template to show, so it never offers nothing.
+        CheckBox showCommunity = new CheckBox("Show community templates");
+        showCommunity.setTooltip(new javafx.scene.control.Tooltip(
+                "Community templates are listed automatically. Nobody reviewed their code."));
+        showCommunity.setVisible(false);
+        showCommunity.setManaged(false);
+        loadTemplates(templateCombo, showCommunity);
 
         // One line under the dropdown, saying what the chosen row actually gives you. It matters more than
         // it looks: "Blank" means a plain Java project with no bot API in it, and a user who reaches it
@@ -515,6 +523,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 exampleLabel,
                 new Label("Start from:"),
                 templateCombo,
+                showCommunity,
                 startNote
         );
 
@@ -571,7 +580,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
             if (entry == null) return "Blank — a main() and nothing else";
             String description = entry.description() == null || entry.description().isBlank()
                     ? "" : " — " + entry.description();
-            return displayName() + description + "  (" + entry.owner() + ")";
+            String tier = entry.isVetted() ? "" : " · Community";
+            return displayName() + description + "  (" + entry.owner() + tier + ")";
         }
 
         /**
@@ -597,28 +607,43 @@ public class ProjectSelectionScreen implements ProjectWindow {
      * be reached, which is the only reason Studio composes a starting project at all
      * ({@code project/StarterSources}) — New Project has to work on a plane. Nobody picks it on purpose.
      *
-     * <p>Sorted by display name so the default is the same row on every launch: the index's own order is a
-     * property of how CI generated it, and the first row here is the one preselected.
+     * <p>Vetted first and then by name ({@link GalleryEntry#templates}), so the default is the same row on
+     * every launch: the catalog's own order is a property of how CI generated it, and the first row here is
+     * the one preselected. Community templates join only while {@code showCommunity} is ticked, and the
+     * toggle is revealed only when there is one.
      *
      * <p>Failure is silent on purpose, and this is what it degrades to: the blank row is untouched, which is
      * a complete answer to "what can I start from". An error dialog in front of a working New Project dialog
      * would be the network's problem presented as the user's.
      */
-    private void loadTemplates(ComboBox<TemplateChoice> combo) {
+    private void loadTemplates(ComboBox<TemplateChoice> combo, CheckBox showCommunity) {
         new GitHubGallery(gitHubClient, gitHubAuth).browse().thenAccept(entries -> Platform.runLater(() -> {
-            List<TemplateChoice> templates = entries.stream()
-                    .filter(GalleryEntry::isTemplate)
-                    .map(TemplateChoice::new)
-                    .sorted(Comparator.comparing(TemplateChoice::displayName, String.CASE_INSENSITIVE_ORDER))
-                    .toList();
-            if (templates.isEmpty()) return;
-            combo.getItems().addAll(templates);
-            // Select before removing: dropping the selected item would leave the value null, and the dialog's
-            // result converter reads "no value" as the blank project — which is exactly the row being taken
-            // away.
-            combo.setValue(templates.get(0));
-            combo.getItems().remove(TemplateChoice.blank());
+            boolean anyCommunity = entries.stream().anyMatch(e -> e.isTemplate() && !e.isVetted());
+            showCommunity.setVisible(anyCommunity);
+            showCommunity.setManaged(anyCommunity);
+            Runnable fill = () -> fillTemplates(combo, GalleryEntry.templates(entries, showCommunity.isSelected()));
+            showCommunity.selectedProperty().addListener((o, was, now) -> fill.run());
+            fill.run();
         }));
+    }
+
+    /**
+     * Replaces the combo's rows with {@code templates}, or with the blank row when there are none, keeping the
+     * current choice when it is still offered.
+     *
+     * <p>The value is set before the old rows go: dropping the selected item would leave the value null, and
+     * the dialog's result converter reads "no value" as the blank project — which may be a row being taken
+     * away.
+     */
+    private static void fillTemplates(ComboBox<TemplateChoice> combo, List<GalleryEntry> templates) {
+        List<TemplateChoice> rows = templates.isEmpty()
+                ? List.of(TemplateChoice.blank())
+                : templates.stream().map(TemplateChoice::new).toList();
+        TemplateChoice keep = rows.contains(combo.getValue()) ? combo.getValue() : rows.get(0);
+        combo.getItems().addAll(rows.stream().filter(r -> !combo.getItems().contains(r)).toList());
+        combo.setValue(keep);
+        combo.getItems().retainAll(rows);
+        combo.getItems().sort(Comparator.comparingInt(rows::indexOf));
     }
 
     // loadSdkVersions and decorateLocalBuilds were here until 2026-09-04, with the SDK version combo they
@@ -672,7 +697,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Downloads {@code entry}'s newest release and makes it {@code projectName}.
+     * Downloads {@code entry}'s release — the vetted one for a Vetted template, else the newest — and makes
+     * it {@code projectName}.
      *
      * <p>The download and the unpack are the slow, failable part and they run off the FX thread; everything
      * the user sees about a failure is one dialog, because there is nothing half-created to explain — a
@@ -683,7 +709,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         BotInstaller installer = new BotInstaller(gitHubClient, gallery);
         new Thread(() -> {
             try {
-                String tag = gallery.latestReleaseTag(entry.owner(), entry.repo()).join();
+                String tag = gallery.installTag(entry).join();
                 if (tag == null || tag.isBlank()) {
                     throw new java.io.IOException(entry.name() + " has no published release yet, so there is "
                             + "nothing to start from. Ask its author to cut one.");

@@ -756,6 +756,33 @@
     -fx-opacity: 0.8;
 }
 
+/* A gallery listing's tier (GalleryDialog, New Project). Vetted takes the accent because it is the claim worth
+   noticing; Community is the quiet default, like a type badge, so a list of them does not read as a warning. */
+.gallery-tier-badge {
+    -fx-background-radius: 3;
+    -fx-padding: 1 6 1 6;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+.gallery-tier-vetted {
+    -fx-background-color: -bm-accent;
+    -fx-text-fill: -bm-on-accent;
+}
+.gallery-tier-community {
+    -fx-background-color: -bm-divider;
+}
+
+/* A secondary line on a gallery card: what the bot requires, what New Project's toggle does. */
+.gallery-card-note {
+    -fx-text-fill: -bm-muted;
+    -fx-font-size: 11px;
+}
+
+.gallery-repo-link {
+    -fx-padding: 0;
+    -fx-font-size: 11px;
+}
+
 /* The jump list above the settings: one chip per category, sized like a tag rather than like a button, so a
    row of a dozen reads as an index and not as a dozen things to do. */
 .runner-category-chip {

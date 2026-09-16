@@ -6,6 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-16 — the gallery is read with its tiers (gallery v2, phase 3).** `GitHubGallery.browse` reads
+  `catalog.json` and falls back to `index.json`, marking those entries Vetted because that file holds nothing
+  else. `GalleryEntry` gained `tier` (`GalleryTier`, total parse to Community), `vettedVersion` and `requires`;
+  `installTag` and `updateTarget` are the two rules (install the vetted release; update to it, never below what
+  is installed) and `templates` is New Project's order. `GalleryDialog` rows carry a tier badge, *Open on
+  GitHub* and *Requires*; a tier filter sits beside the search. New Project shows Vetted templates behind a
+  *Show community templates* toggle. Styles are `blocks.css` classes (`gallery-tier-*`, `gallery-card-note`).
+  `GalleryCatalogReadTest` holds the parsing and both rules headlessly.
 - **2026-09-16 — remove, downgrade and install: four operations over one report.** Phase 6, the last of the
   project-upgrade plan. **Remove is the same report with no target jar** — `PluginUpgradeService.removal()`
   scans the plugin's own jar against an empty model, so every type is unpaired, and `remove()` carries it out

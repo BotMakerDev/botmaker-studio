@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -82,36 +83,39 @@ public final class BotInstaller {
     }
 
     /**
-     * Returns the latest release tag for an installed bot if it is newer than what's installed, else empty.
+     * The release an installed bot should move to, else empty — see {@link GalleryEntry#updateTarget}: a
+     * Vetted bot is offered its vetted release, anything else the newest.
+     *
+     * @param catalog the gallery's current listings; a bot it does not name is offered its newest release
      */
-    public Optional<String> checkForUpdate(Path projectDir) {
+    public Optional<String> checkForUpdate(Path projectDir, List<GalleryEntry> catalog) {
         Optional<BotSource> src = BotSource.read(projectDir);
         if (src.isEmpty()) return Optional.empty();
         String latest = gallery.latestReleaseTag(src.get().owner(), src.get().repo()).join();
-        if (latest.isBlank() || latest.equals(src.get().tag())) return Optional.empty();
-        return Optional.of(latest);
+        GalleryEntry listing = GitHubGallery.find(catalog, src.get().owner(), src.get().repo()).orElse(null);
+        return GalleryEntry.updateTarget(listing, src.get().tag(), latest);
     }
 
     /**
-     * Re-downloads the latest release of an installed bot and replaces the project in place. Overwrites
+     * Re-downloads the release {@link #checkForUpdate} offers and replaces the project in place. Overwrites
      * local edits (the caller warns the user first).
      *
-     * @return the tag updated to, or empty if there was nothing newer / no provenance
+     * @return the tag updated to, or empty if there was nothing to move to / no provenance
      */
-    public Optional<String> update(Path projectDir) throws IOException {
+    public Optional<String> update(Path projectDir, List<GalleryEntry> catalog) throws IOException {
         Optional<BotSource> src = BotSource.read(projectDir);
         if (src.isEmpty()) return Optional.empty();
-        String latest = gallery.latestReleaseTag(src.get().owner(), src.get().repo()).join();
-        if (latest.isBlank() || latest.equals(src.get().tag())) return Optional.empty();
+        Optional<String> target = checkForUpdate(projectDir, catalog);
+        if (target.isEmpty()) return Optional.empty();
 
         Path tmp = projectDir.resolveSibling(projectDir.getFileName() + ".update-tmp");
         deleteRecursively(tmp);
-        downloadInto(src.get().owner(), src.get().repo(), latest, tmp);
-        new BotSource(src.get().owner(), src.get().repo(), latest).write(tmp);
+        downloadInto(src.get().owner(), src.get().repo(), target.get(), tmp);
+        new BotSource(src.get().owner(), src.get().repo(), target.get()).write(tmp);
 
         deleteRecursively(projectDir);
         Files.move(tmp, projectDir);
-        return Optional.of(latest);
+        return target;
     }
 
     // -------------------------------------------------------------------------

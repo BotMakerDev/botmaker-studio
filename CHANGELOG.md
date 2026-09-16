@@ -10,6 +10,23 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **Vetted and Community bots.** Browse Bots shows each bot's tier as a badge and filters by it. A Vetted bot
+  is one a maintainer looked at, and installing it downloads the release that was looked at. A Community bot
+  was listed automatically, and the install warning says nobody reviewed its code.
+- **Open on GitHub** on every Browse Bots row, and a *Requires* line naming the plugins a bot declares.
+- **New Project lists Vetted templates.** *Show community templates* adds the rest, and appears only when there
+  are any.
+
+### Changed
+
+- **An installed Vetted bot is offered its vetted release**, never an older one than it has. Everything else
+  is offered its newest release, as before.
+- Studio reads the gallery's `catalog.json`, and falls back to `index.json` when it cannot.
+
 ## [1.1.1] — 2026-09-16
 
 No `## [Unreleased]` section exists — v1.1.0 is HEAD, tagged, no commits since. Nothing to write; an Unreleased section would be empty.
