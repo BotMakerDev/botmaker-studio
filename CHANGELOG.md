@@ -12,6 +12,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Studio reads the parameters a bot declares in its own Java.** A `@Param` field is found wherever the
+  author wrote it, with its type, its value, its category, its description, its bounds and its choices, and
+  it can be added, renamed, retyped, re-annotated and removed from the editor — every edit landing in the
+  source file as a one-line diff, leaving the author's own formatting and comments where they are. A field
+  the editor cannot safely rewrite (not `public static`, `final`, a type no plugin registers, or a value
+  written by hand as an expression) is still listed and still shows what it holds, with a line saying why
+  its cell is read-only. The Parameters window itself moves onto this next.
+
 ### Fixed
 
 - **No more warnings at startup, at project open, or when a bot runs.** The JVM's "restricted method" notice

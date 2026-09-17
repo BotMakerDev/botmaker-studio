@@ -1027,6 +1027,20 @@ The `ui/` package is split by concern:
   `services/ActivityService`, `ActivitiesChangedEvent` and `ProjectState.activities` went with it. What a
   menu or a picker needs instead is `plugin/HostParameters` (the parameters every loaded plugin declares)
   and `project/ActivityBodies.names` (the activities the bot's own source defines).
+- **`project/params/`** — **a user parameter is a `@Param` field in the bot's own Java** (2026-09-17), and
+  this package is how Studio reads and writes one. Three classes, split by what each needs: **
+  `JavaParameterSource`** parses one source into `ParameterRow`s (JDT, **no bindings** — a type is whatever
+  it is *written* as, so a bot whose pom is mid-edit still shows its parameters), **`JavaParameterEdits`**
+  rewrites one source (`ASTRewrite`, so the author's formatting and comments survive; an edit it cannot
+  make answers the source unchanged and never throws), and **`JavaParameters`** is the half that knows
+  about the project — `BotSources`, buffers before files, both written. The first two are pure, which is
+  why they are tested over source text rather than over a project on disk.
+  **Reading a value back is the codec's** (`ValueCodec.wireOfLiteral`): `literal` writes a value
+  structurally so a bot cannot throw at class-init, and only the plugin that wrote that spelling can undo
+  it. A field whose initialiser the codec declines is listed, shown and **read-only, with the reason** —
+  the window never hides a parameter the bot reads, and never rewrites Java the author wrote by hand.
+  Plugin rows (`HostParameters`) are still the other half: an activity's enable flag is the plugin's, not
+  the user's.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that
