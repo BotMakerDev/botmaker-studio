@@ -8,6 +8,9 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
+import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.params.ParameterSurface;
+import com.botmaker.studio.project.params.ParameterSurface.Entry;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.services.MavenService;
@@ -90,6 +93,9 @@ public final class RunnerWindow implements ProjectWindow {
     private final Stage stage;
     private final Origin origin;
     private final ProjectConfig config;
+
+    /** The open buffers — a {@code @Param} field is read from the editor's copy where there is one. */
+    private final ProjectState state;
     private final EventBus eventBus;
 
     /** Leaves the Runner for the editor scene, without changing what the project is. Supplied by the shell. */
@@ -106,17 +112,13 @@ public final class RunnerWindow implements ProjectWindow {
     private Button runButton;
     private Button stopButton;
 
-    /**
-     * One row and the section it belongs to.
-     *
-     * <p>The pair, never the name alone: a name identifies a parameter only inside its own plugin's section,
-     * so two plugins may both offer a {@code Timeout} and a name-keyed handle would hand one of them the
-     * other's answer.
-     */
-    private record Owned(String group, ParameterRow row) {}
+    // The (group, row) pair was a record of this class until 2026-09-17; it is ParameterSurface.Entry now, so
+    // the Runner and the Parameters window read one list through one shape. It is still the pair and never
+    // the name alone: a name identifies a parameter only inside its own section, and two of them may both
+    // offer a Timeout.
 
-    /** Every public row the loaded plugins hold, in section order — read once, when the window is built. */
-    private final List<Owned> rows = new ArrayList<>();
+    /** Every public parameter the project declares, in section order — read once, when the window is built. */
+    private final List<Entry> rows = new ArrayList<>();
 
     /** Every on-screen widget's reader, keyed by the {@code (group, name)} pair it was built from. */
     private final List<ParamValueWidgets.ValueEditor> valueEditors = new ArrayList<>();
@@ -129,6 +131,7 @@ public final class RunnerWindow implements ProjectWindow {
         this.stage = stage;
         this.origin = origin;
         this.config = ctx.config();
+        this.state = ctx.state();
         this.eventBus = ctx.eventBus();
         this.onShowEditor = onShowEditor;
 
@@ -274,21 +277,24 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     /**
-     * The public rows of every loaded plugin's sections, in section order.
+     * The public parameters of the project — the bot's own {@code @Param} fields and the loaded plugins'
+     * rows, in section order.
      *
-     * <p>Read once, when the window is built: the Runner is not an editor, so nothing here changes a row's
+     * <p>Read once, when the window is built: the Runner is not an editor, so nothing here changes a
      * declaration and the only writes are values, which go back to their owner on Run.
      *
-     * <p><b>A row the author kept to themselves is never read at all</b> — {@link ParameterRow#isPublic()} is
-     * checked here rather than at the card, so an editor-only parameter has no widget, no reader and nothing
-     * that could send a value for it. A user's window must not be able to change what it cannot see.
+     * <p><b>A parameter the author kept to themselves is never read at all</b> — {@code isPublic()} is
+     * checked here rather than at the card, so an editor-only one has no widget, no reader and nothing that
+     * could send a value for it. A user's window must not be able to change what it cannot see.
+     *
+     * <p><b>And neither is one the editor itself cannot rewrite.</b> A hand-written initialiser is shown
+     * read-only in the Parameters window, where its author can read the reason; here there is no author and
+     * no reason to show, so it is simply not one of this bot's settings.
      */
     private void reload() {
         rows.clear();
-        for (ParameterGroup group : PluginHost.parameterGroups(sdkPin())) {
-            for (ParameterRow row : PluginHost.parameterRows(group.id())) {
-                if (row.isPublic()) rows.add(new Owned(group.id(), row));
-            }
+        for (Entry entry : ParameterSurface.rows(config, state, sdkPin())) {
+            if (entry.row().isPublic() && entry.editable()) rows.add(entry);
         }
     }
 
@@ -314,7 +320,7 @@ public final class RunnerWindow implements ProjectWindow {
      * bot, not a sign the window failed to load.
      */
     private Node settingsSection() {
-        Map<String, List<Owned>> byCategory = byCategory();
+        Map<String, List<Entry>> byCategory = byCategory();
         VBox groups = new VBox(18);
         if (byCategory.isEmpty()) {
             groups.getChildren().add(hint("This bot has no settings for you to change."));
@@ -326,9 +332,9 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     /** The rows filed under each category, in the order the plugins declared them. */
-    private Map<String, List<Owned>> byCategory() {
-        Map<String, List<Owned>> byCategory = new LinkedHashMap<>();
-        for (Owned entry : rows) {
+    private Map<String, List<Entry>> byCategory() {
+        Map<String, List<Entry>> byCategory = new LinkedHashMap<>();
+        for (Entry entry : rows) {
             byCategory.computeIfAbsent(entry.row().categoryOrGeneral(), key -> new ArrayList<>()).add(entry);
         }
         return byCategory;
@@ -342,7 +348,7 @@ public final class RunnerWindow implements ProjectWindow {
      * index cannot offer a category that isn't below it — and it is left out entirely below two categories,
      * where a jump list is longer than the thing it indexes.
      */
-    private Node categoryIndex(Map<String, List<Owned>> byTag) {
+    private Node categoryIndex(Map<String, List<Entry>> byTag) {
         if (byTag.size() < 3) return null;
         FlowPane chips = new FlowPane(6, 6);
         byTag.forEach((tag, group) -> {
@@ -365,7 +371,7 @@ public final class RunnerWindow implements ProjectWindow {
      * window's width went unused no matter how wide it was pulled. A titled card with a rule under it and a
      * reflowing grid inside says where a group starts and ends without anybody having to count rows.
      */
-    private Node categoryCard(String tag, List<Owned> group) {
+    private Node categoryCard(String tag, List<Entry> group) {
         Label heading = new Label(tag);
         heading.getStyleClass().add("dialog-subheading");
         Label count = hint(group.size() == 1 ? "1 setting" : group.size() + " settings");
@@ -379,7 +385,7 @@ public final class RunnerWindow implements ProjectWindow {
         // pane wraps, so the reflow is the layout's own doing and needs no width listener.
         tiles.setPrefTileWidth(TILE_WIDTH);
         tiles.setTileAlignment(Pos.TOP_LEFT);
-        for (Owned entry : group) tiles.getChildren().add(paramCard(entry));
+        for (Entry entry : group) tiles.getChildren().add(paramCard(entry));
 
         VBox card = new VBox(8, title, new Separator(), tiles);
         card.getStyleClass().add("runner-category");
@@ -395,7 +401,7 @@ public final class RunnerWindow implements ProjectWindow {
      * beside "Delay" could be seconds or milliseconds, and "Region" could be a name or four numbers. The
      * badge says which, in the same words the author picked the type with.
      */
-    private Node paramCard(Owned entry) {
+    private Node paramCard(Entry entry) {
         ParameterRow v = entry.row();
         Label name = new Label(v.displayLabel());
         name.getStyleClass().add("runner-setting-name");
@@ -514,14 +520,13 @@ public final class RunnerWindow implements ProjectWindow {
     private void flushValues() {
         for (ParamValueWidgets.ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {
-                Owned entry = rows.get(i);
+                Entry entry = rows.get(i);
                 if (!editor.describes(entry.group(), entry.row().name())) continue;
                 List<String> typed = editor.read().get();
                 if (typed.equals(entry.row().value())) break;
-                Optional<ParameterRow> stored = PluginHost.parameterEdited(
-                        new ParameterEdit(entry.group(), entry.row().name(), typed));
+                Optional<ParameterRow> stored = ParameterSurface.setValue(config, state, entry, typed);
                 int at = i;
-                stored.ifPresent(row -> rows.set(at, new Owned(entry.group(), row)));
+                stored.ifPresent(row -> rows.set(at, new Entry(entry.group(), row, entry.java())));
                 break;
             }
         }

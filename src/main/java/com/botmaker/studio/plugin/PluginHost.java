@@ -1,6 +1,5 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ParameterDeclaration;
 import com.botmaker.plugin.api.ParameterEdit;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
@@ -592,22 +591,10 @@ public final class PluginHost {
         return Optional.empty();
     }
 
-    /**
-     * A declared row — added, renamed, retyped, refiled, removed — offered to each plugin until one owns it.
-     *
-     * <p>Empty means <em>no row stands under that name</em>, and the host cannot tell a removal from a
-     * refusal here: both are answered by re-reading {@link #parameterRows(String)}, which is what the window
-     * does after every declaration. A plugin that wants a refusal to be visible answers the row it kept.
-     */
-    public static Optional<ParameterRow> parameterDeclared(ParameterDeclaration declaration) {
-        if (declaration == null) return Optional.empty();
-        for (StudioPlugin plugin : plugins) {
-            Optional<ParameterRow> stored = quietly(plugin, "store a parameter declaration",
-                    () -> plugin.parameterDeclared(declaration));
-            if (stored != null && stored.isPresent()) return stored;
-        }
-        return Optional.empty();
-    }
+    // parameterDeclared stood here until 2026-09-17, offering a declared row to each plugin until one owned
+    // it. The contract call is gone: a user parameter is a @Param field in the bot's own Java and the host
+    // declares one by editing the syntax tree (project/params/ParameterSurface). What a plugin still owns it
+    // declares in its own code, and the host only ever changes a value — parameterEdited, above.
 
     /**
      * Runs one plugin call, answering {@code null} when it throws.

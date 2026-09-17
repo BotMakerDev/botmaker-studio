@@ -78,7 +78,12 @@ public final class JavaParameters {
     /** Replaces a parameter's value with {@code value}, as the type's own Java. */
     public static boolean setValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                    List<String> value) {
-        ValueCatalog catalog = PluginHost.valueTypes();
+        return setValue(config, state, parameter, value, PluginHost.valueTypes());
+    }
+
+    /** The same, against a given catalog — the seam a test uses, as it is for {@link #scan}. */
+    public static boolean setValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                   List<String> value, ValueCatalog catalog) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
                 source, catalog, parameter.className(), parameter.name(), parameter.row().type(), value));
     }
@@ -99,7 +104,12 @@ public final class JavaParameters {
     /** Changes a parameter's type, resetting its value to that type's default. */
     public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                  ValueChoice choice) {
-        ValueCatalog catalog = PluginHost.valueTypes();
+        return retype(config, state, parameter, choice, PluginHost.valueTypes());
+    }
+
+    /** The same, against a given catalog. */
+    public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                 ValueChoice choice, ValueCatalog catalog) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
                 source, catalog, parameter.className(), parameter.name(), choice));
     }
@@ -126,7 +136,14 @@ public final class JavaParameters {
      */
     public static boolean add(ProjectConfig config, ProjectState state, String className, String fieldName,
                               ValueChoice choice, List<String> value, String category, String description) {
-        ValueCatalog catalog = PluginHost.valueTypes();
+        return add(config, state, className, fieldName, choice, value, category, description,
+                PluginHost.valueTypes());
+    }
+
+    /** The same, against a given catalog. */
+    public static boolean add(ProjectConfig config, ProjectState state, String className, String fieldName,
+                              ValueChoice choice, List<String> value, String category, String description,
+                              ValueCatalog catalog) {
         return rewriteAll(config, state, source -> JavaParameterEdits.add(
                 source, catalog, className, fieldName, choice, value, category, description));
     }

@@ -59,7 +59,8 @@ public final class VariablePicker {
 
     /** The same, over the parameter groups the open project's plugins declare. */
     private static String referencedVariable(CodeEditorService context, ValueSlot arg) {
-        return referencedVariable(arg, q -> HostParameters.isQualifier(context.getConfig(), q));
+        return referencedVariable(arg,
+                q -> HostParameters.isQualifier(context.getConfig(), context.getState(), q));
     }
 
     public static Node create(CodeEditorService context, ValueSlot arg, ResolvedType slotType) {
@@ -67,7 +68,8 @@ public final class VariablePicker {
         ComboBox<String> combo = new ComboBox<>();
         combo.getStyleClass().add("block-selector");
         combo.setTooltip(new Tooltip("Which project variable this is — edit them in Project ▸ Parameters"));
-        for (HostParameters.Parameter parameter : HostParameters.compatibleWith(context.getConfig(), slotType)) {
+        for (HostParameters.Parameter parameter
+                : HostParameters.compatibleWith(context.getConfig(), context.getState(), slotType)) {
             combo.getItems().add(parameter.row().name());
         }
         if (current != null && !combo.getItems().contains(current)) combo.getItems().add(current);
@@ -78,7 +80,7 @@ public final class VariablePicker {
             // The class the picked name is declared on, asked of the plugin that declares it rather than
             // taken from the qualifier already in the slot: swapping a flag for a value moves the reference
             // between two classes, and keeping the old qualifier would write Activities.REST.
-            String qualifier = HostParameters.qualifierOf(context.getConfig(), picked);
+            String qualifier = HostParameters.qualifierOf(context.getConfig(), context.getState(), picked);
             if (qualifier == null) return;   // the name left the declaration between opening and picking
             context.getCodeEditor().replaceWithFieldReference(arg.node(), qualifier, picked);
         });

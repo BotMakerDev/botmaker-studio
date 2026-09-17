@@ -3,6 +3,9 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.studio.project.params.ParameterSurface;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -44,23 +47,35 @@ public final class HostParameters {
         }
     }
 
-    /** Every declared parameter, section by section, in the order the plugins hand them over. */
-    public static List<Parameter> all(ProjectConfig config) {
+    /**
+     * Every declared parameter — the bot's own {@code @Param} fields first, then each plugin's rows.
+     *
+     * <p>{@link ParameterSurface} is asked rather than the plugins directly, because since 2026-09-17 a user
+     * parameter is a field in the bot's own Java: a menu that asked only the plugins would offer none of the
+     * parameters the person actually wrote.
+     */
+    public static List<Parameter> all(ProjectConfig config, ProjectState state) {
         List<Parameter> out = new ArrayList<>();
-        for (ParameterGroup group : PluginHost.parameterGroups(pin(config))) {
-            for (ParameterRow row : PluginHost.parameterRows(group.id())) {
-                out.add(new Parameter(group.className(), row));
-            }
+        for (ParameterSurface.Entry entry : ParameterSurface.rows(config, state, pin(config))) {
+            out.add(new Parameter(qualifierOf(entry, pin(config)), entry.row()));
         }
         return List.copyOf(out);
+    }
+
+    /** The class a bot spells in front of this row — the declaring class, or the group's generated one. */
+    private static String qualifierOf(ParameterSurface.Entry entry, String sdkPin) {
+        if (entry.isJava()) return entry.java().className();
+        ParameterGroup group = PluginHost.parameterGroup(sdkPin, entry.group());
+        return group == null ? "" : group.className();
     }
 
     /**
      * The parameters a slot of {@code requiredType} may be filled from, using
      * {@link ProjectAnalyzer#isCompatible} so the answer cannot differ from the one every other menu gives.
      */
-    public static List<Parameter> compatibleWith(ProjectConfig config, ResolvedType requiredType) {
-        return all(config).stream()
+    public static List<Parameter> compatibleWith(ProjectConfig config, ProjectState state,
+                                                 ResolvedType requiredType) {
+        return all(config, state).stream()
                 .filter(p -> ProjectAnalyzer.isCompatible(ValueWire.resolvedType(p.row().type()), requiredType))
                 .toList();
     }
@@ -75,8 +90,9 @@ public final class HostParameters {
      * platform exists to close. A project with no plugins recognises nothing, which is correct — nothing has
      * declared a parameter, so no reference to one can be resolved.
      */
-    public static boolean isQualifier(ProjectConfig config, String qualifier) {
+    public static boolean isQualifier(ProjectConfig config, ProjectState state, String qualifier) {
         if (qualifier == null || qualifier.isBlank()) return false;
+        if (JavaParameters.isQualifier(config, state, qualifier)) return true;
         for (ParameterGroup group : PluginHost.parameterGroups(pin(config))) {
             if (group.className().equals(qualifier)) return true;
         }
@@ -91,9 +107,9 @@ public final class HostParameters {
      * always there in practice, and inventing a qualifier for a name nobody claims would write a reference to
      * a class that does not exist.
      */
-    public static String qualifierOf(ProjectConfig config, String name) {
+    public static String qualifierOf(ProjectConfig config, ProjectState state, String name) {
         if (name == null || name.isBlank()) return null;
-        for (Parameter parameter : all(config)) {
+        for (Parameter parameter : all(config, state)) {
             if (parameter.row().name().equals(name)) return parameter.qualifier();
         }
         return null;

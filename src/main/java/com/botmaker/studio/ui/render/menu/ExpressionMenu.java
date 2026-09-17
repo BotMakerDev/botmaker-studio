@@ -491,7 +491,7 @@ public final class ExpressionMenu {
         // name" menu is a different thing and keeps its name.
         Menu menu = MenuIcons.decorate(new Menu("Parameters"), MenuIcons.ACTIVITIES);
         List<HostParameters.Parameter> variables =
-                HostParameters.compatibleWith(context.getConfig(), expectedType);
+                HostParameters.compatibleWith(context.getConfig(), context.getState(), expectedType);
         if (variables.isEmpty()) {
             menu.getItems().add(MenuBuilders.disabledItem("(Nothing of this type)"));
             return menu;

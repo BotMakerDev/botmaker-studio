@@ -20,7 +20,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   source file as a one-line diff, leaving the author's own formatting and comments where they are. A field
   the editor cannot safely rewrite (not `public static`, `final`, a type no plugin registers, or a value
   written by hand as an expression) is still listed and still shows what it holds, with a line saying why
-  its cell is read-only. The Parameters window itself moves onto this next.
+  its cell is read-only.
+- **The Parameters window and the Runner are over those fields now.** One section per class of yours that
+  declares any — headed with the file name, saying the bot reads them as `Parameters.<name>` — then one per
+  plugin. Adding a parameter writes a field, and a project's first one creates `Parameters.java` and says
+  so; renaming one repoints every reference to it in your bot; retyping one rewrites the declared type and
+  resets the value, because a value written for one type is not a value of another. Removing one takes the
+  declaration and **leaves the places your bot reads it**, with a line saying how many there are: what a
+  use should become is your judgement, and the compiler is what points at them.
+- **A plugin's section is value-only.** Its rows' names, types, categories and notes are shown as the
+  plugin's own facts rather than as fields you can type into — because they are, and a text box you may not
+  type in reads as something broken.
+- The value cell is the same editor the canvas uses, a plugin's included, so a colour is picked off the
+  screen and a duration is entered as hours and minutes wherever you meet one.
 
 ### Fixed
 
