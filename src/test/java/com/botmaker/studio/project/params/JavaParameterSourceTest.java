@@ -244,6 +244,22 @@ class JavaParameterSourceTest {
     }
 
     @Test
+    void theAnnotationsOwnConstantsAreReadAsTheStringsTheyAre() {
+        // Param.PUBLIC exists so that nobody writes "public"; a reader that could not read it would make
+        // the better spelling mean the opposite of what it says.
+        List<JavaParameter> found = read(wrap("""
+                    @Param(visibility = Param.PUBLIC)
+                    public static int a = 1;
+
+                    @Param(visibility = com.botmaker.plugin.basics.params.Param.EDITOR)
+                    public static int b = 2;
+                """));
+
+        assertEquals(Visibility.PUBLIC, found.get(0).row().visibility());
+        assertEquals(Visibility.EDITOR_ONLY, found.get(1).row().visibility());
+    }
+
+    @Test
     void aMemberThatIsNotALiteralReadsAsAbsent() {
         // Without bindings a constant's value is unknowable, and a wrong category is worse than none.
         JavaParameter parameter = read(wrap("""

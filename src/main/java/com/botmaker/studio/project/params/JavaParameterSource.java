@@ -21,6 +21,7 @@ import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ParameterizedType;
+import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.Type;
@@ -254,10 +255,27 @@ public final class JavaParameterSource {
         return out;
     }
 
-    /** A string literal's content, or empty for anything that is not one. */
+    /**
+     * A string literal's content, or empty for anything that is not one — with one exception.
+     *
+     * <p><b>{@code Param.PUBLIC} and {@code Param.EDITOR} are resolved</b>, because the annotation declares
+     * those two constants precisely so that nobody writes the strings down, and a reader that could not
+     * read its own vocabulary would turn the better spelling into a silent "absent". Only a
+     * <em>qualified</em> name is taken, and only one qualified by {@code Param} — a bare {@code PUBLIC}
+     * could be any constant in the file, and guessing at it is what the rest of this method exists not to
+     * do. The value is the contract's own {@link Visibility} id, so there is no third copy of the strings.
+     */
     private static Optional<String> constant(Expression expression) {
-        return expression instanceof StringLiteral literal
-                ? Optional.of(literal.getLiteralValue()) : Optional.empty();
+        if (expression instanceof StringLiteral literal) return Optional.of(literal.getLiteralValue());
+        if (expression instanceof QualifiedName qualified
+                && qualified.getQualifier().getFullyQualifiedName().endsWith(ANNOTATION)) {
+            return switch (qualified.getName().getIdentifier()) {
+                case "PUBLIC" -> Optional.of(Visibility.PUBLIC.id());
+                case "EDITOR" -> Optional.of(Visibility.EDITOR_ONLY.id());
+                default -> Optional.empty();
+            };
+        }
+        return Optional.empty();
     }
 
     private static String string(Map<String, Object> members, String name) {
