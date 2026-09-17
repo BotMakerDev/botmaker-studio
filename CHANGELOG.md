@@ -10,6 +10,67 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.1.2; re-released for updated upstream pins.
+
+### Added
+
+- **Studio reads the parameters a bot declares in its own Java.** A `@Param` field is found wherever the
+  author wrote it, with its type, its value, its category, its description, its bounds and its choices, and
+  it can be added, renamed, retyped, re-annotated and removed from the editor — every edit landing in the
+  source file as a one-line diff, leaving the author's own formatting and comments where they are. A field
+  the editor cannot safely rewrite (not `public static`, `final`, a type no plugin registers, or a value
+  written by hand as an expression) is still listed and still shows what it holds, with a line saying why
+  its cell is read-only.
+- **The Parameters window and the Runner are over those fields now.** One section per class of yours that
+  declares any — headed with the file name, saying the bot reads them as `Parameters.<name>` — then one per
+  plugin. Adding a parameter writes a field, and a project's first one creates `Parameters.java` and says
+  so; renaming one repoints every reference to it in your bot; retyping one rewrites the declared type and
+  resets the value, because a value written for one type is not a value of another. Removing one takes the
+  declaration and **leaves the places your bot reads it**, with a line saying how many there are: what a
+  use should become is your judgement, and the compiler is what points at them.
+- **A plugin's section is value-only.** Its rows' names, types, categories and notes are shown as the
+  plugin's own facts rather than as fields you can type into — because they are, and a text box you may not
+  type in reads as something broken.
+- The value cell is the same editor the canvas uses, a plugin's included, so a colour is picked off the
+  screen and a duration is entered as hours and minutes wherever you meet one.
+- **The categories on the left are yours.** They are whatever your `@Param` fields say, so the rail lists
+  what you actually filed something under — the SDK's six fixed ones (Timing, Targets, Vision, Input,
+  Limits, Debug) are gone, and an empty project no longer offers six drawers with nothing in them.
+
+### Fixed
+
+- **No more warnings at startup, at project open, or when a bot runs.** The JVM's "restricted method" notice
+  named `javafx.graphics` as well as the unnamed module, and ClassGraph's cleaner call needed
+  `--sun-misc-unsafe-memory-access=allow`; both are now in the run plugin, the installer and the jar's
+  manifest. Opening a project printed six resolver warnings per module about JavaFX's published poms —
+  silenced to `error`, where a resolution that really fails still reports. A bot's own JVM grants native
+  access too, so OpenCV no longer warns in the output pane the moment a bot starts.
+
+### Added
+
+- **Vetted and Community bots.** Browse Bots shows each bot's tier as a badge and filters by it. A Vetted bot
+  is one a maintainer looked at, and installing it downloads the release that was looked at. A Community bot
+  was listed automatically, and the install warning says nobody reviewed its code.
+- **Open on GitHub** on every Browse Bots row, and a *Requires* line naming the plugins a bot declares.
+- **New Project lists Vetted templates.** *Show community templates* adds the rest, and appears only when there
+  are any.
+- **A new Publish window.** One page in sections — Kind (bot or template), Listing, Details, Release — beside a
+  live preview of the Browse Bots card, a checklist of the publish's five steps, and your listing as the gallery
+  has it: tier, pull request, whether it is waiting or needs a maintainer, and Unpublish.
+- **A failed publish resumes.** *Retry* continues from the step that failed; the repository, upload and release
+  already done are not repeated.
+- **Listing no longer waits for a maintainer.** The entry goes to the gallery as a pull request its checks merge
+  by themselves, and it names the plugins your bot requires. Re-publishing updates your listing; it used to say
+  "already listed" and change nothing.
+
+### Changed
+
+- **An installed Vetted bot is offered its vetted release**, never an older one than it has. Everything else
+  is offered its newest release, as before.
+- Studio reads the gallery's `catalog.json`, and falls back to `index.json` when it cannot.
+
 ## [1.1.2] — 2026-09-17
 
 ### Added
