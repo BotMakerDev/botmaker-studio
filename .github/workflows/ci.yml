@@ -46,20 +46,20 @@ jobs:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The plugin contract. Studio is the host side of it, and plugin-host below declares it `provided`
       # precisely so there is exactly one copy of it — the loader is parent-first for
       # com.botmaker.plugin.api.**, which a transitive second copy would silently make false.
       - name: Check out botmaker-studio-api
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-studio-api
           path: .deps/botmaker-studio-api
 
       # The plugin loader. Studio's own, until 2026-08-28.
       - name: Check out botmaker-plugin-host
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-plugin-host
           path: .deps/botmaker-plugin-host
@@ -68,13 +68,13 @@ jobs:
       # for its bundled SdkPlugin. Both are gone (2026-09-02): a plugin brings its own toolkit at compile
       # scope, which is what the archetype generates and what botmaker-cli's `pom-scopes` check enforces.
       - name: Check out botmaker-shared
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-shared
           path: .deps/botmaker-shared
 
       - name: Check out botmaker-session
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-session
           path: .deps/botmaker-session
@@ -83,7 +83,7 @@ jobs:
       # in plugin-platform phase 7, and on 2026-09-02 the dependency itself left this pom: Studio bundles
       # no plugin at all now and loads every one from the open project's own resolved classpath. Installing
       # it would put a jar in ~/.m2 that this build never resolves.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -121,10 +121,10 @@ jobs:
     env:
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -217,7 +217,7 @@ jobs:
       # The plugin contract, installed first: the plugin host compiles against it and declares it
       # `provided`, so Studio is what supplies the single copy the parent-first arm depends on.
       - name: Check out botmaker-studio-api
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-studio-api
           ref: ${{ steps.deps.outputs.studioapi }}
@@ -225,21 +225,21 @@ jobs:
 
       # The plugin loader.
       - name: Check out botmaker-plugin-host
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-plugin-host
           ref: ${{ steps.deps.outputs.pluginhost }}
           path: .deps/botmaker-plugin-host
 
       - name: Check out botmaker-shared
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-shared
           ref: ${{ steps.deps.outputs.shared }}
           path: .deps/botmaker-shared
 
       - name: Check out botmaker-session
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: LiQiyeDev/botmaker-session
           ref: ${{ steps.deps.outputs.session }}
@@ -317,7 +317,7 @@ jobs:
           }
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BotMaker-Studio-${{ matrix.platform }}
           path: |
@@ -337,12 +337,12 @@ jobs:
     steps:
       # For packaging/linux/install.sh, tools/changelog-section.sh and CHANGELOG.md — the packages
       # themselves come from `package`. fetch-depth 0 because JReleaser wants the history behind the tag.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -420,10 +420,10 @@ jobs:
       GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
     steps:
       # Only for .github/scripts/build-repo.sh — nothing here is built from source.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -453,11 +453,11 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: bash .github/scripts/build-repo.sh artifacts site "${GITHUB_REF_NAME}"
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
