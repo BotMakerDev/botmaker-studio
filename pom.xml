@@ -438,6 +438,9 @@
                                          runtime and compare cleanly against GitHub release tags. -->
                                     <manifestEntries>
                                         <Implementation-Version>${app.version}</Implementation-Version>
+                                        <!-- `java -jar` reads the grant from here: a command line nobody
+                                             types cannot carry the flag. -->
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                                     </manifestEntries>
                                 </transformer>
                             </transformers>
@@ -457,7 +460,11 @@
                          (glass native libs) doesn't print the "restricted method" warning at startup;
                          also pre-empts the future release that blocks it outright. -->
                     <options>
-                        <option>--enable-native-access=ALL-UNNAMED</option>
+                        <!-- javafx.graphics is a named module on this classpath layout and loads its own
+                             natives; ALL-UNNAMED does not cover it. -->
+                        <option>--enable-native-access=ALL-UNNAMED,javafx.graphics</option>
+                        <!-- ClassGraph's invokeCleaner goes through sun.misc.Unsafe (JDK >= 23 warns). -->
+                        <option>--sun-misc-unsafe-memory-access=allow</option>
                     </options>
                 </configuration>
             </plugin>
@@ -595,7 +602,8 @@
                                     <!-- Same native-access grant as the dev-run plugin, so the
                                          packaged app-image/installer launches without the warning. -->
                                     <javaOptions>
-                                        <javaOption>--enable-native-access=ALL-UNNAMED</javaOption>
+                                        <javaOption>--enable-native-access=ALL-UNNAMED,javafx.graphics</javaOption>
+                                        <javaOption>--sun-misc-unsafe-memory-access=allow</javaOption>
                                     </javaOptions>
                                     <!-- Build the bundled runtime with jlink instead of copying the whole build
                                          JDK (the old `<runtimeImage>${java.home}</runtimeImage>`, which shipped all

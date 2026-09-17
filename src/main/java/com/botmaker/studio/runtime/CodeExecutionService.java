@@ -143,8 +143,10 @@ public class CodeExecutionService {
                 // Tell UI the program has started so the Stop button becomes clickable.
                 eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
 
-                // Run the compiled main class directly: java [session hand-off] -cp <classes:deps> <mainClass>
+                // Run the compiled main class directly:
+                // java [bot options] [session hand-off] -cp <classes:deps> <mainClass>
                 List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
+                command.addAll(BotJvm.OPTIONS);
                 command.addAll(sessionHandoffArguments());
                 // entryClassName(), not mainClassName(): the entry class is named after the project only in a
                 // project Studio created and the user has not renamed. One made from a published template

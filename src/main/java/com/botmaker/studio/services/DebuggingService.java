@@ -9,6 +9,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.palette.InputKind;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.runtime.BotJvm;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.project.ProjectState;
 import com.sun.jdi.*;
@@ -213,12 +214,10 @@ public class DebuggingService {
                 // Use the full classpath here. Run from the project root (like CodeExecutionService) so the
                 // bot's relative resource paths — e.g. src/main/resources/images/*.png passed to OpenCV
                 // imread — resolve against the bot project, not Studio's working directory.
-                ProcessBuilder pb = new ProcessBuilder(
-                        javaExecutable,
-                        debugAgent,
-                        "-cp", fullClassPath.toString(),
-                        className
-                ).directory(config.projectPath().toFile());
+                List<String> command = new ArrayList<>(List.of(javaExecutable));
+                command.addAll(BotJvm.OPTIONS);
+                command.addAll(List.of(debugAgent, "-cp", fullClassPath.toString(), className));
+                ProcessBuilder pb = new ProcessBuilder(command).directory(config.projectPath().toFile());
                 startTelemetry(pb);
                 this.currentProcess = pb.start();
 

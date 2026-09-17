@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more warnings at startup, at project open, or when a bot runs.** The JVM's "restricted method" notice
+  named `javafx.graphics` as well as the unnamed module, and ClassGraph's cleaner call needed
+  `--sun-misc-unsafe-memory-access=allow`; both are now in the run plugin, the installer and the jar's
+  manifest. Opening a project printed six resolver warnings per module about JavaFX's published poms —
+  silenced to `error`, where a resolution that really fails still reports. A bot's own JVM grants native
+  access too, so OpenCV no longer warns in the output pane the moment a bot starts.
+
 ### Added
 
 - **Vetted and Community bots.** Browse Bots shows each bot's tier as a badge and filters by it. A Vetted bot

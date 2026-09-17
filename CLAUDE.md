@@ -42,6 +42,18 @@ mvn -Pdist package
 From the **umbrella** root you can also run the Studio via the reactor: `mvn -pl botmaker-studio javafx:run`.
 Tests run with JUnit Jupiter (Surefire).
 
+**An IntelliJ Application run configuration builds its own command line and so carries none of the
+`javafx:run` options.** That is where the startup warnings come from, not from the code. Paste into its *VM
+options*:
+
+```
+--enable-native-access=ALL-UNNAMED,javafx.graphics --sun-misc-unsafe-memory-access=allow
+```
+
+The same two are in `pom.xml` (`javafx-maven-plugin` `<options>` and jpackage `<javaOptions>`), and
+`Enable-Native-Access: ALL-UNNAMED` is in the shaded jar's manifest for `java -jar`. A bot's own JVM is a
+third command line, built in `runtime/BotJvm`.
+
 ## Code Style
 
 Prefer minimizing mutable state — favor a functional OOP style. Use immutable values (`record`s like
