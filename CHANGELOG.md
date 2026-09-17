@@ -33,6 +33,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   type in reads as something broken.
 - The value cell is the same editor the canvas uses, a plugin's included, so a colour is picked off the
   screen and a duration is entered as hours and minutes wherever you meet one.
+- **The categories on the left are yours.** They are whatever your `@Param` fields say, so the rail lists
+  what you actually filed something under — the SDK's six fixed ones (Timing, Targets, Vision, Input,
+  Limits, Debug) are gone, and an empty project no longer offers six drawers with nothing in them.
 
 ### Fixed
 
