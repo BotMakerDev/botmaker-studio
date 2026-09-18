@@ -54,14 +54,14 @@ jobs:
       - name: Check out botmaker-studio-api
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-studio-api
+          repository: BotMakerDev/botmaker-studio-api
           path: .deps/botmaker-studio-api
 
       # The plugin loader. Studio's own, until 2026-08-28.
       - name: Check out botmaker-plugin-host
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-plugin-host
+          repository: BotMakerDev/botmaker-plugin-host
           path: .deps/botmaker-plugin-host
 
       # botmaker-plugin-toolkit was checked out here too, for the runtime-scope dependency Studio carried
@@ -70,13 +70,13 @@ jobs:
       - name: Check out botmaker-shared
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-shared
+          repository: BotMakerDev/botmaker-shared
           path: .deps/botmaker-shared
 
       - name: Check out botmaker-session
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-session
+          repository: BotMakerDev/botmaker-session
           path: .deps/botmaker-session
 
       # botmaker-sdk was checked out here too, "for type identity (palette/SdkType)". SdkType was deleted
@@ -219,7 +219,7 @@ jobs:
       - name: Check out botmaker-studio-api
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-studio-api
+          repository: BotMakerDev/botmaker-studio-api
           ref: ${{ steps.deps.outputs.studioapi }}
           path: .deps/botmaker-studio-api
 
@@ -227,21 +227,21 @@ jobs:
       - name: Check out botmaker-plugin-host
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-plugin-host
+          repository: BotMakerDev/botmaker-plugin-host
           ref: ${{ steps.deps.outputs.pluginhost }}
           path: .deps/botmaker-plugin-host
 
       - name: Check out botmaker-shared
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-shared
+          repository: BotMakerDev/botmaker-shared
           ref: ${{ steps.deps.outputs.shared }}
           path: .deps/botmaker-shared
 
       - name: Check out botmaker-session
         uses: actions/checkout@v7
         with:
-          repository: LiQiyeDev/botmaker-session
+          repository: BotMakerDev/botmaker-session
           ref: ${{ steps.deps.outputs.session }}
           path: .deps/botmaker-session
 
