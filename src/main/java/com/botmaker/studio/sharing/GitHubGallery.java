@@ -50,10 +50,10 @@ public final class GitHubGallery {
         if (!GitHubConfig.isGalleryConfigured()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        return client.getString(GitHubConfig.catalogRawUrl()).thenCompose(body -> {
+        return client.getFirstString(GitHubConfig.catalogRawUrls()).thenCompose(body -> {
             Optional<List<GalleryEntry>> catalog = parseCatalog(client.mapper(), body);
             if (catalog.isPresent()) return CompletableFuture.completedFuture(catalog.get());
-            return client.getString(GitHubConfig.indexRawUrl())
+            return client.getFirstString(GitHubConfig.indexRawUrls())
                     .thenApply(index -> parseLegacyIndex(client.mapper(), index));
         });
     }

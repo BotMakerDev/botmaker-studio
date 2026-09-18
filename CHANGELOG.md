@@ -21,6 +21,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Browse Bots, New Project's templates and Manage Plugins keep working when the gallery and the plugin
+  registry move** to the `BotMakerDev` organization. Studio reads the new location first and the current one
+  second, so it needs no update on the day they move.
 - **Studio moves only the projects it keeps.** *Archive* works as before for a project in
   `~/BotMakerProjects`. For a project opened from elsewhere the button reads *Remove from Recents*, and it
   forgets the project without touching its folder.

@@ -129,7 +129,7 @@ public final class PluginRegistry {
         if (!GitHubConfig.isRegistryConfigured()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        return client.getString(GitHubConfig.registryIndexRawUrl()).thenApply(PluginRegistry::parse);
+        return client.getFirstString(GitHubConfig.registryIndexRawUrls()).thenApply(PluginRegistry::parse);
     }
 
     /** Package-private and static so the parse can be tested without a network or a client. */
