@@ -35,10 +35,38 @@ public record ProjectConfig(
 ) {
 
     public static ProjectConfig forProject(String projectName, Path projectsRoot) {
-        String javaHome = System.getProperty("java.home");
+        return of(projectName, projectName.toLowerCase(), projectsRoot.resolve(projectName));
+    }
+
+    /**
+     * The project <b>in</b> {@code projectDir}, wherever that is — the way to open one Studio did not create
+     * under {@code ~/BotMakerProjects}, such as a template kept in its own repository.
+     *
+     * <p>The name is still the folder's name. The package is not always derivable from it: a folder called
+     * {@code botmaker-gamebot} holds {@code com.botmaker.gamebot}, and no rule gets from one to the other. A
+     * template says which package it is in ({@link TemplateProject#FILE_NAME}), so that declaration wins when
+     * it is there and names a {@code com.} package; otherwise the package is derived exactly as
+     * {@link #forProject} derives it, which keeps a project under the default root reading the same through
+     * either door.
+     */
+    public static ProjectConfig forDirectory(Path projectDir) {
+        Path dir = projectDir.toAbsolutePath().normalize();
+        String projectName = dir.getFileName().toString();
         String packageName = projectName.toLowerCase();
+        try {
+            String declared = TemplateProject.read(dir).packageName();
+            if (declared.startsWith("com.") && declared.length() > "com.".length()) {
+                packageName = declared.substring("com.".length());
+            }
+        } catch (java.io.IOException notATemplate) {
+            // An ordinary project: the derived package is the answer.
+        }
+        return of(projectName, packageName, dir);
+    }
+
+    private static ProjectConfig of(String projectName, String packageName, Path projectPath) {
+        String javaHome = System.getProperty("java.home");
         String className = toClassName(projectName);
-        Path projectPath = projectsRoot.resolve(projectName);
 
         boolean isWindows = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
         String javaBin = isWindows ? "java.exe" : "java";
@@ -50,8 +78,8 @@ public record ProjectConfig(
                 className,
                 projectPath,
                 projectPath.resolve("src").resolve("main").resolve("java"),
-                projectPath.resolve("src").resolve("main").resolve("java")
-                        .resolve("com").resolve(packageName).resolve(className + ".java"),
+                packageDir(projectPath.resolve("src").resolve("main").resolve("java"), packageName)
+                        .resolve(className + ".java"),
                 // Maven standard output directory
                 projectPath.resolve("target").resolve("classes"),
                 "com." + packageName + "." + className,
@@ -112,6 +140,17 @@ public record ProjectConfig(
         }
     }
 
+    /**
+     * {@code <sourceRoot>/com/<packageName>}, one directory per segment. A derived package has one segment;
+     * a declared one ({@link #forDirectory}) may have several, and resolving {@code botmaker.gamebot} whole
+     * would name a directory with a dot in it.
+     */
+    private static Path packageDir(Path sourceRoot, String packageName) {
+        Path dir = sourceRoot.resolve("com");
+        for (String segment : packageName.split("\\.")) dir = dir.resolve(segment);
+        return dir;
+    }
+
     /** {@code projectName} as a Java class name: the same word, capitalized. */
     public static String toClassName(String projectName) {
         if (projectName == null || projectName.isEmpty()) return projectName;
@@ -130,7 +169,7 @@ public record ProjectConfig(
 
     /** The generated {@code Activities.java} sidecar (sibling of the main class): the enable flags. */
     public Path activitiesSourceFile() {
-        return sourceRoot.resolve("com").resolve(packageName).resolve("Activities.java");
+        return mainPackageDir().resolve("Activities.java");
     }
 
     /**
@@ -140,7 +179,7 @@ public record ProjectConfig(
      * created before then has none until it is opened and migrated.
      */
     public Path parametersSourceFile() {
-        return sourceRoot.resolve("com").resolve(packageName).resolve("Parameters.java");
+        return mainPackageDir().resolve("Parameters.java");
     }
 
     // templatesSourceFile() went on 2026-09-01 with no caller and none since the SDK stopped writing source
@@ -149,12 +188,12 @@ public record ProjectConfig(
 
     /** The generated {@code ActivityRegistry.java} sidecar (sibling of the main class). */
     public Path activityRegistrySourceFile() {
-        return sourceRoot.resolve("com").resolve(packageName).resolve("ActivityRegistry.java");
+        return mainPackageDir().resolve("ActivityRegistry.java");
     }
 
     /** The generated {@code FlowDriver.java} sidecar — the state machine over the drawn Activity Flow. */
     public Path flowDriverSourceFile() {
-        return sourceRoot.resolve("com").resolve(packageName).resolve("FlowDriver.java");
+        return mainPackageDir().resolve("FlowDriver.java");
     }
 
     /**
@@ -168,7 +207,7 @@ public record ProjectConfig(
 
     /** {@code src/main/java/com/<pkg>} — the package every generated sidecar is written into. */
     public Path mainPackageDir() {
-        return sourceRoot.resolve("com").resolve(packageName);
+        return packageDir(sourceRoot, packageName);
     }
 
     /** {@code com.<pkg>} — the bot's own package, as an import would spell it. */
@@ -178,7 +217,7 @@ public record ProjectConfig(
 
     /** {@code src/main/java/com/<pkg>/activities} — where per-activity subclass stubs live. */
     public Path activitiesPackageDir() {
-        return sourceRoot.resolve("com").resolve(packageName).resolve("activities");
+        return mainPackageDir().resolve("activities");
     }
 
     /**

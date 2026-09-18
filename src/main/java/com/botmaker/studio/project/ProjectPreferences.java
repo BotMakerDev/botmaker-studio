@@ -15,16 +15,23 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.botmaker.studio.BotMakerStudio.PROJECTS_ROOT;
+import static com.botmaker.studio.config.Constants.PROJECTS_ROOT;
 
 /**
  * User preferences for project management (last opened, recent projects).
  * Persisted as JSON in the projects root directory.
  * Renamed from the old ProjectConfig to avoid clash with the new ProjectConfig.
+ *
+ * <p>A project is remembered by its <b>directory</b> since 2026-09-18, because one may live outside the
+ * default root. The name is still written beside it: a file this build wrote stays readable by an older
+ * Studio, which ignores {@code path} and {@code lastOpenedPath} and finds a default-root project by name as it
+ * always did. A file an older Studio wrote has no path, and a missing path means the default root.
  */
 public class ProjectPreferences {
 
     private static final Path CONFIG_FILE = PROJECTS_ROOT.resolve("botmaker-config.json");
+    /** How many projects the MRU keeps. */
+    private static final int MAX_RECENT_PROJECTS = 10;
     /** Same depth as the project MRU — long enough to cover a working set, short enough to stay scannable. */
     private static final int MAX_RECENT_LAUNCH_TARGETS = 10;
     private static final ObjectMapper MAPPER = new ObjectMapper()
@@ -32,6 +39,8 @@ public class ProjectPreferences {
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     private String lastOpenedProject;
+    /** The last project's directory; {@code null} in a file an older Studio wrote. */
+    private String lastOpenedPath;
     private List<ProjectEntry> recentProjects = new ArrayList<>();
     /**
      * Launch-target specs the user has picked before, newest first — the "Recently used" list in
@@ -63,6 +72,8 @@ public class ProjectPreferences {
 
     public String getLastOpenedProject() { return lastOpenedProject; }
     public void setLastOpenedProject(String name) { this.lastOpenedProject = name; }
+    public String getLastOpenedPath() { return lastOpenedPath; }
+    public void setLastOpenedPath(String path) { this.lastOpenedPath = path; }
     public List<ProjectEntry> getRecentProjects() { return recentProjects; }
     public List<String> getRecentLaunchTargets() { return recentLaunchTargets; }
     public void setRecentLaunchTargets(List<String> specs) {
@@ -81,12 +92,38 @@ public class ProjectPreferences {
     public String getProjectSortMode() { return projectSortMode; }
     public void setProjectSortMode(String mode) { this.projectSortMode = mode; }
 
-    public void addRecentProject(String projectName) {
-        recentProjects.removeIf(p -> p.getName().equals(projectName));
-        recentProjects.addFirst(new ProjectEntry(projectName));
-        if (recentProjects.size() > 10) {
-            recentProjects = recentProjects.subList(0, 10);
+    /**
+     * Records {@code projectDir} as the project last opened and moves it to the front of the MRU. Two entries
+     * are the same project when they are the same directory, not when they share a name: a template kept in
+     * its own repository and a project made from it are both called whatever their folders are called.
+     */
+    public void recordOpened(Path projectDir) {
+        Path dir = projectDir.toAbsolutePath().normalize();
+        // Forget first: forgetting the last-opened project also clears "last opened", which is about to be set.
+        forgetRecent(dir);
+        lastOpenedProject = dir.getFileName().toString();
+        lastOpenedPath = dir.toString();
+        recentProjects.addFirst(new ProjectEntry(dir));
+        if (recentProjects.size() > MAX_RECENT_PROJECTS) {
+            recentProjects = new ArrayList<>(recentProjects.subList(0, MAX_RECENT_PROJECTS));
         }
+    }
+
+    /** Drops {@code projectDir} from the MRU, and from "last opened" when it is that one. Touches no file. */
+    public void forgetRecent(Path projectDir) {
+        Path dir = projectDir.toAbsolutePath().normalize();
+        recentProjects.removeIf(p -> dir.equals(p.directory()));
+        if (dir.equals(lastOpenedDirectory())) {
+            lastOpenedProject = null;
+            lastOpenedPath = null;
+        }
+    }
+
+    /** The last project's directory, or {@code null}. A file without {@code lastOpenedPath} means the default root. */
+    @JsonIgnore
+    public Path lastOpenedDirectory() {
+        if (lastOpenedPath != null && !lastOpenedPath.isBlank()) return Path.of(lastOpenedPath);
+        return lastOpenedProject == null ? null : PROJECTS_ROOT.resolve(lastOpenedProject);
     }
 
     /**
@@ -108,9 +145,18 @@ public class ProjectPreferences {
     // --- Persistence ---
 
     public static ProjectPreferences load() {
+        return read(CONFIG_FILE);
+    }
+
+    public void save() {
+        write(CONFIG_FILE);
+    }
+
+    /** {@link #load()} from any file — the seam the round-trip tests use. */
+    static ProjectPreferences read(Path file) {
         try {
-            if (Files.exists(CONFIG_FILE)) {
-                return MAPPER.readValue(CONFIG_FILE.toFile(), ProjectPreferences.class);
+            if (Files.exists(file)) {
+                return MAPPER.readValue(file.toFile(), ProjectPreferences.class);
             }
         } catch (Exception e) {
             System.err.println("Failed to load project preferences: " + e.getMessage());
@@ -118,10 +164,11 @@ public class ProjectPreferences {
         return new ProjectPreferences();
     }
 
-    public void save() {
+    /** {@link #save()} to any file. */
+    void write(Path file) {
         try {
-            Files.createDirectories(CONFIG_FILE.getParent());
-            MAPPER.writeValue(CONFIG_FILE.toFile(), this);
+            Files.createDirectories(file.getParent());
+            MAPPER.writeValue(file.toFile(), this);
         } catch (IOException e) {
             System.err.println("Failed to save project preferences: " + e.getMessage());
         }
@@ -129,15 +176,27 @@ public class ProjectPreferences {
 
     // --- Static Convenience ---
 
-    public static void updateLastOpened(String projectName) {
+    public static void updateLastOpened(Path projectDir) {
         ProjectPreferences prefs = load();
-        prefs.setLastOpenedProject(projectName);
-        prefs.addRecentProject(projectName);
+        prefs.recordOpened(projectDir);
         prefs.save();
     }
 
-    public static String getLastOpened() {
-        return load().getLastOpenedProject();
+    /** The directory of the project last opened, or {@code null}. */
+    public static Path getLastOpened() {
+        return load().lastOpenedDirectory();
+    }
+
+    /** The remembered projects' directories, newest first. */
+    public static List<Path> recentDirectories() {
+        return load().getRecentProjects().stream().map(ProjectEntry::directory).toList();
+    }
+
+    /** Removes {@code projectDir} from the MRU. The folder itself is not touched. */
+    public static void removeRecent(Path projectDir) {
+        ProjectPreferences prefs = load();
+        prefs.forgetRecent(projectDir);
+        prefs.save();
     }
 
     /** Records a launch-target spec in the global MRU. Called from every path that writes {@code launch.target}. */
@@ -247,18 +306,30 @@ public class ProjectPreferences {
 
     public static class ProjectEntry {
         private String name;
+        /** The project's directory; {@code null} in an entry an older Studio wrote, meaning the default root. */
+        private String path;
         private String lastOpened;
 
         public ProjectEntry() {}
 
-        public ProjectEntry(String name) {
-            this.name = name;
+        public ProjectEntry(Path directory) {
+            this.name = directory.getFileName().toString();
+            this.path = directory.toString();
             this.lastOpened = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
         }
 
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
+        public String getPath() { return path; }
+        public void setPath(String path) { this.path = path; }
         public String getLastOpened() { return lastOpened; }
         public void setLastOpened(String lastOpened) { this.lastOpened = lastOpened; }
+
+        /** Where this project is: its recorded path, or the default root for an entry written without one. */
+        @JsonIgnore
+        public Path directory() {
+            Path dir = path != null && !path.isBlank() ? Path.of(path) : PROJECTS_ROOT.resolve(name);
+            return dir.toAbsolutePath().normalize();
+        }
     }
 }

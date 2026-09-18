@@ -3,6 +3,7 @@ package com.botmaker.studio;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.impl.NestedSession;
+import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.BotProject;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectPreferences;
@@ -36,10 +37,6 @@ import java.nio.file.Path;
 
 public class BotMakerStudio extends Application {
 
-    /** Root directory where all user projects live. */
-    public static final Path PROJECTS_ROOT =
-            Path.of(System.getProperty("user.home"), "BotMakerProjects").toAbsolutePath();
-
     /** Narrowest the shell may be dragged — see {@code configureWindow}. */
     private static final double MIN_WINDOW_WIDTH = 900;
     /** Shortest the shell may be dragged: menu bar, toolbar, a usable canvas and the status line. */
@@ -61,7 +58,7 @@ public class BotMakerStudio extends Application {
      */
     private Boolean showAsUser;
     /** The project {@link #showAsUser} was chosen for. */
-    private String openProjectName;
+    private Path openProjectDir;
 
     /** The primary window, kept for owning dialogs. */
     private Stage primaryStage;
@@ -87,16 +84,15 @@ public class BotMakerStudio extends Application {
         sweep.start();
         applyAppIcons(primaryStage);
         configureWindow(primaryStage);
-        String requested = requestedProject();
-        String toOpen = requested != null ? requested : ProjectPreferences.getLastOpened();
+        Path requested = requestedProject();
+        Path toOpen = requested != null ? requested : ProjectPreferences.getLastOpened();
         if (toOpen != null && projectExists(toOpen)) {
             openProject(primaryStage, toOpen, false);
         } else {
             if (requested != null) {
                 // Named but absent: say so rather than silently showing the picker, because the caller was
                 // a program (`botmaker run --project`) and a picker is not an answer a program can read.
-                System.err.println("No project '" + requested + "' under " + PROJECTS_ROOT
-                        + " — showing the project list instead.");
+                System.err.println("No project at " + requested + " — showing the project list instead.");
             }
             showProjectSelection(primaryStage);
         }
@@ -109,8 +105,8 @@ public class BotMakerStudio extends Application {
     private void showProjectSelection(Stage primaryStage) {
         ProjectSelectionScreen selectionScreen = new ProjectSelectionScreen(
                 primaryStage,
-                (projectName, clearCache, freshlyCreated) ->
-                        openProject(primaryStage, projectName, freshlyCreated)
+                (projectDir, clearCache, freshlyCreated) ->
+                        openProject(primaryStage, projectDir, freshlyCreated)
         );
         setScenePreservingGeometry(primaryStage, selectionScreen.createScene());
         primaryStage.setTitle("BotMaker - Select Project");
@@ -135,7 +131,8 @@ public class BotMakerStudio extends Application {
     // PROJECT LIFECYCLE
     // =========================================================================
 
-    private void openProject(Stage primaryStage, String projectName, boolean freshlyCreated) {
+    private void openProject(Stage primaryStage, Path projectDir, boolean freshlyCreated) {
+        String projectName = projectDir.getFileName().toString();
         // 1. Close previous project — its window first. This is also the reload path (a VCS rollback publishes
         //    ProjectReloadRequestedEvent), so it runs far more often than "the user picked another project";
         //    without releasing the shell the Remote Pilot port and its nested display would survive every one.
@@ -147,11 +144,11 @@ public class BotMakerStudio extends Application {
 
         // A window choice belongs to the project it was made about. Reloading the same one (the audience
         // toggle, a VCS rollback) keeps it; moving to another drops it.
-        if (!projectName.equals(openProjectName)) showAsUser = null;
-        openProjectName = projectName;
+        if (!projectDir.equals(openProjectDir)) showAsUser = null;
+        openProjectDir = projectDir;
 
         // 2. Save preference
-        ProjectPreferences.updateLastOpened(projectName);
+        ProjectPreferences.updateLastOpened(projectDir);
 
         // 3. Show the loading screen immediately so the window is never blank/frozen while the (slow,
         //    possibly download-heavy) open runs off the FX thread.
@@ -170,7 +167,7 @@ public class BotMakerStudio extends Application {
         Task<OpenedProject> openTask = new Task<>() {
             @Override
             protected OpenedProject call() {
-                BotProject project = BotProject.open(projectName, PROJECTS_ROOT, false, (fraction, message) -> {
+                BotProject project = BotProject.open(projectDir, false, (fraction, message) -> {
                     updateProgress(fraction, 1.0);
                     updateMessage(fraction >= 0
                             ? message + " — " + Math.round(fraction * 100) + "%"
@@ -192,7 +189,7 @@ public class BotMakerStudio extends Application {
             progressBar.progressProperty().unbind();
             OpenedProject opened = openTask.getValue();
             currentProject = opened.project();
-            finishOpen(primaryStage, projectName, freshlyCreated, opened.sources());
+            finishOpen(primaryStage, projectDir, freshlyCreated, opened.sources());
         });
 
         openTask.setOnFailed(e -> {
@@ -223,8 +220,9 @@ public class BotMakerStudio extends Application {
      * new-project setup dialog) goes with it, since all of it either assumes a rendered program or opens a
      * dialog over one.
      */
-    private void finishOpen(Stage primaryStage, String projectName, boolean freshlyCreated,
+    private void finishOpen(Stage primaryStage, Path projectDir, boolean freshlyCreated,
                             java.util.List<ProjectFile> sources) {
+        String projectName = projectDir.getFileName().toString();
         try {
             // A project saved by a newer Studio is refused here and not in ProjectOpenMigrations, because it
             // has to be refused for *both* audiences: a file shape this build cannot read is no more readable
@@ -243,17 +241,17 @@ public class BotMakerStudio extends Application {
             // both of them can raise it.
             currentProject.getEventBus().subscribe(
                     com.botmaker.studio.events.CoreApplicationEvents.ProjectReloadRequestedEvent.class,
-                    e -> openProject(primaryStage, projectName, false), true);
+                    e -> openProject(primaryStage, projectDir, false), true);
 
             // The audience decides the whole window, not a set of hidden controls — so the branch is here,
             // before anything editor-shaped is constructed. The Runner needs no parsed source at all, which
             // is why it returns before the block-building work below.
             if (openAsUser()) {
-                openRunner(primaryStage, projectName);
+                openRunner(primaryStage, projectDir);
                 return;
             }
 
-            UIManager uiManager = getUiManager(primaryStage, projectName);
+            UIManager uiManager = getUiManager(primaryStage, projectDir);
 
             setScenePreservingGeometry(primaryStage, uiManager.createScene());
             primaryStage.setTitle("BotMaker Blocks - " + projectName);
@@ -345,28 +343,28 @@ public class BotMakerStudio extends Application {
      * than a scene swap: the project's services and its event bus are rebuilt with it, so nothing from the
      * window being left behind can still be listening.
      */
-    private void openRunner(Stage primaryStage, String projectName) {
+    private void openRunner(Stage primaryStage, Path projectDir) {
         RunnerWindow.Origin origin = Boolean.TRUE.equals(showAsUser)
                 ? RunnerWindow.Origin.PREVIEW
                 : RunnerWindow.Origin.INSTALLED;
         RunnerWindow runner = new RunnerWindow(currentProject.context(), primaryStage, origin, () -> {
             showAsUser = Boolean.FALSE;
-            openProject(primaryStage, projectName, false);
+            openProject(primaryStage, projectDir, false);
         });
         this.currentWindow = runner;
 
         setScenePreservingGeometry(primaryStage, runner.createScene());
-        primaryStage.setTitle("BotMaker - " + projectName);
+        primaryStage.setTitle("BotMaker - " + projectDir.getFileName());
         primaryStage.show();
         requestSceneLayout(primaryStage);
     }
 
-    private UIManager getUiManager(Stage primaryStage, String projectName) {
+    private UIManager getUiManager(Stage primaryStage, Path projectDir) {
         UIManager uiManager = new UIManager(currentProject.context(), primaryStage);
         uiManager.setOnSelectProject(v -> switchToProjectSelector(primaryStage));
         uiManager.setOnPreviewAsUser(() -> {
             showAsUser = Boolean.TRUE;
-            openProject(primaryStage, projectName, false);
+            openProject(primaryStage, projectDir, false);
         });
         this.currentWindow = uiManager;
         return uiManager;
@@ -575,32 +573,37 @@ public class BotMakerStudio extends Application {
     }
 
     /**
-     * The project named on the command line as {@code --project=<name>}, or {@code null}.
+     * The project named on the command line as {@code --project=<name or path>}, as a directory, or
+     * {@code null}.
      *
      * <p>Added 2026-08-28 for {@code botmaker run}, whose whole job is to build a plugin and put the user in
      * front of a project that uses it. Without it the CLI would have to write Studio's own preferences file
      * from outside to choose what opens, which is a program reaching into another program's state.
      *
-     * <p>A <em>name</em>, not a path, because that is the unit Studio deals in: projects live under
-     * {@link #PROJECTS_ROOT} and are opened, remembered and listed by name everywhere else. A path here
-     * would be a second way to identify the same thing.
+     * <p>A bare <em>name</em> is a project under {@link Constants#PROJECTS_ROOT}, which is what every caller
+     * written before 2026-09-18 passes and what {@code botmaker run} still passes. A value containing a path
+     * separator is a directory, because since that date a project is identified by its directory and may
+     * live anywhere — a template kept in its own repository is the case that forced it. Nothing is guessed
+     * between the two: a name cannot contain a separator, so the separator is the whole rule.
      *
      * <p>It does not become the remembered project by itself — {@link #openProject} does that, exactly as it
      * would for a click. Opening one project by request and then having Studio reopen it next time is what a
      * user expects; suppressing that would be a special case with no reason behind it.
      */
-    private String requestedProject() {
+    private Path requestedProject() {
         Parameters parameters = getParameters();
         if (parameters == null) {
             return null;
         }
         String named = parameters.getNamed().get("project");
-        return named == null || named.isBlank() ? null : named;
+        if (named == null || named.isBlank()) return null;
+        boolean isPath = named.contains("/") || named.contains(java.io.File.separator);
+        Path dir = isPath ? Path.of(named) : Constants.PROJECTS_ROOT.resolve(named);
+        return dir.toAbsolutePath().normalize();
     }
 
-    private boolean projectExists(String projectName) {
-        Path projectPath = PROJECTS_ROOT.resolve(projectName);
-        return Files.exists(projectPath) && Files.exists(projectPath.resolve("pom.xml"));
+    private static boolean projectExists(Path projectDir) {
+        return Files.exists(projectDir) && Files.exists(projectDir.resolve("pom.xml"));
     }
 
     private void showErrorDialog(String message) {

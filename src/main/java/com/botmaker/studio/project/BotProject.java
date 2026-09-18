@@ -82,28 +82,24 @@ public class BotProject {
     /**
      * Opens a project: resolves dependencies, builds the type index, creates all services.
      *
-     * @param projectName Name of the project
-     * @param projectsRoot Root directory containing all projects
+     * @param projectDir The project's own directory — under the default root or anywhere else
      * @param enableEventLogging Whether to log events for debugging
      * @return Fully initialized BotProject
      */
-    public static BotProject open(String projectName,
-                                  Path projectsRoot,
-                                  boolean enableEventLogging) {
-        return open(projectName, projectsRoot, enableEventLogging, ProgressReporter.NONE);
+    public static BotProject open(Path projectDir, boolean enableEventLogging) {
+        return open(projectDir, enableEventLogging, ProgressReporter.NONE);
     }
 
     /**
-     * As {@link #open(String, Path, boolean)}, but reports progress via {@code progress}: real download
+     * As {@link #open(Path, boolean)}, but reports progress via {@code progress}: real download
      * percentages during dependency resolution, and indeterminate status messages for the other phases
      * ({@code "Resolving dependencies…"}, {@code "Loading project…"}). May be invoked from worker threads.
      */
-    public static BotProject open(String projectName,
-                                  Path projectsRoot,
+    public static BotProject open(Path projectDir,
                                   boolean enableEventLogging,
                                   ProgressReporter progress) {
         // 1. Create config
-        ProjectConfig config = ProjectConfig.forProject(projectName, projectsRoot);
+        ProjectConfig config = ProjectConfig.forDirectory(projectDir);
 
         // 2. Create state
         ProjectState state = new ProjectState();

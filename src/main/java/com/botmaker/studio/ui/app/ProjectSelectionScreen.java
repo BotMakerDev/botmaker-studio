@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectInfo;
 import com.botmaker.studio.project.ProjectPreferences;
@@ -21,8 +22,11 @@ import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,13 +56,17 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private volatile String myLogin;
 
     /**
-     * Notified to open a project. {@code freshlyCreated} is true only for a brand-new project (from
-     * {@link #createProject}), so the caller can auto-open the Project Setup wizard on creation but not on a
-     * plain open.
+     * Notified to open the project in {@code projectDir}. {@code freshlyCreated} is true only for a brand-new
+     * project (from {@link #createProject}), so the caller can auto-open the Project Setup wizard on creation
+     * but not on a plain open.
+     *
+     * <p>A directory rather than a name since 2026-09-18: a project opened with <em>Open Folder…</em> lives
+     * outside the projects root, and a name would be re-resolved against the root and open the wrong folder
+     * or none. This screen already held the path ({@link ProjectInfo#projectPath()}) and threw it away.
      */
     @FunctionalInterface
     public interface OpenHandler {
-        void open(String projectName, boolean clearCache, boolean freshlyCreated);
+        void open(Path projectDir, boolean clearCache, boolean freshlyCreated);
     }
 
     private final OpenHandler onProjectSelected;
@@ -68,6 +76,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private CheckBox myProjectsCheckbox;
     private ComboBox<SortMode> sortCombo;
     private Button openButton;
+    private Button openFolderButton;
     private Button createButton;
     private Button galleryButton;
     private Button archiveButton;
@@ -147,6 +156,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // Header rows aren't a meaningful selection — bounce selection to the nearest project row.
         projectListView.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now instanceof HeaderRow) Platform.runLater(this::selectNearestProjectRow);
+            updateArchiveButton();
         });
 
         resolveLogin();
@@ -157,6 +167,12 @@ public class ProjectSelectionScreen implements ProjectWindow {
         openButton.setDefaultButton(true);
         openButton.setOnAction(e -> openSelectedProject());
 
+        openFolderButton = new Button("Open Folder…");
+        openFolderButton.setPrefWidth(130);
+        openFolderButton.setTooltip(new Tooltip("Open a project kept outside " + Constants.PROJECTS_ROOT
+                + " — a repository of your own, say. It is remembered under “Elsewhere”."));
+        openFolderButton.setOnAction(e -> openFolder());
+
         createButton = new Button("Create New Project");
         createButton.setPrefWidth(150);
         createButton.setOnAction(e -> showCreateProjectDialog());
@@ -166,7 +182,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         galleryButton.setOnAction(e -> showGallery());
 
         archiveButton = new Button("Archive");
-        archiveButton.setPrefWidth(110);
+        archiveButton.setPrefWidth(150);
         archiveButton.setOnAction(e -> archiveSelectedProject());
 
         archivedButton = new Button("View Archived…");
@@ -196,7 +212,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
         HBox sortRow = new HBox(10, new Label("Sort:"), sortCombo, myProjectsCheckbox);
         sortRow.setAlignment(Pos.CENTER_LEFT);
 
-        HBox buttonBox = new HBox(10, openButton, createButton, galleryButton, archiveButton, archivedButton);
+        HBox buttonBox = new HBox(10, openButton, openFolderButton, createButton, galleryButton,
+                archiveButton, archivedButton);
         buttonBox.setAlignment(Pos.CENTER);
 
         VBox footer = new VBox(15, sortRow, buttonBox);
@@ -314,13 +331,51 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private void openSelectedProject() {
         ProjectInfo selected = selectedProject();
         if (selected != null) {
-            onProjectSelected.open(selected.name(), false, false);
+            onProjectSelected.open(selected.projectPath(), false, false);
         }
     }
 
     /**
+     * Opens a project from a folder the user picks, anywhere. Refused, with the reason, when the folder is not
+     * a Maven project — the same two things {@link ProjectManager#isValidProject} checks for the list, so a
+     * folder that would not be listed cannot be opened either.
+     */
+    private void openFolder() {
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Open a project folder");
+        // A directory that does not exist is no directory at all — JavaFX throws rather than ignoring it.
+        File home = new File(System.getProperty("user.home"));
+        if (home.isDirectory()) chooser.setInitialDirectory(home);
+        File picked = chooser.showDialog(stage);
+        if (picked == null) return;
+        Path dir = picked.toPath().toAbsolutePath().normalize();
+        if (projectManager.projectAt(dir).isEmpty()) {
+            error("Not a project", dir + " has no " + ProjectManager.PROJECT_SHAPE
+                    + ", so there is no project here to open.");
+            return;
+        }
+        onProjectSelected.open(dir, false, false);
+    }
+
+    /** True when {@code project} is one the user opened from a folder of their own, not one under the root. */
+    private boolean isElsewhere(ProjectInfo project) {
+        return !projectManager.isUnderRoot(project.projectPath());
+    }
+
+    /** The archive button archives a root project and forgets an outside one — see {@link #archiveSelectedProject}. */
+    private void updateArchiveButton() {
+        if (archiveButton == null) return;
+        ProjectInfo selected = selectedProject();
+        archiveButton.setText(selected != null && isElsewhere(selected) ? "Remove from Recents" : "Archive");
+    }
+
+    /**
      * Rebuilds the list rows from the current source (live vs archived), applying the "My projects"
-     * filter, the chosen sort, and Local/Imported group headers.
+     * filter, the chosen sort, and Local/Imported/Elsewhere group headers.
+     *
+     * <p>"Elsewhere" is the recents list's projects outside the root, one directory each: the list never scans
+     * a folder it was not pointed at. A remembered folder that is gone, or is no longer a project, is skipped
+     * rather than shown as broken — it costs nothing to open it again.
      */
     private void rebuildRows() {
         if (projectListView == null) return;
@@ -329,6 +384,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         boolean mineOnly = myProjectsCheckbox != null && myProjectsCheckbox.isSelected();
         List<ProjectRow> local = new ArrayList<>();
         List<ProjectRow> imported = new ArrayList<>();
+        List<ProjectRow> elsewhere = new ArrayList<>();
         for (ProjectInfo p : projects) {
             Ownership owner = ownershipOf(p);
             if (owner == Ownership.IMPORTED) {
@@ -338,10 +394,18 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 local.add(new ProjectRow(p, owner));
             }
         }
+        for (Path dir : ProjectPreferences.recentDirectories()) {
+            if (projectManager.isUnderRoot(dir)) continue;
+            projectManager.projectAt(dir).ifPresent(p -> {
+                Ownership owner = ownershipOf(p);
+                if (!(mineOnly && owner == Ownership.IMPORTED)) elsewhere.add(new ProjectRow(p, owner));
+            });
+        }
 
         Comparator<ProjectRow> cmp = sortComparator();
         local.sort(cmp);
         imported.sort(cmp);
+        elsewhere.sort(cmp);
 
         List<Row> rows = new ArrayList<>();
         if (!local.isEmpty()) {
@@ -352,8 +416,13 @@ public class ProjectSelectionScreen implements ProjectWindow {
             rows.add(new HeaderRow("Imported"));
             rows.addAll(imported);
         }
+        if (!elsewhere.isEmpty()) {
+            rows.add(new HeaderRow("Elsewhere"));
+            rows.addAll(elsewhere);
+        }
         projectListView.getItems().setAll(rows);
         selectNearestProjectRow();
+        updateArchiveButton();
     }
 
     private Comparator<ProjectRow> sortComparator() {
@@ -376,6 +445,13 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private void archiveSelectedProject() {
         ProjectInfo selected = selectedProject();
         if (selected == null) return;
+        if (isElsewhere(selected)) {
+            // Not Studio's folder to move (ProjectManager refuses it too). Forgetting it touches no file and is
+            // undone by opening the folder again, so it asks nothing.
+            ProjectPreferences.removeRecent(selected.projectPath());
+            rebuildRows();
+            return;
+        }
         Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
                 "Archive “" + selected.name() + "”?\n\nIt will be moved to the archive and hidden from "
                         + "the project list. You can restore or permanently delete it later via “View Archived…”.",
@@ -385,7 +461,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         Optional<ButtonType> choice = confirm.showAndWait();
         if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
         try {
-            projectManager.archiveProject(selected.name());
+            projectManager.archiveProject(selected.projectPath());
             rebuildRows();
         } catch (Exception ex) {
             error("Failed to archive project", ex.getMessage());
@@ -687,7 +763,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private void createProject(String projectName) {
         try {
             projectCreator.createProject(projectName, com.botmaker.studio.project.ProjectTemplate.EMPTY);
-            onProjectSelected.open(projectName, false, true);
+            onProjectSelected.open(Constants.PROJECTS_ROOT.resolve(projectName), false, true);
         } catch (Exception e) {
             // No version is a failure here any more: the floor went on 2026-08-25 with Studio's generation,
             // and so did the too-new probe with the scaffold contract the day before. Whatever refusal is
@@ -716,7 +792,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 }
                 projectCreator.createFromTemplate(projectName,
                         dest -> installer.unpackTemplate(entry, tag, dest));
-                Platform.runLater(() -> onProjectSelected.open(projectName, false, true));
+                Platform.runLater(() -> onProjectSelected.open(
+                        Constants.PROJECTS_ROOT.resolve(projectName), false, true));
             } catch (Exception e) {
                 Platform.runLater(() -> error("Could not create the project", e.getMessage()));
             }

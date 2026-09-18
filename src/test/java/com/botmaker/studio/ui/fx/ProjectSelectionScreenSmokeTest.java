@@ -21,9 +21,9 @@ class ProjectSelectionScreenSmokeTest extends FxHeadlessTest {
 
     @Override
     public void start(Stage stage) {
-        // The second arg is the "project selected" callback (name, clearCache, freshlyCreated); a no-op is
+        // The second arg is the "project selected" callback (directory, clearCache, freshlyCreated); a no-op is
         // fine — we never open a project.
-        ProjectSelectionScreen screen = new ProjectSelectionScreen(stage, (name, clearCache, freshlyCreated) -> {});
+        ProjectSelectionScreen screen = new ProjectSelectionScreen(stage, (dir, clearCache, freshlyCreated) -> {});
         stage.setScene(screen.createScene());
         stage.show();
     }
@@ -35,6 +35,7 @@ class ProjectSelectionScreenSmokeTest extends FxHeadlessTest {
                 "title label should render");
 
         assertButtonPresent("Open Project");
+        assertButtonPresent("Open Folder…");
         assertButtonPresent("Create New Project");
         assertButtonPresent("Browse Gallery");
     }

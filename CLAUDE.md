@@ -262,7 +262,15 @@ one-line delegation; `TagPicklist` is a two-line subclass of `TagPicker` taking 
 
 ## Setup
 
-User projects live in `~/BotMakerProjects/` (not inside this repo). Each project is a standard **Maven** project with the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java`. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
+User projects live in `~/BotMakerProjects/` by default (not inside this repo), and **a project is identified
+by its directory, not its name (2026-09-18)**: *Open Folder…* opens one anywhere, recents remember the path,
+and `ProjectConfig.forDirectory` is the door. The list still scans only the default root — a folder of
+repositories holds every other Maven project too — and a project elsewhere is found one remembered directory
+at a time. Archive, restore and delete move folders, so they act only on the root's projects; an outside one
+is *Removed from Recents*, never moved. The template (`../botmaker-gamebot`) is opened this way, and its SDK
+upgrade goes through *Project ▸ Upgrade…*, not a hand edit. Each project is a standard **Maven** project with
+the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a template, the package its
+`botmaker-template.properties` declares. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
 
 ### Relationship to the SDK and shared
 

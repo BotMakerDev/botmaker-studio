@@ -6,6 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-18 — a project is a directory, not a name under one root.** `ProjectConfig.forDirectory` (reads
+  a template's declared package, one directory per segment), `BotProject.open(Path…)`, recents keyed by path
+  (`ProjectEntry.path`, `lastOpenedPath`; an older file means the default root), *Open Folder…* and an
+  *Elsewhere* group on the selection screen, `ProjectManager.archiveProject(Path)` refusing outside the root,
+  `--project=` taking a path. One `PROJECTS_ROOT` (`config/Constants`). `ProjectDirectoryTest`.
 - **2026-09-16 — publishing is a resumable plan, and the dialog shows it (gallery v2, phase 4).**
   `BotPublisher.publish` became `start(PublishRequest)` → `Run.resume`, five steps recorded in a pure
   `PublishPlan` (REPO, PUSH, RELEASE, ARCHIVE, LISTING), each safe to re-run: a release whose tag exists counts

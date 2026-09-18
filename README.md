@@ -83,7 +83,8 @@ from inside Studio.
 bot, plus a diagram of how a run actually loops. The same text is in the app under **Help ▸ Getting Started**;
 both are rendered from one source, so they cannot say different things.
 
-Projects are standard **Maven** projects under `~/BotMakerProjects/<ProjectName>/`:
+Projects are standard **Maven** projects, under `~/BotMakerProjects/<ProjectName>/` unless you open one from
+another folder with **Open Folder…**:
 
 ```
 ~/BotMakerProjects/MyBot/
@@ -211,8 +212,9 @@ BotMaker-Studio/
 ## Troubleshooting
 
 **No projects in the selection screen**
-A project must live under `~/BotMakerProjects/` with a `pom.xml` and the layout
-`src/main/java/com/<projectname>/<ProjectName>.java`.
+The list shows what sits directly under `~/BotMakerProjects/`, plus the projects you opened from elsewhere
+(under **Elsewhere**). A project needs a `pom.xml` and a `src/main/java` folder. One kept in another folder
+is opened with **Open Folder…**, and is listed from then on.
 
 **SDK types missing from autocomplete**
 Open **Project ▸ Manage Libraries…** and confirm the BotMaker SDK version is set; applying refreshes the type
