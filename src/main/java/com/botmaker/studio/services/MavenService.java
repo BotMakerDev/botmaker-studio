@@ -83,7 +83,7 @@ public final class MavenService {
      * make that bump silently stop working. What a <em>freshly created</em> pom pins is also a separate
      * question from what this build of the SDK is.
      */
-    public static final String SDK_FALLBACK_VERSION = "1.1.9";
+    public static final String SDK_FALLBACK_VERSION = "1.1.10";
 
     // There is no MIN_SDK_VERSION any more, and its absence is deliberate (2026-08-25).
     //
