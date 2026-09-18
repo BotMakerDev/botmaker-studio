@@ -71,6 +71,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
 
     @Test
     void anyOfAClosedSetTicksTheTypesOwnValuesWithNothingDeclared() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         ParameterRow directions = row("ways", new ValueChoice(DIRECTION, ValueShape.ANY_OF));
         assertTrue(directions.options().isEmpty(), "nobody declares the directions; the SDK has them");
 
@@ -88,6 +89,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     @Test
     void everyDirectionTheSdkHasHasASquareOnThePad() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         List<String> known = ValueWire.fixedOptions(DIRECTION);
         assertFalse(known.isEmpty(), "the SDK enum is what the pad is built from");
 

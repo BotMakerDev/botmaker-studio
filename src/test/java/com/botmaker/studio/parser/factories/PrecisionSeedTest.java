@@ -27,6 +27,7 @@ class PrecisionSeedTest {
 
     @Test
     void aFreshSlotIsSeededWithTheNamedDefaultNotAnUncompilableConstructor() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         // `new Precision()` would not compile — the record has required components. It also has to be the
         // *constant*: seeding a bare 12.0 would defeat the type, which exists so the call site says what the
         // number means.

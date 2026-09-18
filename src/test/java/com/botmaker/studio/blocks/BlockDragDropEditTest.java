@@ -108,6 +108,7 @@ public class BlockDragDropEditTest {
 
     @Test
     void activityDisable_roundTripsToAStandardizedLibraryCallBlock() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         // Activity.disable/enable("X") are ordinary SDK facade calls now — no bespoke toggle block. They must
         // round-trip to the standardized LibraryCallBlock (same SDK chrome as every other facade call).
         String code = """
@@ -123,6 +124,7 @@ public class BlockDragDropEditTest {
 
     @Test
     void botStop_roundTripsToAStandardizedLibraryCallBlock() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         String code = """
             import com.botmaker.sdk.api.bot.Bot;
             public class Subject {

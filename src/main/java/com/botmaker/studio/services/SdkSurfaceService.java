@@ -322,8 +322,10 @@ public final class SdkSurfaceService {
     // =========================================================================
 
     /**
-     * The SDK version this project's pom pins — or {@link MavenService#SDK_FALLBACK_VERSION} when the pom
-     * cannot be read or names no SDK dependency, which is what {@link MavenService#readSdkVersion} answers.
+     * The SDK version this project's pom pins — or {@code ""} when the pom cannot be read or names no SDK
+     * dependency ({@link MavenService#readSdkVersion} is empty). It answered
+     * {@link MavenService#SDK_FALLBACK_VERSION} until 2026-09-04, which became a lie the day a project could
+     * name no plugin at all.
      */
     public String sdkVersion() {
         return sdkVersion;

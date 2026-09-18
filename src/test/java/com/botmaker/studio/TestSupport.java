@@ -33,6 +33,23 @@ public final class TestSupport {
 
     private TestSupport() {}
 
+    /**
+     * Skips the calling test unless the SDK plugin is on this classpath.
+     *
+     * <p>Studio has not depended on {@code botmaker-sdk} since 2026-09-02, test scope included: every plugin
+     * reaches it off an open project's classpath, and {@code PluginHost.BUNDLED} is empty. A test asserting
+     * what the SDK's palette, seeds, value types or toolbar items do can only run where something puts the
+     * SDK there; everywhere else it failed, silently, because CI builds Studio with {@code -DskipTests}. A
+     * skip says which of the two it was. The id is the SDK's {@code SdkPlugin.ID}, written out because this
+     * module may not name an SDK type.
+     */
+    public static void assumeSdkPluginBound() {
+        boolean bound = com.botmaker.studio.plugin.PluginHost.plugins().stream()
+                .anyMatch(p -> "com.botmaker.sdk".equals(p.id()));
+        org.junit.jupiter.api.Assumptions.assumeTrue(bound,
+                "the SDK plugin is not on this classpath — Studio does not depend on botmaker-sdk (2026-09-02)");
+    }
+
     public static List<String> findJavaFiles(Path root) throws IOException {
         try (Stream<Path> paths = Files.walk(root)) {
             return paths

@@ -181,6 +181,7 @@ class SdkSurfaceServiceTest {
 
     @Test
     void thePaletteIsIntersectedWithWhatTheBotActuallyHas(@TempDir Path tmp) throws IOException {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         SdkSurfaceService surface = serviceOver(tmp, fixtureJar(tmp));
 
         assertEquals(List.of("Mouse", "Wait"), surface.facadeNames(),
@@ -192,12 +193,11 @@ class SdkSurfaceServiceTest {
     // --- The version floor ---
 
     @Test
-    void anUnreadablePomAnswersTheFallbackVersion(@TempDir Path tmp) {
+    void anUnreadablePomAnswersNoVersion(@TempDir Path tmp) {
         SdkSurfaceService surface = serviceOver(tmp, null);
 
-        // No pom → the fallback version, never null and never blank. This test used to close on
-        // isBelowMinimum(); the version floor went on 2026-08-25 with Studio's generation, so what is left to
-        // assert is the answer every other reader of this class depends on.
-        assertEquals(MavenService.SDK_FALLBACK_VERSION, surface.sdkVersion());
+        // No pom → blank, never null. It was SDK_FALLBACK_VERSION until 2026-09-04, when a project that names
+        // no plugin became the starting state: reporting a fallback there is a version the bot does not pin.
+        assertEquals("", surface.sdkVersion());
     }
 }

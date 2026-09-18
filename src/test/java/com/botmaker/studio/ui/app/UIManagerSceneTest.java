@@ -193,7 +193,14 @@ class UIManagerSceneTest extends FxHeadlessTest {
         // item is the failure this test exists to catch. (Flow was the shell's own button until 2026-09-11
         // and is contributed now, which is why it moved into that half of the sentence rather than out of
         // the list.)
-        for (String expected : List.of("Run", "Debug", "Compile", "Stop", "Activity Flow", "Pilot")) {
+        for (String expected : List.of("Run", "Debug", "Compile", "Stop")) {
+            assertTrue(labels.stream().anyMatch(l -> l.contains(expected)),
+                    "the toolbar lost '" + expected + "'; it has: " + labels);
+        }
+        // The plugin half needs the plugin on the classpath, which Studio's own is not (2026-09-02). Split
+        // rather than skipped whole, so the shell's half is still asserted everywhere.
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
+        for (String expected : List.of("Activity Flow", "Pilot")) {
             assertTrue(labels.stream().anyMatch(l -> l.contains(expected)),
                     "the toolbar lost '" + expected + "'; it has: " + labels);
         }

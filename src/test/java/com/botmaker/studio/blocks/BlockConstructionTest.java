@@ -129,6 +129,7 @@ class BlockConstructionTest {
      */
     @Test
     void aMouseClickUsesTheGenericLibraryCallBlock() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         assertTrue(blockKinds("Mouse.click(1, 2);").contains("LibraryCallBlock"));
     }
 }

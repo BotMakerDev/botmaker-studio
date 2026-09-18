@@ -68,6 +68,7 @@ public class PickerGalleryWindowTest {
     /** A closed-set type never reads the table: its choices are the enum's own constants. */
     @Test
     void aClosedSetTypeBringsItsOwnChoices() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         ValueType direction = ValueWire.type("DIRECTION");
         assertEquals(List.of(), PickerGalleryWindow.options(direction, TEMPLATES));
         assertTrue(ValueWire.effectiveOptions(direction, List.of()).size() > 1);

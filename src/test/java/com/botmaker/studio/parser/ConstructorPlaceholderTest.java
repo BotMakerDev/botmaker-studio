@@ -71,6 +71,7 @@ class ConstructorPlaceholderTest {
      */
     @Test
     void theNamedDefaultSeedsStillWin() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         ProjectAnalyzer analyzer = analyzer();
 

@@ -67,6 +67,7 @@ class PasteImportsTest {
      */
     @Test
     void pastingAnSdkTypeResolvesToTheSdkNotToAwt() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         EditorFixture f = new EditorFixture(SUBJECT);
         f.editor.pasteCode(f.body("run"), 1, "Point where = Mouse.position();");
 
@@ -80,6 +81,7 @@ class PasteImportsTest {
     /** A facade in a sub-package — an FQN no amount of string manipulation on the simple name could produce. */
     @Test
     void pastingASubPackagedSdkFacadeResolvesToItsRealPackage() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         EditorFixture f = new EditorFixture(SUBJECT);
         f.editor.pasteCode(f.body("run"), 1, "ImageFinder.find(new ImageTemplate(\"gold.png\"));");
 

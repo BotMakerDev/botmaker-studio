@@ -45,6 +45,7 @@ class CaptureSourceOverloadTest {
 
     @Test
     void switchingOntoACaptureSourceOverloadSeedsSourceCurrent() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         EditorFixture f = new EditorFixture(SOURCE);
         MethodInvocation call = findCall(f.state.getCompilationUnit().orElseThrow());
 
