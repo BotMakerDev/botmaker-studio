@@ -10,6 +10,26 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.1.4; re-released for updated upstream pins.
+
+### Added
+
+- **Open a project from any folder.** *Open Folder…* on the project screen opens a Maven project wherever
+  you keep it — your own repository, for instance — and it is listed under **Elsewhere** from then on. A
+  template that declares its package in `botmaker-template.properties` opens in that package, whatever its
+  folder is called. `--project=` also takes a path now; a bare name still means `~/BotMakerProjects/<name>`.
+
+### Changed
+
+- **Browse Bots, New Project's templates and Manage Plugins keep working when the gallery and the plugin
+  registry move** to the `BotMakerDev` organization. Studio reads the new location first and the current one
+  second, so it needs no update on the day they move.
+- **Studio moves only the projects it keeps.** *Archive* works as before for a project in
+  `~/BotMakerProjects`. For a project opened from elsewhere the button reads *Remove from Recents*, and it
+  forgets the project without touching its folder.
+
 ## [1.1.4] — 2026-09-18
 
 ### Added
