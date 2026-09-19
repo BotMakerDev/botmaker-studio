@@ -42,6 +42,18 @@ mvn -Pdist package
 From the **umbrella** root you can also run the Studio via the reactor: `mvn -pl botmaker-studio javafx:run`.
 Tests run with JUnit Jupiter (Surefire).
 
+**An IntelliJ Application run configuration builds its own command line and so carries none of the
+`javafx:run` options.** That is where the startup warnings come from, not from the code. Paste into its *VM
+options*:
+
+```
+--enable-native-access=ALL-UNNAMED,javafx.graphics --sun-misc-unsafe-memory-access=allow
+```
+
+The same two are in `pom.xml` (`javafx-maven-plugin` `<options>` and jpackage `<javaOptions>`), and
+`Enable-Native-Access: ALL-UNNAMED` is in the shaded jar's manifest for `java -jar`. A bot's own JVM is a
+third command line, built in `runtime/BotJvm`.
+
 ## Code Style
 
 Prefer minimizing mutable state — favor a functional OOP style. Use immutable values (`record`s like
@@ -250,7 +262,15 @@ one-line delegation; `TagPicklist` is a two-line subclass of `TagPicker` taking 
 
 ## Setup
 
-User projects live in `~/BotMakerProjects/` (not inside this repo). Each project is a standard **Maven** project with the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java`. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
+User projects live in `~/BotMakerProjects/` by default (not inside this repo), and **a project is identified
+by its directory, not its name (2026-09-18)**: *Open Folder…* opens one anywhere, recents remember the path,
+and `ProjectConfig.forDirectory` is the door. The list still scans only the default root — a folder of
+repositories holds every other Maven project too — and a project elsewhere is found one remembered directory
+at a time. Archive, restore and delete move folders, so they act only on the root's projects; an outside one
+is *Removed from Recents*, never moved. The template (`../botmaker-gamebot`) is opened this way, and its SDK
+upgrade goes through *Project ▸ Upgrade…*, not a hand edit. Each project is a standard **Maven** project with
+the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a template, the package its
+`botmaker-template.properties` declares. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
 
 ### Relationship to the SDK and shared
 
@@ -389,13 +409,106 @@ point of it.**
   stays — what a *newly created* pom pins is a separate question. When the SDK's own generator lands
   (inversion phase 2), whether it can serve a given pinned version is the **generator's** answer to give,
   from its per-version catalog, not a constant here.
-- **Changing the SDK version is a report, not a cell edit — `services/SdkUpgradeService`** (*Project ▸ Upgrade
-  SDK…*, and where the floor banner's button goes). It resolves the **target** version's jar
-  (`MavenService.resolveSdkJar`, any version — the project pom's JitPack repo means it need never have been on
-  this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
+- **Changing an installed plugin's version is a report, not a cell edit — `services/upgrade/PluginUpgradeService`**
+  (*Project ▸ Upgrade SDK…*, and where the floor banner's button goes). It resolves the **target** version's jar
+  (`MavenService.resolveArtifact`, any coordinate and any version — the project pom's JitPack repo means it need
+  never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
-  (file + line), and where each break went — read from the **pointer pair the two jars carry**
-  (`@ReplacedBy`/`@Replaces`, `docs/refactor/21-api-compat.md` §4). Four things about it are load-bearing:
+  (file + line), and where each break went — read from the **one pointer the old jar carries**
+  (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). Ten things about it are load-bearing:
+  - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what
+    "generalising the upgrade" required.** The six engine classes moved from `services/` to
+    `services/upgrade/` and lost their `Sdk` prefix — `ApiModel`, `Pairing`, `Redirects`, `UpgradeDiff`,
+    `WhatsNew`, `PluginUpgradeService` — as did `parser/refactor/{ApiReferences, ApiMigrationRunner}`.
+    **Nothing but the names and one driver changed**, because nothing under here ever read an SDK-shaped
+    fact: the pointer vocabulary is the contract's `com.botmaker.plugin.api.meta`, which any plugin may
+    write, and `ApiMigrationRunner.run` already took its type set and field owners as parameters. What *was*
+    SDK-shaped was `MavenService.SDK_GROUP_ID`/`SDK_ARTIFACT_ID` plus `resolveSdkJar`/`readSdkVersion`, so
+    `MavenService` grew `resolveArtifact(projectDir, groupId, artifactId, classifier, version)` and
+    `readDependencyVersion(projectDir, groupId, artifactId)` with the SDK-named entry points left as
+    two-line delegations — `SdkDocsService` and `SdkSurfaceService` ask a *palette* question, not an upgrade
+    one, and have no coordinate to hand. `PluginUpgradeService.SDK` is the coordinate `StudioActions` passes,
+    and it is the only place left in the UI that says "the SDK". **The pom write is coordinate-keyed too
+    since the window landed** — `MavenService.setDependencyVersions(projectDir, Map<coordinate, version>)`
+    through `LibraryService.updateVersions`, one read and one write for every row at once. It only ever
+    re-versions a dependency the pom already declares and adds none: the rows are built *from* the pom, so a
+    coordinate it does not name means the pom moved underneath the window, and quietly acquiring a dependency
+    is the wrong answer to that. `apply` refused any non-SDK coordinate for one phase, while the write was
+    still `updateLibraries`' SDK pin.
+  - **A row of the project upgrade window is `services/upgrade/InstalledPlugin`, and *installed* means the
+    pom declares it.** Same rule as `PluginRegistry.isInstalledIn`, and the only defensible one: a plugin
+    that arrives transitively is something another plugin brought, so writing a pin for it would overrule
+    Maven's own mediation. The list is `LibraryService.declaredLibraries()` ∩ three sources, tried in order
+    of how much each knows — `REGISTRY` (name, description, `editorDependencies`, and `available` =
+    **`verifiedVersion`**, not JitPack's newest, since the newest tag may be one nothing has ever loaded),
+    `LOCAL_BUILD` (a `*SNAPSHOT` in `~/.m2`; it wins the version and keeps the registry entry's editor
+    dependencies, exactly as `ManagePluginsDialog.merge` already does), `UNLISTED` (the pom declares a
+    plugin nothing else accounts for). **What makes a dependency a plugin is `MavenService.declaresPlugin`**
+    — the `META-INF/services/com.botmaker.plugin.api.StudioPlugin` entry `ServiceLoader` itself reads, made
+    public for this and previously the local-build scan's alone. A second rule would answer differently for
+    the first hand-published plugin, which is the case `UNLISTED` exists for. **`InstalledPlugin.of` reaches
+    no network**: it is handed the registry's answer, `~/.m2`'s and a predicate, so an unreachable registry
+    leaves `available` blank on a row rather than emptying the table, and `withAvailable` is how an async
+    lookup lands on a built row.
+  - **Two plugins declaring one simple name is refused, never guessed** (`InstalledPlugin.ambiguousTypeNames`
+    → `PluginUpgradeService`'s `ambiguous` set → a line in `problems()` from `usesIn`, before anything is
+    scanned). Attribution is by the simple name the source writes, because there are no bindings, so
+    `Point.of(…)` in a project holding two plugins that both declare a `Point` is genuinely unanswerable —
+    the source does not contain the answer. It is `MethodReferences`' three-way verdict applied one level
+    up, and the reason it must be a refusal is that a wrong attribution does not merely *report* a break in
+    a class the bot never touched, it **rewrites it there**. The refusal is scoped to the clashing names, so
+    one bad pair does not freeze every row; and a problem stops the report *and* the rewrite, which is the
+    same all-or-nothing rule a file that does not parse already gets.
+  - **The window is `ui/app/ProjectUpgradeDialog` (*Project ▸ Upgrade…*), and applying is one pass, not one
+    pass per row** (`services/upgrade/ProjectUpgrade`). The order is **check every row → one snapshot →
+    repair each row in sequence, each committed to disk before the next starts → one pom write**, and each
+    step is where it is for a reason that is not layout. Checking first means a row that refuses does so
+    while the project is untouched and there is nothing to undo — one plugin's refusal stops the plugins
+    beside it, because the versions are written together and a project sitting on plugin A's new version with
+    plugin B's old source compiles against neither. One snapshot because a commit per plugin describes a
+    state the user never chose, and reverting it would undo one repair while leaving another. Repairing in
+    sequence *with each write landing* because every pass re-reads the project's current content, so plugin B
+    is migrated against the files plugin A already rewrote. **What it deliberately does not promise** is a
+    rollback of a failure *after* the snapshot: that is what the snapshot is for, and a second implementation
+    of the revert the VCS panel already offers would be the worse one. The version control is a `ComboBox` of
+    every version JitPack can build, seeded with what is already known — so a **downgrade is the same
+    operation and the same control**, and a row stays usable when JitPack never answers.
+  - **Four operations, one report, and the fourth is the one worth knowing (2026-09-16).** Upgrade and
+    downgrade are the same control and the same engine with the jars in a different order;
+    `Report.operation()` says which, and a **downgrade says so in its own sentence** rather than leaving an
+    all-defaults report to read as a failure — `@ReplacedBy` points forward, so nothing pairs going
+    backwards and that is the correct answer, not a gap. **Remove is the same report with no target jar at
+    all** (`PluginUpgradeService.removal()` / `remove()`): the empty model makes every type unpaired, and the
+    one place removal and an upgrade must disagree is what that means for a **call**. An upgrade reads a call
+    on a vanished type as `TYPE_REMOVED` and refuses, because a class disappearing out of a release the user
+    did not write is evidence something larger went wrong. A removal repairs it — the call becomes a literal
+    default or a deleted line and the type name goes with it — because the user has said outright that the
+    plugin should go. What still refuses is a type the bot writes **down** (`ImageTemplate t;`, a parameter,
+    a cast): there is no value to stand in for a declaration, so the removal is refused naming the type and
+    every site, which is the constraint working rather than a gap. **Removal is also the only operation that
+    drops import lines** (`Repairs.droppedImports` → `CallMigrator.dropTypeIn`): every other operation leaves
+    the jar on the classpath, so an import that survives a rewrite still resolves, and a removed plugin's
+    does not — including one naming a class the bot never called, which no call scan or type sweep would ever
+    reach. **Install has no report and needs none** — nothing is migrated by adding a dependency — so it
+    stays `ManagePluginsDialog`'s and is reached from the upgrade window's own button, rather than becoming a
+    second install path to keep in step.
+  - **The report layout is `ui/app/upgrade/ReportView`, shared by both windows.** It was
+    `SdkUpgradeDialog`'s own `render` until the project window existed, and it moved for the reason that
+    dialog's javadoc already gave for its own two modes: every sentence in it describes what the repair will
+    do, and two copies of that description drift the first time the repair changes. It also *collects* one
+    thing — the per-call-site answer a split asks for — and owns no button: whether Apply is enabled is the
+    window's question, because the project window asks it across several reports at once.
+  - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
+    (2026-09-15). The default filters to `PluginHost.cataloguedPackages()` — the packages the plugins bound
+    *right now* catalogue — which is the right question for a menu and the wrong one here: the jar being read
+    may belong to a plugin that is not bound, is being installed for the first time, or failed to load, and
+    each of those answers the empty set. **A scan filtered to nothing reads as "this jar has no public API at
+    all"**, which is the sentence the report actually printed in every headless caller from 2026-09-02, when
+    the literal `Set.of("com.botmaker.sdk.api")` became the catalog lookup. Production never saw it (a bound
+    SDK answers its own package) and 57 tests did, silently, for thirteen days. What a jar contains is a
+    property of the jar. The extra classes cost nothing downstream — attribution is by the type name the
+    bot's own source writes, so a class no bot can name is never a call site — and the one list that shows
+    unintersected names, `UpgradeDiff.additions`, filters for itself.
   - **A redirect where the jars confirm it, a default where they do not.** The SDK once shipped a repair per
     break (a `fix` in `migrations.json`) and it was guessing — nothing checked that two members shared a
     return type, an arity or any semantics. What replaced it is not the absence of a redirect but a
@@ -413,20 +526,29 @@ point of it.**
     (`CallChange.CallDeleted`, because `0;` is not a statement), and `@NeedsReview` on the enclosing function
     **in the same rewrite** — see the review-marks bullet below. *The repair makes the bot compile; the user
     makes it correct.*
-  - **`services/SdkPairing` follows edges, and pairs members independently of types.** One edge map:
-    the **old** jar's `@ReplacedBy` forwards (the author of the element the bot actually calls saying where it
-    went) plus the **new** jar's `@Replaces` backwards, **filtered by era** — an entry is consulted only for a
-    bot pinned at or below the version it records. The walk follows edges until it reaches a spelling the
-    target jar actually has, which is what resolves a **chain** with no intermediate jar fetched; a visited
-    set bounds it, and a cycle reaching nothing live is simply unpaired. Three deliberate refusals: a
-    spelling the target **still has** is answered by the live element (so an accumulated entry can never go
-    stale into a wrong answer), an ambiguous claim is left unpaired with a `problems()` line, and a pairing is
-    never invented. `memberName` and `targetOf` are the two readers — the first answers "what is this called
-    on the type this one paired with", the second hands back an endpoint that crossed types, and only
-    `redirectsFor` (which is about to move the receiver too) is entitled to that.
-  - **The graph is multi-valued, because a member can become two.** `forwardEdges`/`backwardEdges` are
+  - **`services/upgrade/Pairing` follows edges, and pairs members independently of types.** One edge map, built
+    from one annotation: the **old** jar's `@ReplacedBy`, the author of the element the bot actually calls
+    saying where it went. The walk follows edges until it reaches a spelling the target jar actually has; a
+    visited set bounds it, and a cycle reaching nothing live is simply unpaired. Two deliberate refusals: a
+    spelling the target **still has** is answered by the live element (so an accumulated pointer can never go
+    stale into a wrong answer), and a pairing is never invented. `memberName` and `targetOf` are the two
+    readers — the first answers "what is this called on the type this one paired with", the second hands back
+    an endpoint that crossed types, and only `redirectsFor` (which is about to move the receiver too) is
+    entitled to that.
+  - **There is no back edge, and the removal on 2026-09-15 is worth knowing before anyone proposes one.**
+    `@Replaces` on the survivor — with an era filter, since an entry only describes a bot pinned at or below
+    the version it records — was read here until then, for the one case a forward pointer cannot answer: a
+    **deleted** element carries no pointer. Two facts retired it. Nothing writes it: the contract declares
+    `ReplacedBy` and nothing else, and `com.botmaker.plugin.api.meta.Replaces` has never existed, so for two
+    weeks `ApiModel` (then `SdkApiModel`) read an annotation no plugin could produce. And nothing needs to: japicmp refuses a
+    removal from a plugin's published API, so the target jar still carries the deprecated element and its own
+    forward pointer. What that changes about a **chain** is worth stating, because it is not nothing — the
+    intermediate is now *present* in the target jar rather than absent from both, so an upgrade stops there
+    (`Legacy → Middle`) and it takes Modernise to walk past it (`Middle → Modern`). The bot compiles either
+    way, which is the property that matters.
+  - **The graph is multi-valued, because a member can become two.** `forwardEdges` is
     `Map<String, List<String>>`, `follow` returns a *list* expanded in declared order and depth-first through
-    chains, and `SdkRedirects.redirectsFor` returns `List<Candidate>` in preference order — `redirectFor`
+    chains, and `Redirects.redirectsFor` returns `List<Candidate>` in preference order — `redirectFor`
     survives as the one-line "first candidate, or null", which is the whole answer for every reader that does
     not ask the user. Today's `null` is an empty list, so **every one-target pointer is
     the degenerate case** and the almost-always path is byte-for-byte what it was. A split composes with a
@@ -445,18 +567,30 @@ point of it.**
     offset)* — never node identity: the report pass and the apply pass parse the sources twice, so the AST
     node in the report is not the node the rewriter holds. Nothing edits the files between the passes, and a
     key that misses falls back to that site's default.
+  - **The question at a site widened from *which candidate* to *what should happen here* (2026-09-15), and it
+    is three actions because three are what can be written without a compile error.** `PluginUpgradeService
+    .Decision` is `REDIRECT` (naming the candidate), `DEFAULT` (a literal of what the old member gave back,
+    plus `@NeedsReview`) or `DISCARD` (delete the call); it reaches the rewriter as
+    `ApiMigrationRunner.Action`. **Nothing new is written** — the last two are the engine's own two outcomes,
+    and what changed is who decides. `Decision.PREFERRED` is what every site arrives on, so a window closed
+    without a click migrates byte-for-byte as before. **There is deliberately no *leave it alone***: a call
+    whose member is gone does not compile, so skipping is not an action anybody can be offered — discard is
+    what a user who does not want the call means. **Discard is legal only where the call stands as a
+    statement** (`Site.statement()`, which is why the record carries it), because deleting an expression
+    leaves a hole where its value sat; asked for anywhere else it is written as a default, refused twice —
+    once in `choicesFor`, which knows the position, and once in the runner, which must be safe for any
+    caller. Defaulting a **void** call is deleting it, since there is no value to stand in for, so the two
+    actions meet there.
   - **The dialog opens with what the release *gives* you.** `Report.added` is a diff-derived list of API
     names, which is not a reason to upgrade. The SDK ships its whole `CHANGELOG.md` inside its jar as
     `META-INF/botmaker/whats-new.md`; `Report.highlights()` holds the sections in `(from, to]`, newest first,
     rendered above every cost section, with the exhaustive API diff still below it. Absent file → exactly the
     old dialog, which is the standing rule that every new reader degrades.
-  - **The author's own sentence reaches the user verbatim.** `@ReplacedBy(note=…)` / `@Replaces(note=…)` are
-    preferred over Studio's generated sentence and never rewritten; when both jars carry one the **old** jar's
-    wins (the author speaking at the moment of the change, on the element the bot actually calls) and the new
-    jar's is the fallback for a bot that skipped that release. `behaviourChanged` is a logical OR across the
-    two ends and forces the review mark **even where the shape did not move** — `shapeChanged ||
-    behaviourChanged` — which is the one gap the model cannot detect by construction. `@Since` groups the
-    additions by the version that introduced them.
+  - **The author's own sentence reaches the user verbatim.** `@ReplacedBy(note=…)` is preferred over Studio's
+    generated sentence and never rewritten — the author speaking at the moment of the change, on the element
+    the bot actually calls, which is the only end there is. `behaviourChanged` forces the review mark **even
+    where the shape did not move** — `shapeChanged || behaviourChanged` — which is the one gap the model
+    cannot detect by construction. `@Since` groups the additions by the version that introduced them.
   - **A removed type with no pairing is the one break that refuses the upgrade**
     (`BreakKind.TYPE_REMOVED`, `Break.isRepairable()` false): a default has nowhere to go in
     `ImageTemplate t = …;`. It disables the whole span (`Report.canMigrate()`), because rewriting some call
@@ -503,7 +637,7 @@ point of it.**
     with it** — a removed `void` member in a one-line lambda body, or a constant used as a `case` label whose
     enum cannot be told. That is the same all-or-nothing `rewriteOthers` already enforced for a rewrite that
     will not parse.
-  - **Applying is `parser/refactor/SdkMigrationRunner`: one pass over resolved endpoints, two sweeps per
+  - **Applying is `parser/refactor/ApiMigrationRunner`: one pass over resolved endpoints, two sweeps per
     file.** There is no replay — `Pairing` has already walked the edges to an endpoint the target jar has, so
     `foo`→`bar` (2.0) and `bar`→`baz` (3.0) reach the runner as the single fact `foo`→`baz`, which is what a
     bot that has run neither pass actually needs, and `a`→`b` + `b`→`a` reaches nothing live and is dropped
@@ -545,7 +679,7 @@ point of it.**
       name. Both the caller and the rule are the SDK plugin's now (`internal/plugin/templates/TemplateUses`
       and `ResourceManagerDialog`); what Studio kept is the `reviewNote` parameter of the `Sources`
       capability, which is how a plugin asks for the mark without knowing what a picture is.
-    - `SdkMigrationRunner`, as above.
+    - `ApiMigrationRunner`, as above.
   - **`prepare` may answer null, and that is not a failure.** A mark is a reference to a generated annotation,
     so if the annotation cannot be written the choice is between refusing the refactor and doing it unmarked
     — and unmarked is plainly better: the user asked for the rename, not the bookkeeping. It has to be called
@@ -576,13 +710,13 @@ point of it.**
     everything else or the bot stops compiling, but the file is regenerated on the next save, which would
     silently erase the mark. A review row that disappears on its own is worse than no row: the user is never
     told the thing they were meant to look at has stopped being listed.
-  - **One scanner, two readers: `parser/refactor/SdkReferences`.** The report asks it what the bot calls; the
+  - **One scanner, two readers: `parser/refactor/ApiReferences`.** The report asks it what the bot calls; the
     runner asks it the same question to know what to rewrite. Two scans would eventually disagree, and the
     disagreement's shape is the worst available — a dialog listing three call sites beside a button that
     repairs two. A `Reference` therefore carries a `MethodReferences.CallSite` (file, parse, **node**); the
     report keeps the line and drops the node, the runner keeps the node.
-  - **A member is not the only thing a bot can lose: `SdkReferences.typeUses` is the other half.** It yields
-    every place the source *writes* an SDK type without calling it — a field, a parameter, a return type, a
+  - **A member is not the only thing a bot can lose: `ApiReferences.typeUses` is the other half.** It yields
+    every place the source *writes* one of the plugin's types without calling it — a field, a parameter, a return type, a
     local, a cast, a type argument, an `instanceof`, a catch clause — and `breaks()` reads it, so a removed
     unpaired type is a `TYPE_REMOVED` break **even in a bot with zero calls**, and a `TYPE_RENAMED` one lists
     those places too. Until 2026-08-23 such a bot got *no finding at all* and was upgraded into something
@@ -593,14 +727,14 @@ point of it.**
   - **Every file in the project is migrated, since 2026-08-30.** The split survives in the runner's two
     lists — only `FileRole.EDITABLE` files are rewritten — but the second list now holds bundled library
     source alone and is empty in an ordinary project. What follows described the arrangement it replaced, in
-    which a generated file was re-rendered rather than rewritten: `SdkUpgradeService.regenerateScaffolding` called
+    which a generated file was re-rendered rather than rewritten: the upgrade service's `regenerateScaffolding` called
     `Regeneration.write` **after the pom has moved** — the render has to see the SDK the project actually
     pins now — falling back to `Regeneration.writeTemplatesClass` for an empty project, which has no
     model-derived file but does have a `Templates` class. For one day (phase 0b) it re-rendered only that
     last file, because Studio had no generator at all and **an upgrade left the generated Java pinned to the
     old SDK's spelling**; that cost is paid off. An `IOException` here is a printed sentence and not a failed
     upgrade: the sources are repaired and the pom is moved, so undoing it is the destructive answer and the
-    pre-upgrade snapshot is the way back. `SdkMigrationRunner.scaffoldingInTheWay` deliberately stays
+    pre-upgrade snapshot is the way back. `ApiMigrationRunner.scaffoldingInTheWay` deliberately stays
     conservative even so — relaxing it wants the per-version catalog, not just a working re-render.
   - **`apply(target, repairSources)` is snapshot → migrate → bump, and `repairSources` gates only the middle.**
     A span carrying a removed type nothing pairs with must still be *switchable* — the user reads which type
@@ -627,7 +761,7 @@ point of it.**
     `writeTemplatesClass`, `restore`, `renderEverything`), `project/seed/` (`SeedWriter`, `SeedReconciler`,
     `SeedLedger`, `SeedSync`), `project/ScaffoldMigration`, `ProjectSpecs.generatedFileNames`/
     `generatedSource`, `PluginHost.seedPlan`/`seedFiles`, `ImageTemplateLibrary.regenerateTemplatesClass`
-    and its six call sites, `SdkUpgradeService.regenerateScaffolding`, and `ProjectRepair`'s whole
+    and its six call sites, the upgrade service's `regenerateScaffolding`, and `ProjectRepair`'s whole
     damaged-locked-method half. `project/scaffold/` and `TemplateStore` had already gone on 2026-08-26.
   - **The lineage, because each step was defended and each was superseded within days.** Studio owned the
     generators; then the SDK did and Studio spliced fences into its templates; then the templates went and
@@ -901,6 +1035,28 @@ The `ui/` package is split by concern:
   `services/ActivityService`, `ActivitiesChangedEvent` and `ProjectState.activities` went with it. What a
   menu or a picker needs instead is `plugin/HostParameters` (the parameters every loaded plugin declares)
   and `project/ActivityBodies.names` (the activities the bot's own source defines).
+- **`project/params/`** — **a user parameter is a `@Param` field in the bot's own Java** (2026-09-17), and
+  this package is how Studio reads and writes one. Four classes, split by what each needs: **
+  `JavaParameterSource`** parses one source into `ParameterRow`s (JDT, **no bindings** — a type is whatever
+  it is *written* as, so a bot whose pom is mid-edit still shows its parameters), **`JavaParameterEdits`**
+  rewrites one source (`ASTRewrite`, so the author's formatting and comments survive; an edit it cannot
+  make answers the source unchanged and never throws), and **`JavaParameters`** is the half that knows
+  about the project — `BotSources`, buffers before files, both written. The first two are pure, which is
+  why they are tested over source text rather than over a project on disk.
+  **Reading a value back is the codec's** (`ValueCodec.wireOfLiteral`): `literal` writes a value
+  structurally so a bot cannot throw at class-init, and only the plugin that wrote that spelling can undo
+  it. A field whose initialiser the codec declines is listed, shown and **read-only, with the reason** —
+  the window never hides a parameter the bot reads, and never rewrites Java the author wrote by hand.
+  **`ParameterSurface` is the fourth and the one the windows use**: the bot's fields and the loaded
+  plugins' rows as *one* list of `Entry(group, row, java)`, with a section id of `java:<ClassName>` for a
+  field and the plugin's group id for a row. It is also where the asymmetry is enforced — a field may be
+  added, renamed, retyped, refiled and removed; **a plugin's row only ever has its value changed**
+  (`parameterEdited`), because `parameterDeclared` is gone from the contract (2026-09-17) and a plugin
+  declares its own rows in its own code. Every method takes a `ValueCatalog`, defaulting to
+  `PluginHost.valueTypes()`: the catalog is what turns a value into the Java a field is initialised with,
+  so a window and a test that disagreed about it would write two different files from the same click.
+  `ParametersDialog` and `RunnerWindow` read this one list; the Runner also drops what it cannot rewrite,
+  because a read-only cell is a message for the author and there is no author in the Runner.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that
@@ -1169,28 +1325,64 @@ belongs here.*
   rule now spans two repositories, so signing into Google must still not wipe the GitHub token.
 
 
-`sharing/GitHubGallery` **reads** `index.json` from the gallery's raw-CDN URL; `sharing/BotPublisher`
+`sharing/GitHubGallery` **reads** `catalog.json` (since 2026-09-16; `index.json` before, and still as its
+fallback) from the gallery's raw-CDN URL; `sharing/BotPublisher`
 **writes** `bots/<owner>-<repo>.json` and nothing else. Since 2026-08-28 `index.json` is *generated* by the
 gallery's own CI from those entry files, and a pull request that edits it is refused — so the read path and
 the write path no longer touch the same file, and that asymmetry is the design rather than an accident:
 
 - **The read URL is a compatibility promise.** Every Studio already installed has it compiled in, so the
-  generated array stays byte-compatible with `GalleryEntry` and the path never moves.
+  generated array stays byte-compatible with `GalleryEntry` and the path never moves. Since 2026-09-16 it
+  holds Vetted bots only — see *Tiers* below.
 - **The write path was the problem.** Appending to a shared array made every concurrent submission a merge
   conflict and each publish a read-modify-write against a base SHA somebody else may have moved; unpublishing
   rewrote the whole file for a one-line removal. `GitHubConfig.entryPath` is where a bot's identity becomes a
   path, and re-publishing is idempotent because that path is the identity.
-- **Publishing from a Studio older than that release breaks, deliberately** — the gate refuses the pull
+- **Publishing from a Studio older than that release broke, deliberately** — the gate refused the pull
   request with a message naming the update. The alternative (a CI job converting an index-only PR) means
   maintaining both shapes indefinitely.
 - `GitHubClient.delete(url, body, token)` exists for this: GitHub's Contents API needs a body to delete a
   file and `HttpRequest.DELETE()` sends none. The bodyless `delete(url, token)` stays for the endpoints that
   reject one.
 
+### Tiers, and a publish that resumes (2026-09-16)
+
+**The gallery lists as Vetted or Community, and nobody merges a Community listing by hand.** The gallery's CI
+runs `botmaker-cli`'s `GalleryGate` on a listing pull request and its `ListingPolicy` merges it, unless the
+author is over 3 new listings in 24 hours (`waiting`) or the change needs a maintainer (`needs-maintainer`).
+Vetted is a maintainer's `vetted/<owner>-<repo>.json` pinning one release, written from the dashboard. Every
+rule is the CLI's; Studio reads the outcome.
+
+- **The read side is `catalog.json`, with `index.json` as its fallback.** `GitHubGallery.parseCatalog` reads
+  `{"schemaVersion", "bots": [...]}`; anything unreadable falls back to `parseLegacyIndex`, which marks every
+  entry Vetted because since this date that file holds nothing else — it is Vetted-only *so that* Studios
+  already installed, which cannot show a tier, show only bots somebody looked at. `GalleryTier.fromId` is
+  total and falls to Community: an unknown tier must never read as more trusted.
+- **A Vetted bot installs and updates to its vetted release.** `GalleryEntry.installTag` and `updateTarget`
+  are the two rules, pure and tested (`GalleryCatalogReadTest`); an update never moves an installed copy to a
+  release older than the one it has. The accepted cost, stated in the gallery's README: an older Studio
+  installs a Vetted bot's newest release, because it never learnt `vettedVersion`.
+- **A publish is `BotPublisher.Run` over a `PublishPlan`** — REPO, PUSH, RELEASE, ARCHIVE, LISTING — and a
+  retry resumes at the failed step. Each step is safe to run twice: the repository is found, a release whose
+  tag exists counts as cut, a listing identical to the gallery's entry is not resubmitted. ARCHIVE downloads
+  the zipball **without** a token, because that is what the gallery's gate does and what an installer has.
+- **The entry is `PublishRequest.entry`: schema 2, the CLI's field order, and `requires`** — the pom's
+  dependencies the plugin registry knows, by id, properties interpolated. Keyed by the registry exactly as
+  `botmaker-cli`'s `Requirements` is, so Studio and `botmaker bot publish` write the same file.
+- **A listing is a pull request from `listing/<repo>` on the author's fork, reset to the gallery's tip.** Not
+  from the fork's `main`: that diverges from the gallery the first time a listing is squash-merged, and a
+  second pull request from it would carry the first listing again. An open pull request from the branch is
+  updated in place. The gallery's owner still commits straight to `main`.
+- **`ListingStatus` is the workflows' words, not Studio's**: the `validate` check run, the two labels and the
+  comment starting `<!-- botmaker-listing -->`, whose sentence is shown verbatim.
+- **`ui/app/gallery/GalleryCard` is the one card**, drawn by Browse Bots and by `PublishDialog`'s preview, so
+  the preview cannot promise a row the gallery does not show.
+
 ### Templates — a starting point is a published bot (2026-08-30)
 
 **New Project lists the gallery.** An entry whose `tags` carry `GalleryEntry.TEMPLATE_TAG` (`"template"`) is
-a starting template rather than a bot to install: `ProjectSelectionScreen` lists exactly those, and
+a starting template rather than a bot to install: `ProjectSelectionScreen` lists exactly those (Vetted ones,
+and Community ones behind *Show community templates* since 2026-09-16), and
 `GalleryDialog` (Browse Bots) filters exactly those out. Nothing else about the gallery changes — same
 `index.json`, same `bots/<owner>-<repo>.json`, same release zip, same `BotInstaller`.
 
