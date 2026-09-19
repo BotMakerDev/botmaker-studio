@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,7 +71,7 @@ class ProjectUpgradeTest {
         PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, BOT);
         Recorder writer = new Recorder();
 
-        CompletableFuture<Void> pass =
+        CompletableFuture<ProjectUpgrade.Result> pass =
                 ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(service, "2.0.0")), writer);
 
         ExecutionException failed = assertThrows(ExecutionException.class, pass::get);
@@ -116,7 +117,48 @@ class ProjectUpgradeTest {
     @Test
     void anEmptyWindowWritesNothing() {
         Recorder writer = new Recorder();
-        ProjectUpgrade.run(List.of(), writer).join();
+        ProjectUpgrade.Result result = ProjectUpgrade.run(List.of(), writer).join();
         assertEquals(0, writer.calls.get());
+        assertEquals(List.of(), result.moved());
+    }
+
+    // -------------------------------------------------------------------------
+    // What the window says afterwards
+    // -------------------------------------------------------------------------
+
+    /**
+     * The sentence the window shows instead of closing. It is asserted here rather than in the dialog,
+     * because the counts are the pass's own and the wording is the only part of the result the user reads.
+     */
+    @Test
+    void theSummaryNamesTheVersionsAndWhatTheyCostThisBot() {
+        String summary = new ProjectUpgrade.Result(
+                List.of(new ProjectUpgrade.Moved("BotMaker SDK", "1.1.6", "1.1.12")), 2, 3).summary();
+
+        assertTrue(summary.contains("BotMaker SDK 1.1.6 → 1.1.12"), summary);
+        assertTrue(summary.contains("3 calls repaired in 2 files"), summary);
+        assertTrue(summary.contains("marked for review"), summary);
+        assertTrue(summary.contains("Project History"), "it says where the way back is: " + summary);
+    }
+
+    /** An upgrade that rewrote nothing says so, and offers no review to walk. */
+    @Test
+    void anUpgradeThatTouchedNoCodeSaysThatInsteadOfCountingZeroes() {
+        ProjectUpgrade.Result result = new ProjectUpgrade.Result(
+                List.of(new ProjectUpgrade.Moved("Basics", "0.0.4", "0.0.5")), 0, 0);
+
+        assertTrue(result.summary().contains("Nothing in this bot's own code had to change"),
+                result.summary());
+        assertFalse(result.touchedSources(), "so the window offers no Review tab button");
+    }
+
+    @Test
+    void severalPluginsAreCountedAndThenListed() {
+        String summary = new ProjectUpgrade.Result(List.of(
+                new ProjectUpgrade.Moved("SDK", "1", "2"),
+                new ProjectUpgrade.Moved("Basics", "3", "4")), 1, 1).summary();
+
+        assertTrue(summary.startsWith("Moved 2 plugins: SDK 1 → 2, Basics 3 → 4."), summary);
+        assertTrue(summary.contains("1 call repaired in 1 file"), "singular where it is one: " + summary);
     }
 }

@@ -24,13 +24,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * One upgrade report, laid out — the body of both upgrade windows.
+ * One upgrade report, laid out — the body of {@link com.botmaker.studio.ui.app.ProjectUpgradeDialog}.
  *
  * <p>It was {@code SdkUpgradeDialog}'s own {@code render} until 2026-09-15, and it moved out for the reason
  * that dialog's javadoc already gave for sharing a class between its two modes: <b>every sentence here
  * describes what the repair will do</b>, and two copies of that description drift the first time the repair
  * changes. The project upgrade window renders the same records for every plugin, so the second copy would
- * have been a second answer to <i>what happens to my bot</i>.
+ * have been a second answer to <i>what happens to my bot</i>. That dialog itself is gone since 2026-09-19;
+ * this class is what outlived it, and an upgrade and a removal are the same layout in two modes.
  *
  * <p>It <b>collects one thing</b> rather than only displaying: {@link #picks()} is what the user asked for at
  * each call site — a {@link Decision}, filled in as each card is built. So the map is complete before the

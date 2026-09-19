@@ -10,14 +10,12 @@ import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
@@ -109,8 +107,9 @@ final class StudioActions {
         menuBar.setOnManagePlugins(this::openManagePlugins);
         menuBar.setOnReloadPlugins(this::reloadPlugins);
         menuBar.setOnUpgradeProject(this::openProjectUpgrade);
-        menuBar.setOnUpgradeSdk(this::openSdkUpgrade);
-        menuBar.setOnModernise(this::openModernise);
+        // Nothing to wire for Upgrade SDK... or Modernise...: both entries are gone since 2026-09-19. The
+        // first was Upgrade... with the SDK's row pre-chosen, the second was the same report with no version
+        // change, and neither could do anything the general window cannot.
         // Nothing to wire for Project Setup: that checklist is the SDK plugin's 📋 Project Setup item since
         // 2026-08-31. Every row of it reads a file the plugin owns, so the shell could only ever have shown
         // it by asking the plugin for the answers.
@@ -228,40 +227,20 @@ final class StudioActions {
     }
 
     /**
-     * The same report as {@link #openSdkUpgrade}, for every plugin the project declares rather than for one
-     * of them — one table, one snapshot, one pom write. The SDK is a row in it like any other plugin, which
-     * is the whole point: a checked migration was plugin #1's privilege until 2026-09-15.
+     * Every plugin the project declares, in one table — one snapshot, one pom write. The SDK is a row in it
+     * like any other plugin, which is the whole point: a checked migration was plugin #1's privilege until
+     * 2026-09-15.
+     *
+     * <p><b>Upgrade SDK…</b> and <b>Modernise…</b> stood beside it until 2026-09-19 and are DELETED, not
+     * moved: both were this window with one row pre-chosen, and a menu that offers the general case plus two
+     * special cases of it teaches the user that the three do different things. The engine keeps
+     * {@code PluginUpgradeService.modernise()} — it is a service verb, and nothing in the UI calls it today.
      */
     void openProjectUpgrade() {
-        new ProjectUpgradeDialog(primaryStage, config, state, libraryService, pluginRegistry, jitPackSearch)
-                .show();
-    }
-
-    /**
-     * The same operation Manage Libraries offers as a cell edit — change the SDK version — but with the
-     * consequences read out of both jars first. Public for the same reason as {@link #openManageLibraries}:
-     * the canvas banner is a second, non-menu route to it.
-     */
-    public void openSdkUpgrade() {
-        new SdkUpgradeDialog(primaryStage, upgradesFor(PluginUpgradeService.SDK)).show();
-    }
-
-    /**
-     * The upgrade engine pointed at one coordinate. Since 2026-09-15 the SDK is not a constant inside the
-     * service but an argument handed to it, so this is the only place in the UI that still says "the SDK" —
-     * and the project upgrade window will call it once per installed plugin instead.
-     */
-    private PluginUpgradeService upgradesFor(UserLibrary artifact) {
-        return new PluginUpgradeService(config, state, libraryService, jitPackSearch, artifact);
-    }
-
-    /**
-     * The same report and the same repair pass with no version in it — move this bot off what the SDK it
-     * already pins has deprecated. It needs no network at all: the answer is in the jar the project resolves
-     * today.
-     */
-    private void openModernise() {
-        new SdkUpgradeDialog(primaryStage, upgradesFor(PluginUpgradeService.SDK)).showModernise();
+        ProjectUpgradeDialog dialog = new ProjectUpgradeDialog(primaryStage, config, state, libraryService,
+                pluginRegistry, jitPackSearch);
+        dialog.setOnOpenReview(menuBar::reviewChanges);
+        dialog.show();
     }
 
     private void openManageImports() {

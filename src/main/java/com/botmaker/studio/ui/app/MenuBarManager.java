@@ -32,8 +32,6 @@ public class MenuBarManager {
     private Runnable onManagePlugins;
     private Runnable onReloadPlugins;
     private Runnable onUpgradeProject;
-    private Runnable onUpgradeSdk;
-    private Runnable onModernise;
     private Runnable onManageImports;
     private Runnable onParameters;
     /** Kept so the entry can be renamed once the project's settings model is known. */
@@ -213,26 +211,16 @@ public class MenuBarManager {
             if (onReloadPlugins != null) onReloadPlugins.run();
         });
 
-        // The same report, for every plugin the pom declares rather than for one of them. It leads the two
-        // below because it is the general case: the SDK is a row in this window, and Upgrade SDK... is that
-        // row on its own.
+        // Beside Manage Libraries, not inside it: a version change is the one library edit that can stop the
+        // bot compiling, and that deserves a report rather than a cell edit. Every plugin the pom declares is
+        // a row, the SDK included.
+        //
+        // "Upgrade SDK..." and "Modernise..." stood under it until 2026-09-19 and are DELETED, not moved:
+        // the first was this window with the SDK's row pre-chosen, the second the same report with no version
+        // change. Three entries for one report made them read as three different operations.
         MenuItem upgradeProjectItem = new MenuItem("Upgrade...");
         upgradeProjectItem.setOnAction(e -> {
             if (onUpgradeProject != null) onUpgradeProject.run();
-        });
-
-        // Beside Manage Libraries, not inside it: the SDK version is the one library whose change can stop
-        // the bot compiling, and that deserves a report rather than a cell edit.
-        MenuItem upgradeSdkItem = new MenuItem("Upgrade SDK...");
-        upgradeSdkItem.setOnAction(e -> {
-            if (onUpgradeSdk != null) onUpgradeSdk.run();
-        });
-
-        // The half of Upgrade SDK that needs no upgrade: this bot's own SDK already says which of the members
-        // it calls are on the way out and what replaces them, and acting on that is not a version change.
-        MenuItem moderniseItem = new MenuItem("Modernise...");
-        moderniseItem.setOnAction(e -> {
-            if (onModernise != null) onModernise.run();
         });
 
         MenuItem manageImportsItem = new MenuItem("Manage Imports...");
@@ -298,7 +286,6 @@ public class MenuBarManager {
 
         projectMenu.getItems().addAll(
                 manageLibrariesItem, managePluginsItem, reloadPluginsItem, upgradeProjectItem,
-                upgradeSdkItem, moderniseItem,
                 manageImportsItem,
                 new SeparatorMenuItem(),
                 parametersItem,
@@ -713,21 +700,18 @@ public class MenuBarManager {
         this.onUpgradeProject = callback;
     }
 
-    /**
-     * Sets the callback for when "Upgrade SDK..." is clicked
-     */
-    public void setOnUpgradeSdk(Runnable callback) {
-        this.onUpgradeSdk = callback;
-    }
-
-    /** Sets the callback for when "Modernise..." is clicked — the same report with no version change. */
-    public void setOnModernise(Runnable callback) {
-        this.onModernise = callback;
-    }
-
     /** Sets the callback for when "Review Changes" is clicked — raises the Review tab. */
     public void setOnReviewChanges(Runnable callback) {
         this.onReviewChanges = callback;
+    }
+
+    /**
+     * Raises the Review tab as the menu entry would. The upgrade window's result summary offers the same
+     * door, and this is how it reaches it: the tab belongs to the shell, and a dialog that could open it
+     * itself would be a second implementation of the menu entry.
+     */
+    public void reviewChanges() {
+        if (onReviewChanges != null) onReviewChanges.run();
     }
 
     /**

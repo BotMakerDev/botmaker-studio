@@ -44,7 +44,19 @@ import java.util.Set;
  *
  * <p>This is <b>Upgrade SDK…</b> generalised, and the generalisation is the point: plugin #1 got a checked
  * migration and every other plugin got a pom edit, which is exactly the privilege the plugin platform exists
- * to refuse. The SDK appears here as an ordinary row.
+ * to refuse. The SDK appears here as an ordinary row. Since 2026-09-19 it is the <b>only</b> door: the two
+ * pre-chosen variants of it in the Project menu are gone.
+ *
+ * <h2>Saying what it is doing</h2>
+ *
+ * <p>Three rules, all learned from a window that did the work and said nothing about it. Picking a version
+ * <b>runs that row's check by itself</b>, because a user who has chosen a version has already asked the
+ * question the Check button repeats. Every row carries its <b>own</b> state chip rather than sharing one
+ * spinner. And Apply <b>says why it is disabled</b>, since a dead button with no sentence beside it reads as
+ * a broken window rather than as a missing step.
+ *
+ * <p>On success the window <b>stays open</b> with what the pass did — versions moved, files rewritten, calls
+ * repaired, and the way back. Closing on success threw away the one message worth reading.
  *
  * <h2>What the window is, and what it is not</h2>
  *
@@ -83,6 +95,9 @@ import java.util.Set;
  */
 public final class ProjectUpgradeDialog {
 
+    /** The state cell's base style class; {@code CHIP + "-ok"} and friends carry the colour. */
+    private static final String CHIP = "upgrade-chip";
+
     private final Window owner;
     private final ProjectConfig config;
     private final ProjectState state;
@@ -92,13 +107,28 @@ public final class ProjectUpgradeDialog {
 
     private final GridPane table = new GridPane();
     private final Label statusLabel = new Label();
+    private final Label whyDisabled = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
     private final Button applyButton = new Button("Snapshot, repair & switch");
     private final ReportView reportView = new ReportView();
     private final List<Row> rows = new ArrayList<>();
 
+    /** The success block, hidden until there is one. See {@link #showResult}. */
+    private final VBox resultBox = new VBox(6);
+    private final Label resultText = new Label();
+    private final Button openReview = new Button("Open Review tab");
+
     private Stage stage;
     private Row showing;
+    private Runnable onOpenReview;
+
+    /**
+     * How the result block raises the Review tab. The tab is the shell's, so the shell supplies the verb —
+     * a dialog that opened it itself would be a second implementation of the menu entry.
+     */
+    public void setOnOpenReview(Runnable openReviewTab) {
+        this.onOpenReview = openReviewTab;
+    }
 
     public ProjectUpgradeDialog(Window owner, ProjectConfig config, ProjectState state,
                                 LibraryService libraryService, PluginRegistry registry,
@@ -138,10 +168,22 @@ public final class ProjectUpgradeDialog {
         VBox.setVgrow(reportScroll, Priority.ALWAYS);
         reportView.placeholder("Pick a version and press Check on a row.");
 
+        whyDisabled.setWrapText(true);
+        whyDisabled.getStyleClass().add("sdk-upgrade-empty");
+
+        resultText.setWrapText(true);
+        openReview.setOnAction(e -> {
+            if (onOpenReview != null) onOpenReview.run();
+            stage.close();
+        });
+        resultBox.getStyleClass().add("sdk-upgrade-card");
+        resultBox.setVisible(false);
+        resultBox.setManaged(false);
+
         VBox root = new VBox(12);
         root.setPadding(new Insets(16));
-        root.getChildren().addAll(new HBox(8, hint, progress), table, reportScroll, statusLabel,
-                buttonBar());
+        root.getChildren().addAll(new HBox(8, hint, progress), table, reportScroll, resultBox, statusLabel,
+                whyDisabled, buttonBar());
 
         stage.setScene(ThemedWindows.scene(root, 760, 620));
         stage.show();
@@ -251,6 +293,9 @@ public final class ProjectUpgradeDialog {
         private final Label verdict = new Label();
 
         private Report report;
+        /** True while {@link #loadVersions} is filling the combo box, so seeding checks nothing. */
+        private boolean seeding = true;
+        private boolean checking;
 
         Row(InstalledPlugin plugin, Set<String> ambiguous) {
             this.plugin = plugin;
@@ -266,11 +311,14 @@ public final class ProjectUpgradeDialog {
             versions.setPromptText("loading versions…");
             versions.setDisable(true);
             // A version change invalidates the verdict beside it: a chip that still says "nothing breaks"
-            // about the version the user has just moved away from is worse than no chip.
+            // about the version the user has just moved away from is worse than no chip. Choosing one then
+            // runs the check, because choosing a version IS asking what it would do — the button stays for
+            // re-runs, and the seeding pass is exempt so opening the window fires nothing.
             versions.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
                 report = null;
-                verdict.setText("");
+                chip("", "none");
                 refreshApply();
+                if (!seeding && isMoving()) runCheck();
             });
 
             check.setOnAction(e -> runCheck());
@@ -288,21 +336,32 @@ public final class ProjectUpgradeDialog {
          * installed one are in the same menu as the ones above it.
          */
         void loadVersions() {
+            seeding = true;
             String seed = plugin.available().isBlank() ? plugin.installed() : plugin.available();
             versions.getItems().setAll(seed);
             versions.getSelectionModel().select(seed);
             versions.setDisable(false);
             versions.setPromptText(null);
             check.setDisable(false);
+            seeding = false;
 
             upgrades.availableVersions().thenAccept(fetched -> Platform.runLater(() -> {
                 if (fetched.isEmpty()) return;               // offline: the seed is still a real answer
                 String selected = versions.getValue();
                 List<String> items = new ArrayList<>(fetched);
                 if (!items.contains(seed)) items.add(seed);
+                seeding = true;
                 versions.getItems().setAll(items);
                 versions.getSelectionModel().select(items.contains(selected) ? selected : seed);
+                seeding = false;
             }));
+        }
+
+        /** Repaints this row's state cell. One class per state, so both themes are the stylesheet's job. */
+        private void chip(String text, String state) {
+            verdict.getStyleClass().removeIf(c -> c.startsWith(CHIP));
+            if (!text.isEmpty()) verdict.getStyleClass().addAll(CHIP, CHIP + "-" + state);
+            verdict.setText(text);
         }
 
         /** The report for this row alone, read off the FX thread and shown below the table. */
@@ -310,8 +369,11 @@ public final class ProjectUpgradeDialog {
             String target = versions.getValue();
             if (target == null || target.isBlank()) return;
             check.setDisable(true);
+            checking = true;
+            chip("checking…", "checking");
             progress.setVisible(true);
             status("Resolving and scanning " + plugin.displayName() + " " + target + "…");
+            refreshApply();
 
             Thread worker = new Thread(() -> {
                 Report result;
@@ -322,8 +384,10 @@ public final class ProjectUpgradeDialog {
                     Platform.runLater(() -> {
                         progress.setVisible(false);
                         check.setDisable(false);
-                        verdict.setText("could not check");
+                        checking = false;
+                        chip("could not check", "blocked");
                         status("The check for " + plugin.displayName() + " failed: " + message);
+                        refreshApply();
                     });
                     return;
                 }
@@ -331,11 +395,14 @@ public final class ProjectUpgradeDialog {
                 Platform.runLater(() -> {
                     progress.setVisible(false);
                     check.setDisable(false);
+                    checking = false;
                     report = done;
-                    verdict.setText(chip(done));
+                    chip(chipText(done), chipState(done));
                     showing = Row.this;
                     reportView.render(done, ReportView.Mode.UPGRADE);
-                    status("");
+                    // The outcome stays on the status line instead of being wiped: the chip is four words
+                    // and the line is where the version that was checked is named.
+                    status("Checked " + plugin.displayName() + " " + target + ": " + chipText(done) + ".");
                     refreshApply();
                 });
             }, "plugin-upgrade-check");
@@ -353,6 +420,7 @@ public final class ProjectUpgradeDialog {
         void runRemovalCheck() {
             remove.setDisable(true);
             progress.setVisible(true);
+            chip("checking…", "checking");
             status("Reading what removing " + plugin.displayName() + " would break…");
 
             Thread worker = new Thread(() -> {
@@ -364,6 +432,7 @@ public final class ProjectUpgradeDialog {
                     Platform.runLater(() -> {
                         progress.setVisible(false);
                         remove.setDisable(false);
+                        chip("could not check", "blocked");
                         status("The check for removing " + plugin.displayName() + " failed: " + message);
                     });
                     return;
@@ -373,9 +442,10 @@ public final class ProjectUpgradeDialog {
                     progress.setVisible(false);
                     remove.setDisable(false);
                     report = null;                           // this one is not about a version change
+                    chip(chipText(done), chipState(done));
                     showing = Row.this;
                     reportView.render(done, ReportView.Mode.REMOVAL);
-                    status("");
+                    status("Removing " + plugin.displayName() + ": " + chipText(done) + ".");
                     confirmRemoval(done);
                 });
             }, "plugin-removal-check");
@@ -417,7 +487,7 @@ public final class ProjectUpgradeDialog {
                     + plugin.displayName() + "…");
 
             upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks())
-                    .whenComplete((ignored, error) -> Platform.runLater(() -> {
+                    .whenComplete((files, error) -> Platform.runLater(() -> {
                         progress.setVisible(false);
                         remove.setDisable(false);
                         if (error != null) {
@@ -427,7 +497,8 @@ public final class ProjectUpgradeDialog {
                                     "The removal did not run:\n\n" + cause.getMessage()).showAndWait();
                             return;
                         }
-                        status("Removed. The previous state is one revert away in Project History.");
+                        status("");
+                        showResult(removalSummary(plugin.displayName(), files, r.breaks().size()), files > 0);
                         // The table it was a row of is now wrong, and the clash set with it: one plugin
                         // fewer can make a name that was ambiguous answerable again.
                         progress.setVisible(true);
@@ -459,11 +530,31 @@ public final class ProjectUpgradeDialog {
      * Studio will do, and work it refuses to do. A count is given where there is one — <i>2 repairable</i>
      * says something <i>changes will be made</i> does not.
      */
-    private static String chip(Report r) {
+    static String chipText(Report r) {
         if (r.isIncomplete()) return "blocked — could not read";
         if (!r.unrepairable().isEmpty()) return "blocked — " + r.unrepairable().size() + " to fix by hand";
         if (r.breaks().isEmpty()) return "nothing breaks";
         return r.breaks().size() + " repairable";
+    }
+
+    /**
+     * The removal's own result sentence — the upgrade's {@link ProjectUpgrade.Result#summary()} for the one
+     * operation that has no versions to name.
+     */
+    static String removalSummary(String plugin, int filesRewritten, int calls) {
+        String head = "Removed " + plugin + " from this project.";
+        if (filesRewritten == 0) return head + " This bot called nothing in it, so only the pom changed."
+                + " The previous state is one revert away in Project History.";
+        return head + " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in "
+                + filesRewritten + " file" + (filesRewritten == 1 ? "" : "s")
+                + " — the functions they are in are marked for review."
+                + " The previous state is one revert away in Project History.";
+    }
+
+    /** The same three states as a style class, so the colour is the stylesheet's and not this file's. */
+    static String chipState(Report r) {
+        if (r.isIncomplete() || !r.unrepairable().isEmpty()) return "blocked";
+        return r.breaks().isEmpty() ? "ok" : "repairable";
     }
 
     // -------------------------------------------------------------------------
@@ -479,9 +570,35 @@ public final class ProjectUpgradeDialog {
      * is fine.
      */
     private void refreshApply() {
-        boolean moving = rows.stream().anyMatch(Row::isMoving);
-        boolean blocked = rows.stream().anyMatch(Row::isBlocked);
-        applyButton.setDisable(!moving || blocked);
+        int moving = (int) rows.stream().filter(Row::isMoving).count();
+        List<String> blocked = rows.stream().filter(Row::isBlocked).map(r -> r.plugin.displayName()).toList();
+        boolean checking = rows.stream().anyMatch(r -> r.checking);
+        applyButton.setDisable(moving == 0 || !blocked.isEmpty() || checking);
+
+        String why = applyBlockedReason(moving, blocked, checking);
+        whyDisabled.setText(why);
+        whyDisabled.setVisible(!why.isEmpty());
+        whyDisabled.setManaged(!why.isEmpty());
+    }
+
+    /**
+     * Why Apply is grey, or "" when it is not.
+     *
+     * <p>A disabled button is a statement the user cannot read: they see that BotMaker will not do the thing
+     * and are left to guess whether the window is broken. Each sentence names the <em>next action</em>, which
+     * is the only part they can act on.
+     */
+    static String applyBlockedReason(int movingRows, List<String> blockedRows, boolean checking) {
+        if (movingRows == 0) {
+            return "Pick a version different from the installed one on at least one row.";
+        }
+        if (checking) return "A check is still running.";
+        if (!blockedRows.isEmpty()) {
+            return String.join(", ", blockedRows) + (blockedRows.size() == 1 ? " is" : " are")
+                    + " blocked: the report below says what to change by hand. Setting that row back to its "
+                    + "installed version lets the others move.";
+        }
+        return "";
     }
 
     private void runApply() {
@@ -490,11 +607,12 @@ public final class ProjectUpgradeDialog {
 
         applyButton.setDisable(true);
         progress.setVisible(true);
+        hideResult();
         status("Committing a snapshot, repairing your call sites and switching " + moving.size()
                 + " plugin(s)…");
 
         ProjectUpgrade.run(moving, libraryService::updateVersions)
-                .whenComplete((ignored, error) -> Platform.runLater(() -> {
+                .whenComplete((result, error) -> Platform.runLater(() -> {
                     progress.setVisible(false);
                     if (error != null) {
                         Throwable cause = error.getCause() != null ? error.getCause() : error;
@@ -504,9 +622,36 @@ public final class ProjectUpgradeDialog {
                         applyButton.setDisable(false);
                         return;
                     }
-                    status("Done. The previous state is one revert away in Project History.");
-                    stage.close();
+                    status("");
+                    showResult(result.summary(), result.touchedSources());
+                    // The table is about versions that have just changed, so it is read again — the same
+                    // reason a removal reloads it.
+                    progress.setVisible(true);
+                    load();
                 }));
+    }
+
+    /**
+     * The success block: what happened, and the one door that follows from it.
+     *
+     * <p>Shown instead of closing the window. The Review tab button is there only when this bot's own code
+     * was rewritten, because that is the only case where there is anything to review.
+     */
+    private void showResult(String summary, boolean marks) {
+        resultText.setText(summary);
+        resultBox.getChildren().setAll(resultText);
+        if (marks && onOpenReview != null) {
+            HBox actions = new HBox(8, openReview);
+            actions.setAlignment(Pos.CENTER_LEFT);
+            resultBox.getChildren().add(actions);
+        }
+        resultBox.setVisible(true);
+        resultBox.setManaged(true);
+    }
+
+    private void hideResult() {
+        resultBox.setVisible(false);
+        resultBox.setManaged(false);
     }
 
     private void status(String message) {

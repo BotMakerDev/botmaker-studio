@@ -911,6 +911,21 @@
 }
 
 /*
+ * One upgrade row's state: checking, then what the check answered. Severity tokens rather than colours, so
+ * the three states stay apart on both themes and mean the same thing here as everywhere else in the app —
+ * "blocked" is the only one that is an error, and "repairable" is work Studio will do, not a problem.
+ */
+.upgrade-chip {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 2 8 2 8;
+}
+.upgrade-chip-checking { -fx-text-fill: -bm-muted; }
+.upgrade-chip-ok { -fx-text-fill: -bm-severity-ok-text; }
+.upgrade-chip-repairable { -fx-text-fill: -bm-severity-warning-text; }
+.upgrade-chip-blocked { -fx-text-fill: -bm-severity-error-text; }
+
+/*
  * A method this project's SDK marks @Deprecated. Strikethrough plus a little transparency — the call still
  * compiles and still runs, so it must stay legible and stay clickable; this is notice, not an error state,
  * and painting it in -bm-danger would be a lie about what happens if the user runs it.

@@ -410,7 +410,7 @@ point of it.**
   (inversion phase 2), whether it can serve a given pinned version is the **generator's** answer to give,
   from its per-version catalog, not a constant here.
 - **Changing an installed plugin's version is a report, not a cell edit — `services/upgrade/PluginUpgradeService`**
-  (*Project ▸ Upgrade SDK…*, and where the floor banner's button goes). It resolves the **target** version's jar
+  (*Project ▸ Upgrade…*, the one door since 2026-09-19). It resolves the **target** version's jar
   (`MavenService.resolveArtifact`, any coordinate and any version — the project pom's JitPack repo means it need
   never have been on this machine), ClassGraph-scans it beside the pinned one, and intersects the difference with the bot's own
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
@@ -492,10 +492,11 @@ point of it.**
     reach. **Install has no report and needs none** — nothing is migrated by adding a dependency — so it
     stays `ManagePluginsDialog`'s and is reached from the upgrade window's own button, rather than becoming a
     second install path to keep in step.
-  - **The report layout is `ui/app/upgrade/ReportView`, shared by both windows.** It was
-    `SdkUpgradeDialog`'s own `render` until the project window existed, and it moved for the reason that
-    dialog's javadoc already gave for its own two modes: every sentence in it describes what the repair will
-    do, and two copies of that description drift the first time the repair changes. It also *collects* one
+  - **The report layout is `ui/app/upgrade/ReportView`.** It was `SdkUpgradeDialog`'s own `render` until the
+    project window existed, and it moved for the reason that dialog's javadoc already gave for its own two
+    modes: every sentence in it describes what the repair will do, and two copies of that description drift
+    the first time the repair changes. That dialog is gone since 2026-09-19 and this is what outlived it —
+    an upgrade and a removal are the same layout in two modes. It also *collects* one
     thing — the per-call-site answer a split asks for — and owns no button: whether Apply is enabled is the
     window's question, because the project window asks it across several reports at once.
   - **It scans a jar with `TypeSummaryManager.overEverything()`, and the default manager would be wrong**
@@ -595,12 +596,15 @@ point of it.**
     (`BreakKind.TYPE_REMOVED`, `Break.isRepairable()` false): a default has nowhere to go in
     `ImageTemplate t = …;`. It disables the whole span (`Report.canMigrate()`), because rewriting some call
     sites and leaving the rest is the half-migration `CallMigrator.rewriteOthers` returns `null` to prevent.
-  - **Modernise is the same machinery one hop further.** *Project ▸ Modernise…* touches no pom: it walks the
+  - **Modernise is the same machinery one hop further**, and **has no menu entry since 2026-09-19** —
+    `PluginUpgradeService.modernise()` survives as a service verb with no caller in the UI. It touches no pom:
+    it walks the
     pointers the project's own jar's **deprecated** elements carry (`throughDeprecations`, which also folds in
     the target jar's forward edges — same shape of edge, only the stopping rule differs) and rewrites the bot
     off them in place. It has its own verdict, `Report.canModernise()`, rather than borrowing `canMigrate()`:
     moving off a deprecation is still possible on a project where an unpaired removed type blocks the upgrade.
-    It is also the upgrade dialog's checkbox (`compare(target, alsoModernise)`).
+    It is still an argument of the report (`compare(target, alsoModernise)`) and of `ProjectUpgrade.Row`,
+    false at every call site the UI has left.
   - **Studio is the version that lags**, so it degrades rather than guessing — and the pointer model makes
     that free: an annotation a newer SDK invents is simply invisible to a ClassGraph scan asking for the two
     Studio knows, so an older Studio falls back to exactly its behaviour against a jar with no pointers at

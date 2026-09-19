@@ -1044,9 +1044,10 @@ class PluginUpgradeServiceTest {
      * {@code ApiModel.apiClassOf} has passed the literal {@code false} for both the class and the member
      * ever since, so nothing can set it.
      *
-     * <p>The plumbing is still wired end to end — the record component, {@code UpgradeDiff.scaffolding},
-     * and a warning block in {@code SdkUpgradeDialog} that cannot render. It is left standing rather than
-     * demolished here, because that is a decision of its own and this pass is about the pointer vocabulary;
+     * <p>The plumbing is still wired end to end — the record component and {@code UpgradeDiff.scaffolding}.
+     * The warning block that could never render went with {@code SdkUpgradeDialog} on 2026-09-19. What is
+     * left is standing rather than demolished because that is a decision of its own and this pass is about
+     * the pointer vocabulary;
      * what must not stand is a test that passes only if a deleted annotation comes back.
      */
     @Test

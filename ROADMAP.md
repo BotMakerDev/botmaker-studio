@@ -6,7 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-19 (latest) — a plugin bound into an open project is visible, and one that will not compose
+- **2026-09-19 (latest) — one upgrade door, and it says what it is doing.** *Project ▸ Upgrade SDK…* and
+  *Project ▸ Modernise…* are **deleted**, `ui/app/SdkUpgradeDialog` with them: both were
+  `ProjectUpgradeDialog` with one row pre-chosen, and offering the general case beside two special cases of
+  it taught the user that three different things were on offer. `PluginUpgradeService.modernise()` and the
+  `alsoModernise` argument stay — a service verb and a report flag, with no caller in the UI — because the
+  question they answer (*what has the version I already pin deprecated?*) has not gone away, and the engine
+  is where it belongs. Then the feedback the window never gave: choosing a version **runs that row's check**
+  (the button stays for re-runs, and the seeding pass is exempt, so opening the window fires nothing), each
+  row carries **its own state chip** (`upgrade-chip-*`, coloured from the `-bm-severity-*` tokens so both
+  themes are the stylesheet's job) instead of sharing one spinner, the status line **keeps** the outcome
+  naming the version that was checked, and `applyBlockedReason` puts a sentence under a greyed Apply saying
+  which next action is missing. On success the window **stays open**: `ProjectUpgrade.run` returns a
+  `Result` (`Moved` rows, files rewritten, calls repaired) whose `summary()` is the sentence shown, with an
+  **Open Review tab** button when the bot's own code was rewritten — reached through
+  `MenuBarManager.reviewChanges()`, since the tab is the shell's. `PluginUpgradeService.repair` and
+  `repairRemoval` return the number of files they wrote, and `remove` carries that count through the pom
+  write, because only the pass knows what it cost. It used to set a status message and call `stage.close()`
+  on the next line.
+
+- **2026-09-19 (earlier) — a plugin bound into an open project is visible, and one that will not compose
   costs only itself.** `index/TypeSummaryManager` takes its allow-list as a `Supplier` asked on every cache
   rebuild instead of a `final Set` captured when `BotProject` built it: a blank project binds no plugin, so
   that set was empty and stayed empty, and every class of a plugin installed afterwards was filtered out of

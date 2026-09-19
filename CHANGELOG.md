@@ -12,6 +12,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **One upgrade door, not three.** *Project ▸ Upgrade SDK…* and *Project ▸ Modernise…* are gone. Both were
+  *Project ▸ Upgrade…* with one row chosen for you, and three entries made one report read as three
+  operations. The SDK is a row in the upgrade table like any other plugin.
+- **The upgrade window says what it is doing.** Picking a version runs that row's check by itself; every row
+  carries its own state — *checking…*, *nothing breaks*, *N repairable*, *blocked* — instead of sharing one
+  spinner; the status line keeps the outcome of the check instead of clearing it; and when Apply is greyed
+  out, a line below it says why and what to do next.
+- **The window stays open when an upgrade succeeds**, with what the pass did: the versions that moved, how
+  many calls were repaired in how many files, and a button to the Review tab when your own code was
+  rewritten. A removal says the same. Previously the window closed on success and the message went with it.
+
 ### Fixed
 
 - **A plugin you install is there at once.** Adding the SDK — or any plugin — to an open project used to

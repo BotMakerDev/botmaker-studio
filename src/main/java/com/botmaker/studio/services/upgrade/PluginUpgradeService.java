@@ -136,9 +136,11 @@ import static com.botmaker.studio.services.upgrade.Redirects.returnTypeOf;
  * downstream — the shape check, the arity repair, the review marks, the all-or-nothing commit — is the code
  * that was already there, which is the reason it is a stopping rule and not a second engine.
  *
- * <p>Two things reach it: <b>Project ▸ Modernise…</b>, which touches no pom at all, and the upgrade dialog's
- * "also move off deprecated members", where the extra hop is taken during the upgrade so a bot does not
- * arrive on the new version already owing the same work. The one rule that differs is that modernising never
+ * <p>Nothing in the UI reaches it today. <b>Project ▸ Modernise…</b> did until 2026-09-19 and the upgrade
+ * window's "also move off deprecated members" checkbox before that; both are gone, and {@link #modernise()}
+ * and {@code alsoModernise} stay as the service verb and the argument they always were — an upgrade may
+ * still take the extra hop so a bot does not arrive on the new version already owing the same work. The one
+ * rule that differs is that modernising never
  * writes a default value: a deprecated member is still there, so anything the shape check refuses is left
  * alone and stays on the list, where the user can see it.
  *
@@ -860,23 +862,28 @@ public final class PluginUpgradeService {
      * <p>{@code repairSources} is {@link Report#canMigrate()}, read the same way {@link #apply} reads it: a
      * removal whose report found nothing to repair still has a pom edit to make.
      */
-    public CompletableFuture<Void> remove(List<UserLibrary> editorDependencies, boolean repairSources,
-                                          Map<CallSite, Decision> picks) {
+    public CompletableFuture<Integer> remove(List<UserLibrary> editorDependencies, boolean repairSources,
+                                             Map<CallSite, Decision> picks) {
         return CompletableFuture
-                .runAsync(() -> {
+                .supplyAsync(() -> {
                     snapshot("Before removing " + name());
-                    if (repairSources) repairRemoval(picks);
+                    return repairSources ? repairRemoval(picks) : 0;
                 })
-                .thenCompose(v -> libraryService.removePlugin(
-                        artifact.groupId(), artifact.artifactId(), editorDependencies));
+                // The count survives the pom write: what the user is owed afterwards is how much of their own
+                // code changed, and only this pass knows it.
+                .thenCompose(files -> libraryService
+                        .removePlugin(artifact.groupId(), artifact.artifactId(), editorDependencies)
+                        .thenApply(v -> files));
     }
 
     /**
      * Repairs the project's own files for this plugin's <b>departure</b>, or throws saying why it will not —
      * the removal's half of {@link #repair}, and public for the same reason: it writes the files and not the
      * pom.
+     *
+     * @return how many of the project's files were rewritten, as {@link #repair} does
      */
-    public void repairRemoval(Map<CallSite, Decision> picks) {
+    public int repairRemoval(Map<CallSite, Decision> picks) {
         String version = currentVersion();
         Optional<Path> jar = resolve(version);
         if (jar.isEmpty()) {
@@ -885,7 +892,7 @@ public final class PluginUpgradeService {
         }
 
         ApiMigrationRunner.Outcome outcome = migrateRemoval(jar.get(), picks);
-        if (outcome == null) return;                        // nothing named it
+        if (outcome == null) return 0;                      // nothing named it
         if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
         try {
             ReviewMarks.ensureFile(config.mainPackageDir(), config.mainPackage());
@@ -893,6 +900,7 @@ public final class PluginUpgradeService {
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
         }
+        return outcome.files().size();
     }
 
     /**
@@ -921,9 +929,13 @@ public final class PluginUpgradeService {
      * plugins needs: one snapshot, then this once per row (each pass re-reading {@code ProjectFile}'s current
      * content, so the second plugin sees the first one's output), then one pom write for all of them. It
      * blocks, for the same reasons {@link #compare(String)} does.
+     *
+     * @return how many of the project's files were rewritten — zero when nothing needed repairing. The
+     *         window says it back to the user, which is the only reason it is counted here rather than
+     *         guessed from the report: a report is what <em>would</em> change.
      */
-    public void repair(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
-                       Map<CallSite, Decision> picks) {
+    public int repair(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
+                      Map<CallSite, Decision> picks) {
         String from = currentVersion();
         Optional<Path> oldJar = resolve(from);
         Optional<Path> newJar = resolve(targetVersion);
@@ -934,7 +946,7 @@ public final class PluginUpgradeService {
 
         ApiMigrationRunner.Outcome outcome = migrate(oldJar.get(), newJar.get(), from, targetVersion,
                 throughDeprecations, allowDefaults, picks);
-        if (outcome == null) return;                        // nothing needed repairing
+        if (outcome == null) return 0;                      // nothing needed repairing
         if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
         try {
             // The annotation the rewritten files now reference. Written before them, so the project never
@@ -945,6 +957,7 @@ public final class PluginUpgradeService {
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
         }
+        return outcome.files().size();
     }
 
     /**

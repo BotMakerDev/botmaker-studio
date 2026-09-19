@@ -223,8 +223,8 @@ index. The SDK resolves from JitPack, so the first fetch of a version needs a ne
 **A banner says the project's SDK is too old**
 The project still opens, and everything in it stays editable, buildable and runnable — but the files Studio
 generates are built from templates that only newer SDKs ship, so the Activity Flow cannot be saved until you
-run **Project ▸ Upgrade SDK…**. The upgrade re-renders the generated files and leaves everything you wrote
-untouched.
+run **Project ▸ Upgrade…** and move the SDK's row to a newer version. The upgrade repairs the calls that
+changed and leaves everything else you wrote untouched.
 
 ## Contributing
 

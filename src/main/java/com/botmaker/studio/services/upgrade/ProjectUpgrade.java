@@ -70,6 +70,60 @@ public final class ProjectUpgrade {
         }
     }
 
+    /** One plugin that moved, as the summary names it. */
+    public record Moved(String plugin, String from, String to) {
+
+        @Override
+        public String toString() {
+            return plugin + " " + from + " → " + to;
+        }
+    }
+
+    /**
+     * What the pass did, for the window to say back.
+     *
+     * <p>It exists because the window used to close on success: the one moment a user wants to read a
+     * sentence is the moment the operation they were warned about has finished. The counts are the two the
+     * pass actually knows — {@code filesRewritten} is what was written, {@code callsRepaired} is what the
+     * reports found — and nothing here is a report of what <em>would</em> happen.
+     */
+    public record Result(List<Moved> moved, int filesRewritten, int callsRepaired) {
+
+        public Result {
+            moved = List.copyOf(moved);
+        }
+
+        public static Result nothing() {
+            return new Result(List.of(), 0, 0);
+        }
+
+        /** True when the user's own code was changed, so there are review marks to walk. */
+        public boolean touchedSources() {
+            return filesRewritten > 0;
+        }
+
+        /**
+         * The success sentence, in three parts: what moved, what it cost this bot, and where the way back
+         * is. Pure, so the wording is asserted without a window.
+         */
+        public String summary() {
+            if (moved.isEmpty()) return "Nothing moved.";
+            StringBuilder text = new StringBuilder(moved.size() == 1
+                    ? "Moved " + moved.getFirst() + "."
+                    : "Moved " + moved.size() + " plugins: "
+                            + String.join(", ", moved.stream().map(Moved::toString).toList()) + ".");
+            if (filesRewritten == 0) {
+                text.append(" Nothing in this bot's own code had to change.");
+            } else {
+                text.append(" ").append(callsRepaired).append(" call")
+                        .append(callsRepaired == 1 ? "" : "s").append(" repaired in ")
+                        .append(filesRewritten).append(" file").append(filesRewritten == 1 ? "" : "s")
+                        .append(" — the functions they are in are marked for review.");
+            }
+            return text + " The previous state is one revert away in Project History.";
+        }
+    }
+
     /**
      * Where the new versions land. {@code LibraryService::updateVersions} live; a test hands in a recorder,
      * because the real one re-resolves the classpath and re-binds every plugin.
@@ -83,12 +137,12 @@ public final class ProjectUpgrade {
      * Runs the whole pass off the calling thread. The future fails — with nothing written — when any row
      * refuses; see the class javadoc for what a failure after the snapshot means.
      */
-    public static CompletableFuture<Void> run(List<Row> rows, PomWriter writer) {
+    public static CompletableFuture<Result> run(List<Row> rows, PomWriter writer) {
         List<Row> moving = rows.stream()
                 .filter(r -> !r.targetVersion().isBlank()
                         && !r.targetVersion().equals(r.upgrades().currentVersion()))
                 .toList();
-        if (moving.isEmpty()) return CompletableFuture.completedFuture(null);
+        if (moving.isEmpty()) return CompletableFuture.completedFuture(Result.nothing());
 
         return CompletableFuture
                 .supplyAsync(() -> {
@@ -101,18 +155,30 @@ public final class ProjectUpgrade {
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
 
                     Map<String, String> versions = new LinkedHashMap<>();
+                    List<Moved> moved = new ArrayList<>();
+                    int files = 0;
+                    int calls = 0;
                     for (int i = 0; i < moving.size(); i++) {
                         Row row = moving.get(i);
                         Report report = checked.get(i);
+                        // Read before the repair: the version the project is on is read off the pom, and the
+                        // pom write below moves it.
+                        String from = row.upgrades().currentVersion();
                         if (report.canMigrate() || (row.alsoModernise() && report.canModernise())) {
-                            row.upgrades().repair(row.targetVersion(), row.alsoModernise(), true, row.picks());
+                            files += row.upgrades()
+                                    .repair(row.targetVersion(), row.alsoModernise(), true, row.picks());
+                            calls += report.breaks().size();
                         }
+                        moved.add(new Moved(row.upgrades().displayName(), from, row.targetVersion()));
                         versions.put(row.upgrades().coordinate(), row.targetVersion());
                     }
-                    return versions;
+                    return new Pass(versions, new Result(moved, files, calls));
                 })
-                .thenCompose(writer::write);
+                .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }
+
+    /** The pom write and the sentence that follows it, carried together through the last step. */
+    private record Pass(Map<String, String> versions, Result result) {}
 
     /**
      * That row's report, or an exception saying why the pass will not start.
