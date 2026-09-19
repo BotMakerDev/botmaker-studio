@@ -12,7 +12,7 @@ inside an Android emulator. It can run on a **private display** so it doesn't ta
 can watch and drive it from your phone.
 
 Built with **JavaFX**, editing real Java through the **Eclipse JDT** AST, and seeing the screen through the
-**[BotMaker SDK](https://github.com/LiQiyeDev/BotMaker-sdk)** — OpenCV template matching, OCR, mouse, keyboard
+**[BotMaker SDK](https://github.com/BotMakerDev/botmaker-sdk)** — OpenCV template matching, OCR, mouse, keyboard
 and window control.
 
 ## Features
@@ -36,7 +36,7 @@ and window control.
 
 ## Download
 
-Grab a self-contained build from the [Releases](https://github.com/LiQiyeDev/BotMaker-Studio/releases) page. It
+Grab a self-contained build from the [Releases](https://github.com/BotMakerDev/botmaker-studio/releases) page. It
 **bundles its own Java + JavaFX runtime**, so there's nothing else to install — unzip and run the launcher.
 Builds are per-OS; pick the one matching your platform.
 
@@ -46,25 +46,25 @@ Fedora/RHEL and Debian/Ubuntu can take Studio from a signed repository instead, 
 system package manager:
 
 ```bash
-curl -fsSL https://liqiyedev.github.io/botmaker-studio/install.sh | sudo bash
+curl -fsSL https://botmakerdev.github.io/botmaker-studio/install.sh | sudo bash
 ```
 
 That registers the signed repository and installs from it, on either distro. The script is
 [`packaging/linux/install.sh`](packaging/linux/install.sh) — committed, attached to every release, and
 published byte-for-byte; read it before piping it into a root shell if you'd rather.
 
-To do the same by hand, the copy-paste snippets are at **<https://liqiyedev.github.io/botmaker-studio>**:
+To do the same by hand, the copy-paste snippets are at **<https://botmakerdev.github.io/botmaker-studio>**:
 
 ```bash
 # Fedora / RHEL  (dnf offers to import the signing key on the first metadata read)
 sudo curl -fsSL -o /etc/yum.repos.d/botmaker-studio.repo \
-  https://liqiyedev.github.io/botmaker-studio/botmaker-studio.repo
+  https://botmakerdev.github.io/botmaker-studio/botmaker-studio.repo
 sudo dnf install botmaker-studio
 
 # Debian / Ubuntu
 sudo install -d -m 755 /etc/apt/keyrings
-sudo curl -fsSL -o /etc/apt/keyrings/botmaker.asc https://liqiyedev.github.io/botmaker-studio/botmaker.asc
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/botmaker.asc] https://liqiyedev.github.io/botmaker-studio/deb stable main" \
+sudo curl -fsSL -o /etc/apt/keyrings/botmaker.asc https://botmakerdev.github.io/botmaker-studio/botmaker.asc
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/botmaker.asc] https://botmakerdev.github.io/botmaker-studio/deb stable main" \
   | sudo tee /etc/apt/sources.list.d/botmaker-studio.list
 sudo apt-get update && sudo apt-get install botmaker-studio
 ```
@@ -123,8 +123,8 @@ JavaFX is pulled in as a Maven dependency — no separate JavaFX SDK and no Java
 ### Clone & run
 
 ```bash
-git clone https://github.com/LiQiyeDev/BotMaker-Studio.git
-cd BotMaker-Studio
+git clone https://github.com/BotMakerDev/botmaker-studio.git
+cd botmaker-studio
 mvn javafx:run
 ```
 
