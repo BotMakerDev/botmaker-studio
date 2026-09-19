@@ -4,6 +4,7 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
+import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -69,6 +70,15 @@ public final class ManagePluginsDialog {
     private final ListView<PluginRegistry.Plugin> list = new ListView<>(shown);
 
     /**
+     * The line about plugins that did not load, refreshed after every pom write.
+     *
+     * <p>A field rather than a local since 2026-09-19: a clash is only discovered when the new classpath is
+     * bound, which happens <em>because</em> of a click in this window, so a label built once at construction
+     * shows the state before the thing the user just did.
+     */
+    private final Label failed = new Label();
+
+    /**
      * Everything the project's pom declares, re-read after every change so the badges stay honest.
      *
      * <p><b>Declared, not user-added</b>, and that distinction is the whole of the bug this fixed:
@@ -124,11 +134,9 @@ public final class ManagePluginsDialog {
         // "this project pins a plugin that is broken", which are the same empty palette and completely
         // different problems. Three incidents in this project's record end with the words "an empty palette
         // and one line on stderr"; this is where that line goes now.
-        Label failed = new Label(failureText());
         failed.setWrapText(true);
         failed.setStyle("-fx-font-size: 11px; -fx-text-fill: #b00020;");
-        failed.setVisible(!failed.getText().isEmpty());
-        failed.setManaged(failed.isVisible());
+        showFailures();
 
         progress.setVisible(false);
         progress.setPrefSize(20, 20);
@@ -180,6 +188,13 @@ public final class ManagePluginsDialog {
         return failureText(PluginHost.failures());
     }
 
+    /** Puts what the last bind could not load on screen, and takes the row away when there is nothing. */
+    private void showFailures() {
+        failed.setText(failureText());
+        failed.setVisible(!failed.getText().isEmpty());
+        failed.setManaged(failed.isVisible());
+    }
+
     /**
      * The one line this dialog says about plugins that did not load, or {@code ""} when they all did.
      *
@@ -200,6 +215,33 @@ public final class ManagePluginsDialog {
         return lead + failures.stream().map(PluginLoader.PluginFailure::describe)
                 .collect(java.util.stream.Collectors.joining("; "))
                 + ". Its features are absent from the editor; the project itself is unaffected.";
+    }
+
+    /** The ids of the plugins bound to the open project — whatever put them on its classpath. */
+    private static List<String> boundPluginIds() {
+        return PluginHost.plugins().stream().map(StudioPlugin::id).toList();
+    }
+
+    /**
+     * Why this plugin must not be declared here, or {@code ""} when it may be.
+     *
+     * <p>A plugin already <b>bound</b> but not <b>declared</b> is one another plugin depends on — the SDK
+     * brings plugin-basics, and a bot's pom naming basics beside it is the case the umbrella's rules call out
+     * by name. Maven's nearest-wins would then let this pom pin a version the plugin that depends on it was
+     * never built against, and the failure that produces is a linkage error inside somebody else's plugin.
+     *
+     * <p>Static and pure so it is asserted with no scene, like {@link #failureText(List)} beside it.
+     */
+    static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
+                                  List<String> boundIds) {
+        // A coordinate the pom already declares is an ordinary re-install or version change, whatever else
+        // is bound: this dialog is idempotent by coordinate and must stay so.
+        if (plugin.isInstalledIn(declared)) return "";
+        if (plugin.id().isBlank() || !boundIds.contains(plugin.id())) return "";
+        String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
+        return name + " is already on this project's classpath — another plugin it is a dependency of brings "
+                + "it. Declaring it here too would let this pom pin a version that plugin was never built "
+                + "against. Change the version of the plugin that brings it instead.";
     }
 
     private List<PluginRegistry.Plugin> merge(List<PluginRegistry.Plugin> published,
@@ -261,6 +303,11 @@ public final class ManagePluginsDialog {
             error("This entry has no resolvable coordinate — nothing to install.");
             return;
         }
+        String provided = alreadyProvided(plugin, installed, boundPluginIds());
+        if (!provided.isEmpty()) {
+            error(provided);
+            return;
+        }
         busy(true);
         version(plugin).thenAccept(version -> {
             if (version == null || version.isBlank()) {
@@ -289,6 +336,7 @@ public final class ManagePluginsDialog {
         write.whenComplete((ok, err) -> Platform.runLater(() -> {
             busy(false);
             installed = libraryService.declaredLibraries();
+            showFailures();
             // The badges are per-row, so the rows are what have to be redrawn.
             list.refresh();
             if (err != null) {

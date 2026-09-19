@@ -6,6 +6,20 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-19 (latest) — a plugin bound into an open project is visible, and one that will not compose
+  costs only itself.** `index/TypeSummaryManager` takes its allow-list as a `Supplier` asked on every cache
+  rebuild instead of a `final Set` captured when `BotProject` built it: a blank project binds no plugin, so
+  that set was empty and stayed empty, and every class of a plugin installed afterwards was filtered out of
+  `getAllTypes()` — which is why the statement menus needed a reopen and why *Reload Plugins* (the same
+  `rebind()`) did not help. `PluginHost.compose` replaces the throwing `mergeValueTypes` fold: a plugin
+  whose value type ids clash with one already folded, or whose own `valueTypes()` throws, is dropped **on
+  its own** and reported as a `PluginLoader.PluginFailure`, where the catch used to fall back to the bundled
+  set — empty, so an SDK older than 1.1.7 beside `plugin-basics` (both registering `DURATION`) cost the user
+  every editor of every plugin with one line on stderr. `ManagePluginsDialog.alreadyProvided` refuses to
+  declare a plugin that is bound but not declared — the umbrella's plugin-to-plugin rule, enforced where the
+  user is — and its failure line is a field refreshed after each pom write, since a clash is only discovered
+  by the bind that the click causes.
+
 - **2026-09-19 (later) — the canvas survives a literal, and shows what it must not edit.**
   `parser/helpers/NumberLiterals` reads a number by the grammar (`60000L` used to throw and blank the file);
   `BlockConverter.parseMember` isolates each member and `ConvertResult.problems` carries what was left out

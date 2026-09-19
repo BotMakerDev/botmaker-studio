@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * Per-jar index of external library types, backed directly by ClassGraph.
@@ -40,7 +41,21 @@ public class TypeSummaryManager {
         return PluginHost.cataloguedPackages();
     }
 
-    private final Set<String> allowedPackagePrefixes;
+    /**
+     * Asked on every cache rebuild, never captured — which is what makes a plugin installed into an open
+     * project visible without reopening it (2026-09-19).
+     *
+     * <p>It was a {@code final Set} taken once, at the moment {@code BotProject} built this manager. A blank
+     * project binds no plugin, so that set was empty and stayed empty: {@code LibraryService.rebind()} bound
+     * the new plugin, re-scanned its jar and published {@code LibrariesChangedEvent}, and every class in it
+     * was still filtered out of {@link #getAllTypes()}. The statement menus enumerate through
+     * {@code ProjectAnalyzer} and so listed nothing, which is why adding the SDK to a project needed a
+     * reopen — and why <i>Reload Plugins</i> did not help, since it runs the same rebind.
+     */
+    private final Supplier<Set<String>> allowedPackagePrefixes;
+
+    /** The prefixes {@link #ensureCaches()} last built with, so a changed answer rebuilds them. */
+    private Set<String> prefixesInUse = Set.of();
 
     /**
      * Whether {@link #getAllTypes()} hands back everything indexed, ignoring {@link #allowedPackagePrefixes}
@@ -67,16 +82,27 @@ public class TypeSummaryManager {
     private List<ClassInfo> staticUtilityCache = List.of();
 
     public TypeSummaryManager() {
-        this(defaultAllowedPackagePrefixes());
+        this(TypeSummaryManager::defaultAllowedPackagePrefixes, false);
     }
 
+    /** A manager over a fixed set of prefixes — a test's, or a caller that knows the answer already. */
     public TypeSummaryManager(Set<String> allowedPackagePrefixes) {
+        this(fixed(allowedPackagePrefixes), false);
+    }
+
+    /** A manager whose prefixes are asked for on every rebuild — the shape production uses, for a test. */
+    TypeSummaryManager(Supplier<Set<String>> allowedPackagePrefixes) {
         this(allowedPackagePrefixes, false);
     }
 
-    private TypeSummaryManager(Set<String> allowedPackagePrefixes, boolean everything) {
-        this.allowedPackagePrefixes = Set.copyOf(allowedPackagePrefixes);
+    private TypeSummaryManager(Supplier<Set<String>> allowedPackagePrefixes, boolean everything) {
+        this.allowedPackagePrefixes = allowedPackagePrefixes;
         this.everything = everything;
+    }
+
+    private static Supplier<Set<String>> fixed(Set<String> prefixes) {
+        Set<String> copy = Set.copyOf(prefixes);
+        return () -> copy;
     }
 
     /**
@@ -94,14 +120,14 @@ public class TypeSummaryManager {
      * <p>What a jar contains is a property of the jar, so nothing here needs a project, a binding or a list.
      */
     public static TypeSummaryManager overEverything() {
-        return new TypeSummaryManager(Set.of(), true);
+        return new TypeSummaryManager(Set::of, true);
     }
 
-    /** True when {@code ci}'s package is under one of the {@link #allowedPackagePrefixes}. */
-    private boolean isAllowed(ClassInfo ci) {
+    /** True when {@code ci}'s package is under one of {@code prefixes}. */
+    private boolean isAllowed(ClassInfo ci, Set<String> prefixes) {
         if (everything) return true;
         String pkg = ci.getPackageName();
-        for (String prefix : allowedPackagePrefixes) {
+        for (String prefix : prefixes) {
             if (pkg.equals(prefix) || pkg.startsWith(prefix + ".")) return true;
         }
         return false;
@@ -273,11 +299,15 @@ public class TypeSummaryManager {
     }
 
     private synchronized void ensureCaches() {
-        if (!cachesDirty) return;
+        // The prefixes are asked for every time, not captured: a plugin bound into the open project widens
+        // them, and the caches built before it was installed hide everything it brought.
+        Set<String> prefixes = everything ? Set.of() : Set.copyOf(allowedPackagePrefixes.get());
+        if (!cachesDirty && prefixes.equals(prefixesInUse)) return;
         cachesDirty = false;
+        prefixesInUse = prefixes;
         // Only allowed-package classes are surfaced to the user; transitive deps and the SDK's internal
         // package stay indexed per-jar (for any future resolution use) but never reach the menus.
-        allTypesCache = index.values().stream().flatMap(List::stream).filter(this::isAllowed).toList();
+        allTypesCache = index.values().stream().flatMap(List::stream).filter(ci -> isAllowed(ci, prefixes)).toList();
         bySimpleName.clear();
         byQualifiedName.clear();
         for (ClassInfo ci : allTypesCache) {

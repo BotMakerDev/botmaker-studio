@@ -12,9 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-No source changes since v1.1.6; re-released for updated upstream pins.
-
 ### Fixed
+
+- **A plugin you install is there at once.** Adding the SDK — or any plugin — to an open project used to
+  leave the statement menus empty until the project was reopened, and *Reload Plugins* did not help. The
+  types a newly bound plugin brings are offered as soon as it binds.
+- **One plugin that will not compose no longer costs you every other one.** Two plugins registering the same
+  value type id (an SDK older than 1.1.7 beside `plugin-basics`, which is where the nine JDK types live now)
+  used to silently drop *all* plugin editors — no pictures, no durations, no colours — with nothing on
+  screen to say so. The plugin that clashes is left out on its own, and Manage Plugins names it, the ids and
+  who already claims them.
+- **Manage Plugins refuses to install a plugin another plugin already brings**, and says to change that
+  plugin's version instead. Declaring it twice let Maven pin a version it was never built against.
 
 - **One number stopped blanking a whole file.** `Duration.ofMillis(60000L)` — or any `long`, hex, binary,
   octal or `1_000` literal — was read as an `int`, threw, and left the canvas empty with no message. Numbers

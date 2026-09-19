@@ -147,6 +147,32 @@ class TypeSummaryManagerCacheTest {
                 "but the jar is still fully indexed, so resolution can find those types");
     }
 
+    /**
+     * The allow-list is asked for on every read, so a plugin bound into the open project is visible at once.
+     *
+     * <p>The bug this holds: {@code BotProject} builds this manager once, at open, and the prefixes come from
+     * {@code PluginHost.cataloguedPackages()} — which is empty for a project that binds no plugin. Installing
+     * the SDK through Manage Plugins re-scanned its jar and re-bound it, and every class in it stayed hidden
+     * behind a filter captured before it existed, so the statement menus listed nothing until the project was
+     * reopened. Nothing here re-indexes: the same manager, the same jar, a widened answer.
+     */
+    @Test
+    void awidenedAllowListIsSeenWithoutReindexing(@TempDir Path tmp) throws IOException {
+        Path jar = fixtureJar(tmp, "fixture-1.0.jar");
+        Set<String>[] prefixes = new Set[]{Set.of()};
+
+        TypeSummaryManager manager = new TypeSummaryManager(() -> prefixes[0]);
+        manager.refresh(List.of(jar.toString()));
+
+        assertEquals(List.of(), simpleNames(manager), "no plugin bound yet, so nothing is offerable");
+
+        prefixes[0] = Set.of(PKG);
+
+        assertEquals(List.of("Mode", "Quiet", "Widget"), simpleNames(manager),
+                "the plugin is bound now, and its types are offered with no reopen");
+        assertTrue(manager.findBySimpleName("Widget").isPresent(), "the name maps are rebuilt with them");
+    }
+
     // --- The cache round-trip ---
 
     @Test

@@ -13,15 +13,18 @@ import com.botmaker.plugin.api.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.value.ValueCatalog;
+import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.host.PluginLoader;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
@@ -221,17 +224,16 @@ public final class PluginHost {
     }
 
     private static void swap(PluginLoader opened, List<StudioPlugin> bound) {
-        ValueCatalog merged;
-        try {
-            merged = mergeValueTypes(bound);
-        } catch (RuntimeException | Error e) {
-            // A clash between two of a project's own plugins refuses the binding, not the project. The same
-            // clash among the bundled ones is a build error and is left to throw at class-init, which is
-            // where a developer can act on it.
-            System.err.println("Warning: the project's plugins do not compose; using the bundled set: " + e);
-            if (opened != null) opened.close();
-            if (bound != BUNDLED) swap(null, BUNDLED);
-            return;
+        Composition composed = compose(bound);
+        ValueCatalog merged = composed.valueTypes();
+        bound = composed.bound();
+        if (!composed.rejected().isEmpty()) {
+            // A plugin that cannot compose is dropped on its own, and every plugin beside it still binds.
+            // Until 2026-09-19 one clash threw out of the fold and the whole project fell back to the
+            // bundled set — which is empty, so a project pinning an SDK older than the release that moved
+            // the nine JDK value types into plugin-basics, plus basics itself, lost *every* editor it had
+            // and said so on stderr alone. Reported rather than printed for the reason `failures()` exists.
+            failures = concat(failures, composed.rejected());
         }
         // Before anything is replaced, and before the outgoing loader is closed at the end of this method:
         // a plugin releasing a port or a nested display has to be able to run its own code to do it.
@@ -666,23 +668,79 @@ public final class PluginHost {
     }
 
     private static ValueCatalog mergeValueTypes() {
-        return mergeValueTypes(plugins);
+        return compose(plugins).valueTypes();
     }
 
-    private static ValueCatalog mergeValueTypes(List<StudioPlugin> set) {
+    /**
+     * What a set of plugins composes to: the merged value vocabulary, the plugins that are in it, and a
+     * failure per plugin that was left out.
+     *
+     * @param valueTypes what {@link #valueTypes()} serves
+     * @param bound      {@code set} minus whatever could not compose, in the same order
+     * @param rejected   one entry per plugin left out, in the shape {@link #failures()} already reports
+     */
+    record Composition(ValueCatalog valueTypes, List<StudioPlugin> bound,
+                               List<PluginLoader.PluginFailure> rejected) {
+    }
+
+    /**
+     * Folds the plugins into one value vocabulary, <b>dropping a plugin that will not compose rather than
+     * the whole set</b> (2026-09-19).
+     *
+     * <p>Two plugins claiming one id is genuinely unanswerable — the id <em>is</em> the identity a project
+     * file holds — so one of them has to go. Which one is classpath order, which is Maven's own answer and
+     * the only one here that is not a guess. What changed is the blast radius: the fold used to throw, and
+     * the caller fell back to the bundled set, so a clash between two of a project's plugins cost the user
+     * every editor of every other plugin as well.
+     *
+     * <p>Total, like every other pass over plugin code here: a plugin whose own {@code valueTypes()} throws
+     * is a rejection and not a failed bind.
+     */
+    static Composition compose(List<StudioPlugin> set) {
         ValueCatalog merged = ValueCatalog.empty();
+        List<StudioPlugin> kept = new ArrayList<>();
+        List<PluginLoader.PluginFailure> rejected = new ArrayList<>();
+        Map<String, String> claimedBy = new HashMap<>();
         for (StudioPlugin plugin : set) {
-            ValueCatalog offered = plugin.valueTypes();
-            if (offered == null) continue;
+            ValueCatalog offered;
+            try {
+                offered = plugin.valueTypes();
+            } catch (RuntimeException | Error e) {
+                rejected.add(new PluginLoader.PluginFailure(plugin.id(), e));
+                continue;
+            }
+            if (offered == null) {
+                kept.add(plugin);
+                continue;
+            }
             List<String> clashes = merged.clashesWith(offered);
             if (!clashes.isEmpty()) {
-                throw new IllegalStateException("plugin " + plugin.id()
-                        + " registers value type ids another plugin already claims: "
-                        + String.join(", ", clashes));
+                rejected.add(new PluginLoader.PluginFailure(plugin.id(),
+                        new IllegalStateException(clashMessage(clashes, claimedBy))));
+                continue;
             }
+            for (ValueType type : offered.types()) claimedBy.putIfAbsent(type.id(), plugin.id());
             merged = merged.merge(offered);
+            kept.add(plugin);
         }
-        return merged;
+        return new Composition(merged, List.copyOf(kept), List.copyOf(rejected));
+    }
+
+    /** Why a plugin was left out, naming the ids and whoever already claimed them. */
+    private static String clashMessage(List<String> clashes, Map<String, String> claimedBy) {
+        String owner = clashes.stream().map(claimedBy::get).filter(Objects::nonNull).findFirst()
+                .orElse("another plugin");
+        return "it was left out: it registers the value type(s) " + String.join(", ", clashes)
+                + ", which " + owner + " already claims. Two plugins cannot both own a type id — install one "
+                + "of them, or move to a version of one that no longer registers it.";
+    }
+
+    /** {@code first} then {@code second}, as one immutable list. */
+    private static List<PluginLoader.PluginFailure> concat(List<PluginLoader.PluginFailure> first,
+                                                           List<PluginLoader.PluginFailure> second) {
+        List<PluginLoader.PluginFailure> all = new ArrayList<>(first);
+        all.addAll(second);
+        return List.copyOf(all);
     }
 
     /**
