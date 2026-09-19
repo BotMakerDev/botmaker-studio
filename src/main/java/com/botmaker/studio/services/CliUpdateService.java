@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * in {@code botmaker-studio-api} and {@code botmaker-plugin-host}, and <b>Studio has no Maven dependency on
  * {@code botmaker-cli} — there is deliberately none, and none is coming.</b> So there is no version to skew:
  * this class knows the CLI only as a package name, a {@code --version} line and a GitHub tag. That is also why
- * the check reaches {@code LiQiyeDev/botmaker-cli}'s releases rather than reading a constant baked in here —
+ * the check reaches {@code BotMakerDev/botmaker-cli}'s releases rather than reading a constant baked in here —
  * a Studio that has not been re-released still learns about a newer CLI.
  *
  * <p><b>Linux only.</b> The CLI is packaged for the same signed dnf/apt repository Studio itself updates from

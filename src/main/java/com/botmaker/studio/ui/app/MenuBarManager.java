@@ -56,9 +56,9 @@ public class MenuBarManager {
     private java.nio.file.Path projectPath;
 
     /** GitHub repo of the Studio itself (opened from Help → BotMaker Studio on GitHub). */
-    private static final String STUDIO_REPO_URL = "https://github.com/LiQiyeDev/BotMaker-Studio";
+    private static final String STUDIO_REPO_URL = "https://github.com/BotMakerDev/botmaker-studio";
     /** GitHub repo of the BotMaker SDK (opened from Help → BotMaker SDK on GitHub). */
-    private static final String SDK_REPO_URL = "https://github.com/LiQiyeDev/BotMaker-sdk";
+    private static final String SDK_REPO_URL = "https://github.com/BotMakerDev/botmaker-sdk";
     public MenuBarManager(Stage primaryStage) {
         this.primaryStage = primaryStage;
         this.menuBar = new MenuBar();

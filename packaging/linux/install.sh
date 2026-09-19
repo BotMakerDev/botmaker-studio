@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # BotMaker Studio — one-command install on Fedora/RHEL (dnf) and Debian/Ubuntu (apt).
 #
-#   curl -fsSL https://liqiyedev.github.io/botmaker-studio/install.sh | sudo bash
+#   curl -fsSL https://botmakerdev.github.io/botmaker-studio/install.sh | sudo bash
 #
 # All this does is what the landing page tells you to do by hand: register the signed package repository
 # and install from it. It is deliberately readable end to end, because the recommended way to run it pipes
@@ -18,9 +18,9 @@ set -euo pipefail
 
 # The site this script installs from. Overridable for testing against a staging deploy; the default is
 # asserted by build-repo.sh to match the URL it is actually publishing to, so the two cannot drift.
-BASE_URL="${BOTMAKER_REPO_URL:-https://liqiyedev.github.io/botmaker-studio}"
+BASE_URL="${BOTMAKER_REPO_URL:-https://botmakerdev.github.io/botmaker-studio}"
 
-RELEASES_URL="https://github.com/LiQiyeDev/botmaker-studio/releases"
+RELEASES_URL="https://github.com/BotMakerDev/botmaker-studio/releases"
 
 die() { echo "error: $*" >&2; exit 1; }
 info() { echo "==> $*"; }

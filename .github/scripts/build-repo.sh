@@ -30,7 +30,7 @@ ARTIFACTS="${1:?usage: build-repo.sh <artifacts-dir> <site-dir> <tag>}"
 SITE="${2:?usage: build-repo.sh <artifacts-dir> <site-dir> <tag>}"
 TAG="${3:?usage: build-repo.sh <artifacts-dir> <site-dir> <tag>}"
 
-REPO_SLUG="${GITHUB_REPOSITORY:-LiQiyeDev/botmaker-studio}"
+REPO_SLUG="${GITHUB_REPOSITORY:-BotMakerDev/botmaker-studio}"
 RELEASE_URL="https://github.com/${REPO_SLUG}/releases/download/${TAG}"
 # Pages serves <owner>.github.io/<repo> lowercased.
 PAGES_URL="${PAGES_URL:-https://$(echo "${REPO_SLUG%%/*}" | tr '[:upper:]' '[:lower:]').github.io/${REPO_SLUG##*/}}"

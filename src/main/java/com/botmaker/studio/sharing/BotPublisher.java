@@ -273,7 +273,7 @@ public final class BotPublisher {
         String token = auth.token();
         boolean inGallery = client.get(upstreamApi() + "/contents/" + GitHubConfig.entryPath(login, repoName)
                 + "?ref=" + GitHubConfig.INDEX_BRANCH, token).join() != null;
-        if (!login.equalsIgnoreCase(GitHubConfig.INDEX_OWNER)) {
+        if (!login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
             JsonNode prs = client.get(upstreamApi() + "/pulls?state=all&per_page=1&head=" + login + ":"
                     + listingBranch(repoName), token).join();
             if (prs != null && prs.isArray() && !prs.isEmpty()) {
@@ -291,7 +291,10 @@ public final class BotPublisher {
     /**
      * Writes ({@code entry} non-null) or removes ({@code entry} null) {@code bots/<login>-<repoName>.json}.
      *
-     * <p>A maintainer of the gallery commits directly, since they cannot fork their own repository. Everyone
+     * <p>The maintainer commits directly, since they cannot fork their own repository. The comparison is
+     * against {@link GitHubConfig#MAINTAINER} — the person — rather than the gallery's owner, which is an
+     * organization since 2026-09-18 and equals nobody's login; against the owner, the maintainer would take
+     * the fork path and GitHub would refuse the fork. Everyone
      * else gets a fork, a branch of that fork named for the bot and started from the gallery's current tip,
      * and one pull request from it. The branch is why re-publishing works: a fork's {@code main} diverges
      * from the gallery the first time a listing is squash-merged, so a second pull request from it would carry
@@ -314,7 +317,7 @@ public final class BotPublisher {
         }
 
         try {
-            if (login.equalsIgnoreCase(GitHubConfig.INDEX_OWNER)) {
+            if (login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
                 if (entry != null) {
                     writeEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, entry, login, repoName);
                 } else {
