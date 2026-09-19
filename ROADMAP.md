@@ -6,6 +6,18 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-19 (later) — the canvas survives a literal, and shows what it must not edit.**
+  `parser/helpers/NumberLiterals` reads a number by the grammar (`60000L` used to throw and blank the file);
+  `BlockConverter.parseMember` isolates each member and `ConvertResult.problems` carries what was left out
+  to the status line; `DeclareClassVariableBlock` routes a field's value through `PickerRegistry`, so a
+  field gets the same editors a local and an argument do. `LockResolver` gained two shape rules —
+  a `@Param` field anywhere, and a constant a plugin declares through the contract's new
+  `StudioPlugin.managedFields()` (`PluginHost.managedFields`), a class of nothing but those refused whole —
+  plus the file rule for `parametersSourceFile()`. A read-only slot is drawn by
+  `PluginPickers.previewFor` (`SlotEditor.preview`), never by an editor whose write would be refused.
+  **`PickerContext.readOnly` is passed by the owning block, not re-derived from `LockResolver`**: a render
+  reads the resolver once and writes the verdict into its blocks, and asking again while a re-render is in
+  flight answered about another file (caught by `CanvasScrollTest`).
 - **2026-09-19 — an edit rewrites only what it edits.** `CodeEditor.formatted` lays out the changed lines
   (`SourceFormatter.formatChanged`) instead of the whole file; `AstRewriteHelper` passes four-space
   indentation to `rewriteAST` (null gave JDT's tab); `JavaParameterEdits` writes `visibility = Param.PUBLIC`;

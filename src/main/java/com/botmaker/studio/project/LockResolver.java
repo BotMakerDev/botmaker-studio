@@ -1,12 +1,21 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.plugin.api.ManagedField;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.params.JavaParameterSource;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Comment;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
+import org.eclipse.jdt.core.dom.Type;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * The one answer to "may the user change <em>this</em> node, and how?"
@@ -22,8 +31,24 @@ import java.nio.file.Path;
  * denied  &lt;- the project is open for reading  (an installed bot, see {@link ProjectMode})
  * denied  &lt;- the file is bundled library source
  * denied  &lt;- SIGNATURE edits to {@code public static void main(String[])}
+ * denied  &lt;- anything in the file the Parameters window owns ({@link Managed})
+ * denied  &lt;- a {@code @Param} field, wherever it is
+ * denied  &lt;- a constant a plugin manages ({@link ManagedField}), and all of a class holding only those
  * allowed &lt;- otherwise, the BODY of {@code main} included
  * </pre>
+ *
+ * <p><b>The fourth rule (2026-09-19) is keyed on a path, and that is the difference from {@code main}'s.</b>
+ * {@code Parameters.java} is what <i>Project ▸ Parameters</i> reads and writes, and that window keeps what
+ * the canvas does not — the annotation's members — so an edit made on the canvas is the one that leaves a
+ * parameter half-changed. The blocks are still drawn, with their pickers as previews: the file is shown and
+ * refused, never hidden. The window writes through {@code BotSources}, not through here, so the rule stops
+ * the canvas and nothing else. <b>Only the host's own file is named</b>: a file a plugin's vocabulary shapes
+ * (a class of {@code ImageTemplate} constants) is that plugin's to speak for, not this class's.
+ *
+ * <p><b>The last two are matched on shape, like {@code main}.</b> A {@code @Param} field is the Parameters
+ * window's wherever its author put it, so being in another file does not make it editable. A plugin says
+ * which constants it keeps in step through its own window ({@code StudioPlugin.managedFields}, read from
+ * {@code PluginHost}), and this class matches them without knowing what any of them are.
  *
  * <p>The third is the only rule left that is about a <em>member</em>, and it is the narrowest thing that
  * works: <b>{@code main}'s signature is fixed and its body is the user's.</b> The signature is not a
@@ -74,6 +99,42 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         }
     }
 
+    /** A file whose contents another window owns, with where to go instead and the status-line badge. */
+    public enum Managed {
+        PARAMETERS("Parameters.java holds the bot's parameters. Change them in Project ▸ Parameters…",
+                "Parameters - Read Only");
+
+        private final String reason;
+        private final String badge;
+
+        Managed(String reason, String badge) {
+            this.reason = reason;
+            this.badge = badge;
+        }
+
+        public String reason() {
+            return reason;
+        }
+
+        public String badge() {
+            return badge;
+        }
+    }
+
+    /** Which window owns this file, or {@code null} for a file the canvas may edit. */
+    public Managed managed() {
+        if (config == null || file == null) return null;
+        Path normalized = file.toAbsolutePath().normalize();
+        return normalized.equals(config.parametersSourceFile().toAbsolutePath().normalize())
+                ? Managed.PARAMETERS : null;
+    }
+
+    /** The status-line suffix for this file, or {@code null} for an ordinary one. */
+    public String badge() {
+        Managed managed = managed();
+        return managed != null ? managed.badge() : role().badge();
+    }
+
     /** The resolver for whatever file is being edited right now, or a permissive one if there is no project. */
     public static LockResolver forActiveFile(ProjectConfig config, ProjectState state) {
         if (config == null || state == null) return new LockResolver(null, null, false);
@@ -88,21 +149,87 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
 
     /** True when {@code node}'s member may be renamed/retyped/deleted, or its class-level structure changed. */
     public boolean signatureEditable(ASTNode node) {
-        return editable() && !isEntryPointMain(node);
+        return editable() && !isEntryPointMain(node) && managedReason(node, PluginHost.managedFields()) == null;
     }
 
     /** True when statements inside {@code node}'s method may be changed — {@code main}'s included. */
     public boolean bodyEditable(ASTNode node) {
-        return editable();
+        return editable() && managedReason(node, PluginHost.managedFields()) == null;
+    }
+
+    /** Why the Parameters window, not the canvas, changes a {@code @Param} field. */
+    public static final String PARAM_REASON =
+            "This is a parameter. Change it in Project ▸ Parameters…, which keeps its annotation in step.";
+
+    /**
+     * Why {@code node} belongs to another window, or {@code null} when nothing but the file decides.
+     *
+     * <p>Pure, and public for that reason: the plugin rule is tested with a list rather than a bound plugin.
+     * Types are matched without bindings — a written qualified name, or a simple name the file imports —
+     * because the editor routinely draws a file whose siblings do not compile.
+     */
+    public static String managedReason(ASTNode node, List<ManagedField> managed) {
+        FieldDeclaration field = enclosing(node, FieldDeclaration.class);
+        if (field != null) {
+            if (JavaParameterSource.paramAnnotation(field) != null) return PARAM_REASON;
+            String reason = pluginReason(field, managed);
+            if (reason != null) return reason;
+        }
+        // A class of nothing but managed constants is managed whole: adding a method to it, or deleting its
+        // constructor, is an edit to a file whose purpose is somebody else's window.
+        TypeDeclaration type = enclosing(node, TypeDeclaration.class);
+        if (type == null || type.getFields().length == 0) return null;
+        String first = null;
+        for (FieldDeclaration each : type.getFields()) {
+            String reason = pluginReason(each, managed);
+            if (reason == null) return null;
+            if (first == null) first = reason;
+        }
+        return first;
+    }
+
+    /** The reason of the managed entry this constant matches, or {@code null}. */
+    private static String pluginReason(FieldDeclaration field, List<ManagedField> managed) {
+        if (managed.isEmpty()) return null;
+        int modifiers = field.getModifiers();
+        if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers)) return null;
+        for (ManagedField entry : managed) {
+            if (writtenAs(field.getType(), entry.typeName())) return entry.reason();
+        }
+        return null;
+    }
+
+    /** Whether {@code type} names {@code qualified}: spelled out, or its simple name with a matching import. */
+    private static boolean writtenAs(Type type, String qualified) {
+        String written = type.toString();
+        if (written.equals(qualified)) return true;
+        int dot = qualified.lastIndexOf('.');
+        if (dot < 0 || !written.equals(qualified.substring(dot + 1))) return false;
+        if (!(type.getRoot() instanceof CompilationUnit unit)) return false;
+        String pkg = qualified.substring(0, dot);
+        for (Object each : unit.imports()) {
+            ImportDeclaration imported = (ImportDeclaration) each;
+            if (imported.isStatic()) continue;
+            String name = imported.getName().getFullyQualifiedName();
+            if (imported.isOnDemand() ? name.equals(pkg) : name.equals(qualified)) return true;
+        }
+        return unit.getPackage() != null && unit.getPackage().getName().getFullyQualifiedName().equals(pkg);
+    }
+
+    private static <T extends ASTNode> T enclosing(ASTNode node, Class<T> kind) {
+        for (ASTNode n = node; n != null; n = n.getParent()) {
+            if (kind.isInstance(n)) return kind.cast(n);
+        }
+        return null;
     }
 
     /** True when blocks in this file should default to refusing interaction. */
     public boolean suppressesInteraction() {
-        return readerMode || role().suppressesInteraction();
+        return readerMode || role().suppressesInteraction() || managed() != null;
     }
 
     private boolean editable() {
-        return !readerMode && !role().isReadOnly();
+        return !readerMode && !role().isReadOnly() && managed() == null;
     }
 
     /**
@@ -160,6 +287,10 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         // Reading someone else's bot outranks the file's own verdict: nothing here is the user's to change.
         if (readerMode) return Verdict.no(READER_MODE_REASON);
         if (role() == FileRole.LIBRARY) return Verdict.no("This is bundled library code — it can't be edited.");
+        Managed managed = managed();
+        if (managed != null) return Verdict.no(managed.reason());
+        String reason = managedReason(node, PluginHost.managedFields());
+        if (reason != null) return Verdict.no(reason);
         if (kind == EditKind.SIGNATURE && isEntryPointMain(node)) return Verdict.no(entryPointReason());
         return Verdict.ok();
     }

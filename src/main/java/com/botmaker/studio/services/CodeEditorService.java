@@ -854,9 +854,13 @@ public class CodeEditorService {
 
         if (state.getActiveFile() != null) {
             String fileName = state.getActiveFile().getPath().getFileName().toString();
-            String badge = resolver.role().badge();
+            String badge = resolver.badge();
             if (badge != null) fileName += " [" + badge + "]";
-            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Loaded: " + fileName));
+            // A member left out of the canvas is said, not silently missing: the file on disk still has it,
+            // and a canvas that looks complete while it is not is how an edit lands next to a hole.
+            String loaded = result.problems().isEmpty() ? "Loaded: " + fileName
+                    : "Loaded: " + fileName + " — " + String.join("; ", result.problems());
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(loaded));
         }
     }
     private void copySelectedBlock() {

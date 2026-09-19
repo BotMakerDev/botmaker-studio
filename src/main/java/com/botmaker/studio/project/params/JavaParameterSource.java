@@ -208,8 +208,11 @@ public final class JavaParameterSource {
         return ValueType.unknown(written);
     }
 
-    /** The {@code @Param} annotation on this field, or {@code null}. */
-    static Annotation paramAnnotation(FieldDeclaration field) {
+    /**
+     * The {@code @Param} annotation on this field, or {@code null}. Public for {@code LockResolver}: what makes
+     * a field a parameter is stated here once, and the canvas refusing to edit one asks the same question.
+     */
+    public static Annotation paramAnnotation(FieldDeclaration field) {
         for (Object modifier : field.modifiers()) {
             if (!(modifier instanceof Annotation annotation)) continue;
             String name = annotation.getTypeName().getFullyQualifiedName();

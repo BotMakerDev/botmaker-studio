@@ -101,6 +101,10 @@ public final class PickerRegistry {
      * and would shut a plugin out of its own type.
      */
     public static Node pickerNodeFor(PickerContext ctx) {
+        // A slot the canvas may not write gets a plugin's preview — a thumbnail, a swatch — or the plain
+        // read-only node. Never an editor: one that opens a chooser and then has its write refused is worse
+        // than none, and the host's own pickers here are all editors.
+        if (ctx != null && ctx.readOnly()) return PluginPickers.previewFor(ctx);
         for (SpecialTypePicker picker : PICKERS) {
             if (picker.matches(ctx)) return picker.create(ctx);
         }

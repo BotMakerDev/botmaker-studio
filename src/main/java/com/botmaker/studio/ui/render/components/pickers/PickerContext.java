@@ -14,11 +14,34 @@ import com.botmaker.studio.types.ResolvedType;
  * and the index {@code -1}.
  */
 public record PickerContext(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
-                            String className, String methodName, int argIndex) {
+                            String className, String methodName, int argIndex, boolean readOnly) {
+
+    /**
+     * The same for a caller that says nothing about writability — editable, which is what every caller meant
+     * before {@code readOnly} existed (2026-09-19).
+     */
+    public PickerContext(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
+                         String className, String methodName, int argIndex) {
+        this(context, arg, paramType, className, methodName, argIndex, false);
+    }
 
     /** A context with no enclosing-call info (class/method null, index -1) — for header slots and list elements. */
     public static PickerContext of(CodeEditorService context, ValueSlot arg, ResolvedType paramType) {
         return new PickerContext(context, arg, paramType, null, null, -1);
+    }
+
+    /**
+     * The same, saying whether the block that draws this slot may be edited. A read-only slot gets a plugin's
+     * preview — a thumbnail, a swatch — never a control that opens a chooser and then has its write refused.
+     *
+     * <p><b>The owning block is asked, not {@code LockResolver}.</b> Both know the answer, but only the block
+     * knows it at the moment its node is built: a render reads the resolver once for the whole file and
+     * writes the verdict into its blocks, so asking the resolver again here answers about whatever file the
+     * editor has open by then — which, during the re-render an edit causes, is not reliably this one.
+     */
+    public static PickerContext of(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
+                                   boolean readOnly) {
+        return new PickerContext(context, arg, paramType, null, null, -1, readOnly);
     }
 
     /** True when {@code paramType} is the SDK type {@code sdkType}. */

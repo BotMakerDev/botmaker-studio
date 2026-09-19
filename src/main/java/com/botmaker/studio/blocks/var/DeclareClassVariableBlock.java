@@ -6,6 +6,9 @@ import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import com.botmaker.studio.blocks.expr.ListBlock;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
+import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.ui.render.components.pickers.PickerContext;
+import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
@@ -115,11 +118,20 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
         return setValue;
     }
 
-    /** Whatever stands for the value: a list, an array, or the expression's own node. */
+    /**
+     * Whatever stands for the value: a list, an array, a type-matched picker, or the expression's own node.
+     *
+     * <p>The picker is the field's declared type's, exactly as a local variable's and a call argument's are
+     * (2026-09-19). Until then a field never asked, so {@code static final ImageTemplate COLLECT = new
+     * ImageTemplate(…)} was drawn as the generic blue <i>Create</i> block while the SDK's picture editor for
+     * the type went unused. On a field the canvas may not edit, the registry answers the plugin's preview.
+     */
     private Node initializerNode(CodeEditorService context) {
         if (initializer instanceof ListBlock) return initializer.getUINode(context);
         if (initializer.getAstNode() instanceof ArrayInitializer) return createListDisplay(context);
-        return initializer.getUINode(context);
+        Node picker = PickerRegistry.pickerNodeFor(
+                PickerContext.of(context, ValueSlot.of(initializer), fieldType, isReadOnly()));
+        return picker != null ? picker : initializer.getUINode(context);
     }
 
     @Override

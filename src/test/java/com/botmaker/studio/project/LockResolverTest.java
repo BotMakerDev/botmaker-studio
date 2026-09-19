@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.plugin.api.ManagedField;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -149,5 +151,91 @@ class LockResolverTest {
         assertFalse(v.allowed());
         assertNotNull(v.reason());
         assertFalse(v.reason().isBlank());
+    }
+
+    // --- files and fields another window owns (2026-09-19) --------------------------------------------------
+
+    private static final List<ManagedField> PICTURES = List.of(
+            new ManagedField("com.example.vision.Picture", "Change pictures in the picture window."));
+
+    private static TypeDeclaration typeOf(String source) {
+        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+        parser.setSource(source.toCharArray());
+        return (TypeDeclaration) ((CompilationUnit) parser.createAST(null)).types().getFirst();
+    }
+
+    @Test
+    void everyEditInTheParametersFileIsRefusedWithWhereToGo() {
+        LockResolver resolver = resolver(CONFIG.parametersSourceFile());
+
+        LockResolver.Verdict v = resolver.check(statementIn("helper"), EditKind.BODY);
+        assertFalse(v.allowed());
+        assertTrue(v.reason().contains("Project ▸ Parameters"), v.reason());
+        assertTrue(resolver.suppressesInteraction());
+        assertTrue(resolver(HELPER).permits(statementIn("helper"), EditKind.BODY));
+    }
+
+    @Test
+    void aParamFieldIsTheParametersWindowsWhereverItIs() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.botmaker.plugin.basics.params.Param;
+                public class Tuning {
+                    @Param public static int attempts = 3;
+                    public static int counter = 0;
+                }
+                """);
+
+        assertEquals(LockResolver.PARAM_REASON, LockResolver.managedReason(type.getFields()[0], List.of()));
+        assertNull(LockResolver.managedReason(type.getFields()[1], List.of()));
+    }
+
+    @Test
+    void aClassOfNothingButManagedConstantsIsManagedWhole() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.example.vision.Picture;
+                final class Pictures {
+                    static final Picture COLLECT = new Picture("collect.png");
+                    static final Picture BATTLE = new Picture("battle.png");
+                    private Pictures() {}
+                }
+                """);
+
+        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getFields()[0], PICTURES));
+        // The constructor is not a picture, and is refused anyway: the class exists only to name them.
+        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getMethods()[0], PICTURES));
+        // No plugin managing the type: nothing is locked, which is every project before this rule.
+        assertNull(LockResolver.managedReason(type.getFields()[0], List.of()));
+    }
+
+    @Test
+    void aMixedClassLocksOnlyTheManagedConstants() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.example.vision.Picture;
+                class Mixed {
+                    static final Picture COLLECT = new Picture("collect.png");
+                    static Picture current = null;
+                    void run() { }
+                }
+                """);
+
+        assertNotNull(LockResolver.managedReason(type.getFields()[0], PICTURES));
+        assertNull(LockResolver.managedReason(type.getFields()[1], PICTURES), "not final: ordinary code");
+        assertNull(LockResolver.managedReason(type.getMethods()[0], PICTURES));
+    }
+
+    @Test
+    void aSameNamedTypeFromAnotherPackageIsNotManaged() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.other.Picture;
+                final class Pictures {
+                    static final Picture COLLECT = new Picture("collect.png");
+                }
+                """);
+
+        assertNull(LockResolver.managedReason(type.getFields()[0], PICTURES));
     }
 }

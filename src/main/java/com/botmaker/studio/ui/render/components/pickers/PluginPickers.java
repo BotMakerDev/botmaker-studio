@@ -41,6 +41,38 @@ final class PluginPickers {
         return dispatch(ctx, true, run);
     }
 
+    /**
+     * The preferred claimant's {@link SlotEditor#preview}, or {@code null} — for a slot that is shown and may
+     * not be edited. Built over the same context an editor gets, so {@code matches} and {@code preview} read
+     * the same source text.
+     */
+    static Node previewFor(PickerContext ctx) {
+        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
+        if (editors.isEmpty() || ctx == null) return null;
+        HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),
+                ctx.className(), ctx.methodName(), ctx.argIndex(),
+                HostServices.forProject(ctx.context() == null ? null : ctx.context().getConfig()), null);
+        List<PluginHost.OwnedEditor> claimants = new ArrayList<>();
+        for (PluginHost.OwnedEditor owned : editors) {
+            try {
+                if (owned.editor().matches(context)) claimants.add(owned);
+            } catch (RuntimeException | LinkageError e) {
+                System.err.println("Plugin slot editor failed for " + typeLabel(ctx) + ": " + e);
+            }
+        }
+        String typeName = ctx.paramType() == null ? null : ctx.paramType().qualifiedName();
+        for (PluginHost.OwnedEditor owned : EditorContest.ordered(
+                claimants, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName))) {
+            try {
+                Node node = owned.editor().preview(context);
+                if (node != null) return node;
+            } catch (RuntimeException | LinkageError e) {
+                System.err.println("Plugin slot preview failed for " + typeLabel(ctx) + ": " + e);
+            }
+        }
+        return null;
+    }
+
     /** Whether any plugin editor claims {@code ctx}, without building anything. */
     static boolean hasPicker(PickerContext ctx) {
         return dispatch(ctx, false, null) != null;

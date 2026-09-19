@@ -23,6 +23,7 @@ import com.botmaker.studio.palette.InputKind;
 import com.botmaker.studio.parser.handlers.BranchChainHandler;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;
+import com.botmaker.studio.parser.helpers.NumberLiterals;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -51,7 +52,17 @@ public class BlockConverter {
     }
 
     /** Result of a {@link #convert} call: the root block plus the binding-resolved CU it was built from. */
-    public record ConvertResult(AbstractCodeBlock root, CompilationUnit cu) {}
+    /**
+     * @param problems one sentence per member that could not be drawn, or why the whole file could not be —
+     *                 the caller shows them, because an empty or partial canvas with no sentence is
+     *                 indistinguishable from a file that is empty
+     */
+    public record ConvertResult(AbstractCodeBlock root, CompilationUnit cu, List<String> problems) {
+
+        public ConvertResult(AbstractCodeBlock root, CompilationUnit cu) {
+            this(root, cu, List.of());
+        }
+    }
 
     // =========================================================================
     // ENTRY POINT
@@ -113,12 +124,15 @@ public class BlockConverter {
             if (ast.types().isEmpty()) return new ConvertResult(null, ast);
 
             AbstractTypeDeclaration rootNode = (AbstractTypeDeclaration) ast.types().getFirst();
-            return new ConvertResult(parseRoot(rootNode, ctx), ast);
+            List<String> problems = new ArrayList<>();
+            AbstractCodeBlock root = parseRoot(rootNode, ctx, problems);
+            return new ConvertResult(root, ast, List.copyOf(problems));
 
         } catch (Exception e) {
             System.err.println("Critical error in BlockConverter.convert: " + e.getMessage());
             e.printStackTrace();
-            return new ConvertResult(null, null);
+            return new ConvertResult(null, null, List.of("This file could not be drawn ("
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")."));
         }
     }
 
@@ -135,71 +149,27 @@ public class BlockConverter {
         return createCompilationUnit(state.getResolvedClasspath(), javaCode, state.getSourcePath(), unitName);
     }
 
-    private AbstractCodeBlock parseRoot(AbstractTypeDeclaration rootNode, ParseContext ctx) {
+    private AbstractCodeBlock parseRoot(AbstractTypeDeclaration rootNode, ParseContext rootCtx,
+                                        List<String> problems) {
         // --- CASE A: Standard Class File ---
         if (rootNode instanceof TypeDeclaration typeDecl) {
+            // A class another window owns whole (only a plugin's managed constants in it) draws every member
+            // read-only, the same way a file open for reading does — LockResolver says which.
+            ParseContext ctx = signatureEditable(typeDecl, rootCtx) ? rootCtx : rootCtx.withReadOnly(true);
             ClassBlock classBlock = new ClassBlock(
                     BlockId.of(typeDecl), typeDecl, ctx.manager());
             applyReadOnly(classBlock, ctx);
             ctx.nodeToBlockMap().put(typeDecl, classBlock);
 
             for (Object obj : typeDecl.bodyDeclarations()) {
-                // Every member of every file is the user's since 2026-08-29, so none is filtered out of the
-                // tree. What used to be dropped here — an activity's Outcome enum, its INSTANCE static, its
-                // isEnabled() wiring — was dropped because BotMaker wrote it and rewrote it; nothing does.
-                if (obj instanceof MethodDeclaration method) {
-                    MethodDeclarationBlock methodBlock;
-                    if (method.isConstructor()) {
-                        methodBlock = new ConstructorBlock(
-                                BlockId.of(method), method, ctx.manager());
-                    } else if (FileTypeDetector.isMainMethod(method)) {
-                        methodBlock = new MainBlock(
-                                BlockId.of(method), method, ctx.manager());
-                    } else {
-                        methodBlock = new MethodDeclarationBlock(
-                                BlockId.of(method), method, ctx.manager());
-                    }
-                    // LockResolver is the one authority on whether an edit is allowed — bundled library
-                    // source, or a bot open for reading. Don't re-derive either from a path here.
-                    methodBlock.setReadOnly(!signatureEditable(method, ctx));
-                    ctx.nodeToBlockMap().put(method, methodBlock);
-
-                    if (method.getBody() != null) {
-                        methodBlock.setBody(parseBodyBlock(method.getBody(),
-                                ctx.withReadOnly(!bodyEditable(method, ctx))));
-                    }
-                    classBlock.addBodyDeclaration(methodBlock);
-                } else if (obj instanceof Initializer initializer) {
-                    // static { … } / { … }. Modelled by JDT as neither a method nor a field, so without this
-                    // branch the whole construct vanished from the tree — see blocks/misc/InitializerBlock.
-                    InitializerBlock initBlock = new InitializerBlock(BlockId.of(initializer), initializer);
-                    applyReadOnly(initBlock, ctx);
-                    ctx.nodeToBlockMap().put(initializer, initBlock);
-
-                    if (initializer.getBody() != null) {
-                        initBlock.setBody(parseBodyBlock(initializer.getBody(), ctx));
-                    }
-                    classBlock.addBodyDeclaration(initBlock);
-                } else if (obj instanceof EnumDeclaration enumDecl) {
-                    DeclareEnumBlock enumBlock = new DeclareEnumBlock(
-                            BlockId.of(enumDecl), enumDecl);
-                    applyReadOnly(enumBlock, ctx);
-                    // An activity's Outcome enum is generated from the flow dialog inside a file the user
-                    // otherwise owns, so the file's own verdict is not the answer here.
-                    if (!signatureEditable(enumDecl, ctx)) enumBlock.setReadOnly(true);
-                    ctx.nodeToBlockMap().put(enumDecl, enumBlock);
-                    classBlock.addBodyDeclaration(enumBlock);
-                } else if (obj instanceof FieldDeclaration field) {
-                    DeclareClassVariableBlock fieldBlock = new DeclareClassVariableBlock(
-                            BlockId.of(field), field);
-                    applyReadOnly(fieldBlock, ctx);
-                    ctx.nodeToBlockMap().put(field, fieldBlock);
-
-                    VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().getFirst();
-                    if (fragment.getInitializer() != null) {
-                        parseExpression(fragment.getInitializer(), ctx).ifPresent(fieldBlock::setInitializer);
-                    }
-                    classBlock.addBodyDeclaration(fieldBlock);
+                // One member that cannot be drawn costs that member, not the file. Until 2026-09-19 the throw
+                // reached convert()'s outer catch, which answered "no root" — so one `60000L` drew the whole
+                // file as an empty canvas and said nothing. The member is left out and named instead.
+                try {
+                    parseMember(obj, classBlock, ctx);
+                } catch (RuntimeException e) {
+                    problems.add(memberName(obj) + " could not be drawn ("
+                            + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")");
                 }
             }
             return classBlock;
@@ -208,11 +178,87 @@ public class BlockConverter {
         else if (rootNode instanceof EnumDeclaration enumDecl) {
             DeclareEnumBlock rootEnumBlock = new DeclareEnumBlock(
                     BlockId.of(enumDecl), enumDecl);
-            applyReadOnly(rootEnumBlock, ctx);
-            ctx.nodeToBlockMap().put(enumDecl, rootEnumBlock);
+            applyReadOnly(rootEnumBlock, rootCtx);
+            rootCtx.nodeToBlockMap().put(enumDecl, rootEnumBlock);
             return rootEnumBlock;
         }
         return null;
+    }
+
+    /** What a member is called in a status line — {@code Parameters.restBetween}, {@code run()}. */
+    private static String memberName(Object member) {
+        return switch (member) {
+            case MethodDeclaration method -> method.getName().getIdentifier() + "()";
+            case FieldDeclaration field when !field.fragments().isEmpty() ->
+                    ((VariableDeclarationFragment) field.fragments().getFirst()).getName().getIdentifier();
+            case EnumDeclaration enumDecl -> enumDecl.getName().getIdentifier();
+            case Initializer ignored -> "an initializer block";
+            default -> "a member";
+        };
+    }
+
+    /** One member of a class, added to {@code classBlock}. */
+    private void parseMember(Object obj, ClassBlock classBlock, ParseContext ctx) {
+        // Every member of every file is the user's since 2026-08-29, so none is filtered out of the
+        // tree. What used to be dropped here — an activity's Outcome enum, its INSTANCE static, its
+        // isEnabled() wiring — was dropped because BotMaker wrote it and rewrote it; nothing does.
+        if (obj instanceof MethodDeclaration method) {
+            MethodDeclarationBlock methodBlock;
+            if (method.isConstructor()) {
+                methodBlock = new ConstructorBlock(
+                        BlockId.of(method), method, ctx.manager());
+            } else if (FileTypeDetector.isMainMethod(method)) {
+                methodBlock = new MainBlock(
+                        BlockId.of(method), method, ctx.manager());
+            } else {
+                methodBlock = new MethodDeclarationBlock(
+                        BlockId.of(method), method, ctx.manager());
+            }
+            // LockResolver is the one authority on whether an edit is allowed — bundled library
+            // source, or a bot open for reading. Don't re-derive either from a path here.
+            methodBlock.setReadOnly(!signatureEditable(method, ctx));
+            ctx.nodeToBlockMap().put(method, methodBlock);
+
+            if (method.getBody() != null) {
+                methodBlock.setBody(parseBodyBlock(method.getBody(),
+                        ctx.withReadOnly(!bodyEditable(method, ctx))));
+            }
+            classBlock.addBodyDeclaration(methodBlock);
+        } else if (obj instanceof Initializer initializer) {
+            // static { … } / { … }. Modelled by JDT as neither a method nor a field, so without this
+            // branch the whole construct vanished from the tree — see blocks/misc/InitializerBlock.
+            InitializerBlock initBlock = new InitializerBlock(BlockId.of(initializer), initializer);
+            applyReadOnly(initBlock, ctx);
+            ctx.nodeToBlockMap().put(initializer, initBlock);
+
+            if (initializer.getBody() != null) {
+                initBlock.setBody(parseBodyBlock(initializer.getBody(), ctx));
+            }
+            classBlock.addBodyDeclaration(initBlock);
+        } else if (obj instanceof EnumDeclaration enumDecl) {
+            DeclareEnumBlock enumBlock = new DeclareEnumBlock(
+                    BlockId.of(enumDecl), enumDecl);
+            applyReadOnly(enumBlock, ctx);
+            // An activity's Outcome enum is generated from the flow dialog inside a file the user
+            // otherwise owns, so the file's own verdict is not the answer here.
+            if (!signatureEditable(enumDecl, ctx)) enumBlock.setReadOnly(true);
+            ctx.nodeToBlockMap().put(enumDecl, enumBlock);
+            classBlock.addBodyDeclaration(enumBlock);
+        } else if (obj instanceof FieldDeclaration field) {
+            // A @Param field, or a constant a plugin manages, is drawn read-only — its value included, which
+            // is why the initializer is parsed under the field's verdict and not the file's.
+            ParseContext fieldCtx = signatureEditable(field, ctx) ? ctx : ctx.withReadOnly(true);
+            DeclareClassVariableBlock fieldBlock = new DeclareClassVariableBlock(
+                    BlockId.of(field), field);
+            applyReadOnly(fieldBlock, fieldCtx);
+            ctx.nodeToBlockMap().put(field, fieldBlock);
+
+            VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().getFirst();
+            if (fragment.getInitializer() != null) {
+                parseExpression(fragment.getInitializer(), fieldCtx).ifPresent(fieldBlock::setInitializer);
+            }
+            classBlock.addBodyDeclaration(fieldBlock);
+        }
     }
 
     private void applyReadOnly(CodeBlock block, ParseContext ctx) {
@@ -689,14 +735,17 @@ public class BlockConverter {
             }
             return Optional.of(block);
         }
-        if (expr instanceof NumberLiteral nl) {
-            String t = nl.getToken();
-            ExpressionBlock b;
-            if (t.toLowerCase().endsWith("f")) b = new LiteralBlock<>(BlockId.of(expr), expr, Float.parseFloat(t));
-            else if (t.contains(".") || t.toLowerCase().endsWith("d")) b = new LiteralBlock<>(BlockId.of(expr), expr, Double.parseDouble(t));
-            else b = new LiteralBlock<>(BlockId.of(expr), expr, Integer.parseInt(t));
-            map.put(expr, b);
-            return Optional.of(b);
+        // A number is read by the grammar (NumberLiterals): `60000L` once reached Integer.parseInt, threw, and
+        // blanked the whole canvas. One spelled in a way a number field cannot write back — hex, `1_000`, an
+        // exponent, or an int literal only legal under a minus — falls through to the verbatim block below,
+        // which keeps the author's spelling visible and intact.
+        if (expr instanceof NumberLiteral nl && NumberLiterals.isPlainDecimal(nl.getToken())) {
+            Optional<Number> value = NumberLiterals.value(nl.getToken());
+            if (value.isPresent()) {
+                ExpressionBlock b = new LiteralBlock<>(BlockId.of(expr), expr, value.get());
+                map.put(expr, b);
+                return Optional.of(b);
+            }
         }
         if (expr instanceof BooleanLiteral bl) {
             BooleanLiteralBlock b = new BooleanLiteralBlock(BlockId.of(expr), bl);

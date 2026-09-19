@@ -79,7 +79,9 @@ public class LiteralBlock<T> extends AbstractExpressionBlock {
                         textField.setText(textToSave);
                     }
 
-                    if (!textToSave.equals(oldText)) {
+                    // Both sides carry the suffix: a long shows `60000` and saves `60000L`, so comparing the
+                    // raw text would rewrite the file every time the field merely lost focus.
+                    if (!textToSave.equals(normalizeNumberSuffix(oldText))) {
                         if (this.astNode instanceof MethodInvocation mi) {
                             context.getCodeEditor().addStringArgumentToMethodInvocation(mi, textToSave);
                         } else {
