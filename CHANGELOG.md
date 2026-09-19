@@ -10,6 +10,46 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.1.6; re-released for updated upstream pins.
+
+### Fixed
+
+- **One number stopped blanking a whole file.** `Duration.ofMillis(60000L)` — or any `long`, hex, binary,
+  octal or `1_000` literal — was read as an `int`, threw, and left the canvas empty with no message. Numbers
+  are read by Java's own rules now. A spelling a number field cannot write back (hex, `1_000`, an exponent)
+  is shown exactly as you wrote it instead of being turned into a decimal.
+- **A member that cannot be drawn costs that member, not the file.** The rest of the file draws, and the
+  status line names what was left out.
+- **A field's value gets its real editor.** `static final ImageTemplate COLLECT = new ImageTemplate(…)` shows
+  the picture editor, and a `Duration` field its duration editor, where both used to be a generic blue
+  *Create …* block. Class fields now ask the same editors a local variable and a call argument do.
+
+### Changed
+
+- **The download page looks like the rest of the project, and its commands copy.** The stylesheet and the
+  copy button come from `botmakerdev.github.io/assets/`, the organization's front page, rather than from a
+  `<style>` block repeated in four repositories, and the page links to that front page — where one command
+  installs every BotMaker tool at once. The installers, the repository and the signing key are untouched.
+- **Parameters and plugin-managed constants are shown read-only.** Everything in `Parameters.java`, every
+  `@Param` field wherever it lives, and every constant a plugin manages (the SDK's pictures) draws with its
+  blocks and its picker — as a preview — and refuses edits, naming the window that owns it. A picker that
+  opened a chooser and then had its write refused is gone.
+
+- **An edit on the canvas changes only what it edits.** Every edit used to re-lay-out the whole file, so
+  adding one statement could rewrite `private Collect() {}` three methods away. Now only the lines the edit
+  wrote are laid out, and everything else stays exactly as you wrote it.
+- **What Studio writes is indented with four spaces**, like the rest of the file, not with a tab.
+- **A public parameter is written `visibility = Param.PUBLIC`**, the annotation's own constant, not the
+  string `"public"`, so a field the Parameters window added reads like the ones beside it.
+
+### Changed
+
+- **The title bar and the Parameters window name the project's directory** (`~/IdeaProjects/gamebot`), not
+  only its name. Two copies of one template are common, and an edit that seems lost is usually in the other
+  copy.
+
 ## [1.1.6] — 2026-09-19
 
 ### Fixed
