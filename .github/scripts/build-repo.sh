@@ -159,8 +159,10 @@ echo \"deb ${apt_opts}${PAGES_URL}/deb stable main\" | sudo tee /etc/apt/sources
 sudo apt-get update && sudo apt-get install botmaker-studio"
 
 # --- landing page -----------------------------------------------------------------------------------------
-# Deliberately one self-contained file with no assets: the whole point of this site is that it is metadata,
-# and a stylesheet request would be one more thing to keep alive for a page people visit once.
+# The stylesheet and the copy button are the organization page's, at botmakerdev.github.io/assets/. Same
+# origin as this page — every project site is a path under it — so linking them costs no availability this
+# page did not already have, and the four project pages plus the front page stop being five copies of one
+# look that drift apart. Nothing else is fetched.
 cat > "${SITE}/index.html" <<EOF
 <!doctype html>
 <html lang="en">
@@ -168,22 +170,7 @@ cat > "${SITE}/index.html" <<EOF
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BotMaker Studio — package repository</title>
-<style>
-  :root { color-scheme: light dark; --fg: #1a1a1a; --bg: #ffffff; --muted: #5f6368; --line: #e0e0e0; --code-bg: #f5f5f5; }
-  @media (prefers-color-scheme: dark) {
-    :root { --fg: #e8e8e8; --bg: #16181c; --muted: #9aa0a6; --line: #2c2f36; --code-bg: #1f2228; }
-  }
-  body { margin: 0 auto; padding: 3rem 1.25rem 5rem; max-width: 46rem; color: var(--fg); background: var(--bg);
-         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
-  h2 { font-size: 1.15rem; margin: 2.5rem 0 .5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
-  p.sub { color: var(--muted); margin: 0 0 2rem; }
-  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
-        padding: .9rem 1rem; overflow-x: auto; font-size: .875rem; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  footer { margin-top: 3rem; color: var(--muted); font-size: .875rem; }
-  a { color: inherit; }
-</style>
+<link rel="stylesheet" href="https://botmakerdev.github.io/assets/style.css">
 </head>
 <body>
 <h1>BotMaker Studio</h1>
@@ -214,7 +201,10 @@ inside Studio and needs no root.</p>
 archive. Every previous version stays downloadable from Releases.</p>
 <p>The <code>.rpm</code> itself is served from the GitHub release; only its metadata lives here. The
 <code>.deb</code> is hosted here because apt cannot be pointed at another host.</p>
+<p><a href="https://botmakerdev.github.io/">Every BotMaker tool, and one command that installs all of
+them</a>.</p>
 </footer>
+<script src="https://botmakerdev.github.io/assets/copy.js" defer></script>
 </body>
 </html>
 EOF

@@ -26,6 +26,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The download page looks like the rest of the project, and its commands copy.** The stylesheet and the
+  copy button come from `botmakerdev.github.io/assets/`, the organization's front page, rather than from a
+  `<style>` block repeated in four repositories, and the page links to that front page — where one command
+  installs every BotMaker tool at once. The installers, the repository and the signing key are untouched.
 - **Parameters and plugin-managed constants are shown read-only.** Everything in `Parameters.java`, every
   `@Param` field wherever it lives, and every constant a plugin manages (the SDK's pictures) draws with its
   blocks and its picker — as a preview — and refuses edits, naming the window that owns it. A picker that
