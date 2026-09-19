@@ -90,6 +90,26 @@ public record ProjectConfig(
     }
 
     /**
+     * The project directory as a window names it — {@code ~/IdeaProjects/gamebot}.
+     *
+     * <p>Shown because two checkouts of one template is the ordinary case here (the umbrella's
+     * {@code botmaker-gamebot/} and a clone beside it), and a window naming only the project could be editing
+     * either: an edit made in Studio then looks lost from the IDE open on the other copy.
+     */
+    public String displayDirectory() {
+        return displayDirectory(projectPath);
+    }
+
+    /** The same, for a directory no config has been built for yet — a project still opening. */
+    public static String displayDirectory(Path directory) {
+        Path absolute = directory.toAbsolutePath().normalize();
+        Path home = Path.of(System.getProperty("user.home")).toAbsolutePath().normalize();
+        return absolute.startsWith(home) && !absolute.equals(home)
+                ? "~/" + home.relativize(absolute).toString().replace('\\', '/')
+                : absolute.toString();
+    }
+
+    /**
      * The file holding the bot's {@code main} — <b>found, not assumed</b>.
      *
      * <p>{@link #mainSourceFile()} is the file a project Studio created <em>starts</em> with, named after the

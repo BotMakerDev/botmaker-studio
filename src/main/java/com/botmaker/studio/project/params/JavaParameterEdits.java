@@ -2,6 +2,7 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -132,9 +133,7 @@ public final class JavaParameterEdits {
                 }
                 MemberValuePair replacement = ast.newMemberValuePair();
                 replacement.setName(ast.newSimpleName(entry.getKey()));
-                StringLiteral literal = ast.newStringLiteral();
-                literal.setLiteralValue(entry.getValue());
-                replacement.setValue(literal);
+                replacement.setValue(memberValue(ast, existing, entry.getKey(), entry.getValue()));
                 if (present != null) {
                     pairs.replace(present, replacement, null);
                 } else {
@@ -343,6 +342,29 @@ public final class JavaParameterEdits {
         rewrite.getListRewrite(field, FieldDeclaration.MODIFIERS2_PROPERTY)
                 .replace(existing, normal, null);
         return normal;
+    }
+
+    /**
+     * A member's value as the author would write it: a string literal, except a visibility the annotation has
+     * a constant for, which is written {@code Param.PUBLIC}.
+     *
+     * <p>The annotation declares {@code PUBLIC} and {@code EDITOR} precisely so nobody types the string, and
+     * {@link JavaParameterSource} reads the constant back as the same id — so the field this window writes
+     * reads like the ones beside it rather than like a tool wrote it. The qualifier is the annotation's own
+     * name <i>as written</i>, so a file that imports {@code Param} and one that spells it out both compile.
+     */
+    private static Expression memberValue(AST ast, Annotation annotation, String member, String value) {
+        if (member.equals("visibility")) {
+            String constant = value.equals(Visibility.PUBLIC.id()) ? "PUBLIC"
+                    : value.equals(Visibility.EDITOR_ONLY.id()) ? "EDITOR" : null;
+            if (constant != null) {
+                return ast.newQualifiedName(ast.newName(annotation.getTypeName().getFullyQualifiedName()),
+                        ast.newSimpleName(constant));
+            }
+        }
+        StringLiteral literal = ast.newStringLiteral();
+        literal.setLiteralValue(value);
+        return literal;
     }
 
     private static MemberValuePair pairOf(NormalAnnotation annotation, String name) {

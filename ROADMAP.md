@@ -6,6 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
+- **2026-09-19 — an edit rewrites only what it edits.** `CodeEditor.formatted` lays out the changed lines
+  (`SourceFormatter.formatChanged`) instead of the whole file; `AstRewriteHelper` passes four-space
+  indentation to `rewriteAST` (null gave JDT's tab); `JavaParameterEdits` writes `visibility = Param.PUBLIC`;
+  the title bar and Parameters window show `ProjectConfig.displayDirectory()`.
 - **2026-09-18 — the suite is green again, by saying what it cannot test.** 13 tests asserted the SDK
   plugin's behaviour with no SDK on the classpath (gone from the pom 2026-09-02) and failed unseen, CI being
   `-DskipTests`; they now skip through `TestSupport.assumeSdkPluginBound`, and `UIManagerSceneTest` still

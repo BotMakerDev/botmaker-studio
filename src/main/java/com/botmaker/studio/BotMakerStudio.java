@@ -5,6 +5,7 @@ import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.impl.NestedSession;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.BotProject;
+import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.project.migration.ProjectSchema;
@@ -254,7 +255,8 @@ public class BotMakerStudio extends Application {
             UIManager uiManager = getUiManager(primaryStage, projectDir);
 
             setScenePreservingGeometry(primaryStage, uiManager.createScene());
-            primaryStage.setTitle("BotMaker Blocks - " + projectName);
+            primaryStage.setTitle("BotMaker Blocks - " + projectName
+                    + " — " + ProjectConfig.displayDirectory(projectDir));
             uiManager.showEditorLoading();
 
             primaryStage.show();
@@ -354,7 +356,8 @@ public class BotMakerStudio extends Application {
         this.currentWindow = runner;
 
         setScenePreservingGeometry(primaryStage, runner.createScene());
-        primaryStage.setTitle("BotMaker - " + projectDir.getFileName());
+        primaryStage.setTitle("BotMaker - " + projectDir.getFileName()
+                + " — " + ProjectConfig.displayDirectory(projectDir));
         primaryStage.show();
         requestSceneLayout(primaryStage);
     }

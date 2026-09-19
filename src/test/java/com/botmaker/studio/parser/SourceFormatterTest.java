@@ -39,20 +39,56 @@ class SourceFormatterTest {
     }
 
     /**
-     * The wiring, not the formatter: an edit published through {@code CodeEditor} comes out laid out. Asserted
-     * because the formatter being correct and the write path calling it are two different facts, and the
-     * second one is a single line that any refactor can quietly drop.
+     * The wiring, not the formatter: an edit published through {@code CodeEditor} lays out the lines it wrote
+     * and no others. Asserted because the formatter being correct and the write path calling it are two
+     * different facts, and the second one is a single line that any refactor can quietly drop.
+     *
+     * <p>Until 2026-09-19 this asserted the opposite half — that the whole packed file came back reflowed. That
+     * was the behaviour that rewrote members an edit never touched, so the packed line the edit did not reach
+     * now stays exactly as it was.
      */
     @Test
-    void codePublishedByAnEditIsFormatted() {
+    void codePublishedByAnEditLaysOutWhatItWroteAndNothingElse() {
         String packed = readResource("/parser/packed-switch.java.txt");
         EditorFixture fixture = new EditorFixture(packed);
 
         fixture.editor.addStatement(fixture.body("run"), BlockCatalog.PRINT, 0);
 
         assertNotNull(fixture.lastCode, () -> "the edit was refused: " + fixture.statusMessages);
-        assertTrue(longestLine(fixture.lastCode).length() < longestLine(packed).length(),
-                () -> "the write path published unformatted source:\n" + fixture.lastCode);
+        java.util.Set<String> before = new java.util.HashSet<>(packed.lines().toList());
+        java.util.List<String> written = fixture.lastCode.lines().filter(line -> !before.contains(line)).toList();
+        assertFalse(written.isEmpty(), fixture.lastCode);
+        assertTrue(written.stream().allMatch(line -> line.length() <= 120 && !line.contains("\t")),
+                () -> "the write path published an unformatted line:\n" + String.join("\n", written));
+        assertTrue(fixture.lastCode.contains(longestLine(packed)),
+                () -> "a line the edit never reached was reflowed:\n" + fixture.lastCode);
+    }
+
+    /**
+     * The 2026-09-19 regression: one statement added to {@code define()} rewrote {@code private Collect() {}}
+     * three members away. An edit lays out what it wrote and leaves every other line as the author had it.
+     */
+    @Test
+    void anEditLaysOutOnlyTheLinesItChanged() {
+        String before = """
+                final class Collect {
+
+                    private Collect() {}
+
+                    static void define() {
+                        int   aligned   = 1;
+                    }
+                }
+                """;
+        String after = before.replace("        int   aligned   = 1;\n",
+                "        int   aligned   = 1;\nSystem.out.println(  \"x\"  );\n");
+
+        String formatted = SourceFormatter.formatChanged(before, after);
+
+        assertTrue(formatted.contains("    private Collect() {}\n"), formatted);
+        assertTrue(formatted.contains("        int   aligned   = 1;\n"), formatted);
+        assertTrue(formatted.contains("\n        System.out.println(\"x\");\n"), formatted);
+        assertSame(before, SourceFormatter.formatChanged(before, before));
     }
 
     /** Formatting twice must be formatting once — otherwise every save produces a diff. */

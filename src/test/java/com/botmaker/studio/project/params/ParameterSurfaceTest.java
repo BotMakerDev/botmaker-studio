@@ -153,7 +153,7 @@ class ParameterSurfaceTest {
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
         assertFalse(source.contains("category ="), source);
         assertTrue(source.contains("description = \"Attempts before it gives up\""), source);
-        assertTrue(source.contains("visibility = \"public\""), source);
+        assertTrue(source.contains("visibility = Param.PUBLIC"), source);
         assertTrue(source.contains("min = \"1\""), source);
         assertEquals(Visibility.PUBLIC, stored.get().visibility());
         assertEquals("50", stored.get().bounds().max());

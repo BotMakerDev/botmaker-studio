@@ -207,6 +207,27 @@ class JavaParameterEditsTest {
     }
 
     @Test
+    void anAddedParameterIsIndentedWithSpacesLikeTheRestOfTheFile() {
+        String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
+                List.of("hello"), "", "");
+
+        assertFalse(edited.contains("\t"), edited);
+        assertTrue(edited.contains("\n    public static String label = \"hello\";"), edited);
+    }
+
+    @Test
+    void aPublicVisibilityIsWrittenAsTheAnnotationsConstant() {
+        String edited = JavaParameterEdits.setMembers(SOURCE, "Parameters", "maxAttempts",
+                Map.of("visibility", "public"));
+
+        assertTrue(edited.contains("visibility = Param.PUBLIC"), edited);
+        assertFalse(edited.contains("\"public\""), edited);
+        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
+                .filter(p -> p.name().equals("maxAttempts")).findFirst().orElseThrow();
+        assertEquals(com.botmaker.plugin.api.value.Visibility.PUBLIC, parameter.row().visibility());
+    }
+
+    @Test
     void anAddedParameterWithNothingToSayGetsABareAnnotation() {
         String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
                 List.of("hello"), "", "");

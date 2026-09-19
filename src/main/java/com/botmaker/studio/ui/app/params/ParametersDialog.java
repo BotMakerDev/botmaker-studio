@@ -173,7 +173,8 @@ public final class ParametersDialog {
     public void show() {
         reload();
 
-        StudioWindow window = StudioWindow.modal("parameters", "Parameters", owner)
+        // The directory, not only the project: an edit here is written to that directory's files.
+        StudioWindow window = StudioWindow.modal("parameters", "Parameters — " + config.displayDirectory(), owner)
                 .size(900, 640).minSize(700, 460);
         stage = window.stage();
 

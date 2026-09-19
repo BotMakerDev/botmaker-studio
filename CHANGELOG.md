@@ -10,6 +10,23 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **An edit on the canvas changes only what it edits.** Every edit used to re-lay-out the whole file, so
+  adding one statement could rewrite `private Collect() {}` three methods away. Now only the lines the edit
+  wrote are laid out, and everything else stays exactly as you wrote it.
+- **What Studio writes is indented with four spaces**, like the rest of the file, not with a tab.
+- **A public parameter is written `visibility = Param.PUBLIC`**, the annotation's own constant, not the
+  string `"public"`, so a field the Parameters window added reads like the ones beside it.
+
+### Changed
+
+- **The title bar and the Parameters window name the project's directory** (`~/IdeaProjects/gamebot`), not
+  only its name. Two copies of one template are common, and an edit that seems lost is usually in the other
+  copy.
+
 ## [1.1.5] — 2026-09-19
 
 ### Changed

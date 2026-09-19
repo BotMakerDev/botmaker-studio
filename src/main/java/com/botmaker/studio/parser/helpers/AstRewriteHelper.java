@@ -27,7 +27,8 @@ public class AstRewriteHelper {
     public static String applyRewrite(ASTRewrite rewriter, String originalCode) {
         IDocument document = new Document(originalCode);
         try {
-            TextEdit edits = rewriter.rewriteAST(document, null);
+            // The repository's layout, not JDT's default: null options indent an inserted node with a tab.
+            TextEdit edits = rewriter.rewriteAST(document, SourceFormatter.rewriteOptions());
             edits.apply(document);
             return document.get();
         } catch (Exception e) {
@@ -51,7 +52,7 @@ public class AstRewriteHelper {
     public static String applyRewriteAndInsertAt(ASTRewrite rewriter, String originalCode, int offset, String text) {
         IDocument document = new Document(originalCode);
         try {
-            TextEdit edits = rewriter.rewriteAST(document, null);
+            TextEdit edits = rewriter.rewriteAST(document, SourceFormatter.rewriteOptions());
             RangeMarker marker = new RangeMarker(offset, 0);
             try {
                 edits.addChild(marker);
