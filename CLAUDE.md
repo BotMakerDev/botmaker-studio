@@ -1087,6 +1087,25 @@ The `ui/` package is split by concern:
   so a window and a test that disagreed about it would write two different files from the same click.
   `ParametersDialog` and `RunnerWindow` read this one list; the Runner also drops what it cannot rewrite,
   because a read-only cell is a message for the author and there is no author in the Runner.
+- **`project/models/`** — **a plugin's model is a record, and this is the grammar for one** (2026-09-20,
+  `33-plugin-java.md`). Pure, over a `Class<?>`: no host state, no project, no JavaFX, so both halves are
+  tested without a running Studio for the same reason the first two classes of `project/params/` are.
+  **`ModelGrammar`** answers *is this record legal, and which component is not* — `String`, the eight
+  primitives and their boxes, an enum constant, a registered leaf, a registered container of legal types,
+  another legal record, and nothing else — and a refusal **names the component to its full path**. It is
+  asked at registration rather than at write, which is how *100% accurate compilation* is met: the set that
+  is accepted is made equal to the set that can be written. **A recursive model is legal** (a node holding a
+  list of nodes is the ordinary shape of a graph): the walk stops at a record it is already inside, and
+  `ModelForm.Declared` holds no components, so the expansion happens over a value tree, which is finite.
+  **Builtins are taken before the catalog** — `int` and `String` are registered leaves too, and a
+  `ValueCodec<Long>` handed an `Integer` throws. **`ModelWriter`** turns an instance plus its class into one
+  compilation unit: a `final class` holding one `public static final` constant of the plugin's **own** record
+  type, everything fully qualified and **no imports** (the file is placed in a package the user never chose).
+  The record type stays in the plugin's jar, so a generated file adds a value and not a vocabulary, and a
+  component whose type changed breaks the bot's *build*. A container's call is whatever the container
+  declared: the host asks `ValueContainer.partForms` with a marker leaf per type argument and substitutes
+  the real forms back, so a contributed container works with no change here. The writer's one refusal is a
+  `null` a component holds, and it refuses the whole model rather than writing part of one.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that

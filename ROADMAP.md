@@ -6,7 +6,31 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the shape axis is deleted, host side.** Phase G of `32-generic-values.md`.
+- **2026-09-20 (latest) — the record grammar: what a plugin's model may be, and how it is written.** Phase H
+  of `33-plugin-java.md`, and nothing a user can see yet: two pure classes over a `Class<?>`, no host state
+  and no JavaFX, so both halves are testable without a running Studio. `ModelGrammar` answers *is this
+  record legal, and which component is not* — `33`'s table exactly: `String`, the eight primitives and their
+  boxes, an enum constant, a registered leaf, a registered container of legal types, another legal record.
+  Anything else is refused **at registration** with the component named to its full path
+  (`HasAnInterface.action is java.lang.Runnable, which is neither a registered value type, a container, an
+  enum nor a record`), which is how the first stated requirement — *100% accurate compilation* — is met: the
+  set Studio accepts is made equal to the set it can write, rather than the writer being careful.
+  **A recursive model is legal**, because a node holding a list of nodes is the ordinary shape of a graph;
+  the walk stops at a record it is already inside and `ModelForm.Declared` holds no components, so the
+  expansion happens over a value tree, which is finite.
+  **Builtins are taken before the catalog**: `int` and `String` are registered leaves as well, and a
+  `ValueCodec<Long>` handed an `Integer` throws — a primitive is written from what the compiler guarantees.
+  `ModelWriter` turns an instance plus its class into one compilation unit: a `final class` holding one
+  `public static final` constant of the plugin's own record type, everything fully qualified, **no imports
+  at all** (the file is placed in a package the user never chose, and an import list is one more thing that
+  must regenerate identically). The record type stays in the plugin's jar, so the file adds a value and not
+  a vocabulary. A container's call is whatever the container **declared** — the host asks `partForms` with a
+  marker leaf per type argument and substitutes the real ones back, so a plugin's own container works with
+  no change here, and a map is `Map.ofEntries(Map.entry(…), …)` at one pair as at twelve. The only refusal
+  left to the writer is a `null` a component holds, because a legal type says nothing about an instance, and
+  it refuses the whole model rather than writing part of one.
+
+- **2026-09-20 — the shape axis is deleted, host side.** Phase G of `32-generic-values.md`.
   `ValueWire` loses `one`'s old return type, `javaType`, `hasOptions`, `defaultWire`, `normalize` and the
   choice-keyed `normalizeOptions`: coercing a whole stored value is the owning plugin's job
   (`ParameterStore` does it), and what the editor needs is the leaf-keyed `normalizeOptions` that remains.
