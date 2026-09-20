@@ -56,7 +56,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     private static ParameterRow row(String name, ValueChoice type, List<String> options) {
         return ParameterRow.named(name, type)
-                .value(ValueWire.defaultWire(type))
+                .value(ValueWire.initializer(type, ValueWire.defaultWire(type)))
                 .options(ValueWire.normalizeOptions(options, type, Range.NONE))
                 .build();
     }
@@ -157,11 +157,17 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     @Test
     void whatIsReadBackIsTheStoredValueAndNotTheLabel() {
-        ParameterRow picked = row("mode", new ValueChoice(TEXT, ValueShape.ONE_OF),
-                List.of("fast", "slow")).toBuilder().value("slow").build();
+        // The choice is made on the control rather than seeded through the row's value: a row's value is
+        // Java source since 2026-09-20, so seeding one would put this test's subject behind a codec that is
+        // only registered when a plugin is bound. What is under test is the reader, not the seeding.
+        ParameterRow choices = row("mode", new ValueChoice(TEXT, ValueShape.ONE_OF),
+                List.of("fast", "slow"));
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
-        interact(() -> ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, picked, null, sink));
+        Node[] built = new Node[1];
+        interact(() -> built[0] = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, choices, null, sink));
+        List<Node> buttons = childrenOf(built[0]);
+        interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
 
         assertEquals(1, sink.size());
         assertEquals(List.of("slow"), sink.getFirst().read().get());

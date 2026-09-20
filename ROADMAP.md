@@ -6,7 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-19 (latest) — one upgrade door, and it says what it is doing.** *Project ▸ Upgrade SDK…* and
+- **2026-09-20 (latest) — a `@Param` field's type is a tree.** `JavaParameterSource.choiceOf` is `formOf`,
+  walking a JDT `Type` recursively into a `ValueForm`: a registered leaf, or a registered `ValueContainer`
+  over forms, to any depth. A field declared `Map<String, Integer>` read as *unknown* and refused to be
+  edited, because a `ValueChoice` could say a type and one list around it; it is now listed, typed and
+  editable, and `Map<String, List<Duration>>` reads too. An array, a wildcard, a type variable, a `Set`
+  nobody registered and a container whose written arity disagrees with the registered one are still unknown
+  leaves shown as written — read-only is a first-class outcome. `whyNotEditable` names *which* type
+  argument is not a value type, and says so for a class the bot declares itself. `JavaParameterEdits`
+  writes the form's own spelling (`typeName` is `ValueForm.sourceName`, which retired the `isList()` branch
+  and the boxing table beside it), takes an initialiser **already written** rather than a catalog and a
+  list of stored items, and seeds a new container **empty**. `ParameterRow.value()` is that one source
+  string, through `ParameterSurface`, `JavaParameters` and the two windows; `plugin/ValueWire.read` /
+  `initializer` is the join to the value cells, which still speak the editor's wire form until they move.
+  `docs/refactor/32-generic-values.md` phase D.
+
+- **2026-09-19 — one upgrade door, and it says what it is doing.** *Project ▸ Upgrade SDK…* and
   *Project ▸ Modernise…* are **deleted**, `ui/app/SdkUpgradeDialog` with them: both were
   `ProjectUpgradeDialog` with one row pre-chosen, and offering the general case beside two special cases of
   it taught the user that three different things were on offer. `PluginUpgradeService.modernise()` and the

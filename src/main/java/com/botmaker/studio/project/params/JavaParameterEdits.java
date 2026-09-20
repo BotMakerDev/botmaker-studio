@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.AST;
@@ -46,16 +46,19 @@ public final class JavaParameterEdits {
     private JavaParameterEdits() {}
 
     /**
-     * Replaces the value of {@code className.fieldName} with the Java for {@code value}.
+     * Replaces the value of {@code className.fieldName} with {@code initializer}.
      *
-     * <p>The initialiser is the catalog's ({@code ValueCatalog.initializer}), which is the same call the
-     * canvas makes — so a value written here and a value written there are the same text, and reading it
-     * back is the codec's {@code valueOfLiteral}, which is what makes the round trip a fixed point.
+     * <p><b>The initialiser arrives written</b>, because since 2026-09-20 that is what a value <em>is</em>
+     * ({@code 32-generic-values.md} decision 6): whoever has the value in hand asks
+     * {@code ValueCatalog.initializer} for its Java, which is the same call the canvas makes, and reading it
+     * back is {@code ValueCatalog.valueOf} — the round trip is a fixed point precisely because one spelling
+     * crosses rather than two.
+     *
+     * <p>A blank initialiser answers the source unchanged: a field with no value is not something this can
+     * write, and emptying one is not an edit anybody asked for.
      */
-    public static String setValue(String source, ValueCatalog catalog, String className, String fieldName,
-                                  ValueChoice choice, List<String> value) {
-        String initializer = catalog.initializer(choice, value).orElse(null);
-        if (initializer == null) return source;            // an unknown type has no source spelling
+    public static String setValue(String source, String className, String fieldName, String initializer) {
+        if (initializer == null || initializer.isBlank()) return source;
         return edit(source, className, fieldName, (ast, rewrite, field, fragment) ->
                 rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
                         expression(ast, rewrite, initializer), null));
@@ -98,9 +101,10 @@ public final class JavaParameterEdits {
      * not compile. The caller is the one that tells the user, and marks the uses for review.
      */
     public static String retype(String source, ValueCatalog catalog, String className, String fieldName,
-                                ValueChoice choice) {
-        String typeName = typeName(choice);
-        String initializer = catalog.initializer(choice, List.of(catalog.defaultItem(choice.type().id())))
+                                ValueForm form) {
+        String typeName = typeName(form);
+        String initializer = catalog.defaultValue(form)
+                .flatMap(value -> catalog.initializer(form, value))
                 .orElse(null);
         if (typeName == null || initializer == null) return source;
         return edit(source, className, fieldName, (ast, rewrite, field, fragment) -> {
@@ -187,11 +191,11 @@ public final class JavaParameterEdits {
      * <p>Appended rather than inserted in sorted order: a source file is the author's, and a window that
      * reordered their declarations to suit its own list would be rewriting more than the user asked for.
      */
-    public static String add(String source, ValueCatalog catalog, String className, String fieldName,
-                             ValueChoice choice, List<String> value, String category, String description) {
-        String typeName = typeName(choice);
-        String initializer = catalog.initializer(choice, value).orElse(null);
-        if (typeName == null || initializer == null || fieldName == null || fieldName.isBlank()) {
+    public static String add(String source, String className, String fieldName, ValueForm form,
+                             String initializer, String category, String description) {
+        String typeName = typeName(form);
+        if (typeName == null || initializer == null || initializer.isBlank()
+                || fieldName == null || fieldName.isBlank()) {
             return source;
         }
         CompilationUnit unit = JavaParameterSource.parse(source);
@@ -376,31 +380,20 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * The Java type a choice is written as — {@code List<Rect>} for a list shape.
+     * The Java type a form is written as — {@code java.util.Map<String, java.util.List<Duration>>} for one
+     * two levels deep.
      *
-     * <p>Null for a type nothing registers, which is what makes every caller decline rather than write a
-     * field naming a class that does not exist.
+     * <p><b>The form spells itself</b> ({@code ValueForm.sourceName}), which is what retired the branch on
+     * {@code isList()} that stood here: a shape with one boolean could write one container, and the boxing
+     * rule that went with it lives on the leaf, where a type already knows what boxes it.
+     *
+     * <p>Null for a form with an unknown leaf anywhere, which is what makes every caller decline rather than
+     * write a field naming a class that does not exist.
      */
-    private static String typeName(ValueChoice choice) {
-        if (choice == null || !choice.type().known()) return null;
-        String java = choice.type().javaName();
-        if (java == null || java.isBlank()) return null;
-        return choice.isList() ? "java.util.List<" + boxed(java) + ">" : java;
-    }
-
-    /** A list's element type is a reference type: {@code List<int>} does not compile. */
-    private static String boxed(String java) {
-        return switch (java) {
-            case "int" -> "Integer";
-            case "long" -> "Long";
-            case "double" -> "Double";
-            case "float" -> "Float";
-            case "boolean" -> "Boolean";
-            case "char" -> "Character";
-            case "byte" -> "Byte";
-            case "short" -> "Short";
-            default -> java;
-        };
+    private static String typeName(ValueForm form) {
+        if (form == null || !form.known()) return null;
+        String java = form.sourceName();
+        return java == null || java.isBlank() ? null : java;
     }
 
     /** Java source as an expression node, placed into the rewrite verbatim. */

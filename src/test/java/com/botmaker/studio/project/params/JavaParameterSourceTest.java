@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +50,7 @@ class JavaParameterSourceTest {
         assertEquals("maxAttempts", parameter.name());
         assertEquals("Parameters.maxAttempts", parameter.qualified());
         assertEquals(TestValues.WHOLE_NUMBER, parameter.row().type().type());
-        assertEquals(List.of("10"), parameter.row().value());
+        assertEquals("10", parameter.row().value());
         assertTrue(parameter.editable(), parameter.note());
     }
 
@@ -77,7 +78,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertEquals(List.of("fast", "slow"), parameter.row().options());
-        assertEquals(List.of("fast"), parameter.row().value());
+        assertEquals("\"fast\"", parameter.row().value());
     }
 
     @Test
@@ -105,8 +106,8 @@ class JavaParameterSourceTest {
 
         assertEquals(TestValues.DURATION, found.get(0).row().type().type());
         assertEquals(TestValues.DURATION, found.get(1).row().type().type());
-        assertEquals(List.of("3000"), found.get(0).row().value());
-        assertEquals(List.of("1000"), found.get(1).row().value());
+        assertEquals("java.time.Duration.ofMillis(3000L)", found.get(0).row().value());
+        assertEquals("java.time.Duration.ofMillis(1000L)", found.get(1).row().value());
     }
 
     @Test
@@ -120,8 +121,89 @@ class JavaParameterSourceTest {
 
         assertTrue(parameter.row().type().isList());
         assertEquals(TestValues.DURATION, parameter.row().type().type());
-        assertEquals(List.of("3000", "60000"), parameter.row().value());
+        assertEquals(ValueForm.listOf(ValueForm.of(TestValues.DURATION)), parameter.row().form());
+        assertEquals(List.of("3000", "60000"), TestValues.CATALOG
+                .valueOfInitializer(parameter.row().type(), parameter.row().value()).orElseThrow());
         assertTrue(parameter.editable(), parameter.note());
+    }
+
+    // ---- the type is a tree, so a field javac accepts is a field this reads ----------------------------
+
+    /**
+     * The checkpoint of {@code 32-generic-values.md}: a {@code Map} field was <em>unknown</em> and
+     * read-only, because a {@code ValueChoice} could say a type and one list around it and nothing else.
+     */
+    @Test
+    void aMapFieldIsAMapFormAndReadsBothArguments() {
+        JavaParameter parameter = read(wrap("""
+                    @Param
+                    public static java.util.Map<String, Duration> waits =
+                            java.util.Map.ofEntries(java.util.Map.entry("mine",
+                                    java.time.Duration.ofMillis(3000L)));
+                """)).getFirst();
+
+        assertEquals(ValueForm.mapOf(ValueForm.of(TestValues.TEXT), ValueForm.of(TestValues.DURATION)),
+                parameter.row().form());
+        assertTrue(parameter.row().form().known());
+        assertTrue(parameter.editable(), parameter.note());
+    }
+
+    /** Nesting is unbounded in what may be <em>read</em>; only a picker is capped. */
+    @Test
+    void aNestedContainerReadsAllTheWayDown() {
+        JavaParameter parameter = read(wrap("""
+                    @Param
+                    public static java.util.Map<String, java.util.List<Duration>> plans =
+                            java.util.Map.ofEntries();
+                """)).getFirst();
+
+        assertEquals(ValueForm.mapOf(ValueForm.of(TestValues.TEXT),
+                        ValueForm.listOf(ValueForm.of(TestValues.DURATION))),
+                parameter.row().form());
+        assertEquals("java.util.Map<String, java.util.List<java.time.Duration>>",
+                parameter.row().form().sourceName());
+    }
+
+    /**
+     * One unknown leaf anywhere makes the whole form unreadable — and the reason names <em>which</em>
+     * argument, which is the sentence {@code 32} §<i>A bot's own generic class</i> asks for.
+     */
+    @Test
+    void aContainerOverAnUnknownLeafIsListedAndSaysWhichArgument() {
+        JavaParameter parameter = read(wrap("""
+                    @Param
+                    public static java.util.Map<String, Channel> routes = java.util.Map.ofEntries();
+                """)).getFirst();
+
+        assertFalse(parameter.editable());
+        assertFalse(parameter.row().form().known());
+        assertTrue(parameter.note().contains("type argument Channel"), parameter.note());
+    }
+
+    /** A container nobody registered is not guessed at: it is shown as written and left alone. */
+    @Test
+    void anUnregisteredContainerIsAnUnknownLeafRatherThanAGuess() {
+        JavaParameter parameter = read(wrap("""
+                    @Param
+                    public static java.util.Set<String> tags = java.util.Set.of("a");
+                """)).getFirst();
+
+        assertFalse(parameter.editable());
+        assertEquals("java.util.Set<String>", parameter.row().form().sourceName());
+    }
+
+    /** A hand-written spelling of a container this grammar did not write is kept, not replaced. */
+    @Test
+    void aMapWrittenWithMapOfIsKeptAsWritten() {
+        JavaParameter parameter = read(wrap("""
+                    @Param
+                    public static java.util.Map<String, Duration> waits =
+                            java.util.Map.of("mine", java.time.Duration.ofMillis(3000L));
+                """)).getFirst();
+
+        assertTrue(parameter.row().form().known(), "the type is read even when the value is not");
+        assertFalse(parameter.editable());
+        assertTrue(parameter.note().contains("kept rather than replaced"), parameter.note());
     }
 
     @Test
@@ -137,7 +219,7 @@ class JavaParameterSourceTest {
                 """));
 
         assertEquals(List.of("a", "b"), found.stream().map(JavaParameter::name).toList());
-        assertEquals(List.of("2"), found.get(1).row().value());
+        assertEquals("2", found.get(1).row().value());
     }
 
     @Test

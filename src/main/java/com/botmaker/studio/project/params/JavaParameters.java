@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -75,17 +75,11 @@ public final class JavaParameters {
     // renamed while the window was open, a value the type cannot spell — and the window says so rather than
     // failing.
 
-    /** Replaces a parameter's value with {@code value}, as the type's own Java. */
+    /** Replaces a parameter's value with {@code initializer}, which is already the type's own Java. */
     public static boolean setValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                   List<String> value) {
-        return setValue(config, state, parameter, value, PluginHost.valueTypes());
-    }
-
-    /** The same, against a given catalog — the seam a test uses, as it is for {@link #scan}. */
-    public static boolean setValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                   List<String> value, ValueCatalog catalog) {
+                                   String initializer) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
-                source, catalog, parameter.className(), parameter.name(), parameter.row().type(), value));
+                source, parameter.className(), parameter.name(), initializer));
     }
 
     /**
@@ -103,15 +97,15 @@ public final class JavaParameters {
 
     /** Changes a parameter's type, resetting its value to that type's default. */
     public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                 ValueChoice choice) {
-        return retype(config, state, parameter, choice, PluginHost.valueTypes());
+                                 ValueForm form) {
+        return retype(config, state, parameter, form, PluginHost.valueTypes());
     }
 
     /** The same, against a given catalog. */
     public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                 ValueChoice choice, ValueCatalog catalog) {
+                                 ValueForm form, ValueCatalog catalog) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
-                source, catalog, parameter.className(), parameter.name(), choice));
+                source, catalog, parameter.className(), parameter.name(), form));
     }
 
     /** Sets or clears {@code @Param} members — a blank value removes the member. */
@@ -135,17 +129,9 @@ public final class JavaParameters {
      * bigger event than a field appearing in a file, and the person should be the one who asks for it.
      */
     public static boolean add(ProjectConfig config, ProjectState state, String className, String fieldName,
-                              ValueChoice choice, List<String> value, String category, String description) {
-        return add(config, state, className, fieldName, choice, value, category, description,
-                PluginHost.valueTypes());
-    }
-
-    /** The same, against a given catalog. */
-    public static boolean add(ProjectConfig config, ProjectState state, String className, String fieldName,
-                              ValueChoice choice, List<String> value, String category, String description,
-                              ValueCatalog catalog) {
+                              ValueForm form, String initializer, String category, String description) {
         return rewriteAll(config, state, source -> JavaParameterEdits.add(
-                source, catalog, className, fieldName, choice, value, category, description));
+                source, className, fieldName, form, initializer, category, description));
     }
 
     /**

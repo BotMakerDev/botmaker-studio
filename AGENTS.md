@@ -1047,10 +1047,20 @@ The `ui/` package is split by concern:
   make answers the source unchanged and never throws), and **`JavaParameters`** is the half that knows
   about the project — `BotSources`, buffers before files, both written. The first two are pure, which is
   why they are tested over source text rather than over a project on disk.
-  **Reading a value back is the codec's** (`ValueCodec.valueOfLiteral`): `literal` writes a value
-  structurally so a bot cannot throw at class-init, and only the plugin that wrote that spelling can undo
-  it. A field whose initialiser the codec declines is listed, shown and **read-only, with the reason** —
-  the window never hides a parameter the bot reads, and never rewrites Java the author wrote by hand.
+  **A field's type is a `ValueForm`, read recursively** (`JavaParameterSource.formOf`, 2026-09-20): a
+  registered leaf, or a registered `ValueContainer` over forms, all the way down, so `Map<String,
+  List<Duration>>` is something this reads rather than something it calls unknown. It was a `ValueChoice`
+  — a type plus one list — and a field javac accepts perfectly well came out unknown and read-only. What is
+  *not* a container is still an unknown leaf, shown as written: an array, a wildcard, a type variable, a
+  `Set` nobody contributed, and a container whose written arity disagrees with the registered one.
+  **Reading a value back is the codec's** (`ValueCodec.valueOfLiteral`) through `ValueCatalog.valueOf`:
+  `literal` writes a value structurally so a bot cannot throw at class-init, and only the plugin that wrote
+  that spelling can undo it. A field whose initialiser the grammar declines is listed, shown and
+  **read-only, with the reason** — the window never hides a parameter the bot reads, and never rewrites
+  Java the author wrote by hand. **A row's value is the initialiser itself**, as the author wrote it: one
+  source string rather than a list of stored items, because a composite has no other canonical form
+  (`32-generic-values.md` decision 6). `plugin/ValueWire.read`/`initializer` is the join between that and
+  the value cells, which still speak the editor's wire form; it goes when they move.
   **`ParameterSurface` is the fourth and the one the windows use**: the bot's fields and the loaded
   plugins' rows as *one* list of `Entry(group, row, java)`, with a section id of `java:<ClassName>` for a
   field and the plugin's group id for a row. It is also where the asymmetry is enforced — a field may be

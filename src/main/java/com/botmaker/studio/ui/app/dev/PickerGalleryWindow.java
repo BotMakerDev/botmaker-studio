@@ -273,7 +273,7 @@ public final class PickerGalleryWindow {
                 ? ValueWire.normalizeOptions(options(type, templates), choice, Range.NONE)
                 : List.of();
         return ParameterRow.named(identifier(type, shape), choice)
-                .value(ValueWire.defaultWire(choice))
+                .value(ValueWire.initializer(choice, ValueWire.defaultWire(choice)))
                 .visibility(Visibility.PUBLIC)
                 .options(options)
                 .bounds(Range.NONE)

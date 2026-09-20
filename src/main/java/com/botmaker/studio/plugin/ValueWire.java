@@ -1,8 +1,10 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.ResolvedType;
@@ -76,6 +78,49 @@ public final class ValueWire {
      */
     public static ValueType type(String id) {
         return catalog().type(id);
+    }
+
+    // ---- a row's value, which is Java source since 2026-09-20 --------------------------------------------
+    //
+    // ParameterRow.value() is the initialiser a field of the row's form takes (32-generic-values.md decision
+    // 6), because a composite has no wire encoding at all. The widgets below still speak the editor's wire
+    // form, and these two are the whole of the join between them. They go when the value cells do.
+
+    /**
+     * The stored items a row's initialiser was written from, or empty when nothing here can read it.
+     *
+     * <p><b>Empty and "no items" are different answers</b>, which is why this is an {@code Optional} rather
+     * than a list: an empty list is a value a user chose, and a source this grammar did not write is a value
+     * that must be shown as it stands and never replaced.
+     */
+    public static Optional<List<String>> read(ParameterRow row) {
+        return row == null ? Optional.empty()
+                : catalog().valueOfInitializer(row.type(), row.value());
+    }
+
+    /** The same, as the list a widget seeds itself from — a source nothing can read seeds an empty one. */
+    public static List<String> items(ParameterRow row) {
+        return read(row).orElse(List.of());
+    }
+
+    /** Items written back as the Java a field of this type takes — {@code ""} when they cannot be. */
+    public static String initializer(ValueChoice type, List<String> items) {
+        return catalog().initializer(type, items).orElse("");
+    }
+
+    /** The same, for the row those items were read out of. */
+    public static String initializer(ParameterRow row, List<String> items) {
+        return row == null ? "" : initializer(row.type(), items);
+    }
+
+    /**
+     * The Java a freshly declared field of {@code form} is initialised with, or {@code ""} when there is
+     * none — an unknown leaf, or a class the bot declares, for which no default may be invented.
+     */
+    public static String defaultInitializer(ValueForm form) {
+        return catalog().defaultValue(form)
+                .flatMap(value -> catalog().initializer(form, value))
+                .orElse("");
     }
 
     /** One free value of the type with this id — the shape almost every caller wants. */

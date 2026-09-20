@@ -3,6 +3,7 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
@@ -78,11 +79,11 @@ class ParameterSurfaceTest {
         ProjectConfig config = project(root);
 
         Optional<ParameterRow> stored = ParameterSurface.add(config, null, "Parameters", "maxAttempts",
-                ValueChoice.of(TestValues.WHOLE_NUMBER), List.of("10"), "Limits", "How many times to try",
+                ValueForm.of(TestValues.WHOLE_NUMBER), "10", "Limits", "How many times to try",
                 TestValues.CATALOG);
 
         assertTrue(stored.isPresent());
-        assertEquals(List.of("10"), stored.get().value());
+        assertEquals("10", stored.get().value());
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
         assertTrue(source.contains("import com.botmaker.plugin.basics.params.Param;"), source);
         assertTrue(source.contains("public static int maxAttempts = 10;"), source);
@@ -98,7 +99,7 @@ class ParameterSurfaceTest {
                 """));
 
         Optional<ParameterRow> refused = ParameterSurface.add(config, null, "Parameters", "maxAttempts",
-                ValueChoice.of(TestValues.TEXT), List.of("x"), "", "", TestValues.CATALOG);
+                ValueForm.of(TestValues.TEXT), "\"x\"", "", "", TestValues.CATALOG);
 
         assertTrue(refused.isEmpty());
         assertEquals(1, ParameterSurface.rows(config, null, PIN, TestValues.CATALOG).size());
@@ -173,7 +174,7 @@ class ParameterSurfaceTest {
 
         assertEquals(TestValues.TEXT, stored.type().type());
         // The old type's text is not carried across: a value written for one type is not a value of another.
-        assertEquals(List.of(""), stored.value());
+        assertEquals("\"\"", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
                 .contains("public static String maxAttempts"));
     }
@@ -188,10 +189,10 @@ class ParameterSurfaceTest {
                     public static java.time.Duration rest = java.time.Duration.ofMillis(3000L);
                 """));
 
-        ParameterRow stored = ParameterSurface
-                .setValue(config, null, only(config), List.of("60000"), TestValues.CATALOG).orElseThrow();
+        ParameterRow stored = ParameterSurface.setValue(config, null, only(config),
+                "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).orElseThrow();
 
-        assertEquals(List.of("60000"), stored.value());
+        assertEquals("java.time.Duration.ofMillis(60000L)", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
                 .contains("java.time.Duration.ofMillis(60000L)"));
     }
@@ -209,8 +210,8 @@ class ParameterSurfaceTest {
 
         assertFalse(entry.editable());
         assertFalse(entry.note().isBlank(), "a read-only row says why");
-        assertTrue(ParameterSurface.setValue(config, null, entry, List.of("60000"), TestValues.CATALOG)
-                .isEmpty());
+        assertTrue(ParameterSurface.setValue(config, null, entry,
+                "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).isEmpty());
         assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")),
                 "the author's own expression is not rewritten");
     }
@@ -247,7 +248,7 @@ class ParameterSurfaceTest {
     }
 
     private static ParameterRow renamed(ParameterRow row, String name) {
-        return ParameterRow.named(name, row.type()).value(row.value()).description(row.description())
+        return ParameterRow.named(name, row.form()).value(row.value()).description(row.description())
                 .category(row.category()).visibility(row.visibility()).options(row.options())
                 .bounds(row.bounds()).build();
     }

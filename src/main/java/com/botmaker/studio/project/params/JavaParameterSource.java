@@ -3,7 +3,8 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueContainer;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import org.eclipse.jdt.core.JavaCore;
@@ -105,12 +106,15 @@ public final class JavaParameterSource {
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
 
-        ValueChoice choice = choiceOf(catalog, field.getType(), fragment.getExtraDimensions());
-        Optional<List<String>> value = catalog.valueOfInitializer(choice, initializer);
+        ValueForm form = formOf(catalog, field.getType(), fragment.getExtraDimensions());
+        Optional<Object> value = catalog.valueOf(form, initializer);
 
-        String note = whyNotEditable(field, choice, value, initializer);
-        ParameterRow.Builder row = ParameterRow.named(name, choice)
-                .value(value.orElse(List.of()))
+        String note = whyNotEditable(field, form, value, initializer);
+        // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
+        // be edited still has to show what the field holds, and the reading above decides only whether it
+        // may be replaced.
+        ParameterRow.Builder row = ParameterRow.named(name, form)
+                .value(initializer)
                 .description(string(members, "description"))
                 .category(string(members, "category"))
                 .visibility(Visibility.fromId(string(members, "visibility")))
@@ -130,8 +134,8 @@ public final class JavaParameterSource {
      * reason — is the failure this whole design exists to avoid. A field is never <em>rejected</em>: it is
      * still listed, still shows what it holds, and still tells the author what to change.
      */
-    private static String whyNotEditable(FieldDeclaration field, ValueChoice choice,
-                                         Optional<List<String>> value, String initializer) {
+    private static String whyNotEditable(FieldDeclaration field, ValueForm form,
+                                         Optional<Object> value, String initializer) {
         int modifiers = field.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
             return "not public: the bot can read it, the window cannot show it being changed";
@@ -142,8 +146,18 @@ public final class JavaParameterSource {
         if (Modifier.isFinal(modifiers)) {
             return "final: its value is fixed at compile time";
         }
-        if (!choice.type().known()) {
-            return "no installed plugin registers " + choice.type().id() + " as a value type";
+        if (form instanceof ValueForm.Declared declared) {
+            // 32-generic-values.md §A bot's own generic class: writing `new Box<>(…)` needs a constructor
+            // this parser cannot see, and inventing a placeholder into a user's own class is the one thing
+            // the design refuses outright. Phase F is where it becomes readable.
+            return declared.qualifiedName() + " is a class this bot declares, "
+                    + "and there is no constructor Studio can write for it yet";
+        }
+        String unknown = firstUnknown(form);
+        if (unknown != null) {
+            return form instanceof ValueForm.Leaf
+                    ? "no installed plugin registers " + unknown + " as a value type"
+                    : "type argument " + unknown + " is not a known value type";
         }
         if (initializer.isBlank()) {
             return "no initialiser: there is no value to show or replace";
@@ -155,30 +169,62 @@ public final class JavaParameterSource {
     }
 
     /**
-     * The {@link ValueChoice} a written type means: the registered type, list-shaped when it is written as
-     * a {@code List<…>}, and {@link ValueType#unknown} when nothing registers it.
+     * The {@link ValueForm} a written type means, all the way down: a registered leaf, a registered
+     * container over forms, and {@link ValueType#unknown} for anything else.
      *
-     * <p>An array is <em>not</em> a list shape. {@code int[]} is a Java spelling no codec emits and the
-     * value surface has one list shape, so an array field is read as its element type and comes out
-     * read-only — visible, honest, and not silently rewritten into a {@code List}.
+     * <p><b>Recursive, and unbounded.</b> {@code Map<String, List<Duration>>} reads as what it is. Until
+     * 2026-09-20 this answered a {@code ValueChoice}, which could say a type and <em>one</em> list around
+     * it, so a field javac accepts perfectly well read as unknown and refused to be edited. Only the
+     * picker is capped, because a four-level value cell is not drawable in a table row; nothing caps what
+     * may be read out of a user's file, shown and left intact.
+     *
+     * <p>An array is <em>not</em> a container. {@code int[]} is a Java spelling no codec emits, so an array
+     * field is read as unknown and comes out read-only — visible, honest, and not silently rewritten into a
+     * {@code List}. A wildcard, a type variable and a container whose written arity disagrees with the
+     * registered one read the same way, and for the same reason.
      */
-    static ValueChoice choiceOf(ValueCatalog catalog, Type type, int extraDimensions) {
+    static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions) {
+        if (type == null) return ValueForm.of(unknown(""));
         if (extraDimensions > 0 || type.isArrayType()) {
-            return ValueChoice.of(unknown(type.toString()));
+            return ValueForm.of(unknown(type.toString().strip()));
         }
-        if (type instanceof ParameterizedType parameterized && isList(parameterized)) {
+        if (type instanceof ParameterizedType parameterized) {
+            String raw = parameterized.getType().toString().strip();
+            Optional<ValueContainer<?>> container = catalog.containerForJava(raw);
             List<?> arguments = parameterized.typeArguments();
-            if (arguments.size() == 1) {
-                Type element = (Type) arguments.getFirst();
-                return ValueChoice.listOf(registered(catalog, element));
+            if (container.isEmpty() || container.get().arity() != arguments.size()) {
+                return ValueForm.of(unknown(type.toString().strip()));
             }
+            List<ValueForm> forms = new ArrayList<>(arguments.size());
+            for (Object argument : arguments) forms.add(formOf(catalog, (Type) argument, 0));
+            return new ValueForm.Of(container.get(), forms);
         }
-        return ValueChoice.of(registered(catalog, type));
+        if (type.isWildcardType() || type.isIntersectionType() || type.isUnionType()) {
+            return ValueForm.of(unknown(type.toString().strip()));
+        }
+        return ValueForm.of(registered(catalog, type));
     }
 
-    private static boolean isList(ParameterizedType parameterized) {
-        String raw = parameterized.getType().toString();
-        return raw.equals("List") || raw.equals("java.util.List");
+    /**
+     * The first leaf in {@code form} that nothing registers, as it is written — or {@code null} when every
+     * one of them is known.
+     *
+     * <p>Depth-first in written order, so the reason a cell gives names the argument a reader's eye reaches
+     * first. One unknown leaf anywhere makes the whole form unreadable, which is the same rule
+     * {@code ValueCatalog.valueOf} applies to one unreadable part of a list.
+     */
+    private static String firstUnknown(ValueForm form) {
+        return switch (form) {
+            case ValueForm.Leaf leaf -> leaf.type().known() ? null : leaf.type().id();
+            case ValueForm.Of of -> {
+                for (ValueForm argument : of.arguments()) {
+                    String found = firstUnknown(argument);
+                    if (found != null) yield found;
+                }
+                yield null;
+            }
+            case ValueForm.Declared declared -> declared.qualifiedName();
+        };
     }
 
     /**

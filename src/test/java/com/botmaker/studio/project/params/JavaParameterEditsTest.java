@@ -43,9 +43,22 @@ class JavaParameterEditsTest {
             }
             """;
 
+    /**
+     * A value edit spelled the way a window spells one: the catalog writes the Java, and the rewrite takes
+     * it already written — since 2026-09-20 the initialiser <em>is</em> the value.
+     */
     private static String setValue(String source, String field, ValueChoice choice, String... value) {
-        return JavaParameterEdits.setValue(source, TestValues.CATALOG, "Parameters", field, choice,
-                List.of(value));
+        return JavaParameterEdits.setValue(source, "Parameters", field, initializer(choice, value));
+    }
+
+    private static String add(String source, String className, String field, ValueChoice choice,
+                              String value, String category, String description) {
+        return JavaParameterEdits.add(source, className, field, choice.form(),
+                initializer(choice, value), category, description);
+    }
+
+    private static String initializer(ValueChoice choice, String... value) {
+        return TestValues.CATALOG.initializer(choice, List.of(value)).orElse("");
     }
 
     // ---- values ---------------------------------------------------------------------------------------
@@ -68,15 +81,14 @@ class JavaParameterEditsTest {
         // And it reads back, which is the property the window depends on.
         JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
                 .filter(p -> p.name().equals("restBetween")).findFirst().orElseThrow();
-        assertEquals(List.of("5000"), parameter.row().value());
+        assertEquals("java.time.Duration.ofMillis(5000L)", parameter.row().value());
         assertTrue(parameter.editable());
     }
 
     @Test
     void aFieldThatIsNotThereChangesNothing() {
         assertSame(SOURCE, setValue(SOURCE, "notDeclared", NUMBER, "1"));
-        assertSame(SOURCE, JavaParameterEdits.setValue(SOURCE, TestValues.CATALOG, "Elsewhere",
-                "maxAttempts", NUMBER, List.of("1")));
+        assertSame(SOURCE, JavaParameterEdits.setValue(SOURCE, "Elsewhere", "maxAttempts", "1"));
     }
 
     @Test
@@ -136,20 +148,37 @@ class JavaParameterEditsTest {
     @Test
     void retypingChangesTheTypeAndResetsTheValue() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                DURATION);
+                DURATION.form());
 
         assertTrue(edited.contains("public static java.time.Duration maxAttempts"), edited);
         assertTrue(edited.contains("= java.time.Duration.ofMillis(0L);"), edited);
     }
 
+    /**
+     * A container's default is an <b>empty</b> one, which is what changed when the type became a tree: the
+     * flat pair seeded one item because a list was a shape over a single type's default, and a list a user
+     * has not filled in has no items. It is the same rule a plugin's own store has always applied.
+     */
     @Test
-    void retypingToAListWritesTheListType() {
+    void retypingToAListWritesTheListTypeAndAnEmptyList() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                ValueChoice.listOf(TestValues.WHOLE_NUMBER));
+                ValueChoice.listOf(TestValues.WHOLE_NUMBER).form());
 
         // Boxed: List<int> does not compile.
         assertTrue(edited.contains("java.util.List<Integer> maxAttempts"), edited);
-        assertTrue(edited.contains("java.util.List.of(0)"), edited);
+        assertTrue(edited.contains("java.util.List.of()"), edited);
+    }
+
+    /** A map is a type a bot may declare, so it is a type this window may write. */
+    @Test
+    void retypingToAMapWritesBothArgumentsAndAnEmptyMap() {
+        String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
+                com.botmaker.plugin.api.value.ValueForm.mapOf(
+                        com.botmaker.plugin.api.value.ValueForm.of(TestValues.TEXT),
+                        com.botmaker.plugin.api.value.ValueForm.of(TestValues.DURATION)));
+
+        assertTrue(edited.contains("java.util.Map<String, java.time.Duration> maxAttempts"), edited);
+        assertTrue(edited.contains("java.util.Map.ofEntries()"), edited);
     }
 
     // ---- annotation members ---------------------------------------------------------------------------
@@ -196,8 +225,7 @@ class JavaParameterEditsTest {
 
     @Test
     void anAddedParameterIsAPublicStaticAnnotatedField() {
-        String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
-                List.of("hello"), "Naming", "What to call it");
+        String edited = add(SOURCE, "Parameters", "label", TEXT, "hello", "Naming", "What to call it");
 
         assertTrue(edited.contains("@Param(category = \"Naming\", description = \"What to call it\")"),
                 edited);
@@ -208,8 +236,7 @@ class JavaParameterEditsTest {
 
     @Test
     void anAddedParameterIsIndentedWithSpacesLikeTheRestOfTheFile() {
-        String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
-                List.of("hello"), "", "");
+        String edited = add(SOURCE, "Parameters", "label", TEXT, "hello", "", "");
 
         assertFalse(edited.contains("\t"), edited);
         assertTrue(edited.contains("\n    public static String label = \"hello\";"), edited);
@@ -229,8 +256,7 @@ class JavaParameterEditsTest {
 
     @Test
     void anAddedParameterWithNothingToSayGetsABareAnnotation() {
-        String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
-                List.of("hello"), "", "");
+        String edited = add(SOURCE, "Parameters", "label", TEXT, "hello", "", "");
 
         assertTrue(edited.contains("@Param" + System.lineSeparator())
                 || edited.contains("@Param\n") || edited.contains("@Param "), edited);
@@ -239,12 +265,9 @@ class JavaParameterEditsTest {
 
     @Test
     void addingANameThatIsTakenOrAClassThatIsNotThereChangesNothing() {
-        assertSame(SOURCE, JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                NUMBER, List.of("1"), "", ""));
-        assertSame(SOURCE, JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Missing", "a",
-                NUMBER, List.of("1"), "", ""));
-        assertSame(SOURCE, JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "  ",
-                NUMBER, List.of("1"), "", ""));
+        assertSame(SOURCE, add(SOURCE, "Parameters", "maxAttempts", NUMBER, "1", "", ""));
+        assertSame(SOURCE, add(SOURCE, "Missing", "a", NUMBER, "1", "", ""));
+        assertSame(SOURCE, add(SOURCE, "Parameters", "  ", NUMBER, "1", "", ""));
     }
 
     @Test
@@ -280,12 +303,13 @@ class JavaParameterEditsTest {
 
     @Test
     void whatIsWrittenIsWhatIsReadBack() {
-        String edited = JavaParameterEdits.add(SOURCE, TestValues.CATALOG, "Parameters", "label", TEXT,
-                List.of("a \"quoted\" value"), "Naming", "");
+        String edited = add(SOURCE, "Parameters", "label", TEXT, "a \"quoted\" value", "Naming", "");
         JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
                 .filter(p -> p.name().equals("label")).findFirst().orElseThrow();
 
-        assertEquals(List.of("a \"quoted\" value"), parameter.row().value());
+        assertEquals("\"a \\\"quoted\\\" value\"", parameter.row().value());
+        assertEquals(List.of("a \"quoted\" value"),
+                TestValues.CATALOG.valueOfInitializer(TEXT, parameter.row().value()).orElseThrow());
         assertEquals("Naming", parameter.row().category());
         assertTrue(parameter.editable(), parameter.note());
     }

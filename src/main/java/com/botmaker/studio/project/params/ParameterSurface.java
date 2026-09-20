@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.ParameterEdit;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
@@ -180,19 +180,19 @@ public final class ParameterSurface {
      * back. A field is rewritten in place, and its initialiser is re-read afterwards for the same reason.
      */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state, Entry entry,
-                                                  List<String> value) {
+                                                  String value) {
         return setValue(config, state, entry, value, PluginHost.valueTypes());
     }
 
     /** The same, against a given catalog. */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state, Entry entry,
-                                                  List<String> value, ValueCatalog catalog) {
+                                                  String value, ValueCatalog catalog) {
         if (entry == null) return Optional.empty();
         if (!entry.isJava()) {
             return PluginHost.parameterEdited(new ParameterEdit(entry.group(), entry.row().name(), value));
         }
         if (!entry.editable()) return Optional.empty();
-        JavaParameters.setValue(config, state, entry.java(), value, catalog);
+        JavaParameters.setValue(config, state, entry.java(), value);
         return reread(config, state, entry.java().className(), entry.row().name(), catalog);
     }
 
@@ -225,8 +225,8 @@ public final class ParameterSurface {
         JavaParameter held = find(config, state, className, name, catalog).orElse(null);
         if (held == null) return Optional.empty();
 
-        if (!wanted.type().equals(before.type())) {
-            JavaParameters.retype(config, state, held, wanted.type(), catalog);
+        if (!wanted.form().equals(before.form())) {
+            JavaParameters.retype(config, state, held, wanted.form(), catalog);
             held = find(config, state, className, name, catalog).orElse(null);
             if (held == null) return Optional.empty();
         }
@@ -264,7 +264,7 @@ public final class ParameterSurface {
         }
 
         if (!wanted.value().equals(before.value()) && held.editable()) {
-            JavaParameters.setValue(config, state, held, wanted.value(), catalog);
+            JavaParameters.setValue(config, state, held, wanted.value());
         }
         return reread(config, state, className, name, catalog);
     }
@@ -282,22 +282,22 @@ public final class ParameterSurface {
      * whose default cannot be spelled as Java, or a class that could not be created.
      */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, ValueChoice type, List<String> value,
+                                             String name, ValueForm form, String value,
                                              String category, String description) {
-        return add(config, state, className, name, type, value, category, description,
+        return add(config, state, className, name, form, value, category, description,
                 PluginHost.valueTypes());
     }
 
     /** The same, against a given catalog. */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, ValueChoice type, List<String> value,
+                                             String name, ValueForm form, String value,
                                              String category, String description, ValueCatalog catalog) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, catalog).isPresent()) return Optional.empty();
         if (!JavaParameters.classes(config, state).contains(className) && !createClass(config, className)) {
             return Optional.empty();
         }
-        JavaParameters.add(config, state, className, name, type, value, category, description, catalog);
+        JavaParameters.add(config, state, className, name, form, value, category, description);
         return reread(config, state, className, name, catalog);
     }
 

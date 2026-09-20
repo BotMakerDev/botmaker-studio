@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
@@ -13,6 +14,7 @@ import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.params.ParameterSurface;
 import com.botmaker.studio.project.params.ParameterSurface.Entry;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
@@ -919,8 +921,9 @@ public final class ParametersDialog {
                 String tag = VariableRailModel.ALL.equals(selectedTag)
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
+                ValueForm form = type.choice().form();
                 Optional<ParameterRow> stored = ParameterSurface.add(config, state, selectedClass, candidate,
-                        type.choice(), List.of(), tag, "");
+                        form, ValueWire.defaultInitializer(form), tag, "");
                 if (stored.isEmpty()) {
                     error("“" + candidate + "” was not written — " + selectedClass + " may already declare "
                             + "a field of that name, or this type has no default that can be written as "
@@ -1039,7 +1042,7 @@ public final class ParametersDialog {
     }
 
     private static ParameterRow rename(ParameterRow row, String name) {
-        return ParameterRow.named(name, row.type())
+        return ParameterRow.named(name, row.form())
                 .value(row.value())
                 .description(row.description())
                 .category(row.category())
@@ -1104,7 +1107,7 @@ public final class ParametersDialog {
             ParameterRow row = entry.row();
             Entry held = find(entry.group(), row.name());
             if (held == null && entry.isJava()) {
-                ParameterSurface.add(config, state, entry.java().className(), row.name(), row.type(),
+                ParameterSurface.add(config, state, entry.java().className(), row.name(), row.form(),
                         row.value(), row.category(), row.description());
                 held = find(entry.group(), row.name());
             }
@@ -1142,8 +1145,11 @@ public final class ParametersDialog {
             for (int i = 0; i < rows.size(); i++) {
                 Entry entry = rows.get(i);
                 if (!editor.describes(entry.group(), entry.row().name())) continue;
-                List<String> typed = editor.read().get();
-                if (typed.equals(entry.row().value())) break;
+                // What the widget reads is the editor's wire form; what a row holds is the Java it is written
+                // as. Blank means this type has no source spelling for what was typed, and writing nothing
+                // is the only honest answer to that.
+                String typed = ValueWire.initializer(entry.row(), editor.read().get());
+                if (typed.isBlank() || typed.equals(entry.row().value())) break;
                 // The answer is the row as *stored*, which may differ from what was typed — a clamp, a
                 // canonical spelling from a plugin, an initialiser as the codec spells it. That is what goes
                 // into the list, so the next redraw shows what the bot will actually get.

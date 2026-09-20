@@ -20,6 +20,7 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -117,7 +118,7 @@ public final class ParamValueWidgets {
 
     private static Node single(String group, ParameterRow variable, ValueType base,
                                ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ValueEditors.Editor editor = ValueEditors.editorFor(base, variable.singleValue(), ctx);
+        ValueEditors.Editor editor = ValueEditors.editorFor(base, first(variable), ctx);
         Node widget = editor.node();
         ValueEditors.stretch(widget);
         sink.add(ValueEditor.of(group, variable, () -> List.of(editor.read().get())));
@@ -132,10 +133,23 @@ public final class ParamValueWidgets {
         return widget;
     }
 
-    /** One value as a person would read it — a list as its joined members, not as an empty cell. */
+    /**
+     * One value as a person would read it — a list as its joined members, not as an empty cell.
+     *
+     * <p>A value nothing here can read is shown <b>as the author wrote it</b>, which is the honest rendering
+     * of a cell that is about to be read-only: the window never hides a parameter the bot reads.
+     */
     public static String display(ParameterRow row) {
-        if (row.type().isList()) return String.join(", ", row.value());
-        return row.singleValue();
+        Optional<List<String>> items = ValueWire.read(row);
+        if (items.isEmpty()) return row.value();
+        if (row.type().isList()) return String.join(", ", items.get());
+        return items.get().isEmpty() ? "" : items.get().getFirst();
+    }
+
+    /** The row's first stored item, for the widgets that show one — {@code ""} when it has none. */
+    private static String first(ParameterRow row) {
+        List<String> items = ValueWire.items(row);
+        return items.isEmpty() ? "" : items.getFirst();
     }
 
     /** Declared choices, ticked. */
@@ -147,7 +161,7 @@ public final class ParamValueWidgets {
             CheckBox box = new CheckBox(option);
             box.setUserData(option);
             box.setGraphic(ValueEditors.optionGraphic(base, option, ctx));
-            box.setSelected(variable.value().contains(option));
+            box.setSelected(ValueWire.items(variable).contains(option));
             boxes.add(box);
             column.getChildren().add(box);
         }
@@ -168,7 +182,7 @@ public final class ParamValueWidgets {
                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
         ToggleGroup toggles = new ToggleGroup();
         VBox column = new VBox(2);
-        String current = variable.singleValue();
+        String current = first(variable);
         for (String option : options) {
             RadioButton button = new RadioButton(option);
             button.setToggleGroup(toggles);
@@ -198,9 +212,10 @@ public final class ParamValueWidgets {
                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
         // By id, never by identity: a ValueType's identity *is* its persisted id, and two plugin
         // classloaders each holding their own copy of a class would make `==` mean nothing.
+        List<String> items = ValueWire.items(variable);
         if (ValueCatalog.TEXT_ID.equals(base.id())) {
-            TextArea area = new TextArea(String.join("\n", variable.value()));
-            area.setPrefRowCount(Math.max(3, Math.min(8, variable.value().size() + 1)));
+            TextArea area = new TextArea(String.join("\n", items));
+            area.setPrefRowCount(Math.max(3, Math.min(8, items.size() + 1)));
             area.setPromptText("One per line");
             sink.add(ValueEditor.of(group, variable, () -> area.getText() == null ? List.of()
                     : area.getText().lines().map(String::trim).filter(line -> !line.isEmpty()).toList()));
@@ -235,7 +250,7 @@ public final class ParamValueWidgets {
             column.getChildren().add(add);
         };
 
-        for (String item : variable.value()) editors.add(ValueEditors.editorFor(base, item, ctx));
+        for (String item : items) editors.add(ValueEditors.editorFor(base, item, ctx));
         add.setOnAction(e -> {
             editors.add(ValueEditors.editorFor(base, null, ctx));
             rebuild[0].run();
