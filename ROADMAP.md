@@ -6,7 +6,37 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — a value is Java everywhere, and a plugin's values live in a file the plugin
+- **2026-09-20 (latest) — `project/managed/`: Studio reads and writes a plugin's values out of the bot's
+  Java.** Phase 2 of `../docs/refactor/33-plugin-java.md`, the host half of the entry below.
+  **Modelled on `project/params/`, sharing its helpers rather than copying them.** `JavaManagedSource` finds
+  every `public static` method carrying `@Managed` by simple name, exactly as `paramAnnotation:341` matches
+  `@Param`, and derives the `ValueForm` from `getReturnType2()` through the now-public
+  `JavaParameterSource.formOf` — so a plugin declares no forms at all, and a value typed with one of the
+  bot's own records reads through `BotRecords` like a parameter does. `JavaManagedValues` is the half that
+  knows about files: `BotSources`, buffers before disk, both written, nothing cached.
+  **The read rule is the whole safety argument.** A body must be exactly one `return <expression>;`. A body
+  with a local variable in it is a value assembled by code the plugin did not write, and there is no
+  expression to replace without deleting what the author did — so it comes back **read-only with a sentence**
+  and its `expression()` is empty rather than the last statement's text, which is what stops any caller
+  mistaking half a body for the value. `JavaManagedEdits` declines it a second time, so a window that ignored
+  the note still could not overwrite the code.
+  **The write is one `ASTRewrite` over `ReturnStatement.EXPRESSION_PROPERTY`**, plus any import
+  `ValueCatalog.imports(form)` asks for that the file does not already have — appended rather than sorted
+  into place, because re-sorting somebody's import block to insert one line is a diff about something nobody
+  asked to change. `JavaManagedRoundTripTest` is `read(write(v)) == v` over a comma inside a string, an empty
+  `List.of()`, a method reference and a four-level `Map<String, List<Map<String, List<Duration>>>>`, and
+  asserts the javadoc, the helper method and the line count are untouched.
+  **`HostPluginValues` is the capability**, installed and cleared with `HostSources` in `BotProject` and for
+  the same reason: `HostServices` is built ad hoc from a `ProjectConfig` and can outlive its project, so a
+  window left open over the project the user just left must write nothing. It snapshots through `ProjectVcs`
+  before each write.
+  **`LockResolver` stopped guessing.** `managedReason` took a `List<ManagedField>` and matched a field's
+  *declared type*, then inferred that a class of nothing but such fields was managed whole; it takes a
+  `List<ManagedValue>` and matches a `@Managed("id")` method or class. `ManagedField`,
+  `StudioPlugin.managedFields()`, `PluginHost.mergeManagedFields` and both heuristics are deleted, and with
+  them the case where one picture constant beside ordinary code locked the file it was in.
+
+- **2026-09-20 — a value is Java everywhere, and a plugin's values live in a file the plugin
   ships.** Phase 1 of the rewritten `../docs/refactor/33-plugin-java.md`, and it withdraws the call-statement
   design recorded in the entry below — which had itself withdrawn the record design of the entry below that,
   the same day.

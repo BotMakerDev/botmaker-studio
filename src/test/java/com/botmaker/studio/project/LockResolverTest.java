@@ -1,6 +1,6 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.plugin.api.ManagedField;
+import com.botmaker.plugin.api.ManagedValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
@@ -174,8 +174,9 @@ class LockResolverTest {
 
     // --- files and fields another window owns (2026-09-19) --------------------------------------------------
 
-    private static final List<ManagedField> PICTURES = List.of(
-            new ManagedField("com.example.vision.Picture", "Change pictures in the picture window."));
+    private static final List<ManagedValue> PICTURES = List.of(
+            new ManagedValue("pictures", "Change pictures in the picture window."),
+            new ManagedValue("flow", "Draw the flow in ✂ Activity Flow."));
 
     private static TypeDeclaration typeOf(String source) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
@@ -210,51 +211,73 @@ class LockResolverTest {
     }
 
     @Test
-    void aClassOfNothingButManagedConstantsIsManagedWhole() {
+    void anAnnotatedClassIsManagedWhole() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.botmaker.plugin.basics.managed.Managed;
+                import com.example.vision.Picture;
+                @Managed("pictures")
+                public final class Pictures {
+                    public static final Picture COLLECT = new Picture("collect.png");
+                    private Pictures() {}
+                }
+                """);
+
+        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getFields()[0], PICTURES));
+        // The constructor is not a picture, and is refused anyway: the class is the plugin's window's whole.
+        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getMethods()[0], PICTURES));
+        // No plugin claiming the id: nothing is locked, which is every project before this rule.
+        assertNull(LockResolver.managedReason(type.getFields()[0], List.of()));
+    }
+
+    @Test
+    void anUnannotatedClassOfTheSameConstantsIsOrdinaryCode() {
         TypeDeclaration type = typeOf("""
                 package com.mybot;
                 import com.example.vision.Picture;
                 final class Pictures {
                     static final Picture COLLECT = new Picture("collect.png");
                     static final Picture BATTLE = new Picture("battle.png");
-                    private Pictures() {}
                 }
                 """);
 
-        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getFields()[0], PICTURES));
-        // The constructor is not a picture, and is refused anyway: the class exists only to name them.
-        assertEquals(PICTURES.getFirst().reason(), LockResolver.managedReason(type.getMethods()[0], PICTURES));
-        // No plugin managing the type: nothing is locked, which is every project before this rule.
-        assertNull(LockResolver.managedReason(type.getFields()[0], List.of()));
-    }
-
-    @Test
-    void aMixedClassLocksOnlyTheManagedConstants() {
-        TypeDeclaration type = typeOf("""
-                package com.mybot;
-                import com.example.vision.Picture;
-                class Mixed {
-                    static final Picture COLLECT = new Picture("collect.png");
-                    static Picture current = null;
-                    void run() { }
-                }
-                """);
-
-        assertNotNull(LockResolver.managedReason(type.getFields()[0], PICTURES));
-        assertNull(LockResolver.managedReason(type.getFields()[1], PICTURES), "not final: ordinary code");
-        assertNull(LockResolver.managedReason(type.getMethods()[0], PICTURES));
-    }
-
-    @Test
-    void aSameNamedTypeFromAnotherPackageIsNotManaged() {
-        TypeDeclaration type = typeOf("""
-                package com.mybot;
-                import com.other.Picture;
-                final class Pictures {
-                    static final Picture COLLECT = new Picture("collect.png");
-                }
-                """);
-
+        // The type-match heuristic locked this file and every one shaped like it. An annotation is a
+        // statement, and nobody made one here.
         assertNull(LockResolver.managedReason(type.getFields()[0], PICTURES));
+    }
+
+    @Test
+    void anAnnotatedMethodIsLockedAndItsNeighboursAreNot() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot.plugins.sdk;
+                import com.botmaker.plugin.basics.managed.Managed;
+                public final class Sdk {
+                    @Managed("flow")
+                    public static Flow flow() { return Flow.of(); }
+                    public static void install() { Flows.use(flow()); }
+                }
+                """);
+
+        assertEquals("Draw the flow in ✂ Activity Flow.",
+                LockResolver.managedReason(type.getMethods()[0], PICTURES));
+        // install() is the plugin's hand-off and the user's to call or not: the class is not annotated, so
+        // only the one method the plugin writes is refused.
+        assertNull(LockResolver.managedReason(type.getMethods()[1], PICTURES));
+    }
+
+    @Test
+    void anIdNoPluginClaimsIsOrdinaryCode() {
+        TypeDeclaration type = typeOf("""
+                package com.mybot;
+                import com.botmaker.plugin.basics.managed.Managed;
+                public final class Mine {
+                    @Managed("something-of-my-own")
+                    public static int value() { return 3; }
+                }
+                """);
+
+        assertNull(LockResolver.managedReason(type.getMethods()[0], PICTURES));
+        assertNotNull(LockResolver.managedReason(type.getMethods()[0],
+                List.of(new ManagedValue("something-of-my-own", "Mine."))));
     }
 }

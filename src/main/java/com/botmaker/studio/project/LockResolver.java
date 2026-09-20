@@ -1,17 +1,17 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.plugin.api.ManagedField;
+import com.botmaker.plugin.api.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.managed.JavaManagedSource;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.Comment;
-import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
-import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.nio.file.Path;
@@ -33,7 +33,7 @@ import java.util.List;
  * denied  &lt;- SIGNATURE edits to {@code public static void main(String[])}
  * denied  &lt;- anything in the file the Parameters window owns ({@link Managed})
  * denied  &lt;- a {@code @Param} field, wherever it is
- * denied  &lt;- a constant a plugin manages ({@link ManagedField}), and all of a class holding only those
+ * denied  &lt;- a {@code @Managed} method's body, and all of a {@code @Managed} class ({@link ManagedValue})
  * allowed &lt;- otherwise, the BODY of {@code main} included
  * </pre>
  *
@@ -45,10 +45,11 @@ import java.util.List;
  * the canvas and nothing else. <b>Only the host's own file is named</b>: a file a plugin's vocabulary shapes
  * (a class of {@code ImageTemplate} constants) is that plugin's to speak for, not this class's.
  *
- * <p><b>The last two are matched on shape, like {@code main}.</b> A {@code @Param} field is the Parameters
- * window's wherever its author put it, so being in another file does not make it editable. A plugin says
- * which constants it keeps in step through its own window ({@code StudioPlugin.managedFields}, read from
- * {@code PluginHost}), and this class matches them without knowing what any of them are.
+ * <p><b>The last two are matched on an annotation the author wrote.</b> A {@code @Param} field is the
+ * Parameters window's wherever its author put it, so being in another file does not make it editable. A
+ * plugin says which ids it keeps in step through its own window ({@code StudioPlugin.managedValues}, read
+ * from {@code PluginHost}), and this class matches a {@code @Managed("id")} method or type against them
+ * without knowing what any of them are.
  *
  * <p>The third is the only rule left that is about a <em>member</em>, and it is the narrowest thing that
  * works: <b>{@code main}'s signature is fixed and its body is the user's.</b> The signature is not a
@@ -149,12 +150,12 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
 
     /** True when {@code node}'s member may be renamed/retyped/deleted, or its class-level structure changed. */
     public boolean signatureEditable(ASTNode node) {
-        return editable() && !isEntryPointMain(node) && managedReason(node, PluginHost.managedFields()) == null;
+        return editable() && !isEntryPointMain(node) && managedReason(node, PluginHost.managedValues()) == null;
     }
 
     /** True when statements inside {@code node}'s method may be changed — {@code main}'s included. */
     public boolean bodyEditable(ASTNode node) {
-        return editable() && managedReason(node, PluginHost.managedFields()) == null;
+        return editable() && managedReason(node, PluginHost.managedValues()) == null;
     }
 
     /** Why the Parameters window, not the canvas, changes a {@code @Param} field. */
@@ -165,55 +166,45 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
      * Why {@code node} belongs to another window, or {@code null} when nothing but the file decides.
      *
      * <p>Pure, and public for that reason: the plugin rule is tested with a list rather than a bound plugin.
-     * Types are matched without bindings — a written qualified name, or a simple name the file imports —
-     * because the editor routinely draws a file whose siblings do not compile.
+     * Nothing is resolved — the annotation is matched by simple name, as {@code @Param} is — because the
+     * editor routinely draws a file whose siblings do not compile.
+     *
+     * <p><b>An annotation, since 2026-09-20.</b> This matched a field's <em>declared type</em> until then,
+     * which cannot tell two same-typed classes apart, and inferred that a class of nothing but such
+     * constants was managed whole. Both were guesses from shape. {@code @Managed("id")} is a statement, and
+     * it carries which of a plugin's values a method holds.
      */
-    public static String managedReason(ASTNode node, List<ManagedField> managed) {
+    public static String managedReason(ASTNode node, List<ManagedValue> managed) {
         FieldDeclaration field = enclosing(node, FieldDeclaration.class);
-        if (field != null) {
-            if (JavaParameterSource.paramAnnotation(field) != null) return PARAM_REASON;
-            String reason = pluginReason(field, managed);
+        if (field != null && JavaParameterSource.paramAnnotation(field) != null) return PARAM_REASON;
+        if (managed.isEmpty()) return null;
+        // The method's own annotation first: a @Managed method inside a class that is not annotated is one
+        // value of many in an ordinary file, and only its body is the plugin's.
+        MethodDeclaration method = enclosing(node, MethodDeclaration.class);
+        if (method != null) {
+            String reason = pluginReason(method, managed);
             if (reason != null) return reason;
         }
-        // A class of nothing but managed constants is managed whole: adding a method to it, or deleting its
-        // constructor, is an edit to a file whose purpose is somebody else's window.
-        TypeDeclaration type = enclosing(node, TypeDeclaration.class);
-        if (type == null || type.getFields().length == 0) return null;
-        String first = null;
-        for (FieldDeclaration each : type.getFields()) {
-            String reason = pluginReason(each, managed);
-            if (reason == null) return null;
-            if (first == null) first = reason;
-        }
-        return first;
-    }
-
-    /** The reason of the managed entry this constant matches, or {@code null}. */
-    private static String pluginReason(FieldDeclaration field, List<ManagedField> managed) {
-        if (managed.isEmpty()) return null;
-        int modifiers = field.getModifiers();
-        if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers)) return null;
-        for (ManagedField entry : managed) {
-            if (writtenAs(field.getType(), entry.typeName())) return entry.reason();
+        // A @Managed type is the plugin's whole: adding a member to it, renaming one or deleting its
+        // constructor is an edit to a class whose purpose is somebody else's window.
+        for (ASTNode n = node; n != null; n = n.getParent()) {
+            if (!(n instanceof TypeDeclaration type)) continue;
+            String reason = pluginReason(type, managed);
+            if (reason != null) return reason;
         }
         return null;
     }
 
-    /** Whether {@code type} names {@code qualified}: spelled out, or its simple name with a matching import. */
-    private static boolean writtenAs(Type type, String qualified) {
-        String written = type.toString();
-        if (written.equals(qualified)) return true;
-        int dot = qualified.lastIndexOf('.');
-        if (dot < 0 || !written.equals(qualified.substring(dot + 1))) return false;
-        if (!(type.getRoot() instanceof CompilationUnit unit)) return false;
-        String pkg = qualified.substring(0, dot);
-        for (Object each : unit.imports()) {
-            ImportDeclaration imported = (ImportDeclaration) each;
-            if (imported.isStatic()) continue;
-            String name = imported.getName().getFullyQualifiedName();
-            if (imported.isOnDemand() ? name.equals(pkg) : name.equals(qualified)) return true;
+    /** The reason of the managed entry this declaration's {@code @Managed} id names, or {@code null}. */
+    private static String pluginReason(BodyDeclaration declaration, List<ManagedValue> managed) {
+        Annotation annotation = JavaManagedSource.managedAnnotation(declaration);
+        if (annotation == null) return null;
+        String id = JavaManagedSource.idOf(annotation);
+        if (id.isEmpty()) return null;
+        for (ManagedValue entry : managed) {
+            if (id.equals(entry.id())) return entry.reason();
         }
-        return unit.getPackage() != null && unit.getPackage().getName().getFullyQualifiedName().equals(pkg);
+        return null;
     }
 
     private static <T extends ASTNode> T enclosing(ASTNode node, Class<T> kind) {
@@ -291,7 +282,7 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         if (role().isReadOnly()) return Verdict.no(role().reason());
         Managed managed = managed();
         if (managed != null) return Verdict.no(managed.reason());
-        String reason = managedReason(node, PluginHost.managedFields());
+        String reason = managedReason(node, PluginHost.managedValues());
         if (reason != null) return Verdict.no(reason);
         if (kind == EditKind.SIGNATURE && isEntryPointMain(node)) return Verdict.no(entryPointReason());
         return Verdict.ok();

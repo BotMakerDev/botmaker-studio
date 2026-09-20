@@ -18,24 +18,61 @@ import java.util.Optional;
  * <p>They are spelled like plugin-basics' three most awkward cases all the same — a structural literal
  * ({@code Duration}), a quoted one ({@code String}) and a bare one ({@code int}) — because those are the
  * three shapes the scanner has to tell apart, and inventing prettier ones would test a situation that does
- * not occur.
+ * not occur. {@link #BODY} is the fourth, added for {@code project/managed}: a type whose literal is a
+ * <b>method reference</b>, which is how the SDK will name an activity's body and is a shape no other
+ * codec here produces.
+ *
+ * <p>Public rather than package-private since 2026-09-20, so {@code project/managed}'s tests read the same
+ * catalog: what they exercise is the same host reading of the same Java, and two catalogs would be two
+ * answers to what a {@code Duration} is written as.
  */
-final class TestValues {
+public final class TestValues {
 
-    static final ValueType TEXT = ValueType.of("TEXT").label("Text")
+    public static final ValueType TEXT = ValueType.of("TEXT").label("Text")
             .source("String").boxed("String")
             .build();
 
-    static final ValueType WHOLE_NUMBER = ValueType.of("WHOLE_NUMBER").label("Whole number")
+    public static final ValueType WHOLE_NUMBER = ValueType.of("WHOLE_NUMBER").label("Whole number")
             .source("int").boxed("Integer").primitive()
             .build();
 
-    static final ValueType DURATION = ValueType.of("DURATION").label("Duration")
+    public static final ValueType DURATION = ValueType.of("DURATION").label("Duration")
             .source("java.time.Duration")
             .build();
 
+    /** A value named by {@code Owner::method}, the shape an activity's body takes. */
+    public static final ValueType BODY = ValueType.of("BODY").label("Body")
+            .source("com.example.bot.Body")
+            .build();
+
     /** The same shape as a real catalog: one codec per type, each able to read its own literal back. */
-    static final ValueCatalog CATALOG = ValueCatalog.builder()
+    public static final ValueCatalog CATALOG = ValueCatalog.builder()
+            .add(BODY, new ValueCodec<String>() {
+                @Override
+                public String parse(String wire) {
+                    return wire == null ? "" : wire.strip();
+                }
+
+                @Override
+                public String store(String value) {
+                    return value;
+                }
+
+                /** The value <em>is</em> the reference: {@code Collect::body} names a method, not a string. */
+                @Override
+                public String literal(String value) {
+                    return value;
+                }
+
+                @Override
+                public Optional<String> valueOfLiteral(String java) {
+                    String source = java == null ? "" : java.strip();
+                    int arrow = source.indexOf("::");
+                    if (arrow <= 0 || arrow + 2 >= source.length()) return Optional.empty();
+                    return source.chars().allMatch(c -> Character.isJavaIdentifierPart(c) || c == ':')
+                            ? Optional.of(source) : Optional.empty();
+                }
+            })
             .add(TEXT, new ValueCodec<String>() {
                 @Override
                 public String parse(String wire) {

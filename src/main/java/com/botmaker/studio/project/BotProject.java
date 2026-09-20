@@ -3,6 +3,7 @@ package com.botmaker.studio.project;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.BlockConverter;
+import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSources;
@@ -260,6 +261,11 @@ public class BotProject {
         // plugin renaming something it owns between projects must find nothing rather than repoint the code
         // of the project the user just left.
         HostSources.install(config, state, eventBus);
+
+        // The plugin's own values, which live in the bot's Java beside everything else here. Same lifetime
+        // for the same reason, and the services handed over are this project's: a value written through a
+        // window left open over the project the user just left would land in the wrong file.
+        HostPluginValues.install(config, state, HostServices.forProject(config));
     }
 
     // =========================================================================
@@ -317,5 +323,6 @@ public class BotProject {
         PluginHost.unbind();
         HostRuns.clear();
         HostSources.clear();
+        HostPluginValues.clear();
     }
 }

@@ -237,7 +237,7 @@ public final class JavaParameterSource {
      * {@code List}. A wildcard, a type variable and a container whose written arity disagrees with the
      * registered one read the same way, and for the same reason.
      */
-    static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions) {
+    public static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions) {
         return formOf(catalog, type, extraDimensions, Declarations.NONE);
     }
 
@@ -250,8 +250,8 @@ public final class JavaParameterSource {
      * reading every previous release gave, and a field whose meaning changed because a file elsewhere in the
      * project was renamed would be the surprise this parser exists not to spring.
      */
-    static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions,
-                            Declarations declarations) {
+    public static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions,
+                                   Declarations declarations) {
         if (type == null) return ValueForm.of(unknown(""));
         if (extraDimensions > 0 || type.isArrayType()) {
             return ValueForm.of(unknown(type.toString().strip()));
@@ -421,14 +421,14 @@ public final class JavaParameterSource {
     }
 
     /** The source text a node occupies, exactly as written — whitespace, comments and all. */
-    static String text(String source, ASTNode node) {
+    public static String text(String source, ASTNode node) {
         int start = node.getStartPosition();
         if (start < 0 || start + node.getLength() > source.length()) return "";
         return source.substring(start, start + node.getLength());
     }
 
     /** The name of the type a node is declared in, or {@code null} for one declared nowhere. */
-    static String enclosingTypeName(ASTNode node) {
+    public static String enclosingTypeName(ASTNode node) {
         for (ASTNode parent = node.getParent(); parent != null; parent = parent.getParent()) {
             if (parent instanceof TypeDeclaration type) return type.getName().getIdentifier();
         }

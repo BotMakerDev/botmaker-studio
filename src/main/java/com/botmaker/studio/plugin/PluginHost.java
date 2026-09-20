@@ -1,6 +1,6 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ManagedField;
+import com.botmaker.plugin.api.ManagedValue;
 import com.botmaker.plugin.api.ParameterEdit;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
@@ -141,8 +141,8 @@ public final class PluginHost {
     /** Memoised beside the slot editors, rebuilt on the same bind. See {@link #toolbarItems()}. */
     private static volatile List<ToolbarItem> toolbarItems = mergeToolbarItems(BUNDLED);
 
-    /** Memoised the same way. See {@link #managedFields()}. */
-    private static volatile List<ManagedField> managedFields = mergeManagedFields(BUNDLED);
+    /** Memoised the same way. See {@link #managedValues()}. */
+    private static volatile List<ManagedValue> managedValues = mergeManagedValues(BUNDLED);
 
     /** What the last {@link #bind} could not load. See {@link #failures()}. */
     private static volatile List<PluginLoader.PluginFailure> failures = List.of();
@@ -250,7 +250,7 @@ public final class PluginHost {
         ownedSlotEditors = mergeOwnedSlotEditors(bound);
         slotEditors = strip(ownedSlotEditors);
         toolbarItems = mergeToolbarItems(bound);
-        managedFields = mergeManagedFields(bound);
+        managedValues = mergeManagedValues(bound);
         CACHE.clear();
         GROUPS.clear();
         if (previous != null) previous.close();
@@ -504,28 +504,27 @@ public final class PluginHost {
     }
 
     /**
-     * The fields the bound plugins maintain through their own windows — what {@code LockResolver} asks
-     * before letting the canvas edit a constant. Empty with no project, so nothing is locked by it.
+     * The values the bound plugins maintain through their own windows — what {@code LockResolver} asks
+     * before letting the canvas edit a {@code @Managed} method or class. Empty with no project, so nothing
+     * is locked by it.
      */
-    public static List<ManagedField> managedFields() {
-        return managedFields;
+    public static List<ManagedValue> managedValues() {
+        return managedValues;
     }
 
     /** Every plugin's entries, a throwing or malformed one costing only itself. */
-    static List<ManagedField> mergeManagedFields(List<StudioPlugin> set) {
-        List<ManagedField> merged = new ArrayList<>();
+    static List<ManagedValue> mergeManagedValues(List<StudioPlugin> set) {
+        List<ManagedValue> merged = new ArrayList<>();
         for (StudioPlugin plugin : set) {
             try {
-                List<ManagedField> offered = plugin.managedFields();
+                List<ManagedValue> offered = plugin.managedValues();
                 if (offered == null) continue;
-                for (ManagedField field : offered) {
-                    if (field != null && field.typeName() != null && !field.typeName().isBlank()) {
-                        merged.add(field);
-                    }
+                for (ManagedValue value : offered) {
+                    if (value != null && value.id() != null && !value.id().isBlank()) merged.add(value);
                 }
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply manages nothing.
-                System.err.println("Warning: " + plugin.id() + " could not list managed fields: " + e);
+                System.err.println("Warning: " + plugin.id() + " could not list managed values: " + e);
             }
         }
         return List.copyOf(merged);

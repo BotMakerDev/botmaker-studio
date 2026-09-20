@@ -112,6 +112,20 @@ public final class HostServices implements StudioServices {
         return HostSources.live();
     }
 
+    /**
+     * The open project's {@code @Managed} values, or {@link com.botmaker.plugin.api.PluginValues#NONE}
+     * between projects.
+     *
+     * <p>Read from {@link HostPluginValues} rather than held, for the reason {@link #runs()} is: this class
+     * is built ad hoc from a {@code ProjectConfig} and an instance can outlive the project it was made for,
+     * so asking the live channel each time is what stops a plugin's window writing into a file the user has
+     * left behind.
+     */
+    @Override
+    public com.botmaker.plugin.api.PluginValues pluginValues() {
+        return HostPluginValues.live();
+    }
+
     @Override
     public void status(String message) {
         HostRuns.status(message);

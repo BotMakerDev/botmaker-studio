@@ -12,7 +12,22 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **A plugin's own values are read and written in your bot's Java.** A `@Managed("id")` method in a file the
+  plugin gave your project is found by its id, its type read off the declared return type, and its value
+  edited through the same control a block's slot and a Parameters row use. Studio rewrites the one
+  expression that method returns and nothing else: your comments, your helper methods and your formatting
+  survive a save, and the `git diff` after changing a plugin's value is one hunk. A body you have edited by
+  hand into something other than a single `return` is shown read-only with the reason, and never
+  overwritten. Nothing uses this yet — the SDK's flow moves onto it next — and no existing project changes.
+
 ### Changed
+
+- **What a plugin locks on the canvas is an annotation you can see.** A plugin used to name a *type*, and
+  Studio locked every `static final` field of it, plus any class holding nothing but those. That guessed:
+  one picture constant beside ordinary code locked the whole file. A `@Managed("id")` method or class is
+  refused, and nothing else is.
 
 - **A plugin's editor is handed the Java a value is written as.** A row of the Parameters window used to
   hand a plugin a stored string and a slot on a block used to hand it an expression, so a plugin drawing
