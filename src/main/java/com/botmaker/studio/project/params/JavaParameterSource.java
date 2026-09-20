@@ -91,6 +91,28 @@ public final class JavaParameterSource {
     }
 
     /**
+     * One expression parsed on its own, or {@code null} when the text is not one.
+     *
+     * <p>A real parser rather than a bracket-matching split, because reading a value means reading Java this
+     * host did not necessarily write: {@code new Point(x + 1, f(2, 3))} is two arguments, and a comma count
+     * says three. Public for the same reason {@link #parse} is — it is the one parser configuration for an
+     * expression, and a second copy of it somewhere else is a second set of compiler options to keep in
+     * step.
+     */
+    public static Expression expression(String source) {
+        if (source == null || source.isBlank()) return null;
+        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+        parser.setKind(ASTParser.K_EXPRESSION);
+        parser.setSource(source.toCharArray());
+        Map<String, String> options = JavaCore.getOptions();
+        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
+        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
+        parser.setCompilerOptions(options);
+        ASTNode node = parser.createAST(null);
+        return node instanceof Expression parsed ? parsed : null;
+    }
+
+    /**
      * Every {@code @Param} field in {@code source}, in the order they are written.
      *
      * @param file    the path the rows are attributed to; may be {@code null} in a test

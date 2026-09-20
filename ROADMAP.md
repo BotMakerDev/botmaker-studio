@@ -6,7 +6,30 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the record grammar: what a plugin's model may be, and how it is written.** Phase H
+- **2026-09-20 (latest) — the derived reader: a generated model file back into the record.** Phase I of
+  `33-plugin-java.md`. `ModelReader` takes a compilation unit, finds the named class's `VALUE` constant and
+  reads its initialiser against the same `ModelForm` the writer used, so there is **one grammar and not two
+  implementations of one**. That is the point: `ValueCodec.wireOfLiteral` rotted into a `default` returning
+  empty in nine of seventeen types precisely because the reader was written separately from the writer and
+  nothing forced them to agree. Here the reader cannot drift, because both halves are derived from the same
+  record declaration and `ModelRoundTripTest` asserts `read(write(v)) == v` rather than asserting what the
+  source looks like.
+  **Decidable because the input domain is the writer's output**, not Java at large: a call whose callee is
+  not this container's declared factory, a creation that is not this record's canonical constructor, an
+  argument that is not a literal where a literal is written — each is empty rather than guessed. A
+  hand-edited generated file therefore reads as *no model* instead of as a model with one component nobody
+  chose, which is what `FileRole.GENERATED` is protecting in phase J.
+  **A real parse, never a comma split**: a generated file is the one place a comma inside a string is
+  certain, because its strings are names the user typed, so `Map.entry("a, b", …)` is two arguments. The
+  expression parser `BotRecords` kept privately is now `JavaParameterSource.expression`, public beside
+  `parse`, with the single copy both packages use — a second set of compiler options would be a second
+  thing to keep in step. **The target type decides how a number reads**: `42` is an `Integer` for a
+  component declared `int` and a `Long` for one declared `long`, the writer's casts and suffixes are taken
+  off here, and `Float.NaN` and the two infinities read as the constants they are written as, since neither
+  is a literal in any Java grammar. A record is built through its canonical constructor, and a compact
+  constructor that now refuses what it once accepted is an empty read rather than a crashed editor.
+
+- **2026-09-20 — the record grammar: what a plugin's model may be, and how it is written.** Phase H
   of `33-plugin-java.md`, and nothing a user can see yet: two pure classes over a `Class<?>`, no host state
   and no JavaFX, so both halves are testable without a running Studio. `ModelGrammar` answers *is this
   record legal, and which component is not* — `33`'s table exactly: `String`, the eight primitives and their

@@ -5,14 +5,10 @@ import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.BotSources;
-import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.RecordDeclaration;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Type;
@@ -208,7 +204,9 @@ public final class BotRecords {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
         if (shape == null || source == null || source.isBlank()) return Optional.empty();
         String trimmed = source.strip();
-        if (!(expression(trimmed) instanceof ClassInstanceCreation creation)) return Optional.empty();
+        if (!(JavaParameterSource.expression(trimmed) instanceof ClassInstanceCreation creation)) {
+            return Optional.empty();
+        }
         if (!names(creation.getType()).equals(shape.simpleName())
                 && !names(creation.getType()).equals(shape.qualifiedName())) {
             return Optional.empty();
@@ -287,22 +285,4 @@ public final class BotRecords {
         return angle < 0 ? written : written.substring(0, angle).strip();
     }
 
-    /**
-     * One expression parsed on its own, or {@code null}.
-     *
-     * <p>A real parser rather than a bracket-matching split, because this is the one place the host is
-     * reading Java it did not write: an author's {@code new Point(x + 1, f(2, 3))} is two arguments, and a
-     * comma count would say three.
-     */
-    private static Expression expression(String source) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_EXPRESSION);
-        parser.setSource(source.toCharArray());
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        parser.setCompilerOptions(options);
-        ASTNode node = parser.createAST(null);
-        return node instanceof Expression parsed ? parsed : null;
-    }
 }

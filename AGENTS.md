@@ -1106,6 +1106,19 @@ The `ui/` package is split by concern:
   declared: the host asks `ValueContainer.partForms` with a marker leaf per type argument and substitutes
   the real forms back, so a contributed container works with no change here. The writer's one refusal is a
   `null` a component holds, and it refuses the whole model rather than writing part of one.
+  **`ModelReader` is the third class and the derived half** (2026-09-20): a generated file back into the
+  record, read against the *same* `ModelForm` the writer used, so there is one grammar rather than two
+  implementations of one — which is the failure `ValueCodec.wireOfLiteral` is the measured example of. It is
+  decidable because the writer's output is the reader's whole input domain, and anything outside it is
+  **empty rather than guessed**: a callee that is not this container's declared factory, a creation that is
+  not this record's canonical constructor, an argument that is not a literal where one is written. A
+  hand-edited generated file therefore reads as *no model*, never as a model with a component nobody chose.
+  A **real parse, never a comma split** (a generated file's strings are names a user typed, so a comma
+  inside one is certain): the expression parser is `JavaParameterSource.expression`, public beside `parse`
+  and the one copy both packages use. The **target type decides how a number reads** — `42` is an `Integer`
+  for a component declared `int` and a `Long` for one declared `long` — and `ModelRoundTripTest` asserts
+  `read(write(v)) == v` rather than asserting what the source looks like, because a test of the text is what
+  lets two halves drift.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that
