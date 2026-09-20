@@ -60,6 +60,24 @@ public final class JavaParameterSource {
 
     private JavaParameterSource() {}
 
+    /**
+     * What the <em>bot itself</em> declares, asked by the name a type is written as.
+     *
+     * <p>This parser has no bindings, so it cannot tell a class the project declares from one nobody has
+     * heard of — both are simply names. {@link BotRecords} can, because it has read the bot's other sources,
+     * and it is handed in here as this one question rather than as a dependency: the reader stays pure and a
+     * test still drives it with source text alone.
+     */
+    @FunctionalInterface
+    public interface Declarations {
+
+        /** The qualified name of the bot's own class {@code written} means, or {@code null} for none. */
+        String qualify(String written);
+
+        /** What a caller with no project has: every name is somebody else's. */
+        Declarations NONE = written -> null;
+    }
+
     /** Parses {@code source} without bindings — the one parser configuration this package uses. */
     public static CompilationUnit parse(String source) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
@@ -79,6 +97,15 @@ public final class JavaParameterSource {
      * @param catalog the merged value catalog, which decides what a field's Java type <em>is</em>
      */
     public static List<JavaParameter> read(Path file, String source, ValueCatalog catalog) {
+        return read(file, source, catalog, BotRecords.none());
+    }
+
+    /**
+     * The same, told what the bot declares itself — the form a window reads, since a field may be typed with
+     * one of the bot's own records.
+     */
+    public static List<JavaParameter> read(Path file, String source, ValueCatalog catalog,
+                                           BotRecords records) {
         List<JavaParameter> out = new ArrayList<>();
         parse(source).accept(new ASTVisitor() {
             @Override
@@ -89,7 +116,7 @@ public final class JavaParameterSource {
                 if (className == null) return false;
                 for (Object each : field.fragments()) {
                     VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
-                    out.add(read(file, source, catalog, className, field, annotation, fragment));
+                    out.add(read(file, source, catalog, records, className, field, annotation, fragment));
                 }
                 return false;
             }
@@ -98,18 +125,23 @@ public final class JavaParameterSource {
     }
 
     /** One fragment of one field — {@code @Param public static int a = 1, b = 2;} declares two. */
-    private static JavaParameter read(Path file, String source, ValueCatalog catalog, String className,
-                                      FieldDeclaration field, Annotation annotation,
+    private static JavaParameter read(Path file, String source, ValueCatalog catalog, BotRecords records,
+                                      String className, FieldDeclaration field, Annotation annotation,
                                       VariableDeclarationFragment fragment) {
         Map<String, Object> members = members(annotation);
         String name = fragment.getName().getIdentifier();
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
 
-        ValueForm form = formOf(catalog, field.getType(), fragment.getExtraDimensions());
-        Optional<Object> value = catalog.valueOf(form, initializer);
+        ValueForm form = formOf(catalog, field.getType(), fragment.getExtraDimensions(),
+                records::qualifyDeclared);
+        // The catalog declines a declared form by design — only the host can see the bot's own source — so
+        // the second reader is asked for exactly that case and for no other.
+        boolean readable = form instanceof ValueForm.Declared declared
+                ? records.partsOf(declared, initializer).isPresent()
+                : catalog.valueOf(form, initializer).isPresent();
 
-        String note = whyNotEditable(field, form, value, initializer);
+        String note = whyNotEditable(field, form, records, readable, initializer);
         // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
         // be edited still has to show what the field holds, and the reading above decides only whether it
         // may be replaced.
@@ -134,8 +166,8 @@ public final class JavaParameterSource {
      * reason — is the failure this whole design exists to avoid. A field is never <em>rejected</em>: it is
      * still listed, still shows what it holds, and still tells the author what to change.
      */
-    private static String whyNotEditable(FieldDeclaration field, ValueForm form,
-                                         Optional<Object> value, String initializer) {
+    private static String whyNotEditable(FieldDeclaration field, ValueForm form, BotRecords records,
+                                         boolean readable, String initializer) {
         int modifiers = field.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
             return "not public: the bot can read it, the window cannot show it being changed";
@@ -147,11 +179,11 @@ public final class JavaParameterSource {
             return "final: its value is fixed at compile time";
         }
         if (form instanceof ValueForm.Declared declared) {
-            // 32-generic-values.md §A bot's own generic class: writing `new Box<>(…)` needs a constructor
-            // this parser cannot see, and inventing a placeholder into a user's own class is the one thing
-            // the design refuses outright. Phase F is where it becomes readable.
-            return declared.qualifiedName() + " is a class this bot declares, "
-                    + "and there is no constructor Studio can write for it yet";
+            // 32-generic-values.md §A bot's own generic class. A record's canonical constructor is what makes
+            // `new Point(1, 2)` writable without guessing; anything else keeps whatever its author wrote, and
+            // no placeholder is ever invented for it.
+            String why = records.whyNotEditable(declared);
+            if (why != null) return why;
         }
         String unknown = firstUnknown(form);
         if (unknown != null) {
@@ -162,7 +194,7 @@ public final class JavaParameterSource {
         if (initializer.isBlank()) {
             return "no initialiser: there is no value to show or replace";
         }
-        if (value.isEmpty()) {
+        if (!readable) {
             return "written by hand as " + initializer + ", which is kept rather than replaced";
         }
         return "";
@@ -184,6 +216,20 @@ public final class JavaParameterSource {
      * registered one read the same way, and for the same reason.
      */
     static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions) {
+        return formOf(catalog, type, extraDimensions, Declarations.NONE);
+    }
+
+    /**
+     * The same, told what the bot declares itself — which is what turns an unknown leaf into a
+     * {@link ValueForm.Declared}.
+     *
+     * <p><b>A registered type wins a name clash</b>, so a bot declaring its own {@code Point} beside the
+     * SDK's still reads as the SDK's. That is the weaker answer and the safer one: the catalog's is the
+     * reading every previous release gave, and a field whose meaning changed because a file elsewhere in the
+     * project was renamed would be the surprise this parser exists not to spring.
+     */
+    static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions,
+                            Declarations declarations) {
         if (type == null) return ValueForm.of(unknown(""));
         if (extraDimensions > 0 || type.isArrayType()) {
             return ValueForm.of(unknown(type.toString().strip()));
@@ -192,17 +238,22 @@ public final class JavaParameterSource {
             String raw = parameterized.getType().toString().strip();
             Optional<ValueContainer<?>> container = catalog.containerForJava(raw);
             List<?> arguments = parameterized.typeArguments();
-            if (container.isEmpty() || container.get().arity() != arguments.size()) {
-                return ValueForm.of(unknown(type.toString().strip()));
-            }
             List<ValueForm> forms = new ArrayList<>(arguments.size());
-            for (Object argument : arguments) forms.add(formOf(catalog, (Type) argument, 0));
-            return new ValueForm.Of(container.get(), forms);
+            for (Object argument : arguments) forms.add(formOf(catalog, (Type) argument, 0, declarations));
+            if (container.isPresent() && container.get().arity() == arguments.size()) {
+                return new ValueForm.Of(container.get(), forms);
+            }
+            String declared = declarations.qualify(raw);
+            if (declared != null) return new ValueForm.Declared(declared, forms);
+            return ValueForm.of(unknown(type.toString().strip()));
         }
         if (type.isWildcardType() || type.isIntersectionType() || type.isUnionType()) {
             return ValueForm.of(unknown(type.toString().strip()));
         }
-        return ValueForm.of(registered(catalog, type));
+        ValueType leaf = registered(catalog, type);
+        if (leaf.known()) return ValueForm.of(leaf);
+        String declared = declarations.qualify(type.toString().strip());
+        return declared == null ? ValueForm.of(leaf) : new ValueForm.Declared(declared, List.of());
     }
 
     /**
@@ -223,7 +274,15 @@ public final class JavaParameterSource {
                 }
                 yield null;
             }
-            case ValueForm.Declared declared -> declared.qualifiedName();
+            // A declared class is not an unknown leaf: the bot does declare it, and whether a value of it can
+            // be written is BotRecords' answer, given above this one. Its type arguments are still leaves.
+            case ValueForm.Declared declared -> {
+                for (ValueForm argument : declared.arguments()) {
+                    String found = firstUnknown(argument);
+                    if (found != null) yield found;
+                }
+                yield null;
+            }
         };
     }
 

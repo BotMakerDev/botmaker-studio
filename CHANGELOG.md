@@ -27,6 +27,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **A value your installed plugins cannot read is shown exactly as you wrote it**, with the reason, and
   nothing this window does will rewrite it.
 
+### Added
+
+- **A parameter can be one of your bot's own records.** `@Param public static Point origin = new Point(1, 2);`
+  is listed, typed and edited component by component, and what is written back is
+  `new com.example.bot.Point(…)`. Records only: an ordinary class with several constructors is shown as
+  written, because which one to call would be a guess. If a component is of a type no installed plugin
+  knows, the window says which component — and it never puts a placeholder into a class of yours.
+
 - **One upgrade door, not three.** *Project ▸ Upgrade SDK…* and *Project ▸ Modernise…* are gone. Both were
   *Project ▸ Upgrade…* with one row chosen for you, and three entries made one report read as three
   operations. The SDK is a row in the upgrade table like any other plugin.

@@ -10,6 +10,7 @@ import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.params.ParameterSurface;
 import com.botmaker.studio.project.params.ParameterSurface.Entry;
@@ -138,6 +139,9 @@ public final class ParametersDialog {
 
     /** Every category in use — the plugins' declared ones plus whatever the bot's own fields say. */
     private List<String> categories = List.of();
+
+    /** The records the bot declares, for a value cell over one of them. Re-read with the rows. */
+    private BotRecords records = BotRecords.none();
     private String selectedTag = VariableRailModel.ALL;
 
     /**
@@ -217,6 +221,10 @@ public final class ParametersDialog {
         rows.clear();
         rows.addAll(ParameterSurface.rows(config, state, sdkPin()));
         categories = ParameterSurface.categories(config, state, sdkPin());
+        // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of
+        // the bot's own records needs that record's components, and a per-cell scan would read every source
+        // file once per row on screen.
+        records = BotRecords.scan(config, state, PluginHost.valueTypes());
     }
 
     // --- left: the tag rail ------------------------------------------------------------------------------
@@ -673,7 +681,7 @@ public final class ParametersDialog {
      */
     private Node valueCell(Entry entry) {
         if (entry.editable()) {
-            return ParamValueWidgets.build(entry.group(), entry.row(), config, valueEditors);
+            return ParamValueWidgets.build(entry.group(), entry.row(), config, records, valueEditors);
         }
         Label written = new Label(entry.java().initializer());
         written.getStyleClass().add("dialog-hint-text");

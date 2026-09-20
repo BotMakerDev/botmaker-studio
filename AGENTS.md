@@ -1040,7 +1040,7 @@ The `ui/` package is split by concern:
   menu or a picker needs instead is `plugin/HostParameters` (the parameters every loaded plugin declares)
   and `project/ActivityBodies.names` (the activities the bot's own source defines).
 - **`project/params/`** — **a user parameter is a `@Param` field in the bot's own Java** (2026-09-17), and
-  this package is how Studio reads and writes one. Four classes, split by what each needs: **
+  this package is how Studio reads and writes one. Five classes, split by what each needs: **
   `JavaParameterSource`** parses one source into `ParameterRow`s (JDT, **no bindings** — a type is whatever
   it is *written* as, so a bot whose pom is mid-edit still shows its parameters), **`JavaParameterEdits`**
   rewrites one source (`ASTRewrite`, so the author's formatting and comments survive; an edit it cannot
@@ -1066,6 +1066,14 @@ The `ui/` package is split by concern:
   remains, at the **leaf**: `literal`/`wire`, because a leaf's own control has text where a composite has
   none. `ui/render/components/ValueTypePicker` holds a form too — `Wrap in ▸` from `catalog.containers()`
   plus `Unwrap`, capped at two containers because a picker is capped where the model is not.
+  **`BotRecords` is the fifth class, and the bot's own half of the vocabulary** (2026-09-20): it reads the
+  project's `record` declarations and answers what `JavaParameterSource` structurally cannot — whether a
+  written name is a class *this bot* declares — so a field typed `Point` is a `ValueForm.Declared` rather
+  than an unknown leaf. It also owns the grammar for one, because the contract's declines it: `new
+  com.example.bot.Point(1, 2)` out, positional parts back, read with a real expression parse. **Records
+  only** (a canonical constructor is unambiguous where a class's five are a guess), **no generics**
+  (substituting a type variable needs the binding this package does without), and **never a placeholder**
+  into a class of the user's.
   **`ParameterSurface` is the fourth and the one the windows use**: the bot's fields and the loaded
   plugins' rows as *one* list of `Entry(group, row, java)`, with a section id of `java:<ClassName>` for a
   field and the plugin's group id for a row. It is also where the asymmetry is enforced — a field may be

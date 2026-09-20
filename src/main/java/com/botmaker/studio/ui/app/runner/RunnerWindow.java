@@ -10,6 +10,7 @@ import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.ParameterSurface;
 import com.botmaker.studio.project.params.ParameterSurface.Entry;
 import com.botmaker.studio.project.StudioContext;
@@ -123,6 +124,9 @@ public final class RunnerWindow implements ProjectWindow {
 
     /** Every on-screen widget's reader, keyed by the {@code (group, name)} pair it was built from. */
     private final List<ParamValueWidgets.ValueEditor> valueEditors = new ArrayList<>();
+
+    /** The records the bot declares, for a setting typed with one of them. Read with the rows. */
+    private BotRecords records = BotRecords.none();
 
     /** The body's scroller and one card per category — what the category chips jump between. */
     private ScrollPane bodyScroll;
@@ -297,6 +301,7 @@ public final class RunnerWindow implements ProjectWindow {
         for (Entry entry : ParameterSurface.rows(config, state, sdkPin())) {
             if (entry.row().isPublic() && entry.editable()) rows.add(entry);
         }
+        records = BotRecords.scan(config, state, PluginHost.valueTypes());
     }
 
     /** The SDK the open project pins, or null — what decides which curation a plugin serves. */
@@ -422,7 +427,7 @@ public final class RunnerWindow implements ProjectWindow {
         HBox header = new HBox(6, name, badge);
         header.setAlignment(Pos.TOP_LEFT);
 
-        Node widget = ParamValueWidgets.build(entry.group(), v, config, valueEditors);
+        Node widget = ParamValueWidgets.build(entry.group(), v, config, records, valueEditors);
         if (widget instanceof Region region) region.setMaxWidth(Double.MAX_VALUE);
 
         VBox card = new VBox(6, header, widget);

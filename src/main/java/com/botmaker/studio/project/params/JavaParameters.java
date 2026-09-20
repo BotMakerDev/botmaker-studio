@@ -48,9 +48,13 @@ public final class JavaParameters {
     /** The same, against a given catalog — the seam a test uses, and the one place the catalog enters. */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
         if (config == null) return List.of();
+        // Two walks rather than one, and cheap for the same reason nothing here is cached: a field may be
+        // typed with a record declared in a file the parameter walk has not reached yet, so what the bot
+        // declares has to be known in full before the first field is read.
+        BotRecords records = BotRecords.scan(config, state, catalog);
         List<JavaParameter> out = new ArrayList<>();
         BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaParameterSource.read(file, source, catalog)));
+                out.addAll(JavaParameterSource.read(file, source, catalog, records)));
         return List.copyOf(out);
     }
 

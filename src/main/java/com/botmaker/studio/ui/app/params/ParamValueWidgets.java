@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.value.ValueContainer;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.plugin.ValueWire;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -90,9 +91,18 @@ public final class ParamValueWidgets {
      * @param config the project, needed by the one type whose picker reads from disk ({@code IMAGE_TEMPLATE})
      */
     public static Node build(String group, ParameterRow row, ProjectConfig config, List<ValueEditor> sink) {
+        return build(group, row, config, BotRecords.none(), sink);
+    }
+
+    /**
+     * The same, told what the bot declares itself — which is what lets a field typed with one of the bot's
+     * own records be edited component by component rather than shown as written.
+     */
+    public static Node build(String group, ParameterRow row, ProjectConfig config, BotRecords records,
+                             List<ValueEditor> sink) {
         String owner = group == null ? "" : group;
         ValueEditors.Context ctx = new ValueEditors.Context(config, row.bounds());
-        Node widget = cell(owner, row, ctx, sink);
+        Node widget = cell(owner, row, records == null ? BotRecords.none() : records, ctx, sink);
         widget.setId("param-value-" + row.name());
         return widget;
     }
@@ -113,10 +123,16 @@ public final class ParamValueWidgets {
      * cell that guessed would be this window deciding something the plugin declined to. The value is shown
      * as written, which is exactly what a plugin gets for free by contributing a container at all.
      */
-    private static Node cell(String group, ParameterRow row, ValueEditors.Context ctx,
+    private static Node cell(String group, ParameterRow row, BotRecords records, ValueEditors.Context ctx,
                              List<ValueEditor> sink) {
         ValueForm form = row.form();
         List<String> options = declaredOptions(row, form);
+
+        if (form instanceof ValueForm.Declared declared) {
+            return records.whyNotEditable(declared) == null
+                    ? recordRows(group, row, declared, records, ctx, sink)
+                    : unreadable(row, records.whyNotEditable(declared));
+        }
 
         // A leaf nothing registered is not sent down the read-only path: its own editor already draws it as a
         // disabled field holding the text as written, and every reader here answers blank for it, so a
@@ -351,6 +367,59 @@ public final class ParamValueWidgets {
             }
             return ValueWire.compose(form, written);
         }));
+        return column;
+    }
+
+    /**
+     * A record the bot declares, as one labelled row per component.
+     *
+     * <p><b>The components are fixed, so there is no Add and no ✕.</b> That is the whole difference between
+     * this cell and the two above it: a list and a map are as long as the user makes them, and a record is
+     * exactly as long as its own declaration — changing that is editing the record, which is a thing to do
+     * in the file and not in a parameters window.
+     *
+     * <p>A component whose own form is not a leaf keeps the source it already had, shown beside its name and
+     * written back untouched. A record of a record is legal, reads, and is edited one file's worth at a
+     * time; drawing an editor for it here would be a cell inside a cell inside a table row.
+     */
+    private static Node recordRows(String group, ParameterRow row, ValueForm.Declared declared,
+                                   BotRecords records, ValueEditors.Context ctx, List<ValueEditor> sink) {
+        List<BotRecords.Component> components = records.componentsOf(declared);
+        List<ValueCatalog.Part> held = records.partsOf(declared, row.value()).orElse(List.of());
+
+        VBox column = new VBox(4);
+        List<Supplier<String>> readers = new ArrayList<>(components.size());
+        for (int i = 0; i < components.size(); i++) {
+            BotRecords.Component component = components.get(i);
+            String written = i < held.size() ? held.get(i).initializer() : "";
+            Label name = new Label(component.name());
+            name.getStyleClass().add("dialog-hint-text");
+            name.setMinWidth(72);
+
+            Node control;
+            if (component.form() instanceof ValueForm.Leaf leaf && leaf.type().known()) {
+                ValueEditors.Editor editor = ValueEditors.editorFor(
+                        leaf.type(), ValueWire.wire(leaf.type(), written), ctx);
+                control = editor.node();
+                readers.add(() -> ValueWire.literal(leaf.type(), editor.read().get()));
+            } else {
+                Label shown = new Label(written.isBlank() ? "—" : written);
+                shown.getStyleClass().add("dialog-hint-text");
+                shown.setTooltip(new Tooltip("Kept as written: " + component.form().sourceName()
+                                             + " is edited where the record is."));
+                control = shown;
+                readers.add(() -> written);
+            }
+
+            HBox line = new HBox(6, name, control);
+            line.setAlignment(Pos.CENTER_LEFT);
+            HBox.setHgrow(control, Priority.ALWAYS);
+            column.getChildren().add(line);
+        }
+        if (components.isEmpty()) column.getChildren().add(hint("This record has no components."));
+
+        sink.add(ValueEditor.of(group, row, () -> records.initializerOfParts(declared,
+                readers.stream().map(Supplier::get).toList()).orElse("")));
         return column;
     }
 

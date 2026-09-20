@@ -6,7 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the picker wraps, and a value cell is drawn from the form.** `ValueTypePicker`
+- **2026-09-20 (latest) — a parameter may be typed with one of the bot's own records.** `BotRecords` reads
+  the project's own `record` declarations off its sources and answers the one question
+  `JavaParameterSource` cannot: whether a written type name is a class *this bot* declares. A field typed
+  `Point` is then a `ValueForm.Declared` rather than an unknown leaf, and its cell is one labelled row per
+  component with no Add — a record is exactly as long as its own declaration. A value is written
+  `new com.example.bot.Point(1, 2)`, fully qualified so the line compiles wherever the field sits, and read
+  back **positionally** through a real expression parse, so `new Point(Math.max(1, 2), 3)` is two arguments
+  and not three. **Records only, and the reason a class is refused is the class's own**: five constructors
+  and no way to tell which one an editor meant. The refusals each name what to change —
+  `Shape.channel is a Channel, which no installed plugin registers as a value`, `Node contains itself`,
+  `Holder takes type arguments`, and a call that is not the canonical constructor is *kept rather than
+  replaced*. Nothing invents a placeholder for a record it cannot read, which is what
+  `ValueCatalog.defaultValue` declining a declared form has meant since phase A′.
+  `docs/refactor/32-generic-values.md` phase F.
+
+- **2026-09-20 — the picker wraps, and a value cell is drawn from the form.** `ValueTypePicker`
   holds a `ValueForm`: `Shape ▸` — four constants, two of which said something about the *value* and not
   about the type — is **`Wrap in ▸`**, built from `ValueCatalog.containers()` plus **`Unwrap`**, so a
   plugin's own container is offered the day it registers one. The button says the form's Java spelling, a
