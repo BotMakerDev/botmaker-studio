@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.SlotEditor;
 import com.botmaker.plugin.api.value.Range;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
@@ -214,12 +215,12 @@ public final class ValueEditors {
      * telling the host how to read it back.
      */
     private static Editor fromPlugin(ValueType type, String wire, Context ctx) {
-        HostValueContext context = HostValueContext.of(type, List.of(wire == null ? "" : wire),
+        HostValueContext context = HostValueContext.of(ValueForm.of(type), wire,
                 HostServices.forProject(ctx.project()), null);
         for (SlotEditor editor : claimants(type, context)) {
             try {
                 Node node = editor.create(context);
-                if (node != null) return new Editor(node, context::single);
+                if (node != null) return new Editor(node, context::source);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin's editor is third-party code drawn inside our dialog: one that throws must cost the
                 // user that row's widget, never the window. The next editor is offered the value, and the
@@ -280,7 +281,7 @@ public final class ValueEditors {
      * before.
      */
     private static Node previewFromPlugin(ValueType type, String wire, Context ctx) {
-        HostValueContext context = HostValueContext.of(type, List.of(wire == null ? "" : wire),
+        HostValueContext context = HostValueContext.of(ValueForm.of(type), wire,
                 HostServices.forProject(ctx.project()), null);
         for (SlotEditor editor : claimants(type, context)) {
             try {

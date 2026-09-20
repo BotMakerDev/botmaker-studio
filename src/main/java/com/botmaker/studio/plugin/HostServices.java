@@ -164,8 +164,8 @@ public final class HostServices implements StudioServices {
     private final class DialogsAdapter implements Dialogs {
 
         @Override
-        public Window owner() {
-            return owner.get();
+        public java.util.Optional<Window> ownerWindow() {
+            return java.util.Optional.ofNullable(owner.get());
         }
 
         @Override

@@ -14,6 +14,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A plugin's editor is handed the Java a value is written as.** A row of the Parameters window used to
+  hand a plugin a stored string and a slot on a block used to hand it an expression, so a plugin drawing
+  both had two spellings to keep in step and could only ever be offered one leaf at a time. There is one
+  spelling now and a whole type tree with it, which is what lets a plugin claim a value the host has no
+  control for. Visible where the SDK's own editors used to differ: a duration in the Parameters window
+  commits on OK rather than as you type, and a colour the editor cannot write back leaves the swatch alone
+  instead of showing white.
+
 - **A parameter's type picker wraps instead of picking a shape.** *Shape ▸* offered four fixed choices; the
   menu is now **Wrap in ▸** — every container the installed plugins registered, `List` and `Map` included —
   plus **Unwrap**, and the button shows the Java you will get. Two containers deep is as far as it goes,

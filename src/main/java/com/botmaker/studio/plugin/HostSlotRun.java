@@ -74,8 +74,8 @@ public final class HostSlotRun implements SlotRun {
     }
 
     @Override
-    public List<String> allowed() {
-        return allowed == null ? null : allowed.get();
+    public java.util.Optional<List<String>> allowedSources() {
+        return allowed == null ? java.util.Optional.empty() : java.util.Optional.ofNullable(allowed.get());
     }
 
     @Override

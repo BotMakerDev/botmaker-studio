@@ -6,7 +6,29 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the record model is withdrawn; a model is a sequence of calls.** Phases H and I
+- **2026-09-20 (latest) — a value is Java everywhere, and a plugin's values live in a file the plugin
+  ships.** Phase 1 of the rewritten `../docs/refactor/33-plugin-java.md`, and it withdraws the call-statement
+  design recorded in the entry below — which had itself withdrawn the record design of the entry below that,
+  the same day.
+  **The host stops being the author of a compilation unit.** A plugin hands over a `PluginSource` (a class
+  name and its whole text); the host copies it into the project once when the plugin is added and thereafter
+  rewrites only the expression a `@Managed("id")` method returns. That is one `ASTRewrite` over a
+  `ReturnStatement` — the surgery `JavaParameterEdits.setValue:61` already performs on a field's initializer
+  — and the `ValueForm` comes from the method's declared return type through `JavaParameterSource.formOf`, so
+  the plugin declares no forms at all. **Nothing here is built yet**: `PluginValues` and `PluginSource` are
+  the contract vocabulary, and the host half is phases 2 and 3.
+  **`ValueContext` stopped speaking the legacy wire form, and that is what landed in Studio this phase.**
+  `HostValueContext` and `HostSlotContext` answer `form()`/`source()` and take
+  `set(String javaExpression, String... imports)`; `HostSlotRun`, `HostActionContext`, `HostOverlayContext`
+  and `HostServices.DialogsAdapter` move to the `Optional` members that replaced their nullable twins, all
+  of which the contract deleted rather than deprecated. The user-visible consequence is in the SDK's own
+  editors, which had two controls per type because a Parameters row held stored text and a slot held Java:
+  a duration in the Parameters window now commits on OK rather than as you type, and a colour the editor
+  cannot write back leaves the swatch alone instead of showing white.
+  **`ValueEditors.fromPlugin` hands a plugin a whole `ValueForm`** rather than one leaf, which is what will
+  let the flow editor claim a composite in phase 5. Counts unchanged at 1184 / 0 / 23.
+
+- **2026-09-20 — the record model is withdrawn; a model is a sequence of calls.** Phases H and I
   below are **superseded and their code is deleted** (`project/models/`'s `ModelForm`, `ModelGrammar`,
   `ModelWriter`, `ModelReader` and their tests), and this entry records why, because the deleted design was
   not wrong so much as one level too high.

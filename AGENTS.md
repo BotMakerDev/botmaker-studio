@@ -1101,23 +1101,26 @@ The `ui/` package is split by concern:
   so a window and a test that disagreed about it would write two different files from the same click.
   `ParametersDialog` and `RunnerWindow` read this one list; the Runner also drops what it cannot rewrite,
   because a read-only cell is a message for the author and there is no author in the Runner.
-- **`project/models/` — a plugin's model is a sequence of calls** (2026-09-20, `33-plugin-java.md`). The
-  contract's half is `com.botmaker.plugin.api.model`: a `ModelCall` describes a call the host may write
-  (owner, method, one `Argument` per parameter), and a `ModelStatement` is one line of a model (which call,
-  and its argument values). The host writes `Activities.declare(Collect::body, "Collect", …);` and reads it
-  back; **no text crosses in either direction** and a plugin writes no emitter and no parser.
-  **The writer and the reader already existed one level down.** `ValueCatalog.initializer` writes
-  `java.util.List.of(a, b, c)` and `valueOf` reads it back by matching the prefix and splitting at depth
-  zero (`SourceSplit`). A statement is that with a semicolon, so `ModelCall` is `ValueContainer` member for
-  member — `factoryOwner`/`owner`, `factory`/`method`, `partForms`/`arguments`.
-  **A body is named by method reference.** `Collect::body` is a token sequence, so it is written and read
-  exactly as an enum constant is, and renaming or deleting a body in Java becomes a *compile error* — which
-  a name string cannot give, and which is the reason the model is Java at all. It is the one argument that
-  is not a value (`MethodRef`), because its type is whatever functional interface the parameter declares and
-  no codec could honestly claim `Collect::body` is a literal of some type.
-  **A record handed over reflectively was tried first and withdrawn** (see `ROADMAP.md`, 2026-09-20): it had
-  to solve constant naming, constructor choice, compact-constructor normalisation, map ordering and derived
-  accessors, and a sequence of statements has none of those questions.
+- **A plugin's values live in a file the plugin ships** (2026-09-20, `33-plugin-java.md`). The contract's
+  half is `PluginSource` — a class name and its whole text — plus `PluginValues` off
+  `StudioServices.pluginValues()`, two methods: `ids()` and `open(String id)`. The plugin writes the class
+  once, with working defaults and one `@Managed("id")` method per value; the host copies it into
+  `src/main/java/<bot package>/plugins/<last id segment>/` when the plugin is added, and after that
+  **rewrites nothing but the expression a `@Managed` method returns**.
+  **The host is not the author of a compilation unit, and that is the whole design.** Four earlier attempts
+  made it one — a record handed over reflectively, the grammar host-side, an annotation processor, and a
+  sequence of `ModelCall` statements written into a generated class, which shipped as studio-api `2bc1e2f`
+  earlier the same day and was withdrawn. Each had to own the package, the class name, the imports and the
+  ordering. Handing the file over answers all of those at once and shrinks the reader's input domain from
+  *a class* to *one expression*, which is what `ValueCatalog.valueOf` already reads.
+  **The write is one `ASTRewrite` over a `ReturnStatement`'s expression**, which is the surgery
+  `JavaParameterEdits.setValue` already performs on a field's initializer: one node, in place, the rest of
+  the file byte-identical. The `ValueForm` comes from the method's **declared return type** through
+  `JavaParameterSource.formOf`, so the plugin declares no forms at all.
+  **`open` hands back a `ValueContext`**, the same interface a slot on the canvas and a Parameters row are
+  edited through, so there is one way to edit a value and not two.
+  **A body that is not exactly `return <expression>;` is read-only with a named reason** — the rule
+  `whyNotEditable` already applies to a computed `@Param` initializer.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that

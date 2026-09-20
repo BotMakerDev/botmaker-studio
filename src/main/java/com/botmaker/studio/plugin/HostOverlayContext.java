@@ -47,8 +47,8 @@ public final class HostOverlayContext implements ActionContext {
     }
 
     @Override
-    public String projectName() {
-        return base.projectName();
+    public java.util.Optional<String> openProjectName() {
+        return base.openProjectName();
     }
 
     @Override

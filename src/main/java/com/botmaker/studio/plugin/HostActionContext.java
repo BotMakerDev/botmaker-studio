@@ -27,9 +27,10 @@ public final class HostActionContext implements ActionContext {
     }
 
     @Override
-    public String projectName() {
+    public java.util.Optional<String> openProjectName() {
         ProjectConfig config = project.get();
-        return config == null ? null : config.projectName();
+        return config == null ? java.util.Optional.empty()
+                : java.util.Optional.ofNullable(config.projectName());
     }
 
     @Override

@@ -4,30 +4,29 @@ import com.botmaker.plugin.api.SlotContext;
 import com.botmaker.plugin.api.SlotRun;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.TypeRef;
+import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 
-import java.util.List;
+import java.util.Optional;
 
 /**
  * A {@link SlotContext} over one slot of a bot's Java source — the second of the two places Studio edits a
  * value, and the one a plugin's editor could not reach until now.
  *
- * <p>{@link HostValueContext} is the other: a row of the Parameters window, with no call site behind it. The
- * pair is the whole of the host's side of the contract, and the reason there are two is that a slot has three
- * things a row does not — Java text rather than stored strings, an enclosing call, and imports.
+ * <p>{@link HostValueContext} is the other: a value with no call site behind it — a row of the Parameters
+ * window, or the expression a {@code @Managed} method returns. The pair is the whole of the host's side of
+ * the contract, and the one thing a slot has that the other does not is an <b>enclosing call</b>. It had two
+ * more until 2026-09-20, when every value became Java text with imports rather than a row of stored strings.
  *
  * <p><b>The slot is asked, never captured.</b> {@link ValueSlot} resolves its expression on every call, so an
  * editor whose popup outlives the re-parse its own edit caused writes into the <em>new</em> node. Handing a
  * stale one to {@code ASTRewrite} throws {@code Node is not inside the AST}; this makes that unreachable
  * rather than guarded against, and it is why this class holds the slot rather than the expression.
- *
- * <p><b>{@link #value()} and {@link #set} are {@link #currentSource()} and {@link #replaceWith} wearing the
- * supertype's clothes.</b> The contract says so explicitly, and it is what lets an editor written for the
- * Parameters window work here without knowing it: a one-element list holding the slot's Java expression.
  */
 public final class HostSlotContext implements SlotContext {
 
@@ -67,8 +66,8 @@ public final class HostSlotContext implements SlotContext {
     }
 
     @Override
-    public SlotRun run() {
-        return run;
+    public Optional<SlotRun> siblingRun() {
+        return Optional.ofNullable(run);
     }
 
     @Override
@@ -76,19 +75,34 @@ public final class HostSlotContext implements SlotContext {
         return typeRef(paramType);
     }
 
+    /**
+     * A leaf of the slot's declared type.
+     *
+     * <p>A slot is one argument of one call, so its type is whatever the resolved signature says the
+     * parameter is — there is no declaration to read type arguments off, which is what
+     * {@code JavaParameterSource.formOf} does for a field. An editor claiming a composite is therefore
+     * reached through the Parameters window and a {@code @Managed} value, not here.
+     */
     @Override
-    public String currentSource() {
+    public ValueForm form() {
+        return ValueForm.of(ValueType.of(nullToEmpty(paramType == null ? "" : paramType.qualifiedName()))
+                .source(nullToEmpty(paramType == null ? "" : paramType.qualifiedName()))
+                .build());
+    }
+
+    @Override
+    public String source() {
         return slot.source();
     }
 
     @Override
-    public String enclosingClass() {
-        return className;
+    public Optional<String> enclosingClassName() {
+        return Optional.ofNullable(className);
     }
 
     @Override
-    public String enclosingMethod() {
-        return methodName;
+    public Optional<String> enclosingMethodName() {
+        return Optional.ofNullable(methodName);
     }
 
     @Override
@@ -97,9 +111,9 @@ public final class HostSlotContext implements SlotContext {
     }
 
     @Override
-    public String enclosingSource() {
+    public Optional<String> enclosingCall() {
         MethodInvocation call = enclosingInvocation();
-        return call == null ? null : call.toString();
+        return call == null ? Optional.empty() : Optional.of(call.toString());
     }
 
     @Override
@@ -118,10 +132,9 @@ public final class HostSlotContext implements SlotContext {
      * that is the <em>receiver</em> of a call ({@code x.foo()}) has that call as its parent too, and
      * replacing it would delete the call on the strength of editing the thing it was called on.
      *
-     * <p><b>Named {@code enclosingInvocation} rather than {@code enclosingCall}</b>: the contract grew a
-     * {@code SlotContext.enclosingCall()} of its own — the {@code Optional} sibling of
-     * {@link #enclosingSource()} — and a private method cannot narrow a public one. The default sibling
-     * wraps {@code enclosingSource()}, so there is nothing here to override.
+     * <p><b>Named {@code enclosingInvocation} rather than {@code enclosingCall}</b>: the contract's own
+     * {@link #enclosingCall()} is the public answer and a private method cannot narrow a public one. This is
+     * the node; that is its source.
      */
     private MethodInvocation enclosingInvocation() {
         return slot.node() != null && slot.node().getParent() instanceof MethodInvocation call
@@ -129,7 +142,7 @@ public final class HostSlotContext implements SlotContext {
     }
 
     @Override
-    public void replaceWith(String javaExpression, String... importsNeeded) {
+    public void set(String javaExpression, String... importsNeeded) {
         if (javaExpression == null || javaExpression.isBlank() || slot.node() == null) return;
         rewrite(slot.node(), javaExpression, importsNeeded);
     }
@@ -147,16 +160,6 @@ public final class HostSlotContext implements SlotContext {
         for (int i = 1; i < importsNeeded.length; i++) {
             context.getCodeEditor().replaceWithRawExpression(target, javaExpression, importsNeeded[i]);
         }
-    }
-
-    @Override
-    public List<String> value() {
-        return List.of(currentSource());
-    }
-
-    @Override
-    public void set(List<String> value) {
-        replaceWith(value == null || value.isEmpty() ? "" : value.getFirst());
     }
 
     @Override

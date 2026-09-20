@@ -3,48 +3,54 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.TypeRef;
 import com.botmaker.plugin.api.ValueContext;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /**
  * A {@link ValueContext} over one value the host is editing, with no call site behind it.
  *
- * <p>This is the Parameters window's half of "one editor, both places". A row of that window holds a
- * {@link ValueType} — a wire id out of the plugin vocabulary — while an editor is chosen by the <em>Java</em>
- * type the value has, which is what a slot in a bot's source has too. {@link ValueType#sourceName()} and
- * {@link ValueType#importName()} are the bridge: a plugin that claims {@code com.acme.Channel} therefore
- * matches in both places, having written the predicate once.
+ * <p>This is the half of "one editor, everywhere" that is not source code a plugin can point at: a row of
+ * the Parameters window, and the expression a {@code @Managed} method returns. The value itself is Java in
+ * all of them — {@code Duration.ofSeconds(3)} — since 2026-09-20, so what distinguishes this from
+ * {@link HostSlotContext} is only that there is no enclosing call to read or rewrite.
  *
- * <p><b>The value is held here, not read back out of the widget.</b> An editor writes through
- * {@link #set(List)} whenever the user changes something, and the host reads {@link #value()} when it is time
- * to store — which is the same discipline the built-in editors follow with their {@code read} suppliers, and
- * the reason a plugin's editor needs no lifecycle of its own.
+ * <p>An editor is chosen by the <b>Java</b> type the value has, which is what a slot in a bot's source has
+ * too. {@link ValueType#sourceName()} and {@link ValueType#importName()} are the bridge: a plugin that
+ * claims {@code com.acme.Channel} therefore matches in both places, having written the predicate once.
+ *
+ * <p><b>The value is held here, not read back out of the widget.</b> An editor writes through {@link #set}
+ * whenever the user changes something, and the host reads {@link #source()} when it is time to store — the
+ * same discipline the built-in editors follow with their {@code read} suppliers, and the reason a plugin's
+ * editor needs no lifecycle of its own.
  */
 public final class HostValueContext implements ValueContext {
 
     private final TypeRef type;
+    private final ValueForm form;
     private final StudioServices services;
-    private final Consumer<List<String>> onChange;
-    private List<String> value;
+    private final BiConsumer<String, List<String>> onChange;
+    private String source;
 
-    public HostValueContext(TypeRef type, List<String> value, StudioServices services,
-                            Consumer<List<String>> onChange) {
+    public HostValueContext(TypeRef type, ValueForm form, String source, StudioServices services,
+                            BiConsumer<String, List<String>> onChange) {
         this.type = type;
+        this.form = form == null ? ValueForm.of(ValueType.unknown("")) : form;
         this.services = services;
         this.onChange = onChange;
-        this.value = value == null ? List.of() : List.copyOf(value);
+        this.source = source == null ? "" : source;
     }
 
     /**
-     * The context for a value of {@code type} — the vocabulary type translated into the Java type a plugin
+     * The context for a value of {@code form} — the vocabulary form translated into the Java type a plugin
      * editor's predicate is written against.
      */
-    public static HostValueContext of(ValueType type, List<String> value, StudioServices services,
-                                      Consumer<List<String>> onChange) {
-        return new HostValueContext(typeRef(type), value, services, onChange);
+    public static HostValueContext of(ValueForm form, String source, StudioServices services,
+                                      BiConsumer<String, List<String>> onChange) {
+        ValueForm safe = form == null ? ValueForm.of(ValueType.unknown("")) : form;
+        return new HostValueContext(typeRef(safe.leaf()), safe, source, services, onChange);
     }
 
     /**
@@ -70,14 +76,21 @@ public final class HostValueContext implements ValueContext {
     }
 
     @Override
-    public List<String> value() {
-        return value;
+    public ValueForm form() {
+        return form;
     }
 
     @Override
-    public void set(List<String> newValue) {
-        value = newValue == null ? List.of() : List.copyOf(new ArrayList<>(newValue));
-        if (onChange != null) onChange.accept(value);
+    public String source() {
+        return source;
+    }
+
+    @Override
+    public void set(String javaExpression, String... importsNeeded) {
+        source = javaExpression == null ? "" : javaExpression;
+        if (onChange != null) {
+            onChange.accept(source, importsNeeded == null ? List.of() : List.of(importsNeeded));
+        }
     }
 
     @Override
