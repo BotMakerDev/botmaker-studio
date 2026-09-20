@@ -53,7 +53,7 @@ final class TestValues {
                 }
 
                 @Override
-                public Optional<String> wireOfLiteral(String java) {
+                public Optional<String> valueOfLiteral(String java) {
                     String source = java == null ? "" : java.strip();
                     if (source.length() < 2 || !source.startsWith("\"") || !source.endsWith("\"")) {
                         return Optional.empty();
@@ -83,9 +83,9 @@ final class TestValues {
                 }
 
                 @Override
-                public Optional<String> wireOfLiteral(String java) {
+                public Optional<Integer> valueOfLiteral(String java) {
                     try {
-                        return Optional.of(Integer.toString(Integer.parseInt(java.strip())));
+                        return Optional.of(Integer.valueOf(java.strip()));
                     } catch (NumberFormatException | NullPointerException notANumber) {
                         return Optional.empty();
                     }
@@ -112,7 +112,7 @@ final class TestValues {
                 }
 
                 @Override
-                public Optional<String> wireOfLiteral(String java) {
+                public Optional<Duration> valueOfLiteral(String java) {
                     String source = java == null ? "" : java.strip();
                     String prefix = "java.time.Duration.ofMillis(";
                     if (!source.startsWith(prefix) || !source.endsWith(")")) return Optional.empty();
@@ -121,7 +121,7 @@ final class TestValues {
                         inner = inner.substring(0, inner.length() - 1);
                     }
                     try {
-                        return Optional.of(Long.toString(Long.parseLong(inner)));
+                        return Optional.of(Duration.ofMillis(Long.parseLong(inner)));
                     } catch (NumberFormatException notANumber) {
                         return Optional.empty();
                     }

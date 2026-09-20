@@ -50,7 +50,7 @@ class PluginCompositionTest {
             }
 
             @Override
-            public Optional<String> wireOfLiteral(String java) {
+            public Optional<String> valueOfLiteral(String java) {
                 return Optional.empty();
             }
         };

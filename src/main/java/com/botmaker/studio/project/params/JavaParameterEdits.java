@@ -50,7 +50,7 @@ public final class JavaParameterEdits {
      *
      * <p>The initialiser is the catalog's ({@code ValueCatalog.initializer}), which is the same call the
      * canvas makes — so a value written here and a value written there are the same text, and reading it
-     * back is the codec's {@code wireOfLiteral}, which is what makes the round trip a fixed point.
+     * back is the codec's {@code valueOfLiteral}, which is what makes the round trip a fixed point.
      */
     public static String setValue(String source, ValueCatalog catalog, String className, String fieldName,
                                   ValueChoice choice, List<String> value) {
