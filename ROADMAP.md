@@ -6,7 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the reader sees a fixed shape written as a plain type name.** Studio's half of
+- **2026-09-21 (latest) — `33-plugin-java.md` is implemented end to end; the worked bot is migrated.**
+  Phases 5–7. Studio's own source did not change in phase 7, and the entry is here because the thing the
+  host *copies* did: `botmaker-gamebot` now holds its flow and its capture source in
+  `src/main/java/com/botmaker/gamebot/plugins/sdk/Sdk.java`, its pictures in `plugins/sdk/Pictures.java`,
+  and one `public static Outcome body(ActivityContext ctx)` per activity. Its `activities.json` is deleted.
+  So *New Project ▸ Start from ▸ Gamebot* copies a project in the shape `PluginSourceFiles.install` would
+  have produced anyway, and the two paths agree for the first time.
+
+  **What this means for the host's writes**: the only thing Studio rewrites in one of those files is a
+  `@Managed` method's returned expression, plus any import it needs, through the `ASTRewrite` path
+  `JavaParameterEdits` uses. A hand-written body is read-only with a reason and is never partially parsed.
+  `FileRole.GENERATED` is still unclaimed.
+
+  **Still owed, and not part of this plan**: `botmaker-project.properties`' `capture.source` is what a
+  running bot resolves, and is written beside the managed value rather than instead of it.
+  `CanvasScrollTest.an_edit_leaves_the_canvas_where_the_user_scrolled_it` is a genuine FX-layout race —
+  it failed one targeted rerun and passed two others and both full-suite runs — and deserves a fix rather
+  than the "passes on a targeted rerun" note it currently carries.
+
+- **2026-09-20 — the reader sees a fixed shape written as a plain type name.** Studio's half of
   phase 4 of `../docs/refactor/33-plugin-java.md`, and it is four lines.
   `JavaParameterSource.formOf` sent anything without angle brackets straight to the leaf lookup, so a
   registered `ValueContainer` of arity zero — the SDK's `Flow` — read as an *unknown leaf* and the value
