@@ -543,10 +543,10 @@ public final class ParametersDialog {
         Node type;
         if (mine) {
             ValueTypePicker picker = new ValueTypePicker();
-            picker.setChoice(v.type());
+            picker.setForm(v.form());
             picker.setPrefWidth(180);
-            picker.choiceProperty().addListener((o, was, is) -> {
-                if (is == null || is.equals(v.type())) return;
+            picker.formProperty().addListener((o, was, is) -> {
+                if (is == null || is.equals(v.form())) return;
                 // Retyping rewrites the field's declared Java type and resets its initialiser to the new
                 // type's default: a value written for one type is not a value of another, and carrying it
                 // across would leave a bot that does not compile.
@@ -554,7 +554,7 @@ public final class ParametersDialog {
             });
             type = picker;
         } else {
-            type = new Label(v.type().label());
+            type = new Label(v.form().sourceName());
         }
 
         CheckBox shared = new CheckBox("Show to user");
@@ -607,9 +607,15 @@ public final class ParametersDialog {
         // A closed-set type brings its own choices (every direction, every mouse button), so there is nothing
         // here for the author to write down — offering an "add a choice" row over them would invite a second,
         // hand-typed copy of a list the plugin already owns.
-        if (mine && v.type().hasOptions() && v.type().type().options().isEmpty()) {
+        // A closed set is declared by writing the choices down, and there is no shape to pick first any more
+        // (2026-09-20): a set is not a type, so a leaf or a list of one always offers this row and a value is
+        // free until something is written in it. A closed-set type brings its own choices (every direction,
+        // every mouse button), so there is nothing here for the author to write — offering an "add a choice"
+        // row over them would invite a second, hand-typed copy of a list the plugin already owns.
+        ValueType leaf = ValueWire.leafOf(v.form());
+        if (mine && leaf != null && leaf.known() && leaf.options().isEmpty()) {
             Label heading = new Label("Choices");
-            heading.setTooltip(new Tooltip(v.type().isList()
+            heading.setTooltip(new Tooltip(v.form() instanceof ValueForm.Of
                     ? "The set this parameter's values are picked from. The user ticks any number of them."
                     : "The set this parameter's value is picked from. The user picks exactly one."));
             grid.add(heading, 0, row);
@@ -617,7 +623,7 @@ public final class ParametersDialog {
             row++;
         }
 
-        if (mine && v.type().type().bounded()) {
+        if (mine && leaf != null && leaf.bounded()) {
             grid.add(new Label("Range"), 0, row);
             grid.add(buildBoundsEditor(entry), 1, row);
             row++;
@@ -717,8 +723,8 @@ public final class ParametersDialog {
      * <p>A rebuild rather than a {@code with…}: {@link ParameterRow}'s builder is named and typed at
      * construction, because a row is a value a plugin builds and those two components are what identify it.
      */
-    private static ParameterRow rebuilt(ParameterRow row, ValueChoice type) {
-        return ParameterRow.named(row.name(), type)
+    private static ParameterRow rebuilt(ParameterRow row, ValueForm form) {
+        return ParameterRow.named(row.name(), form)
                 .value(row.value())
                 .description(row.description())
                 .category(row.category())
@@ -749,7 +755,7 @@ public final class ParametersDialog {
      */
     private Node buildOptionsEditor(Entry entry) {
         ParameterRow v = entry.row();
-        ValueType base = v.type().type();
+        ValueType base = ValueWire.leafOf(v.form());
         ValueEditors.Context ctx = new ValueEditors.Context(config, v.bounds());
         VBox box = new VBox(4);
         List<String> options = v.options();
@@ -921,7 +927,7 @@ public final class ParametersDialog {
                 String tag = VariableRailModel.ALL.equals(selectedTag)
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
-                ValueForm form = type.choice().form();
+                ValueForm form = type.form();
                 Optional<ParameterRow> stored = ParameterSurface.add(config, state, selectedClass, candidate,
                         form, ValueWire.defaultInitializer(form), tag, "");
                 if (stored.isEmpty()) {
@@ -1145,10 +1151,10 @@ public final class ParametersDialog {
             for (int i = 0; i < rows.size(); i++) {
                 Entry entry = rows.get(i);
                 if (!editor.describes(entry.group(), entry.row().name())) continue;
-                // What the widget reads is the editor's wire form; what a row holds is the Java it is written
-                // as. Blank means this type has no source spelling for what was typed, and writing nothing
-                // is the only honest answer to that.
-                String typed = ValueWire.initializer(entry.row(), editor.read().get());
+                // The widget reads back the Java the field takes, which is what a row holds. Blank means this
+                // cell has no source spelling for what is in it — an empty radio group, a leaf whose codec
+                // declined — and writing nothing is the only honest answer to that.
+                String typed = editor.read().get();
                 if (typed.isBlank() || typed.equals(entry.row().value())) break;
                 // The answer is the row as *stored*, which may differ from what was typed — a clamp, a
                 // canonical spelling from a plugin, an initialiser as the codec spells it. That is what goes

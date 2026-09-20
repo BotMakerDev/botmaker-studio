@@ -14,6 +14,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A parameter's type picker wraps instead of picking a shape.** *Shape ▸* offered four fixed choices; the
+  menu is now **Wrap in ▸** — every container the installed plugins registered, `List` and `Map` included —
+  plus **Unwrap**, and the button shows the Java you will get. Two containers deep is as far as it goes,
+  which is a limit on the picker and not on your bot: a deeper type written by hand is still listed, shown
+  and left alone.
+- **A `Map` parameter is edited as a map**, in two columns with an Add row, and a key another row already
+  has is marked where you typed it rather than silently dropped. A list is still rows of its own editor, a
+  value with a set of choices declared is still ticks or radio buttons — and whether those appear now
+  follows the choices you wrote down rather than a shape chosen beforehand, so a parameter never changes
+  control because of something you cannot see.
+- **A value your installed plugins cannot read is shown exactly as you wrote it**, with the reason, and
+  nothing this window does will rewrite it.
+
 - **One upgrade door, not three.** *Project ▸ Upgrade SDK…* and *Project ▸ Modernise…* are gone. Both were
   *Project ▸ Upgrade…* with one row chosen for you, and three entries made one report read as three
   operations. The SDK is a row in the upgrade table like any other plugin.

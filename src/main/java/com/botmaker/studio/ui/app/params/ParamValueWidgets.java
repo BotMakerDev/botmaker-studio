@@ -2,6 +2,8 @@ package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
+import com.botmaker.plugin.api.value.ValueContainer;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.plugin.ValueWire;
@@ -14,28 +16,40 @@ import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * Builds the value-entry widget for one {@link ParameterRow}, seeded from its current value, and hands back a
- * reader turning the widget's live state into the type's wire form.
+ * Builds the value-entry widget for one {@link ParameterRow}, seeded from the Java its value is written as,
+ * and hands back a reader turning the widget's live state back into Java.
+ *
+ * <p><b>Source in, source out (2026-09-20).</b> A row's value is the initialiser its field takes, because a
+ * composite has no other canonical form — so a cell reads and writes that spelling and nothing else. A
+ * <em>leaf</em> still has a second text, the one its own control shows, and {@link ValueWire#literal} and
+ * {@link ValueWire#wire} are the join at that one point. A composite is never encoded: it is taken apart one
+ * level at a time into parts that are themselves source, edited, and composed back through its container's
+ * own factory.
  *
  * <p><b>Reading is total and never validates.</b> A half-typed duration, a number past its bound, a template
  * that has since been deleted: every one of them is handed on as typed, and what it is finally stored as is
  * the owning plugin's answer to a {@code ParameterEdit} — clamped, canonicalised, pruned to the choices still
  * on offer. Nothing here can refuse a value, so nothing here can leave a window unable to close because of a
- * limit somebody tightened afterwards.
+ * limit somebody tightened afterwards. The one refusal is a duplicate map key, and it happens <em>at the
+ * cell</em> rather than at the read: two entries with one key is not a map at all, and {@code Map.ofEntries}
+ * throws at runtime rather than keeping the last.
  *
- * <p><b>One widget per type, chosen by the type alone.</b> That is what makes retyping a variable safe to
- * handle by rebuilding the row wholesale: the dialog throws the old widget away rather than trying to
- * reinterpret what was in it, which is how a date once came back holding text typed for a number.
+ * <p><b>The form decides the widget, and it decides it unconditionally.</b> A leaf is its type's own editor,
+ * a list is rows, a map is two columns. Anything else — a container a plugin contributed, a class the bot
+ * declares, a nesting deeper than the cell draws, a leaf nothing registered — is shown <b>as the author
+ * wrote it</b> and not edited. Read-only is a first-class outcome here
+ * ({@code docs/refactor/32-generic-values.md}), not a failure path: the window never hides a parameter the
+ * bot reads.
  *
  * <p>Shared by the Parameters dialog and the Runner window, so a type is entered the same way wherever it is
  * met.
@@ -48,15 +62,18 @@ public final class ParamValueWidgets {
     private ParamValueWidgets() {}
 
     /**
-     * A variable's handle plus a reader turning its widget's UI state back into the wire form.
+     * A variable's handle plus a reader turning its widget's UI state back into the Java the field takes.
      *
      * <p>The handle is the <b>pair</b> {@code (group, name)}: a name identifies a variable only inside its
      * own plugin's section, so a reader holding just the name could write one plugin's value into another
      * plugin's variable that happens to share it.
+     *
+     * <p>A blank reading means <em>this widget has no source spelling for what is in it</em> — an empty
+     * radio group, a leaf whose codec declined — and a caller writes nothing rather than guessing.
      */
-    public record ValueEditor(String group, String name, Supplier<List<String>> read) {
+    public record ValueEditor(String group, String name, Supplier<String> read) {
 
-        static ValueEditor of(String group, ParameterRow row, Supplier<List<String>> read) {
+        static ValueEditor of(String group, ParameterRow row, Supplier<String> read) {
             return new ValueEditor(group, row.name(), read);
         }
 
@@ -69,59 +86,14 @@ public final class ParamValueWidgets {
     /**
      * The widget for one {@link ParameterRow} of {@code group}, seeded from its current value.
      *
-     * <p><b>The only entry point since 2026-09-10.</b> There was a second, taking Studio's own
-     * {@code ActivityVariable}, for as long as the Runner still read one plugin's file; both windows over this
-     * data now render rows, so there is one widget per type and nothing left that could drift.
-     *
      * @param group  the section the row is filed under — half of the handle a reader is keyed by
      * @param config the project, needed by the one type whose picker reads from disk ({@code IMAGE_TEMPLATE})
      */
     public static Node build(String group, ParameterRow row, ProjectConfig config, List<ValueEditor> sink) {
-        ParameterRow variable = row;
         String owner = group == null ? "" : group;
-        ValueType base = variable.type().type();
-        ValueEditors.Context ctx = new ValueEditors.Context(config, variable.bounds());
-
-        // The set a set-shaped variable offers: the author's declared choices, or — for a type whose values
-        // are already a closed set — the type's own constants. It used to be the author's list alone, so
-        // "any of Direction" with nothing written down offered nothing to tick and fell through to a textarea
-        // asking for raw names, one per line.
-        List<String> declared = variable.type().hasOptions()
-                ? ValueWire.effectiveOptions(base, variable.options())
-                : List.of();
-
-        // The shape decides the widget before the type does, because the shape is the question being asked —
-        // and it decides it *unconditionally*. Dispatching on "are there any options yet" instead is what made
-        // a freshly created "one of…" variable render as the plain single-value editor: the shape was set, the
-        // choices were not yet, and the control silently answered a different question than the one asked.
-        Node widget = switch (variable.type().shape()) {
-            // Tick boxes unconditionally: "many of" is a set the author wrote, and a set they have not
-            // written yet is an empty set, not a different question. The "are there any choices" branch that
-            // used to stand here is what made one shape render as two widgets — it is now the OPEN_LIST
-            // shape's own case, chosen by the user rather than inferred from data they cannot see.
-            case ANY_OF -> checkList(owner, variable, declared, base, ctx, sink);
-            case OPEN_LIST -> openList(owner, variable, base, ctx, sink);
-            // Radio buttons, not a dropdown: the choices are the editor's own and there are a handful of
-            // them, so showing all of them costs one line each and saves a click to find out what they are.
-            case ONE_OF -> radioRow(owner, variable, declared, base, ctx, sink);
-            // One value of one type, which is exactly what ValueEditors answers — the same editors the
-            // activity Variables screen and the block editor get, so a duration is entered the same way
-            // wherever it is met.
-            // ONE, and — the reason there is a default at all — any shape a later contract adds. ValueShape
-            // is a contract enum and documented as growable, so an exhaustive switch here would throw a
-            // MatchException against a newer host rather than falling back to the single-value editor.
-            default -> single(owner, variable, base, ctx, sink);
-        };
-        widget.setId("param-value-" + variable.name());
-        return widget;
-    }
-
-    private static Node single(String group, ParameterRow variable, ValueType base,
-                               ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ValueEditors.Editor editor = ValueEditors.editorFor(base, first(variable), ctx);
-        Node widget = editor.node();
-        ValueEditors.stretch(widget);
-        sink.add(ValueEditor.of(group, variable, () -> List.of(editor.read().get())));
+        ValueEditors.Context ctx = new ValueEditors.Context(config, row.bounds());
+        Node widget = cell(owner, row, ctx, sink);
+        widget.setId("param-value-" + row.name());
         return widget;
     }
 
@@ -134,41 +106,65 @@ public final class ParamValueWidgets {
     }
 
     /**
-     * One value as a person would read it — a list as its joined members, not as an empty cell.
+     * One case of {@link ValueForm} per widget, and a read-only fallback for the rest.
      *
-     * <p>A value nothing here can read is shown <b>as the author wrote it</b>, which is the honest rendering
-     * of a cell that is about to be read-only: the window never hides a parameter the bot reads.
+     * <p>A contributed container draws read-only on purpose. The host knows how to write and read one — that
+     * is what {@link ValueContainer} is for — but it has no idea what a row of one should look like, and a
+     * cell that guessed would be this window deciding something the plugin declined to. The value is shown
+     * as written, which is exactly what a plugin gets for free by contributing a container at all.
      */
-    public static String display(ParameterRow row) {
-        Optional<List<String>> items = ValueWire.read(row);
-        if (items.isEmpty()) return row.value();
-        if (row.type().isList()) return String.join(", ", items.get());
-        return items.get().isEmpty() ? "" : items.get().getFirst();
-    }
+    private static Node cell(String group, ParameterRow row, ValueEditors.Context ctx,
+                             List<ValueEditor> sink) {
+        ValueForm form = row.form();
+        List<String> options = declaredOptions(row, form);
 
-    /** The row's first stored item, for the widgets that show one — {@code ""} when it has none. */
-    private static String first(ParameterRow row) {
-        List<String> items = ValueWire.items(row);
-        return items.isEmpty() ? "" : items.getFirst();
-    }
-
-    /** Declared choices, ticked. */
-    private static Node checkList(String group, ParameterRow variable, List<String> options, ValueType base,
-                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
-        List<CheckBox> boxes = new ArrayList<>();
-        VBox column = new VBox(2);
-        for (String option : options) {
-            CheckBox box = new CheckBox(option);
-            box.setUserData(option);
-            box.setGraphic(ValueEditors.optionGraphic(base, option, ctx));
-            box.setSelected(ValueWire.items(variable).contains(option));
-            boxes.add(box);
-            column.getChildren().add(box);
+        // A leaf nothing registered is not sent down the read-only path: its own editor already draws it as a
+        // disabled field holding the text as written, and every reader here answers blank for it, so a
+        // caller writes nothing back over it. That is the ValueType.unknown rule, unchanged.
+        if (form instanceof ValueForm.Leaf leaf) {
+            return options.isEmpty()
+                    ? single(group, row, leaf.type(), ctx, sink)
+                    : radioRow(group, row, leaf.type(), options, ctx, sink);
         }
-        if (boxes.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(group, variable, () -> boxes.stream()
-                .filter(CheckBox::isSelected).map(box -> (String) box.getUserData()).toList()));
-        return column;
+        if (form instanceof ValueForm.Of of && ValueContainer.LIST.id().equals(of.container().id())
+                && of.last() instanceof ValueForm.Leaf leaf) {
+            return options.isEmpty()
+                    ? listRows(group, row, form, leaf.type(), ctx, sink)
+                    : checkList(group, row, form, leaf.type(), options, ctx, sink);
+        }
+        if (form instanceof ValueForm.Of of && ValueContainer.MAP.id().equals(of.container().id())
+                && of.arguments().get(0) instanceof ValueForm.Leaf key
+                && of.arguments().get(1) instanceof ValueForm.Leaf value) {
+            return mapGrid(group, row, form, key.type(), value.type(), ctx, sink);
+        }
+        return unreadable(row, "no editor here writes " + form.sourceName());
+    }
+
+    /**
+     * The choices in force for this row: the type's own when it has any, else the ones the author declared.
+     *
+     * <p><b>Declared and none are different states, and only the first is a set.</b> A row with no options
+     * written down is a free value of its type and gets that type's own editor — which for a closed-set type
+     * is already a pad, a search or a dropdown. Options live on the row and never on the form: what a value
+     * may be is the declaration's business, and what type it is the field's.
+     */
+    private static List<String> declaredOptions(ParameterRow row, ValueForm form) {
+        if (row.options().isEmpty()) return List.of();
+        return ValueWire.effectiveOptions(ValueWire.leafOf(form), row.options());
+    }
+
+    // --- the four editable cells -------------------------------------------------------------------------
+
+    private static Node single(String group, ParameterRow row, ValueType leaf,
+                               ValueEditors.Context ctx, List<ValueEditor> sink) {
+        // A type nothing registered has no stored text to seed from, so the field shows the initialiser as
+        // the author wrote it — which is what its own editor disables itself to display.
+        String seed = leaf.known() ? ValueWire.wire(leaf, row.value()) : row.value();
+        ValueEditors.Editor editor = ValueEditors.editorFor(leaf, seed, ctx);
+        Node widget = editor.node();
+        ValueEditors.stretch(widget);
+        sink.add(ValueEditor.of(group, row, () -> ValueWire.literal(leaf, editor.read().get())));
+        return widget;
     }
 
     /**
@@ -176,49 +172,69 @@ public final class ParamValueWidgets {
      *
      * <p>Nothing selected is a legal state and the honest one: a stored value the editor has since removed
      * from the list shows as no selection rather than as the first choice, which would be this widget
-     * choosing a setting on the user's behalf.
+     * choosing a setting on the user's behalf. It reads back blank, and a blank reading is written nowhere.
      */
-    private static Node radioRow(String group, ParameterRow variable, List<String> options, ValueType base,
+    private static Node radioRow(String group, ParameterRow row, ValueType leaf, List<String> options,
                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
         ToggleGroup toggles = new ToggleGroup();
         VBox column = new VBox(2);
-        String current = first(variable);
+        String current = ValueWire.wire(leaf, row.value());
         for (String option : options) {
             RadioButton button = new RadioButton(option);
             button.setToggleGroup(toggles);
             button.setUserData(option);
-            button.setGraphic(ValueEditors.optionGraphic(base, option, ctx));
+            button.setGraphic(ValueEditors.optionGraphic(leaf, option, ctx));
             button.setSelected(option.equals(current));
             column.getChildren().add(button);
         }
         if (options.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(group, variable, () -> {
+        sink.add(ValueEditor.of(group, row, () -> {
             Toggle chosen = toggles.getSelectedToggle();
-            return List.of(chosen == null ? "" : (String) chosen.getUserData());
+            return chosen == null ? "" : ValueWire.literal(leaf, (String) chosen.getUserData());
         }));
         return column;
     }
 
+    /** Declared choices, ticked — the list shape of {@link #radioRow}. */
+    private static Node checkList(String group, ParameterRow row, ValueForm form, ValueType leaf,
+                                  List<String> options, ValueEditors.Context ctx, List<ValueEditor> sink) {
+        List<String> held = leafWires(form, row.value(), leaf);
+        List<CheckBox> boxes = new ArrayList<>();
+        VBox column = new VBox(2);
+        for (String option : options) {
+            CheckBox box = new CheckBox(option);
+            box.setUserData(option);
+            box.setGraphic(ValueEditors.optionGraphic(leaf, option, ctx));
+            box.setSelected(held.contains(option));
+            boxes.add(box);
+            column.getChildren().add(box);
+        }
+        if (boxes.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
+        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, boxes.stream()
+                .filter(CheckBox::isSelected)
+                .map(box -> ValueWire.literal(leaf, (String) box.getUserData()))
+                .toList())));
+        return column;
+    }
+
     /**
-     * {@link com.botmaker.plugin.api.value.ValueShape#OPEN_LIST}: the user writes the members themselves,
-     * out of no set at all.
+     * A list the user fills in themselves, out of no set at all.
      *
      * <p>Text is one item per line — a newline is not a character anybody types into a value by accident,
      * where a comma is, and twenty strings are faster typed than clicked. Every other type gets a growable
      * column of that type's own editor instead: a list of durations typed as text is four numbers per line to
      * decode, and a list of templates typed as text is names remembered rather than pictures chosen.
      */
-    private static Node openList(String group, ParameterRow variable, ValueType base,
+    private static Node listRows(String group, ParameterRow row, ValueForm form, ValueType leaf,
                                  ValueEditors.Context ctx, List<ValueEditor> sink) {
-        // By id, never by identity: a ValueType's identity *is* its persisted id, and two plugin
-        // classloaders each holding their own copy of a class would make `==` mean nothing.
-        List<String> items = ValueWire.items(variable);
-        if (ValueCatalog.TEXT_ID.equals(base.id())) {
+        List<String> items = leafWires(form, row.value(), leaf);
+        if (ValueCatalog.TEXT_ID.equals(leaf.id())) {
             TextArea area = new TextArea(String.join("\n", items));
             area.setPrefRowCount(Math.max(3, Math.min(8, items.size() + 1)));
             area.setPromptText("One per line");
-            sink.add(ValueEditor.of(group, variable, () -> area.getText() == null ? List.of()
-                    : area.getText().lines().map(String::trim).filter(line -> !line.isEmpty()).toList()));
+            sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, lines(area).stream()
+                    .map(line -> ValueWire.literal(leaf, line))
+                    .toList())));
             return area;
         }
 
@@ -227,9 +243,9 @@ public final class ParamValueWidgets {
         Button add = new Button("Add");
         Runnable[] rebuild = new Runnable[1];
 
-        // The rows are rebuilt from the editors' own current text rather than from the variable: this widget
-        // outlives several adds and removes before anything is flushed back, so the variable it was built from
-        // is stale from the first click.
+        // The rows are rebuilt from the editors' own current text rather than from the row: this widget
+        // outlives several adds and removes before anything is flushed back, so the row it was built from is
+        // stale from the first click.
         rebuild[0] = () -> {
             column.getChildren().clear();
             for (int i = 0; i < editors.size(); i++) {
@@ -241,30 +257,174 @@ public final class ParamValueWidgets {
                     editors.remove(at);
                     rebuild[0].run();
                 });
-                HBox row = new HBox(6, editor.node(), remove);
-                row.setAlignment(Pos.CENTER_LEFT);
+                HBox line = new HBox(6, editor.node(), remove);
+                line.setAlignment(Pos.CENTER_LEFT);
                 HBox.setHgrow(editor.node(), Priority.ALWAYS);
-                column.getChildren().add(row);
+                column.getChildren().add(line);
             }
             if (editors.isEmpty()) column.getChildren().add(hint("Nothing in this list yet."));
             column.getChildren().add(add);
         };
 
-        for (String item : items) editors.add(ValueEditors.editorFor(base, item, ctx));
+        for (String item : items) editors.add(ValueEditors.editorFor(leaf, item, ctx));
         add.setOnAction(e -> {
-            editors.add(ValueEditors.editorFor(base, null, ctx));
+            editors.add(ValueEditors.editorFor(leaf, null, ctx));
             rebuild[0].run();
         });
         rebuild[0].run();
 
-        sink.add(ValueEditor.of(group, variable, () -> editors.stream()
-                .map(editor -> editor.read().get())
-                .filter(value -> value != null && !value.isBlank())
-                .toList()));
+        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, editors.stream()
+                .map(editor -> ValueWire.literal(leaf, editor.read().get()))
+                .filter(source -> !source.isBlank())
+                .toList())));
         return column;
     }
 
+    /**
+     * A map as two columns of its own editors, one row per entry.
+     *
+     * <p><b>A duplicate key is refused at the cell it was typed into</b>, marked there the moment the field
+     * is left, rather than reported when the window closes. {@code Map.ofEntries} throws on a repeated key,
+     * so a map that wrote one would be a bot that stops running; the marked row is the one not written, and
+     * it stays on screen holding what was typed, so nothing the user entered disappears silently.
+     */
+    private static Node mapGrid(String group, ParameterRow row, ValueForm form, ValueType keyType,
+                                ValueType valueType, ValueEditors.Context ctx, List<ValueEditor> sink) {
+        ValueForm entryForm = form instanceof ValueForm.Of of
+                ? of.container().partForms(of.arguments(), 1).getFirst()
+                : ValueForm.of(ValueType.unknown(""));
+
+        List<Entry> entries = new ArrayList<>();
+        for (ValueCatalog.Part part : ValueWire.partsOrNone(form, row.value())) {
+            List<ValueCatalog.Part> pair = ValueWire.partsOrNone(part.form(), part.initializer());
+            if (pair.size() != 2) continue;
+            entries.add(new Entry(ValueWire.wire(keyType, pair.get(0).initializer()),
+                    ValueWire.wire(valueType, pair.get(1).initializer())));
+        }
+
+        List<Cell> cells = new ArrayList<>();
+        VBox column = new VBox(4);
+        Button add = new Button("Add");
+        Runnable[] rebuild = new Runnable[1];
+
+        rebuild[0] = () -> {
+            column.getChildren().clear();
+            for (int i = 0; i < cells.size(); i++) {
+                Cell cell = cells.get(i);
+                int at = i;
+                Button remove = new Button("✕");
+                remove.getStyleClass().add("row-icon-button");
+                remove.setOnAction(e -> {
+                    cells.remove(at);
+                    rebuild[0].run();
+                });
+                HBox line = new HBox(6, cell.key().node(), new Label("→"), cell.value().node(), remove);
+                line.setAlignment(Pos.CENTER_LEFT);
+                HBox.setHgrow(cell.key().node(), Priority.ALWAYS);
+                HBox.setHgrow(cell.value().node(), Priority.ALWAYS);
+                column.getChildren().add(line);
+            }
+            if (cells.isEmpty()) column.getChildren().add(hint("Nothing in this map yet."));
+            column.getChildren().add(add);
+        };
+
+        // The watcher is wired once per cell, where the cell is made: the rows are rebuilt on every add and
+        // remove, so wiring it there would stack one listener per rebuild on the same field.
+        for (Entry entry : entries) cells.add(watched(cells, keyType, valueType, entry, ctx));
+        add.setOnAction(e -> {
+            cells.add(watched(cells, keyType, valueType, new Entry(null, null), ctx));
+            rebuild[0].run();
+        });
+        rebuild[0].run();
+
+        sink.add(ValueEditor.of(group, row, () -> {
+            List<String> written = new ArrayList<>();
+            List<String> seen = new ArrayList<>();
+            for (Cell cell : cells) {
+                String key = ValueWire.literal(keyType, cell.key().read().get());
+                String value = ValueWire.literal(valueType, cell.value().read().get());
+                // The duplicate is refused here as well as at the cell, because a key may be typed into a row
+                // that is never focused out of. The first one written wins, which is the one on screen above.
+                if (key.isBlank() || value.isBlank() || seen.contains(key)) continue;
+                seen.add(key);
+                written.add(ValueWire.compose(entryForm, List.of(key, value)));
+            }
+            return ValueWire.compose(form, written);
+        }));
+        return column;
+    }
+
+    /** One entry's two halves as the text their own controls show. */
+    private record Entry(String key, String value) {}
+
+    /** One map row, with the key field watching for a key another row already has. */
+    private static Cell watched(List<Cell> cells, ValueType keyType, ValueType valueType, Entry entry,
+                                ValueEditors.Context ctx) {
+        Cell cell = new Cell(ValueEditors.editorFor(keyType, entry.key(), ctx),
+                ValueEditors.editorFor(valueType, entry.value(), ctx));
+        cell.key().node().focusedProperty().addListener((o, was, is) -> {
+            if (!is) markDuplicates(cells, keyType);
+        });
+        return cell;
+    }
+
+    /**
+     * Marks every map row whose key a row above it already has.
+     *
+     * <p>Compared as the <b>source</b> each key is written as, not as the text typed into the field: two
+     * spellings of one duration are one key to {@code Map.ofEntries}, and a check on the typed text would
+     * pass them both and hand the bot a map that throws when it is built.
+     */
+    private static void markDuplicates(List<Cell> cells, ValueType keyType) {
+        List<String> seen = new ArrayList<>();
+        for (Cell cell : cells) {
+            String key = ValueWire.literal(keyType, cell.key().read().get());
+            boolean clash = !key.isBlank() && seen.contains(key);
+            if (!clash && !key.isBlank()) seen.add(key);
+            cell.key().node().getStyleClass().remove("field-error");
+            if (clash) cell.key().node().getStyleClass().add("field-error");
+            Tooltip.install(cell.key().node(), clash
+                    ? new Tooltip("Another row already has this key, so this one is not written. "
+                                  + "A map cannot hold one key twice.")
+                    : null);
+        }
+    }
+
+    /** One row of the map cell: the editor for its key and the editor for its value. */
+    private record Cell(ValueEditors.Editor key, ValueEditors.Editor value) {}
+
+    // --- the read-only fallback --------------------------------------------------------------------------
+
+    /**
+     * A value shown exactly as its author wrote it, with the reason it is not editable here.
+     *
+     * <p>The bot reads it either way, so hiding it would reproduce the fault the JSON era had: a declaration
+     * the author cannot see. Nothing is added to {@code sink}, so nothing can be written back over it.
+     */
+    private static Node unreadable(ParameterRow row, String why) {
+        Label written = new Label(row.value().isBlank() ? "—" : row.value());
+        written.getStyleClass().add("dialog-hint-text");
+        written.setTooltip(new Tooltip("Shown as written, not editable here: " + why + "."));
+        return new VBox(2, written);
+    }
+
     // --- small helpers ------------------------------------------------------------------------------------
+
+    /**
+     * A container's parts as the text a leaf editor shows, one per part — empty when nothing here can read
+     * the source, which is the same answer as a container the user has not filled in.
+     */
+    private static List<String> leafWires(ValueForm form, String source, ValueType leaf) {
+        return ValueWire.partsOrNone(form, source).stream()
+                .map(part -> ValueWire.wire(leaf, part.initializer()))
+                .filter(wire -> !wire.isBlank())
+                .toList();
+    }
+
+    private static List<String> lines(TextArea area) {
+        return area.getText() == null ? List.of()
+                : area.getText().lines().map(String::trim).filter(line -> !line.isEmpty()).toList();
+    }
 
     private static Label hint(String text) {
         Label label = new Label(text);

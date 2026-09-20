@@ -1,9 +1,9 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueContainer;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.types.JdkType;
@@ -31,13 +31,16 @@ import java.util.stream.Collectors;
  * range, pruning a value to the choices still on offer, ordering a multi-pick by its declaration — those are
  * rules a user can watch happen in a dialog, and they are the same rules whatever the type underneath is.
  *
- * <h2>Text on the wire</h2>
+ * <h2>Two spellings, and where each one stops</h2>
  *
- * <p>Every value crosses as a <b>list of strings</b>, whatever its type — one entry for an ordinary
- * parameter, one per item for a {@code List of …} one. That is {@link com.botmaker.plugin.api.ParameterRow}'s
- * own shape, and the uniformity is the point: a value has exactly one form, so there is one normaliser rather
- * than a special case per type. It is also what lets a value survive a retype, a hand edit, and a plugin that
- * is not installed today.
+ * <p>A row's value is the <b>Java initialiser</b> its field takes, because a composite has no other canonical
+ * form. A <b>leaf</b> has a second text — the one its own control shows, and the one an option set is written
+ * down in — so the join between the two lives at that one point ({@link #literal}, {@link #wire}) and a
+ * composite is taken apart into parts that are themselves source ({@link #parts}, {@link #compose}).
+ *
+ * <p>Nothing composes a wire encoding of a composite, deliberately: that was what made a value of a type no
+ * plugin installed today still readable, and it is what {@code docs/refactor/32-generic-values.md} decision 6
+ * replaces with showing the author's own source, untouched.
  *
  * <h2>Why it lives beside the host's other halves of the contract (2026-09-11)</h2>
  *
@@ -83,34 +86,41 @@ public final class ValueWire {
     // ---- a row's value, which is Java source since 2026-09-20 --------------------------------------------
     //
     // ParameterRow.value() is the initialiser a field of the row's form takes (32-generic-values.md decision
-    // 6), because a composite has no wire encoding at all. The widgets below still speak the editor's wire
-    // form, and these two are the whole of the join between them. They go when the value cells do.
+    // 6), because a composite has no wire encoding at all. A *leaf* still has one — it is the text a control
+    // shows — so the join between the two spellings is per item, and a composite is taken apart one level at
+    // a time into parts that are themselves source. Nothing here composes a wire encoding of a composite.
 
     /**
-     * The stored items a row's initialiser was written from, or empty when nothing here can read it.
+     * A composite initialiser taken apart one level, each part with its own form — empty when nothing here
+     * can read it.
      *
-     * <p><b>Empty and "no items" are different answers</b>, which is why this is an {@code Optional} rather
+     * <p><b>Empty and "no parts" are different answers</b>, which is why this is an {@code Optional} rather
      * than a list: an empty list is a value a user chose, and a source this grammar did not write is a value
      * that must be shown as it stands and never replaced.
      */
-    public static Optional<List<String>> read(ParameterRow row) {
-        return row == null ? Optional.empty()
-                : catalog().valueOfInitializer(row.type(), row.value());
+    public static Optional<List<ValueCatalog.Part>> parts(ValueForm form, String source) {
+        return catalog().partsOfInitializer(form, source);
     }
 
-    /** The same, as the list a widget seeds itself from — a source nothing can read seeds an empty one. */
-    public static List<String> items(ParameterRow row) {
-        return read(row).orElse(List.of());
+    /** The same, as the list a cell seeds its rows from — a source nothing can read seeds an empty one. */
+    public static List<ValueCatalog.Part> partsOrNone(ValueForm form, String source) {
+        return parts(form, source).orElse(List.of());
     }
 
-    /** Items written back as the Java a field of this type takes — {@code ""} when they cannot be. */
-    public static String initializer(ValueChoice type, List<String> items) {
-        return catalog().initializer(type, items).orElse("");
+    /** Parts, already written as source, composed back into the call this form's container spells. */
+    public static String compose(ValueForm form, List<String> parts) {
+        return catalog().initializerOfParts(form, parts).orElse("");
     }
 
-    /** The same, for the row those items were read out of. */
-    public static String initializer(ParameterRow row, List<String> items) {
-        return row == null ? "" : initializer(row.type(), items);
+    /** One leaf value as the Java a field of that type takes — {@code ""} when it has no spelling. */
+    public static String literal(ValueType type, String wire) {
+        return type == null ? ""
+                : catalog().literal(type.id(), wire).map(ValueCatalog.Literal::source).orElse("");
+    }
+
+    /** The same read backwards: the text a leaf's own control shows — {@code ""} when it cannot read it. */
+    public static String wire(ValueType type, String source) {
+        return type == null ? "" : catalog().itemOfLiteral(type.id(), source).orElse("");
     }
 
     /**
@@ -123,6 +133,21 @@ public final class ValueWire {
                 .orElse("");
     }
 
+    /**
+     * The leaf a form's value is finally made of: the form itself, or a container's last argument.
+     *
+     * <p>{@code null} for anything else — a nesting deeper than one, a class the bot declares — because the
+     * two questions this answers, <em>what may this value be</em> (the declared choices) and <em>between
+     * which numbers</em> (the range), are asked of one leaf type and are meaningless for a tree with several.
+     */
+    public static ValueType leafOf(ValueForm form) {
+        return switch (form) {
+            case ValueForm.Leaf leaf -> leaf.type();
+            case ValueForm.Of of when of.last() instanceof ValueForm.Leaf leaf -> leaf.type();
+            case null, default -> null;
+        };
+    }
+
     /** One free value of the type with this id — the shape almost every caller wants. */
     public static ValueChoice one(String id) {
         return ValueChoice.of(type(id));
@@ -131,6 +156,17 @@ public final class ValueWire {
     /** Every registered type, in the order the plugins registered them. */
     public static List<ValueType> registered() {
         return catalog().types();
+    }
+
+    /**
+     * Every registered container, contract-seeded and contributed alike, in registration order.
+     *
+     * <p>No privilege for the three the contract seeds: a plugin's own {@code Set} or {@code Either} is
+     * offered by the picker on the same terms, which is the whole point of a container being a contribution
+     * rather than a constant.
+     */
+    public static List<ValueContainer<?>> containers() {
+        return catalog().containers();
     }
 
     /**
@@ -254,12 +290,21 @@ public final class ValueWire {
      * with one and the stored value matches neither.
      */
     public static List<String> normalizeOptions(List<String> options, ValueChoice type, Range bounds) {
-        if (!type.hasOptions() || options == null) return List.of();
+        if (!type.hasOptions()) return List.of();
+        return normalizeOptions(options, type.type(), bounds);
+    }
+
+    /**
+     * The same, asked of the leaf the choices are values of — which is the whole question, since a declared
+     * set belongs to the row rather than to its type.
+     */
+    public static List<String> normalizeOptions(List<String> options, ValueType type, Range bounds) {
+        if (options == null || type == null) return List.of();
         // The author's own list, never {@link #effectiveOptions}: an enum's constants are what its editor
         // offers to pick from, not a set to be copied onto every variable of that type and stored.
         return options.stream()
                 .filter(Objects::nonNull)
-                .map(option -> normalizeItem(option, type.type(), bounds == null ? Range.NONE : bounds))
+                .map(option -> normalizeItem(option, type, bounds == null ? Range.NONE : bounds))
                 .distinct()
                 .toList();
     }

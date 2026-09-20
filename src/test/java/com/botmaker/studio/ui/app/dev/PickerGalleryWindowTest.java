@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.dev;
 
-import com.botmaker.plugin.api.value.ValueShape;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.studio.plugin.ValueWire;
@@ -29,20 +29,37 @@ public class PickerGalleryWindowTest {
     @Test
     void everyPairingIsEitherARowOrNotASentence() {
         for (ValueType type : ValueWire.registered()) {
-            for (ValueShape shape : ValueShape.values()) {
+            for (PickerGalleryWindow.Shape shape : PickerGalleryWindow.SHAPES) {
                 ParameterRow variable = PickerGalleryWindow.sample(type, shape, TEMPLATES);
-                // The only pairing ValueChoice corrects away — a declared subset of a type that is already a
-                // closed set. Everything else is a sentence, lists of a closed set included.
-                boolean legal = shape != ValueShape.ONE_OF || type.shapeable();
+                // The one pairing that is not a sentence: a declared subset of a type that already is a
+                // closed set, or of one this screen has no distinguishable samples for. Everything else is
+                // declarable, lists and maps of a closed set included.
+                boolean legal = !shape.options()
+                        || (ValueWire.fixedOptions(type).isEmpty()
+                            && !PickerGalleryWindow.options(type, TEMPLATES).isEmpty());
                 if (legal) {
-                    assertNotNull(variable, type + " in " + shape + " is declarable and needs a row");
-                    assertEquals(type.id(), variable.type().type().id());
-                    assertEquals(shape, variable.type().shape());
+                    assertNotNull(variable, type + " as " + shape.label() + " is declarable and needs a row");
+                    assertEquals(type.id(), ValueWire.leafOf(variable.form()).id());
+                    assertEquals(shape.formOf(type), variable.form());
                 } else {
-                    assertNull(variable, type + " in " + shape + " is not a sentence anyone can write");
+                    assertNull(variable, type + " as " + shape.label() + " is not a sentence anyone writes");
                 }
             }
         }
+    }
+
+    /** The second axis is a form, so a map row really is one: text in front, the type being shown behind. */
+    @Test
+    void aMapRowIsKeyedByTextAndValuedByTheTypeOnShow() {
+        ValueType text = ValueWire.type("TEXT");
+        PickerGalleryWindow.Shape map = PickerGalleryWindow.SHAPES.stream()
+                .filter(PickerGalleryWindow.Shape::map).findFirst().orElseThrow();
+
+        ValueForm form = map.formOf(text);
+
+        // By form and not by spelling: with no plugin bound the text type is an unknown one, whose own
+        // source name is its id — and what this guards is the shape of the sample, not the vocabulary.
+        assertEquals(ValueForm.mapOf(ValueForm.of(text), ValueForm.of(text)), form);
     }
 
     /**
@@ -56,9 +73,11 @@ public class PickerGalleryWindowTest {
     @Test
     void aDeclaredSetIsAlwaysMoreThanOneDistinctValue() {
         for (ValueType type : ValueWire.registered()) {
-            if (!type.shapeable()) continue;   // a closed set answers with its own constants
+            if (!ValueWire.fixedOptions(type).isEmpty()) continue;   // a closed set brings its own constants
             if (PickerGalleryWindow.options(type, TEMPLATES).isEmpty()) continue;
-            ParameterRow variable = PickerGalleryWindow.sample(type, ValueShape.ONE_OF, TEMPLATES);
+            PickerGalleryWindow.Shape oneOf = PickerGalleryWindow.SHAPES.stream()
+                    .filter(shape -> shape.options() && !shape.list()).findFirst().orElseThrow();
+            ParameterRow variable = PickerGalleryWindow.sample(type, oneOf, TEMPLATES);
             assertNotNull(variable);
             assertTrue(variable.options().size() >= 2,
                     type + " offers " + variable.options() + ", which is not a set to choose from");

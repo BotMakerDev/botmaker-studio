@@ -3,8 +3,8 @@ package com.botmaker.studio.ui.app.dev;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueChoice;
-import com.botmaker.plugin.api.value.ValueShape;
+import com.botmaker.plugin.api.value.ValueCatalog;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
@@ -147,11 +147,15 @@ public final class PickerGalleryWindow {
     // --- the rows -------------------------------------------------------------------------------------------
 
     /**
-     * One row per (type, shape) the plugins bound right now can express.
+     * One row per (type, form) the plugins bound right now can express.
      *
      * <p>The set comes from {@link ValueWire#registered()} rather than from a constant list: a stored
      * variable's type is whatever a plugin registered, so a screen enumerating a fixed set would stop showing
      * the editors it is for the moment a second plugin adds one.
+     *
+     * <p>The second axis is a <b>form</b> since 2026-09-20 and no longer a {@code ValueShape}: a list of a
+     * type and a map from text to it are two more cells to look at, and whether a set of choices is declared
+     * is a fact about the row rather than about its type.
      */
     private void rebuild() {
         rows.clear();
@@ -165,10 +169,10 @@ public final class PickerGalleryWindow {
                     && !type.sourceName().toLowerCase(Locale.ROOT).contains(needle)) {
                 continue;
             }
-            for (ValueShape shape : ValueShape.values()) {
-                if (shape != ValueShape.ONE && !shapesToo.isSelected()) continue;
+            for (Shape shape : SHAPES) {
+                if (!shape.plain() && !shapesToo.isSelected()) continue;
                 ParameterRow variable = sample(type, shape, templates);
-                if (variable == null) continue;   // the shape is not a sentence for this type
+                if (variable == null) continue;   // this sample is not a sentence for this type
                 line = addRow(variable, type, shape, line);
             }
         }
@@ -176,7 +180,7 @@ public final class PickerGalleryWindow {
                 + (int) PULSE.toMillis() + "ms: touch a control and watch it move.");
     }
 
-    private int addRow(ParameterRow variable, ValueType type, ValueShape shape, int line) {
+    private int addRow(ParameterRow variable, ValueType type, Shape shape, int line) {
         Label name = new Label(type.label());
         Label shapeName = new Label(shape.label());
         shapeName.getStyleClass().add("dialog-hint-text");
@@ -222,23 +226,20 @@ public final class PickerGalleryWindow {
                 write("—", "");
                 return;
             }
-            List<String> read;
+            String read;
             try {
                 read = readers.getFirst().read().get();
             } catch (RuntimeException | Error e) {
                 write("✕ read: " + e, "");
                 return;
             }
-            String kept;
+            String back;
             try {
-                // What a plugin's store would keep, asked of the normaliser directly: a ParameterRow is what
-                // crosses the contract and coerces nothing by itself, precisely because the coercion is the
-                // owner's rule rather than the host's.
-                kept = show(ValueWire.normalize(read, variable.type(), variable.options(), variable.bounds()));
+                back = readsBack(variable, read);
             } catch (RuntimeException | Error e) {
-                kept = "✕ stored: " + e;
+                back = "✕ reading back: " + e;
             }
-            write(show(read), "stored as " + kept);
+            write(read.isBlank() ? "— nothing written" : read, back);
         }
 
         private void write(String rawText, String storedText) {
@@ -246,13 +247,53 @@ public final class PickerGalleryWindow {
             if (!storedText.equals(stored.getText())) stored.setText(storedText);
         }
 
-        /** Quoted, always — an editor reading back a single empty string is the failure this screen is for. */
-        private static String show(List<String> wire) {
-            return wire.stream().map(item -> "\"" + item + "\"").collect(java.util.stream.Collectors.joining(", "));
+        /**
+         * Whether the grammar reads back what the cell just wrote — the failure this screen exists for, now
+         * that a value is Java rather than wire text. A cell that writes source nothing can parse is invisible
+         * until a project is reopened, and this line says so while the control is still being touched.
+         */
+        private static String readsBack(ParameterRow row, String source) {
+            if (source.isBlank()) return "";
+            if (row.form() instanceof ValueForm.Leaf leaf) {
+                String wire = ValueWire.wire(leaf.type(), source);
+                return wire.isBlank() ? "✕ nothing reads this back" : "reads back as \"" + wire + "\"";
+            }
+            return ValueWire.parts(row.form(), source)
+                    .map(parts -> "reads back as " + parts.size() + (parts.size() == 1 ? " part" : " parts"))
+                    .orElse("✕ nothing reads this back");
         }
     }
 
     // --- the sample variable each row is built from ----------------------------------------------------------
+
+    /**
+     * One sample form to draw a type in: what the second column calls it, how the leaf is wrapped, and
+     * whether the row declares a set of choices.
+     *
+     * @param plain the one sample always shown — the free value, which is what the filter box is usually for
+     */
+    record Shape(String label, String suffix, boolean list, boolean map, boolean options, boolean plain) {
+
+        ValueForm formOf(ValueType type) {
+            ValueForm leaf = ValueForm.of(type);
+            if (list) return ValueForm.listOf(leaf);
+            if (map) return ValueForm.mapOf(ValueForm.of(ValueWire.type(ValueCatalog.TEXT_ID)), leaf);
+            return leaf;
+        }
+    }
+
+    /**
+     * The five cells a type can be drawn in, which is the whole of {@link ParamValueWidgets}'s dispatch.
+     *
+     * <p>A map is keyed by text and never by the type being shown: the screen is about the <em>value</em>
+     * editor, and a map of colours to colours would draw the same cell twice in one row.
+     */
+    static final List<Shape> SHAPES = List.of(
+            new Shape("free value", "", false, false, false, true),
+            new Shape("one of…", "OneOf", false, false, true, false),
+            new Shape("list of…", "List", true, false, false, false),
+            new Shape("any of…", "AnyOf", true, false, true, false),
+            new Shape("map of…", "Map", false, true, false, false));
 
     /**
      * A row of {@code type} in {@code shape}, or null when that pairing is not a thing anyone can declare —
@@ -263,17 +304,16 @@ public final class PickerGalleryWindow {
      * spelled the way nobody stores it labels its radio buttons with strings the value can never match, and
      * that is a fault in this screen rather than in the editor it is showing.
      */
-    static ParameterRow sample(ValueType type, ValueShape shape, List<String> templates) {
-        // ValueChoice corrects an impossible pairing rather than refusing it — it is built from files, and a
-        // file that says something impossible must still open. Here the correction is the tell: the row it
-        // would produce is another row's, already shown.
-        ValueChoice choice = new ValueChoice(type, shape);
-        if (choice.shape() != shape) return null;
-        List<String> options = shape.hasOptions()
-                ? ValueWire.normalizeOptions(options(type, templates), choice, Range.NONE)
+    static ParameterRow sample(ValueType type, Shape shape, List<String> templates) {
+        List<String> options = shape.options()
+                ? ValueWire.normalizeOptions(options(type, templates), type, Range.NONE)
                 : List.of();
-        return ParameterRow.named(identifier(type, shape), choice)
-                .value(ValueWire.initializer(choice, ValueWire.defaultWire(choice)))
+        // A closed-set type answers with its own constants and has no set to declare, so its "one of" row
+        // would be the free value's row drawn twice.
+        if (shape.options() && (options.isEmpty() || !ValueWire.fixedOptions(type).isEmpty())) return null;
+        ValueForm form = shape.formOf(type);
+        return ParameterRow.named(identifier(type, shape), form)
+                .value(ValueWire.defaultInitializer(form))
                 .visibility(Visibility.PUBLIC)
                 .options(options)
                 .bounds(Range.NONE)
@@ -284,13 +324,12 @@ public final class PickerGalleryWindow {
      * A valid Java identifier, because a parameter's name is a generated field's — nothing here generates
      * code, and a sample that could not have been declared for real is a poor sample.
      */
-    private static String identifier(ValueType type, ValueShape shape) {
+    private static String identifier(ValueType type, Shape shape) {
         // An id is a plugin's free string, not necessarily a Java name, so anything that cannot appear in one
         // is folded to an underscore before the camel-casing. SCREAMING_SNAKE ids pass through untouched.
         String id = type.id().replaceAll("[^A-Za-z0-9_]", "_");
         if (id.isEmpty() || Character.isDigit(id.charAt(0))) id = "v" + id;
-        return camel(id) + camel(shape.name()).substring(0, 1).toUpperCase(Locale.ROOT)
-                + camel(shape.name()).substring(1);
+        return camel(id) + shape.suffix();
     }
 
     /** {@code IMAGE_TEMPLATE} → {@code imageTemplate}. */

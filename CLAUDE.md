@@ -1059,8 +1059,13 @@ The `ui/` package is split by concern:
   **read-only, with the reason** — the window never hides a parameter the bot reads, and never rewrites
   Java the author wrote by hand. **A row's value is the initialiser itself**, as the author wrote it: one
   source string rather than a list of stored items, because a composite has no other canonical form
-  (`32-generic-values.md` decision 6). `plugin/ValueWire.read`/`initializer` is the join between that and
-  the value cells, which still speak the editor's wire form; it goes when they move.
+  (`32-generic-values.md` decision 6). **The value cells read and write that same spelling** (2026-09-20):
+  `ParamValueWidgets` switches on the form — a leaf editor, a list of them, a two-column map, and the
+  author's own source read-only for everything else — and a composite is taken apart one level at a time
+  through `ValueCatalog.partsOfInitializer`, never encoded. `plugin/ValueWire` keeps the one join that
+  remains, at the **leaf**: `literal`/`wire`, because a leaf's own control has text where a composite has
+  none. `ui/render/components/ValueTypePicker` holds a form too — `Wrap in ▸` from `catalog.containers()`
+  plus `Unwrap`, capped at two containers because a picker is capped where the model is not.
   **`ParameterSurface` is the fourth and the one the windows use**: the bot's fields and the loaded
   plugins' rows as *one* list of `Entry(group, row, java)`, with a section id of `java:<ClassName>` for a
   field and the plugin's group id for a row. It is also where the asymmetry is enforced — a field may be

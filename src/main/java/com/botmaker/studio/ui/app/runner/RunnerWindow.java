@@ -523,7 +523,7 @@ public final class RunnerWindow implements ProjectWindow {
             for (int i = 0; i < rows.size(); i++) {
                 Entry entry = rows.get(i);
                 if (!editor.describes(entry.group(), entry.row().name())) continue;
-                String typed = ValueWire.initializer(entry.row(), editor.read().get());
+                String typed = editor.read().get();
                 if (typed.isBlank() || typed.equals(entry.row().value())) break;
                 Optional<ParameterRow> stored = ParameterSurface.setValue(config, state, entry, typed);
                 int at = i;

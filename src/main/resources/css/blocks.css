@@ -388,6 +388,14 @@
     -fx-font-size: 12px;
 }
 
+/* A field holding a value the editor will not write — today, a map key a row above already has. The row
+   stays on screen with what was typed in it, so the outline is what says it is not being stored. */
+.field-error {
+    -fx-border-color: -bm-severity-error-text;
+    -fx-border-width: 1;
+    -fx-border-radius: 3;
+}
+
 /* The quiet explanatory line under a heading or beside a field — never the only carrier of meaning. */
 /* Dimmed the way this file's -bm-text-on-color note prescribes: the theme's own text colour plus an
    opacity, which moves the right direction under a light *and* a dark background. */

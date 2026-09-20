@@ -3,8 +3,7 @@ package com.botmaker.studio.ui.fx;
 import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueChoice;
-import com.botmaker.plugin.api.value.ValueShape;
+import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
@@ -24,17 +23,14 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Which control a project variable gets, and on what the answer depends: the <em>shape</em>, and nothing else.
+ * Which control a parameter gets, and on what the answer depends: its {@link ValueForm}, and whether the row
+ * declares a set of choices.
  *
- * <p>It used to depend on whether any choices had been declared yet. A "one of…" variable with none showed the
- * plain single-value editor and an "any of…" one showed a textarea asking for raw values one per line — so the
- * two shapes were invisible until after the author had filled the set in, which is exactly when they were
- * least needed. Worse, a closed-set type like Direction never gets a declared set at all (its values are the
- * SDK's), so "any of Direction" was permanently a textarea of names typed from memory.
- *
- * <p>The last of that rule was the one list shape that meant two things. "Many of…" and "List of…" are now two
- * shapes, so the widget follows the shape here too and there is no state in which a variable changes control
- * because a choice was added to it.
+ * <p>It used to depend on a {@code ValueShape}, which answered two unrelated questions at once — how many
+ * values there are, and whether they come from a set somebody wrote down. The second is a fact about the
+ * <em>row</em>, so it lives on the row's options and the form says nothing about it (2026-09-20). What
+ * survives from the shape era is the rule the shapes were split to get: the widget follows the declaration,
+ * so a parameter never changes control because of something the author cannot see.
  */
 class ParamShapeWidgetTest extends FxHeadlessTest {
 
@@ -51,35 +47,22 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     }
 
     /**
-     * One row as a plugin's own store would hand it over: seeded with the type's default and carrying the
-     * declared choices as that store normalises them, which is where a set a shape has no use for is dropped.
+     * One row as a plugin's own store would hand it over: seeded with the form's default initialiser and
+     * carrying the declared choices as that store normalises them.
      */
-    private static ParameterRow row(String name, ValueChoice type, List<String> options) {
-        return ParameterRow.named(name, type)
-                .value(ValueWire.initializer(type, ValueWire.defaultWire(type)))
-                .options(ValueWire.normalizeOptions(options, type, Range.NONE))
+    private static ParameterRow row(String name, ValueForm form, List<String> options) {
+        return ParameterRow.named(name, form)
+                .value(ValueWire.defaultInitializer(form))
+                .options(ValueWire.normalizeOptions(options, ValueWire.leafOf(form), Range.NONE))
                 .build();
     }
 
-    private static ParameterRow row(String name, ValueChoice type) {
-        return row(name, type, List.of());
+    private static ParameterRow row(String name, ValueForm form) {
+        return row(name, form, List.of());
     }
 
     private List<Node> childrenOf(Node node) {
         return node instanceof Pane pane ? List.copyOf(pane.getChildren()) : List.of();
-    }
-
-    @Test
-    void anyOfAClosedSetTicksTheTypesOwnValuesWithNothingDeclared() {
-        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        ParameterRow directions = row("ways", new ValueChoice(DIRECTION, ValueShape.ANY_OF));
-        assertTrue(directions.options().isEmpty(), "nobody declares the directions; the SDK has them");
-
-        List<Node> rows = childrenOf(widgetFor(directions));
-
-        assertFalse(rows.isEmpty(), "a list of directions is tick boxes, not an empty textarea");
-        for (Node row : rows) assertInstanceOf(CheckBox.class, row);
-        assertTrue(rows.stream().anyMatch(row -> "NORTH".equals(((CheckBox) row).getUserData())));
     }
 
     /**
@@ -93,7 +76,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         List<String> known = ValueWire.fixedOptions(DIRECTION);
         assertFalse(known.isEmpty(), "the SDK enum is what the pad is built from");
 
-        Node pad = widgetFor(row("way", ValueChoice.of(DIRECTION)));
+        Node pad = widgetFor(row("way", ValueForm.of(DIRECTION)));
         List<Node> parts = childrenOf(pad);
 
         assertEquals(1, parts.size(),
@@ -103,65 +86,79 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     }
 
     /**
-     * The two list shapes, side by side on the same type with the same choices declared. Before the split
-     * these were one shape and this test could not have been written: the "many of" reading was reachable
-     * only with choices and the "open list" reading only without them, so no pair of variables differed by
-     * the shape alone.
+     * The two list cells, side by side on the same form. What tells them apart is the row's own choices, and
+     * nothing else: a list with a set declared is tick boxes, a list with none is the user's to fill in.
      */
     @Test
-    void theTwoListShapesAreTwoWidgetsOnTheSameTypeAndTheSameChoices() {
+    void aListIsTicksWithASetDeclaredAndTheUsersOwnWithout() {
         List<String> skills = List.of("mine", "fish", "cook");
 
-        ParameterRow many = row("many", new ValueChoice(TEXT, ValueShape.ANY_OF), skills);
+        ParameterRow many = row("many", ValueForm.listOf(ValueForm.of(TEXT)), skills);
         List<Node> ticks = childrenOf(widgetFor(many));
         assertEquals(skills.size(), ticks.size());
         for (Node tick : ticks) assertInstanceOf(CheckBox.class, tick);
 
         // A textarea and not a Pane, so it has no children to count: text is written one per line.
-        ParameterRow open = row("open", ValueChoice.listOf(TEXT), skills);
+        ParameterRow open = row("open", ValueForm.listOf(ValueForm.of(TEXT)));
         assertInstanceOf(TextArea.class, widgetFor(open),
-                "an open list is the user's to fill in, whatever the author wrote down");
-        assertTrue(open.options().isEmpty(), "and the choices are not even stored on it");
+                "a list with nothing declared is the user's to fill in");
     }
 
-    /** Every other type's open list is a growable column of that type's own editor, empty to begin with. */
+    /** Every other type's list is a growable column of that type's own editor, empty to begin with. */
     @Test
-    void anOpenListOfSomethingOtherThanTextIsRowsOfItsOwnEditor() {
-        ParameterRow spots = row("spots", ValueChoice.listOf(POINT));
+    void aListOfSomethingOtherThanTextIsRowsOfItsOwnEditor() {
+        ParameterRow spots = row("spots", ValueForm.listOf(ValueForm.of(POINT)));
 
         List<Node> parts = childrenOf(widgetFor(spots));
 
         assertFalse(parts.isEmpty(), "the empty state still has to say something and offer Add");
         assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
-                "nothing to tick: an open list has no set behind it");
+                "nothing to tick: no set has been declared");
     }
 
     @Test
-    void oneOfShowsItsRadioButtonsBeforeAnyChoiceIsDeclared() {
-        ValueChoice oneOf = new ValueChoice(WHOLE_NUMBER, ValueShape.ONE_OF);
+    void aDeclaredSetOnALeafIsRadioButtons() {
+        ValueForm number = ValueForm.of(WHOLE_NUMBER);
 
-        // With nothing declared it says so, rather than quietly rendering the free-value spinner.
-        assertEquals(1, childrenOf(widgetFor(row("size", oneOf))).size());
-
-        List<Node> rows = childrenOf(widgetFor(row("size", oneOf, List.of("1", "2", "3"))));
+        List<Node> rows = childrenOf(widgetFor(row("size", number, List.of("1", "2", "3"))));
 
         assertEquals(3, rows.size());
         for (Node button : rows) assertInstanceOf(RadioButton.class, button);
         assertEquals("2", ((RadioButton) rows.get(1)).getUserData());
     }
 
+    /** With nothing declared the same leaf is the free-value editor, not an empty radio group. */
+    @Test
+    void aLeafWithNothingDeclaredIsItsOwnEditor() {
+        assertTrue(childrenOf(widgetFor(row("size", ValueForm.of(WHOLE_NUMBER)))).isEmpty(),
+                "a spinner is one control, not a column of choices");
+    }
+
     /**
-     * The reader hands back the option's own wire text, never the button's label. They part company the moment
-     * an option carries a graphic — a template's thumbnail, a colour swatch — and a value read off a label
-     * would then be whatever the label happened to say.
+     * A map is two columns of the leaf editors its key and value types have, with an Add row beneath — the
+     * cell `Map<String, Integer>` gets, and the checkpoint the whole type tree was built for.
      */
     @Test
-    void whatIsReadBackIsTheStoredValueAndNotTheLabel() {
-        // The choice is made on the control rather than seeded through the row's value: a row's value is
-        // Java source since 2026-09-20, so seeding one would put this test's subject behind a codec that is
-        // only registered when a plugin is bound. What is under test is the reader, not the seeding.
-        ParameterRow choices = row("mode", new ValueChoice(TEXT, ValueShape.ONE_OF),
-                List.of("fast", "slow"));
+    void aMapIsTwoColumnsAndAnAddRow() {
+        ParameterRow retries = row("retries",
+                ValueForm.mapOf(ValueForm.of(TEXT), ValueForm.of(WHOLE_NUMBER)));
+
+        List<Node> parts = childrenOf(widgetFor(retries));
+
+        assertFalse(parts.isEmpty(), "an empty map still says so and offers Add");
+        assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
+                "a map is not a set of choices");
+    }
+
+    /**
+     * The reader hands back the Java the field takes, written from the option's own stored text and never
+     * from the button's label. They part company the moment an option carries a graphic — a template's
+     * thumbnail, a colour swatch — and a value read off a label would then be whatever the label said.
+     */
+    @Test
+    void whatIsReadBackIsTheValueWrittenAsJavaAndNotTheLabel() {
+        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
+        ParameterRow choices = row("mode", ValueForm.of(TEXT), List.of("fast", "slow"));
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
@@ -170,6 +167,6 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
 
         assertEquals(1, sink.size());
-        assertEquals(List.of("slow"), sink.getFirst().read().get());
+        assertEquals("\"slow\"", sink.getFirst().read().get());
     }
 }

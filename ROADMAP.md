@@ -6,7 +6,27 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — a `@Param` field's type is a tree.** `JavaParameterSource.choiceOf` is `formOf`,
+- **2026-09-20 (latest) — the picker wraps, and a value cell is drawn from the form.** `ValueTypePicker`
+  holds a `ValueForm`: `Shape ▸` — four constants, two of which said something about the *value* and not
+  about the type — is **`Wrap in ▸`**, built from `ValueCatalog.containers()` plus **`Unwrap`**, so a
+  plugin's own container is offered the day it registers one. The button says the form's Java spelling, a
+  wrap puts the current form in the container's **last** argument (text in front, so wrapping `Duration` in
+  a map offers `Map<String, Duration>`), and the third wrap is greyed: a picker is capped where the model
+  is not. Picking a type replaces the innermost leaf and keeps the containers around it.
+  `ParamValueWidgets` switches on the form's case — a leaf editor, a list of them, a **two-column map**
+  whose duplicate key is refused at the cell it was typed into, and the author's own source shown read-only
+  for everything else, a contributed container included. A row's choices are the *row's*, so the widget
+  reads them off `options()` rather than off a shape: a leaf with a set declared is radio buttons, a list
+  with one is tick boxes, and neither with none is that type's own editor. Both windows now flush what the
+  cell reads back **as Java**, with the `ValueWire` wire join from phase D deleted; what is left of that
+  class at the leaf is `literal`/`wire`, because a leaf's control has text where a composite has none. The
+  contract gained the editor's half of the grammar — `partsOfInitializer`, `initializerOfParts`,
+  `itemOfLiteral` — so a part a codec refuses is drawn as written instead of emptying the whole cell. The
+  Picker Gallery enumerates forms (free value, one of, list, any of, map) and its second readout line says
+  whether the grammar reads back what the cell just wrote, which is the failure that is otherwise invisible
+  until a project is reopened. `docs/refactor/32-generic-values.md` phase E.
+
+- **2026-09-20 — a `@Param` field's type is a tree.** `JavaParameterSource.choiceOf` is `formOf`,
   walking a JDT `Type` recursively into a `ValueForm`: a registered leaf, or a registered `ValueContainer`
   over forms, to any depth. A field declared `Map<String, Integer>` read as *unknown* and refused to be
   edited, because a `ValueChoice` could say a type and one list around it; it is now listed, typed and
