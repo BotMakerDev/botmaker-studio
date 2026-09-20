@@ -4,7 +4,6 @@ import com.botmaker.plugin.api.ParameterGroup;
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
@@ -620,7 +619,7 @@ public final class ParametersDialog {
         // free until something is written in it. A closed-set type brings its own choices (every direction,
         // every mouse button), so there is nothing here for the author to write — offering an "add a choice"
         // row over them would invite a second, hand-typed copy of a list the plugin already owns.
-        ValueType leaf = ValueWire.leafOf(v.form());
+        ValueType leaf = v.form().leaf();
         if (mine && leaf != null && leaf.known() && leaf.options().isEmpty()) {
             Label heading = new Label("Choices");
             heading.setTooltip(new Tooltip(v.form() instanceof ValueForm.Of
@@ -763,7 +762,7 @@ public final class ParametersDialog {
      */
     private Node buildOptionsEditor(Entry entry) {
         ParameterRow v = entry.row();
-        ValueType base = ValueWire.leafOf(v.form());
+        ValueType base = v.form().leaf();
         ValueEditors.Context ctx = new ValueEditors.Context(config, v.bounds());
         VBox box = new VBox(4);
         List<String> options = v.options();

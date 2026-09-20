@@ -79,8 +79,8 @@ public final class ToolbarVisibility {
      *
      * <p>It is here rather than on {@link ToolbarGroup} because a group's <em>heading</em> is a word this
      * window chooses: the contract's own rule is that a plugin picks a group and cannot create one, so the
-     * enum carries the identity and the host carries what it is called. Compare {@code ValueShape.label()},
-     * which <em>is</em> the contract's, because a stored shape has to read the same in every host.
+     * enum carries the identity and the host carries what it is called. Compare {@code ValueType.label()},
+     * which <em>is</em> the contract's, because a stored type has to read the same in every host.
      */
     public static String label(ToolbarGroup group) {
         return switch (group) {

@@ -310,10 +310,11 @@ public final class BotType {
      * <p>There were four shapes here until phase 10b, and the other three — {@code ONE_OF} ("one out of a set
      * the author writes down"), {@code ANY_OF} ("several out of that set") and {@code OPEN_LIST} — were
      * <em>project variable</em> ideas and nothing else: fixing the set a value may come from is a question
-     * about something somebody configures, and a method parameter has nobody to ask. They live on in
-     * {@link com.botmaker.plugin.api.value.ValueShape}, which is the vocabulary a stored value is typed by;
-     * what was left here after removing them was {@code ONE} and two spellings of {@code List<T>} that
-     * generated identical source, so they are one.
+     * about something somebody configures, and a method parameter has nobody to ask. They lived on in the
+     * contract's {@code ValueShape} until 2026-09-20, when that axis was replaced by
+     * {@link com.botmaker.plugin.api.value.ValueForm} and the "out of what set" half moved to the row that
+     * declares it; what was left here after removing them was {@code ONE} and two spellings of
+     * {@code List<T>} that generated identical source, so they are one.
      */
     public enum Shape {
         /** One value, free within its type. */
@@ -352,9 +353,9 @@ public final class BotType {
         public Choice {
             if (type == null) throw new IllegalArgumentException("a type choice needs a type");
             if (shape == null) shape = Shape.ONE;
-            // Throwing, where the contract's ValueChoice corrects: this pair can only come from a dialog or a
-            // parsed signature, never from a file, so an impossible one is a bug rather than a project to
-            // rescue. `List<void>` is the only impossible one left.
+            // Throwing, where the contract's ValueForm corrects a wrong arity: this pair can only come from a
+            // dialog or a parsed signature, never from a file, so an impossible one is a bug rather than a
+            // project to rescue. `List<void>` is the only impossible one left.
             if (shape.isList() && !type.listable()) {
                 throw new IllegalArgumentException("there is no list of " + type.typeName());
             }

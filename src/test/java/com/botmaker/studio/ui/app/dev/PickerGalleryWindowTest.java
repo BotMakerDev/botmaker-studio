@@ -39,7 +39,7 @@ public class PickerGalleryWindowTest {
                             && !PickerGalleryWindow.options(type, TEMPLATES).isEmpty());
                 if (legal) {
                     assertNotNull(variable, type + " as " + shape.label() + " is declarable and needs a row");
-                    assertEquals(type.id(), ValueWire.leafOf(variable.form()).id());
+                    assertEquals(type.id(), variable.form().leaf().id());
                     assertEquals(shape.formOf(type), variable.form());
                 } else {
                     assertNull(variable, type + " as " + shape.label() + " is not a sentence anyone writes");

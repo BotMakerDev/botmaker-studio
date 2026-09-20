@@ -415,7 +415,10 @@ public final class RunnerWindow implements ProjectWindow {
         name.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(name, Priority.ALWAYS);
 
-        Label badge = new Label(v.type().label());
+        // The type as the field declares it, which since 2026-09-20 is the only name a form has. It was
+        // "One of Image template" while a shape carried the prose; a badge naming the Java is the same rule
+        // the picker's button follows, and it is what the user reads in their own file.
+        Label badge = new Label(v.form().sourceName());
         badge.getStyleClass().add("runner-type-badge");
         badge.setWrapText(true);
         // The badge keeps the width it asks for and the name wraps into what is left. The other way round —

@@ -1050,7 +1050,10 @@ The `ui/` package is split by concern:
   **A field's type is a `ValueForm`, read recursively** (`JavaParameterSource.formOf`, 2026-09-20): a
   registered leaf, or a registered `ValueContainer` over forms, all the way down, so `Map<String,
   List<Duration>>` is something this reads rather than something it calls unknown. It was a `ValueChoice`
-  — a type plus one list — and a field javac accepts perfectly well came out unknown and read-only. What is
+  — a type plus one list, deleted from the contract 2026-09-20 — and a field javac accepts perfectly well
+  came out unknown and read-only. The single type a form's values are typed as is `ValueForm.leaf()`, which
+  is what a declared set of choices and a declared `Range` are asked of and the only thing a `ValueChoice`
+  said that anything still needs. What is
   *not* a container is still an unknown leaf, shown as written: an array, a wildcard, a type variable, a
   `Set` nobody contributed, and a container whose written arity disagrees with the registered one.
   **Reading a value back is the codec's** (`ValueCodec.valueOfLiteral`) through `ValueCatalog.valueOf`:

@@ -26,6 +26,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   control because of something you cannot see.
 - **A value your installed plugins cannot read is shown exactly as you wrote it**, with the reason, and
   nothing this window does will rewrite it.
+- **A parameter's type badge in the Runner names the Java you wrote**, `java.util.List<Duration>` where it
+  said "List of Duration". A type is a tree now and there is no prose short enough to say one truthfully; the
+  Java is what is in your file, and it is what the type picker's button has said since this release.
 
 ### Added
 

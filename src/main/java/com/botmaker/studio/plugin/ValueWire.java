@@ -2,7 +2,6 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueContainer;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
@@ -133,24 +132,13 @@ public final class ValueWire {
                 .orElse("");
     }
 
-    /**
-     * The leaf a form's value is finally made of: the form itself, or a container's last argument.
-     *
-     * <p>{@code null} for anything else — a nesting deeper than one, a class the bot declares — because the
-     * two questions this answers, <em>what may this value be</em> (the declared choices) and <em>between
-     * which numbers</em> (the range), are asked of one leaf type and are meaningless for a tree with several.
-     */
-    public static ValueType leafOf(ValueForm form) {
-        return switch (form) {
-            case ValueForm.Leaf leaf -> leaf.type();
-            case ValueForm.Of of when of.last() instanceof ValueForm.Leaf leaf -> leaf.type();
-            case null, default -> null;
-        };
-    }
+    // leafOf stood here from phase E until 2026-09-20, when the same question became ValueForm.leaf() in the
+    // contract: every host asks it, it is answered out of the form alone, and one of the two callers it had
+    // was a plugin's store. Callers say form.leaf().
 
-    /** One free value of the type with this id — the shape almost every caller wants. */
-    public static ValueChoice one(String id) {
-        return ValueChoice.of(type(id));
+    /** One free value of the type with this id — the form almost every caller wants. */
+    public static ValueForm one(String id) {
+        return ValueForm.of(type(id));
     }
 
     /** Every registered type, in the order the plugins registered them. */
@@ -186,43 +174,35 @@ public final class ValueWire {
                 .findFirst();
     }
 
-    // ---- the type's shape -----------------------------------------------------------------------------
+    // ---- what a form is, to the rest of the editor -----------------------------------------------------
 
     /**
-     * The Java type of the generated field — {@code int}, {@code java.time.Duration},
-     * {@code java.util.List<com.example.plugin.Point>}.
+     * The resolved type, so the expression menu can filter parameters against an expected slot type.
      *
-     * <p>Everything outside {@code java.lang} is named in full, so a caller composing a declaration needs no
-     * import for the type — the cheapest way to guarantee it never needs one that was forgotten. That is why
-     * this is not {@link ValueChoice#sourceName()}, which writes the simple name a type declares an import
-     * for.
-     */
-    public static String javaType(ValueChoice type) {
-        ValueType base = type.type();
-        return type.isList() ? "java.util.List<" + boxed(base) + ">" : qualified(base);
-    }
-
-    /**
-     * The resolved type, so the expression menu can filter variables against an expected slot type.
-     *
-     * <p>Was a {@code switch} over seventeen constants; it is three questions the type answers about itself
+     * <p>Was a {@code switch} over seventeen constants; it is three questions the form answers about itself
      * now — {@link ResolvedType#named} routes a primitive keyword to its own variant, so
      * {@code boolean}/{@code int}/{@code double}/{@code char} need no arm each. The one case a name cannot
      * carry is {@code String}: it is written unqualified and imports nothing, so nothing in the type says
      * {@code java.lang}.
+     *
+     * <p><b>A container answers the container</b>, never its element: what the menu asks is whether a
+     * variable may be dropped into a slot, and {@code List<Duration>} fills a {@code List} slot rather than
+     * a {@code Duration} one. A form the catalog has no container for answers its own written spelling,
+     * which matches nothing and is the safe direction — an offer not made beats an offer that will not
+     * compile.
      */
-    public static ResolvedType resolvedType(ValueChoice type) {
-        if (type.isList()) return ResolvedType.named("java.util.List");
-        ValueType base = type.type();
+    public static ResolvedType resolvedType(ValueForm form) {
+        if (form == null) return ResolvedType.named("");
+        if (!(form instanceof ValueForm.Leaf leaf)) {
+            return ResolvedType.named(form instanceof ValueForm.Of of
+                    ? of.container().type().getName()
+                    : form.sourceName());
+        }
+        ValueType base = leaf.type();
         if (!base.isPrimitive() && "String".equals(base.sourceName()) && base.importName().isEmpty()) {
             return ResolvedType.of(JdkType.STRING);
         }
         return ResolvedType.named(qualified(base));
-    }
-
-    /** True when the editor writes the choices down — any shape that declares a set. */
-    public static boolean hasOptions(ValueChoice type) {
-        return type.hasOptions();
     }
 
     /** True when a declared {@link Range} means anything for this type — the type's own answer. */
@@ -247,56 +227,17 @@ public final class ValueWire {
 
     // ---- values ---------------------------------------------------------------------------------------
 
-    /** The wire value a freshly created variable of this type starts with; empty for a list. */
-    public static List<String> defaultWire(ValueChoice type) {
-        if (type.isList()) return List.of();
-        return List.of(catalog().defaultItem(type.type().id()));
-    }
+    // defaultWire, normalize and the choice-keyed normalizeOptions stood here until 2026-09-20 and went with
+    // ValueChoice. What they did for a whole value is a plugin's job — ParameterStore coerces what it stores
+    // — and what the editor needs of them is the one method below, asked of the leaf a cell types values of.
 
     /**
-     * {@code wire} reduced to something {@code type} can hold. Never throws, never returns null, and its own
-     * output is always a fixed point.
+     * The declared choices as the leaf they are values of actually stores them: each normalised, duplicates
+     * dropped, order kept.
      *
-     * @param options the declared choices, for {@linkplain #hasOptions an option-bearing} shape
-     * @param bounds  the declared range, for a bounded number
-     */
-    public static List<String> normalize(List<String> wire, ValueChoice type, List<String> options,
-                                         Range bounds) {
-        List<String> safe = wire == null ? List.of() : wire.stream().filter(Objects::nonNull).toList();
-        List<String> choices = normalizeOptions(options, type, bounds);
-        Range range = bounds == null ? Range.NONE : bounds;
-
-        if (!type.isList()) {
-            return List.of(constrain(
-                    normalizeItem(safe.isEmpty() ? null : safe.getFirst(), type.type(), range), choices));
-        }
-        // An option-bearing list follows the declaration order, not the file's: two projects that picked the
-        // same choices in a different order must write the same line, or a diff shows a change nobody made.
-        if (!choices.isEmpty()) {
-            LinkedHashSet<String> chosen = safe.stream()
-                    .map(item -> normalizeItem(item, type.type(), range))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            return choices.stream().filter(chosen::contains).toList();
-        }
-        return safe.stream().map(item -> normalizeItem(item, type.type(), range)).toList();
-    }
-
-    /**
-     * The declared choices as this type actually stores them: each normalised, duplicates dropped, order kept.
-     * Empty when the shape declares no set.
-     *
-     * <p>Every choice is itself a value of the base type, so it goes through the same normaliser the value
-     * does — otherwise {@code "10 "} and {@code "10"} are two different choices, the radio button is labelled
+     * <p>Every choice is itself a value of that leaf, so it goes through the same normaliser the value does
+     * — otherwise {@code "10 "} and {@code "10"} are two different choices, the radio button is labelled
      * with one and the stored value matches neither.
-     */
-    public static List<String> normalizeOptions(List<String> options, ValueChoice type, Range bounds) {
-        if (!type.hasOptions()) return List.of();
-        return normalizeOptions(options, type.type(), bounds);
-    }
-
-    /**
-     * The same, asked of the leaf the choices are values of — which is the whole question, since a declared
-     * set belongs to the row rather than to its type.
      */
     public static List<String> normalizeOptions(List<String> options, ValueType type, Range bounds) {
         if (options == null || type == null) return List.of();

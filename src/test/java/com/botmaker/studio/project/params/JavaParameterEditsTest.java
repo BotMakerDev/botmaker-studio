@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueChoice;
+import com.botmaker.plugin.api.value.ValueForm;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -22,9 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JavaParameterEditsTest {
 
-    private static final ValueChoice NUMBER = ValueChoice.of(TestValues.WHOLE_NUMBER);
-    private static final ValueChoice DURATION = ValueChoice.of(TestValues.DURATION);
-    private static final ValueChoice TEXT = ValueChoice.of(TestValues.TEXT);
+    private static final ValueForm NUMBER = ValueForm.of(TestValues.WHOLE_NUMBER);
+    private static final ValueForm DURATION = ValueForm.of(TestValues.DURATION);
+    private static final ValueForm TEXT = ValueForm.of(TestValues.TEXT);
 
     private static final String SOURCE = """
             package com.example.bot;
@@ -47,18 +47,18 @@ class JavaParameterEditsTest {
      * A value edit spelled the way a window spells one: the catalog writes the Java, and the rewrite takes
      * it already written — since 2026-09-20 the initialiser <em>is</em> the value.
      */
-    private static String setValue(String source, String field, ValueChoice choice, String... value) {
-        return JavaParameterEdits.setValue(source, "Parameters", field, initializer(choice, value));
+    private static String setValue(String source, String field, ValueForm form, String... value) {
+        return JavaParameterEdits.setValue(source, "Parameters", field, initializer(form, value));
     }
 
-    private static String add(String source, String className, String field, ValueChoice choice,
+    private static String add(String source, String className, String field, ValueForm form,
                               String value, String category, String description) {
-        return JavaParameterEdits.add(source, className, field, choice.form(),
-                initializer(choice, value), category, description);
+        return JavaParameterEdits.add(source, className, field, form,
+                initializer(form, value), category, description);
     }
 
-    private static String initializer(ValueChoice choice, String... value) {
-        return TestValues.CATALOG.initializer(choice, List.of(value)).orElse("");
+    private static String initializer(ValueForm form, String... value) {
+        return TestValues.CATALOG.initializerOfWires(form, List.of(value)).orElse("");
     }
 
     // ---- values ---------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ class JavaParameterEditsTest {
         // An unknown type has no initialiser the catalog can write, so the edit declines rather than
         // writing a field naming a class that does not exist.
         assertSame(SOURCE, setValue(SOURCE, "maxAttempts",
-                ValueChoice.of(com.botmaker.plugin.api.value.ValueType.unknown("CHANNEL")), "x"));
+                ValueForm.of(com.botmaker.plugin.api.value.ValueType.unknown("CHANNEL")), "x"));
     }
 
     // ---- renames --------------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ class JavaParameterEditsTest {
     @Test
     void retypingChangesTheTypeAndResetsTheValue() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                DURATION.form());
+                DURATION);
 
         assertTrue(edited.contains("public static java.time.Duration maxAttempts"), edited);
         assertTrue(edited.contains("= java.time.Duration.ofMillis(0L);"), edited);
@@ -162,7 +162,7 @@ class JavaParameterEditsTest {
     @Test
     void retypingToAListWritesTheListTypeAndAnEmptyList() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                ValueChoice.listOf(TestValues.WHOLE_NUMBER).form());
+                ValueForm.listOf(ValueForm.of(TestValues.WHOLE_NUMBER)));
 
         // Boxed: List<int> does not compile.
         assertTrue(edited.contains("java.util.List<Integer> maxAttempts"), edited);
@@ -309,7 +309,7 @@ class JavaParameterEditsTest {
 
         assertEquals("\"a \\\"quoted\\\" value\"", parameter.row().value());
         assertEquals(List.of("a \"quoted\" value"),
-                TestValues.CATALOG.valueOfInitializer(TEXT, parameter.row().value()).orElseThrow());
+                TestValues.CATALOG.wiresOfInitializer(TEXT, parameter.row().value()).orElseThrow());
         assertEquals("Naming", parameter.row().category());
         assertTrue(parameter.editable(), parameter.note());
     }

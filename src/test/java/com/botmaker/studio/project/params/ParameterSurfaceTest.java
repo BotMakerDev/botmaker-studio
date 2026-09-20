@@ -2,7 +2,6 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueChoice;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
@@ -170,9 +169,9 @@ class ParameterSurfaceTest {
 
         ParameterSurface.Entry entry = only(config);
         ParameterRow stored = ParameterSurface.declare(config, null, entry,
-                retyped(entry.row(), ValueChoice.of(TestValues.TEXT)), TestValues.CATALOG).orElseThrow();
+                retyped(entry.row(), ValueForm.of(TestValues.TEXT)), TestValues.CATALOG).orElseThrow();
 
-        assertEquals(TestValues.TEXT, stored.type().type());
+        assertEquals(TestValues.TEXT, stored.form().leaf());
         // The old type's text is not carried across: a value written for one type is not a value of another.
         assertEquals("\"\"", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
@@ -253,8 +252,8 @@ class ParameterSurfaceTest {
                 .bounds(row.bounds()).build();
     }
 
-    private static ParameterRow retyped(ParameterRow row, ValueChoice type) {
-        return ParameterRow.named(row.name(), type).value(row.value()).description(row.description())
+    private static ParameterRow retyped(ParameterRow row, ValueForm form) {
+        return ParameterRow.named(row.name(), form).value(row.value()).description(row.description())
                 .category(row.category()).visibility(row.visibility()).options(row.options())
                 .bounds(row.bounds()).build();
     }

@@ -42,7 +42,7 @@ public final class HostParameters {
         /** What a menu shows: the prose label when the author gave one, else the name and its type. */
         public String menuLabel() {
             return row.name().equals(row.displayLabel())
-                    ? row.name() + " (" + row.type().label() + ")"
+                    ? row.name() + " (" + row.form().sourceName() + ")"
                     : row.displayLabel() + " — " + row.name();
         }
     }
@@ -76,7 +76,7 @@ public final class HostParameters {
     public static List<Parameter> compatibleWith(ProjectConfig config, ProjectState state,
                                                  ResolvedType requiredType) {
         return all(config, state).stream()
-                .filter(p -> ProjectAnalyzer.isCompatible(ValueWire.resolvedType(p.row().type()), requiredType))
+                .filter(p -> ProjectAnalyzer.isCompatible(ValueWire.resolvedType(p.row().form()), requiredType))
                 .toList();
     }
 

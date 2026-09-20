@@ -49,7 +49,7 @@ class JavaParameterSourceTest {
         assertEquals("Parameters", parameter.className());
         assertEquals("maxAttempts", parameter.name());
         assertEquals("Parameters.maxAttempts", parameter.qualified());
-        assertEquals(TestValues.WHOLE_NUMBER, parameter.row().type().type());
+        assertEquals(TestValues.WHOLE_NUMBER, parameter.row().form().leaf());
         assertEquals("10", parameter.row().value());
         assertTrue(parameter.editable(), parameter.note());
     }
@@ -104,8 +104,8 @@ class JavaParameterSourceTest {
                     public static java.time.Duration qualified = java.time.Duration.ofMillis(1000L);
                 """));
 
-        assertEquals(TestValues.DURATION, found.get(0).row().type().type());
-        assertEquals(TestValues.DURATION, found.get(1).row().type().type());
+        assertEquals(TestValues.DURATION, found.get(0).row().form().leaf());
+        assertEquals(TestValues.DURATION, found.get(1).row().form().leaf());
         assertEquals("java.time.Duration.ofMillis(3000L)", found.get(0).row().value());
         assertEquals("java.time.Duration.ofMillis(1000L)", found.get(1).row().value());
     }
@@ -119,11 +119,10 @@ class JavaParameterSourceTest {
                                     java.time.Duration.ofMillis(60000L));
                 """)).getFirst();
 
-        assertTrue(parameter.row().type().isList());
-        assertEquals(TestValues.DURATION, parameter.row().type().type());
         assertEquals(ValueForm.listOf(ValueForm.of(TestValues.DURATION)), parameter.row().form());
+        assertEquals(TestValues.DURATION, parameter.row().form().leaf());
         assertEquals(List.of("3000", "60000"), TestValues.CATALOG
-                .valueOfInitializer(parameter.row().type(), parameter.row().value()).orElseThrow());
+                .wiresOfInitializer(parameter.row().form(), parameter.row().value()).orElseThrow());
         assertTrue(parameter.editable(), parameter.note());
     }
 
@@ -131,7 +130,8 @@ class JavaParameterSourceTest {
 
     /**
      * The checkpoint of {@code 32-generic-values.md}: a {@code Map} field was <em>unknown</em> and
-     * read-only, because a {@code ValueChoice} could say a type and one list around it and nothing else.
+     * read-only, because the deleted {@code ValueChoice} could say a type and one list around it and nothing
+     * else.
      */
     @Test
     void aMapFieldIsAMapFormAndReadsBothArguments() {
@@ -267,7 +267,7 @@ class JavaParameterSourceTest {
         assertEquals("java.time.Duration.ofSeconds(3)", parameter.initializer());
         assertTrue(parameter.note().contains("kept rather than replaced"), parameter.note());
         // Still listed, still typed: the bot reads it and the window has to show it.
-        assertEquals(TestValues.DURATION, parameter.row().type().type());
+        assertEquals(TestValues.DURATION, parameter.row().form().leaf());
     }
 
     @Test
@@ -278,7 +278,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertFalse(parameter.row().type().type().known());
+        assertFalse(parameter.row().form().known());
         assertTrue(parameter.note().contains("registers Channel"), parameter.note());
     }
 
@@ -314,15 +314,15 @@ class JavaParameterSourceTest {
 
     @Test
     void anArrayIsReadOnlyRatherThanTreatedAsAList() {
-        // The value surface has one list shape and no codec emits an array, so an array field is shown as
-        // written instead of being rewritten into a List the author did not ask for.
+        // No container registers an array and no codec emits one, so an array field is shown as written
+        // instead of being rewritten into a List the author did not ask for.
         JavaParameter parameter = read(wrap("""
                     @Param
                     public static int[] counts = {1, 2};
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertFalse(parameter.row().type().isList());
+        assertFalse(parameter.row().form().known());
     }
 
     @Test

@@ -6,7 +6,20 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — a parameter may be typed with one of the bot's own records.** `BotRecords` reads
+- **2026-09-20 (latest) — the shape axis is deleted, host side.** Phase G of `32-generic-values.md`.
+  `ValueWire` loses `one`'s old return type, `javaType`, `hasOptions`, `defaultWire`, `normalize` and the
+  choice-keyed `normalizeOptions`: coercing a whole stored value is the owning plugin's job
+  (`ParameterStore` does it), and what the editor needs is the leaf-keyed `normalizeOptions` that remains.
+  `leafOf` goes too — the same question is `ValueForm.leaf()` in the contract now, because every host asks
+  it and one of its callers was a plugin's own store. `resolvedType` takes a form and **answers the
+  container, never its element**: the expression menu asks whether a parameter may be dropped into a slot,
+  and a `List<Duration>` fills a `List` slot rather than a `Duration` one. A form no container is registered
+  for answers its own written spelling, which matches nothing — an offer not made beats an offer that will
+  not compile. The Runner's type badge and `HostParameters.menuLabel` name the Java (`java.util.List<Duration>`)
+  where they named a shape's prose ("List of Duration"), which is the same choice the type picker's button
+  made in phase E: a tree has no prose short enough to be true, and the Java is what is in the user's file.
+
+- **2026-09-20 — a parameter may be typed with one of the bot's own records.** `BotRecords` reads
   the project's own `record` declarations off its sources and answers the one question
   `JavaParameterSource` cannot: whether a written type name is a class *this bot* declares. A field typed
   `Point` is then a `ValueForm.Declared` rather than an unknown leaf, and its cell is one labelled row per

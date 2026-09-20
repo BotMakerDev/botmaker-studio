@@ -166,7 +166,7 @@ public final class ParamValueWidgets {
      */
     private static List<String> declaredOptions(ParameterRow row, ValueForm form) {
         if (row.options().isEmpty()) return List.of();
-        return ValueWire.effectiveOptions(ValueWire.leafOf(form), row.options());
+        return ValueWire.effectiveOptions(form.leaf(), row.options());
     }
 
     // --- the four editable cells -------------------------------------------------------------------------

@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Which control a parameter gets, and on what the answer depends: its {@link ValueForm}, and whether the row
  * declares a set of choices.
  *
- * <p>It used to depend on a {@code ValueShape}, which answered two unrelated questions at once — how many
+ * <p>It used to depend on the deleted {@code ValueShape}, which answered two unrelated questions at once — how many
  * values there are, and whether they come from a set somebody wrote down. The second is a fact about the
  * <em>row</em>, so it lives on the row's options and the form says nothing about it (2026-09-20). What
  * survives from the shape era is the rule the shapes were split to get: the widget follows the declaration,
@@ -53,7 +53,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     private static ParameterRow row(String name, ValueForm form, List<String> options) {
         return ParameterRow.named(name, form)
                 .value(ValueWire.defaultInitializer(form))
-                .options(ValueWire.normalizeOptions(options, ValueWire.leafOf(form), Range.NONE))
+                .options(ValueWire.normalizeOptions(options, form.leaf(), Range.NONE))
                 .build();
     }
 
