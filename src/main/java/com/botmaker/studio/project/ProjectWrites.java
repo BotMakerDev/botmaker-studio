@@ -18,9 +18,11 @@ import java.nio.file.Path;
  * site is the point: there are exactly three places that create a source file, and the one that forgot is
  * the one that would lose somebody's work.
  *
- * <p><b>Whole files only.</b> Nothing here merges, patches or preserves a region. A generated file is
- * rewritten entire ({@link FileRole#GENERATED} says why there is no partial grant), and a created file is
- * created once and then belongs to whoever edits it.
+ * <p><b>Whole files only.</b> Nothing here merges, patches or preserves a region. A file is created once and
+ * then belongs to whoever edits it — a plugin's own file included, which is why
+ * {@code PluginSourceFiles} goes through {@link #create} and not through {@link #replace}. Rewriting a
+ * region of somebody's file is {@code project/managed/JavaManagedEdits}' job, over one AST node, and not
+ * this class's.
  */
 public final class ProjectWrites {
 

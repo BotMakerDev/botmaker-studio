@@ -5,6 +5,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.PluginSourceFiles;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
@@ -101,6 +102,10 @@ public final class LibraryService {
         List<String> classpath = MavenService.resolveClasspath(config.projectPath());
         state.setResolvedClasspath(classpath);
         PluginHost.bind(classpath, HostServices.forProject(config));
+        // A plugin just installed becomes askable here and nowhere earlier: the pom write that added it had
+        // no classloader to ask. A file already in the project is left alone, so a removal followed by a
+        // re-install does not overwrite what the user has drawn.
+        PluginSourceFiles.install(config);
         typeIndex.refresh(classpath);
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));
     }

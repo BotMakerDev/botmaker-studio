@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Locks in the file-role rules — the single source of "may the user change this?".
  *
- * <p>Between 2026-08-29 and 2026-09-20 there were two rules, because nothing generated a project's Java and
- * a lock over files nobody rewrites protects nothing. A plugin's model is compiled code again
- * ({@code docs/refactor/33-plugin-java.md}), so {@code GENERATED} is back — and the assertions below say
- * exactly how much of it came back. The old constant covered everything BotMaker wrote into a user's tree:
- * the game-bot entry point, {@code Activities}, {@code ActivityRegistry}, {@code FlowDriver},
- * {@code Templates}. Those are the user's and stay the user's. What is locked is one thing: a file in a
- * plugin's own package, which the host rewrites whole every time that model is saved.
+ * <p><b>One rule, about bundled code, and nothing about the project.</b> {@code GENERATED} covered
+ * everything BotMaker once wrote into a user's tree — the game-bot entry point, {@code Activities},
+ * {@code ActivityRegistry}, {@code FlowDriver}, {@code Templates} — and went on 2026-08-29 because nothing
+ * generated a project's Java any more. It came back for one day on 2026-09-20, for a design where the host
+ * wrote a plugin's model whole, and went again with it: the plugin ships the file and the host rewrites one
+ * expression inside it ({@code docs/refactor/33-plugin-java.md}). The assertions below say so — a file in a
+ * plugin's own package is the user's, because that is exactly what a plugin handed them.
  *
  * <p>The other read-only case — a bot installed from the gallery and opened for reading — is a property of
  * the checkout rather than of a file, and lives in {@link ProjectMode} and {@link LockResolver}.
@@ -67,28 +67,22 @@ class FileRoleTest {
     }
 
     /**
-     * A plugin's model, and only that. One package below {@code plugins} is the host's; anything else a
-     * user chose to put under a package of that name is theirs, which is what keeps the rule narrow enough
-     * to be safe.
+     * The file a plugin hands a bot is the user's. Locking it would fight the reason for handing it over —
+     * that a developer with no BotMaker installed can read it, edit it and hand it to a compiler. What is
+     * refused is one {@code @Managed} method's body, which is {@link LockResolver}'s and not a file's.
      */
     @Test
-    void aPluginsOwnPackageIsGenerated() {
-        Path model = inMainPackage("plugins/sdk/Flow.java");
-        assertEquals(FileRole.GENERATED, FileRole.of(model));
-
+    void aPluginsOwnPackageBelongsToTheUser() {
+        assertEquals(FileRole.EDITABLE, FileRole.of(inMainPackage("plugins/sdk/Sdk.java")));
         assertEquals(FileRole.EDITABLE, FileRole.of(inMainPackage("plugins/Helpers.java")));
         assertEquals(FileRole.EDITABLE, FileRole.of(inMainPackage("plugins/helpers/deep/Util.java")));
         assertEquals(FileRole.EDITABLE, FileRole.of(inMainPackage("plugins/sdk/notes.txt")));
     }
 
+    /** Two roles, and a third would have to earn its way back in. */
     @Test
-    void aGeneratedFileIsLockedAndSaysWhy() {
-        FileRole generated = FileRole.GENERATED;
-        assertTrue(generated.isReadOnly());
-        assertTrue(generated.suppressesInteraction());
-        assertEquals("Generated - Read Only", generated.badge());
-        assertNotNull(generated.reason());
-        assertTrue(generated.reason().contains("overwritten"), generated.reason());
+    void thereIsExactlyOneReadOnlyRole() {
+        assertEquals(List.of(FileRole.EDITABLE, FileRole.LIBRARY), List.of(FileRole.values()));
     }
 
     @Test

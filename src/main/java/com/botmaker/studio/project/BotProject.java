@@ -8,6 +8,7 @@ import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSources;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.PluginSourceFiles;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.SdkDocsService;
@@ -131,6 +132,11 @@ public class BotProject {
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
         // falls back to the bundled plugins; it never leaves Studio without an answer.
         PluginHost.bind(classpath, HostServices.forProject(config));
+
+        // 5b. The file each bound plugin gives a bot, if it is not there yet. Here rather than at the
+        // install click because a plugin is installed by writing its coordinate into the pom, and at that
+        // moment there is no classloader to ask. A file that exists is never touched.
+        PluginSourceFiles.install(config);
 
         // 6. Build or load the type index for external libraries
         progress.message("Indexing libraries…");

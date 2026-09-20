@@ -131,21 +131,20 @@ class LockResolverTest {
         assertTrue(r.check(method("helper"), EditKind.SIGNATURE).reason().contains("library"));
     }
 
-    // --- a plugin's model: the host's, and rewritten whole ------------------------------------------------
+    // --- a plugin's own file: the user's, one method excepted ---------------------------------------------
 
     /**
-     * The user's own statement of this rule is the test — <i>not editable, it's modified here in the flow
-     * editor, not in the file</i> — and the reason has to say that, because an edit refused with no way
-     * forward is where the author stops rather than where they go next.
+     * The file a plugin ships is ordinary user code. It was {@code FileRole.GENERATED} for one day, from the
+     * withdrawn design where the host wrote it whole; what is refused now is one {@code @Managed} body, by
+     * the annotation rule below, and everything around it in the same file stays editable.
      */
     @Test
-    void aGeneratedModelRejectsEverythingAndSaysWhereToChangeIt() {
-        LockResolver r = resolver(inMainPackage("plugins/sdk/Flow.java"));
-        assertEquals(FileRole.GENERATED, r.role());
-        assertFalse(r.permits(statementIn("helper"), EditKind.BODY));
-        assertFalse(r.permits(method("helper"), EditKind.SIGNATURE));
-        assertTrue(r.suppressesInteraction());
-        assertTrue(r.check(method("helper"), EditKind.SIGNATURE).reason().contains("editor that owns"));
+    void aPluginsOwnFileIsEditableLikeAnyOther() {
+        LockResolver r = resolver(inMainPackage("plugins/sdk/Sdk.java"));
+        assertEquals(FileRole.EDITABLE, r.role());
+        assertTrue(r.permits(statementIn("helper"), EditKind.BODY));
+        assertTrue(r.permits(method("helper"), EditKind.SIGNATURE));
+        assertFalse(r.suppressesInteraction());
     }
 
     // --- the two escape hatches ---------------------------------------------------------------------------
