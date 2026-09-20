@@ -29,7 +29,7 @@ import java.util.List;
  * <p><b>The rule</b>, now that a project's Java is the user's:
  * <pre>
  * denied  &lt;- the project is open for reading  (an installed bot, see {@link ProjectMode})
- * denied  &lt;- the file is bundled library source
+ * denied  &lt;- the file is bundled library source, or a plugin's generated model ({@link FileRole})
  * denied  &lt;- SIGNATURE edits to {@code public static void main(String[])}
  * denied  &lt;- anything in the file the Parameters window owns ({@link Managed})
  * denied  &lt;- a {@code @Param} field, wherever it is
@@ -286,7 +286,9 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         if (node == null) return Verdict.no("Nothing to edit.");
         // Reading someone else's bot outranks the file's own verdict: nothing here is the user's to change.
         if (readerMode) return Verdict.no(READER_MODE_REASON);
-        if (role() == FileRole.LIBRARY) return Verdict.no("This is bundled library code — it can't be edited.");
+        // Every read-only role answers with its own sentence, so a role added later cannot be locked here
+        // and left explaining itself as "library code".
+        if (role().isReadOnly()) return Verdict.no(role().reason());
         Managed managed = managed();
         if (managed != null) return Verdict.no(managed.reason());
         String reason = managedReason(node, PluginHost.managedFields());

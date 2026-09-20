@@ -9,10 +9,8 @@ import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.ProjectWrites;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -306,11 +304,12 @@ public final class ParameterSurface {
      *
      * <p>A file appearing in a project is a bigger event than a field appearing in a file, so this is called
      * only when a person asks for a parameter and there is nowhere to put it. An existing file is never
-     * overwritten — it is somebody's work, and a class that exists is a class a field can go into.
+     * overwritten — it is somebody's work, and a class that exists is a class a field can go into. The
+     * write goes through {@link ProjectWrites}, which takes the history snapshot that makes a file the user
+     * did not type undoable.
      */
     public static boolean createClass(ProjectConfig config, String className) {
         Path file = config.mainPackageDir().resolve(className + ".java");
-        if (Files.isRegularFile(file)) return true;
         String source = """
                 package %s;
 
@@ -327,13 +326,7 @@ public final class ParameterSurface {
                 }
                 """.formatted(config.mainPackage(), JavaParameterSource.ANNOTATION_FQN, className,
                 className, className);
-        try {
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, source);
-            return true;
-        } catch (IOException notWritten) {
-            throw new UncheckedIOException("could not create " + file, notWritten);
-        }
+        return ProjectWrites.create(config, file, source, "Create " + className);
     }
 
     // ---- plumbing ---------------------------------------------------------------------------------------

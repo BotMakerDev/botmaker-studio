@@ -23,8 +23,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>This used to be {@link FileRole} × {@code MethodLock} × {@link EditKind}: a generated file whose one
  * granted method kept an editable body, an activity's {@code isEnabled()} locked inside a file the user
  * otherwise owned, a flow driver locked wholesale. All of it described code BotMaker wrote and rewrote, and
- * it writes none — so the two verdicts that remain are the two that were never about generation at all: a
- * bot opened for <em>reading</em>, and bundled library source.
+ * it wrote none between 2026-08-29 and 2026-09-20. Two of the verdicts here were never about generation at
+ * all — a bot opened for <em>reading</em>, and bundled library source — and the third is back, because a
+ * plugin's model is compiled code again. What came back is the <em>file</em>, whole: there is no granted
+ * method inside a generated file and no locked member inside an editable one.
  */
 class LockResolverTest {
 
@@ -127,6 +129,23 @@ class LockResolverTest {
         assertFalse(r.permits(method("helper"), EditKind.SIGNATURE));
         assertTrue(r.suppressesInteraction());
         assertTrue(r.check(method("helper"), EditKind.SIGNATURE).reason().contains("library"));
+    }
+
+    // --- a plugin's model: the host's, and rewritten whole ------------------------------------------------
+
+    /**
+     * The user's own statement of this rule is the test — <i>not editable, it's modified here in the flow
+     * editor, not in the file</i> — and the reason has to say that, because an edit refused with no way
+     * forward is where the author stops rather than where they go next.
+     */
+    @Test
+    void aGeneratedModelRejectsEverythingAndSaysWhereToChangeIt() {
+        LockResolver r = resolver(inMainPackage("plugins/sdk/Flow.java"));
+        assertEquals(FileRole.GENERATED, r.role());
+        assertFalse(r.permits(statementIn("helper"), EditKind.BODY));
+        assertFalse(r.permits(method("helper"), EditKind.SIGNATURE));
+        assertTrue(r.suppressesInteraction());
+        assertTrue(r.check(method("helper"), EditKind.SIGNATURE).reason().contains("editor that owns"));
     }
 
     // --- the two escape hatches ---------------------------------------------------------------------------
