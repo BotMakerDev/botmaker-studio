@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — the plugin's file lands in the project, and `FileRole.GENERATED` is deleted
+- **2026-09-20 (latest) — the reader sees a fixed shape written as a plain type name.** Studio's half of
+  phase 4 of `../docs/refactor/33-plugin-java.md`, and it is four lines.
+  `JavaParameterSource.formOf` sent anything without angle brackets straight to the leaf lookup, so a
+  registered `ValueContainer` of arity zero — the SDK's `Flow` — read as an *unknown leaf* and the value
+  came back read-only. It now asks `containerForJava` first, and **only at arity zero**: a `List` written
+  bare is a raw type, which is not a form this reader invents arguments for.
+
+- **2026-09-20 — the plugin's file lands in the project, and `FileRole.GENERATED` is deleted
   again.** Phase 3 of `../docs/refactor/33-plugin-java.md`.
   **`PluginSourceFiles.install` runs on every bind, not on the install click.** A plugin is installed by
   writing its coordinate into the pom, and at that moment its jar is on no classloader — there is nothing to

@@ -45,8 +45,47 @@ public final class TestValues {
             .source("com.example.bot.Body")
             .build();
 
+    /**
+     * A fixed shape: a record with named components and no type arguments, registered as a container of
+     * {@linkplain com.botmaker.plugin.api.value.ValueContainer#arity() arity zero}.
+     *
+     * <p>The SDK's {@code Flow} is one of these, and it is the case that broke until 2026-09-20: a
+     * container had to take at least one type argument, so a record with fixed components could only be
+     * registered as an opaque leaf — which is a string, which is what this whole design exists to leave
+     * behind.
+     */
+    public record Span(String label, int length) {}
+
+    public static final com.botmaker.plugin.api.value.ValueContainer<Span> SPAN =
+            new com.botmaker.plugin.api.value.ValueContainer<>() {
+                @Override public Class<?> type() { return Span.class; }
+
+                @Override public int arity() { return 0; }
+
+                @Override public String factory() { return "of"; }
+
+                @Override public java.util.List<Object> parts(Span value) {
+                    return value == null ? java.util.List.of("", 0)
+                            : java.util.List.of(value.label(), value.length());
+                }
+
+                @Override public Span build(java.util.List<Object> parts) {
+                    return parts.size() != 2 ? null
+                            : new Span((String) parts.get(0), ((Number) parts.get(1)).intValue());
+                }
+
+                @Override public java.util.List<com.botmaker.plugin.api.value.ValueForm> partForms(
+                        java.util.List<com.botmaker.plugin.api.value.ValueForm> arguments, int parts) {
+                    var forms = java.util.List.of(
+                            com.botmaker.plugin.api.value.ValueForm.of(TEXT),
+                            com.botmaker.plugin.api.value.ValueForm.of(WHOLE_NUMBER));
+                    return parts == forms.size() ? forms : java.util.List.of();
+                }
+            };
+
     /** The same shape as a real catalog: one codec per type, each able to read its own literal back. */
     public static final ValueCatalog CATALOG = ValueCatalog.builder()
+            .add(SPAN)
             .add(BODY, new ValueCodec<String>() {
                 @Override
                 public String parse(String wire) {

@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A value can be a record with fixed parts, not just a list or a map.** A plugin's `Flow` reads as the
+  shape it is — activities, edges, start, limits — instead of as an unknown type shown read-only, which is
+  what any type without angle brackets did before.
+
 - **A plugin can give your bot a file, and it lands once.** A plugin that ships one gets it written to
   `src/main/java/<your package>/plugins/<plugin>/`, with the package filled in, the first time Studio sees
   the plugin on your project's classpath — installing it, reloading plugins, or just opening the project.

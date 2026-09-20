@@ -111,6 +111,24 @@ class JavaManagedRoundTripTest {
                 DEEP, value));
     }
 
+    /**
+     * A record with fixed components, written as a plain type name and read back as the shape it is.
+     *
+     * <p>This is the SDK's {@code Flow} in miniature, and it is the case the reader could not see until
+     * 2026-09-20: a type with no angle brackets went straight to the leaf lookup, so a registered container
+     * of arity zero read as an unknown leaf and the value came back read-only.
+     */
+    @Test
+    void aFixedShapeWrittenAsAPlainTypeNameRoundTrips() {
+        ValueForm span = new ValueForm.Of(TestValues.SPAN, List.of());
+        TestValues.Span value = new TestValues.Span("phase one", 12);
+
+        Object read = roundTrip("com.botmaker.studio.project.params.TestValues.Span", span, value);
+
+        assertEquals(value, read);
+        assertEquals("com.botmaker.studio.project.params.TestValues.Span", span.sourceName());
+    }
+
     // ---- what must not round-trip -----------------------------------------------------------------------
 
     @Test

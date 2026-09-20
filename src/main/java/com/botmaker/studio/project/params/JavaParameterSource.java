@@ -272,6 +272,14 @@ public final class JavaParameterSource {
         if (type.isWildcardType() || type.isIntersectionType() || type.isUnionType()) {
             return ValueForm.of(unknown(type.toString().strip()));
         }
+        // A container of arity zero is a fixed shape — the SDK's `Flow`, which takes no type arguments and
+        // still has parts. It is written as a plain name, so it is looked for here rather than in the
+        // parameterized branch above, and only at arity zero: a `List` written bare is a raw type, which is
+        // not a form this reader invents arguments for.
+        Optional<ValueContainer<?>> fixed = catalog.containerForJava(type.toString().strip());
+        if (fixed.isPresent() && fixed.get().arity() == 0) {
+            return new ValueForm.Of(fixed.get(), List.of());
+        }
         ValueType leaf = registered(catalog, type);
         if (leaf.known()) return ValueForm.of(leaf);
         String declared = declarations.qualify(type.toString().strip());
