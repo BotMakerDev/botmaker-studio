@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
@@ -116,6 +117,25 @@ public final class BotSources {
             reader.accept(file, source);
             return false;
         });
+    }
+
+    /**
+     * One named file's current source — the open buffer if there is one, the file on disk otherwise, and
+     * empty when neither exists.
+     *
+     * <p>The same <em>buffer first</em> rule as the walks above, for one file that the caller already knows
+     * the path of. A walk would answer it too, and would read every source in the project to do so.
+     */
+    public static Optional<String> sourceOf(ProjectConfig config, ProjectState state, Path file) {
+        if (file == null) return Optional.empty();
+        Path absolute = file.toAbsolutePath().normalize();
+        ProjectFile open = openBuffers(state).get(absolute);
+        if (open != null && open.getContent() != null) return Optional.of(open.getContent());
+        try {
+            return Files.isRegularFile(absolute) ? Optional.of(Files.readString(absolute)) : Optional.empty();
+        } catch (IOException unreadable) {
+            return Optional.empty();
+        }
     }
 
     /** The open buffers by absolute path — the copy that wins over the file on disk. */

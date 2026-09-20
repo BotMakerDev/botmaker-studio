@@ -6,7 +6,32 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-20 (latest) — `FileRole.GENERATED` comes back, file-level only.** Phase J of
+- **2026-09-20 (latest) — the record model is withdrawn; a model is a sequence of calls.** Phases H and I
+  below are **superseded and their code is deleted** (`project/models/`'s `ModelForm`, `ModelGrammar`,
+  `ModelWriter`, `ModelReader` and their tests), and this entry records why, because the deleted design was
+  not wrong so much as one level too high.
+  The question is what a plugin hands the host so the host can write it as Java and read it back. The record
+  answer said *a record instance, walked reflectively*. The observation that replaced it is that **the bot
+  already stores the hard half as calls**: `Activities.define("Collect", ctx -> {…})` is a name and a body
+  written as a statement in the user's own Java. Store the rest the same way, and the thing the host needs
+  in order to write one — owner, method, the form of each argument, the values, a way to rebuild — is
+  `ValueContainer`, member for member. `ValueCatalog.initializer` already writes
+  `java.util.List.of(a, b, c)` and `valueOf` already reads it back at depth zero. **A statement is that with
+  a semicolon**, so the writer and the reader are machinery that already exists and is already tested.
+  What the record design had to solve and this does not: naming a constant from an activity name, stably and
+  uniquely; choosing between a seven-component canonical constructor and a six-argument convenience one; a
+  compact constructor normalising `id` into a duplicate of `name` inside the user's repository; keeping map
+  order deterministic; cross-file constant references; and Jackson's `"empty": false`, a derived value
+  persisted beside what it was derived from. A statement is ordered by being a statement, and its arguments
+  are arguments.
+  **A body is named by method reference** — `Collect::body` — which is a token sequence, written and read
+  exactly as an enum constant is, so renaming or deleting a body in Java becomes a *compile error*. That is
+  the benefit the whole exercise is for, and a name string cannot give it.
+  Kept from the withdrawn work: `BotSources.sourceOf`, the one-file form of the existing buffer-first walks,
+  because reading one known path should not read every source in the project. `FileRole.GENERATED` and
+  `ProjectWrites` (phase J) are untouched — they are about the *file*, which this does not change.
+
+- **2026-09-20 — `FileRole.GENERATED` comes back, file-level only.** Phase J of
   `33-plugin-java.md`. The deletion of 2026-08-29 stated its own expiry — *nothing generates a project's
   Java any more* — and a plugin's model is compiled code again, so the role returns with the user's wording
   as its test: *not editable, it's modified here in the flow editor, not in the file*. **Only the file**:

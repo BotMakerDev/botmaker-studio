@@ -1101,38 +1101,23 @@ The `ui/` package is split by concern:
   so a window and a test that disagreed about it would write two different files from the same click.
   `ParametersDialog` and `RunnerWindow` read this one list; the Runner also drops what it cannot rewrite,
   because a read-only cell is a message for the author and there is no author in the Runner.
-- **`project/models/`** — **a plugin's model is a record, and this is the grammar for one** (2026-09-20,
-  `33-plugin-java.md`). Pure, over a `Class<?>`: no host state, no project, no JavaFX, so both halves are
-  tested without a running Studio for the same reason the first two classes of `project/params/` are.
-  **`ModelGrammar`** answers *is this record legal, and which component is not* — `String`, the eight
-  primitives and their boxes, an enum constant, a registered leaf, a registered container of legal types,
-  another legal record, and nothing else — and a refusal **names the component to its full path**. It is
-  asked at registration rather than at write, which is how *100% accurate compilation* is met: the set that
-  is accepted is made equal to the set that can be written. **A recursive model is legal** (a node holding a
-  list of nodes is the ordinary shape of a graph): the walk stops at a record it is already inside, and
-  `ModelForm.Declared` holds no components, so the expansion happens over a value tree, which is finite.
-  **Builtins are taken before the catalog** — `int` and `String` are registered leaves too, and a
-  `ValueCodec<Long>` handed an `Integer` throws. **`ModelWriter`** turns an instance plus its class into one
-  compilation unit: a `final class` holding one `public static final` constant of the plugin's **own** record
-  type, everything fully qualified and **no imports** (the file is placed in a package the user never chose).
-  The record type stays in the plugin's jar, so a generated file adds a value and not a vocabulary, and a
-  component whose type changed breaks the bot's *build*. A container's call is whatever the container
-  declared: the host asks `ValueContainer.partForms` with a marker leaf per type argument and substitutes
-  the real forms back, so a contributed container works with no change here. The writer's one refusal is a
-  `null` a component holds, and it refuses the whole model rather than writing part of one.
-  **`ModelReader` is the third class and the derived half** (2026-09-20): a generated file back into the
-  record, read against the *same* `ModelForm` the writer used, so there is one grammar rather than two
-  implementations of one — which is the failure `ValueCodec.wireOfLiteral` is the measured example of. It is
-  decidable because the writer's output is the reader's whole input domain, and anything outside it is
-  **empty rather than guessed**: a callee that is not this container's declared factory, a creation that is
-  not this record's canonical constructor, an argument that is not a literal where one is written. A
-  hand-edited generated file therefore reads as *no model*, never as a model with a component nobody chose.
-  A **real parse, never a comma split** (a generated file's strings are names a user typed, so a comma
-  inside one is certain): the expression parser is `JavaParameterSource.expression`, public beside `parse`
-  and the one copy both packages use. The **target type decides how a number reads** — `42` is an `Integer`
-  for a component declared `int` and a `Long` for one declared `long` — and `ModelRoundTripTest` asserts
-  `read(write(v)) == v` rather than asserting what the source looks like, because a test of the text is what
-  lets two halves drift.
+- **`project/models/` — a plugin's model is a sequence of calls** (2026-09-20, `33-plugin-java.md`). The
+  contract's half is `com.botmaker.plugin.api.model`: a `ModelCall` describes a call the host may write
+  (owner, method, one `Argument` per parameter), and a `ModelStatement` is one line of a model (which call,
+  and its argument values). The host writes `Activities.declare(Collect::body, "Collect", …);` and reads it
+  back; **no text crosses in either direction** and a plugin writes no emitter and no parser.
+  **The writer and the reader already existed one level down.** `ValueCatalog.initializer` writes
+  `java.util.List.of(a, b, c)` and `valueOf` reads it back by matching the prefix and splitting at depth
+  zero (`SourceSplit`). A statement is that with a semicolon, so `ModelCall` is `ValueContainer` member for
+  member — `factoryOwner`/`owner`, `factory`/`method`, `partForms`/`arguments`.
+  **A body is named by method reference.** `Collect::body` is a token sequence, so it is written and read
+  exactly as an enum constant is, and renaming or deleting a body in Java becomes a *compile error* — which
+  a name string cannot give, and which is the reason the model is Java at all. It is the one argument that
+  is not a value (`MethodRef`), because its type is whatever functional interface the parameter declares and
+  no codec could honestly claim `Collect::body` is a literal of some type.
+  **A record handed over reflectively was tried first and withdrawn** (see `ROADMAP.md`, 2026-09-20): it had
+  to solve constant naming, constructor choice, compact-constructor normalisation, map ordering and derived
+  accessors, and a sequence of statements has none of those questions.
 - **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
   rows over the running game, and the only place a bot can be authored or recorded without leaving it.
   `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that
