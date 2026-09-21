@@ -10,6 +10,26 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.1.8; re-released for updated upstream pins.
+
+### Changed
+
+- **Rebuilt against the plugin contract's new package layout.** Studio's plugin host imports
+  `com.botmaker.plugin.api.slot`, `.parameters`, `.toolbar` and `.source` now. Imports only — nothing in the
+  canvas, the Parameters window or the plugin loader behaves differently. A plugin built against
+  `botmaker-studio-api` v0.1.5 or earlier will not load in this Studio; rebuild it against v0.1.6.
+
+- **The walkthrough describes the bot you actually get.** Getting Started and `WORKFLOW.md` still said a
+  variable's value lived in `activities.json` and was read at startup by a generated `Activities.java`, that
+  Studio maintained one source file per activity plus a registry, and that a run was driven by a generated
+  `FlowDriver`. None of that has been true since a plugin's values became Java the plugin ships: a variable
+  is a `@Param` field in your own `Parameters.java`, an activity is a `public static Outcome
+  body(ActivityContext ctx)` the flow names as `Collect::body`, and the flow is a value in your own
+  `plugins/sdk/Sdk.java`. The steps, the order and the runtime diagram's shape are unchanged — only the
+  sentences that described the old machinery.
+
 ## [1.1.8] — 2026-09-21
 
 ### Changed
