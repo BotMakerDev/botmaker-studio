@@ -186,13 +186,24 @@ class CodeEditorLockTest {
         }
     }
 
+    /**
+     * A project that still has the file BotMaker used to generate.
+     *
+     * <p>The name is spelled here rather than asked of {@code ProjectConfig}: the accessor went on
+     * 2026-09-21 with no caller in main, because nothing generates the file any more. What is left of it is
+     * a legacy name in somebody's project, and a test about that name is the right place to keep it.
+     */
     private static Fixture flowDriver() {
-        return new Fixture(CONFIG.flowDriverSourceFile(), FLOW_DRIVER);
+        return new Fixture(legacyFlowDriver(), FLOW_DRIVER);
     }
 
     /** The same project, opened for reading — someone else's installed bot. */
     private static Fixture reading() {
-        return new Fixture(CONFIG.flowDriverSourceFile(), FLOW_DRIVER, true);
+        return new Fixture(legacyFlowDriver(), FLOW_DRIVER, true);
+    }
+
+    private static Path legacyFlowDriver() {
+        return CONFIG.mainPackageDir().resolve("FlowDriver.java");
     }
 
     private static Fixture activity() {

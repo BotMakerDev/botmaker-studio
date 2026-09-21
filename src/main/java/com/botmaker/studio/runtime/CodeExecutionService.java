@@ -211,8 +211,9 @@ public class CodeExecutionService {
     /** Builds {@code <compiledOutput><sep><resources><sep><dep jars...>} for launching/compiling the project. */
     private String buildRuntimeClasspath(ProjectState.Snapshot snapshot) {
         StringBuilder cp = new StringBuilder(config.compiledOutputPath().toString());
-        // Put src/main/resources on the classpath so generated code can read /activities.json (and other
-        // bundled resources) at runtime, mirroring Maven's resource-on-classpath semantics.
+        // Put src/main/resources on the classpath, mirroring Maven's resource-on-classpath semantics: it is
+        // where a plugin's own data and the bot's image templates live, and a bot reading one of its own
+        // resources at runtime must find it the same way it will once it is built by Maven.
         cp.append(java.io.File.pathSeparator).append(config.resourcesRoot().toString());
         for (String jar : snapshot.resolvedClasspath()) {
             cp.append(java.io.File.pathSeparator).append(jar);

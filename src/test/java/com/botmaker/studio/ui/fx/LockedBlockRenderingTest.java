@@ -46,6 +46,15 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
     private static final ProjectConfig CONFIG =
             ProjectConfig.forProject("MyBot", Paths.get("/tmp/projects"));
 
+    /**
+     * The file BotMaker used to generate, in a project that still has one.
+     *
+     * <p>Spelled here rather than asked of {@code ProjectConfig}: that accessor went on 2026-09-21 with no
+     * caller in main, nothing generating the file any more. These tests render a body that is locked for
+     * other reasons — an installed bot, opened for reading — and only need a file in the bot's own package.
+     */
+    private static final Path LEGACY_FLOW_DRIVER = CONFIG.mainPackageDir().resolve("FlowDriver.java");
+
     private static final List<String> RUNTIME_CLASSPATH =
             List.of(System.getProperty("java.class.path").split(java.io.File.pathSeparator));
 
@@ -226,7 +235,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
     @Test
     void aBodyOpenedForReadingOffersNoControlsAtAll() {
         // The reported bug: a locked body's calls kept live class/method selectors and the ⚙ overload button.
-        Rendered r = render(CONFIG.flowDriverSourceFile(), FLOW_DRIVER, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, FLOW_DRIVER, true);
         BodyBlock run = bodyOf(r.root(), "run");
         assertTrue(run.isReadOnly(), "a bot open for reading is locked throughout");
 
@@ -241,7 +250,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
     void theSameFileIsFullyInteractiveWhenItIsYours() {
         // The mirror image, and the half that regressed: the file is ordinary user code unless something says
         // otherwise, and nothing says otherwise about a project you made.
-        Rendered r = render(CONFIG.flowDriverSourceFile(), FLOW_DRIVER);
+        Rendered r = render(LEGACY_FLOW_DRIVER, FLOW_DRIVER);
         BodyBlock run = bodyOf(r.root(), "run");
         assertFalse(run.isReadOnly(), "nothing in a project of your own is generated or locked");
 
@@ -254,7 +263,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
     @Test
     void aLockedCallOffersNoDropdownToChangeTheMethod() {
         // The reported bug: the method-call dropdown edited read-only code and the edit stuck.
-        Rendered r = render(CONFIG.flowDriverSourceFile(), FLOW_DRIVER, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, FLOW_DRIVER, true);
         BodyBlock locked = bodyOf(r.root(), "run");
 
         Node[] node = new Node[1];
@@ -281,7 +290,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
                     }
                 }
                 """;
-        Rendered r = render(CONFIG.flowDriverSourceFile(), withField, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, withField, true);
 
         AbstractCodeBlock field = null;
         for (CodeBlock b : flatten(r.root())) {
@@ -327,7 +336,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
                     private FlowDriver() {}
                 }
                 """;
-        Rendered r = render(CONFIG.flowDriverSourceFile(), source, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, source, true);
         Node[] node = new Node[1];
         interact(() -> node[0] = r.root().getUINode(r.context()));
 
@@ -369,7 +378,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
                     }
                 }
                 """;
-        Rendered r = render(CONFIG.flowDriverSourceFile(), source, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, source, true);
         BodyBlock helper = bodyOf(r.root(), "helper");
         assertTrue(helper.isReadOnly(), "precondition: everything in the file is locked");
 
@@ -388,7 +397,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
                     }
                 }
                 """;
-        Rendered r = render(CONFIG.flowDriverSourceFile(), emptyRun, true);
+        Rendered r = render(LEGACY_FLOW_DRIVER, emptyRun, true);
         BodyBlock helper = bodyOf(r.root(), "helper");
         assertTrue(helper.isReadOnly());
 

@@ -314,7 +314,7 @@ public final class ExpressionMenu {
             if (expr == ExpressionCatalog.VARIABLE) {
                 if (contextNode != null) collectVariableLeaves(expectedType, context, contextNode, onSelect, leaves);
             } else if (expr == ExpressionCatalog.ACTIVITY) {
-                MenuBuilders.collectMenuLeaves(activitiesSubmenu(expectedType, context, onSelect), leaves);
+                MenuBuilders.collectMenuLeaves(parametersSubmenu(expectedType, context, onSelect), leaves);
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
                 Menu sub = specificEnumSubmenu(expectedType, onSelect);
                 if (sub != null) MenuBuilders.collectMenuLeaves(sub, leaves);
@@ -344,7 +344,7 @@ public final class ExpressionMenu {
             if (expr == ExpressionCatalog.VARIABLE) {
                 if (contextNode != null) menu.getItems().add(variableSubmenu(expectedType, context, contextNode, onSelect));
             } else if (expr == ExpressionCatalog.ACTIVITY) {
-                menu.getItems().add(activitiesSubmenu(expectedType, context, onSelect));
+                menu.getItems().add(parametersSubmenu(expectedType, context, onSelect));
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
                 Menu sub = specificEnumSubmenu(expectedType, onSelect);
                 if (sub != null) menu.getItems().add(sub);
@@ -484,12 +484,13 @@ public final class ExpressionMenu {
      * — with the field name beside it, because the field name is what lands in the code and a menu that shows
      * only the prose leaves the reader guessing at what they just inserted.
      */
-    private static Menu activitiesSubmenu(ResolvedType expectedType, CodeEditorService context,
+    private static Menu parametersSubmenu(ResolvedType expectedType, CodeEditorService context,
                                           Consumer<Object> onSelect) {
         // "Parameters" — the window these are edited in, not the class they are fields of: a section may
         // generate any class its plugin names, and two plugins do not share one. The neighbouring "Activity
-        // name" menu is a different thing and keeps its name.
-        Menu menu = MenuIcons.decorate(new Menu("Parameters"), MenuIcons.ACTIVITIES);
+        // name" menu is a different thing and keeps its name. This method was activitiesSubmenu() until
+        // 2026-09-21, a name left over from when a parameter was a field of the generated Activities.java.
+        Menu menu = MenuIcons.decorate(new Menu("Parameters"), MenuIcons.PARAMETERS);
         List<HostParameters.Parameter> variables =
                 HostParameters.compatibleWith(context.getConfig(), context.getState(), expectedType);
         if (variables.isEmpty()) {

@@ -203,7 +203,8 @@ public class DebuggingService {
                 StringBuilder fullClassPath = new StringBuilder();
                 fullClassPath.append(config.compiledOutputPath().toString());
 
-                // src/main/resources on the classpath so generated code finds /activities.json at runtime.
+                // src/main/resources on the classpath, as CodeExecutionService does and for the same reason:
+                // a bot reads its own resources — a plugin's data, its image templates — from there.
                 fullClassPath.append(java.io.File.pathSeparator).append(config.resourcesRoot().toString());
 
                 // 2. Add all resolved dependency JARs — from the same snapshot the code was compiled from

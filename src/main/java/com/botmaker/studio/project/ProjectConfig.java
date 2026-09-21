@@ -177,7 +177,11 @@ public record ProjectConfig(
         return Character.toUpperCase(projectName.charAt(0)) + projectName.substring(1);
     }
 
-    /** {@code src/main/resources} — where {@code activities.json} and image templates live. */
+    /**
+     * {@code src/main/resources} — image templates, and one folder per plugin holding that plugin's own
+     * data ({@code plugins/<id prefix>/<last segment>/}). Nothing here is the host's to read: a file under
+     * {@code plugins/} belongs to whichever plugin's id names the folder.
+     */
     public Path resourcesRoot() {
         return projectPath.resolve("src").resolve("main").resolve("resources");
     }
@@ -187,10 +191,9 @@ public record ProjectConfig(
         return resourcesRoot().resolve("images");
     }
 
-    /** The generated {@code Activities.java} sidecar (sibling of the main class): the enable flags. */
-    public Path activitiesSourceFile() {
-        return mainPackageDir().resolve("Activities.java");
-    }
+    // activitiesSourceFile() went on 2026-09-21 with no caller. It named the generated Activities.java,
+    // which held one activity's enable flag per field; a flow's activity carries its own `enabled` now
+    // (Flow.activity(…)), inside the value the SDK plugin's window writes.
 
     /**
      * The generated {@code Parameters.java} sidecar: every configured value the bot reads.
@@ -206,26 +209,13 @@ public record ProjectConfig(
     // into a project (2026-08-29). It named the generated Templates.java, which is the picture library's
     // file: the plugin that writes it is the one entitled to say where it goes.
 
-    /** The generated {@code ActivityRegistry.java} sidecar (sibling of the main class). */
-    public Path activityRegistrySourceFile() {
-        return mainPackageDir().resolve("ActivityRegistry.java");
-    }
+    // activityRegistrySourceFile() and flowDriverSourceFile() went on 2026-09-21, both with no caller in
+    // main. They named ActivityRegistry.java and FlowDriver.java, the two files the old generator wrote to
+    // hold the flow: a bot runs from the flow value in its own plugins/sdk/Sdk.java now, and nothing
+    // generates either file. needsReviewSourceFile() went with them, also uncalled — parser.refactor
+    // .ReviewMarker resolves that file itself, on demand, being the only thing that writes it.
 
-    /** The generated {@code FlowDriver.java} sidecar — the state machine over the drawn Activity Flow. */
-    public Path flowDriverSourceFile() {
-        return mainPackageDir().resolve("FlowDriver.java");
-    }
-
-    /**
-     * The generated {@code NeedsReview.java} — the annotation a refactor marks a function with when it changed
-     * it in a way the user has to finish. Written on demand by {@code parser.refactor.ReviewMarks}, not by any
-     * template, so a bot that has never been refactored does not have this file.
-     */
-    public Path needsReviewSourceFile() {
-        return mainPackageDir().resolve("NeedsReview.java");
-    }
-
-    /** {@code src/main/java/com/<pkg>} — the package every generated sidecar is written into. */
+    /** {@code src/main/java/com/<pkg>} — the package the bot's own classes are written into. */
     public Path mainPackageDir() {
         return packageDir(sourceRoot, packageName);
     }
