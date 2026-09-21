@@ -1,15 +1,15 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ManagedValue;
-import com.botmaker.plugin.api.ParameterEdit;
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
-import com.botmaker.plugin.api.SlotEditor;
-import com.botmaker.plugin.api.SourceSeed;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
-import com.botmaker.plugin.api.ToolbarGroup;
-import com.botmaker.plugin.api.ToolbarItem;
+import com.botmaker.plugin.api.parameters.ParameterEdit;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.plugin.api.slot.SlotEditor;
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.api.source.SourceSeed;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.value.ValueCatalog;

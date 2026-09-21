@@ -1,6 +1,6 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.plugin.api.ManagedValue;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;

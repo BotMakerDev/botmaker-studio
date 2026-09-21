@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.SeparatorMenuItem;

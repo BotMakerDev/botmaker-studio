@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.plugin.api.ActionContext;
-import com.botmaker.plugin.api.ToolbarGroup;
-import com.botmaker.plugin.api.ToolbarItem;
+import com.botmaker.plugin.api.toolbar.ActionContext;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.studio.ui.app.ToolbarItems;
 import javafx.geometry.Insets;
 import javafx.scene.Node;

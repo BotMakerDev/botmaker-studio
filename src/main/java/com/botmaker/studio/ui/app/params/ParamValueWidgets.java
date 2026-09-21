@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueContainer;
 import com.botmaker.plugin.api.value.ValueForm;

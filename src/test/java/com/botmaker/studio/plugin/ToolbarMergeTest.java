@@ -1,8 +1,9 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
-import com.botmaker.plugin.api.ToolbarGroup;
-import com.botmaker.plugin.api.ToolbarItem;
+import com.botmaker.plugin.api.toolbar.EnabledWhen;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
@@ -112,9 +113,9 @@ class ToolbarMergeTest {
         List<ToolbarItem> offered = new ArrayList<>();
         offered.add(null);
         offered.add(new ToolbarItem("no-label", null, null, null, ToolbarGroup.RUN, 1,
-                com.botmaker.plugin.api.EnabledWhen.ALWAYS, c -> { }));
+                EnabledWhen.ALWAYS, c -> { }));
         offered.add(new ToolbarItem("no-action", () -> "x", null, null, ToolbarGroup.RUN, 2,
-                com.botmaker.plugin.api.EnabledWhen.ALWAYS, null));
+                EnabledWhen.ALWAYS, null));
         offered.add(item("fine", ToolbarGroup.RUN, 3));
 
         assertEquals(List.of("fine"), ids(PluginHost.mergeToolbarItems(List.of(new Fake("a", offered)))));

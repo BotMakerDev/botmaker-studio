@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.SlotEditor;
+import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
@@ -199,14 +199,14 @@ public final class ValueEditors {
      * The first plugin-contributed editor that claims {@code type}, or null when none does.
      *
      * <p><b>It is consulted last, and that placement is the contract's rule made real.</b>
-     * {@link com.botmaker.plugin.api.SlotEditor} documents that the host's own editors come first; every arm
+     * {@link com.botmaker.plugin.api.slot.SlotEditor} documents that the host's own editors come first; every arm
      * above this one is a host editor, so "the {@code default} arm" and "after everything built in" are the
      * same statement. A plugin therefore cannot take the duration field away from the SDK's own
      * {@code DURATION} — it can only supply an editor for a type nothing here has one for, which is every type
      * a plugin is entitled to introduce.
      *
      * <p><b>One editor serves this window and a slot in the source.</b> The predicate is written against a
-     * {@link com.botmaker.plugin.api.TypeRef} — the Java type — so the same {@code matches} that recognises a
+     * {@link com.botmaker.plugin.api.slot.TypeRef} — the Java type — so the same {@code matches} that recognises a
      * {@code com.acme.Channel} argument in a bot's source recognises a variable of that type here.
      * {@link HostValueContext#typeRef} is the translation, and it is the whole of the bridge.
      *

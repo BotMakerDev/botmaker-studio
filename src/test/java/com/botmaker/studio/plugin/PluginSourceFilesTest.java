@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.PluginSource;
 import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.api.source.PluginSource;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

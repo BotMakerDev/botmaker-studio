@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;

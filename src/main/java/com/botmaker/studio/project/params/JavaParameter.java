@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 
 import java.nio.file.Path;
 

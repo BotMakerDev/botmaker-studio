@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ActionContext;
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.studio.project.ProjectConfig;
 
 import java.util.Optional;

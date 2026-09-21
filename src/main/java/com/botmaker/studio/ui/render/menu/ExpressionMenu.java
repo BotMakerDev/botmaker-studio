@@ -480,7 +480,7 @@ public final class ExpressionMenu {
      * Every plugin's parameters whose type is assignment-compatible with the slot, inserted as
      * {@code <the declaring class>.<field>} and grouped under the category each is filed under.
      *
-     * <p>The label is {@link com.botmaker.plugin.api.ParameterRow#displayLabel()} — what the author called it
+     * <p>The label is {@link com.botmaker.plugin.api.parameters.ParameterRow#displayLabel()} — what the author called it
      * — with the field name beside it, because the field name is what lands in the code and a menu that shows
      * only the prose leaves the reader guessing at what they just inserted.
      */

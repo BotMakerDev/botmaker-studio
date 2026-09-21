@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
-import com.botmaker.plugin.api.SlotEditor;
-import com.botmaker.plugin.api.SlotRun;
+import com.botmaker.plugin.api.slot.SlotEditor;
+import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSlotContext;

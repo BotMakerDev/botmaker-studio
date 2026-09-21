@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.Dialogs;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.Theme;
+import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.NativeFileDialog;
@@ -113,7 +114,7 @@ public final class HostServices implements StudioServices {
     }
 
     /**
-     * The open project's {@code @Managed} values, or {@link com.botmaker.plugin.api.PluginValues#NONE}
+     * The open project's {@code @Managed} values, or {@link PluginValues#NONE}
      * between projects.
      *
      * <p>Read from {@link HostPluginValues} rather than held, for the reason {@link #runs()} is: this class
@@ -122,7 +123,7 @@ public final class HostServices implements StudioServices {
      * left behind.
      */
     @Override
-    public com.botmaker.plugin.api.PluginValues pluginValues() {
+    public PluginValues pluginValues() {
         return HostPluginValues.live();
     }
 

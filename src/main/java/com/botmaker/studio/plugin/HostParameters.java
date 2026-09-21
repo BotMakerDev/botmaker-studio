@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameters;

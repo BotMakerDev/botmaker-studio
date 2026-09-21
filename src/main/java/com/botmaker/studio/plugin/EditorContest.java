@@ -35,7 +35,7 @@ import java.util.function.Function;
  * verdict their own way is three places for it to be applied differently.
  *
  * <p>Nothing crosses the contract. There is deliberately no priority on
- * {@link com.botmaker.plugin.api.SlotEditor}: a plugin that declares its own precedence wins forever the
+ * {@link com.botmaker.plugin.api.slot.SlotEditor}: a plugin that declares its own precedence wins forever the
  * moment it writes a big number, which is the back door the platform exists to close.
  */
 public final class EditorContest {

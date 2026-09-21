@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.factories;
 
-import com.botmaker.plugin.api.SourceSeed;
+import com.botmaker.plugin.api.source.SourceSeed;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;

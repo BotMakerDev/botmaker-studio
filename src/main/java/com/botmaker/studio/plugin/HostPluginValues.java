@@ -1,8 +1,8 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.PluginValues;
 import com.botmaker.plugin.api.StudioServices;
-import com.botmaker.plugin.api.ValueContext;
+import com.botmaker.plugin.api.slot.ValueContext;
+import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.JavaManagedValues;

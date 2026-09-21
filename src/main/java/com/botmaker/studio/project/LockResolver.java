@@ -1,6 +1,6 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.plugin.api.ManagedValue;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.JavaManagedSource;
 import com.botmaker.studio.project.params.JavaParameterSource;

@@ -1,9 +1,9 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.SlotContext;
-import com.botmaker.plugin.api.SlotRun;
 import com.botmaker.plugin.api.StudioServices;
-import com.botmaker.plugin.api.TypeRef;
+import com.botmaker.plugin.api.slot.SlotContext;
+import com.botmaker.plugin.api.slot.SlotRun;
+import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.core.ValueSlot;

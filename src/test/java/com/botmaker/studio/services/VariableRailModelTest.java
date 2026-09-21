@@ -1,7 +1,7 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.ValueWire;
 import org.junit.jupiter.api.Test;
 

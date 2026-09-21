@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;

@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.ActionContext;
-import com.botmaker.plugin.api.EnabledWhen;
-import com.botmaker.plugin.api.ToolbarItem;
+import com.botmaker.plugin.api.toolbar.ActionContext;
+import com.botmaker.plugin.api.toolbar.EnabledWhen;
+import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import javafx.scene.control.Button;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;

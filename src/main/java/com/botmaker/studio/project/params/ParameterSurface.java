@@ -1,8 +1,8 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.ParameterEdit;
-import com.botmaker.plugin.api.ParameterGroup;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterEdit;
+import com.botmaker.plugin.api.parameters.ParameterGroup;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;

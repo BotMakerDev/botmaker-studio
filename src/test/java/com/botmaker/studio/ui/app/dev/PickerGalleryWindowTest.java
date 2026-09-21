@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.plugin.api.ParameterRow;
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.ValueWire;
 import org.junit.jupiter.api.Test;
 

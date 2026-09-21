@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.plugin.api.ActionContext;
-import com.botmaker.plugin.api.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ActionContext;
+import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.plugin.HostOverlayContext;
 import com.botmaker.studio.plugin.PluginHost;

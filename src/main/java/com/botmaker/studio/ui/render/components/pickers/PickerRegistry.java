@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
-import com.botmaker.plugin.api.SlotRun;
+import com.botmaker.plugin.api.slot.SlotRun;
 import javafx.scene.Node;
 
 import java.util.List;
@@ -15,7 +15,7 @@ import java.util.List;
  * (method-specific pickers first, then type-based, then the enum fallback).
  *
  * <p><b>Since 2026-08-27 there are three tiers, not one</b> (plugin platform, phase 12): {@link #PICKERS},
- * then every loaded plugin's {@link com.botmaker.plugin.api.SlotEditor}s via {@code PluginPickers}, then
+ * then every loaded plugin's {@link com.botmaker.plugin.api.slot.SlotEditor}s via {@code PluginPickers}, then
  * {@link #FALLBACKS}. The split is not cosmetic — it is the two ends that cannot move. {@code VariablePicker}
  * has to lead, or a slot holding a project variable is claimed by type and offered a literal instead; and the
  * enum dropdown has to trail, or it claims any enum it can resolve and a plugin never draws an editor for its

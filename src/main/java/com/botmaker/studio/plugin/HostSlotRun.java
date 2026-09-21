@@ -1,6 +1,6 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.SlotRun;
+import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.services.CodeEditorService;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodInvocation;

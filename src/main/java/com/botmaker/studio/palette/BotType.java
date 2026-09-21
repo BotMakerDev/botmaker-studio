@@ -1,6 +1,6 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.plugin.api.SourceSeed;
+import com.botmaker.plugin.api.source.SourceSeed;
 import com.botmaker.studio.palette.Initializer.BoolLit;
 import com.botmaker.studio.palette.Initializer.CharLit;
 import com.botmaker.studio.palette.Initializer.DoubleLit;
