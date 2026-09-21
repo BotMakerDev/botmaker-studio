@@ -38,9 +38,11 @@ public final class Workflow {
                 WorkflowStep.of("Create a project",
                         "A project is a normal Maven project under ~/BotMakerProjects/.",
                         StudioAction.PROJECT_SETUP,
-                        "Studio generates the sources, the pom.xml and the scaffolding a bot needs — an entry "
-                        + "point, an activity registry, a popup guard. You never have to edit those by hand; "
-                        + "they are marked read-only in the editor precisely because Studio maintains them.",
+                        "Studio writes the pom.xml and the project's first sources — an entry point, an "
+                        + "activity or three, the parameters — and then never writes them again. There is no "
+                        + "generated half and nothing is locked: every file is yours from the moment it "
+                        + "lands, to rename, split up or delete. A plugin you add later puts its own file "
+                        + "under plugins/ the same way, once.",
                         "Project Setup is also where you come back to later: it is a checklist of what the "
                         + "project still needs — something to launch, something to capture, a reference "
                         + "resolution and the pictures it looks for — and it says where to set each one."),
@@ -95,24 +97,34 @@ public final class Workflow {
                         + "wires those outcomes to whatever runs next. \"" + RuntimeDiagram.TITLE + "\" above "
                         + "is what that looks like at run time; it is worth reading before you draw a graph, "
                         + "because activities do not run top to bottom, once each.",
-                        "Studio generates and maintains one source file per activity plus the registry that "
-                        + "knows them. To stop an activity running, turn its switch off — it stays on the "
-                        + "graph and keeps its code. Delete activity removes it and its source for good."),
+                        "An activity is a method you write — a public static Outcome body(ActivityContext "
+                        + "ctx) — and the flow names it as a method reference, Collect::body. That is the "
+                        + "whole binding: rename or delete the method and the compiler says so, pointing at "
+                        + "the flow, instead of a card that quietly stops doing anything. A card's label is "
+                        + "a separate string on purpose, so renaming one never touches your code.",
+                        "The flow itself is a value in your own plugins/sdk/Sdk.java, written by the editor "
+                        + "when you save and readable as ordinary Java when you do not. To stop an activity "
+                        + "running, turn its switch off — the card stays and so does your method. Delete "
+                        + "activity removes the card and its wires; the file you wrote the steps in is left "
+                        + "exactly as it is."),
 
                 WorkflowStep.of("Give the bot its variables",
                         "The numbers, texts, durations and switches your logic reads — one list for the whole "
-                        + "project, organised by tag.",
+                        + "project, organised by category.",
                         StudioAction.PARAMETERS,
                         "A variable belongs to the project, not to an activity: the delay two activities both "
-                        + "wait for is one variable they both read, rather than a copy each. A tag says where "
-                        + "it is filed and nothing more — a variable tagged \"Mining\" is still readable from "
-                        + "anywhere. They are the same tags templates use, so \"Mining\" means the same thing "
-                        + "in both lists and renaming an activity renames its tag in both.",
-                        "The values live in activities.json, and the generated Activities.java reads them at "
-                        + "startup — so your blocks say Activities.RETRIES and the compiler checks the type, "
-                        + "while the value itself stays something you can see and edit without recompiling.",
-                        "Mark a variable shared to offer it to whoever runs the bot: shared variables appear in "
-                        + "the Runner under their tag's heading, and the rest stay yours."),
+                        + "wait for is one variable they both read, rather than a copy each. A category says "
+                        + "where it is filed in the window and nothing more — a variable filed under "
+                        + "\"Mining\" is still readable from anywhere.",
+                        "Each one is a field in your own Parameters.java, marked @Param — so your blocks say "
+                        + "Parameters.maxAttempts, the compiler checks the type, and deleting a variable "
+                        + "something still reads is a compile error rather than a surprise at run time. The "
+                        + "window writes back into that file: changing a value rewrites one initialiser, "
+                        + "renaming repoints every use, adding appends a field, and your comments and "
+                        + "formatting survive all three.",
+                        "Mark a variable public — visibility = Param.PUBLIC on the field — to offer it to "
+                        + "whoever runs the bot: those appear in the Runner under their category's heading, "
+                        + "and the rest stay yours."),
 
                 WorkflowStep.of("Author the logic with blocks",
                         "The centre canvas is your program: drag blocks to build loops, conditions, clicks and "
@@ -163,9 +175,11 @@ public final class Workflow {
                 WorkflowStep.of("Browse the gallery",
                         "Install someone else's bot, or see how one is put together.",
                         StudioAction.GALLERY,
-                        "An installed bot opens read-only: the scaffolding and the generated members are hidden "
-                        + "rather than merely greyed out, so you see the bot's logic and not Studio's plumbing. "
-                        + "Opting into editing turns it into an ordinary project of yours."));
+                        "An installed bot opens in the Runner — someone else's bot is something you run — and "
+                        + "its code is shown full-colour with every edit refused rather than hidden, so you "
+                        + "can read how it works. \"Improve this bot\" turns it into an ordinary project of "
+                        + "yours, for good. A bot you published yourself is never treated as somebody "
+                        + "else's, on any machine you are signed in on."));
     }
 
     /**

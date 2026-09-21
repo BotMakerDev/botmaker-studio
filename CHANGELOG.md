@@ -10,6 +10,19 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- **The walkthrough describes the bot you actually get.** Getting Started and `WORKFLOW.md` still said a
+  variable's value lived in `activities.json` and was read at startup by a generated `Activities.java`, that
+  Studio maintained one source file per activity plus a registry, and that a run was driven by a generated
+  `FlowDriver`. None of that has been true since a plugin's values became Java the plugin ships: a variable
+  is a `@Param` field in your own `Parameters.java`, an activity is a `public static Outcome
+  body(ActivityContext ctx)` the flow names as `Collect::body`, and the flow is a value in your own
+  `plugins/sdk/Sdk.java`. The steps, the order and the runtime diagram's shape are unchanged — only the
+  sentences that described the old machinery.
+
 ## [1.1.7] — 2026-09-21
 
 ### Added

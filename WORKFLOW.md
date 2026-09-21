@@ -7,14 +7,14 @@ A BotMaker bot watches a game or app on your screen, decides what it sees, and c
 
 ## How a bot runs
 
-Your activities are not a script that runs top to bottom. The generated FlowDriver holds one current activity, runs it, and asks the flow graph what follows the outcome it reported — so the shape of a run is a loop, and it is the graph you drew that decides where it goes next.
+Your activities are not a script that runs top to bottom. A run holds one current activity, calls the method the flow names for it, and follows the wire leaving the outcome that method reported — so the shape of a run is a loop, and it is the flow you drew that decides where it goes next. The flow is a value in your own plugins/sdk/Sdk.java: nothing is generated, and you can read what the bot will do without opening the editor.
 
 ```mermaid
 flowchart TD
     start(["main() — your bot class"])
     launch["Launch target"]
-    driver{{"FlowDriver — which activity now?"}}
-    run["That activity's run()"]
+    driver{{"The flow — which activity now?"}}
+    run["The method that card names"]
     outcome(["The outcome it returns"])
     start --> launch
     launch --> driver
@@ -25,25 +25,25 @@ flowchart TD
     guard -. "before every vision step" .-> run
 ```
 
-- **main() — your bot class** — Installs the popup guard and hands control to Bot.start, which supervises the whole run and restarts the game through GoHome if it crashes or gets stuck.
+- **main() — your bot class** — Installs the flow and the capture source — Sdk.install() — then hands control to Bot.start, which supervises the whole run and gets the game back to a known screen through your goHome if it crashes or gets stuck.
 
 - **Launch target** — The game or app you declared is started if it isn't already running. Nothing is captured or clicked until it is up.
 
-- **FlowDriver — which activity now?** — The current node of the flow graph. This is the only place that decides what runs next; an activity never calls another activity.
+- **The flow — which activity now?** — The current card of the flow you drew. This is the only place that decides what runs next; an activity never calls another activity.
 
-- **That activity's run()** — The blocks you authored: capture, match, click, wait. A disabled activity is stepped over here, following the wire it would have taken.
+- **The method that card names** — Your own Collect::body, and the blocks you authored in it: capture, match, click, wait. An activity switched off is stepped over here, following the wire it would have taken.
 
 - **The outcome it returns** — One of the activity's own named outcomes — the label on the wire leaving it in the flow editor.
 
-- **Popup guard** (before every vision step) — Popups.run() is called before every vision step, whichever activity is running — so a daily reward covering the button is dismissed by one file instead of by every activity that might trip over it.
+- **Popup guard** (before every vision step) — A handler you install once — PopupGuard.install(…) — runs before every vision step, whichever activity is running, so a daily reward covering the button is dismissed in one place instead of by every activity that might trip over it. A card can opt out of it.
 
-The driver follows the wire leaving that outcome and runs whatever is on the other end — for as long as there is one. A run ends when the outcome it reported has no wire leaving it: an unwired outcome is the stop, and there is no terminal node to draw.
+The run follows the wire leaving that outcome and runs whatever is on the other end — for as long as there is one. A run ends when the outcome it reported has no wire leaving it: an unwired outcome is the stop, and there is no terminal node to draw.
 
 ## 1. Create a project
 
 > A project is a normal Maven project under ~/BotMakerProjects/.
 
-Studio generates the sources, the pom.xml and the scaffolding a bot needs — an entry point, an activity registry, a popup guard. You never have to edit those by hand; they are marked read-only in the editor precisely because Studio maintains them.
+Studio writes the pom.xml and the project's first sources — an entry point, an activity or three, the parameters — and then never writes them again. There is no generated half and nothing is locked: every file is yours from the moment it lands, to rename, split up or delete. A plugin you add later puts its own file under plugins/ the same way, once.
 
 Project Setup is also where you come back to later: it is a checklist of what the project still needs — something to launch, something to capture, a reference resolution and the pictures it looks for — and it says where to set each one.
 
@@ -95,19 +95,21 @@ Rename, preview, re-tag, delete, import and export all happen here, and they go 
 
 Rather than one long script, a bot is a set of named activities — "Mining", "HandleFullInventory", "Login" — each returning an outcome, and the flow editor wires those outcomes to whatever runs next. "How a bot runs" above is what that looks like at run time; it is worth reading before you draw a graph, because activities do not run top to bottom, once each.
 
-Studio generates and maintains one source file per activity plus the registry that knows them. To stop an activity running, turn its switch off — it stays on the graph and keeps its code. Delete activity removes it and its source for good.
+An activity is a method you write — a public static Outcome body(ActivityContext ctx) — and the flow names it as a method reference, Collect::body. That is the whole binding: rename or delete the method and the compiler says so, pointing at the flow, instead of a card that quietly stops doing anything. A card's label is a separate string on purpose, so renaming one never touches your code.
+
+The flow itself is a value in your own plugins/sdk/Sdk.java, written by the editor when you save and readable as ordinary Java when you do not. To stop an activity running, turn its switch off — the card stays and so does your method. Delete activity removes the card and its wires; the file you wrote the steps in is left exactly as it is.
 
 *In Studio:* 🔀 Activity Flow on the toolbar (contributed by the BotMaker SDK)
 
 ## 7. Give the bot its variables
 
-> The numbers, texts, durations and switches your logic reads — one list for the whole project, organised by tag.
+> The numbers, texts, durations and switches your logic reads — one list for the whole project, organised by category.
 
-A variable belongs to the project, not to an activity: the delay two activities both wait for is one variable they both read, rather than a copy each. A tag says where it is filed and nothing more — a variable tagged "Mining" is still readable from anywhere. They are the same tags templates use, so "Mining" means the same thing in both lists and renaming an activity renames its tag in both.
+A variable belongs to the project, not to an activity: the delay two activities both wait for is one variable they both read, rather than a copy each. A category says where it is filed in the window and nothing more — a variable filed under "Mining" is still readable from anywhere.
 
-The values live in activities.json, and the generated Activities.java reads them at startup — so your blocks say Activities.RETRIES and the compiler checks the type, while the value itself stays something you can see and edit without recompiling.
+Each one is a field in your own Parameters.java, marked @Param — so your blocks say Parameters.maxAttempts, the compiler checks the type, and deleting a variable something still reads is a compile error rather than a surprise at run time. The window writes back into that file: changing a value rewrites one initialiser, renaming repoints every use, adding appends a field, and your comments and formatting survive all three.
 
-Mark a variable shared to offer it to whoever runs the bot: shared variables appear in the Runner under their tag's heading, and the rest stay yours.
+Mark a variable public — visibility = Param.PUBLIC on the field — to offer it to whoever runs the bot: those appear in the Runner under their category's heading, and the rest stay yours.
 
 *In Studio:* Project ▸ Parameters… (or 🎚 Parameters on the toolbar)
 
@@ -157,7 +159,7 @@ The Gallery browses what everyone else has published; installing from it creates
 
 > Install someone else's bot, or see how one is put together.
 
-An installed bot opens read-only: the scaffolding and the generated members are hidden rather than merely greyed out, so you see the bot's logic and not Studio's plumbing. Opting into editing turns it into an ordinary project of yours.
+An installed bot opens in the Runner — someone else's bot is something you run — and its code is shown full-colour with every edit refused rather than hidden, so you can read how it works. "Improve this bot" turns it into an ordinary project of yours, for good. A bot you published yourself is never treated as somebody else's, on any machine you are signed in on.
 
 *In Studio:* Project ▸ Browse Gallery…
 

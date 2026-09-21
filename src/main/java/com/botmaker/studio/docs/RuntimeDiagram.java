@@ -3,12 +3,11 @@ package com.botmaker.studio.docs;
 import java.util.List;
 
 /**
- * <b>How a bot actually runs</b> — the generated scaffolding's control flow, as a diagram rather than a
- * paragraph.
+ * <b>How a bot actually runs</b> — the control flow of a run, as a diagram rather than a paragraph.
  *
  * <p>This is the one thing the workflow guide could not explain in prose. Every other step is a thing you
  * <em>do</em>, in an order, and a numbered list is the right shape for that. The runtime is not a list: it is a
- * loop with a side channel, and describing "the driver runs the current activity, then picks the next one from
+ * loop with a side channel, and describing "the flow runs the current activity, then picks the next one from
  * the outcome it reported, unless the popup guard fires first" in a sentence is exactly how people came away
  * believing their activities run top to bottom, once each.
  *
@@ -29,9 +28,11 @@ public final class RuntimeDiagram {
     public static final String TITLE = "How a bot runs";
 
     public static final String INTRO =
-            "Your activities are not a script that runs top to bottom. The generated FlowDriver holds one "
-            + "current activity, runs it, and asks the flow graph what follows the outcome it reported — so "
-            + "the shape of a run is a loop, and it is the graph you drew that decides where it goes next.";
+            "Your activities are not a script that runs top to bottom. A run holds one current activity, "
+            + "calls the method the flow names for it, and follows the wire leaving the outcome that method "
+            + "reported — so the shape of a run is a loop, and it is the flow you drew that decides where it "
+            + "goes next. The flow is a value in your own plugins/sdk/Sdk.java: nothing is generated, and "
+            + "you can read what the bot will do without opening the editor.";
 
     /**
      * One box in the chain.
@@ -70,20 +71,22 @@ public final class RuntimeDiagram {
     public static List<Node> chain() {
         return List.of(
                 new Node("start", "main() — your bot class",
-                        "Installs the popup guard and hands control to Bot.start, which supervises the whole "
-                        + "run and restarts the game through GoHome if it crashes or gets stuck.",
+                        "Installs the flow and the capture source — Sdk.install() — then hands control to "
+                        + "Bot.start, which supervises the whole run and gets the game back to a known "
+                        + "screen through your goHome if it crashes or gets stuck.",
                         Shape.TERMINAL),
                 new Node("launch", "Launch target",
                         "The game or app you declared is started if it isn't already running. Nothing is "
                         + "captured or clicked until it is up.",
                         Shape.STEP),
-                new Node("driver", "FlowDriver — which activity now?",
-                        "The current node of the flow graph. This is the only place that decides what runs "
+                new Node("driver", "The flow — which activity now?",
+                        "The current card of the flow you drew. This is the only place that decides what runs "
                         + "next; an activity never calls another activity.",
                         Shape.DECISION),
-                new Node("run", "That activity's run()",
-                        "The blocks you authored: capture, match, click, wait. A disabled activity is stepped "
-                        + "over here, following the wire it would have taken.",
+                new Node("run", "The method that card names",
+                        "Your own Collect::body, and the blocks you authored in it: capture, match, click, "
+                        + "wait. An activity switched off is stepped over here, following the wire it would "
+                        + "have taken.",
                         Shape.STEP),
                 new Node("outcome", "The outcome it returns",
                         "One of the activity's own named outcomes — the label on the wire leaving it in the "
@@ -97,16 +100,16 @@ public final class RuntimeDiagram {
     }
 
     public static final String LOOP_NOTE =
-            "The driver follows the wire leaving that outcome and runs whatever is on the other end — for as "
+            "The run follows the wire leaving that outcome and runs whatever is on the other end — for as "
             + "long as there is one. A run ends when the outcome it reported has no wire leaving it: an "
             + "unwired outcome is the stop, and there is no terminal node to draw.";
 
     /** The side channel: the popup guard, which interrupts vision rather than sitting in the chain. */
     public static Node guard() {
         return new Node("guard", "Popup guard",
-                "Popups.run() is called before every vision step, whichever activity is running — so a daily "
-                + "reward covering the button is dismissed by one file instead of by every activity that "
-                + "might trip over it.",
+                "A handler you install once — PopupGuard.install(…) — runs before every vision step, "
+                + "whichever activity is running, so a daily reward covering the button is dismissed in one "
+                + "place instead of by every activity that might trip over it. A card can opt out of it.",
                 Shape.STEP);
     }
 
