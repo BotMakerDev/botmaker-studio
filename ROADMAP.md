@@ -6,7 +6,20 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-21 (latest) — `33-plugin-java.md` is implemented end to end; the worked bot is migrated.**
+- **2026-09-21 (latest) — Studio stops writing a plugin's file into a project.**
+  `plugin/PluginSourceFiles` and `PluginSourceFilesTest` are **deleted**, with both call sites —
+  `project/BotProject` step 5b and `services/LibraryService.rebind`, which each ran it on every
+  `PluginHost.bind`. The contract method behind it (`StudioPlugin.pluginSources()`) and `PluginSource` went
+  with them; see `../botmaker-studio-api/ROADMAP.md` for why.
+  Nothing about **reading** a plugin's values changed: `project/managed/` still finds `@Managed` methods in
+  the bot's own source and still rewrites one returned expression at a time, and `FileRole.GENERATED` still
+  recognises `…/plugins/<segment>/<Name>.java` by location. What Studio no longer does is put the file
+  there. A project gets one from the template it was created from; a plugin that wants to add one to an
+  existing project writes it from its own window, which is not built yet and is the accepted cost.
+  *A project's structure belongs to the user* now holds with no exception at all — the rule that deleted the
+  seed machinery on 2026-08-29, applied to the last thing still writing into a source tree.
+
+- **2026-09-21 — `33-plugin-java.md` is implemented end to end; the worked bot is migrated.**
   Phases 5–7. Studio's own source did not change in phase 7, and the entry is here because the thing the
   host *copies* did: `botmaker-gamebot` now holds its flow and its capture source in
   `src/main/java/com/botmaker/gamebot/plugins/sdk/Sdk.java`, its pictures in `plugins/sdk/Pictures.java`,

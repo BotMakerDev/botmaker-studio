@@ -8,7 +8,6 @@ import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSources;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.PluginSourceFiles;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.SdkDocsService;
@@ -133,10 +132,10 @@ public class BotProject {
         // falls back to the bundled plugins; it never leaves Studio without an answer.
         PluginHost.bind(classpath, HostServices.forProject(config));
 
-        // 5b. The file each bound plugin gives a bot, if it is not there yet. Here rather than at the
-        // install click because a plugin is installed by writing its coordinate into the pom, and at that
-        // moment there is no classloader to ask. A file that exists is never touched.
-        PluginSourceFiles.install(config);
+        // 5b. was PluginSourceFiles.install(config) — copying each bound plugin's shipped Java into the
+        // project on every bind. Deleted 2026-09-21: a project's plugins/<id>/ file comes from the template
+        // it was created from, and a plugin that wants to add one to an existing project writes it from its
+        // own window. The host is not in the business of putting files in somebody's source tree.
 
         // 6. Build or load the type index for external libraries
         progress.message("Indexing libraries…");
