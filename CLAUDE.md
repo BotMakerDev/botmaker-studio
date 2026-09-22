@@ -302,9 +302,11 @@ point of it.**
 - **`plugin/PluginHost` is where a name is resolved, and it serves two different catalogs on purpose.**
   `bundled()` is "which names does a plugin own?" — the newest surface this build knows — and backs
   `ownerOf` / `qualifiedName` / `isFacadeClass` / `menuFacades` / `facadeNames`, every one of which is a
-  question asked with **no project in hand**. `catalogFor(pin)` is "what should we offer *this* bot?" and is
+  question asked with **no project in hand**. `catalogFor()` is "what should we offer *this* bot?" and is
   the only one curation may read. Using the first for curation would offer a bot on an older SDK members its
-  jar has never had — the bug the pinned catalog exists to prevent.
+  jar has never had. **It lost its pin argument on 2026-09-22**, with `StudioPlugin.catalog(String)`'s:
+  every plugin ignored the pin, because the catalog a project's own plugins serve is already the one its
+  jar was built with — which is what the pin used to select.
 
   **What loads the plugins is no longer here.** `plugin/PluginLoader` moved to the `botmaker-plugin-host`
   submodule on 2026-08-28 (`com.botmaker.plugin.host.PluginLoader`, an ordinary `compile` dependency), so
@@ -353,7 +355,8 @@ point of it.**
   **That rule is about *presence*. Curation is a second question and does need an explicit filter** (2026-08-23):
   "is this method here?" and "should we lead with it?" are different, and nothing enumerable answers the second.
   **Since 2026-08-26 the answer comes from the SDK's per-version catalog, served through
-  `PluginHost.catalogFor(the project's pin)`** — the third mechanism to hold this job, after an `@Palette`
+  `PluginHost.catalogFor(the project's pin)`** (no argument since 2026-09-22: the project's own plugins
+  answer) — the third mechanism to hold this job, after an `@Palette`
   annotation probed out of the bot's jar (2026-08-23 → 2026-08-25) and nothing at all for the day between.
   Read `isCurated` as *"a plugin catalogues this type"* and `isPaletteAware` as *"a catalog was served"*.
   **The fail-open is at the version level and only there:** a pin with no catalog — released before catalogs
@@ -1061,8 +1064,17 @@ The `ui/` package is split by concern:
   make answers the source unchanged and never throws), and **`JavaParameters`** is the half that knows
   about the project — `BotSources`, buffers before files, both written. The first two are pure, which is
   why they are tested over source text rather than over a project on disk.
+  **The grammar is Studio's since 2026-09-22** (`plugin/grammar/`): `ValueForm`, `ValueContainer`,
+  `HostContainers` and `SourceSplit` moved here from the contract, and **`ValueGrammar`** replaced
+  `ValueCatalog`'s grammar half — built once per bind by `PluginHost.grammar()` from the bound plugins'
+  `types()` and `componentTypes()`. A leaf is a JDK literal (`JdkLiterals`), an enum constant, a
+  `ComponentType` taken apart through `components` and put back through `build`, a declared type written
+  as its own source, or unknown. **No plugin sees Java source**: an editor gets the value
+  (`ValueContext.value`) and hands one back (`set(Object)`), and `ValueGrammar` spells it. Where this
+  section still says *codec*, *`ValueCatalog`* or *wire*, read *`ValueGrammar`* and *value*: the codec,
+  the catalog and every text bridge were deleted, not moved.
   **A field's type is a `ValueForm`, read recursively** (`JavaParameterSource.formOf`, 2026-09-20): a
-  registered leaf, or a registered `ValueContainer` over forms, all the way down, so `Map<String,
+  known leaf, or a registered `ValueContainer` over forms, all the way down, so `Map<String,
   List<Duration>>` is something this reads rather than something it calls unknown. It was a `ValueChoice`
   — a type plus one list, deleted from the contract 2026-09-20 — and a field javac accepts perfectly well
   came out unknown and read-only. The single type a form's values are typed as is `ValueForm.leaf()`, which
@@ -1070,24 +1082,24 @@ The `ui/` package is split by concern:
   said that anything still needs. What is
   *not* a container is still an unknown leaf, shown as written: an array, a wildcard, a type variable, a
   `Set` nobody contributed, and a container whose written arity disagrees with the registered one.
-  **Reading a value back is the codec's** (`ValueCodec.valueOfLiteral`) through `ValueCatalog.valueOf`:
-  `literal` writes a value structurally so a bot cannot throw at class-init, and only the plugin that wrote
-  that spelling can undo it. A field whose initialiser the grammar declines is listed, shown and
+  **Reading a value back is `ValueGrammar.valueOf`**: the host wrote the spelling, so the host reads it,
+  and a plugin's `build` turns the typed parts into its value. A field whose initialiser the grammar declines is listed, shown and
   **read-only, with the reason** — the window never hides a parameter the bot reads, and never rewrites
   Java the author wrote by hand. **A row's value is the initialiser itself**, as the author wrote it: one
   source string rather than a list of stored items, because a composite has no other canonical form
   (`32-generic-values.md` decision 6). **The value cells read and write that same spelling** (2026-09-20):
   `ParamValueWidgets` switches on the form — a leaf editor, a list of them, a two-column map, and the
   author's own source read-only for everything else — and a composite is taken apart one level at a time
-  through `ValueCatalog.partsOfInitializer`, never encoded. `plugin/ValueWire` keeps the one join that
-  remains, at the **leaf**: `literal`/`wire`, because a leaf's own control has text where a composite has
-  none. `ui/render/components/ValueTypePicker` holds a form too — `Wrap in ▸` from `catalog.containers()`
+  through `ValueGrammar.partsOfInitializer`, never encoded. `plugin/ValueWire` keeps only that structural
+  half (`parts`, `compose`, `containers`); its leaf join to text (`literal`/`wire`) went on 2026-09-22,
+  because a leaf's control is handed the value now. `ui/render/components/ValueTypePicker` holds a form too — `Wrap in ▸` from `ValueWire.containers()`
   plus `Unwrap`, capped at two containers because a picker is capped where the model is not.
   **`BotRecords` is the fifth class, and the bot's own half of the vocabulary** (2026-09-20): it reads the
   project's `record` declarations and answers what `JavaParameterSource` structurally cannot — whether a
   written name is a class *this bot* declares — so a field typed `Point` is a `ValueForm.Declared` rather
   than an unknown leaf. It also owns the grammar for one, because the contract's declines it: `new
-  com.example.bot.Point(1, 2)` out, positional parts back, read with a real expression parse. **Records
+  com.example.bot.Point(1, 2)` out, positional parts back, read with a real expression parse. (A plugin's
+  `Point` is a `ComponentType` and never reaches here; `BotRecords` is for the bot's own.) **Records
   only** (a canonical constructor is unambiguous where a class's five are a guess), **no generics**
   (substituting a type variable needs the binding this package does without), and **never a placeholder**
   into a class of the user's.
@@ -1103,7 +1115,7 @@ The `ui/` package is split by concern:
   java)` is simply `JavaParameter`, since the field *is* the entry when there is one source. A plugin that
   wants a row of its own **puts a `@Param` field in the file it ships** — `BotSources.scan` already walks
   `plugins/sdk/Sdk.java`, so it is found, drawn and edited with no new code.
-  Every method takes a `ValueCatalog`, defaulting to `PluginHost.valueTypes()`: the catalog is what turns a
+  Every method takes a `ValueGrammar`, defaulting to `PluginHost.grammar()`: the grammar is what turns a
   value into the Java a field is initialised with, so a window and a test that disagreed about it would write
   two different files from the same click. `ParametersDialog` and `RunnerWindow` read this one list; the
   Runner also drops what it cannot rewrite, because a read-only cell is a message for the author and there
@@ -1119,7 +1131,7 @@ The `ui/` package is split by concern:
   sequence of `ModelCall` statements written into a generated class, which shipped as studio-api `2bc1e2f`
   earlier the same day and was withdrawn. Each had to own the package, the class name, the imports and the
   ordering. Handing the file over answers all of those at once and shrinks the reader's input domain from
-  *a class* to *one expression*, which is what `ValueCatalog.valueOf` already reads.
+  *a class* to *one expression*, which is what `ValueGrammar.valueOf` already reads.
   **The write is one `ASTRewrite` over a `ReturnStatement`'s expression**, which is the surgery
   `JavaParameterEdits.setValue` already performs on a field's initializer: one node, in place, the rest of
   the file byte-identical. The `ValueForm` comes from the method's **declared return type** through

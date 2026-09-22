@@ -35,7 +35,8 @@ public final class PluginRegistry {
      * One plugin's entry, as the registry's CI generated it.
      *
      * <p>Unknown properties are ignored because this Studio is the reader that lags: a field a newer
-     * {@code botmaker publish} writes must not make the whole catalog unreadable.
+     * {@code botmaker publish} writes must not make the whole catalog unreadable. The same rule drops
+     * {@code valueTypeIds}, which entries written before 2026-09-23 still carry and nothing reads.
      *
      * @param coordinate {@code groupId:artifactId}, with no version — the index names a plugin, not a
      *                   release
@@ -49,7 +50,7 @@ public final class PluginRegistry {
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Plugin(String id, String name, String coordinate, String repo, String description,
-                         List<String> tags, String minContractVersion, List<String> valueTypeIds,
+                         List<String> tags, String minContractVersion,
                          List<String> editorDependencies, String verifiedVersion, String verifiedAt) {
 
         public Plugin {
@@ -60,7 +61,6 @@ public final class PluginRegistry {
             repo = repo == null ? "" : repo.trim();
             description = description == null ? "" : description;
             tags = tags == null ? List.of() : List.copyOf(tags);
-            valueTypeIds = valueTypeIds == null ? List.of() : List.copyOf(valueTypeIds);
             minContractVersion = minContractVersion == null ? "" : minContractVersion.trim();
             verifiedVersion = verifiedVersion == null ? "" : verifiedVersion.trim();
             verifiedAt = verifiedAt == null ? "" : verifiedAt.trim();

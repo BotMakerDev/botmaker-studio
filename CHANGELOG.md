@@ -29,6 +29,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Retyping a parameter to a type with no starting value** (one of your own records) declares it with no
   initialiser rather than refusing.
 - `@Param` bounds are written as numbers (`min = 1`); text bounds from older bots (`min = "1"`) still read.
+- **Manage Plugins no longer reads an entry's `valueTypeIds`.** Nothing did anything with it, and the
+  registry stopped asking for it. Entries that still carry the field read as before.
 
 ### Removed
 

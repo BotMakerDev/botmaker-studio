@@ -261,7 +261,7 @@ public final class ManagePluginsDialog {
                 // published one does.
                 rows.set(at, new PluginRegistry.Plugin(entry.id(), entry.name(), entry.coordinate(),
                         entry.repo(), entry.description(), entry.tags(), entry.minContractVersion(),
-                        entry.valueTypeIds(), entry.editorDependencies(), build.version(),
+                        entry.editorDependencies(), build.version(),
                         entry.verifiedAt()));
             } else {
                 // A local build the registry has never seen has no entry to read a list from, so installing
@@ -269,7 +269,7 @@ public final class ManagePluginsDialog {
                 // jar's optional dependencies are — and the way out is `botmaker plugin publish`.
                 rows.add(0, new PluginRegistry.Plugin(build.coordinate(), build.artifactId(),
                         build.coordinate(), "", "Built locally into ~/.m2 — not published.", List.of(), "",
-                        List.of(), List.of(), build.version(), ""));
+                        List.of(), build.version(), ""));
             }
         }
         return rows;

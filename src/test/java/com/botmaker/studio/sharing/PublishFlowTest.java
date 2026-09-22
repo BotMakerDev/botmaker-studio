@@ -103,7 +103,7 @@ class PublishFlowTest {
                 new UserLibrary("org.junit.jupiter", "junit-jupiter", "5.10.0"),
                 new UserLibrary("com.example", "unregistered-plugin", "1.0"));
         List<PluginRegistry.Plugin> registry = List.of(new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
-                "com.github.LiQiyeDev:botmaker-sdk", "", "", List.of(), "", List.of(), List.of(), "v1.1.6", ""));
+                "com.github.LiQiyeDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.1.6", ""));
 
         assertEquals(List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.1.6")),
                 PublishRequest.requires(declared, Map.of("botmaker.sdk.version", "1.1.6"), registry));

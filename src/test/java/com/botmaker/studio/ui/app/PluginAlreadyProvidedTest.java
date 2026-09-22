@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginAlreadyProvidedTest {
 
     private static PluginRegistry.Plugin entry(String id, String name, String coordinate) {
-        return new PluginRegistry.Plugin(id, name, coordinate, "", "", List.of(), "", List.of(), List.of(),
+        return new PluginRegistry.Plugin(id, name, coordinate, "", "", List.of(), "", List.of(),
                 "1.0.0", "");
     }
 

@@ -41,7 +41,6 @@ class PluginRegistryTest {
         assertEquals("com.github.someone", plugin.groupId());
         assertEquals("botmaker-discord-plugin", plugin.artifactId());
         assertEquals("v0.1.0", plugin.verifiedVersion());
-        assertEquals(List.of("discord.channel"), plugin.valueTypeIds());
         assertEquals("https://github.com/someone/botmaker-discord-plugin", plugin.htmlUrl());
     }
 
