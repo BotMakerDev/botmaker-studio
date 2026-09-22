@@ -4,7 +4,6 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectState;
@@ -298,7 +297,7 @@ public final class RunnerWindow implements ProjectWindow {
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
             if (entry.row().isPublic() && entry.editable()) rows.add(entry);
         }
-        records = BotRecords.scan(config, state, PluginHost.valueTypes());
+        records = BotRecords.scan(config, state, PluginHost.grammar());
     }
 
     // sdkPin() stood here until 2026-09-22, reading the pom so the parameter data surface could be asked at
@@ -409,7 +408,7 @@ public final class RunnerWindow implements ProjectWindow {
         // The type as the field declares it, which since 2026-09-20 is the only name a form has. It was
         // "One of Image template" while a shape carried the prose; a badge naming the Java is the same rule
         // the picker's button follows, and it is what the user reads in their own file.
-        Label badge = new Label(v.form().sourceName());
+        Label badge = new Label(entry.form().sourceName());
         badge.getStyleClass().add("runner-type-badge");
         badge.setWrapText(true);
         // The badge keeps the width it asks for and the name wraps into what is left. The other way round —
@@ -421,7 +420,7 @@ public final class RunnerWindow implements ProjectWindow {
         HBox header = new HBox(6, name, badge);
         header.setAlignment(Pos.TOP_LEFT);
 
-        Node widget = ParamValueWidgets.build(entry.className(), v, config, records, valueEditors);
+        Node widget = ParamValueWidgets.build(entry.className(), v, entry.form(), config, records, valueEditors);
         if (widget instanceof Region region) region.setMaxWidth(Double.MAX_VALUE);
 
         VBox card = new VBox(6, header, widget);
@@ -524,7 +523,8 @@ public final class RunnerWindow implements ProjectWindow {
                 if (!editor.describes(entry.className(), entry.row().name())) continue;
                 String typed = editor.read().get();
                 if (typed.isBlank() || typed.equals(entry.row().value())) break;
-                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed);
+                Optional<ParameterRow> stored =
+                        JavaParameters.setValue(config, state, entry, typed, editor.imports().get());
                 int at = i;
                 stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
                 break;

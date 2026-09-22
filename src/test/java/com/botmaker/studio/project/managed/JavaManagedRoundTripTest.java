@@ -1,8 +1,8 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueContainer;
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueContainer;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.params.TestValues;
 import org.junit.jupiter.api.Test;
 
@@ -32,11 +32,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JavaManagedRoundTripTest {
 
-    private static final ValueCatalog CATALOG = TestValues.CATALOG;
+    private static final ValueGrammar CATALOG = TestValues.GRAMMAR;
 
-    private static final ValueForm TEXT = ValueForm.of(TestValues.TEXT);
-    private static final ValueForm DURATION = ValueForm.of(TestValues.DURATION);
-    private static final ValueForm BODY = ValueForm.of(TestValues.BODY);
+    private static final ValueForm TEXT = TestValues.TEXT;
+    private static final ValueForm DURATION = TestValues.DURATION;
+    private static final ValueForm BODY = TestValues.BODY;
     private static final ValueForm TEXTS = new ValueForm.Of(ValueContainer.LIST, List.of(TEXT));
     /** {@code Map<String, List<Map<String, List<Duration>>>>} — four containers deep. */
     private static final ValueForm DEEP = new ValueForm.Of(ValueContainer.MAP, List.of(TEXT,
@@ -97,9 +97,11 @@ class JavaManagedRoundTripTest {
         assertEquals(List.of(), roundTrip("java.util.List<String>", TEXTS, List.of()));
     }
 
+    /** A type a plugin declares and cannot take apart crosses as the source it is written as. */
     @Test
     void aMethodReferenceSurvives() {
-        assertEquals("Collect::body", roundTrip("com.example.bot.Body", BODY, "Collect::body"));
+        assertEquals("Collect::body",
+                roundTrip("com.botmaker.studio.project.params.TestValues.Body", BODY, "Collect::body"));
     }
 
     @Test
@@ -114,19 +116,19 @@ class JavaManagedRoundTripTest {
     /**
      * A record with fixed components, written as a plain type name and read back as the shape it is.
      *
-     * <p>This is the SDK's {@code Flow} in miniature, and it is the case the reader could not see until
-     * 2026-09-20: a type with no angle brackets went straight to the leaf lookup, so a registered container
-     * of arity zero read as an unknown leaf and the value came back read-only.
+     * <p>This is the SDK's {@code Flow} in miniature: a {@code ComponentType} nothing declares on its own,
+     * which the plugin hands over through {@code componentTypes()} so the host can read it at all.
      */
     @Test
     void aFixedShapeWrittenAsAPlainTypeNameRoundTrips() {
-        ValueForm span = new ValueForm.Of(TestValues.SPAN, List.of());
         TestValues.Span value = new TestValues.Span("phase one", 12);
 
-        Object read = roundTrip("com.botmaker.studio.project.params.TestValues.Span", span, value);
+        Object read = roundTrip("com.botmaker.studio.project.params.TestValues.Span", TestValues.SPAN_FORM, value);
 
         assertEquals(value, read);
-        assertEquals("com.botmaker.studio.project.params.TestValues.Span", span.sourceName());
+        assertEquals("TestValues.Span", TestValues.SPAN_FORM.sourceName());
+        assertEquals("com.botmaker.studio.project.params.TestValues.Span.of(\"phase one\", 12)",
+                CATALOG.initializer(TestValues.SPAN_FORM, value).orElseThrow());
     }
 
     // ---- what must not round-trip -----------------------------------------------------------------------
@@ -157,11 +159,11 @@ class JavaManagedRoundTripTest {
     }
 
     @Test
-    void aTypeNothingRegistersIsReadOnlyAndKept() {
+    void aTypeNothingDeclaresIsReadOnlyAndKept() {
         ManagedMethod read = only(fileReturning("com.example.bot.Mystery", "Mystery.of(1)"));
 
         assertFalse(read.editable());
-        assertTrue(read.note().contains("no installed plugin registers"), read.note());
+        assertTrue(read.note().contains("no installed plugin declares"), read.note());
         assertEquals("Mystery.of(1)", read.expression(), "still shown, exactly as written");
     }
 
@@ -170,8 +172,9 @@ class JavaManagedRoundTripTest {
     @Test
     void everythingButTheExpressionIsUntouched() {
         String before = fileReturning("java.time.Duration", "java.time.Duration.ofMillis(1L)");
+        // Written fully qualified, so it needs no import and the file gains no line.
         String after = JavaManagedEdits.setValue(before, "Sdk", "value",
-                "java.time.Duration.ofMillis(3000L)", CATALOG.imports(DURATION));
+                "java.time.Duration.ofMillis(3000L)", List.of());
 
         assertTrue(after.contains("java.time.Duration.ofMillis(3000L)"), after);
         assertTrue(after.contains("/** The plugin's values for this bot."), "the javadoc is still there");

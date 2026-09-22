@@ -109,8 +109,8 @@ public final class SdkSurfaceService {
             built.put(ci.getSimpleName(), factsOf(ci));
         }
         this.surface = Map.copyOf(built);
-        // Curation is the plugin's answer for THIS project's pin, never for the jar Studio bundles.
-        this.catalog = PluginHost.catalogFor(this.sdkVersion);
+        // Curation is the answer of the plugins bound for THIS project, which are the pinned jars.
+        this.catalog = PluginHost.catalogFor();
     }
 
     private static TypeFacts factsOf(ClassInfo ci) {

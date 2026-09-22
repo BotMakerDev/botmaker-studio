@@ -1,6 +1,6 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.plugin.api.source.SourceSeed;
+import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.palette.Initializer.BoolLit;
 import com.botmaker.studio.palette.Initializer.CharLit;
 import com.botmaker.studio.palette.Initializer.DoubleLit;
@@ -10,6 +10,9 @@ import com.botmaker.studio.palette.Initializer.Raw;
 import com.botmaker.studio.palette.Initializer.StaticCall;
 import com.botmaker.studio.palette.Initializer.StrLit;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
 
@@ -29,29 +32,18 @@ import java.util.Optional;
  * {@code ImageTemplate.class} and eleven more — which made this file the largest single reason
  * {@code botmaker-studio} compiled against {@code botmaker-sdk} at all. They are gone. What is left as
  * <em>constants</em> is the JDK: four literals, a colour, {@code void}, and the three {@code java.time}
- * values. Everything else is <b>contributed</b>, from the loaded plugins' {@link SourceSeed}s, and joins the
- * list at {@link #values()}.
+ * values. Everything else is <b>contributed</b>, from the loaded plugins' declared types
+ * ({@code StudioPlugin.types()}), and joins the list at {@link #values()}.
  *
- * <p>So this became a final class with static instances rather than an enum, for exactly the reason
- * {@code com.botmaker.plugin.api.value.ValueType} did in phase 10a: a closed set is right for one plugin and
- * wrong for two. A plugin wanting its type declarable would otherwise need a constant granted to it here,
- * which is the back door the platform exists to close.
+ * <p>So this became a final class with static instances rather than an enum: a closed set is right for one
+ * plugin and wrong for two. A plugin wanting its type declarable would otherwise need a constant granted to
+ * it here, which is the back door the platform exists to close.
  *
- * <h2>Why {@code SourceSeed} and not a new contribution surface</h2>
- *
- * <p>A seed already carries everything a declarable type needs: the type's name, the Java a fresh value of it
- * is written as, and the imports that expression wants. That is the same triple the deleted constants
- * carried — {@code Precision.class} plus {@code new EnumConst("Precision", "DEFAULT")} is
- * {@code SourceSeed.of("…Precision", "…Precision.DEFAULT")} with the label spelled twice. So nothing was
- * added to the contract: the surface that answers <em>what does a fresh one look like</em> already answers
- * <em>can I declare one</em>, and a plugin that seeds a type gets it offered for free.
- *
- * <p>The cost, stated plainly: a plugin can no longer be <em>curated</em> from here. This file used to be an
- * allow-list, and its javadoc argued for that — deriving the list from the catalog would put every new SDK
- * class in front of the user, and most of what the SDK ships is not something to declare a variable of. That
- * argument still holds and the answer moved rather than went: the seed list <em>is</em> the curation, and it
- * is written by the plugin that knows which of its types are worth holding. The SDK offering three types
- * where it used to offer fourteen is a decision for {@code SdkPlugin.sourceSeeds()}, not for this file.
+ * <p>It read {@code SourceSeed}s until 2026-09-22, which carried the fresh value as Java text. A declared
+ * {@code PluginType} carries it as a value, written by the host's grammar, or as {@code freshSource()} for a
+ * type whose starting value is a call the bot re-evaluates. The curation argument survived the change: the
+ * declared list <em>is</em> the curation, written by the plugin that knows which of its types are worth
+ * holding.
  *
  * <h2>Every entry compiles on the spot</h2>
  *
@@ -191,26 +183,25 @@ public final class BotType {
     }
 
     /**
-     * A declarable type read off one plugin's {@link SourceSeed}.
+     * A declarable type one plugin declares, with the Java its fresh value is written as.
      *
-     * <p>Written fully qualified, deliberately: the seed names its type either way and this factory has no
-     * rewriter to add an import with, so the qualified form is the only one that always compiles. The label
-     * and the suggested variable name are derived from the simple name, which is what the deleted SDK
-     * constants did too — {@code Point.class.getSimpleName()} was both.
+     * <p>Written fully qualified, deliberately: this factory has no rewriter to add an import with, so the
+     * qualified form is the only one that always compiles. The label and the suggested variable name are
+     * derived from the simple name, which is what the deleted SDK constants did too —
+     * {@code Point.class.getSimpleName()} was both.
      */
-    private static BotType fromSeed(SourceSeed seed) {
-        String qualified = seed.typeName();
+    private static BotType fromPlugin(String qualified, String fresh) {
         int dot = qualified.lastIndexOf('.');
         String simple = dot >= 0 ? qualified.substring(dot + 1) : qualified;
         String varName = simple.isEmpty()
                 ? "value"
                 : Character.toLowerCase(simple.charAt(0)) + simple.substring(1);
         return new BotType("SEED_" + qualified, Group.FROM_PLUGINS, simple, qualified, qualified, false,
-                varName, new Raw(seed.expression()));
+                varName, new Raw(fresh));
     }
 
     /**
-     * A stable identifier — the name of the constant, or {@code SEED_} plus the seeded type's qualified name.
+     * A stable identifier — the name of the constant, or {@code SEED_} plus the plugin type's qualified name.
      *
      * <p>It was {@code Enum.name()} until 2026-09-01 and the built-in ids are unchanged, because
      * {@code BlockCatalog} builds a drag-and-drop block id out of it ({@code DECLARE_TEXT}) and that string
@@ -269,20 +260,29 @@ public final class BotType {
     }
 
     /**
-     * Every offered type: this editor's own, then whatever the loaded plugins seed.
+     * Every offered type: this editor's own, then whatever the loaded plugins declare and can start.
      *
-     * <p>Asked each time rather than cached, which is {@code SourceSeed}'s own rule — the SDK's capture-source
-     * seed reads the project's <em>current</em> default target, and a list built at load would freeze it. A
-     * plugin contributing a type this editor already declares is dropped rather than shadowing it: a duplicate
-     * in a type menu is a menu the user cannot use, and the built-in is the one whose label is a sentence.
+     * <p>Asked each time rather than cached, because a fresh value may read the plugin's live state — the
+     * SDK's capture source starts as the project's <em>current</em> one, and a list built at load would
+     * freeze it. A type with no fresh value at all is left out: a declaration this menu cannot seed is one it
+     * would have to seed with a guess. A plugin declaring a type this editor already offers is dropped rather
+     * than shadowing it: a duplicate in a type menu is a menu the user cannot use, and the built-in is the
+     * one whose label is a sentence.
      */
     public static List<BotType> values() {
         List<BotType> all = new ArrayList<>(BUILT_IN);
-        for (SourceSeed seed : PluginHost.sourceSeeds()) {
-            if (seed.typeName() == null || seed.typeName().isBlank()) continue;
-            BotType seeded = fromSeed(seed);
-            boolean known = all.stream().anyMatch(t -> simple(t.typeName).equals(simple(seeded.typeName)));
-            if (!known) all.add(seeded);
+        ValueGrammar grammar = PluginHost.grammar();
+        for (PluginType<?> type : grammar.types()) {
+            String qualified;
+            try {
+                qualified = JavaNames.canonical(type.type());
+            } catch (RuntimeException | LinkageError e) {
+                continue;
+            }
+            if (qualified.isBlank()) continue;
+            boolean known = all.stream().anyMatch(t -> simple(t.typeName).equals(simple(qualified)));
+            if (known) continue;
+            grammar.freshInitializer(ValueForm.of(qualified)).ifPresent(fresh -> all.add(fromPlugin(qualified, fresh)));
         }
         return List.copyOf(all);
     }

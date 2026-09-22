@@ -391,6 +391,13 @@ public class CodeEditor {
                 (cu, code) -> RawExpressionHandler.replaceWithExpression(cu, code, toReplace, exprCode, importFqn));
     }
 
+    /** The same with any number of imports, applied in one rewrite. */
+    public void replaceWithRawExpression(Expression toReplace, String exprCode, List<String> importFqns) {
+        edit(toReplace, EditKind.BODY, false,
+                (cu, code) -> RawExpressionHandler.replaceWithExpression(cu, code, toReplace, exprCode,
+                        importFqns == null ? List.of() : importFqns));
+    }
+
     /**
      * Declares a new local variable {@code type name = <default>;} just before the statement enclosing
      * {@code toReplace}, then references it in that slot — a single atomic rewrite. Lets the user create a

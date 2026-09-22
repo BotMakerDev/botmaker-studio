@@ -1,12 +1,12 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueContainer;
-import com.botmaker.plugin.api.value.ValueForm;
-import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.plugin.grammar.JavaExpressions;
+import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.plugin.grammar.ValueContainer;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -55,8 +55,12 @@ public final class JavaParameterSource {
     /** The annotation's simple name, which is how it is matched. Its package is not resolvable here. */
     static final String ANNOTATION = "Param";
 
-    /** The annotation's fully qualified name, which is what an import or a qualified use spells. */
-    public static final String ANNOTATION_FQN = "com.botmaker.plugin.basics.params.Param";
+    /**
+     * The annotation's fully qualified name, which is what an import or a qualified use spells. The
+     * contract's since 2026-09-22; plugin-basics held it before, and a use spelling that one still matches,
+     * because the annotation is matched by its simple name.
+     */
+    public static final String ANNOTATION_FQN = "com.botmaker.plugin.api.params.Param";
 
     private JavaParameterSource() {}
 
@@ -100,33 +104,24 @@ public final class JavaParameterSource {
      * step.
      */
     public static Expression expression(String source) {
-        if (source == null || source.isBlank()) return null;
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_EXPRESSION);
-        parser.setSource(source.toCharArray());
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        parser.setCompilerOptions(options);
-        ASTNode node = parser.createAST(null);
-        return node instanceof Expression parsed ? parsed : null;
+        return JavaExpressions.parse(source);
     }
 
     /**
      * Every {@code @Param} field in {@code source}, in the order they are written.
      *
      * @param file    the path the rows are attributed to; may be {@code null} in a test
-     * @param catalog the merged value catalog, which decides what a field's Java type <em>is</em>
+     * @param grammar the bound plugins' value grammar, which decides what a field's Java type <em>is</em>
      */
-    public static List<JavaParameter> read(Path file, String source, ValueCatalog catalog) {
-        return read(file, source, catalog, BotRecords.none());
+    public static List<JavaParameter> read(Path file, String source, ValueGrammar grammar) {
+        return read(file, source, grammar, BotRecords.none());
     }
 
     /**
      * The same, told what the bot declares itself — the form a window reads, since a field may be typed with
      * one of the bot's own records.
      */
-    public static List<JavaParameter> read(Path file, String source, ValueCatalog catalog,
+    public static List<JavaParameter> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records) {
         List<JavaParameter> out = new ArrayList<>();
         parse(source).accept(new ASTVisitor() {
@@ -138,7 +133,7 @@ public final class JavaParameterSource {
                 if (className == null) return false;
                 for (Object each : field.fragments()) {
                     VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
-                    out.add(read(file, source, catalog, records, className, field, annotation, fragment));
+                    out.add(read(file, source, grammar, records, className, field, annotation, fragment));
                 }
                 return false;
             }
@@ -147,7 +142,7 @@ public final class JavaParameterSource {
     }
 
     /** One fragment of one field — {@code @Param public static int a = 1, b = 2;} declares two. */
-    private static JavaParameter read(Path file, String source, ValueCatalog catalog, BotRecords records,
+    private static JavaParameter read(Path file, String source, ValueGrammar grammar, BotRecords records,
                                       String className, FieldDeclaration field, Annotation annotation,
                                       VariableDeclarationFragment fragment) {
         Map<String, Object> members = members(annotation);
@@ -155,30 +150,28 @@ public final class JavaParameterSource {
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
 
-        ValueForm form = formOf(catalog, field.getType(), fragment.getExtraDimensions(),
+        ValueForm form = formOf(grammar, field.getType(), fragment.getExtraDimensions(),
                 records::qualifyDeclared);
-        // The catalog declines a declared form by design — only the host can see the bot's own source — so
-        // the second reader is asked for exactly that case and for no other.
+        // The grammar declines a declared form by design — only the host's view of the bot's own source can
+        // read one — so the second reader is asked for exactly that case and for no other.
         boolean readable = form instanceof ValueForm.Declared declared
                 ? records.partsOf(declared, initializer).isPresent()
-                : catalog.valueOf(form, initializer).isPresent();
+                : grammar.valueOf(form, initializer).isPresent();
 
-        String note = whyNotEditable(field, form, records, readable, initializer);
+        String note = whyNotEditable(grammar, field, form, records, readable, initializer);
         // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
         // be edited still has to show what the field holds, and the reading above decides only whether it
         // may be replaced.
-        ParameterRow.Builder row = ParameterRow.named(name, form)
+        ParameterRow row = ParameterRow.named(name, form.sourceName())
                 .value(initializer)
                 .description(string(members, "description"))
                 .category(string(members, "category"))
                 .visibility(Visibility.fromId(string(members, "visibility")))
-                .options(strings(members, "options"));
-        String min = string(members, "min");
-        String max = string(members, "max");
-        if (!min.isBlank() || !max.isBlank()) {
-            row.bounds(new Range(min.isBlank() ? null : min, max.isBlank() ? null : max));
-        }
-        return new JavaParameter(file, className, row.build(), initializer, note.isEmpty(), note);
+                .options(strings(members, "options"))
+                .bounds(number(members, "min", Double.NEGATIVE_INFINITY),
+                        number(members, "max", Double.POSITIVE_INFINITY))
+                .build();
+        return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note);
     }
 
     /**
@@ -188,8 +181,8 @@ public final class JavaParameterSource {
      * reason — is the failure this whole design exists to avoid. A field is never <em>rejected</em>: it is
      * still listed, still shows what it holds, and still tells the author what to change.
      */
-    private static String whyNotEditable(FieldDeclaration field, ValueForm form, BotRecords records,
-                                         boolean readable, String initializer) {
+    private static String whyNotEditable(ValueGrammar grammar, FieldDeclaration field, ValueForm form,
+                                         BotRecords records, boolean readable, String initializer) {
         int modifiers = field.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
             return "not public: the bot can read it, the window cannot show it being changed";
@@ -207,10 +200,10 @@ public final class JavaParameterSource {
             String why = records.whyNotEditable(declared);
             if (why != null) return why;
         }
-        String unknown = firstUnknown(form);
+        String unknown = grammar.firstUnknown(form);
         if (unknown != null) {
             return form instanceof ValueForm.Leaf
-                    ? "no installed plugin registers " + unknown + " as a value type"
+                    ? "no installed plugin declares " + unknown + " as a value type"
                     : "type argument " + unknown + " is not a known value type";
         }
         if (initializer.isBlank()) {
@@ -223,8 +216,8 @@ public final class JavaParameterSource {
     }
 
     /**
-     * The {@link ValueForm} a written type means, all the way down: a registered leaf, a registered
-     * container over forms, and {@link ValueType#unknown} for anything else.
+     * The {@link ValueForm} a written type means, all the way down: a leaf the grammar knows, a host
+     * container over forms, and a leaf keyed by what was written for anything else.
      *
      * <p><b>Recursive, and unbounded.</b> {@code Map<String, List<Duration>>} reads as what it is. Until
      * 2026-09-20 this answered a {@code ValueChoice}, which could say a type and <em>one</em> list around
@@ -232,115 +225,49 @@ public final class JavaParameterSource {
      * picker is capped, because a four-level value cell is not drawable in a table row; nothing caps what
      * may be read out of a user's file, shown and left intact.
      *
-     * <p>An array is <em>not</em> a container. {@code int[]} is a Java spelling no codec emits, so an array
-     * field is read as unknown and comes out read-only — visible, honest, and not silently rewritten into a
-     * {@code List}. A wildcard, a type variable and a container whose written arity disagrees with the
-     * registered one read the same way, and for the same reason.
+     * <p>An array is <em>not</em> a container. {@code int[]} is a Java spelling the grammar never writes, so
+     * an array field is read as unknown and comes out read-only — visible, honest, and not silently rewritten
+     * into a {@code List}. A wildcard, a type variable and a container whose written arity disagrees with its
+     * own read the same way, and for the same reason.
      */
-    public static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions) {
-        return formOf(catalog, type, extraDimensions, Declarations.NONE);
+    public static ValueForm formOf(ValueGrammar grammar, Type type, int extraDimensions) {
+        return formOf(grammar, type, extraDimensions, Declarations.NONE);
     }
 
     /**
      * The same, told what the bot declares itself — which is what turns an unknown leaf into a
      * {@link ValueForm.Declared}.
      *
-     * <p><b>A registered type wins a name clash</b>, so a bot declaring its own {@code Point} beside the
-     * SDK's still reads as the SDK's. That is the weaker answer and the safer one: the catalog's is the
-     * reading every previous release gave, and a field whose meaning changed because a file elsewhere in the
-     * project was renamed would be the surprise this parser exists not to spring.
+     * <p><b>A plugin's type wins a name clash</b>, so a bot declaring its own {@code Point} beside the SDK's
+     * still reads as the SDK's. That is the weaker answer and the safer one: it is the reading every previous
+     * release gave, and a field whose meaning changed because a file elsewhere in the project was renamed
+     * would be the surprise this parser exists not to spring.
      */
-    public static ValueForm formOf(ValueCatalog catalog, Type type, int extraDimensions,
+    public static ValueForm formOf(ValueGrammar grammar, Type type, int extraDimensions,
                                    Declarations declarations) {
-        if (type == null) return ValueForm.of(unknown(""));
-        if (extraDimensions > 0 || type.isArrayType()) {
-            return ValueForm.of(unknown(type.toString().strip()));
-        }
+        if (type == null) return ValueForm.of("");
+        String written = type.toString().strip();
+        if (extraDimensions > 0 || type.isArrayType()) return ValueForm.of(written);
         if (type instanceof ParameterizedType parameterized) {
             String raw = parameterized.getType().toString().strip();
-            Optional<ValueContainer<?>> container = catalog.containerForJava(raw);
+            Optional<ValueContainer<?>> container = grammar.containerForJava(raw);
             List<?> arguments = parameterized.typeArguments();
             List<ValueForm> forms = new ArrayList<>(arguments.size());
-            for (Object argument : arguments) forms.add(formOf(catalog, (Type) argument, 0, declarations));
+            for (Object argument : arguments) forms.add(formOf(grammar, (Type) argument, 0, declarations));
             if (container.isPresent() && container.get().arity() == arguments.size()) {
                 return new ValueForm.Of(container.get(), forms);
             }
             String declared = declarations.qualify(raw);
             if (declared != null) return new ValueForm.Declared(declared, forms);
-            return ValueForm.of(unknown(type.toString().strip()));
+            return ValueForm.of(written);
         }
         if (type.isWildcardType() || type.isIntersectionType() || type.isUnionType()) {
-            return ValueForm.of(unknown(type.toString().strip()));
+            return ValueForm.of(written);
         }
-        // A container of arity zero is a fixed shape — the SDK's `Flow`, which takes no type arguments and
-        // still has parts. It is written as a plain name, so it is looked for here rather than in the
-        // parameterized branch above, and only at arity zero: a `List` written bare is a raw type, which is
-        // not a form this reader invents arguments for.
-        Optional<ValueContainer<?>> fixed = catalog.containerForJava(type.toString().strip());
-        if (fixed.isPresent() && fixed.get().arity() == 0) {
-            return new ValueForm.Of(fixed.get(), List.of());
-        }
-        ValueType leaf = registered(catalog, type);
-        if (leaf.known()) return ValueForm.of(leaf);
-        String declared = declarations.qualify(type.toString().strip());
-        return declared == null ? ValueForm.of(leaf) : new ValueForm.Declared(declared, List.of());
-    }
-
-    /**
-     * The first leaf in {@code form} that nothing registers, as it is written — or {@code null} when every
-     * one of them is known.
-     *
-     * <p>Depth-first in written order, so the reason a cell gives names the argument a reader's eye reaches
-     * first. One unknown leaf anywhere makes the whole form unreadable, which is the same rule
-     * {@code ValueCatalog.valueOf} applies to one unreadable part of a list.
-     */
-    private static String firstUnknown(ValueForm form) {
-        return switch (form) {
-            case ValueForm.Leaf leaf -> leaf.type().known() ? null : leaf.type().id();
-            case ValueForm.Of of -> {
-                for (ValueForm argument : of.arguments()) {
-                    String found = firstUnknown(argument);
-                    if (found != null) yield found;
-                }
-                yield null;
-            }
-            // A declared class is not an unknown leaf: the bot does declare it, and whether a value of it can
-            // be written is BotRecords' answer, given above this one. Its type arguments are still leaves.
-            case ValueForm.Declared declared -> {
-                for (ValueForm argument : declared.arguments()) {
-                    String found = firstUnknown(argument);
-                    if (found != null) yield found;
-                }
-                yield null;
-            }
-        };
-    }
-
-    /**
-     * The registered type a written name means.
-     *
-     * <p>Asked by simple name as well as fully qualified, because {@code Duration} and
-     * {@code java.time.Duration} are the same field written two ways and only the source says which. A name
-     * two plugins both end with is resolved by the catalog's registration order, which is the same order
-     * every other menu resolves by.
-     */
-    private static ValueType registered(ValueCatalog catalog, Type type) {
-        String written = type.toString().strip();
-        Optional<ValueType> exact = catalog.forJava(written);
-        if (exact.isPresent()) return exact.get();
-        for (ValueType candidate : catalog.types()) {
-            String javaName = candidate.javaName();
-            if (javaName == null) continue;
-            if (javaName.equals(written)) return candidate;
-            int lastDot = javaName.lastIndexOf('.');
-            if (lastDot >= 0 && javaName.substring(lastDot + 1).equals(written)) return candidate;
-        }
-        return unknown(written);
-    }
-
-    /** An unknown type keyed by what was written, so the cell can say which name nobody registers. */
-    private static ValueType unknown(String written) {
-        return ValueType.unknown(written);
+        String known = grammar.qualify(written);
+        if (known != null) return ValueForm.of(known);
+        String declared = declarations.qualify(written);
+        return declared == null ? ValueForm.of(written) : new ValueForm.Declared(declared, List.of());
     }
 
     /**
@@ -387,10 +314,23 @@ public final class JavaParameterSource {
                 }
                 out.put(name, List.copyOf(items));
             } else {
-                constant(pair.getValue()).ifPresent(v -> out.put(name, v));
+                Optional<String> text = constant(pair.getValue());
+                if (text.isPresent()) out.put(name, text.get());
+                else numeric(pair.getValue()).ifPresent(v -> out.put(name, v));
             }
         }
         return out;
+    }
+
+    /**
+     * A numeric literal's value — {@code min = 0}, {@code max = 2.5}, {@code min = -1} — or empty for
+     * anything else. {@code @Param}'s bounds have been {@code double} since 2026-09-22; they were text only
+     * because a codec parsed them.
+     */
+    private static Optional<Double> numeric(Expression expression) {
+        return JdkLiterals.readAny(expression.toString())
+                .filter(Number.class::isInstance)
+                .map(value -> ((Number) value).doubleValue());
     }
 
     /**
@@ -419,6 +359,23 @@ public final class JavaParameterSource {
     private static String string(Map<String, Object> members, String name) {
         Object value = members.get(name);
         return value instanceof String text ? text : "";
+    }
+
+    /**
+     * A bound. A string is read too: {@code @Param}'s bounds were text until 2026-09-22, and a bot written
+     * against plugin-basics' annotation says {@code min = "1"} — the same bound, which it still is.
+     */
+    private static double number(Map<String, Object> members, String name, double absent) {
+        Object value = members.get(name);
+        if (value instanceof Double number) return number;
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Double.parseDouble(text.strip());
+            } catch (NumberFormatException notANumber) {
+                return absent;
+            }
+        }
+        return absent;
     }
 
     @SuppressWarnings("unchecked")

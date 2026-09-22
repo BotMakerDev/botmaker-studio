@@ -1,10 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
-import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -12,7 +8,8 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.StudioWindow;
@@ -218,7 +215,7 @@ public final class ParametersDialog {
         // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of
         // the bot's own records needs that record's components, and a per-cell scan would read every source
         // file once per row on screen.
-        records = BotRecords.scan(config, state, PluginHost.valueTypes());
+        records = BotRecords.scan(config, state, PluginHost.grammar());
     }
 
     // --- left: the tag rail ------------------------------------------------------------------------------
@@ -327,7 +324,7 @@ public final class ParametersDialog {
         // One step for the batch: filing eight parameters at once should be one ↶, not eight.
         change("filing " + chosen.size() + " parameters under " + selectedTag, () -> {
             for (JavaParameter picked : chosen) {
-                declare(picked, current -> current.toBuilder().category(home).build());
+                declare(picked, current -> current.toBuilder().category(home).build(), null);
             }
             error("");
         });
@@ -522,18 +519,18 @@ public final class ParametersDialog {
         Node type;
         if (mine) {
             ValueTypePicker picker = new ValueTypePicker();
-            picker.setForm(v.form());
+            picker.setForm(entry.form());
             picker.setPrefWidth(180);
             picker.formProperty().addListener((o, was, is) -> {
-                if (is == null || is.equals(v.form())) return;
+                if (is == null || is.equals(entry.form())) return;
                 // Retyping rewrites the field's declared Java type and resets its initialiser to the new
-                // type's default: a value written for one type is not a value of another, and carrying it
-                // across would leave a bot that does not compile.
-                edit(entry, "the type", current -> rebuilt(current, is));
+                // type's fresh value: a value written for one type is not a value of another, and carrying
+                // it across would leave a bot that does not compile.
+                edit(entry, "the type", UnaryOperator.identity(), null, is);
             });
             type = picker;
         } else {
-            type = new Label(v.form().sourceName());
+            type = new Label(entry.form().sourceName());
         }
 
         CheckBox shared = new CheckBox("Show to user");
@@ -591,10 +588,11 @@ public final class ParametersDialog {
         // free until something is written in it. A closed-set type brings its own choices (every direction,
         // every mouse button), so there is nothing here for the author to write — offering an "add a choice"
         // row over them would invite a second, hand-typed copy of a list the plugin already owns.
-        ValueType leaf = v.form().leaf();
-        if (mine && leaf != null && leaf.known() && leaf.options().isEmpty()) {
+        ValueForm.Leaf leaf = entry.form().leaf();
+        ValueGrammar grammar = PluginHost.grammar();
+        if (mine && leaf != null && grammar.known(leaf) && !isEnum(grammar, leaf)) {
             Label heading = new Label("Choices");
-            heading.setTooltip(new Tooltip(v.form() instanceof ValueForm.Of
+            heading.setTooltip(new Tooltip(entry.form() instanceof ValueForm.Of
                     ? "The set this parameter's values are picked from. The user ticks any number of them."
                     : "The set this parameter's value is picked from. The user picks exactly one."));
             grid.add(heading, 0, row);
@@ -602,7 +600,7 @@ public final class ParametersDialog {
             row++;
         }
 
-        if (mine && leaf != null && leaf.bounded()) {
+        if (mine && leaf != null && isNumber(grammar, leaf)) {
             grid.add(new Label("Range"), 0, row);
             grid.add(buildBoundsEditor(entry), 1, row);
             row++;
@@ -652,7 +650,8 @@ public final class ParametersDialog {
      */
     private Node valueCell(JavaParameter entry) {
         if (entry.editable()) {
-            return ParamValueWidgets.build(entry.className(), entry.row(), config, records, valueEditors);
+            return ParamValueWidgets.build(entry.className(), entry.row(), entry.form(), config, records,
+                    valueEditors);
         }
         Label written = new Label(entry.initializer());
         written.getStyleClass().add("dialog-hint-text");
@@ -697,20 +696,41 @@ public final class ParametersDialog {
     }
 
     /**
-     * The same row under a different type.
-     *
-     * <p>A rebuild rather than a {@code with…}: {@link ParameterRow}'s builder is named and typed at
-     * construction, because a row is a value a plugin builds and those two components are what identify it.
+     * Whether {@code leaf} is an enum a plugin declares — a closed set that brings its own choices (every
+     * direction, every mouse button), so a hand-typed copy of that list would be a second one to drift.
      */
-    private static ParameterRow rebuilt(ParameterRow row, ValueForm form) {
-        return ParameterRow.named(row.name(), form)
-                .value(row.value())
-                .description(row.description())
-                .category(row.category())
-                .visibility(row.visibility())
-                .options(row.options())
-                .bounds(row.bounds())
-                .build();
+    private static boolean isEnum(ValueGrammar grammar, ValueForm.Leaf leaf) {
+        return grammar.type(leaf.typeName()).map(type -> {
+            try {
+                return type.type().isEnum();
+            } catch (RuntimeException | LinkageError e) {
+                return false;
+            }
+        }).orElse(false);
+    }
+
+    /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
+    private static boolean isNumber(ValueGrammar grammar, ValueForm.Leaf leaf) {
+        String name = grammar.qualify(leaf.typeName());
+        return name != null && NUMBERS.contains(name);
+    }
+
+    private static final java.util.Set<String> NUMBERS = java.util.Set.of(
+            "byte", "short", "int", "long", "float", "double",
+            "java.lang.Byte", "java.lang.Short", "java.lang.Integer", "java.lang.Long",
+            "java.lang.Float", "java.lang.Double");
+
+    /**
+     * A choice as the author writes it into {@code @Param(options = …)}: the text itself for a string, the
+     * constant's name for an enum, and the value's Java for everything else — which is what
+     * {@code ParamValueWidgets.optionSource} reads back as the same value.
+     */
+    private static String optionText(ValueGrammar grammar, ValueForm.Leaf leaf, String source) {
+        Optional<Object> value = grammar.valueOf(leaf, source);
+        if (value.isEmpty()) return "";
+        if (value.get() instanceof String text) return text;
+        if (value.get() instanceof Enum<?> constant) return constant.name();
+        return grammar.initializer(leaf, value.get()).orElse("");
     }
 
     /** Where this parameter is listed — one category or none, never several: a parameter has one home. */
@@ -734,8 +754,9 @@ public final class ParametersDialog {
      */
     private Node buildOptionsEditor(JavaParameter entry) {
         ParameterRow v = entry.row();
-        ValueType base = v.form().leaf();
-        ValueEditors.Context ctx = new ValueEditors.Context(config, v.bounds());
+        ValueForm.Leaf base = entry.form().leaf();
+        ValueGrammar grammar = PluginHost.grammar();
+        ValueEditors.Context ctx = ValueEditors.Context.of(config);
         VBox box = new VBox(4);
         List<String> options = v.options();
 
@@ -751,9 +772,8 @@ public final class ParametersDialog {
         HBox.setHgrow(fresh.node(), Priority.ALWAYS);
         Button add = new Button("Add");
         Runnable addOption = () -> {
-            String typed = fresh.read().get();
-            typed = typed == null ? "" : typed.trim();
-            if (typed.isEmpty()) return;
+            String typed = optionText(grammar, base, fresh.read().get());
+            if (typed.isBlank()) return;
             if (options.contains(typed)) {
                 error("'" + typed + "' is already a choice here.");
                 return;
@@ -784,11 +804,12 @@ public final class ParametersDialog {
      * and adding the right one: an in-place editor for those would need a commit gesture per row, and a
      * three-item choice list is not where that ceremony earns its keep.
      */
-    private Node optionRow(JavaParameter entry, ValueType base, ValueEditors.Context ctx,
+    private Node optionRow(JavaParameter entry, ValueForm.Leaf base, ValueEditors.Context ctx,
                            List<String> options, int at) {
         String option = options.get(at);
+        ValueGrammar grammar = PluginHost.grammar();
         Node shown;
-        if (ValueCatalog.TEXT_ID.equals(base.id())) {
+        if ("java.lang.String".equals(grammar.qualify(base.typeName()))) {
             TextField field = new TextField(option);
             HBox.setHgrow(field, Priority.ALWAYS);
             Runnable commit = () -> {
@@ -815,7 +836,9 @@ public final class ParametersDialog {
             });
             shown = field;
         } else {
-            Label label = new Label(option, ValueEditors.optionGraphic(base, option, ctx));
+            Label label = new Label(option, ParamValueWidgets.optionSource(grammar, base, option)
+                    .map(written -> ValueEditors.optionGraphic(base, written.source(), ctx))
+                    .orElse(null));
             HBox.setHgrow(label, Priority.ALWAYS);
             shown = label;
         }
@@ -846,13 +869,17 @@ public final class ParametersDialog {
      * editor a coarser instrument than the type it edits.
      */
     private Node buildBoundsEditor(JavaParameter entry) {
-        TextField min = boundField(entry.row().bounds().min(), "no minimum");
-        TextField max = boundField(entry.row().bounds().max(), "no maximum");
+        TextField min = boundField(boundText(entry.row().min()), "no minimum");
+        TextField max = boundField(boundText(entry.row().max()), "no maximum");
         Runnable commit = () -> {
-            Range declared = new Range(min.getText(), max.getText());
+            double low = bound(min.getText(), Double.NEGATIVE_INFINITY);
+            double high = bound(max.getText(), Double.POSITIVE_INFINITY);
             JavaParameter held = find(entry.className(), entry.row().name());
-            if (held == null || declared.equals(held.row().bounds())) return;
-            edit(held, "the range", current -> current.toBuilder().bounds(declared).build());
+            if (held == null || (Double.compare(low, held.row().min()) == 0
+                    && Double.compare(high, held.row().max()) == 0)) {
+                return;
+            }
+            edit(held, "the range", current -> current.toBuilder().bounds(low, high).build());
         };
         for (TextField field : List.of(min, max)) {
             field.focusedProperty().addListener((o, was, is) -> {
@@ -866,6 +893,24 @@ public final class ParametersDialog {
         HBox row = new HBox(6, min, new Label("to"), max);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
+    }
+
+    /** A bound as its field shows it: blank for none, {@code 1} rather than {@code 1.0} for a whole one. */
+    private static String boundText(double value) {
+        if (Double.isInfinite(value) || Double.isNaN(value)) return "";
+        return value == Math.rint(value) && Math.abs(value) < 1e15 ? Long.toString((long) value)
+                : Double.toString(value);
+    }
+
+    /** What a bound field says, or {@code absent} for blank or anything that is not a number. */
+    private static double bound(String text, double absent) {
+        if (text == null || text.isBlank()) return absent;
+        try {
+            double parsed = Double.parseDouble(text.strip().replace(',', '.'));
+            return Double.isNaN(parsed) ? absent : parsed;
+        } catch (NumberFormatException e) {
+            return absent;
+        }
     }
 
     private static TextField boundField(String value, String prompt) {
@@ -908,11 +953,10 @@ public final class ParametersDialog {
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
                 ValueForm form = type.form();
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
-                        form, ValueWire.defaultInitializer(form), tag, "");
+                        form, PluginHost.grammar().freshInitializer(form).orElse(""), tag, "");
                 if (stored.isEmpty()) {
                     error("“" + candidate + "” was not written — " + selectedClass + " may already declare "
-                            + "a field of that name, or this type has no default that can be written as "
-                            + "Java.");
+                            + "a field of that name, or no installed plugin declares this type.");
                     return;
                 }
                 error(fresh ? "Created " + selectedClass + ".java for it." : "");
@@ -1001,11 +1045,17 @@ public final class ParametersDialog {
 
     /** The same, optionally renaming to {@code newName}. Answers whether the owner stored anything. */
     private boolean edit(JavaParameter entry, String what, UnaryOperator<ParameterRow> change, String newName) {
+        return edit(entry, what, change, newName, null);
+    }
+
+    /** The same, optionally retyping to {@code newForm} as well. */
+    private boolean edit(JavaParameter entry, String what, UnaryOperator<ParameterRow> change, String newName,
+                         ValueForm newForm) {
         boolean[] stored = {false};
         change(what + " of " + entry.row().name(), () -> stored[0] = declare(entry, current -> {
             ParameterRow changed = change.apply(current);
             return newName == null ? changed : rename(changed, newName);
-        }));
+        }, newForm));
         return stored[0];
     }
 
@@ -1013,26 +1063,28 @@ public final class ParametersDialog {
      * One row, as the source reads it back after the change — or {@code false} when nothing was written.
      *
      * <p>The field is looked up again rather than trusted: an earlier edit in the same gesture may have moved
-     * it, and an undo replaying an old snapshot lands here too.
+     * it, and an undo replaying an old snapshot lands here too. {@code newForm} is null for an edit that
+     * keeps the type.
      */
-    private boolean declare(JavaParameter entry, UnaryOperator<ParameterRow> change) {
+    private boolean declare(JavaParameter entry, UnaryOperator<ParameterRow> change, ValueForm newForm) {
         JavaParameter held = find(entry.className(), entry.row().name());
         if (held == null) return false;
         ParameterRow wanted = change.apply(held.row());
-        boolean stored = JavaParameters.declare(config, state, held, wanted).isPresent();
+        boolean stored = JavaParameters.declare(config, state, held, wanted,
+                newForm == null ? held.form() : newForm).isPresent();
         reload();
         rebuildRail();
         return stored;
     }
 
     private static ParameterRow rename(ParameterRow row, String name) {
-        return ParameterRow.named(name, row.form())
+        return ParameterRow.named(name, row.typeName())
                 .value(row.value())
                 .description(row.description())
                 .category(row.category())
                 .visibility(row.visibility())
                 .options(row.options())
-                .bounds(row.bounds())
+                .bounds(row.min(), row.max())
                 .build();
     }
 
@@ -1090,12 +1142,12 @@ public final class ParametersDialog {
             ParameterRow row = entry.row();
             JavaParameter held = find(entry.className(), row.name());
             if (held == null) {
-                JavaParameters.add(config, state, entry.className(), row.name(), row.form(),
+                JavaParameters.add(config, state, entry.className(), row.name(), entry.form(),
                         row.value(), row.category(), row.description());
                 held = find(entry.className(), row.name());
             }
             if (held == null) continue;
-            JavaParameters.declare(config, state, held, row);
+            JavaParameters.declare(config, state, held, row, entry.form());
             reload();
         }
         reload();
@@ -1132,7 +1184,8 @@ public final class ParametersDialog {
                 // The answer is the row as *stored*, which may differ from what was typed — a clamp, a
                 // canonical spelling from a plugin, an initialiser as the codec spells it. That is what goes
                 // into the list, so the next redraw shows what the bot will actually get.
-                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed);
+                Optional<ParameterRow> stored =
+                        JavaParameters.setValue(config, state, entry, typed, editor.imports().get());
                 stored.ifPresent(row -> rows.set(rows.indexOf(entry), entry.withRow(row)));
                 break;
             }

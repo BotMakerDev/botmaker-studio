@@ -12,6 +12,24 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **A colour, a duration or any other plugin value opened in the Parameters window and closed without an
+  edit comes back byte-identical.** Studio used to read a value as text, run it through a codec it could
+  not check and write it back — a `java.awt.Color` came out as `new java.awt.Color(255, 255, 255)`. Studio
+  now reads every value as the value it is, through each plugin's own declaration of its type, and writes
+  it back only when an editor changes it.
+- **Every value editor is a plugin's.** The check box, spinners, date and time pickers, direction pad, mouse
+  diagram and key list Studio drew itself now come from the plugin that declares the type (plugin-basics for
+  the JDK's, the SDK for its own), so the Parameters window, the Runner and a block draw the same editor.
+  One thing is lost: a declared `@Param(min, max)` no longer narrows a number's editor; it is still read,
+  shown and kept.
+- **A value written into your own file uses simple names and adds the import**, where it used to write
+  `com.botmaker.sdk.api.geometry.Point` in full.
+- **Retyping a parameter to a type with no starting value** (one of your own records) declares it with no
+  initialiser rather than refusing.
+- `@Param` bounds are written as numbers (`min = 1`); text bounds from older bots (`min = "1"`) still read.
+
 ### Removed
 
 - **Studio no longer writes a plugin's file into your project.** `PluginSourceFiles` ran on every plugin

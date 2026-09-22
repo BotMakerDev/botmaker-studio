@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -40,12 +40,12 @@ class BotRecordsTest {
     }
 
     private static BotRecords records(String... sources) {
-        return BotRecords.of(TestValues.CATALOG, List.of(sources));
+        return BotRecords.of(TestValues.GRAMMAR, List.of(sources));
     }
 
     private static JavaParameter only(BotRecords records, String fields) {
         List<JavaParameter> found = JavaParameterSource.read(
-                null, parameters(fields), TestValues.CATALOG, records);
+                null, parameters(fields), TestValues.GRAMMAR, records);
         assertEquals(1, found.size());
         return found.getFirst();
     }
@@ -61,7 +61,7 @@ class BotRecordsTest {
                     public static Point origin = new Point(1, 2);
                 """);
 
-        assertEquals(point(), origin.row().form());
+        assertEquals(point(), origin.form());
         assertTrue(origin.editable(), origin.note());
         assertEquals("new Point(1, 2)", origin.row().value());
     }
@@ -74,8 +74,7 @@ class BotRecordsTest {
                     public static Point origin = new Point(1, 2);
                 """);
 
-        assertEquals(ValueForm.of(com.botmaker.plugin.api.value.ValueType.unknown("Point")),
-                origin.row().form());
+        assertEquals(ValueForm.of("Point"), origin.form());
         assertFalse(origin.editable());
     }
 
@@ -83,10 +82,10 @@ class BotRecordsTest {
     void aValueIsTakenApartPositionallyAndPutBackFullyQualified() {
         BotRecords records = records(POINT);
 
-        List<ValueCatalog.Part> parts = records.partsOf(point(), "new Point(1, 2)").orElseThrow();
+        List<ValueGrammar.Part> parts = records.partsOf(point(), "new Point(1, 2)").orElseThrow();
 
-        assertEquals(List.of("1", "2"), parts.stream().map(ValueCatalog.Part::initializer).toList());
-        assertEquals(TestValues.WHOLE_NUMBER, ((ValueForm.Leaf) parts.getFirst().form()).type());
+        assertEquals(List.of("1", "2"), parts.stream().map(ValueGrammar.Part::initializer).toList());
+        assertEquals(TestValues.WHOLE_NUMBER, parts.getFirst().form());
         assertEquals("new com.example.bot.Point(3, 4)",
                 records.initializerOfParts(point(), List.of("3", "4")).orElseThrow());
     }
@@ -94,11 +93,11 @@ class BotRecordsTest {
     /** A real parser, not a comma count: an argument may contain commas of its own. */
     @Test
     void anArgumentWithCommasInItIsStillOneArgument() {
-        List<ValueCatalog.Part> parts = records(POINT)
+        List<ValueGrammar.Part> parts = records(POINT)
                 .partsOf(point(), "new Point(Math.max(1, 2), 3)").orElseThrow();
 
         assertEquals(List.of("Math.max(1, 2)", "3"), parts.stream()
-                .map(ValueCatalog.Part::initializer).toList());
+                .map(ValueGrammar.Part::initializer).toList());
     }
 
     /**
@@ -179,7 +178,7 @@ class BotRecordsTest {
         assertNull(records.whyNotEditable(declared));
         assertEquals(List.of("new Point(0, 0)", "new Point(1, 1)"),
                 records.partsOf(declared, "new Line(new Point(0, 0), new Point(1, 1))").orElseThrow()
-                        .stream().map(ValueCatalog.Part::initializer).toList());
+                        .stream().map(ValueGrammar.Part::initializer).toList());
     }
 
     /** A record that contains itself has no value to write, and says that rather than being walked. */
@@ -207,7 +206,7 @@ class BotRecordsTest {
                 """;
         BotRecords records = records(holder);
         ValueForm.Declared declared = new ValueForm.Declared("com.example.bot.Holder",
-                List.of(ValueForm.of(TestValues.WHOLE_NUMBER)));
+                List.of(TestValues.WHOLE_NUMBER));
 
         assertNotNull(records.whyNotEditable(declared));
         assertTrue(records.whyNotEditable(declared).contains("type arguments"));

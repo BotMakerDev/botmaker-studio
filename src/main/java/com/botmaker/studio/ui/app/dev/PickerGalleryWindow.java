@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
-import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.Animation;
@@ -44,12 +44,10 @@ import java.util.Locale;
  * directory. Every one of them is a thing you see. What was missing was a place to see all of them at once,
  * without declaring a variable of each type in a real project first.
  *
- * <p><b>The readout is the point.</b> Each row shows the control on the left and, on the right, the wire text
- * it reads back <em>right now</em> — polled, so it follows the control as it is touched — and beneath it the
- * value a plugin's store would keep, which is the same text after
- * {@link ValueWire#normalize normalisation}. A picker that looks right and hands back {@code ""}, or one
- * whose value survives the widget and is thrown away by the normaliser, is invisible without those two lines
- * side by side.
+ * <p><b>The readout is the point.</b> Each row shows the control on the left and, on the right, the Java it
+ * reads back <em>right now</em> — polled, so it follows the control as it is touched — and beneath it whether
+ * the host's grammar reads that Java back. A picker that looks right and hands back {@code ""}, or one that
+ * writes Java nothing can read, is invisible without those two lines side by side.
  *
  * <p>Rows are built through {@link ParamValueWidgets#build}, not by calling
  * {@link com.botmaker.studio.ui.app.params.ValueEditors#editorFor} directly, so what is on screen is exactly
@@ -148,9 +146,9 @@ public final class PickerGalleryWindow {
     /**
      * One row per (type, form) the plugins bound right now can express.
      *
-     * <p>The set comes from {@link ValueWire#registered()} rather than from a constant list: a stored
-     * variable's type is whatever a plugin registered, so a screen enumerating a fixed set would stop showing
-     * the editors it is for the moment a second plugin adds one.
+     * <p>The set comes from the declared types ({@code StudioPlugin.types()}) rather than from a constant
+     * list: a stored variable's type is whatever a plugin declares, so a screen enumerating a fixed set would
+     * stop showing the editors it is for the moment a second plugin adds one.
      *
      * <p>The second axis is a <b>form</b> since 2026-09-20 and no longer a {@code ValueShape}: a list of a
      * type and a map from text to it are two more cells to look at, and whether a set of choices is declared
@@ -161,16 +159,12 @@ public final class PickerGalleryWindow {
         grid.getChildren().clear();
 
         String needle = filter.getText() == null ? "" : filter.getText().trim().toLowerCase(Locale.ROOT);
-        List<String> templates = templateNames();
         int line = 0;
-        for (ValueType type : ValueWire.registered()) {
-            if (!needle.isEmpty() && !type.label().toLowerCase(Locale.ROOT).contains(needle)
-                    && !type.sourceName().toLowerCase(Locale.ROOT).contains(needle)) {
-                continue;
-            }
+        for (String type : declaredTypes()) {
+            if (!needle.isEmpty() && !type.toLowerCase(Locale.ROOT).contains(needle)) continue;
             for (Shape shape : SHAPES) {
                 if (!shape.plain() && !shapesToo.isSelected()) continue;
-                ParameterRow variable = sample(type, shape, templates);
+                Sample variable = sample(type, shape);
                 if (variable == null) continue;   // this sample is not a sentence for this type
                 line = addRow(variable, type, shape, line);
             }
@@ -179,15 +173,28 @@ public final class PickerGalleryWindow {
                 + (int) PULSE.toMillis() + "ms: touch a control and watch it move.");
     }
 
-    private int addRow(ParameterRow variable, ValueType type, Shape shape, int line) {
-        Label name = new Label(type.label());
+    /** Every declared type's canonical name, in plugin order. */
+    static List<String> declaredTypes() {
+        List<String> out = new ArrayList<>();
+        for (PluginType<?> type : PluginHost.grammar().types()) {
+            try {
+                out.add(JavaNames.canonical(type.type()));
+            } catch (RuntimeException | LinkageError e) {
+                // A plugin that cannot name its own type contributes no row, and costs nobody else theirs.
+            }
+        }
+        return out;
+    }
+
+    private int addRow(Sample variable, String type, Shape shape, int line) {
+        Label name = new Label(JavaNames.simple(type));
         Label shapeName = new Label(shape.label());
         shapeName.getStyleClass().add("dialog-hint-text");
 
         List<ParamValueWidgets.ValueEditor> readers = new ArrayList<>();
         Node widget;
         try {
-            widget = ParamValueWidgets.build("", variable, project, readers);
+            widget = ParamValueWidgets.build("", variable.row(), variable.form(), project, readers);
         } catch (RuntimeException | Error e) {
             // The whole reason for the screen: an editor that cannot even be built is a finding, not a crash.
             widget = broken("built: " + e);
@@ -216,8 +223,11 @@ public final class PickerGalleryWindow {
         return label;
     }
 
+    /** One sample parameter: the row and the form it is of. */
+    record Sample(ParameterRow row, ValueForm form) {}
+
     /** One row: the row it was built from, its widget's readers, and the two lines they write to. */
-    private record Row(ParameterRow variable, List<ParamValueWidgets.ValueEditor> readers,
+    private record Row(Sample variable, List<ParamValueWidgets.ValueEditor> readers,
                        Label raw, Label stored) {
 
         void refresh() {
@@ -251,14 +261,10 @@ public final class PickerGalleryWindow {
          * that a value is Java rather than wire text. A cell that writes source nothing can parse is invisible
          * until a project is reopened, and this line says so while the control is still being touched.
          */
-        private static String readsBack(ParameterRow row, String source) {
+        private static String readsBack(Sample sample, String source) {
             if (source.isBlank()) return "";
-            if (row.form() instanceof ValueForm.Leaf leaf) {
-                String wire = ValueWire.wire(leaf.type(), source);
-                return wire.isBlank() ? "✕ nothing reads this back" : "reads back as \"" + wire + "\"";
-            }
-            return ValueWire.parts(row.form(), source)
-                    .map(parts -> "reads back as " + parts.size() + (parts.size() == 1 ? " part" : " parts"))
+            return PluginHost.grammar().valueOf(sample.form(), source)
+                    .map(value -> "reads back as " + value)
                     .orElse("✕ nothing reads this back");
         }
     }
@@ -273,10 +279,10 @@ public final class PickerGalleryWindow {
      */
     record Shape(String label, String suffix, boolean list, boolean map, boolean options, boolean plain) {
 
-        ValueForm formOf(ValueType type) {
+        ValueForm formOf(String type) {
             ValueForm leaf = ValueForm.of(type);
             if (list) return ValueForm.listOf(leaf);
-            if (map) return ValueForm.mapOf(ValueForm.of(ValueWire.type(ValueCatalog.TEXT_ID)), leaf);
+            if (map) return ValueForm.mapOf(ValueForm.of(String.class), leaf);
             return leaf;
         }
     }
@@ -296,104 +302,47 @@ public final class PickerGalleryWindow {
 
     /**
      * A row of {@code type} in {@code shape}, or null when that pairing is not a thing anyone can declare —
-     * "one of a set of colours" is, "one of a set of directions" is not, since the type already shows every
-     * value it has.
-     *
-     * <p>The declared choices are normalised here, which a plugin's own store would do on the way in: a set
-     * spelled the way nobody stores it labels its radio buttons with strings the value can never match, and
-     * that is a fault in this screen rather than in the editor it is showing.
+     * or not one this screen has choices to fill in for.
      */
-    static ParameterRow sample(ValueType type, Shape shape, List<String> templates) {
-        List<String> options = shape.options()
-                ? ValueWire.normalizeOptions(options(type, templates), type, Range.NONE)
-                : List.of();
-        // A closed-set type answers with its own constants and has no set to declare, so its "one of" row
-        // would be the free value's row drawn twice.
-        if (shape.options() && (options.isEmpty() || !ValueWire.fixedOptions(type).isEmpty())) return null;
+    static Sample sample(String type, Shape shape) {
+        List<String> options = shape.options() ? options(type) : List.of();
+        if (shape.options() && options.isEmpty()) return null;
         ValueForm form = shape.formOf(type);
-        return ParameterRow.named(identifier(type, shape), form)
-                .value(ValueWire.defaultInitializer(form))
+        ValueGrammar grammar = PluginHost.grammar();
+        ParameterRow row = ParameterRow.named(identifier(type, shape), form.sourceName())
+                .value(grammar.freshInitializer(form).orElse(""))
                 .visibility(Visibility.PUBLIC)
                 .options(options)
-                .bounds(Range.NONE)
                 .build();
+        return new Sample(row, form);
     }
 
     /**
-     * A valid Java identifier, because a parameter's name is a generated field's — nothing here generates
-     * code, and a sample that could not have been declared for real is a poor sample.
+     * A valid Java identifier, because a parameter's name is a field's — nothing here writes code, and a
+     * sample that could not have been declared for real is a poor sample.
      */
-    private static String identifier(ValueType type, Shape shape) {
-        // An id is a plugin's free string, not necessarily a Java name, so anything that cannot appear in one
-        // is folded to an underscore before the camel-casing. SCREAMING_SNAKE ids pass through untouched.
-        String id = type.id().replaceAll("[^A-Za-z0-9_]", "_");
-        if (id.isEmpty() || Character.isDigit(id.charAt(0))) id = "v" + id;
-        return camel(id) + shape.suffix();
-    }
-
-    /** {@code IMAGE_TEMPLATE} → {@code imageTemplate}. */
-    private static String camel(String constant) {
-        String[] parts = constant.toLowerCase(Locale.ROOT).split("_");
-        StringBuilder out = new StringBuilder(parts[0]);
-        for (int i = 1; i < parts.length; i++) {
-            out.append(parts[i].substring(0, 1).toUpperCase(Locale.ROOT)).append(parts[i].substring(1));
-        }
-        return out.toString();
+    private static String identifier(String type, Shape shape) {
+        String simple = JavaNames.simple(type).replaceAll("[^A-Za-z0-9_]", "_");
+        if (simple.isEmpty() || Character.isDigit(simple.charAt(0))) simple = "v" + simple;
+        return Character.toLowerCase(simple.charAt(0)) + simple.substring(1) + shape.suffix();
     }
 
     /**
-     * Two or three declared choices of {@code type}, for the shapes that need a set to draw.
+     * Two or three declared choices of {@code type}, for the shapes that need a set to draw — written as an
+     * author writes them into {@code @Param(options = …)}.
      *
      * <p>Written out rather than derived: the values have to be <em>different from each other</em> and
-     * different from the default, or a row of three radio buttons all reading {@code "0,0"} tests nothing.
-     * The closed-set types are absent because they answer with their own constants
-     * ({@link ValueWire#fixedOptions}) and never read this.
-     *
-     * <p><b>Keyed by {@linkplain ValueType#id() id}, not by the type object</b> — the vocabulary is open, so
-     * there is no set to switch over exhaustively, and a plugin's type simply falls through to no samples.
-     * These ids are the SDK's, and a screen this one can only be a screen about the plugins it has.
-     *
-     * @param templates the project's own template names, the one set that cannot be written down here
+     * different from the fresh one, or a row of three radio buttons all reading {@code 0} tests nothing. Only
+     * the JDK's literals have samples here: they are the only types whose values this screen can spell
+     * without knowing a plugin's vocabulary, which is the thing it is not allowed to know.
      */
-    static List<String> options(ValueType type, List<String> templates) {
-        return switch (type.id()) {
-            case "TEXT" -> List.of("first", "second", "third");
-            case "WHOLE_NUMBER" -> List.of("1", "2", "3");
-            case "DECIMAL_NUMBER" -> List.of("0.5", "1.5", "2.5");
-            case "CHARACTER" -> List.of("a", "b", "c");
-            case "COLOR" -> List.of("#FF0000", "#00A000", "#3050FF");
-            case "DATE" -> List.of("2026-01-01", "2026-06-15");
-            case "TIME_OF_DAY" -> List.of("08:00", "12:30", "23:59");
-            case "DURATION" -> List.of("30s", "5m", "1h30m");
-            case "POINT" -> List.of("0,0", "100,250");
-            case "SIZE" -> List.of("64,64", "1920,1080");
-            case "RECT" -> List.of("0,0,100,100", "10,10,50,50");
-            case "PRECISION" -> List.of("12.0,4,0", "6.0,2,0");
-            case "IMAGE_TEMPLATE" -> templates;
+    static List<String> options(String type) {
+        return switch (type) {
+            case "java.lang.String" -> List.of("first", "second", "third");
+            case "int", "java.lang.Integer" -> List.of("1", "2", "3");
+            case "double", "java.lang.Double" -> List.of("0.5", "1.5", "2.5");
+            case "char", "java.lang.Character" -> List.of("'a'", "'b'", "'c'");
             default -> List.of();
         };
-    }
-
-    /**
-     * The project's own pictures, so the chips resolve to something real; empty when nothing is open.
-     *
-     * <p>Read as a directory listing rather than through the SDK's picture library, which is what it used
-     * until 2026-09-01. The library would answer this better — it knows about sidecars and the placeholder —
-     * but what this screen needs is three names that have a file behind them, and the folder answers that on
-     * its own. A dev diagnostic is the last place worth holding a dependency on another module's vocabulary
-     * for.
-     */
-    private List<String> templateNames() {
-        if (project == null) return List.of();
-        try (var files = java.nio.file.Files.list(project.imagesRoot())) {
-            return files.map(p -> p.getFileName().toString())
-                    .filter(name -> name.endsWith(".png"))
-                    .sorted()
-                    .limit(3)
-                    .map(name -> name.substring(0, name.length() - ".png".length()))
-                    .toList();
-        } catch (java.io.IOException e) {
-            return List.of();   // no folder yet, which is an ordinary state for a project with no pictures
-        }
     }
 }

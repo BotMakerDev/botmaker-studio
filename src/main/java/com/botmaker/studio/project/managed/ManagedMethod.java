@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueForm;
 
 import java.nio.file.Path;
 

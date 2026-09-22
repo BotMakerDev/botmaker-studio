@@ -4,14 +4,15 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.SlotContext;
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.plugin.api.slot.TypeRef;
-import com.botmaker.plugin.api.value.ValueForm;
-import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -80,14 +81,39 @@ public final class HostSlotContext implements SlotContext {
      *
      * <p>A slot is one argument of one call, so its type is whatever the resolved signature says the
      * parameter is — there is no declaration to read type arguments off, which is what
-     * {@code JavaParameterSource.formOf} does for a field. An editor claiming a composite is therefore
-     * reached through the Parameters window and a {@code @Managed} value, not here.
+     * {@code JavaParameterSource.formOf} does for a field. A slot whose type did not resolve reads its value
+     * by the expression's own spelling instead.
+     */
+    private ValueForm form() {
+        if (paramType == null) return ValueForm.of("");
+        String qualified = nullToEmpty(paramType.qualifiedName());
+        return ValueForm.of(qualified.isEmpty() ? nullToEmpty(paramType.simpleName()) : qualified);
+    }
+
+    @Override
+    public <T> Optional<T> value(Class<T> type) {
+        return grammar().read(form(), slot.source()).flatMap(value -> ValueGrammar.as(value, type));
+    }
+
+    /**
+     * Writes {@code value} with every type by its simple name and the imports that needs — a bot's source is
+     * a file a person reads. A value the grammar cannot spell is ignored rather than written half-way.
      */
     @Override
-    public ValueForm form() {
-        return ValueForm.of(ValueType.of(nullToEmpty(paramType == null ? "" : paramType.qualifiedName()))
-                .source(nullToEmpty(paramType == null ? "" : paramType.qualifiedName()))
-                .build());
+    public void set(Object value) {
+        if (slot.node() == null) return;
+        grammar().write(form(), value).ifPresent(written ->
+                rewrite(slot.node(), written.source(), written.imports().toArray(String[]::new)));
+    }
+
+    @Override
+    public void setSource(String javaExpression, Class<?>... imports) {
+        if (javaExpression == null || javaExpression.isBlank() || slot.node() == null) return;
+        rewrite(slot.node(), javaExpression, HostValueContext.importNames(imports).toArray(String[]::new));
+    }
+
+    private static ValueGrammar grammar() {
+        return PluginHost.grammar();
     }
 
     @Override
@@ -141,25 +167,16 @@ public final class HostSlotContext implements SlotContext {
                && call.arguments().contains(slot.node()) ? call : null;
     }
 
-    @Override
-    public void set(String javaExpression, String... importsNeeded) {
-        if (javaExpression == null || javaExpression.isBlank() || slot.node() == null) return;
-        rewrite(slot.node(), javaExpression, importsNeeded);
-    }
-
     /** One rewrite, whether the target is the slot or the call around it. */
     private void rewrite(Expression target, String javaExpression, String... importsNeeded) {
         if (importsNeeded == null || importsNeeded.length == 0) {
             context.getCodeEditor().replaceWithRawExpression(target, javaExpression);
             return;
         }
-        // One import per call is what the editor's API takes; the expression is written fully-qualified by
-        // every plugin anyway (the contract says that is always safe), so the imports are a tidiness pass and
-        // applying them one at a time costs nothing but a loop.
-        context.getCodeEditor().replaceWithRawExpression(target, javaExpression, importsNeeded[0]);
-        for (int i = 1; i < importsNeeded.length; i++) {
-            context.getCodeEditor().replaceWithRawExpression(target, javaExpression, importsNeeded[i]);
-        }
+        // One rewrite for every import. This was one rewrite per import until 2026-09-23, which was harmless
+        // while an editor wrote one type; the grammar writes `new Rect(new Point(…), …)` with several, and a
+        // second rewrite would be handed the node the first had already replaced.
+        context.getCodeEditor().replaceWithRawExpression(target, javaExpression, List.of(importsNeeded));
     }
 
     @Override

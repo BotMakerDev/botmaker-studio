@@ -41,7 +41,7 @@ public final class JavaManagedEdits {
      * <p>A blank expression answers the source unchanged: a method that returns nothing is not something
      * this can write, and emptying one is not an edit anybody asked for.
      *
-     * @param imports fully-qualified names the expression uses — {@code ValueCatalog.imports(form)}. One
+     * @param imports fully-qualified names the expression uses — what the host's grammar spelled the value with. One
      *                already imported, or in the file's own package, is skipped.
      */
     public static String setValue(String source, String className, String methodName, String expression,

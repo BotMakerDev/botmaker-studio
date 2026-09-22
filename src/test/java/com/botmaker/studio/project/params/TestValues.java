@@ -1,209 +1,103 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueCodec;
-import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.slot.ValueContext;
+import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import javafx.scene.Node;
 
 import java.time.Duration;
-import java.util.Optional;
+import java.util.List;
 
 /**
- * A catalog for these tests — <b>not {@code botmaker-plugin-basics}'</b>, on purpose.
+ * A grammar for these tests — <b>not {@code botmaker-plugin-basics}'</b>, on purpose.
  *
  * <p>Studio depends on no plugin, and a test dependency on one would be the first crack in that: the build
  * would start needing a plugin to compile its own tests, and the next person would reach for a plugin type
  * in main code because it was already on the classpath. What is being tested here is the <em>host's</em>
  * reading of Java, so the types it reads only have to behave like real ones.
  *
- * <p>They are spelled like plugin-basics' three most awkward cases all the same — a structural literal
- * ({@code Duration}), a quoted one ({@code String}) and a bare one ({@code int}) — because those are the
- * three shapes the scanner has to tell apart, and inventing prettier ones would test a situation that does
- * not occur. {@link #BODY} is the fourth, added for {@code project/managed}: a type whose literal is a
- * <b>method reference</b>, which is how the SDK will name an activity's body and is a shape no other
- * codec here produces.
+ * <p>They are declared like plugin-basics' three most awkward cases all the same — a call
+ * ({@code Duration.ofMillis}), a quoted literal ({@code String}) and a bare one ({@code int}) — because those
+ * are the three shapes the scanner has to tell apart. {@link Body} is the fourth, for {@code project/managed}:
+ * a type a plugin declares and cannot take apart, whose value crosses as the source it is written as — the
+ * way the SDK names an activity's body, {@code Collect::body}.
  *
- * <p>Public rather than package-private since 2026-09-20, so {@code project/managed}'s tests read the same
- * catalog: what they exercise is the same host reading of the same Java, and two catalogs would be two
- * answers to what a {@code Duration} is written as.
+ * <p>Since 2026-09-22 these are {@link PluginType}s and {@link ComponentType}s — one declaration each — where
+ * they were a {@code ValueType} and a {@code ValueCodec} with four string methods apiece.
  */
 public final class TestValues {
 
-    public static final ValueType TEXT = ValueType.of("TEXT").label("Text")
-            .source("String").boxed("String")
-            .build();
-
-    public static final ValueType WHOLE_NUMBER = ValueType.of("WHOLE_NUMBER").label("Whole number")
-            .source("int").boxed("Integer").primitive()
-            .build();
-
-    public static final ValueType DURATION = ValueType.of("DURATION").label("Duration")
-            .source("java.time.Duration")
-            .build();
-
-    /** A value named by {@code Owner::method}, the shape an activity's body takes. */
-    public static final ValueType BODY = ValueType.of("BODY").label("Body")
-            .source("com.example.bot.Body")
-            .build();
+    /** A value named by {@code Owner::method}: declared, never taken apart. */
+    public record Body(String source) {}
 
     /**
-     * A fixed shape: a record with named components and no type arguments, registered as a container of
-     * {@linkplain com.botmaker.plugin.api.value.ValueContainer#arity() arity zero}.
+     * A fixed shape: a record with named components and no type arguments, written {@code Span.of(…)}.
      *
-     * <p>The SDK's {@code Flow} is one of these, and it is the case that broke until 2026-09-20: a
-     * container had to take at least one type argument, so a record with fixed components could only be
-     * registered as an opaque leaf — which is a string, which is what this whole design exists to leave
-     * behind.
+     * <p>The SDK's {@code Flow} is one of these, and it is the case that broke until 2026-09-20: a record
+     * with fixed components could only be registered as an opaque leaf — which is a string, which is what
+     * this whole design exists to leave behind.
      */
-    public record Span(String label, int length) {}
+    public record Span(String label, int length) {
 
-    public static final com.botmaker.plugin.api.value.ValueContainer<Span> SPAN =
-            new com.botmaker.plugin.api.value.ValueContainer<>() {
-                @Override public Class<?> type() { return Span.class; }
+        public static Span of(String label, int length) {
+            return new Span(label, length);
+        }
+    }
 
-                @Override public int arity() { return 0; }
+    public static final PluginType<String> TEXT_TYPE = new Leaf<>(String.class, "");
+    public static final PluginType<Integer> WHOLE_NUMBER_TYPE = new Leaf<>(int.class, 0);
 
-                @Override public String factory() { return "of"; }
+    /** {@code java.time.Duration.ofMillis(3000L)} — a call, taken apart into one {@code long}. */
+    public static final DurationType DURATION_TYPE = new DurationType();
 
-                @Override public java.util.List<Object> parts(Span value) {
-                    return value == null ? java.util.List.of("", 0)
-                            : java.util.List.of(value.label(), value.length());
-                }
+    /** Declared with a starting expression and nothing to read it with. */
+    public static final PluginType<Body> BODY_TYPE = new PluginType<>() {
+        @Override public Class<Body> type() { return Body.class; }
+        @Override public Body fresh() { return null; }
+        @Override public String freshSource() { return "com.example.bot.Rest::body"; }
+        @Override public Node editor(ValueContext ctx) { return null; }
+    };
 
-                @Override public Span build(java.util.List<Object> parts) {
-                    return parts.size() != 2 ? null
-                            : new Span((String) parts.get(0), ((Number) parts.get(1)).intValue());
-                }
+    /** {@code Span.of(label, length)}, a component type nothing declares on its own. */
+    public static final ComponentType<Span> SPAN = new ComponentType<>() {
+        @Override public Class<Span> type() { return Span.class; }
+        @Override public String factory() { return "of"; }
+        @Override public List<Class<?>> componentTypes() { return List.of(String.class, int.class); }
+        @Override public List<Object> components(Span value) { return List.of(value.label(), value.length()); }
+        @Override public Span build(List<Object> parts) {
+            return parts.size() != 2 ? null : new Span((String) parts.get(0), ((Number) parts.get(1)).intValue());
+        }
+    };
 
-                @Override public java.util.List<com.botmaker.plugin.api.value.ValueForm> partForms(
-                        java.util.List<com.botmaker.plugin.api.value.ValueForm> arguments, int parts) {
-                    var forms = java.util.List.of(
-                            com.botmaker.plugin.api.value.ValueForm.of(TEXT),
-                            com.botmaker.plugin.api.value.ValueForm.of(WHOLE_NUMBER));
-                    return parts == forms.size() ? forms : java.util.List.of();
-                }
-            };
+    /** The same shape as a real bind: a few declared types, one component type beside them. */
+    public static final ValueGrammar GRAMMAR = ValueGrammar.of(
+            List.of(TEXT_TYPE, WHOLE_NUMBER_TYPE, DURATION_TYPE, BODY_TYPE), List.of(SPAN));
 
-    /** The same shape as a real catalog: one codec per type, each able to read its own literal back. */
-    public static final ValueCatalog CATALOG = ValueCatalog.builder()
-            .add(SPAN)
-            .add(BODY, new ValueCodec<String>() {
-                @Override
-                public String parse(String wire) {
-                    return wire == null ? "" : wire.strip();
-                }
+    public static final ValueForm TEXT = ValueForm.of(String.class);
+    public static final ValueForm WHOLE_NUMBER = ValueForm.of(int.class);
+    public static final ValueForm DURATION = ValueForm.of(Duration.class);
+    public static final ValueForm BODY = ValueForm.of(Body.class);
+    public static final ValueForm SPAN_FORM = ValueForm.of(Span.class);
 
-                @Override
-                public String store(String value) {
-                    return value;
-                }
+    /** A JDK literal type: nothing to take apart, and no editor either — these tests draw nothing. */
+    private record Leaf<T>(Class<T> type, T fresh) implements PluginType<T> {
+        @Override public Node editor(ValueContext ctx) { return null; }
+    }
 
-                /** The value <em>is</em> the reference: {@code Collect::body} names a method, not a string. */
-                @Override
-                public String literal(String value) {
-                    return value;
-                }
-
-                @Override
-                public Optional<String> valueOfLiteral(String java) {
-                    String source = java == null ? "" : java.strip();
-                    int arrow = source.indexOf("::");
-                    if (arrow <= 0 || arrow + 2 >= source.length()) return Optional.empty();
-                    return source.chars().allMatch(c -> Character.isJavaIdentifierPart(c) || c == ':')
-                            ? Optional.of(source) : Optional.empty();
-                }
-            })
-            .add(TEXT, new ValueCodec<String>() {
-                @Override
-                public String parse(String wire) {
-                    return wire == null ? "" : wire;
-                }
-
-                @Override
-                public String store(String value) {
-                    return value;
-                }
-
-                @Override
-                public String literal(String value) {
-                    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-                }
-
-                @Override
-                public Optional<String> valueOfLiteral(String java) {
-                    String source = java == null ? "" : java.strip();
-                    if (source.length() < 2 || !source.startsWith("\"") || !source.endsWith("\"")) {
-                        return Optional.empty();
-                    }
-                    return Optional.of(source.substring(1, source.length() - 1)
-                            .replace("\\\"", "\"").replace("\\\\", "\\"));
-                }
-            })
-            .add(WHOLE_NUMBER, new ValueCodec<Integer>() {
-                @Override
-                public Integer parse(String wire) {
-                    try {
-                        return Integer.parseInt(wire == null ? "" : wire.strip());
-                    } catch (NumberFormatException notANumber) {
-                        return 0;
-                    }
-                }
-
-                @Override
-                public String store(Integer value) {
-                    return Integer.toString(value);
-                }
-
-                @Override
-                public String literal(Integer value) {
-                    return Integer.toString(value);
-                }
-
-                @Override
-                public Optional<Integer> valueOfLiteral(String java) {
-                    try {
-                        return Optional.of(Integer.valueOf(java.strip()));
-                    } catch (NumberFormatException | NullPointerException notANumber) {
-                        return Optional.empty();
-                    }
-                }
-            })
-            .add(DURATION, new ValueCodec<Duration>() {
-                @Override
-                public Duration parse(String wire) {
-                    try {
-                        return Duration.ofMillis(Long.parseLong(wire == null ? "" : wire.strip()));
-                    } catch (NumberFormatException notANumber) {
-                        return Duration.ZERO;
-                    }
-                }
-
-                @Override
-                public String store(Duration value) {
-                    return Long.toString(value.toMillis());
-                }
-
-                @Override
-                public String literal(Duration value) {
-                    return "java.time.Duration.ofMillis(" + value.toMillis() + "L)";
-                }
-
-                @Override
-                public Optional<Duration> valueOfLiteral(String java) {
-                    String source = java == null ? "" : java.strip();
-                    String prefix = "java.time.Duration.ofMillis(";
-                    if (!source.startsWith(prefix) || !source.endsWith(")")) return Optional.empty();
-                    String inner = source.substring(prefix.length(), source.length() - 1).strip();
-                    if (inner.endsWith("L") || inner.endsWith("l")) {
-                        inner = inner.substring(0, inner.length() - 1);
-                    }
-                    try {
-                        return Optional.of(Duration.ofMillis(Long.parseLong(inner)));
-                    } catch (NumberFormatException notANumber) {
-                        return Optional.empty();
-                    }
-                }
-            })
-            .build();
+    /** {@code Duration.ofMillis(long)}. */
+    public static final class DurationType implements PluginType<Duration>, ComponentType<Duration> {
+        @Override public Class<Duration> type() { return Duration.class; }
+        @Override public Duration fresh() { return Duration.ZERO; }
+        @Override public Node editor(ValueContext ctx) { return null; }
+        @Override public String factory() { return "ofMillis"; }
+        @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
+        @Override public List<Object> components(Duration value) { return List.of(value.toMillis()); }
+        @Override public Duration build(List<Object> parts) {
+            return parts.size() == 1 && parts.getFirst() instanceof Number n ? Duration.ofMillis(n.longValue()) : null;
+        }
+    }
 
     private TestValues() {}
 }

@@ -21,7 +21,7 @@ public final class RawExpressionHandler {
 
     public static String replaceWithExpression(CompilationUnit cu, String originalCode,
                                                Expression toReplace, String exprCode) {
-        return replaceWithExpression(cu, originalCode, toReplace, exprCode, null);
+        return replaceWithExpression(cu, originalCode, toReplace, exprCode, java.util.List.of());
     }
 
     /**
@@ -32,6 +32,17 @@ public final class RawExpressionHandler {
      */
     public static String replaceWithExpression(CompilationUnit cu, String originalCode,
                                                Expression toReplace, String exprCode, String importFqn) {
+        return replaceWithExpression(cu, originalCode, toReplace, exprCode,
+                importFqn == null ? java.util.List.of() : java.util.List.of(importFqn));
+    }
+
+    /**
+     * As above with any number of imports, in <b>one</b> rewrite. A value written through the host's grammar
+     * can name several types — {@code new Rect(new Point(0, 0), …)} — and one rewrite per import would hand
+     * the second a node the first had already replaced.
+     */
+    public static String replaceWithExpression(CompilationUnit cu, String originalCode, Expression toReplace,
+                                               String exprCode, java.util.List<String> importFqns) {
         if (exprCode == null || exprCode.isBlank()) return originalCode;
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
         parser.setKind(ASTParser.K_EXPRESSION);
@@ -43,8 +54,8 @@ public final class RawExpressionHandler {
         ASTRewrite rewriter = ASTRewrite.create(ast);
         Expression copied = (Expression) ASTNode.copySubtree(ast, parsedExpr);
         rewriter.replace(toReplace, copied, null);
-        if (importFqn != null && !importFqn.isBlank()) {
-            ImportManager.addImport(cu, rewriter, importFqn);
+        for (String importFqn : importFqns) {
+            if (importFqn != null && !importFqn.isBlank()) ImportManager.addImport(cu, rewriter, importFqn);
         }
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
     }

@@ -1,8 +1,6 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
@@ -23,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The window's side of a {@code @Param} field: one list, and one edit per thing a person does to a row.
  *
- * <p>No JavaFX and no plugin. The catalog is {@link TestValues}' for the reason written there — Studio
+ * <p>No JavaFX and no plugin. The grammar is {@link TestValues}' for the reason written there — Studio
  * depends on no plugin — and there is no {@code ProjectState}, because these are files nobody has open.
  * What is asserted is the <b>file</b> in every case: this class exists to write a person's own source, so a
  * row that came back right while the file was wrong would be the failure that matters.
@@ -50,13 +48,13 @@ class JavaParametersTest {
                 }
                 """);
 
-        List<JavaParameter> rows = JavaParameters.scan(config, null, TestValues.CATALOG);
+        List<JavaParameter> rows = JavaParameters.scan(config, null, TestValues.GRAMMAR);
 
         // A set: the walk visits files in whatever order the filesystem lists them, and which of two classes
         // comes first is not something this class decides or a user could notice.
         assertEquals(Set.of("Parameters", "Tuning"),
                 rows.stream().map(JavaParameter::className).collect(Collectors.toSet()));
-        assertEquals(List.of("Limits"), JavaParameters.categories(config, null, TestValues.CATALOG));
+        assertEquals(List.of("Limits"), JavaParameters.categories(config, null, TestValues.GRAMMAR));
     }
 
     // ---- adding -----------------------------------------------------------------------------------------
@@ -66,13 +64,12 @@ class JavaParametersTest {
         ProjectConfig config = project(root);
 
         Optional<ParameterRow> stored = JavaParameters.add(config, null, "Parameters", "maxAttempts",
-                ValueForm.of(TestValues.WHOLE_NUMBER), "10", "Limits", "How many times to try",
-                TestValues.CATALOG);
+                TestValues.WHOLE_NUMBER, "10", "Limits", "How many times to try", TestValues.GRAMMAR);
 
         assertTrue(stored.isPresent());
         assertEquals("10", stored.get().value());
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
-        assertTrue(source.contains("import com.botmaker.plugin.basics.params.Param;"), source);
+        assertTrue(source.contains("import com.botmaker.plugin.api.params.Param;"), source);
         assertTrue(source.contains("public static int maxAttempts = 10;"), source);
         assertTrue(source.contains("category = \"Limits\""), source);
     }
@@ -86,10 +83,10 @@ class JavaParametersTest {
                 """));
 
         Optional<ParameterRow> refused = JavaParameters.add(config, null, "Parameters", "maxAttempts",
-                ValueForm.of(TestValues.TEXT), "\"x\"", "", "", TestValues.CATALOG);
+                TestValues.TEXT, "\"x\"", "", "", TestValues.GRAMMAR);
 
         assertTrue(refused.isEmpty());
-        assertEquals(1, JavaParameters.scan(config, null, TestValues.CATALOG).size());
+        assertEquals(1, JavaParameters.scan(config, null, TestValues.GRAMMAR).size());
     }
 
     // ---- declaring --------------------------------------------------------------------------------------
@@ -111,7 +108,7 @@ class JavaParametersTest {
 
         JavaParameter entry = only(config);
         Optional<ParameterRow> stored = JavaParameters.declare(config, null, entry,
-                renamed(entry.row(), "tries"), TestValues.CATALOG);
+                renamed(entry.row(), "tries"), entry.form(), TestValues.GRAMMAR);
 
         assertTrue(stored.isPresent());
         assertEquals("tries", stored.get().name());
@@ -132,19 +129,38 @@ class JavaParametersTest {
                 .category("")                       // removed: the default is already the empty answer
                 .description("Attempts before it gives up")
                 .visibility(Visibility.PUBLIC)
-                .bounds(new Range("1", "50"))
+                .bounds(1, 50.5)
                 .build();
         Optional<ParameterRow> stored =
-                JavaParameters.declare(config, null, entry, wanted, TestValues.CATALOG);
+                JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR);
 
         assertTrue(stored.isPresent());
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
         assertFalse(source.contains("category ="), source);
         assertTrue(source.contains("description = \"Attempts before it gives up\""), source);
         assertTrue(source.contains("visibility = Param.PUBLIC"), source);
-        assertTrue(source.contains("min = \"1\""), source);
+        // A number, since @Param's bounds became double: a string here would not compile.
+        assertTrue(source.contains("min = 1,") || source.contains("min = 1)"), source);
+        assertTrue(source.contains("max = 50.5"), source);
         assertEquals(Visibility.PUBLIC, stored.get().visibility());
-        assertEquals("50", stored.get().bounds().max());
+        assertEquals(50.5, stored.get().max());
+    }
+
+    @Test
+    void anInfiniteBoundRemovesTheMember(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param(min = 1, max = 50)
+                    public static int maxAttempts = 10;
+                """));
+
+        JavaParameter entry = only(config);
+        ParameterRow wanted = entry.row().toBuilder().bounds(1, Double.POSITIVE_INFINITY).build();
+        JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR);
+
+        String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+        assertFalse(source.contains("max ="), source);
+        assertTrue(source.contains("min = 1"), source);
     }
 
     @Test
@@ -156,10 +172,10 @@ class JavaParametersTest {
                 """));
 
         JavaParameter entry = only(config);
-        ParameterRow stored = JavaParameters.declare(config, null, entry,
-                retyped(entry.row(), ValueForm.of(TestValues.TEXT)), TestValues.CATALOG).orElseThrow();
+        ParameterRow stored = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
+                TestValues.GRAMMAR).orElseThrow();
 
-        assertEquals(TestValues.TEXT, stored.form().leaf());
+        assertEquals("String", stored.typeName());
         // The old type's text is not carried across: a value written for one type is not a value of another.
         assertEquals("\"\"", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
@@ -177,7 +193,7 @@ class JavaParametersTest {
                 """));
 
         ParameterRow stored = JavaParameters.setValue(config, null, only(config),
-                "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).orElseThrow();
+                "java.time.Duration.ofMillis(60000L)", List.of(), TestValues.GRAMMAR).orElseThrow();
 
         assertEquals("java.time.Duration.ofMillis(60000L)", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
@@ -198,7 +214,7 @@ class JavaParametersTest {
         assertFalse(entry.editable());
         assertFalse(entry.note().isBlank(), "a read-only row says why");
         assertTrue(JavaParameters.setValue(config, null, entry,
-                "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).isEmpty());
+                "java.time.Duration.ofMillis(60000L)", List.of(), TestValues.GRAMMAR).isEmpty());
         assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")),
                 "the author's own expression is not rewritten");
     }
@@ -222,7 +238,7 @@ class JavaParametersTest {
 
         assertTrue(JavaParameters.remove(config, null, only(config)));
 
-        assertEquals(List.of(), JavaParameters.scan(config, null, TestValues.CATALOG));
+        assertEquals(List.of(), JavaParameters.scan(config, null, TestValues.GRAMMAR));
         // Left alone on purpose: what a use should become is a judgement, and the compiler is what finds it.
         assertTrue(Files.readString(config.mainPackageDir().resolve("Bot.java"))
                 .contains("Parameters.maxAttempts"));
@@ -231,19 +247,13 @@ class JavaParametersTest {
     // ---- helpers ----------------------------------------------------------------------------------------
 
     private static JavaParameter only(ProjectConfig config) {
-        return JavaParameters.scan(config, null, TestValues.CATALOG).getFirst();
+        return JavaParameters.scan(config, null, TestValues.GRAMMAR).getFirst();
     }
 
     private static ParameterRow renamed(ParameterRow row, String name) {
-        return ParameterRow.named(name, row.form()).value(row.value()).description(row.description())
+        return ParameterRow.named(name, row.typeName()).value(row.value()).description(row.description())
                 .category(row.category()).visibility(row.visibility()).options(row.options())
-                .bounds(row.bounds()).build();
-    }
-
-    private static ParameterRow retyped(ParameterRow row, ValueForm form) {
-        return ParameterRow.named(row.name(), form).value(row.value()).description(row.description())
-                .category(row.category()).visibility(row.visibility()).options(row.options())
-                .bounds(row.bounds()).build();
+                .bounds(row.min(), row.max()).build();
     }
 
     private static String parameters(String fields) {

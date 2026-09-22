@@ -1,10 +1,9 @@
 package com.botmaker.studio.ui.fx;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Range;
-import com.botmaker.plugin.api.value.ValueForm;
-import com.botmaker.plugin.api.value.ValueType;
-import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
@@ -30,29 +29,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <em>row</em>, so it lives on the row's options and the form says nothing about it (2026-09-20). What
  * survives from the shape era is the rule the shapes were split to get: the widget follows the declaration,
  * so a parameter never changes control because of something the author cannot see.
+ *
+ * <p>No plugin is bound here, and none is needed: the JDK's literal types are read by the host's grammar
+ * itself, and a leaf no plugin draws is the read-only field — which is still exactly one control.
  */
 class ParamShapeWidgetTest extends FxHeadlessTest {
 
-    private static final ValueType TEXT = ValueWire.type("TEXT");
-    private static final ValueType WHOLE_NUMBER = ValueWire.type("WHOLE_NUMBER");
-    private static final ValueType POINT = ValueWire.type("POINT");
-    private static final ValueType DIRECTION = ValueWire.type("DIRECTION");
+    private static final ValueForm TEXT = ValueForm.of(String.class);
+    private static final ValueForm WHOLE_NUMBER = ValueForm.of(int.class);
+    private static final ValueForm POINT = ValueForm.of("com.botmaker.sdk.api.geometry.Point");
 
-    private Node widgetFor(ParameterRow row) {
-        List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
+    private Node widgetFor(ParameterRow row, ValueForm form) {
+        return widgetFor(row, form, new ArrayList<>());
+    }
+
+    private Node widgetFor(ParameterRow row, ValueForm form, List<ParamValueWidgets.ValueEditor> sink) {
         Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build("", row, null, sink));
+        interact(() -> built[0] = ParamValueWidgets.build("", row, form, null, sink));
         return built[0];
     }
 
-    /**
-     * One row as a plugin's own store would hand it over: seeded with the form's default initialiser and
-     * carrying the declared choices as that store normalises them.
-     */
+    /** One row seeded with the form's fresh initialiser and carrying the declared choices as written. */
     private static ParameterRow row(String name, ValueForm form, List<String> options) {
-        return ParameterRow.named(name, form)
-                .value(ValueWire.defaultInitializer(form))
-                .options(ValueWire.normalizeOptions(options, form.leaf(), Range.NONE))
+        return ParameterRow.named(name, form.sourceName())
+                .value(PluginHost.grammar().freshInitializer(form).orElse(""))
+                .options(options)
                 .build();
     }
 
@@ -65,72 +66,62 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     }
 
     /**
-     * Every one of the SDK's directions has a square on the pad. The table listed only the screen spelling
-     * ({@code UP}, {@code DOWN}) while the SDK ships the compass, so all four constants missed the grid and
-     * fell into the row of named buttons kept for the odd one out — a pad that positioned nothing.
-     */
-    @Test
-    void everyDirectionTheSdkHasHasASquareOnThePad() {
-        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        List<String> known = ValueWire.fixedOptions(DIRECTION);
-        assertFalse(known.isEmpty(), "the SDK enum is what the pad is built from");
-
-        Node pad = widgetFor(row("way", ValueForm.of(DIRECTION)));
-        List<Node> parts = childrenOf(pad);
-
-        assertEquals(1, parts.size(),
-                "a second row means constants the grid had no square for and fell through to name buttons");
-        assertEquals(known.size(), childrenOf(parts.getFirst()).size(),
-                "one square per direction the SDK has");
-    }
-
-    /**
      * The two list cells, side by side on the same form. What tells them apart is the row's own choices, and
      * nothing else: a list with a set declared is tick boxes, a list with none is the user's to fill in.
      */
     @Test
     void aListIsTicksWithASetDeclaredAndTheUsersOwnWithout() {
         List<String> skills = List.of("mine", "fish", "cook");
+        ValueForm texts = ValueForm.listOf(TEXT);
 
-        ParameterRow many = row("many", ValueForm.listOf(ValueForm.of(TEXT)), skills);
-        List<Node> ticks = childrenOf(widgetFor(many));
+        List<Node> ticks = childrenOf(widgetFor(row("many", texts, skills), texts));
         assertEquals(skills.size(), ticks.size());
         for (Node tick : ticks) assertInstanceOf(CheckBox.class, tick);
 
         // A textarea and not a Pane, so it has no children to count: text is written one per line.
-        ParameterRow open = row("open", ValueForm.listOf(ValueForm.of(TEXT)));
-        assertInstanceOf(TextArea.class, widgetFor(open),
+        assertInstanceOf(TextArea.class, widgetFor(row("open", texts), texts),
                 "a list with nothing declared is the user's to fill in");
     }
 
     /** Every other type's list is a growable column of that type's own editor, empty to begin with. */
     @Test
     void aListOfSomethingOtherThanTextIsRowsOfItsOwnEditor() {
-        ParameterRow spots = row("spots", ValueForm.listOf(ValueForm.of(POINT)));
+        ValueForm spots = ValueForm.listOf(POINT);
 
-        List<Node> parts = childrenOf(widgetFor(spots));
+        List<Node> parts = childrenOf(widgetFor(row("spots", spots), spots));
 
         assertFalse(parts.isEmpty(), "the empty state still has to say something and offer Add");
         assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
                 "nothing to tick: no set has been declared");
     }
 
+    /**
+     * A declared choice stands for its <b>Java</b>, not its label: {@code "2"} written by the author is the
+     * {@code int} literal {@code 2}.
+     */
     @Test
     void aDeclaredSetOnALeafIsRadioButtons() {
-        ValueForm number = ValueForm.of(WHOLE_NUMBER);
-
-        List<Node> rows = childrenOf(widgetFor(row("size", number, List.of("1", "2", "3"))));
+        List<Node> rows = childrenOf(widgetFor(row("size", WHOLE_NUMBER, List.of("1", "2", "3")), WHOLE_NUMBER));
 
         assertEquals(3, rows.size());
         for (Node button : rows) assertInstanceOf(RadioButton.class, button);
-        assertEquals("2", ((RadioButton) rows.get(1)).getUserData());
+        assertEquals("2", ((ValueGrammar.Written) rows.get(1).getUserData()).source());
     }
 
-    /** With nothing declared the same leaf is the free-value editor, not an empty radio group. */
+    /** A choice that is not a value of the type cannot be picked, rather than being written as it is. */
+    @Test
+    void aChoiceThatIsNotAValueOfTheTypeIsDisabled() {
+        List<Node> rows = childrenOf(widgetFor(row("size", WHOLE_NUMBER, List.of("1", "many")), WHOLE_NUMBER));
+
+        assertFalse(rows.getFirst().isDisabled());
+        assertTrue(rows.get(1).isDisabled());
+    }
+
+    /** With nothing declared the same leaf is the one editor for its type, not an empty radio group. */
     @Test
     void aLeafWithNothingDeclaredIsItsOwnEditor() {
-        assertTrue(childrenOf(widgetFor(row("size", ValueForm.of(WHOLE_NUMBER)))).isEmpty(),
-                "a spinner is one control, not a column of choices");
+        assertTrue(childrenOf(widgetFor(row("size", WHOLE_NUMBER), WHOLE_NUMBER)).isEmpty(),
+                "one control, not a column of choices");
     }
 
     /**
@@ -139,10 +130,9 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     @Test
     void aMapIsTwoColumnsAndAnAddRow() {
-        ParameterRow retries = row("retries",
-                ValueForm.mapOf(ValueForm.of(TEXT), ValueForm.of(WHOLE_NUMBER)));
+        ValueForm retries = ValueForm.mapOf(TEXT, WHOLE_NUMBER);
 
-        List<Node> parts = childrenOf(widgetFor(retries));
+        List<Node> parts = childrenOf(widgetFor(row("retries", retries), retries));
 
         assertFalse(parts.isEmpty(), "an empty map still says so and offers Add");
         assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
@@ -150,22 +140,31 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     }
 
     /**
-     * The reader hands back the Java the field takes, written from the option's own stored text and never
-     * from the button's label. They part company the moment an option carries a graphic — a template's
-     * thumbnail, a colour swatch — and a value read off a label would then be whatever the label said.
+     * The reader hands back the Java the field takes, written from the option's own value and never from the
+     * button's label. They part company the moment an option carries a graphic — a template's thumbnail, a
+     * colour swatch — and a value read off a label would then be whatever the label said.
      */
     @Test
     void whatIsReadBackIsTheValueWrittenAsJavaAndNotTheLabel() {
-        com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        ParameterRow choices = row("mode", ValueForm.of(TEXT), List.of("fast", "slow"));
+        ParameterRow choices = row("mode", TEXT, List.of("fast", "slow"));
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
-        Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build("", choices, null, sink));
-        List<Node> buttons = childrenOf(built[0]);
+        List<Node> buttons = childrenOf(widgetFor(choices, TEXT, sink));
         interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
 
         assertEquals(1, sink.size());
         assertEquals("\"slow\"", sink.getFirst().read().get());
+    }
+
+    /** A stored value is matched against the choices by its value, so {@code "fast"} selects "fast". */
+    @Test
+    void theStoredValueSelectsItsChoice() {
+        ParameterRow choices = ParameterRow.named("mode", "String").value("\"fast\"")
+                .options(List.of("fast", "slow")).build();
+
+        List<Node> buttons = childrenOf(widgetFor(choices, TEXT));
+
+        assertTrue(((RadioButton) buttons.getFirst()).isSelected());
+        assertFalse(((RadioButton) buttons.get(1)).isSelected());
     }
 }

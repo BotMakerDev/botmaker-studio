@@ -1,6 +1,5 @@
 package com.botmaker.studio.parser.factories;
 
-import com.botmaker.plugin.api.source.SourceSeed;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;
@@ -105,13 +104,13 @@ public class InitializerFactory {
         // `CaptureSource.window("…")` literal that stops following the project's source.
         //
         // Two arms lived here until 2026-09-01, naming CaptureSource and Precision — the host holding one
-        // plugin's vocabulary because the host was written first. What replaced them is StudioPlugin's
-        // sourceSeeds(): the same two expressions, contributed by the plugin that owns the types, and a
+        // plugin's vocabulary because the host was written first. What replaced them is the plugin's own
+        // declaration of the type — its fresh() written by the host's grammar, or its freshSource() — and a
         // second plugin's interface-typed slot now gets an answer where before it got `new T()`.
-        SourceSeed seed = PluginHost.sourceSeedFor(richType.leafType().simpleName());
-        if (seed == null) seed = PluginHost.sourceSeedFor(richType.leafType().qualifiedName());
+        String seed = PluginHost.freshSource(richType.leafType().qualifiedName());
+        if (seed == null) seed = PluginHost.freshSource(richType.leafType().simpleName());
         if (seed != null) {
-            Expression seeded = parseExpr(ast, seed.expression());
+            Expression seeded = parseExpr(ast, seed);
             if (seeded != null) return seeded;
             // A seed that will not parse is skipped, never written: the generic paths below are wrong for
             // this type but they compile, and source that does not is the one outcome worse than a bad

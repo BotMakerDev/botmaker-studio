@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -40,21 +40,24 @@ public final class JavaManagedSource {
     /** The annotation's simple name, which is how it is matched. Its package is not resolvable here. */
     static final String ANNOTATION = "Managed";
 
-    /** The annotation's fully qualified name, which is what an import or a qualified use spells. */
-    public static final String ANNOTATION_FQN = "com.botmaker.plugin.basics.managed.Managed";
+    /**
+     * The annotation's fully qualified name, which is what an import or a qualified use spells. The
+     * contract's since 2026-09-22; a use spelling plugin-basics' older one still matches by simple name.
+     */
+    public static final String ANNOTATION_FQN = "com.botmaker.plugin.api.managed.Managed";
 
     private JavaManagedSource() {}
 
     /** Every {@code @Managed} method in {@code source}, in the order they are written. */
-    public static List<ManagedMethod> read(Path file, String source, ValueCatalog catalog) {
-        return read(file, source, catalog, BotRecords.none());
+    public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar) {
+        return read(file, source, grammar, BotRecords.none());
     }
 
     /**
      * The same, told what the bot declares itself — a managed value may be typed with one of the bot's own
      * records exactly as a parameter may.
      */
-    public static List<ManagedMethod> read(Path file, String source, ValueCatalog catalog,
+    public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records) {
         List<ManagedMethod> out = new ArrayList<>();
         JavaParameterSource.parse(source).accept(new ASTVisitor() {
@@ -66,25 +69,25 @@ public final class JavaManagedSource {
                 if (id.isEmpty()) return false;
                 String className = JavaParameterSource.enclosingTypeName(method);
                 if (className == null) return false;
-                out.add(read(file, source, catalog, records, className, id, method));
+                out.add(read(file, source, grammar, records, className, id, method));
                 return false;
             }
         });
         return List.copyOf(out);
     }
 
-    private static ManagedMethod read(Path file, String source, ValueCatalog catalog, BotRecords records,
+    private static ManagedMethod read(Path file, String source, ValueGrammar grammar, BotRecords records,
                                       String className, String id, MethodDeclaration method) {
-        ValueForm form = JavaParameterSource.formOf(catalog, method.getReturnType2(),
+        ValueForm form = JavaParameterSource.formOf(grammar, method.getReturnType2(),
                 method.getExtraDimensions(), records::qualifyDeclared);
         Expression returned = returnedExpression(method);
         String expression = returned == null ? "" : JavaParameterSource.text(source, returned);
-        // The catalog declines a declared form by design — only the host can see the bot's own source — so
-        // the second reader is asked for exactly that case and for no other.
+        // The grammar declines a declared form by design — only the host's view of the bot's own source can
+        // read one — so the second reader is asked for exactly that case and for no other.
         boolean readable = !expression.isEmpty() && (form instanceof ValueForm.Declared declared
                 ? records.partsOf(declared, expression).isPresent()
-                : catalog.valueOf(form, expression).isPresent());
-        String note = whyNotEditable(method, form, records, readable, expression);
+                : grammar.valueOf(form, expression).isPresent());
+        String note = whyNotEditable(grammar, method, form, records, readable, expression);
         return new ManagedMethod(file, className, method.getName().getIdentifier(), id, form, expression,
                 note.isEmpty(), note);
     }
@@ -112,8 +115,8 @@ public final class JavaManagedSource {
      * <em>rejected</em> — it is still found by its id, still reports what it holds, and still says what to
      * change.
      */
-    private static String whyNotEditable(MethodDeclaration method, ValueForm form, BotRecords records,
-                                         boolean readable, String expression) {
+    private static String whyNotEditable(ValueGrammar grammar, MethodDeclaration method, ValueForm form,
+                                         BotRecords records, boolean readable, String expression) {
         int modifiers = method.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
             return "not public: the bot can call it, the plugin's window cannot show it being changed";
@@ -128,10 +131,10 @@ public final class JavaManagedSource {
             String why = records.whyNotEditable(declared);
             if (why != null) return why;
         }
-        String unknown = firstUnknown(form);
+        String unknown = grammar.firstUnknown(form);
         if (unknown != null) {
             return form instanceof ValueForm.Leaf
-                    ? "no installed plugin registers " + unknown + " as a value type"
+                    ? "no installed plugin declares " + unknown + " as a value type"
                     : "type argument " + unknown + " is not a known value type";
         }
         if (expression.isEmpty()) {
@@ -142,23 +145,6 @@ public final class JavaManagedSource {
             return "written by hand as " + expression + ", which is kept rather than replaced";
         }
         return "";
-    }
-
-    /** Depth-first in written order, as {@code JavaParameterSource} does it and for the same reason. */
-    private static String firstUnknown(ValueForm form) {
-        return switch (form) {
-            case ValueForm.Leaf leaf -> leaf.type().known() ? null : leaf.type().id();
-            case ValueForm.Of of -> firstUnknown(of.arguments());
-            case ValueForm.Declared declared -> firstUnknown(declared.arguments());
-        };
-    }
-
-    private static String firstUnknown(List<ValueForm> arguments) {
-        for (ValueForm argument : arguments) {
-            String found = firstUnknown(argument);
-            if (found != null) return found;
-        }
-        return null;
     }
 
     /**

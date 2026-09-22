@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameter;
@@ -35,12 +36,12 @@ public final class HostParameters {
     private HostParameters() {}
 
     /** One parameter and the class a bot spells in front of its name — {@code Parameters.REST}. */
-    public record Parameter(String qualifier, ParameterRow row) {
+    public record Parameter(String qualifier, ParameterRow row, ValueForm form) {
 
         /** What a menu shows: the prose label when the author gave one, else the name and its type. */
         public String menuLabel() {
             return row.name().equals(row.displayLabel())
-                    ? row.name() + " (" + row.form().sourceName() + ")"
+                    ? row.name() + " (" + row.typeName() + ")"
                     : row.displayLabel() + " — " + row.name();
         }
     }
@@ -49,7 +50,7 @@ public final class HostParameters {
     public static List<Parameter> all(ProjectConfig config, ProjectState state) {
         List<Parameter> out = new ArrayList<>();
         for (JavaParameter parameter : JavaParameters.scan(config, state)) {
-            out.add(new Parameter(parameter.className(), parameter.row()));
+            out.add(new Parameter(parameter.className(), parameter.row(), parameter.form()));
         }
         return List.copyOf(out);
     }
@@ -61,7 +62,7 @@ public final class HostParameters {
     public static List<Parameter> compatibleWith(ProjectConfig config, ProjectState state,
                                                  ResolvedType requiredType) {
         return all(config, state).stream()
-                .filter(p -> ProjectAnalyzer.isCompatible(ValueWire.resolvedType(p.row().form()), requiredType))
+                .filter(p -> ProjectAnalyzer.isCompatible(ValueWire.resolvedType(p.form()), requiredType))
                 .toList();
     }
 

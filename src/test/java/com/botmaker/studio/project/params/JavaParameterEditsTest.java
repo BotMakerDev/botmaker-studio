@@ -1,8 +1,9 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueForm;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JavaParameterEditsTest {
 
-    private static final ValueForm NUMBER = ValueForm.of(TestValues.WHOLE_NUMBER);
-    private static final ValueForm DURATION = ValueForm.of(TestValues.DURATION);
-    private static final ValueForm TEXT = ValueForm.of(TestValues.TEXT);
+    private static final ValueForm NUMBER = TestValues.WHOLE_NUMBER;
+    private static final ValueForm DURATION = TestValues.DURATION;
+    private static final ValueForm TEXT = TestValues.TEXT;
 
     private static final String SOURCE = """
             package com.example.bot;
@@ -44,28 +45,28 @@ class JavaParameterEditsTest {
             """;
 
     /**
-     * A value edit spelled the way a window spells one: the catalog writes the Java, and the rewrite takes
+     * A value edit spelled the way a window spells one: the grammar writes the Java, and the rewrite takes
      * it already written — since 2026-09-20 the initialiser <em>is</em> the value.
      */
-    private static String setValue(String source, String field, ValueForm form, String... value) {
+    private static String setValue(String source, String field, ValueForm form, Object value) {
         return JavaParameterEdits.setValue(source, "Parameters", field, initializer(form, value));
     }
 
     private static String add(String source, String className, String field, ValueForm form,
-                              String value, String category, String description) {
-        return JavaParameterEdits.add(source, className, field, form,
+                              Object value, String category, String description) {
+        return JavaParameterEdits.add(source, TestValues.GRAMMAR, className, field, form,
                 initializer(form, value), category, description);
     }
 
-    private static String initializer(ValueForm form, String... value) {
-        return TestValues.CATALOG.initializerOfWires(form, List.of(value)).orElse("");
+    private static String initializer(ValueForm form, Object value) {
+        return TestValues.GRAMMAR.initializer(form, value).orElse("");
     }
 
     // ---- values ---------------------------------------------------------------------------------------
 
     @Test
     void aValueIsReplacedAndNothingElseMoves() {
-        String edited = setValue(SOURCE, "maxAttempts", NUMBER, "25");
+        String edited = setValue(SOURCE, "maxAttempts", NUMBER, 25);
 
         assertTrue(edited.contains("public static int maxAttempts = 25;"), edited);
         assertTrue(edited.contains("/** How many times to try before giving up. */"), edited);
@@ -74,12 +75,12 @@ class JavaParameterEditsTest {
     }
 
     @Test
-    void aStructuralValueIsWrittenAsTheCodecSpellsIt() {
-        String edited = setValue(SOURCE, "restBetween", DURATION, "5000");
+    void aStructuralValueIsWrittenAsItsComponentsSpellIt() {
+        String edited = setValue(SOURCE, "restBetween", DURATION, Duration.ofMillis(5000));
 
         assertTrue(edited.contains("restBetween = java.time.Duration.ofMillis(5000L);"), edited);
         // And it reads back, which is the property the window depends on.
-        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
+        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.GRAMMAR).stream()
                 .filter(p -> p.name().equals("restBetween")).findFirst().orElseThrow();
         assertEquals("java.time.Duration.ofMillis(5000L)", parameter.row().value());
         assertTrue(parameter.editable());
@@ -87,16 +88,25 @@ class JavaParameterEditsTest {
 
     @Test
     void aFieldThatIsNotThereChangesNothing() {
-        assertSame(SOURCE, setValue(SOURCE, "notDeclared", NUMBER, "1"));
+        assertSame(SOURCE, setValue(SOURCE, "notDeclared", NUMBER, 1));
         assertSame(SOURCE, JavaParameterEdits.setValue(SOURCE, "Elsewhere", "maxAttempts", "1"));
     }
 
     @Test
     void aTypeWithNoSourceSpellingChangesNothing() {
-        // An unknown type has no initialiser the catalog can write, so the edit declines rather than
+        // An undeclared type has no initialiser the grammar can write, so the edit declines rather than
         // writing a field naming a class that does not exist.
-        assertSame(SOURCE, setValue(SOURCE, "maxAttempts",
-                ValueForm.of(com.botmaker.plugin.api.value.ValueType.unknown("CHANNEL")), "x"));
+        assertSame(SOURCE, setValue(SOURCE, "maxAttempts", ValueForm.of("Channel"), "x"));
+    }
+
+    @Test
+    void aValueWrittenBySimpleNameBringsItsImport() {
+        String source = SOURCE.replace("import java.time.Duration;\n", "");
+        String edited = JavaParameterEdits.setValue(source, "Parameters", "restBetween",
+                "Duration.ofMillis(5L)", List.of("java.time.Duration"));
+
+        assertTrue(edited.contains("import java.time.Duration;"), edited);
+        assertTrue(edited.contains("restBetween = Duration.ofMillis(5L);"), edited);
     }
 
     // ---- renames --------------------------------------------------------------------------------------
@@ -147,11 +157,32 @@ class JavaParameterEditsTest {
 
     @Test
     void retypingChangesTheTypeAndResetsTheValue() {
-        String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
+        String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
                 DURATION);
 
-        assertTrue(edited.contains("public static java.time.Duration maxAttempts"), edited);
+        // By its simple name, since the file imports it — and the import would have been added if not.
+        assertTrue(edited.contains("public static Duration maxAttempts"), edited);
         assertTrue(edited.contains("= java.time.Duration.ofMillis(0L);"), edited);
+    }
+
+    @Test
+    void retypingToATypeTheFileDoesNotImportAddsTheImport() {
+        String source = SOURCE.replace("import java.time.Duration;\n", "")
+                .replace("public static Duration restBetween", "public static java.time.Duration restBetween");
+        String edited = JavaParameterEdits.retype(source, TestValues.GRAMMAR, "Parameters", "maxAttempts",
+                DURATION);
+
+        assertTrue(edited.contains("import java.time.Duration;"), edited);
+        assertTrue(edited.contains("public static Duration maxAttempts"), edited);
+    }
+
+    /** A type with no fresh value is declared with no initialiser at all — legal Java for every type. */
+    @Test
+    void retypingToATypeWithNoFreshValueLeavesNoInitialiser() {
+        String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
+                new ValueForm.Declared("com.example.bot.Point", List.of()));
+
+        assertTrue(edited.contains("public static com.example.bot.Point maxAttempts;"), edited);
     }
 
     /**
@@ -161,8 +192,8 @@ class JavaParameterEditsTest {
      */
     @Test
     void retypingToAListWritesTheListTypeAndAnEmptyList() {
-        String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                ValueForm.listOf(ValueForm.of(TestValues.WHOLE_NUMBER)));
+        String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
+                ValueForm.listOf(TestValues.WHOLE_NUMBER));
 
         // Boxed: List<int> does not compile.
         assertTrue(edited.contains("java.util.List<Integer> maxAttempts"), edited);
@@ -172,12 +203,10 @@ class JavaParameterEditsTest {
     /** A map is a type a bot may declare, so it is a type this window may write. */
     @Test
     void retypingToAMapWritesBothArgumentsAndAnEmptyMap() {
-        String edited = JavaParameterEdits.retype(SOURCE, TestValues.CATALOG, "Parameters", "maxAttempts",
-                com.botmaker.plugin.api.value.ValueForm.mapOf(
-                        com.botmaker.plugin.api.value.ValueForm.of(TestValues.TEXT),
-                        com.botmaker.plugin.api.value.ValueForm.of(TestValues.DURATION)));
+        String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
+                ValueForm.mapOf(TestValues.TEXT, TestValues.DURATION));
 
-        assertTrue(edited.contains("java.util.Map<String, java.time.Duration> maxAttempts"), edited);
+        assertTrue(edited.contains("java.util.Map<String, Duration> maxAttempts"), edited);
         assertTrue(edited.contains("java.util.Map.ofEntries()"), edited);
     }
 
@@ -249,7 +278,7 @@ class JavaParameterEditsTest {
 
         assertTrue(edited.contains("visibility = Param.PUBLIC"), edited);
         assertFalse(edited.contains("\"public\""), edited);
-        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
+        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.GRAMMAR).stream()
                 .filter(p -> p.name().equals("maxAttempts")).findFirst().orElseThrow();
         assertEquals(com.botmaker.plugin.api.value.Visibility.PUBLIC, parameter.row().visibility());
     }
@@ -265,9 +294,9 @@ class JavaParameterEditsTest {
 
     @Test
     void addingANameThatIsTakenOrAClassThatIsNotThereChangesNothing() {
-        assertSame(SOURCE, add(SOURCE, "Parameters", "maxAttempts", NUMBER, "1", "", ""));
-        assertSame(SOURCE, add(SOURCE, "Missing", "a", NUMBER, "1", "", ""));
-        assertSame(SOURCE, add(SOURCE, "Parameters", "  ", NUMBER, "1", "", ""));
+        assertSame(SOURCE, add(SOURCE, "Parameters", "maxAttempts", NUMBER, 1, "", ""));
+        assertSame(SOURCE, add(SOURCE, "Missing", "a", NUMBER, 1, "", ""));
+        assertSame(SOURCE, add(SOURCE, "Parameters", "  ", NUMBER, 1, "", ""));
     }
 
     @Test
@@ -304,12 +333,11 @@ class JavaParameterEditsTest {
     @Test
     void whatIsWrittenIsWhatIsReadBack() {
         String edited = add(SOURCE, "Parameters", "label", TEXT, "a \"quoted\" value", "Naming", "");
-        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.CATALOG).stream()
+        JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.GRAMMAR).stream()
                 .filter(p -> p.name().equals("label")).findFirst().orElseThrow();
 
         assertEquals("\"a \\\"quoted\\\" value\"", parameter.row().value());
-        assertEquals(List.of("a \"quoted\" value"),
-                TestValues.CATALOG.wiresOfInitializer(TEXT, parameter.row().value()).orElseThrow());
+        assertEquals("a \"quoted\" value", TestValues.GRAMMAR.valueOf(TEXT, parameter.row().value()).orElseThrow());
         assertEquals("Naming", parameter.row().category());
         assertTrue(parameter.editable(), parameter.note());
     }

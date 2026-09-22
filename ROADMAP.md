@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-22 (latest) — `@Param` is the only source of a parameter row, and a section is a class.**
+- **2026-09-23 (latest) — the host owns the value grammar.** `plugin/grammar/` (`ValueForm` with
+  `Leaf(String typeName)`, `ValueContainer` closed to List/Map/Entry, `SourceSplit`, new `JavaNames`,
+  `JavaExpressions`, `JdkLiterals`, `ValueGrammar`) replaces the contract's `ValueCatalog`; `PluginHost`
+  composes it from `types()` + `componentTypes()`, wraps each `PluginType.editor` as a slot editor, and
+  drops `sourceSeeds`/`catalogFor(pin)`. `HostValueContext`/`HostSlotContext` implement `value(Class)`/
+  `set(Object)`/`setSource`. `ValueEditors` is dispatch only; `ValueWire` keeps parts/compose/resolvedType;
+  `JavaParameter` carries its `ValueForm`. `ValueEditorsTest` deleted.
+- **2026-09-22 — `@Param` is the only source of a parameter row, and a section is a class.**
   `project/params/ParameterSurface` (354 lines) is **deleted**, folded into `JavaParameters`;
   `PluginHost.parameterGroups`/`parameterGroup`/`parameterRows`/`parameterEdited` and the `GROUPS` cache go
   with it, as does `HostParameters`' group half (and its `pin(ProjectConfig)`), `RunnerWindow.sdkPin()` and

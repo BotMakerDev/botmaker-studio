@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
@@ -32,31 +32,31 @@ public final class JavaManagedValues {
 
     /** Every {@code @Managed} method the bot declares, file by file, in the order the walk visits them. */
     public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state) {
-        return scan(config, state, PluginHost.valueTypes());
+        return scan(config, state, PluginHost.grammar());
     }
 
-    /** The same, against a given catalog — the seam a test uses, and the one place the catalog enters. */
-    public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
+    /** The same, against a given grammar — the seam a test uses, and the one place the grammar enters. */
+    public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
         // Two walks, as the parameters scan does: a value may be typed with a record declared in a file the
         // managed walk has not reached yet, so what the bot declares has to be known before the first read.
-        BotRecords records = BotRecords.scan(config, state, catalog);
+        BotRecords records = BotRecords.scan(config, state, grammar);
         List<ManagedMethod> out = new ArrayList<>();
         BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaManagedSource.read(file, source, catalog, records)));
+                out.addAll(JavaManagedSource.read(file, source, grammar, records)));
         return List.copyOf(out);
     }
 
     /** The value carrying {@code id}, or empty when the bot declares none — the first one if it declares two. */
     public static Optional<ManagedMethod> find(ProjectConfig config, ProjectState state, String id) {
-        return find(config, state, id, PluginHost.valueTypes());
+        return find(config, state, id, PluginHost.grammar());
     }
 
-    /** The same, against a given catalog. */
+    /** The same, against a given grammar. */
     public static Optional<ManagedMethod> find(ProjectConfig config, ProjectState state, String id,
-                                               ValueCatalog catalog) {
+                                               ValueGrammar grammar) {
         if (id == null || id.isBlank()) return Optional.empty();
-        for (ManagedMethod value : scan(config, state, catalog)) {
+        for (ManagedMethod value : scan(config, state, grammar)) {
             if (id.equals(value.id())) return Optional.of(value);
         }
         return Optional.empty();

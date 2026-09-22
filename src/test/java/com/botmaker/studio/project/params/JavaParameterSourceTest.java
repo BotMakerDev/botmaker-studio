@@ -1,10 +1,11 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.plugin.grammar.ValueForm;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,13 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Reading {@code @Param} fields out of source text.
  *
  * <p>Everything here is source in and rows out — no project, no filesystem, no host — which is the point of
- * {@link JavaParameterSource} being its own class. The catalog is {@link TestValues}', for the reason
+ * {@link JavaParameterSource} being its own class. The grammar is {@link TestValues}', for the reason
  * written there: Studio depends on no plugin.
  */
 class JavaParameterSourceTest {
 
     private static List<JavaParameter> read(String source) {
-        return JavaParameterSource.read(null, source, TestValues.CATALOG);
+        return JavaParameterSource.read(null, source, TestValues.GRAMMAR);
     }
 
     private static String wrap(String fields) {
@@ -49,7 +50,8 @@ class JavaParameterSourceTest {
         assertEquals("Parameters", parameter.className());
         assertEquals("maxAttempts", parameter.name());
         assertEquals("Parameters.maxAttempts", parameter.qualified());
-        assertEquals(TestValues.WHOLE_NUMBER, parameter.row().form().leaf());
+        assertEquals(TestValues.WHOLE_NUMBER, parameter.form().leaf());
+        assertEquals("int", parameter.row().typeName());
         assertEquals("10", parameter.row().value());
         assertTrue(parameter.editable(), parameter.note());
     }
@@ -58,7 +60,7 @@ class JavaParameterSourceTest {
     void everyAnnotationMemberIsRead() {
         JavaParameter parameter = read(wrap("""
                     @Param(category = "Limits", description = "How many times to try",
-                            visibility = "public", min = "1", max = "50")
+                            visibility = "public", min = 1, max = 50.5)
                     public static int maxAttempts = 10;
                 """)).getFirst();
 
@@ -66,8 +68,20 @@ class JavaParameterSourceTest {
         assertEquals("Limits", row.category());
         assertEquals("How many times to try", row.description());
         assertEquals(Visibility.PUBLIC, row.visibility());
-        assertEquals("1", row.bounds().min());
-        assertEquals("50", row.bounds().max());
+        assertEquals(1.0, row.min());
+        assertEquals(50.5, row.max());
+    }
+
+    /** A bot written against plugin-basics' annotation wrote its bounds as text, and they still bound. */
+    @Test
+    void aBoundWrittenAsTextIsTheSameBound() {
+        ParameterRow row = read(wrap("""
+                    @Param(min = "1", max = "-2")
+                    public static int a = 1;
+                """)).getFirst().row();
+
+        assertEquals(1.0, row.min());
+        assertEquals(-2.0, row.max());
     }
 
     @Test
@@ -90,7 +104,7 @@ class JavaParameterSourceTest {
 
         assertEquals("", row.category());
         assertEquals(Visibility.EDITOR_ONLY, row.visibility());
-        assertTrue(row.bounds().isEmpty());
+        assertFalse(row.isBounded());
         assertEquals(List.of(), row.options());
     }
 
@@ -104,8 +118,8 @@ class JavaParameterSourceTest {
                     public static java.time.Duration qualified = java.time.Duration.ofMillis(1000L);
                 """));
 
-        assertEquals(TestValues.DURATION, found.get(0).row().form().leaf());
-        assertEquals(TestValues.DURATION, found.get(1).row().form().leaf());
+        assertEquals(TestValues.DURATION, found.get(0).form().leaf());
+        assertEquals(TestValues.DURATION, found.get(1).form().leaf());
         assertEquals("java.time.Duration.ofMillis(3000L)", found.get(0).row().value());
         assertEquals("java.time.Duration.ofMillis(1000L)", found.get(1).row().value());
     }
@@ -119,10 +133,10 @@ class JavaParameterSourceTest {
                                     java.time.Duration.ofMillis(60000L));
                 """)).getFirst();
 
-        assertEquals(ValueForm.listOf(ValueForm.of(TestValues.DURATION)), parameter.row().form());
-        assertEquals(TestValues.DURATION, parameter.row().form().leaf());
-        assertEquals(List.of("3000", "60000"), TestValues.CATALOG
-                .wiresOfInitializer(parameter.row().form(), parameter.row().value()).orElseThrow());
+        assertEquals(ValueForm.listOf(TestValues.DURATION), parameter.form());
+        assertEquals(TestValues.DURATION, parameter.form().leaf());
+        assertEquals(List.of(Duration.ofMillis(3000), Duration.ofMillis(60000)), TestValues.GRAMMAR
+                .valueOf(parameter.form(), parameter.row().value()).orElseThrow());
         assertTrue(parameter.editable(), parameter.note());
     }
 
@@ -142,9 +156,8 @@ class JavaParameterSourceTest {
                                     java.time.Duration.ofMillis(3000L)));
                 """)).getFirst();
 
-        assertEquals(ValueForm.mapOf(ValueForm.of(TestValues.TEXT), ValueForm.of(TestValues.DURATION)),
-                parameter.row().form());
-        assertTrue(parameter.row().form().known());
+        assertEquals(ValueForm.mapOf(TestValues.TEXT, TestValues.DURATION), parameter.form());
+        assertTrue(TestValues.GRAMMAR.known(parameter.form()));
         assertTrue(parameter.editable(), parameter.note());
     }
 
@@ -157,11 +170,10 @@ class JavaParameterSourceTest {
                             java.util.Map.ofEntries();
                 """)).getFirst();
 
-        assertEquals(ValueForm.mapOf(ValueForm.of(TestValues.TEXT),
-                        ValueForm.listOf(ValueForm.of(TestValues.DURATION))),
-                parameter.row().form());
-        assertEquals("java.util.Map<String, java.util.List<java.time.Duration>>",
-                parameter.row().form().sourceName());
+        assertEquals(ValueForm.mapOf(TestValues.TEXT, ValueForm.listOf(TestValues.DURATION)), parameter.form());
+        // A leaf by its simple name; the import is what a declaration adds beside it.
+        assertEquals("java.util.Map<String, java.util.List<Duration>>", parameter.form().sourceName());
+        assertEquals(List.of("java.time.Duration"), TestValues.GRAMMAR.imports(parameter.form()));
     }
 
     /**
@@ -176,7 +188,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertFalse(parameter.row().form().known());
+        assertFalse(TestValues.GRAMMAR.known(parameter.form()));
         assertTrue(parameter.note().contains("type argument Channel"), parameter.note());
     }
 
@@ -189,7 +201,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertEquals("java.util.Set<String>", parameter.row().form().sourceName());
+        assertEquals("java.util.Set<String>", parameter.form().sourceName());
     }
 
     /** A hand-written spelling of a container this grammar did not write is kept, not replaced. */
@@ -201,7 +213,7 @@ class JavaParameterSourceTest {
                             java.util.Map.of("mine", java.time.Duration.ofMillis(3000L));
                 """)).getFirst();
 
-        assertTrue(parameter.row().form().known(), "the type is read even when the value is not");
+        assertTrue(TestValues.GRAMMAR.known(parameter.form()), "the type is read even when the value is not");
         assertFalse(parameter.editable());
         assertTrue(parameter.note().contains("kept rather than replaced"), parameter.note());
     }
@@ -267,19 +279,19 @@ class JavaParameterSourceTest {
         assertEquals("java.time.Duration.ofSeconds(3)", parameter.initializer());
         assertTrue(parameter.note().contains("kept rather than replaced"), parameter.note());
         // Still listed, still typed: the bot reads it and the window has to show it.
-        assertEquals(TestValues.DURATION, parameter.row().form().leaf());
+        assertEquals(TestValues.DURATION, parameter.form().leaf());
     }
 
     @Test
-    void anUnregisteredTypeIsListedReadOnlyAndNamesTheTypeNobodyRegisters() {
+    void anUndeclaredTypeIsListedReadOnlyAndNamesTheTypeNobodyDeclares() {
         JavaParameter parameter = read(wrap("""
                     @Param
                     public static Channel channel = Channel.GENERAL;
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertFalse(parameter.row().form().known());
-        assertTrue(parameter.note().contains("registers Channel"), parameter.note());
+        assertFalse(TestValues.GRAMMAR.known(parameter.form()));
+        assertTrue(parameter.note().contains("declares Channel"), parameter.note());
     }
 
     @Test
@@ -322,7 +334,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertFalse(parameter.row().form().known());
+        assertFalse(TestValues.GRAMMAR.known(parameter.form()));
     }
 
     @Test

@@ -124,8 +124,9 @@ public class ListBlock extends AbstractExpressionBlock {
         // A type whose owning plugin says what a fresh one looks like skips the generic expression menu: the
         // seed is added straight away and the element's own editor drives the real choice. This arm named
         // ImageTemplate until 2026-09-01 — the host deciding, for one library, that "+" on its lists means
-        // something else — and the question it was really asking is the one SourceSeed answers for everybody.
-        if (PluginHost.sourceSeedFor(targetType == null ? null : targetType.simpleName()) != null) {
+        // something else — and the question it was really asking is the one a plugin's declared type answers
+        // for everybody: whether a fresh one exists.
+        if (PluginHost.freshSource(targetType == null ? null : targetType.simpleName()) != null) {
             context.getCodeEditor().addSeededElementToList(this.astNode, insertIndex, targetType);
             return;
         }

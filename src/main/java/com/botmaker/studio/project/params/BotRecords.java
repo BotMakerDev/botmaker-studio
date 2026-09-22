@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.BotSources;
@@ -25,12 +25,12 @@ import java.util.Set;
 /**
  * The records the bot itself declares, and the grammar for a value of one.
  *
- * <p><b>Why this is the host's and not the catalog's.</b> A {@code ValueCatalog} describes what plugins
- * registered; a bot's own {@code record Point(int x, int y)} is registered by nobody, has no codec, and a
- * second project's {@code Point} is a different class. What the host has and nothing else does is the bot's
- * source — so the contract's grammar declines a {@link ValueForm.Declared}
- * ({@code ValueCatalog.initializer} says so in as many words) and this class answers it instead, with the
- * same shape of answer: parts as source with their forms, and a call composed back over them.
+ * <p><b>Why this is separate from the grammar.</b> A {@link ValueGrammar} describes what plugins declared; a
+ * bot's own {@code record Point(int x, int y)} is declared by no plugin, and a second project's
+ * {@code Point} is a different class. What the host has and no plugin does is the bot's source — so the
+ * grammar declines a {@link ValueForm.Declared} ({@code ValueGrammar.initializer} says so in as many words)
+ * and this class answers it instead, with the same shape of answer: parts as source with their forms, and a
+ * call composed back over them.
  *
  * <h2>Records first, and only records</h2>
  *
@@ -43,7 +43,7 @@ import java.util.Set;
  * <p><b>A placeholder is never written into a user's class</b>
  * ({@code docs/refactor/32-generic-values.md} §<i>A bot's own generic class</i>): a record whose components
  * are not all readable has no default this host may invent, so the field keeps whatever its author put
- * there. That is why {@code ValueCatalog.defaultValue} answers empty for a declared form and why nothing
+ * there. That is why {@code ValueGrammar.freshInitializer} answers empty for a declared form and why nothing
  * here supplies one.
  *
  * <p><b>Syntax only, like everything else in this package.</b> A component's type is whatever it is
@@ -66,12 +66,16 @@ public final class BotRecords {
     public record Shape(String qualifiedName, String simpleName, boolean isRecord,
                         List<Component> components) {}
 
-    private static final BotRecords NONE = new BotRecords(Map.of());
+    private static final BotRecords NONE = new BotRecords(Map.of(), ValueGrammar.empty());
 
     private final Map<String, Shape> byQualifiedName;
 
-    private BotRecords(Map<String, Shape> byQualifiedName) {
+    /** What decides whether a component's own type is one a value can be written of. */
+    private final ValueGrammar grammar;
+
+    private BotRecords(Map<String, Shape> byQualifiedName, ValueGrammar grammar) {
         this.byQualifiedName = Map.copyOf(byQualifiedName);
+        this.grammar = grammar == null ? ValueGrammar.empty() : grammar;
     }
 
     /** No records at all — what a caller with no project has, and what the pure readers are given. */
@@ -85,18 +89,18 @@ public final class BotRecords {
      * <p>Two passes, because a record may name another: the names are collected first, so a component typed
      * {@code Point} resolves to the bot's {@code Point} however the two files are ordered on disk.
      */
-    public static BotRecords scan(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
+    public static BotRecords scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return NONE;
         List<String> sources = new ArrayList<>();
         BotSources.scan(config, state, (file, source) -> sources.add(source));
-        return of(catalog, sources);
+        return of(grammar, sources);
     }
 
     /**
      * The same over source text, which is how this is tested — no project, no filesystem, exactly as
      * {@link JavaParameterSource} is.
      */
-    static BotRecords of(ValueCatalog catalog, List<String> sources) {
+    static BotRecords of(ValueGrammar grammar, List<String> sources) {
         Map<String, Raw> raw = new LinkedHashMap<>();
         for (String source : sources) collect(source, raw);
         if (raw.isEmpty()) return NONE;
@@ -114,12 +118,12 @@ public final class BotRecords {
             List<Component> components = new ArrayList<>(found.components().size());
             for (RawComponent component : found.components()) {
                 components.add(new Component(component.name(), JavaParameterSource.formOf(
-                        catalog, component.type(), component.extraDimensions(), declarations)));
+                        grammar, component.type(), component.extraDimensions(), declarations)));
             }
             shapes.put(found.qualifiedName(), new Shape(found.qualifiedName(), found.simpleName(),
                     found.isRecord(), List.copyOf(components)));
         }
-        return new BotRecords(shapes);
+        return new BotRecords(shapes, grammar);
     }
 
     /**
@@ -183,9 +187,9 @@ public final class BotRecords {
                 if (why != null) return why;
                 continue;
             }
-            if (!component.form().known()) {
+            if (!grammar.known(component.form())) {
                 return shape.simpleName() + "." + component.name() + " is a "
-                        + component.form().sourceName() + ", which no installed plugin registers as a value";
+                        + component.form().sourceName() + ", which no installed plugin declares as a value";
             }
         }
         seen.remove(shape.qualifiedName());
@@ -194,13 +198,13 @@ public final class BotRecords {
 
     /**
      * A {@code new Point(1, 2)} taken apart into its components' own source, each with the component's form
-     * — the counterpart of {@code ValueCatalog.partsOfInitializer} for a class the bot declares.
+     * — the counterpart of {@code ValueGrammar.partsOfInitializer} for a class the bot declares.
      *
      * <p>Positional, because a record's canonical constructor is. A call with the wrong number of arguments
      * is not this record's canonical constructor — it is one of its other constructors, or a different class
      * entirely — and answering a partial reading of it would rewrite something nobody asked to rewrite.
      */
-    public Optional<List<ValueCatalog.Part>> partsOf(ValueForm.Declared declared, String source) {
+    public Optional<List<ValueGrammar.Part>> partsOf(ValueForm.Declared declared, String source) {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
         if (shape == null || source == null || source.isBlank()) return Optional.empty();
         String trimmed = source.strip();
@@ -214,11 +218,11 @@ public final class BotRecords {
         List<?> arguments = creation.arguments();
         if (arguments.size() != shape.components().size()) return Optional.empty();
 
-        List<ValueCatalog.Part> parts = new ArrayList<>(arguments.size());
+        List<ValueGrammar.Part> parts = new ArrayList<>(arguments.size());
         for (int i = 0; i < arguments.size(); i++) {
             String written = JavaParameterSource.text(trimmed, (ASTNode) arguments.get(i));
             if (written.isBlank()) return Optional.empty();
-            parts.add(new ValueCatalog.Part(shape.components().get(i).form(), written));
+            parts.add(new ValueGrammar.Part(shape.components().get(i).form(), written));
         }
         return Optional.of(List.copyOf(parts));
     }

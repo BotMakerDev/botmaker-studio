@@ -1,10 +1,10 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
@@ -60,25 +60,25 @@ public final class JavaParameters {
 
     /** Every {@code @Param} field the bot declares, file by file, in the order the walk visits them. */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state) {
-        return scan(config, state, PluginHost.valueTypes());
+        return scan(config, state, PluginHost.grammar());
     }
 
     /**
-     * The same, against a given catalog — the seam a test uses, and the one place the vocabulary enters.
+     * The same, against a given grammar — the seam a test uses, and the one place the vocabulary enters.
      *
-     * <p>Every edit below takes one too, for a reason worth stating: the catalog is what turns a value into
+     * <p>Every edit below takes one too, for a reason worth stating: the grammar is what turns a value into
      * the Java a field is initialised with, so a window and a test that disagreed about it would write two
      * different files from the same click.
      */
-    public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
+    public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
         // Two walks rather than one, and cheap for the same reason nothing here is cached: a field may be
         // typed with a record declared in a file the parameter walk has not reached yet, so what the bot
         // declares has to be known in full before the first field is read.
-        BotRecords records = BotRecords.scan(config, state, catalog);
+        BotRecords records = BotRecords.scan(config, state, grammar);
         List<JavaParameter> out = new ArrayList<>();
         BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaParameterSource.read(file, source, catalog, records)));
+                out.addAll(JavaParameterSource.read(file, source, grammar, records)));
         return List.copyOf(out);
     }
 
@@ -109,13 +109,13 @@ public final class JavaParameters {
      * bot's author names their own — so the only way to know one exists is that something is filed under it.
      */
     public static List<String> categories(ProjectConfig config, ProjectState state) {
-        return categories(config, state, PluginHost.valueTypes());
+        return categories(config, state, PluginHost.grammar());
     }
 
-    /** The same, against a given catalog. */
-    public static List<String> categories(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
+    /** The same, against a given grammar. */
+    public static List<String> categories(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         Set<String> out = new LinkedHashSet<>();
-        for (JavaParameter parameter : scan(config, state, catalog)) {
+        for (JavaParameter parameter : scan(config, state, grammar)) {
             if (!parameter.row().category().isBlank()) out.add(parameter.row().category());
         }
         return List.copyOf(out);
@@ -135,16 +135,22 @@ public final class JavaParameters {
      */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
                                                   JavaParameter parameter, String value) {
-        return setValue(config, state, parameter, value, PluginHost.valueTypes());
+        return setValue(config, state, parameter, value, List.of(), PluginHost.grammar());
     }
 
-    /** The same, against a given catalog. */
+    /** The same, adding the imports the value's Java names — what an editor hands back beside it. */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
-                                                  JavaParameter parameter, String value,
-                                                  ValueCatalog catalog) {
+                                                  JavaParameter parameter, String value, List<String> imports) {
+        return setValue(config, state, parameter, value, imports, PluginHost.grammar());
+    }
+
+    /** The same, against a given grammar. */
+    public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
+                                                  JavaParameter parameter, String value, List<String> imports,
+                                                  ValueGrammar grammar) {
         if (parameter == null || !parameter.editable()) return Optional.empty();
-        writeValue(config, state, parameter, value);
-        return reread(config, state, parameter.className(), parameter.name(), catalog);
+        writeValue(config, state, parameter, value, imports);
+        return reread(config, state, parameter.className(), parameter.name(), grammar);
     }
 
     /**
@@ -157,14 +163,18 @@ public final class JavaParameters {
      * value may be.
      */
     public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
-                                                 JavaParameter parameter, ParameterRow wanted) {
-        return declare(config, state, parameter, wanted, PluginHost.valueTypes());
+                                                 JavaParameter parameter, ParameterRow wanted,
+                                                 ValueForm wantedForm) {
+        return declare(config, state, parameter, wanted, wantedForm, PluginHost.grammar());
     }
 
-    /** The same, against a given catalog. */
+    /**
+     * The same, against a given grammar. {@code wantedForm} is the type the field should have, which the
+     * row cannot say for itself — it carries the type's written name, not its tree.
+     */
     public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
                                                  JavaParameter parameter, ParameterRow wanted,
-                                                 ValueCatalog catalog) {
+                                                 ValueForm wantedForm, ValueGrammar grammar) {
         if (parameter == null || wanted == null) return Optional.empty();
         String className = parameter.className();
         ParameterRow before = parameter.row();
@@ -174,12 +184,12 @@ public final class JavaParameters {
             if (!rename(config, state, parameter, wanted.name())) return Optional.empty();
             name = wanted.name();
         }
-        JavaParameter held = find(config, state, className, name, catalog).orElse(null);
+        JavaParameter held = find(config, state, className, name, grammar).orElse(null);
         if (held == null) return Optional.empty();
 
-        if (!wanted.form().equals(before.form())) {
-            retype(config, state, held, wanted.form(), catalog);
-            held = find(config, state, className, name, catalog).orElse(null);
+        if (wantedForm != null && !wantedForm.equals(parameter.form())) {
+            retype(config, state, held, wantedForm, grammar);
+            held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return Optional.empty();
         }
 
@@ -195,30 +205,33 @@ public final class JavaParameters {
             members.put("visibility", wanted.visibility() == Visibility.PUBLIC
                     ? Visibility.PUBLIC.id() : "");
         }
-        // Null-safe, because a Range component genuinely is null for "no minimum" — the record keeps the
-        // absence rather than spelling it as an empty string, and an unbounded row is the ordinary case.
-        if (!text(wanted.bounds().min()).equals(text(before.bounds().min()))) {
-            members.put("min", text(wanted.bounds().min()));
-        }
-        if (!text(wanted.bounds().max()).equals(text(before.bounds().max()))) {
-            members.put("max", text(wanted.bounds().max()));
-        }
+        // An infinite bound is the annotation's default, so it removes the member rather than writing
+        // Double.NEGATIVE_INFINITY down.
+        if (Double.compare(wanted.min(), before.min()) != 0) members.put("min", bound(wanted.min()));
+        if (Double.compare(wanted.max(), before.max()) != 0) members.put("max", bound(wanted.max()));
         if (!members.isEmpty()) {
             setMembers(config, state, held, members);
-            held = find(config, state, className, name, catalog).orElse(null);
+            held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return Optional.empty();
         }
 
         if (!wanted.options().equals(before.options())) {
             setOptions(config, state, held, wanted.options());
-            held = find(config, state, className, name, catalog).orElse(null);
+            held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return Optional.empty();
         }
 
         if (!wanted.value().equals(before.value()) && held.editable()) {
-            writeValue(config, state, held, wanted.value());
+            writeValue(config, state, held, wanted.value(), List.of());
         }
-        return reread(config, state, className, name, catalog);
+        return reread(config, state, className, name, grammar);
+    }
+
+    /** A bound as the literal {@code @Param} takes — {@code 0}, {@code 2.5} — or {@code ""} for none. */
+    static String bound(double value) {
+        if (Double.isInfinite(value) || Double.isNaN(value)) return "";
+        if (value == Math.rint(value) && Math.abs(value) < 1e15) return Long.toString((long) value);
+        return Double.toString(value);
     }
 
     /**
@@ -231,21 +244,21 @@ public final class JavaParameters {
                                              String name, ValueForm form, String value,
                                              String category, String description) {
         return add(config, state, className, name, form, value, category, description,
-                PluginHost.valueTypes());
+                PluginHost.grammar());
     }
 
-    /** The same, against a given catalog. */
+    /** The same, against a given grammar. */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
                                              String name, ValueForm form, String value,
-                                             String category, String description, ValueCatalog catalog) {
+                                             String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
-        if (find(config, state, className, name, catalog).isPresent()) return Optional.empty();
+        if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
         if (!classes(config, state).contains(className) && !createClass(config, className)) {
             return Optional.empty();
         }
         rewriteAll(config, state, source -> JavaParameterEdits.add(
-                source, className, name, form, value, category, description));
-        return reread(config, state, className, name, catalog);
+                source, grammar, className, name, form, value, category, description));
+        return reread(config, state, className, name, grammar);
     }
 
     /**
@@ -315,9 +328,9 @@ public final class JavaParameters {
 
     /** Replaces a parameter's value with {@code initializer}, which is already the type's own Java. */
     private static boolean writeValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                      String initializer) {
+                                      String initializer, List<String> imports) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
-                source, parameter.className(), parameter.name(), initializer));
+                source, parameter.className(), parameter.name(), initializer, imports));
     }
 
     /**
@@ -335,9 +348,9 @@ public final class JavaParameters {
 
     /** Changes a parameter's type, resetting its value to that type's default. */
     private static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                  ValueForm form, ValueCatalog catalog) {
+                                  ValueForm form, ValueGrammar grammar) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
-                source, catalog, parameter.className(), parameter.name(), form));
+                source, grammar, parameter.className(), parameter.name(), form));
     }
 
     /** Sets or clears {@code @Param} members — a blank value removes the member. */
@@ -356,23 +369,18 @@ public final class JavaParameters {
 
     // ---- plumbing ---------------------------------------------------------------------------------------
 
-    /** A possibly-absent string as text — {@code null} and {@code ""} are the same answer here. */
-    private static String text(String value) {
-        return value == null ? "" : value;
-    }
-
     /** The field called {@code name} in {@code className}, as the source reads <em>now</em>. */
-    private static Optional<JavaParameter> find(ProjectConfig config, ProjectState state, String className,
-                                                String name, ValueCatalog catalog) {
-        for (JavaParameter parameter : scan(config, state, catalog)) {
+    public static Optional<JavaParameter> find(ProjectConfig config, ProjectState state, String className,
+                                               String name, ValueGrammar grammar) {
+        for (JavaParameter parameter : scan(config, state, grammar)) {
             if (parameter.is(className, name)) return Optional.of(parameter);
         }
         return Optional.empty();
     }
 
     private static Optional<ParameterRow> reread(ProjectConfig config, ProjectState state, String className,
-                                                 String name, ValueCatalog catalog) {
-        return find(config, state, className, name, catalog).map(JavaParameter::row);
+                                                 String name, ValueGrammar grammar) {
+        return find(config, state, className, name, grammar).map(JavaParameter::row);
     }
 
     /** Applies {@code edit} to one file, buffer and disk, and answers whether it changed anything. */

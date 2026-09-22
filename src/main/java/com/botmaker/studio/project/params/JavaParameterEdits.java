@@ -1,9 +1,11 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -49,19 +51,30 @@ public final class JavaParameterEdits {
      * Replaces the value of {@code className.fieldName} with {@code initializer}.
      *
      * <p><b>The initialiser arrives written</b>, because since 2026-09-20 that is what a value <em>is</em>
-     * ({@code 32-generic-values.md} decision 6): whoever has the value in hand asks
-     * {@code ValueCatalog.initializer} for its Java, which is the same call the canvas makes, and reading it
-     * back is {@code ValueCatalog.valueOf} — the round trip is a fixed point precisely because one spelling
-     * crosses rather than two.
+     * ({@code 32-generic-values.md} decision 6): whoever has the value in hand asks the host's
+     * {@code ValueGrammar} for its Java, which is the same call the canvas makes, and reading it back is
+     * {@code ValueGrammar.valueOf} — the round trip is a fixed point precisely because one spelling crosses
+     * rather than two.
      *
      * <p>A blank initialiser answers the source unchanged: a field with no value is not something this can
      * write, and emptying one is not an edit anybody asked for.
      */
     public static String setValue(String source, String className, String fieldName, String initializer) {
+        return setValue(source, className, fieldName, initializer, List.of());
+    }
+
+    /**
+     * The same, adding the imports {@code initializer} needs — an editor writes {@code Duration.ofSeconds(3)}
+     * rather than the qualified name, because the file is one a person reads.
+     */
+    public static String setValue(String source, String className, String fieldName, String initializer,
+                                  List<String> imports) {
         if (initializer == null || initializer.isBlank()) return source;
-        return edit(source, className, fieldName, (ast, rewrite, field, fragment) ->
-                rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
-                        expression(ast, rewrite, initializer), null));
+        return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
+            rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
+                    expression(ast, rewrite, initializer), null);
+            addImports(unit, rewrite, imports);
+        });
     }
 
     /**
@@ -94,23 +107,25 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * Changes the field's declared type, and resets its value to the new type's default.
+     * Changes the field's declared type, and resets its value to the new type's fresh one.
      *
      * <p><b>The value is reset rather than converted.</b> There is no conversion — a {@code Duration} is not
-     * a {@code Rect} in any sense a codec could express — and the alternative is an initialiser that does
-     * not compile. The caller is the one that tells the user, and marks the uses for review.
+     * a {@code Rect} in any sense — and the alternative is an initialiser that does not compile. The caller
+     * is the one that tells the user, and marks the uses for review.
+     *
+     * <p>A type with no fresh value — a class the bot declares, whose placeholder would be a value nobody
+     * chose — is written with <b>no initialiser at all</b>, which is legal Java for every type.
      */
-    public static String retype(String source, ValueCatalog catalog, String className, String fieldName,
+    public static String retype(String source, ValueGrammar grammar, String className, String fieldName,
                                 ValueForm form) {
-        String typeName = typeName(form);
-        String initializer = catalog.defaultValue(form)
-                .flatMap(value -> catalog.initializer(form, value))
-                .orElse(null);
-        if (typeName == null || initializer == null) return source;
-        return edit(source, className, fieldName, (ast, rewrite, field, fragment) -> {
+        String typeName = typeName(grammar, form);
+        if (typeName == null) return source;
+        String initializer = grammar.freshInitializer(form).orElse(null);
+        return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
             rewrite.set(field, FieldDeclaration.TYPE_PROPERTY, type(ast, rewrite, typeName), null);
             rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
-                    expression(ast, rewrite, initializer), null);
+                    initializer == null ? null : expression(ast, rewrite, initializer), null);
+            addImports(unit, rewrite, grammar.imports(form));
         });
     }
 
@@ -124,7 +139,7 @@ public final class JavaParameterEdits {
     public static String setMembers(String source, String className, String fieldName,
                                     Map<String, String> members) {
         if (members == null || members.isEmpty()) return source;
-        return edit(source, className, fieldName, (ast, rewrite, field, fragment) -> {
+        return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
             Annotation existing = JavaParameterSource.paramAnnotation(field);
             if (existing == null) return;
             NormalAnnotation normal = asNormal(ast, rewrite, field, existing);
@@ -156,7 +171,7 @@ public final class JavaParameterEdits {
      */
     public static String setOptions(String source, String className, String fieldName,
                                     List<String> options) {
-        return edit(source, className, fieldName, (ast, rewrite, field, fragment) -> {
+        return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
             Annotation existing = JavaParameterSource.paramAnnotation(field);
             if (existing == null) return;
             NormalAnnotation normal = asNormal(ast, rewrite, field, existing);
@@ -186,18 +201,17 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * Appends a new {@code @Param public static} field to {@code className}.
+     * Appends a new {@code @Param public static} field to {@code className}, importing what its type names.
      *
      * <p>Appended rather than inserted in sorted order: a source file is the author's, and a window that
      * reordered their declarations to suit its own list would be rewriting more than the user asked for.
+     * A blank {@code initializer} declares the field with none, which is legal Java for every type — a
+     * class the bot declares has no fresh value Studio may invent.
      */
-    public static String add(String source, String className, String fieldName, ValueForm form,
-                             String initializer, String category, String description) {
-        String typeName = typeName(form);
-        if (typeName == null || initializer == null || initializer.isBlank()
-                || fieldName == null || fieldName.isBlank()) {
-            return source;
-        }
+    public static String add(String source, ValueGrammar grammar, String className, String fieldName,
+                             ValueForm form, String initializer, String category, String description) {
+        String typeName = typeName(grammar, form);
+        if (typeName == null || fieldName == null || fieldName.isBlank()) return source;
         CompilationUnit unit = JavaParameterSource.parse(source);
         TypeDeclaration target = typeDeclaration(unit, className);
         if (target == null || declares(target, fieldName)) return source;
@@ -210,6 +224,7 @@ public final class JavaParameterEdits {
         String declaration = declaration(typeName, fieldName, initializer, category, description);
         rewrite.getListRewrite(target, TypeDeclaration.BODY_DECLARATIONS_PROPERTY)
                 .insertLast(rewrite.createStringPlaceholder(declaration, ASTNode.FIELD_DECLARATION), null);
+        addImports(unit, rewrite, grammar.imports(form));
         return AstRewriteHelper.applyRewrite(rewrite, source);
     }
 
@@ -223,24 +238,13 @@ public final class JavaParameterEdits {
         }
         String annotation = members.isEmpty() ? "@" + JavaParameterSource.ANNOTATION
                 : "@" + JavaParameterSource.ANNOTATION + "(" + String.join(", ", members) + ")";
-        return annotation + "\npublic static " + typeName + " " + fieldName + " = " + initializer + ";";
+        String value = initializer == null || initializer.isBlank() ? "" : " = " + initializer;
+        return annotation + "\npublic static " + typeName + " " + fieldName + value + ";";
     }
 
     /** A Java string literal. The members written here are ours, but an author's text is not. */
     private static String quote(String text) {
-        StringBuilder out = new StringBuilder("\"");
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            switch (c) {
-                case '"' -> out.append("\\\"");
-                case '\\' -> out.append("\\\\");
-                case '\n' -> out.append("\\n");
-                case '\r' -> out.append("\\r");
-                case '\t' -> out.append("\\t");
-                default -> out.append(c);
-            }
-        }
-        return out.append('"').toString();
+        return JdkLiterals.quote(text);
     }
 
     /**
@@ -277,10 +281,17 @@ public final class JavaParameterEdits {
 
     // ---- plumbing ---------------------------------------------------------------------------------------
 
-    /** What an edit does to one field; {@code ast} and {@code rewrite} are the unit's own. */
+    /** What an edit does to one field; {@code ast} and {@code rewrite} are {@code unit}'s own. */
     @FunctionalInterface
     private interface FieldEdit {
-        void apply(AST ast, ASTRewrite rewrite, FieldDeclaration field, VariableDeclarationFragment fragment);
+        void apply(CompilationUnit unit, AST ast, ASTRewrite rewrite, FieldDeclaration field,
+                   VariableDeclarationFragment fragment);
+    }
+
+    /** Each import into {@code unit}'s rewrite, skipping one already there — {@code ImportManager}'s rule. */
+    private static void addImports(CompilationUnit unit, ASTRewrite rewrite, List<String> imports) {
+        if (imports == null) return;
+        for (String name : imports) ImportManager.addImport(unit, rewrite, name);
     }
 
     /** Finds {@code className.fieldName}, applies {@code edit}, and answers the rewritten source. */
@@ -298,7 +309,7 @@ public final class JavaParameterEdits {
                     VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
                     if (!fragment.getName().getIdentifier().equals(fieldName)) continue;
                     found[0] = true;
-                    edit.apply(ast, rewrite, field, fragment);
+                    edit.apply(unit, ast, rewrite, field, fragment);
                 }
                 return false;
             }
@@ -358,6 +369,18 @@ public final class JavaParameterEdits {
      * name <i>as written</i>, so a file that imports {@code Param} and one that spells it out both compile.
      */
     private static Expression memberValue(AST ast, Annotation annotation, String member, String value) {
+        if (member.equals("min") || member.equals("max")) {
+            // Numbers since 2026-09-22, when @Param's bounds became double: a string here would not compile.
+            String digits = value.strip();
+            boolean negative = digits.startsWith("-");
+            org.eclipse.jdt.core.dom.NumberLiteral number =
+                    ast.newNumberLiteral(negative ? digits.substring(1) : digits);
+            if (!negative) return number;
+            org.eclipse.jdt.core.dom.PrefixExpression minus = ast.newPrefixExpression();
+            minus.setOperator(org.eclipse.jdt.core.dom.PrefixExpression.Operator.MINUS);
+            minus.setOperand(number);
+            return minus;
+        }
         if (member.equals("visibility")) {
             String constant = value.equals(Visibility.PUBLIC.id()) ? "PUBLIC"
                     : value.equals(Visibility.EDITOR_ONLY.id()) ? "EDITOR" : null;
@@ -384,14 +407,14 @@ public final class JavaParameterEdits {
      * two levels deep.
      *
      * <p><b>The form spells itself</b> ({@code ValueForm.sourceName}), which is what retired the branch on
-     * {@code isList()} that stood here: a shape with one boolean could write one container, and the boxing
-     * rule that went with it lives on the leaf, where a type already knows what boxes it.
+     * {@code isList()} that stood here: a shape with one boolean could write one container. A leaf is
+     * spelled by its simple name, and {@code ValueGrammar.imports} is what the caller adds beside it.
      *
      * <p>Null for a form with an unknown leaf anywhere, which is what makes every caller decline rather than
      * write a field naming a class that does not exist.
      */
-    private static String typeName(ValueForm form) {
-        if (form == null || !form.known()) return null;
+    private static String typeName(ValueGrammar grammar, ValueForm form) {
+        if (form == null || grammar == null || !grammar.known(form)) return null;
         String java = form.sourceName();
         return java == null || java.isBlank() ? null : java;
     }

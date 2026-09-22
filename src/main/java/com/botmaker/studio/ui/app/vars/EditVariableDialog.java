@@ -1,12 +1,12 @@
 package com.botmaker.studio.ui.app.vars;
 
-import com.botmaker.plugin.api.value.ValueType;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -34,16 +34,11 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.ASTVisitor;
-import org.eclipse.jdt.core.dom.BooleanLiteral;
-import org.eclipse.jdt.core.dom.CharacterLiteral;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.NumberLiteral;
-import org.eclipse.jdt.core.dom.PrefixExpression;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 
@@ -348,21 +343,27 @@ public final class EditVariableDialog {
      * committing them would put a dozen entries in the undo history for one edit.
      */
     private Node literalEditor(Local local, ResolvedType type) {
-        Optional<ValueType> kind = ValueWire.bySourceName(type.qualifiedName());
-        if (kind.isEmpty() || local.initializer() == null) return sourceLabel(local);
+        ValueForm leaf = ValueForm.of(type.qualifiedName() == null || type.qualifiedName().isBlank()
+                ? type.simpleName() : type.qualifiedName());
+        if (!(leaf instanceof ValueForm.Leaf typed) || !PluginHost.grammar().known(leaf)
+                || local.initializer() == null) {
+            return sourceLabel(local);
+        }
 
-        ValueType botType = kind.get();
-        ValueEditors.Editor editor = ValueEditors.editorFor(botType, readLiteral(local.initializer()),
+        // The value's own Java, handed to the type's editor as it stands: the editor reads the value through
+        // the host's grammar, so there is no literal to strip first. readLiteral stood here until 2026-09-22,
+        // one of three numeric-literal strippers the host and the toolkit kept between them.
+        ValueEditors.Editor editor = ValueEditors.editorFor(typed, local.initializer().toString(),
                 ValueEditors.Context.of(context.getConfig()));
         ValueEditors.stretch(editor.node());
         HBox.setHgrow(editor.node(), Priority.ALWAYS);
 
         Button set = new Button("Set");
         set.setOnAction(e -> {
-            ValueWire.Literal literal = ValueWire.literalSource(botType, editor.read().get());
-            if (literal == null) return;
+            String source = editor.read().get();
+            if (source == null || source.isBlank()) return;
             find().map(Local::initializer).ifPresent(node -> context.getCodeEditor()
-                    .replaceWithRawExpression(node, literal.source(), literal.importFqn()));
+                    .replaceWithRawExpression(node, source, editor.imports().get()));
         });
         HBox box = new HBox(6, editor.node(), set);
         box.setAlignment(Pos.CENTER_LEFT);
@@ -399,26 +400,6 @@ public final class EditVariableDialog {
             menu.show(change, Side.BOTTOM, 0, 0);
         }));
         return change;
-    }
-
-    /**
-     * The literal an editor is seeded from, for the five types that reach {@link #literalEditor}.
-     *
-     * <p>Deliberately narrow: an initializer that is a call or an expression has no literal form, and the
-     * empty string is the honest seed for "what value would you like instead?". The list screen's reader was
-     * far wider — enum constants, constructors, {@code parse("…")} calls — because it had to serve every type;
-     * everything it covered beyond these five now has a picker that reads the AST directly.
-     */
-    private static String readLiteral(Expression expression) {
-        return switch (expression) {
-            case StringLiteral s -> s.getLiteralValue();
-            case NumberLiteral n -> n.getToken();
-            case BooleanLiteral b -> Boolean.toString(b.booleanValue());
-            case CharacterLiteral c -> String.valueOf(c.charValue());
-            case PrefixExpression p when p.getOperator() == PrefixExpression.Operator.MINUS ->
-                    "-" + readLiteral(p.getOperand());
-            case null, default -> "";
-        };
     }
 
     // --- Rename ------------------------------------------------------------------------------------------

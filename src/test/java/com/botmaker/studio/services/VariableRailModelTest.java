@@ -1,7 +1,6 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.studio.plugin.ValueWire;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -28,18 +27,18 @@ class VariableRailModelTest {
         return VariableRailModel.categoriesOf(rows());
     }
 
-    /** Keyed by the persisted id, which is what a type <em>is</em> since the vocabulary opened. */
-    private static ParameterRow row(String name, String typeId, String category) {
-        return ParameterRow.named(name, ValueWire.one(typeId)).category(category).build();
+    /** The type is the Java one the field writes; the rail never looks at it. */
+    private static ParameterRow row(String name, String typeName, String category) {
+        return ParameterRow.named(name, typeName).category(category).build();
     }
 
     private static List<ParameterRow> rows() {
         return List.of(
-                row("RETRIES", "WHOLE_NUMBER", "Mining"),
-                row("ORE", "TEXT", "Mining"),
-                row("BAIT", "TEXT", "Fishing"),
-                row("DEBUG", "YES_NO", ""),
-                row("GAP", "DURATION", "Timing"));
+                row("RETRIES", "int", "Mining"),
+                row("ORE", "String", "Mining"),
+                row("BAIT", "String", "Fishing"),
+                row("DEBUG", "boolean", ""),
+                row("GAP", "Duration", "Timing"));
     }
 
     @Test

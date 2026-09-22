@@ -4,27 +4,26 @@ import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.plugin.api.source.SourceSeed;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
-import com.botmaker.plugin.api.value.ValueCatalog;
-import com.botmaker.plugin.api.value.ValueType;
+import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.PluginLoader;
+import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.ServiceLoader;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -47,16 +46,15 @@ import java.util.function.Supplier;
  *
  * <p><b>Fail-open, in one direction only.</b> An empty classpath, a jar with no services file, a plugin
  * whose constructor throws: each is logged and answered with the bundled set. Menus widen, never empty; a
- * value type nothing registers resolves to {@code ValueType.unknown} and its stored value is preserved
- * read-only. {@code ActivityVariable}'s constructor reads {@link #valueTypes()} and must never see an
- * exception, whatever the state of the loader.
+ * type no plugin declares is read as unknown and its value is preserved read-only. {@link #grammar()} must
+ * never throw, whatever the state of the loader.
  *
  * <h2>Two catalogs, and the difference matters</h2>
  *
- * <p>{@link #catalogFor(String)} answers for <em>the version a project pins</em>: a bot compiles against the
- * SDK named in its pom, which is routinely older than the one this Studio bundles, and the palette must
- * describe that jar rather than this one. That is the inversion's rule — a bot gets its answers from its own
- * version — and it is why the pinned version is an argument at every level of this stack.
+ * <p>{@link #catalogFor()} answers for <em>the project's own plugins</em>: a bot compiles against the
+ * plugin jars named in its pom, which are routinely older than anything this Studio has seen, and the
+ * palette must describe those jars. It took the pinned SDK version as an argument until 2026-09-22; no
+ * plugin ever read it, because the bound set already <em>is</em> the pinned jar.
  *
  * <p>{@link #bundled()} answers for the plugin jars Studio itself was compiled against, and has exactly one
  * legitimate use: resolving a bare simple name to a fully-qualified one when there is no project in hand
@@ -101,22 +99,14 @@ public final class PluginHost {
      */
     private static boolean serving;
 
-    /** pinned version → the merged catalog for it. Keyed by the raw pin, since that is what a caller holds. */
-    private static final Map<String, PaletteCatalog> CACHE = new ConcurrentHashMap<>();
+    /** The bound set's merged palette, built on first ask and dropped on every bind. */
+    private static volatile PaletteCatalog catalog;
 
     /**
-     * The blank pin — "whatever this jar is". Every plugin is asked to read it as its own version rather
-     * than as an unknown one, which is what makes {@link #bundled()} a question a plugin can answer without
-     * Studio having to know how that plugin spells its versions.
+     * Memoised on the same reasoning as the palette — the merge walks every plugin and the value cells ask
+     * on every keystroke — and rebuilt on every bind, which is why it is a field rather than a constant.
      */
-    private static final String BUNDLED_PIN = "";
-
-    /**
-     * Memoised on the same reasoning as the palette caches — the merge walks every plugin and the variable
-     * editors ask on every keystroke — and rebuilt on every bind, which is why it is a field rather than a
-     * constant.
-     */
-    private static volatile ValueCatalog valueTypes = mergeValueTypes();
+    private static volatile ValueGrammar grammar = compose(BUNDLED).grammar();
 
     /** Memoised beside the value catalog, and rebuilt on the same bind, for the same reason. */
     private static volatile List<OwnedEditor> ownedSlotEditors = mergeOwnedSlotEditors(BUNDLED);
@@ -219,7 +209,7 @@ public final class PluginHost {
 
     private static void swap(PluginLoader opened, List<StudioPlugin> bound) {
         Composition composed = compose(bound);
-        ValueCatalog merged = composed.valueTypes();
+        ValueGrammar merged = composed.grammar();
         bound = composed.bound();
         if (!composed.rejected().isEmpty()) {
             // A plugin that cannot compose is dropped on its own, and every plugin beside it still binds.
@@ -240,12 +230,12 @@ public final class PluginHost {
         PluginLoader previous = loader;
         loader = opened;
         plugins = bound;
-        valueTypes = merged;
+        grammar = merged;
         ownedSlotEditors = mergeOwnedSlotEditors(bound);
         slotEditors = strip(ownedSlotEditors);
         toolbarItems = mergeToolbarItems(bound);
         managedValues = mergeManagedValues(bound);
-        CACHE.clear();
+        catalog = null;
         if (previous != null) previous.close();
     }
 
@@ -322,21 +312,15 @@ public final class PluginHost {
     }
 
     /**
-     * Every value type every loaded plugin registers, merged by id.
+     * The value grammar over every type the bound plugins declare — what reads a value out of a user's Java
+     * and writes one back, for every plugin at once.
      *
-     * <p><b>This does not vary by pin, and that is not an oversight.</b> A palette entry is an <em>offer</em>
-     * — a member this build knows about that an older jar may not contain — so it is narrowed against the
-     * bot's own bytecode. A value type is a <em>reading</em>: the project file already says {@code DURATION},
-     * and what that word means has to be answered whatever the pin, or the value cannot be shown at all. A
-     * type an older jar never had simply never appears in an older project's file.
-     *
-     * <p>Two plugins claiming one id is refused loudly at startup rather than resolved. First-wins would make
-     * a project open differently depending on load order, which is the one failure a user could never
-     * diagnose; and the ids are what {@code activities.json} holds, so a silent winner silently retypes their
-     * variables.
+     * <p>Two plugins declaring one type is refused at bind rather than resolved: first-wins would make a
+     * project open differently depending on load order, which is the one failure a user could never
+     * diagnose. See {@link #compose}.
      */
-    public static ValueCatalog valueTypes() {
-        return valueTypes;
+    public static ValueGrammar grammar() {
+        return grammar;
     }
 
     /**
@@ -368,14 +352,29 @@ public final class PluginHost {
         return ownedSlotEditors;
     }
 
-    private static List<OwnedEditor> mergeOwnedSlotEditors(List<StudioPlugin> set) {
+    /**
+     * Each plugin's {@link StudioPlugin#slotEditors()} first — the editors chosen by the call, and overrides
+     * of somebody else's type, which are narrower matches — and then one editor per type it declares, drawn
+     * by {@link PluginType#editor}. A declared type is named once, in its {@code PluginType}, so this is
+     * where it becomes an editor rather than the plugin listing it a second time.
+     */
+    static List<OwnedEditor> mergeOwnedSlotEditors(List<StudioPlugin> set) {
         List<OwnedEditor> merged = new ArrayList<>();
         for (StudioPlugin plugin : set) {
-            List<SlotEditor> offered = plugin.slotEditors();
-            if (offered == null) continue;
             String name = displayNameOf(plugin);
-            for (SlotEditor editor : offered) {
-                if (editor != null) merged.add(new OwnedEditor(plugin.id(), name, editor));
+            List<SlotEditor> offered = quietly(plugin, "offer slot editors", plugin::slotEditors);
+            if (offered != null) {
+                for (SlotEditor editor : offered) {
+                    if (editor != null) merged.add(new OwnedEditor(plugin.id(), name, editor));
+                }
+            }
+            List<PluginType<?>> types = quietly(plugin, "declare types", plugin::types);
+            if (types == null) continue;
+            for (PluginType<?> type : types) {
+                Class<?> cls = type == null ? null : quietly(plugin, "name a type", type::type);
+                if (cls == null) continue;
+                merged.add(new OwnedEditor(plugin.id(), name,
+                        SlotEditor.forType(cls, type::editor, type::preview)));
             }
         }
         return List.copyOf(merged);
@@ -449,51 +448,16 @@ public final class PluginHost {
     }
 
     /**
-     * The Java a fresh value of a plugin-owned type should be written as — asked on every seed, never
-     * memoised, which is the one place this class deliberately does not cache.
+     * The Java a fresh value of the type written {@code typeName} starts as — fully qualified — or
+     * {@code null} when no bound plugin declares it.
      *
-     * <p>{@link SourceSeed} is contributed as data, and a seed may read the project's live state: the SDK's
-     * capture-source seed is the project's <em>current</em> default target. Memoising it beside the slot
-     * editors would freeze a slot onto whatever that was at project open — the bug the SDK's own
-     * {@code CaptureExpr.projectDefault()} exists to prevent. The lists are two entries long and a seed is
-     * built when a user drops a block, so there is nothing here worth caching anyway.
-     *
-     * <p>A plugin that throws costs only itself, exactly as in {@link #mergeToolbarItems}: an uncompilable
-     * default in one slot must not stop the others being seeded.
+     * <p>Asked on every seed and never memoised: {@code PluginType.fresh()} may read the plugin's live
+     * state, and the SDK's capture source is the project's <em>current</em> one. It was
+     * {@code sourceSeeds()} until 2026-09-22 — the same answer as Java text a plugin typed, which javac
+     * never looked at; now the plugin hands over a value and the grammar writes it.
      */
-    public static List<SourceSeed> sourceSeeds() {
-        List<SourceSeed> merged = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
-            List<SourceSeed> offered;
-            try {
-                offered = plugin.sourceSeeds();
-            } catch (RuntimeException | Error e) {
-                System.err.println("Warning: " + plugin.id() + " could not offer source seeds: " + e);
-                continue;
-            }
-            if (offered == null) continue;
-            for (SourceSeed seed : offered) {
-                if (seed != null && seed.typeName() != null && seed.expression() != null
-                        && !seed.expression().isBlank()) {
-                    merged.add(seed);
-                }
-            }
-        }
-        return List.copyOf(merged);
-    }
-
-    /**
-     * The seed for a slot whose type is written {@code typeName}, or {@code null} for none.
-     *
-     * <p>First match wins, in plugin load order, which is the same rule the slot editors follow and for the
-     * same reason: a plugin that ships a type ships the answer for it, and two plugins claiming one name is
-     * a collision the host cannot adjudicate.
-     */
-    public static SourceSeed sourceSeedFor(String typeName) {
-        for (SourceSeed seed : sourceSeeds()) {
-            if (seed.claims(typeName)) return seed;
-        }
-        return null;
+    public static String freshSource(String typeName) {
+        return grammar.freshInitializer(ValueForm.of(typeName == null ? "" : typeName)).orElse(null);
     }
 
     /**
@@ -585,72 +549,71 @@ public final class PluginHost {
         }
     }
 
-    private static ValueCatalog mergeValueTypes() {
-        return compose(plugins).valueTypes();
-    }
-
     /**
-     * What a set of plugins composes to: the merged value vocabulary, the plugins that are in it, and a
-     * failure per plugin that was left out.
+     * What a set of plugins composes to: the grammar over what they declare, the plugins that are in it, and
+     * a failure per plugin that was left out.
      *
-     * @param valueTypes what {@link #valueTypes()} serves
-     * @param bound      {@code set} minus whatever could not compose, in the same order
-     * @param rejected   one entry per plugin left out, in the shape {@link #failures()} already reports
+     * @param grammar  what {@link #grammar()} serves
+     * @param bound    {@code set} minus whatever could not compose, in the same order
+     * @param rejected one entry per plugin left out, in the shape {@link #failures()} already reports
      */
-    record Composition(ValueCatalog valueTypes, List<StudioPlugin> bound,
-                               List<PluginLoader.PluginFailure> rejected) {
+    record Composition(ValueGrammar grammar, List<StudioPlugin> bound,
+                       List<PluginLoader.PluginFailure> rejected) {
     }
 
     /**
-     * Folds the plugins into one value vocabulary, <b>dropping a plugin that will not compose rather than
-     * the whole set</b> (2026-09-19).
+     * Folds the plugins' declarations into one grammar, <b>dropping a plugin that will not compose rather
+     * than the whole set</b> (2026-09-19).
      *
-     * <p>Two plugins claiming one id is genuinely unanswerable — the id <em>is</em> the identity a project
-     * file holds — so one of them has to go. Which one is classpath order, which is Maven's own answer and
-     * the only one here that is not a guess. What changed is the blast radius: the fold used to throw, and
-     * the caller fell back to the bundled set, so a clash between two of a project's plugins cost the user
-     * every editor of every other plugin as well.
+     * <p>Two plugins declaring one type is genuinely unanswerable — the class <em>is</em> the identity, and
+     * which plugin's {@code fresh()} and editor a project gets cannot depend on load order — so one of them
+     * has to go. Which one is classpath order, which is Maven's own answer and the only one here that is not
+     * a guess. Offering an editor for another plugin's type is not declaring it: that is
+     * {@link StudioPlugin#slotEditors()}, and the user picks between the two.
      *
-     * <p>Total, like every other pass over plugin code here: a plugin whose own {@code valueTypes()} throws
-     * is a rejection and not a failed bind.
+     * <p>Total, like every other pass over plugin code here: a plugin whose {@code types()} or
+     * {@code componentTypes()} throws is a rejection and not a failed bind.
      */
     static Composition compose(List<StudioPlugin> set) {
-        ValueCatalog merged = ValueCatalog.empty();
+        List<PluginType<?>> types = new ArrayList<>();
+        List<ComponentType<?>> components = new ArrayList<>();
         List<StudioPlugin> kept = new ArrayList<>();
         List<PluginLoader.PluginFailure> rejected = new ArrayList<>();
         Map<String, String> claimedBy = new HashMap<>();
         for (StudioPlugin plugin : set) {
-            ValueCatalog offered;
+            List<PluginType<?>> offered;
+            List<ComponentType<?>> parts;
+            List<String> names = new ArrayList<>();
             try {
-                offered = plugin.valueTypes();
-            } catch (RuntimeException | Error e) {
+                offered = plugin.types();
+                parts = plugin.componentTypes();
+                if (offered != null) {
+                    for (PluginType<?> type : offered) if (type != null) names.add(JavaNames.canonical(type.type()));
+                }
+            } catch (RuntimeException | LinkageError e) {
                 rejected.add(new PluginLoader.PluginFailure(plugin.id(), e));
                 continue;
             }
-            if (offered == null) {
-                kept.add(plugin);
-                continue;
-            }
-            List<String> clashes = merged.clashesWith(offered);
+            List<String> clashes = names.stream().filter(claimedBy::containsKey).distinct().toList();
             if (!clashes.isEmpty()) {
                 rejected.add(new PluginLoader.PluginFailure(plugin.id(),
                         new IllegalStateException(clashMessage(clashes, claimedBy))));
                 continue;
             }
-            for (ValueType type : offered.types()) claimedBy.putIfAbsent(type.id(), plugin.id());
-            merged = merged.merge(offered);
+            for (String name : names) claimedBy.putIfAbsent(name, plugin.id());
+            if (offered != null) offered.stream().filter(t -> t != null).forEach(types::add);
+            if (parts != null) parts.stream().filter(c -> c != null).forEach(components::add);
             kept.add(plugin);
         }
-        return new Composition(merged, List.copyOf(kept), List.copyOf(rejected));
+        return new Composition(ValueGrammar.of(types, components), List.copyOf(kept), List.copyOf(rejected));
     }
 
-    /** Why a plugin was left out, naming the ids and whoever already claimed them. */
+    /** Why a plugin was left out, naming the types and whoever already declared them. */
     private static String clashMessage(List<String> clashes, Map<String, String> claimedBy) {
-        String owner = clashes.stream().map(claimedBy::get).filter(Objects::nonNull).findFirst()
-                .orElse("another plugin");
-        return "it was left out: it registers the value type(s) " + String.join(", ", clashes)
-                + ", which " + owner + " already claims. Two plugins cannot both own a type id — install one "
-                + "of them, or move to a version of one that no longer registers it.";
+        String owner = claimedBy.getOrDefault(clashes.getFirst(), "another plugin");
+        return "it was left out: it declares " + String.join(", ", clashes)
+                + ", which " + owner + " already declares. Two plugins cannot both own a type — install one "
+                + "of them, or move to a version of one that no longer declares it.";
     }
 
     /** {@code first} then {@code second}, as one immutable list. */
@@ -662,29 +625,29 @@ public final class PluginHost {
     }
 
     /**
-     * The palette every loaded plugin offers at the versions this project pins, merged.
-     *
-     * <p>Today one plugin means one version string. When a second plugin arrives this takes a map — the
-     * merge itself already handles several catalogs, and {@link PaletteCatalog#mergedWith} is additive on
+     * The palette every bound plugin offers, merged. {@link PaletteCatalog#mergedWith} is additive on
      * purpose: a plugin curates its own surface and has no business removing another's.
      *
-     * @param pinnedSdkVersion the SDK version the open project's pom names; never interpreted here
+     * <p>No version argument since 2026-09-22. It took the SDK version the pom pinned, and no plugin ever
+     * read it: the plugin answering is the one inside the pinned jar already, which is what {@link #bind}
+     * is for.
      */
-    public static PaletteCatalog catalogFor(String pinnedSdkVersion) {
-        String pin = pinnedSdkVersion == null ? BUNDLED_PIN : pinnedSdkVersion;
-        return CACHE.computeIfAbsent(pin, PluginHost::build);
+    public static PaletteCatalog catalogFor() {
+        PaletteCatalog local = catalog;
+        if (local == null) {
+            local = merge(plugins);
+            catalog = local;
+        }
+        return local;
     }
 
     /**
-     * The palette of the plugin jars Studio itself bundles — the newest surface this build knows about.
-     *
-     * <p>Read it as "which names does a plugin own?", never as "which members should we offer": the second
-     * question belongs to the project's own pin and is {@link #catalogFor}'s. Using this one for curation
-     * would offer a bot on an older SDK members its jar has never had, which is the bug the pinned catalog
-     * exists to prevent.
+     * The same palette, read as "which names does a plugin own?" rather than "which members should we
+     * offer". Two names for one answer, kept apart because the two questions are: recognition is asked with
+     * no project in hand, and curation is not.
      */
     public static PaletteCatalog bundled() {
-        return catalogFor(BUNDLED_PIN);
+        return catalogFor();
     }
 
     /**
@@ -758,10 +721,11 @@ public final class PluginHost {
                 .toList();
     }
 
-    private static PaletteCatalog build(String pin) {
+    private static PaletteCatalog merge(List<StudioPlugin> set) {
         PaletteCatalog merged = PaletteCatalog.empty();
-        for (StudioPlugin plugin : plugins) {
-            merged = merged.mergedWith(plugin.catalog(pin));
+        for (StudioPlugin plugin : set) {
+            PaletteCatalog offered = quietly(plugin, "build its palette", plugin::catalog);
+            if (offered != null) merged = merged.mergedWith(offered);
         }
         return merged;
     }
