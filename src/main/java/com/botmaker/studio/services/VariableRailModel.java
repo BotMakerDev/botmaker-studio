@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 
 import java.util.ArrayList;
@@ -14,13 +13,15 @@ import java.util.List;
  * over {@code TagCatalog} — one tag per activity in {@code activities.json}, plus the custom tags in
  * {@code templates.json} — which was right while Studio was the thing that defined activities. It no longer
  * is: activities are the SDK plugin's, so the rail was reading one plugin's file to decide the editor's own
- * headings, and renaming an activity silently renamed a category. What replaced it is a second layer
- * <em>inside</em> a section: each {@link ParameterGroup} declares the categories its own parameters may be
- * filed under, and this model is handed that list. There is nothing left to drift because there is nothing
- * left to derive.
+ * headings, and renaming an activity silently renamed a category.
  *
- * <p><b>Nothing is ever unreachable.</b> A variable filed under a category the group no longer declares —
- * the plugin dropped it, or an older project carries an activity name — would otherwise have no row at all.
+ * <p><b>And a category is free text (2026-09-22).</b> A plugin declared the categories its section allowed
+ * for two weeks; nothing ever declared one, and a {@code @Param(category = "…")} is whatever a bot's author
+ * wrote. So the list this model is handed is now simply the distinct categories the bot's own fields use —
+ * derived from the declarations themselves, which is the one source that cannot drift from them.
+ *
+ * <p><b>Nothing is ever unreachable.</b> A variable filed under a category the list no longer holds —
+ * an older project carries an activity name, say — would otherwise have no row at all.
  * Rather than inventing one, it is listed under {@link ParameterRow#GENERAL}, which is where a parameter
  * with no category lives and where this one effectively now is. The dialog's picker then shows it as
  * unfiled, so the fix is a visible choice rather than a silent relabel.
@@ -41,14 +42,14 @@ public final class VariableRailModel {
     /** A selectable bucket, including the computed {@link #ALL} and {@link ParameterRow#GENERAL} rows. */
     public record TagRow(String tag, int count) implements Row {}
 
-    /** Every category declared by any of {@code groups}, in group order then declaration order, deduplicated. */
-    public static List<String> categoriesOf(List<ParameterGroup> groups) {
-        if (groups == null || groups.isEmpty()) return List.of();
+    /** The categories {@code rows} use, in declaration order, deduplicated the way the rail compares them. */
+    public static List<String> categoriesOf(List<ParameterRow> rows) {
+        if (rows == null || rows.isEmpty()) return List.of();
         List<String> out = new ArrayList<>();
-        for (ParameterGroup group : groups) {
-            for (String category : group.categories()) {
-                if (out.stream().noneMatch(seen -> seen.equalsIgnoreCase(category))) out.add(category);
-            }
+        for (ParameterRow row : rows) {
+            String category = row.category();
+            if (category.isBlank()) continue;
+            if (out.stream().noneMatch(seen -> seen.equalsIgnoreCase(category))) out.add(category);
         }
         return List.copyOf(out);
     }
@@ -60,15 +61,14 @@ public final class VariableRailModel {
     }
 
     /**
-     * The rail for the {@link ParameterRow}s the plugins hand over, over the categories {@code declared} by
-     * those plugins: All, then a <i>Categories</i> heading over General and each declared category in the
-     * order the plugin listed them. Both computed rows are always present — All because it is the way to see
-     * everything, General because it is where a new parameter lands before anyone files it, and a bucket you
-     * cannot select is a bucket you cannot put anything in.
+     * The rail for {@code rows}, over the categories {@code declared}: All, then a <i>Categories</i> heading
+     * over General and each category in the order it was first written. Both computed rows are always
+     * present — All because it is the way to see everything, General because it is where a new parameter
+     * lands before anyone files it, and a bucket you cannot select is a bucket you cannot put anything in.
      *
-     * <p>The declared list is flat and already merged across groups. It is not split into a heading per
-     * plugin, because the sections in the pane on the right already are: a rail that also grouped by plugin
-     * would ask the user to hold the plugin architecture in their head twice.
+     * <p>The declared list is flat. It is not split into a heading per class, because the sections in the
+     * pane on the right already are: a rail that also grouped by class would ask the user to hold the same
+     * division in their head twice.
      *
      * <p>There was a second pair of these taking Studio's own {@code ActivityVariable}, for as long as the
      * Runner still read one plugin's file; it went on 2026-09-10 with that window's retype.
@@ -91,8 +91,8 @@ public final class VariableRailModel {
      * The rows {@code tag} holds, in the order they were declared.
      *
      * <p>{@link #ALL} is everything. {@link ParameterRow#GENERAL} is everything unfiled <em>plus</em>
-     * everything whose category no plugin declares — see the class note. Any other row is an exact,
-     * case-insensitive match.
+     * everything whose category the declared list does not hold — see the class note. Any other row is an
+     * exact, case-insensitive match.
      */
     public static List<ParameterRow> rowsIn(List<ParameterRow> rows, String tag, List<String> declared) {
         return filter(rows, ParameterRow::category, tag, declared);

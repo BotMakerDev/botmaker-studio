@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.ValueWire;
 import org.junit.jupiter.api.Test;
@@ -14,25 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The Parameters dialog's rail, which is a decision rather than a widget: which buckets exist, what each holds,
  * and — the one that matters — that no parameter can end up in none of them.
  *
- * <p>The categories came from the picture library's {@code TagCatalog} until 2026-09-02 and are declared on a
- * {@link ParameterGroup} now, so the fixture is a list of plugin sections rather than an activity list. The
- * two headings the rail used to draw over the tags — <i>Activity categories</i>, <i>Custom categories</i> —
- * went with that split: a category has one origin now, the plugin that owns the section.
+ * <p>The categories came from the picture library's {@code TagCatalog} until 2026-09-02, then from a
+ * {@code ParameterGroup} a plugin declared, and since 2026-09-22 from the rows themselves — a
+ * {@code @Param(category = …)} is free text, so the only categories that exist are the ones something is
+ * filed under. The two headings the rail used to draw over the tags — <i>Activity categories</i>,
+ * <i>Custom categories</i> — went with the first of those splits.
  *
  * <p>The fixture is {@link ParameterRow}s since 2026-09-10, which is what every reader of this model hands it
  * now that the Runner renders rows too.
  */
 class VariableRailModelTest {
 
-    /** Two sections, as two plugins would declare them — the merge is the thing under test. */
-    private static List<ParameterGroup> groups() {
-        return List.of(
-                ParameterGroup.of(ParameterGroup.DEFAULT_ID, "Parameters", List.of("Mining", "Fishing")),
-                ParameterGroup.of("discord", "DiscordParameters", List.of("Timing")));
-    }
-
     private static List<String> categories() {
-        return VariableRailModel.categoriesOf(groups());
+        return VariableRailModel.categoriesOf(rows());
     }
 
     /** Keyed by the persisted id, which is what a type <em>is</em> since the vocabulary opened. */
@@ -59,14 +52,14 @@ class VariableRailModelTest {
     }
 
     @Test
-    void theCategoriesOfSeveralSectionsMergeInSectionOrderWithoutDuplicates() {
-        // Two plugins may both call a category "Timing"; the rail is one list, so it must be listed once.
-        List<ParameterGroup> overlapping = List.of(
-                ParameterGroup.of(ParameterGroup.DEFAULT_ID, "Parameters", List.of("Timing", "Vision")),
-                ParameterGroup.of("discord", "DiscordParameters", List.of("timing", "Webhooks")));
+    void theCategoriesOfSeveralClassesMergeInDeclarationOrderWithoutDuplicates() {
+        // Two classes may both file a field under "Timing"; the rail is one list, so it is listed once.
+        List<ParameterRow> overlapping = List.of(
+                row("A", "TEXT", "Timing"), row("B", "TEXT", "Vision"),
+                row("C", "TEXT", "timing"), row("D", "TEXT", "Webhooks"), row("E", "TEXT", ""));
 
         assertEquals(List.of("Timing", "Vision", "Webhooks"), VariableRailModel.categoriesOf(overlapping),
-                "first spelling wins, and it wins case-insensitively");
+                "first spelling wins, it wins case-insensitively, and the unfiled declare nothing");
     }
 
     /** Both computed rows exist even with nothing in them: a bucket you cannot select is one you cannot fill. */

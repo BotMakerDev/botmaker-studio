@@ -23,6 +23,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   **A project made from a template already has the file.** A blank project that installs the SDK now gets
   no `plugins/sdk/Sdk.java` — the flow window offering to create one is owed and not in this release.
 
+- **The Parameters window has one kind of section, and it is a class of your bot.** Studio no longer asks a
+  plugin for parameter sections, rows or edits: `PluginHost.parameterGroups`/`parameterGroup`/`parameterRows`/
+  `parameterEdited`, `HostParameters`' group half and `project/params/ParameterSurface` are all gone, and
+  what is left is `JavaParameters`, which reads and writes `@Param` fields off your own source.
+  Nothing a plugin ever declared is lost, because no plugin ever declared one — the surface read a
+  pre-2026-09-17 project's JSON and answered empty for every project made since. **A plugin that wants a row
+  of its own puts a `@Param` field in the file it ships**, and the window finds it like any other: a field in
+  `plugins/sdk/Sdk.java` is listed under `Sdk.java`, editable, with the same value cell.
+  Visible differences, all of them the sections: a heading reads `Parameters.java` rather than a plugin's
+  title, a plugin with no parameters no longer draws an empty section, and the rail's categories are the
+  distinct `@Param(category = …)` strings your bot actually uses.
+
 ### Changed
 
 - **Rebuilt against the plugin contract's new package layout.** Studio's plugin host imports

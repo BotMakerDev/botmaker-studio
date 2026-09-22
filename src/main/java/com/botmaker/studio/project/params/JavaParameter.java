@@ -7,11 +7,10 @@ import java.nio.file.Path;
 /**
  * One {@code @Param} field, as the Parameters window needs it: where it is written, and what it says.
  *
- * <p><b>The row is the same {@link ParameterRow} a plugin hands over</b>, so every consumer of the
- * parameter surface — the window, the Runner, the variable picker, the expression menu — reads a Java
- * parameter and a plugin's row through one shape. What is extra here is the <em>position</em>: the file and
- * the class an edit has to go back to, which a plugin's row does not need because its owner writes its own
- * file.
+ * <p><b>The row is the contract's {@link ParameterRow}</b>, so every consumer — the window, the Runner, the
+ * variable picker, the expression menu — reads one parameter through one shape. What is extra here is the
+ * <em>position</em>: the file and the class an edit has to go back to, and whether the initialiser there can
+ * be rewritten at all.
  *
  * @param file        the source file the field is declared in
  * @param className   the class it is declared in — what a bot spells in front of the name
@@ -38,5 +37,25 @@ public record JavaParameter(Path file, String className, ParameterRow row, Strin
     /** What a bot writes to read it: {@code Parameters.maxAttempts}. */
     public String qualified() {
         return className + "." + row.name();
+    }
+
+    /**
+     * True when this is the field called {@code name} in {@code otherClass}.
+     *
+     * <p>The pair, never the name alone: two classes may each declare a {@code timeout}, which javac allows
+     * and already keeps apart.
+     */
+    public boolean is(String otherClass, String name) {
+        return className.equals(otherClass) && row.name().equals(name);
+    }
+
+    /**
+     * The same field carrying {@code newRow} — what a window holds after an edit it has already written.
+     *
+     * <p>The position does not change when a value does, so re-scanning the whole project to learn the file
+     * a field is still in would be a walk that can only confirm what is here.
+     */
+    public JavaParameter withRow(ParameterRow newRow) {
+        return new JavaParameter(file, className, newRow, initializer, editable, note);
     }
 }

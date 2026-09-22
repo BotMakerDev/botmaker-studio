@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.app.dev;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
@@ -188,7 +187,7 @@ public final class PickerGalleryWindow {
         List<ParamValueWidgets.ValueEditor> readers = new ArrayList<>();
         Node widget;
         try {
-            widget = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, variable, project, readers);
+            widget = ParamValueWidgets.build("", variable, project, readers);
         } catch (RuntimeException | Error e) {
             // The whole reason for the screen: an editor that cannot even be built is a finding, not a crash.
             widget = broken("built: " + e);

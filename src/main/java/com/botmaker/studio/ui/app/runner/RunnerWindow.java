@@ -1,7 +1,5 @@
 package com.botmaker.studio.ui.app.runner;
 
-import com.botmaker.plugin.api.parameters.ParameterEdit;
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -11,11 +9,10 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.params.ParameterSurface;
-import com.botmaker.studio.project.params.ParameterSurface.Entry;
+import com.botmaker.studio.project.params.JavaParameter;
+import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
@@ -114,13 +111,13 @@ public final class RunnerWindow implements ProjectWindow {
     private Button runButton;
     private Button stopButton;
 
-    // The (group, row) pair was a record of this class until 2026-09-17; it is ParameterSurface.Entry now, so
-    // the Runner and the Parameters window read one list through one shape. It is still the pair and never
-    // the name alone: a name identifies a parameter only inside its own section, and two of them may both
-    // offer a Timeout.
+    // The (group, row) pair was a record of this class until 2026-09-17, then ParameterSurface.Entry, and
+    // since 2026-09-22 it is JavaParameter — the field itself, because a field is the only thing a row ever
+    // comes from now. It is still a pair and never the name alone: a name identifies a parameter only inside
+    // its own class, and two classes may both declare a Timeout.
 
-    /** Every public parameter the project declares, in section order — read once, when the window is built. */
-    private final List<Entry> rows = new ArrayList<>();
+    /** Every public parameter the project declares, in class order — read once, when the window is built. */
+    private final List<JavaParameter> rows = new ArrayList<>();
 
     /** Every on-screen widget's reader, keyed by the {@code (group, name)} pair it was built from. */
     private final List<ParamValueWidgets.ValueEditor> valueEditors = new ArrayList<>();
@@ -298,20 +295,14 @@ public final class RunnerWindow implements ProjectWindow {
      */
     private void reload() {
         rows.clear();
-        for (Entry entry : ParameterSurface.rows(config, state, sdkPin())) {
+        for (JavaParameter entry : JavaParameters.scan(config, state)) {
             if (entry.row().isPublic() && entry.editable()) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.valueTypes());
     }
 
-    /** The SDK the open project pins, or null — what decides which curation a plugin serves. */
-    private String sdkPin() {
-        try {
-            return MavenService.readSdkVersion(config.projectPath()).orElse(null);
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
+    // sdkPin() stood here until 2026-09-22, reading the pom so the parameter data surface could be asked at
+    // the version the project pins. The rows come off the bot's own source now, which no version qualifies.
 
     /**
      * The rows under their category headings. The grouping is the whole reason a row carries a category — the
@@ -326,7 +317,7 @@ public final class RunnerWindow implements ProjectWindow {
      * bot, not a sign the window failed to load.
      */
     private Node settingsSection() {
-        Map<String, List<Entry>> byCategory = byCategory();
+        Map<String, List<JavaParameter>> byCategory = byCategory();
         VBox groups = new VBox(18);
         if (byCategory.isEmpty()) {
             groups.getChildren().add(hint("This bot has no settings for you to change."));
@@ -338,9 +329,9 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     /** The rows filed under each category, in the order the plugins declared them. */
-    private Map<String, List<Entry>> byCategory() {
-        Map<String, List<Entry>> byCategory = new LinkedHashMap<>();
-        for (Entry entry : rows) {
+    private Map<String, List<JavaParameter>> byCategory() {
+        Map<String, List<JavaParameter>> byCategory = new LinkedHashMap<>();
+        for (JavaParameter entry : rows) {
             byCategory.computeIfAbsent(entry.row().categoryOrGeneral(), key -> new ArrayList<>()).add(entry);
         }
         return byCategory;
@@ -354,7 +345,7 @@ public final class RunnerWindow implements ProjectWindow {
      * index cannot offer a category that isn't below it — and it is left out entirely below two categories,
      * where a jump list is longer than the thing it indexes.
      */
-    private Node categoryIndex(Map<String, List<Entry>> byTag) {
+    private Node categoryIndex(Map<String, List<JavaParameter>> byTag) {
         if (byTag.size() < 3) return null;
         FlowPane chips = new FlowPane(6, 6);
         byTag.forEach((tag, group) -> {
@@ -377,7 +368,7 @@ public final class RunnerWindow implements ProjectWindow {
      * window's width went unused no matter how wide it was pulled. A titled card with a rule under it and a
      * reflowing grid inside says where a group starts and ends without anybody having to count rows.
      */
-    private Node categoryCard(String tag, List<Entry> group) {
+    private Node categoryCard(String tag, List<JavaParameter> group) {
         Label heading = new Label(tag);
         heading.getStyleClass().add("dialog-subheading");
         Label count = hint(group.size() == 1 ? "1 setting" : group.size() + " settings");
@@ -391,7 +382,7 @@ public final class RunnerWindow implements ProjectWindow {
         // pane wraps, so the reflow is the layout's own doing and needs no width listener.
         tiles.setPrefTileWidth(TILE_WIDTH);
         tiles.setTileAlignment(Pos.TOP_LEFT);
-        for (Entry entry : group) tiles.getChildren().add(paramCard(entry));
+        for (JavaParameter entry : group) tiles.getChildren().add(paramCard(entry));
 
         VBox card = new VBox(8, title, new Separator(), tiles);
         card.getStyleClass().add("runner-category");
@@ -407,7 +398,7 @@ public final class RunnerWindow implements ProjectWindow {
      * beside "Delay" could be seconds or milliseconds, and "Region" could be a name or four numbers. The
      * badge says which, in the same words the author picked the type with.
      */
-    private Node paramCard(Entry entry) {
+    private Node paramCard(JavaParameter entry) {
         ParameterRow v = entry.row();
         Label name = new Label(v.displayLabel());
         name.getStyleClass().add("runner-setting-name");
@@ -430,7 +421,7 @@ public final class RunnerWindow implements ProjectWindow {
         HBox header = new HBox(6, name, badge);
         header.setAlignment(Pos.TOP_LEFT);
 
-        Node widget = ParamValueWidgets.build(entry.group(), v, config, records, valueEditors);
+        Node widget = ParamValueWidgets.build(entry.className(), v, config, records, valueEditors);
         if (widget instanceof Region region) region.setMaxWidth(Double.MAX_VALUE);
 
         VBox card = new VBox(6, header, widget);
@@ -495,7 +486,7 @@ public final class RunnerWindow implements ProjectWindow {
      * Save you didn't know about is the bug this ordering removes. The run happens after the writes because a
      * bot reads its parameters off the classpath at startup — starting first would run the previous answers.
      *
-     * <p><b>Each row is written by its owner, one {@link ParameterEdit} at a time</b>, rather than by this
+     * <p><b>Each row is written into the bot's own source one value at a time</b>, rather than by this
      * window rewriting one file. That is what takes the Runner out of the two-writer hazard entirely: nothing
      * here holds a document that another window could have moved underneath it, and a plugin that is not
      * installed cannot lose its data because nothing here ever reads it.
@@ -529,13 +520,13 @@ public final class RunnerWindow implements ProjectWindow {
     private void flushValues() {
         for (ParamValueWidgets.ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {
-                Entry entry = rows.get(i);
-                if (!editor.describes(entry.group(), entry.row().name())) continue;
+                JavaParameter entry = rows.get(i);
+                if (!editor.describes(entry.className(), entry.row().name())) continue;
                 String typed = editor.read().get();
                 if (typed.isBlank() || typed.equals(entry.row().value())) break;
-                Optional<ParameterRow> stored = ParameterSurface.setValue(config, state, entry, typed);
+                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed);
                 int at = i;
-                stored.ifPresent(row -> rows.set(at, new Entry(entry.group(), row, entry.java())));
+                stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
                 break;
             }
         }

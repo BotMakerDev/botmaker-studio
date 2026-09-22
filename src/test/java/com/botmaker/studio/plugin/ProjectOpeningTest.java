@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
  *
  * <p>The failure this guards against is not a leak but an empty window. A plugin is constructed once by
  * {@code ServiceLoader} and then serves whatever is bound to it, so a plugin never told which project it has
- * cannot answer {@code parameterRows} out of that project's own files — and a data surface that answers
- * nothing looks exactly like a project with no parameters. Nothing about it fails to compile.
+ * cannot read that project's own files at all — and a plugin that answers nothing looks exactly like a
+ * plugin with nothing to contribute. Nothing about it fails to compile.
  */
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class ProjectOpeningTest {

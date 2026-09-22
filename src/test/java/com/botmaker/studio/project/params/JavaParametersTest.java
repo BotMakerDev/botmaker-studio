@@ -28,20 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * What is asserted is the <b>file</b> in every case: this class exists to write a person's own source, so a
  * row that came back right while the file was wrong would be the failure that matters.
  */
-class ParameterSurfaceTest {
-
-    private static final String PIN = null;
+class JavaParametersTest {
 
     // ---- what a section is ------------------------------------------------------------------------------
-
-    @Test
-    void aSectionIdSaysWhetherItIsAClassOrAPlugin() {
-        assertEquals("java:Parameters", ParameterSurface.groupOf("Parameters"));
-        assertEquals("Parameters", ParameterSurface.classOf("java:Parameters"));
-        assertTrue(ParameterSurface.isJavaGroup("java:Tuning"));
-        assertFalse(ParameterSurface.isJavaGroup("com.botmaker.sdk/settings"));
-        assertEquals("", ParameterSurface.classOf(""), "the default plugin's group is not a class");
-    }
 
     @Test
     void everyFieldIsListedUnderItsOwnClass(@TempDir Path root) throws IOException {
@@ -61,14 +50,13 @@ class ParameterSurfaceTest {
                 }
                 """);
 
-        List<ParameterSurface.Entry> rows = ParameterSurface.rows(config, null, PIN, TestValues.CATALOG);
+        List<JavaParameter> rows = JavaParameters.scan(config, null, TestValues.CATALOG);
 
         // A set: the walk visits files in whatever order the filesystem lists them, and which of two classes
         // comes first is not something this class decides or a user could notice.
-        assertEquals(Set.of("java:Parameters", "java:Tuning"),
-                rows.stream().map(ParameterSurface.Entry::group).collect(Collectors.toSet()));
-        assertTrue(rows.stream().allMatch(ParameterSurface.Entry::isJava));
-        assertEquals(List.of("Limits"), ParameterSurface.categories(config, null, PIN, TestValues.CATALOG));
+        assertEquals(Set.of("Parameters", "Tuning"),
+                rows.stream().map(JavaParameter::className).collect(Collectors.toSet()));
+        assertEquals(List.of("Limits"), JavaParameters.categories(config, null, TestValues.CATALOG));
     }
 
     // ---- adding -----------------------------------------------------------------------------------------
@@ -77,7 +65,7 @@ class ParameterSurfaceTest {
     void aProjectsFirstParameterCreatesTheClassItGoesIn(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
 
-        Optional<ParameterRow> stored = ParameterSurface.add(config, null, "Parameters", "maxAttempts",
+        Optional<ParameterRow> stored = JavaParameters.add(config, null, "Parameters", "maxAttempts",
                 ValueForm.of(TestValues.WHOLE_NUMBER), "10", "Limits", "How many times to try",
                 TestValues.CATALOG);
 
@@ -97,11 +85,11 @@ class ParameterSurfaceTest {
                     public static int maxAttempts = 10;
                 """));
 
-        Optional<ParameterRow> refused = ParameterSurface.add(config, null, "Parameters", "maxAttempts",
+        Optional<ParameterRow> refused = JavaParameters.add(config, null, "Parameters", "maxAttempts",
                 ValueForm.of(TestValues.TEXT), "\"x\"", "", "", TestValues.CATALOG);
 
         assertTrue(refused.isEmpty());
-        assertEquals(1, ParameterSurface.rows(config, null, PIN, TestValues.CATALOG).size());
+        assertEquals(1, JavaParameters.scan(config, null, TestValues.CATALOG).size());
     }
 
     // ---- declaring --------------------------------------------------------------------------------------
@@ -121,8 +109,8 @@ class ParameterSurfaceTest {
                 }
                 """);
 
-        ParameterSurface.Entry entry = only(config);
-        Optional<ParameterRow> stored = ParameterSurface.declare(config, null, entry,
+        JavaParameter entry = only(config);
+        Optional<ParameterRow> stored = JavaParameters.declare(config, null, entry,
                 renamed(entry.row(), "tries"), TestValues.CATALOG);
 
         assertTrue(stored.isPresent());
@@ -139,7 +127,7 @@ class ParameterSurfaceTest {
                     public static int maxAttempts = 10;
                 """));
 
-        ParameterSurface.Entry entry = only(config);
+        JavaParameter entry = only(config);
         ParameterRow wanted = entry.row().toBuilder()
                 .category("")                       // removed: the default is already the empty answer
                 .description("Attempts before it gives up")
@@ -147,7 +135,7 @@ class ParameterSurfaceTest {
                 .bounds(new Range("1", "50"))
                 .build();
         Optional<ParameterRow> stored =
-                ParameterSurface.declare(config, null, entry, wanted, TestValues.CATALOG);
+                JavaParameters.declare(config, null, entry, wanted, TestValues.CATALOG);
 
         assertTrue(stored.isPresent());
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
@@ -167,8 +155,8 @@ class ParameterSurfaceTest {
                     public static int maxAttempts = 10;
                 """));
 
-        ParameterSurface.Entry entry = only(config);
-        ParameterRow stored = ParameterSurface.declare(config, null, entry,
+        JavaParameter entry = only(config);
+        ParameterRow stored = JavaParameters.declare(config, null, entry,
                 retyped(entry.row(), ValueForm.of(TestValues.TEXT)), TestValues.CATALOG).orElseThrow();
 
         assertEquals(TestValues.TEXT, stored.form().leaf());
@@ -188,7 +176,7 @@ class ParameterSurfaceTest {
                     public static java.time.Duration rest = java.time.Duration.ofMillis(3000L);
                 """));
 
-        ParameterRow stored = ParameterSurface.setValue(config, null, only(config),
+        ParameterRow stored = JavaParameters.setValue(config, null, only(config),
                 "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).orElseThrow();
 
         assertEquals("java.time.Duration.ofMillis(60000L)", stored.value());
@@ -205,11 +193,11 @@ class ParameterSurfaceTest {
                 """));
         String before = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
 
-        ParameterSurface.Entry entry = only(config);
+        JavaParameter entry = only(config);
 
         assertFalse(entry.editable());
         assertFalse(entry.note().isBlank(), "a read-only row says why");
-        assertTrue(ParameterSurface.setValue(config, null, entry,
+        assertTrue(JavaParameters.setValue(config, null, entry,
                 "java.time.Duration.ofMillis(60000L)", TestValues.CATALOG).isEmpty());
         assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")),
                 "the author's own expression is not rewritten");
@@ -232,9 +220,9 @@ class ParameterSurfaceTest {
                 }
                 """);
 
-        assertTrue(ParameterSurface.remove(config, null, only(config)));
+        assertTrue(JavaParameters.remove(config, null, only(config)));
 
-        assertEquals(List.of(), ParameterSurface.rows(config, null, PIN, TestValues.CATALOG));
+        assertEquals(List.of(), JavaParameters.scan(config, null, TestValues.CATALOG));
         // Left alone on purpose: what a use should become is a judgement, and the compiler is what finds it.
         assertTrue(Files.readString(config.mainPackageDir().resolve("Bot.java"))
                 .contains("Parameters.maxAttempts"));
@@ -242,8 +230,8 @@ class ParameterSurfaceTest {
 
     // ---- helpers ----------------------------------------------------------------------------------------
 
-    private static ParameterSurface.Entry only(ProjectConfig config) {
-        return ParameterSurface.rows(config, null, PIN, TestValues.CATALOG).getFirst();
+    private static JavaParameter only(ProjectConfig config) {
+        return JavaParameters.scan(config, null, TestValues.CATALOG).getFirst();
     }
 
     private static ParameterRow renamed(ParameterRow row, String name) {

@@ -6,7 +6,34 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-21 (latest) — Studio stops writing a plugin's file into a project.**
+- **2026-09-22 (latest) — `@Param` is the only source of a parameter row, and a section is a class.**
+  `project/params/ParameterSurface` (354 lines) is **deleted**, folded into `JavaParameters`;
+  `PluginHost.parameterGroups`/`parameterGroup`/`parameterRows`/`parameterEdited` and the `GROUPS` cache go
+  with it, as does `HostParameters`' group half (and its `pin(ProjectConfig)`), `RunnerWindow.sdkPin()` and
+  `ParametersDialog.sdkPin()`. `ParameterSurfaceTest` is `JavaParametersTest`.
+  **Why `ParameterSurface` existed at all, and why nothing replaces it**: it merged *two* sources of rows —
+  `@Param` fields under a `java:<Class>` section id, and rows a plugin declared under its own group id — and
+  almost all of its length was that merge. Nothing ever declared a plugin row. The SDK's group was the only
+  one in existence and declared none; `botmaker-plugin-basics`' `ParameterStore.declare` had no caller
+  anywhere. So `parameterRows` returned a pre-2026-09-17 project's JSON and empty for everything since,
+  which is the *second reader of a format nothing writes* the umbrella `CLAUDE.md` forbids by name.
+  **The section id goes with the merge.** A section is a class the bot declares, so `JAVA_PREFIX`,
+  `groupOf`, `classOf`, `isJavaGroup` and the two-kinds branch in `ParametersDialog.sections()` are all gone,
+  and the handle is the pair `(className, fieldName)` — which javac already guarantees is unique, where
+  `(group, name)` needed a prefix to keep two plugins' `timeout` apart.
+  **`ParameterSurface.Entry` is `JavaParameter`.** `Entry` carried `(group, row, java)` with `java` null for
+  a plugin's row; with one source the field *is* the entry, so `ParametersDialog` and `RunnerWindow` hold a
+  `List<JavaParameter>` and `entry.isJava()` branches are deleted rather than inverted. `JavaParameter`
+  gained `is(className, name)` and `withRow(row)` for what those windows did inline.
+  **What a plugin does instead**: it puts a `@Param` field in the file it ships. `BotSources.scan` already
+  walks `plugins/sdk/Sdk.java` — it is one of the bot's sources — so the row is found, drawn and edited with
+  no new code, and its author can read it in their own editor.
+  **The rail's categories are derived, not declared.** `VariableRailModel.categoriesOf` takes the rows and
+  returns the distinct `@Param(category = …)` strings, first spelling winning case-insensitively. It took a
+  `List<ParameterGroup>` before; a category has been free text since 2026-09-17, so the declaration list had
+  nothing left to declare.
+
+- **2026-09-21 — Studio stops writing a plugin's file into a project.**
   `plugin/PluginSourceFiles` and `PluginSourceFilesTest` are **deleted**, with both call sites —
   `project/BotProject` step 5b and `services/LibraryService.rebind`, which each ran it on every
   `PluginHost.bind`. The contract method behind it (`StudioPlugin.pluginSources()`) and `PluginSource` went

@@ -2,9 +2,6 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
-import com.botmaker.plugin.api.parameters.ParameterEdit;
-import com.botmaker.plugin.api.parameters.ParameterGroup;
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.SourceSeed;
@@ -156,9 +153,6 @@ public final class PluginHost {
      */
     private static StudioServices opening;
 
-    /** pinned version → the sections of the Parameters window at it. Cleared with {@link #CACHE}. */
-    private static final Map<String, List<ParameterGroup>> GROUPS = new ConcurrentHashMap<>();
-
     public static List<StudioPlugin> plugins() {
         return plugins;
     }
@@ -172,9 +166,9 @@ public final class PluginHost {
      *
      * <p>{@code services} names the project being bound, and every plugin that ends up serving it is told
      * through {@link StudioPlugin#projectOpened(StudioServices)} — including the bundled set, which is what
-     * serves a project whose own plugins would not load. It is what a plugin answering
-     * {@link StudioPlugin#parameterRows(String)} reads its own file out of; those surfaces take no services
-     * argument, deliberately, because they are asked every time a window is drawn.
+     * serves a project whose own plugins would not load. It is what a plugin reads its own files out of; no
+     * contribution surface takes a services argument, deliberately, because they are asked every time a
+     * window is drawn.
      */
     public static synchronized void bind(List<String> resolvedClasspath, StudioServices services) {
         opening = services;
@@ -252,7 +246,6 @@ public final class PluginHost {
         toolbarItems = mergeToolbarItems(bound);
         managedValues = mergeManagedValues(bound);
         CACHE.clear();
-        GROUPS.clear();
         if (previous != null) previous.close();
     }
 
@@ -564,71 +557,17 @@ public final class PluginHost {
         return List.copyOf(out);
     }
 
-    /**
-     * The sections of the Parameters window, in plugin order — the default plugin's first.
-     *
-     * <p>One window, one section per group. Two plugins claiming one {@link ParameterGroup#className()} is a
-     * composition error, and it is refused the same way a value-type id clash is: the later claimant is
-     * dropped with a warning rather than the project being refused, because a user whose project will not
-     * open has no way to act on the problem, while a section that is missing is visible and diagnosable.
-     *
-     * @param pinnedSdkVersion the version the open project's pom names; passed through, never interpreted
-     */
-    public static List<ParameterGroup> parameterGroups(String pinnedSdkVersion) {
-        String pin = pinnedSdkVersion == null ? BUNDLED_PIN : pinnedSdkVersion;
-        return GROUPS.computeIfAbsent(pin, PluginHost::buildGroups);
-    }
-
-    /** The group a variable's {@code group} id names, or null when no loaded plugin claims that id. */
-    public static ParameterGroup parameterGroup(String pinnedSdkVersion, String groupId) {
-        String wanted = groupId == null ? ParameterGroup.DEFAULT_ID : groupId.trim();
-        for (ParameterGroup group : parameterGroups(pinnedSdkVersion)) {
-            if (group.id().equals(wanted)) return group;
-        }
-        return null;
-    }
-
-    /**
-     * The rows one section currently holds, asked of whichever plugin owns the group.
-     *
-     * <p><b>Asked on every draw and never cached</b>, which is the surface's own rule: the file is the truth
-     * and the plugin is the only thing that can read it. The first plugin to answer anything owns the group —
-     * two plugins claiming one id is already refused when the groups are merged, so the loser is not asked.
-     *
-     * <p>A plugin that throws costs its own section and nothing else. The window has to draw either way, and
-     * the alternative is one broken plugin emptying a window several plugins contribute to.
-     */
-    public static List<ParameterRow> parameterRows(String groupId) {
-        String wanted = groupId == null ? ParameterGroup.DEFAULT_ID : groupId.trim();
-        for (StudioPlugin plugin : plugins) {
-            List<ParameterRow> rows = quietly(plugin, "read its parameters",
-                    () -> plugin.parameterRows(wanted));
-            if (rows != null && !rows.isEmpty()) return List.copyOf(rows);
-        }
-        return List.of();
-    }
-
-    /**
-     * A changed value, offered to each plugin until one takes it — the answer being the row as stored.
-     *
-     * <p>Empty is "nobody owns this", which the caller reads as *leave the screen alone*. It is deliberately
-     * the same answer a plugin that threw produces: a row the user's edit did not reach must not be redrawn
-     * as though it had.
-     */
-    public static Optional<ParameterRow> parameterEdited(ParameterEdit edit) {
-        if (edit == null) return Optional.empty();
-        for (StudioPlugin plugin : plugins) {
-            Optional<ParameterRow> stored = quietly(plugin, "store a parameter value",
-                    () -> plugin.parameterEdited(edit));
-            if (stored != null && stored.isPresent()) return stored;
-        }
-        return Optional.empty();
-    }
-
-    // parameterDeclared stood here until 2026-09-17, offering a declared row to each plugin until one owned
-    // it. The contract call is gone: a user parameter is a @Param field in the bot's own Java and the host
-    // declares one by editing the syntax tree (project/params/ParameterSurface). What a plugin still owns it
-    // declares in its own code, and the host only ever changes a value — parameterEdited, above.
+    // parameterGroups(String), parameterGroup(String, String), parameterRows(String) and
+    // parameterEdited(ParameterEdit) stood here from 2026-09-10 to 2026-09-22, with a GROUPS cache beside
+    // CACHE. The contract surface under them is deleted and nothing replaces them here.
+    //
+    // They asked each plugin for the rows of a section that plugin had declared. Nothing ever declared one:
+    // the SDK's group was the only implementation, it declared no rows, and basics' ParameterStore.declare
+    // had no caller, so what came back was a pre-2026-09-17 project's JSON and nothing else. A parameter is
+    // a @Param field in the bot's own Java, which project/params/JavaParameters reads and writes off the
+    // syntax tree -- including one in a file a plugin ships, which BotSources.scan already walks.
+    //
+    // parameterDeclared went first, on 2026-09-17, offering a declared row to each plugin until one owned it.
 
     /**
      * Runs one plugin call, answering {@code null} when it throws.
@@ -644,26 +583,6 @@ public final class PluginHost {
             System.err.println("Warning: plugin " + plugin.id() + " failed to " + what + ": " + e);
             return null;
         }
-    }
-
-    private static List<ParameterGroup> buildGroups(String pin) {
-        List<ParameterGroup> merged = new ArrayList<>();
-        Set<String> ids = new LinkedHashSet<>();
-        Set<String> classNames = new LinkedHashSet<>();
-        for (StudioPlugin plugin : plugins) {
-            List<ParameterGroup> offered = plugin.parameters(pin);
-            if (offered == null) continue;
-            for (ParameterGroup group : offered) {
-                if (!ids.add(group.id()) || !classNames.add(group.className())) {
-                    System.err.println("Warning: plugin " + plugin.id() + " claims a parameter group ("
-                            + group.id() + " / " + group.className() + ") another plugin already owns;"
-                            + " its section is not shown.");
-                    continue;
-                }
-                merged.add(group);
-            }
-        }
-        return List.copyOf(merged);
     }
 
     private static ValueCatalog mergeValueTypes() {

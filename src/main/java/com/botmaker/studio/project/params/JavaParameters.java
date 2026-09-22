@@ -1,30 +1,46 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.ValueCatalog;
 import com.botmaker.plugin.api.value.ValueForm;
+import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
- * The bot's own user parameters: {@code @Param} fields, read off its sources and written back to them.
+ * The project's parameters: {@code @Param} fields, read off the bot's own sources and written back to them.
  *
  * <p><b>The declaration is the Java</b> (2026-09-17). Until then a user parameter was a row in a plugin's
  * JSON file that a bot read back by name, so a typo compiled and answered the type's fallback and the
- * declaration lived where the bot's author could not see it. A plugin's JSON keeps what is genuinely the
- * plugin's — a flow, capture targets, an activity's enable flag — and those still arrive through
- * {@code PluginHost.parameterRows}.
+ * declaration lived where the bot's author could not see it.
  *
- * <p><b>Buffers before files, both written.</b> Everything here goes through {@code BotSources}, which is
+ * <p><b>And it is the only source of a row</b> (2026-09-22). A second one stood beside it for five days:
+ * {@code ParameterSurface} merged these fields with the rows a plugin declared through
+ * {@code StudioPlugin.parameterRows}, which is why a section had an id ({@code java:<Class>} or a plugin's
+ * group) rather than simply being a class. Nothing ever declared a plugin row — basics'
+ * {@code ParameterStore.declare} had no caller anywhere — so that half read a pre-2026-09-17 project's JSON
+ * and nothing else, and it is deleted with the contract surface under it. **A plugin that wants a row of its
+ * own puts a {@code @Param} field in the file it ships**, and {@link BotSources#scan} finds it here with no
+ * special case: {@code plugins/sdk/Sdk.java} is one of the bot's sources.
+ *
+ * <p><b>A section is a class, and the handle is the pair {@code (className, fieldName)}.</b> Two classes may
+ * each declare a {@code timeout}, which javac already allows and already keeps apart, so nothing here is
+ * keyed by a name alone.
+ *
+ * <p><b>Buffers before files, both written.</b> Everything here goes through {@link BotSources}, which is
  * the walk that reads a file's open editor buffer where there is one and writes a rewrite to both copies.
  * A scan that read the disk would miss the user's last ten minutes; a write that touched only the disk
  * would be undone by the next save.
@@ -40,12 +56,20 @@ public final class JavaParameters {
 
     private JavaParameters() {}
 
+    // ---- reading ----------------------------------------------------------------------------------------
+
     /** Every {@code @Param} field the bot declares, file by file, in the order the walk visits them. */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state) {
         return scan(config, state, PluginHost.valueTypes());
     }
 
-    /** The same, against a given catalog — the seam a test uses, and the one place the catalog enters. */
+    /**
+     * The same, against a given catalog — the seam a test uses, and the one place the vocabulary enters.
+     *
+     * <p>Every edit below takes one too, for a reason worth stating: the catalog is what turns a value into
+     * the Java a field is initialised with, so a window and a test that disagreed about it would write two
+     * different files from the same click.
+     */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
         if (config == null) return List.of();
         // Two walks rather than one, and cheap for the same reason nothing here is cached: a field may be
@@ -58,7 +82,12 @@ public final class JavaParameters {
         return List.copyOf(out);
     }
 
-    /** The classes that declare at least one parameter, in the order they were found. */
+    /**
+     * The classes that declare at least one parameter, in the order they were found — the window's sections.
+     *
+     * <p>A class with no fields left still gets its section for as long as the window is open; that is the
+     * window's doing, not this method's. What is listed here is what the project currently declares.
+     */
     public static List<String> classes(ProjectConfig config, ProjectState state) {
         Set<String> names = new LinkedHashSet<>();
         for (JavaParameter parameter : scan(config, state)) names.add(parameter.className());
@@ -73,69 +102,150 @@ public final class JavaParameters {
         return qualifier != null && !qualifier.isBlank() && classes(config, state).contains(qualifier);
     }
 
-    // ---- edits ------------------------------------------------------------------------------------------
-    //
-    // Each one answers whether anything changed. False is an ordinary outcome — a field somebody else
-    // renamed while the window was open, a value the type cannot spell — and the window says so rather than
-    // failing.
-
-    /** Replaces a parameter's value with {@code initializer}, which is already the type's own Java. */
-    public static boolean setValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                   String initializer) {
-        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
-                source, parameter.className(), parameter.name(), initializer));
-    }
-
     /**
-     * Renames a parameter and repoints every reference to it, in every file.
+     * Every category the window may file a parameter under: every string the bot's own fields actually use.
      *
-     * <p>Project-wide because a bot reads {@code Parameters.restBetween} wherever it likes: a rename that
-     * touched only the declaring file would leave the bot not compiling, which is the one outcome an editor
-     * must never produce from a rename.
+     * <p>A {@code @Param}'s category is free text — the six the SDK used to declare were a vocabulary, and a
+     * bot's author names their own — so the only way to know one exists is that something is filed under it.
      */
-    public static boolean rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                 String newName) {
-        return rewriteAll(config, state, source ->
-                JavaParameterEdits.rename(source, parameter.className(), parameter.name(), newName));
-    }
-
-    /** Changes a parameter's type, resetting its value to that type's default. */
-    public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                 ValueForm form) {
-        return retype(config, state, parameter, form, PluginHost.valueTypes());
+    public static List<String> categories(ProjectConfig config, ProjectState state) {
+        return categories(config, state, PluginHost.valueTypes());
     }
 
     /** The same, against a given catalog. */
-    public static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                 ValueForm form, ValueCatalog catalog) {
-        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
-                source, catalog, parameter.className(), parameter.name(), form));
+    public static List<String> categories(ProjectConfig config, ProjectState state, ValueCatalog catalog) {
+        Set<String> out = new LinkedHashSet<>();
+        for (JavaParameter parameter : scan(config, state, catalog)) {
+            if (!parameter.row().category().isBlank()) out.add(parameter.row().category());
+        }
+        return List.copyOf(out);
     }
 
-    /** Sets or clears {@code @Param} members — a blank value removes the member. */
-    public static boolean setMembers(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                     Map<String, String> members) {
-        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setMembers(
-                source, parameter.className(), parameter.name(), members));
+    // ---- changing ---------------------------------------------------------------------------------------
+    //
+    // Each one answers the row as it reads back, or empty when nothing was written. Empty is an ordinary
+    // outcome — a field somebody else renamed while the window was open, a value the type cannot spell —
+    // and the window says so rather than failing.
+
+    /**
+     * Sets a field's value and answers the row as it now stands.
+     *
+     * <p>The initialiser is re-read from the source afterwards rather than assumed, for the same reason a
+     * plugin's answer used to be rendered rather than the edit: what the file says is what the bot runs.
+     */
+    public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
+                                                  JavaParameter parameter, String value) {
+        return setValue(config, state, parameter, value, PluginHost.valueTypes());
     }
 
-    /** Sets or clears {@code @Param(options = …)}. */
-    public static boolean setOptions(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                     List<String> options) {
-        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setOptions(
-                source, parameter.className(), parameter.name(), options));
+    /** The same, against a given catalog. */
+    public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
+                                                  JavaParameter parameter, String value,
+                                                  ValueCatalog catalog) {
+        if (parameter == null || !parameter.editable()) return Optional.empty();
+        writeValue(config, state, parameter, value);
+        return reread(config, state, parameter.className(), parameter.name(), catalog);
     }
 
     /**
-     * Declares a new parameter in {@code className}, which must already exist.
+     * Applies {@code wanted} to the field {@code parameter} names — name, type, category, note, visibility,
+     * bounds, choices and value, each through the edit that owns it.
      *
-     * <p>Creating the class is not done here and is the window's call: a file appearing in a project is a
-     * bigger event than a field appearing in a file, and the person should be the one who asks for it.
+     * <p><b>Only what differs is written, and the order matters.</b> The name first, because everything
+     * after it is found by name; the type next, because retyping resets the value; the annotation members
+     * together, because they are one annotation; the value last, because everything before it changes what a
+     * value may be.
      */
-    public static boolean add(ProjectConfig config, ProjectState state, String className, String fieldName,
-                              ValueForm form, String initializer, String category, String description) {
-        return rewriteAll(config, state, source -> JavaParameterEdits.add(
-                source, className, fieldName, form, initializer, category, description));
+    public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
+                                                 JavaParameter parameter, ParameterRow wanted) {
+        return declare(config, state, parameter, wanted, PluginHost.valueTypes());
+    }
+
+    /** The same, against a given catalog. */
+    public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
+                                                 JavaParameter parameter, ParameterRow wanted,
+                                                 ValueCatalog catalog) {
+        if (parameter == null || wanted == null) return Optional.empty();
+        String className = parameter.className();
+        ParameterRow before = parameter.row();
+        String name = before.name();
+
+        if (!wanted.name().equals(name)) {
+            if (!rename(config, state, parameter, wanted.name())) return Optional.empty();
+            name = wanted.name();
+        }
+        JavaParameter held = find(config, state, className, name, catalog).orElse(null);
+        if (held == null) return Optional.empty();
+
+        if (!wanted.form().equals(before.form())) {
+            retype(config, state, held, wanted.form(), catalog);
+            held = find(config, state, className, name, catalog).orElse(null);
+            if (held == null) return Optional.empty();
+        }
+
+        Map<String, String> members = new LinkedHashMap<>();
+        if (!wanted.category().equals(before.category())) members.put("category", wanted.category());
+        if (!wanted.description().equals(before.description())) {
+            members.put("description", wanted.description());
+        }
+        if (wanted.visibility() != before.visibility()) {
+            // The annotation spells a visibility as the plugin's own id string — the contract's enum is off a
+            // bot's classpath — and EDITOR is the default, so the editor-only case removes the member rather
+            // than writing the default down.
+            members.put("visibility", wanted.visibility() == Visibility.PUBLIC
+                    ? Visibility.PUBLIC.id() : "");
+        }
+        // Null-safe, because a Range component genuinely is null for "no minimum" — the record keeps the
+        // absence rather than spelling it as an empty string, and an unbounded row is the ordinary case.
+        if (!text(wanted.bounds().min()).equals(text(before.bounds().min()))) {
+            members.put("min", text(wanted.bounds().min()));
+        }
+        if (!text(wanted.bounds().max()).equals(text(before.bounds().max()))) {
+            members.put("max", text(wanted.bounds().max()));
+        }
+        if (!members.isEmpty()) {
+            setMembers(config, state, held, members);
+            held = find(config, state, className, name, catalog).orElse(null);
+            if (held == null) return Optional.empty();
+        }
+
+        if (!wanted.options().equals(before.options())) {
+            setOptions(config, state, held, wanted.options());
+            held = find(config, state, className, name, catalog).orElse(null);
+            if (held == null) return Optional.empty();
+        }
+
+        if (!wanted.value().equals(before.value()) && held.editable()) {
+            writeValue(config, state, held, wanted.value());
+        }
+        return reread(config, state, className, name, catalog);
+    }
+
+    /**
+     * Declares a new field in {@code className}, creating that class when the project has none.
+     *
+     * <p>Answers the row as it reads back, or empty when nothing was written — a name already taken, a type
+     * whose default cannot be spelled as Java, or a class that could not be created.
+     */
+    public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
+                                             String name, ValueForm form, String value,
+                                             String category, String description) {
+        return add(config, state, className, name, form, value, category, description,
+                PluginHost.valueTypes());
+    }
+
+    /** The same, against a given catalog. */
+    public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
+                                             String name, ValueForm form, String value,
+                                             String category, String description, ValueCatalog catalog) {
+        if (config == null || className == null || className.isBlank()) return Optional.empty();
+        if (find(config, state, className, name, catalog).isPresent()) return Optional.empty();
+        if (!classes(config, state).contains(className) && !createClass(config, className)) {
+            return Optional.empty();
+        }
+        rewriteAll(config, state, source -> JavaParameterEdits.add(
+                source, className, name, form, value, category, description));
+        return reread(config, state, className, name, catalog);
     }
 
     /**
@@ -146,8 +256,39 @@ public final class JavaParameters {
      * The window makes that call and tells the user what it did.
      */
     public static boolean remove(ProjectConfig config, ProjectState state, JavaParameter parameter) {
+        if (parameter == null) return false;
         return rewrite(config, state, parameter.file(),
                 source -> JavaParameterEdits.remove(source, parameter.className(), parameter.name()));
+    }
+
+    /**
+     * Writes an empty {@code @Param} holder class into the bot's package, and answers whether it is there.
+     *
+     * <p>A file appearing in a project is a bigger event than a field appearing in a file, so this is called
+     * only when a person asks for a parameter and there is nowhere to put it. An existing file is never
+     * overwritten — it is somebody's work, and a class that exists is a class a field can go into. The
+     * write goes through {@link ProjectWrites}, which takes the history snapshot that makes a file the user
+     * did not type undoable.
+     */
+    public static boolean createClass(ProjectConfig config, String className) {
+        Path file = config.mainPackageDir().resolve(className + ".java");
+        String source = """
+                package %s;
+
+                import %s;
+
+                /**
+                 * The bot's settings. Each field is one row of the Parameters window, and the bot reads it by
+                 * name — <code>%s.restBetween</code> — so a misspelling is a compile error and the type is the
+                 * type.
+                 */
+                public final class %s {
+
+                    private %s() {}
+                }
+                """.formatted(config.mainPackage(), JavaParameterSource.ANNOTATION_FQN, className,
+                className, className);
+        return ProjectWrites.create(config, file, source, "Create " + className);
     }
 
     /** Every place in the bot that names this parameter, for the window to show before a destructive edit. */
@@ -166,7 +307,73 @@ public final class JavaParameters {
     /** One line of the bot's source that names a parameter. */
     public record Use(Path file, int line, String text) {}
 
+    // ---- the single-field edits ---------------------------------------------------------------------
+    //
+    // Private, because each one leaves the project in a state only declare() knows is finished: a retype
+    // resets the value, an annotation rewrite has to be re-read before the next edit finds the field. Each
+    // answers whether anything changed.
+
+    /** Replaces a parameter's value with {@code initializer}, which is already the type's own Java. */
+    private static boolean writeValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                      String initializer) {
+        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
+                source, parameter.className(), parameter.name(), initializer));
+    }
+
+    /**
+     * Renames a parameter and repoints every reference to it, in every file.
+     *
+     * <p>Project-wide because a bot reads {@code Parameters.restBetween} wherever it likes: a rename that
+     * touched only the declaring file would leave the bot not compiling, which is the one outcome an editor
+     * must never produce from a rename.
+     */
+    private static boolean rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                  String newName) {
+        return rewriteAll(config, state, source ->
+                JavaParameterEdits.rename(source, parameter.className(), parameter.name(), newName));
+    }
+
+    /** Changes a parameter's type, resetting its value to that type's default. */
+    private static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                  ValueForm form, ValueCatalog catalog) {
+        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
+                source, catalog, parameter.className(), parameter.name(), form));
+    }
+
+    /** Sets or clears {@code @Param} members — a blank value removes the member. */
+    private static boolean setMembers(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                      Map<String, String> members) {
+        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setMembers(
+                source, parameter.className(), parameter.name(), members));
+    }
+
+    /** Sets or clears {@code @Param(options = …)}. */
+    private static boolean setOptions(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                      List<String> options) {
+        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setOptions(
+                source, parameter.className(), parameter.name(), options));
+    }
+
     // ---- plumbing ---------------------------------------------------------------------------------------
+
+    /** A possibly-absent string as text — {@code null} and {@code ""} are the same answer here. */
+    private static String text(String value) {
+        return value == null ? "" : value;
+    }
+
+    /** The field called {@code name} in {@code className}, as the source reads <em>now</em>. */
+    private static Optional<JavaParameter> find(ProjectConfig config, ProjectState state, String className,
+                                                String name, ValueCatalog catalog) {
+        for (JavaParameter parameter : scan(config, state, catalog)) {
+            if (parameter.is(className, name)) return Optional.of(parameter);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ParameterRow> reread(ProjectConfig config, ProjectState state, String className,
+                                                 String name, ValueCatalog catalog) {
+        return find(config, state, className, name, catalog).map(JavaParameter::row);
+    }
 
     /** Applies {@code edit} to one file, buffer and disk, and answers whether it changed anything. */
     private static boolean rewrite(ProjectConfig config, ProjectState state, Path file,

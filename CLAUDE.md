@@ -1091,16 +1091,23 @@ The `ui/` package is split by concern:
   only** (a canonical constructor is unambiguous where a class's five are a guess), **no generics**
   (substituting a type variable needs the binding this package does without), and **never a placeholder**
   into a class of the user's.
-  **`ParameterSurface` is the fourth and the one the windows use**: the bot's fields and the loaded
-  plugins' rows as *one* list of `Entry(group, row, java)`, with a section id of `java:<ClassName>` for a
-  field and the plugin's group id for a row. It is also where the asymmetry is enforced — a field may be
-  added, renamed, retyped, refiled and removed; **a plugin's row only ever has its value changed**
-  (`parameterEdited`), because `parameterDeclared` is gone from the contract (2026-09-17) and a plugin
-  declares its own rows in its own code. Every method takes a `ValueCatalog`, defaulting to
-  `PluginHost.valueTypes()`: the catalog is what turns a value into the Java a field is initialised with,
-  so a window and a test that disagreed about it would write two different files from the same click.
-  `ParametersDialog` and `RunnerWindow` read this one list; the Runner also drops what it cannot rewrite,
-  because a read-only cell is a message for the author and there is no author in the Runner.
+  **`ParameterSurface` stood beside them from 2026-09-17 to 2026-09-22 and is deleted, folded into
+  `JavaParameters`.** It merged *two* sources of rows — `@Param` fields under a `java:<ClassName>` section
+  id, and rows a plugin declared under its own group id — and almost all of its 354 lines were that merge.
+  **Nothing ever declared a plugin row**: the SDK's group was the only one in existence and declared none,
+  and `botmaker-plugin-basics`' `ParameterStore.declare` had no caller anywhere, so `parameterRows` returned
+  a pre-2026-09-17 project's JSON and empty for every project made since — the *second reader of a format
+  nothing writes* the umbrella `CLAUDE.md` forbids by name. The contract surface went with it.
+  **So a section is a class and the handle is `(className, fieldName)`**, which javac already keeps unique
+  where `(group, name)` needed a `java:` prefix to keep two plugins' `timeout` apart; and `Entry(group, row,
+  java)` is simply `JavaParameter`, since the field *is* the entry when there is one source. A plugin that
+  wants a row of its own **puts a `@Param` field in the file it ships** — `BotSources.scan` already walks
+  `plugins/sdk/Sdk.java`, so it is found, drawn and edited with no new code.
+  Every method takes a `ValueCatalog`, defaulting to `PluginHost.valueTypes()`: the catalog is what turns a
+  value into the Java a field is initialised with, so a window and a test that disagreed about it would write
+  two different files from the same click. `ParametersDialog` and `RunnerWindow` read this one list; the
+  Runner also drops what it cannot rewrite, because a read-only cell is a message for the author and there
+  is no author in the Runner.
 - **A plugin's values live in a file the plugin ships** (2026-09-20, `33-plugin-java.md`). The contract's
   half is `PluginSource` — a class name and its whole text — plus `PluginValues` off
   `StudioServices.pluginValues()`, two methods: `ids()` and `open(String id)`. The plugin writes the class

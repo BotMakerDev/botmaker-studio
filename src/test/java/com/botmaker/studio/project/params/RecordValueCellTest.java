@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.ValueForm;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
@@ -46,7 +45,7 @@ class RecordValueCellTest extends FxHeadlessTest {
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
         interact(() -> built[0] = ParamValueWidgets.build(
-                ParameterGroup.DEFAULT_ID, row, null, records, sink));
+                "", row, null, records, sink));
         List<Node> rows = childrenOf(built[0]);
 
         assertEquals(2, rows.size(), "one row per component, and no Add: a record is as long as it is");
@@ -73,7 +72,7 @@ class RecordValueCellTest extends FxHeadlessTest {
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
         interact(() -> built[0] = ParamValueWidgets.build(
-                ParameterGroup.DEFAULT_ID, row, null, records, sink));
+                "", row, null, records, sink));
         List<Node> rows = childrenOf(built[0]);
 
         assertEquals("new com.example.bot.Point(1, 2)", sink.getFirst().read().get());
@@ -91,7 +90,7 @@ class RecordValueCellTest extends FxHeadlessTest {
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, row, null, sink));
+        interact(() -> built[0] = ParamValueWidgets.build("", row, null, sink));
 
         assertTrue(sink.isEmpty(), "a read-only cell adds no reader, so nothing can write over the field");
         assertEquals("new Point(1, 2)", ((Label) childrenOf(built[0]).getFirst()).getText());

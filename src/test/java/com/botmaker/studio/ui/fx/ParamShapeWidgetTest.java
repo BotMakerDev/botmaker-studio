@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueForm;
@@ -42,7 +41,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     private Node widgetFor(ParameterRow row) {
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, row, null, sink));
+        interact(() -> built[0] = ParamValueWidgets.build("", row, null, sink));
         return built[0];
     }
 
@@ -162,7 +161,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
-        interact(() -> built[0] = ParamValueWidgets.build(ParameterGroup.DEFAULT_ID, choices, null, sink));
+        interact(() -> built[0] = ParamValueWidgets.build("", choices, null, sink));
         List<Node> buttons = childrenOf(built[0]);
         interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
 

@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.parameters.ParameterGroup;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Range;
 import com.botmaker.plugin.api.value.ValueCatalog;
@@ -10,12 +9,10 @@ import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
-import com.botmaker.studio.project.params.ParameterSurface;
-import com.botmaker.studio.project.params.ParameterSurface.Entry;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
-import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.StudioWindow;
@@ -67,29 +64,27 @@ import java.util.function.UnaryOperator;
  * The one place a bot's parameters are defined: what each is called, what it holds, who it is for, and what
  * it is set to.
  *
- * <h2>Two kinds of section, and the difference is who owns the row</h2>
+ * <h2>One kind of section: a class of the bot</h2>
  *
- * <p><b>The bot's own parameters are {@code @Param} fields in its Java</b> (2026-09-17), one section per
+ * <p><b>Every parameter is a {@code @Param} field in the bot's own Java</b> (2026-09-17), one section per
  * class that declares any. Adding, renaming, retyping, refiling and removing one is an edit to that source
- * file, made through {@link ParameterSurface} — so the declaration a user reads in their editor and the row
+ * file, made through {@link JavaParameters} — so the declaration a user reads in their editor and the row
  * they read here are the same thing, and a name they misspell in their bot is a compile error rather than a
  * silent fallback.
  *
- * <p><b>A plugin's rows are the plugin's</b> — an activity's enable flag, a capture target — and the only
- * thing this window does to one is change its <em>value</em> ({@code StudioPlugin.parameterEdited}), whose
- * answer is the row <em>as stored</em>: a clamp, a canonical spelling, a value pruned to the choices still on
- * offer. It never coerces on a plugin's behalf; it renders what comes back. Declaring a plugin's row from
- * here was a contract call until 2026-09-17 and is not one any more.
+ * <p><b>A plugin's rows were a second kind until 2026-09-22</b> — read through a contract surface, with only
+ * their value editable here. Nothing ever declared one, and a plugin that wants a row of its own now puts a
+ * {@code @Param} field in the file it ships, which this window finds like any other. So the asymmetry is
+ * gone and with it the section id: a section is a class, which javac already keeps distinct.
  *
  * <p><b>Nothing in this class knows what an activity is, or what a plugin's file looks like.</b> That was the
- * point of the 2026-09-10 rewrite and it still holds: what changed is that the host now owns one of the two
- * stores, because the store is the user's own source.
+ * point of the 2026-09-10 rewrite and it still holds.
  *
  * <h2>One list, organised by category</h2>
  *
  * <p>Every parameter belongs to the project. What the rail on the left offers is a <em>view</em> of that one
- * list — <i>All</i>, <i>General</i> for the unfiled, then every category in use: the ones the loaded plugins
- * declare on their own {@link ParameterGroup}s, and whatever a {@code @Param} says. A field's category is
+ * list — <i>All</i>, <i>General</i> for the unfiled, then every category in use: whatever the bot's own
+ * {@code @Param}s say. A field's category is
  * free text, so the only way one exists is that something is filed under it. Filing a parameter under
  * "Timing" does not scope it to anything: a category only says where it is listed.
  *
@@ -101,8 +96,8 @@ import java.util.function.UnaryOperator;
  *
  * <h2>Nothing to save</h2>
  *
- * <p>Every change is stored by its owner as it is made — a field is rewritten in its own file (buffer and
- * disk both), a plugin's row is handed to its plugin. There is no autosave and no Save button, because there
+ * <p>Every change is written as it is made — the field is rewritten in its own file, buffer and disk both.
+ * There is no autosave and no Save button, because there
  * is nothing here holding an unwritten state. What is left is ↶ and ↷, which replay the rows as they were as
  * further edits; see {@link #restore}.
  */
@@ -126,17 +121,17 @@ public final class ParametersDialog {
     private final VBox paramColumn = new VBox(10);
     private final Label statusLabel = new Label();
 
-    // The (group, row) pair was a record of this class until 2026-09-17. It is ParameterSurface.Entry now,
-    // because the pair has a third thing to carry — the field a Java parameter was read from — and because
-    // the Runner reads the same list through the same shape.
+    // The (group, row) pair was a record of this class until 2026-09-17, then ParameterSurface.Entry, and
+    // since 2026-09-22 it is JavaParameter — the field itself, because a field is the only thing a row ever
+    // comes from now. The Runner reads the same list through the same shape.
 
-    /** What the project currently declares, in section order — re-read after every change. */
-    private final List<Entry> rows = new ArrayList<>();
+    /** What the project currently declares, in class order — re-read after every change. */
+    private final List<JavaParameter> rows = new ArrayList<>();
 
     /** Readers for the value widgets currently on screen; re-created whenever the column is rebuilt. */
     private final List<ValueEditor> valueEditors = new ArrayList<>();
 
-    /** Every category in use — the plugins' declared ones plus whatever the bot's own fields say. */
+    /** Every category in use — whatever the bot's own fields say. */
     private List<String> categories = List.of();
 
     /** The records the bot declares, for a value cell over one of them. Re-read with the rows. */
@@ -155,10 +150,10 @@ public final class ParametersDialog {
      * form: this dialog knows both halves of every step, because it decides when one has happened (see
      * {@link #commitPending}).
      */
-    private final SnapshotHistory<List<Entry>> history = new SnapshotHistory<>(this::restore);
+    private final SnapshotHistory<List<JavaParameter>> history = new SnapshotHistory<>(this::restore);
 
     /** The rows as of the last recorded step — the "before" the next one is measured against. */
-    private List<Entry> committed = List.of();
+    private List<JavaParameter> committed = List.of();
 
     /**
      * Typing is not an event this dialog can hear. The value widgets are twenty shapes with twenty different
@@ -218,8 +213,8 @@ public final class ParametersDialog {
      */
     private void reload() {
         rows.clear();
-        rows.addAll(ParameterSurface.rows(config, state, sdkPin()));
-        categories = ParameterSurface.categories(config, state, sdkPin());
+        rows.addAll(JavaParameters.scan(config, state));
+        categories = JavaParameters.categories(config, state);
         // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of
         // the bot's own records needs that record's components, and a per-cell scan would read every source
         // file once per row on screen.
@@ -321,17 +316,17 @@ public final class ParametersDialog {
     private void moveIntoSelected() {
         if (VariableRailModel.ALL.equals(selectedTag)) return;
         String home = ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
-        List<Entry> inside = shown(selectedTag);
-        List<Entry> outside = rows.stream().filter(entry -> !inside.contains(entry)).toList();
+        List<JavaParameter> inside = shown(selectedTag);
+        List<JavaParameter> outside = rows.stream().filter(entry -> !inside.contains(entry)).toList();
         if (outside.isEmpty()) {
             error("Every parameter is already filed under “" + selectedTag + "”.");
             return;
         }
-        List<Entry> chosen = pickParameters(outside);
+        List<JavaParameter> chosen = pickParameters(outside);
         if (chosen.isEmpty()) return;
         // One step for the batch: filing eight parameters at once should be one ↶, not eight.
         change("filing " + chosen.size() + " parameters under " + selectedTag, () -> {
-            for (Entry picked : chosen) {
+            for (JavaParameter picked : chosen) {
                 declare(picked, current -> current.toBuilder().category(home).build());
             }
             error("");
@@ -344,10 +339,10 @@ public final class ParametersDialog {
      * <p>The pairs themselves rather than their names: a name is unique only inside its plugin's section, so
      * a list of names could no longer say <em>which</em> {@code Timeout} was ticked.
      */
-    private List<Entry> pickParameters(List<Entry> offered) {
+    private List<JavaParameter> pickParameters(List<JavaParameter> offered) {
         List<CheckBox> boxes = new ArrayList<>();
         VBox column = new VBox(4);
-        for (Entry entry : offered) {
+        for (JavaParameter entry : offered) {
             CheckBox box = new CheckBox(entry.row().name() + "   ·   " + entry.row().categoryOrGeneral());
             box.setUserData(entry);
             boxes.add(box);
@@ -370,13 +365,13 @@ public final class ParametersDialog {
         dialog.getDialogPane().setContent(box);
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != move) return List.of();
-        return boxes.stream().filter(CheckBox::isSelected).map(b -> (Entry) b.getUserData()).toList();
+        return boxes.stream().filter(CheckBox::isSelected).map(b -> (JavaParameter) b.getUserData()).toList();
     }
 
     /** Redraws the rail (the counts move on every add, delete and re-tag) and keeps the selection. */
     private void rebuildRail() {
         List<VariableRailModel.Row> railRows =
-                VariableRailModel.rowsOf(rows.stream().map(Entry::row).toList(), categories);
+                VariableRailModel.rowsOf(rows.stream().map(JavaParameter::row).toList(), categories);
         rail.getItems().setAll(railRows);
         VariableRailModel.Row keep = railRows.stream()
                 .filter(r -> r instanceof VariableRailModel.TagRow t && t.tag().equals(selectedTag))
@@ -392,15 +387,15 @@ public final class ParametersDialog {
      * Files the dragged parameter under {@code tag} — what a drop onto the rail does, and the same edit the
      * card's own picker makes. Returns whether anything moved, which is what a drop reports back.
      *
-     * <p>{@code dragged} is the {@code group\nname} pair the grip put on the dragboard; a payload with no
-     * newline is read as a bare name in the default section, which is what every earlier drag was.
+     * <p>{@code dragged} is the {@code class\nname} pair the grip put on the dragboard; a payload with no
+     * newline is read as a bare name in the default class, which is what every earlier drag was.
      */
     private boolean fileUnder(String dragged, String tag) {
         if (dragged == null) return false;
         int cut = dragged.indexOf('\n');
-        String group = cut < 0 ? ParameterGroup.DEFAULT_ID : dragged.substring(0, cut);
+        String group = cut < 0 ? JavaParameters.DEFAULT_CLASS : dragged.substring(0, cut);
         String name = cut < 0 ? dragged : dragged.substring(cut + 1);
-        Entry entry = find(group, name);
+        JavaParameter entry = find(group, name);
         if (entry == null) return false;
         String home = ParameterRow.GENERAL.equals(tag) ? "" : tag;
         edit(entry, "the category", current -> current.toBuilder().category(home).build());
@@ -439,90 +434,67 @@ public final class ParametersDialog {
         explain.getStyleClass().add("dialog-hint-text");
         paramColumn.getChildren().addAll(title, explain);
 
-        List<Entry> visible = shown(selectedTag);
-        for (ParameterGroup group : sections()) {
-            List<Entry> mine = visible.stream().filter(entry -> entry.group().equals(group.id())).toList();
-            paramColumn.getChildren().add(sectionHeader(group, mine.isEmpty()));
-            for (Entry entry : mine) paramColumn.getChildren().add(buildParamCard(entry));
+        List<JavaParameter> visible = shown(selectedTag);
+        for (String className : sections()) {
+            List<JavaParameter> mine =
+                    visible.stream().filter(entry -> entry.className().equals(className)).toList();
+            paramColumn.getChildren().add(sectionHeader(className, mine.isEmpty()));
+            for (JavaParameter entry : mine) paramColumn.getChildren().add(buildParamCard(entry));
         }
     }
 
     /** The rows the rail's selected bucket holds, in section order. */
-    private List<Entry> shown(String tag) {
+    private List<JavaParameter> shown(String tag) {
         List<ParameterRow> visible = VariableRailModel.rowsIn(
-                rows.stream().map(Entry::row).toList(), tag, categories);
+                rows.stream().map(JavaParameter::row).toList(), tag, categories);
         return rows.stream().filter(entry -> visible.contains(entry.row())).toList();
     }
 
     /**
-     * The sections to draw, in order: one per class of the bot that declares a {@code @Param} field, then
-     * one per plugin, then one per group this project's rows name that no installed plugin claims.
+     * The sections to draw: one per class of the bot that declares a {@code @Param} field.
      *
-     * <p><b>Every declared group gets a heading even when it is empty</b>, because the heading is how a user
-     * discovers that a plugin has parameters at all — an empty section reads as "nothing set up yet", an
-     * absent one as "this plugin has no settings", and only the first is true. A bot with no fields yet gets
-     * the same courtesy through the one section every project can have, {@code Parameters}.
+     * <p><b>A section is a class</b> (2026-09-22). It was a group id — {@code java:<Class>} for a field and
+     * a plugin's own id otherwise — while a plugin could declare rows of its own. None ever did, and a
+     * plugin that wants one now puts a {@code @Param} field in the file it ships, so the two kinds of
+     * section collapsed into the one javac already keeps distinct.
+     *
+     * <p><b>A project with no fields still gets a heading</b>, the one every project can have: an empty
+     * section reads as "nothing set up yet", and no section at all reads as "this window is not for me".
      */
-    private List<ParameterGroup> sections() {
-        List<ParameterGroup> groups = new ArrayList<>(ParameterSurface.sections(config, state, sdkPin()));
-        boolean anyJava = groups.stream().anyMatch(group -> ParameterSurface.isJavaGroup(group.id()));
-        if (!anyJava) {
-            groups.addFirst(ParameterGroup.of(
-                    ParameterSurface.groupOf(JavaParameters.DEFAULT_CLASS), JavaParameters.DEFAULT_CLASS));
+    private List<String> sections() {
+        List<String> classes = new ArrayList<>(JavaParameters.classes(config, state));
+        if (classes.isEmpty()) classes.add(JavaParameters.DEFAULT_CLASS);
+        for (JavaParameter entry : rows) {
+            if (!classes.contains(entry.className())) classes.add(entry.className());
         }
-        Set<String> ids = new LinkedHashSet<>(groups.stream().map(ParameterGroup::id).toList());
-        for (Entry entry : rows) {
-            if (ids.add(entry.group())) {
-                groups.add(ParameterGroup.of(entry.group(),
-                        entry.group().isEmpty() ? "Parameters" : entry.group()));
-            }
-        }
-        return groups;
+        return classes;
     }
 
     /** The heading of one section, what it is, and — when it holds nothing yet — the line that says so. */
-    private Node sectionHeader(ParameterGroup group, boolean empty) {
-        String className = ParameterSurface.classOf(group.id());
-        Label heading = new Label(className.isEmpty() ? group.title() : className + ".java");
+    private Node sectionHeader(String className, boolean empty) {
+        Label heading = new Label(className + ".java");
         heading.getStyleClass().add("param-section-heading");
         VBox box = new VBox(2, heading);
         box.setPadding(new Insets(6, 0, 0, 0));
-        Label what = new Label(className.isEmpty()
-                ? "Declared by a plugin — you can change a value here; the plugin owns the rest."
-                : "Your bot's own fields. The bot reads them as " + className + ".<name>.");
+        Label what = new Label("Your bot's own fields. The bot reads them as " + className + ".<name>.");
         what.getStyleClass().add("dialog-hint-text");
         box.getChildren().add(what);
         if (empty) {
-            Label none = new Label(className.isEmpty()
-                    ? "Nothing filed here yet."
-                    : "Nothing here yet — add one in the bar at the bottom.");
+            Label none = new Label("Nothing here yet — add one in the bar at the bottom.");
             none.getStyleClass().add("dialog-hint-text");
             box.getChildren().add(none);
         }
         return box;
     }
 
-    /**
-     * The SDK version the open project pins, or null when it declares none or cannot be read.
-     *
-     * <p>Read from the pom each time rather than cached: the *Upgrade SDK* dialog moves it while this window
-     * can be open, and a stale pin would draw the previous version's sections.
-     *
-     * <p>Null is passed straight to {@code parameters(pin)}, which every plugin answers totally — so a
-     * project with no SDK simply has no section from it, which is the truth rather than a degradation.
-     */
-    private String sdkPin() {
-        try {
-            return MavenService.readSdkVersion(config.projectPath()).orElse(null);
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
+    // sdkPin() stood here until 2026-09-22, reading the pom on every draw because the sections were asked of
+    // each plugin at the version the project pins. A section is a class the bot declares now, which no
+    // version qualifies.
 
     /** One parameter: what it is called, what it holds, who it is for, where it is filed, what it is set to. */
-    private Node buildParamCard(Entry entry) {
+    private Node buildParamCard(JavaParameter entry) {
         ParameterRow v = entry.row();
-        boolean mine = entry.isJava();
+        boolean mine = true;
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
@@ -593,7 +565,7 @@ public final class ParametersDialog {
             // The pair, not the name: a name only identifies a parameter inside its own plugin's section, and
             // a drop has to move the one that was picked up. \n cannot occur in either half — a group id is
             // trimmed and a parameter name is a Java identifier.
-            content.putString(entry.group() + "\n" + v.name());
+            content.putString(entry.className() + "\n" + v.name());
             board.setContent(content);
             e.consume();
         });
@@ -678,11 +650,11 @@ public final class ParametersDialog {
      * see. {@code java.time.Duration.ofSeconds(3)} is a duration nobody's codec would emit, and showing it as
      * written beats offering an editor whose first keystroke would rewrite the author's own expression.
      */
-    private Node valueCell(Entry entry) {
+    private Node valueCell(JavaParameter entry) {
         if (entry.editable()) {
-            return ParamValueWidgets.build(entry.group(), entry.row(), config, records, valueEditors);
+            return ParamValueWidgets.build(entry.className(), entry.row(), config, records, valueEditors);
         }
-        Label written = new Label(entry.java().initializer());
+        Label written = new Label(entry.initializer());
         written.getStyleClass().add("dialog-hint-text");
         written.setTooltip(new Tooltip("Shown as written, not editable here: " + entry.note()));
         Label why = new Label(entry.note());
@@ -707,17 +679,17 @@ public final class ParametersDialog {
      * bot that still compiles and behaves differently. So the count is shown before, and the compiler is what
      * finds them afterwards.
      */
-    private void removeParameter(Entry entry) {
-        if (!entry.isJava()) return;
-        int uses = JavaParameters.uses(config, state, entry.java()).size() - 1;   // the declaration itself
+    private void removeParameter(JavaParameter entry) {
+        if (!true) return;
+        int uses = JavaParameters.uses(config, state, entry).size() - 1;   // the declaration itself
         change("removing " + entry.row().name(), () -> {
-            if (!ParameterSurface.remove(config, state, entry)) {
+            if (!JavaParameters.remove(config, state, entry)) {
                 error("“" + entry.row().name() + "” could not be removed — it may already be gone.");
                 return;
             }
             error(uses > 0
                     ? "Removed. " + uses + (uses == 1 ? " place" : " places") + " in your bot still name "
-                            + entry.java().qualified() + " — the compiler will point at them."
+                            + entry.qualified() + " — the compiler will point at them."
                     : "");
             reload();
             rebuildRail();
@@ -742,7 +714,7 @@ public final class ParametersDialog {
     }
 
     /** Where this parameter is listed — one category or none, never several: a parameter has one home. */
-    private Node buildTagPicker(Entry entry) {
+    private Node buildTagPicker(JavaParameter entry) {
         ComboBox<String> picker = new ComboBox<>();
         picker.getItems().setAll(filingChoices());
         picker.setValue(VariableRailModel.isDeclared(categories, entry.row().category())
@@ -760,7 +732,7 @@ public final class ParametersDialog {
      * list is a declaration like any other, so a choice that is deleted cannot survive as a stored value
      * nobody can see any more — the owner prunes it.
      */
-    private Node buildOptionsEditor(Entry entry) {
+    private Node buildOptionsEditor(JavaParameter entry) {
         ParameterRow v = entry.row();
         ValueType base = v.form().leaf();
         ValueEditors.Context ctx = new ValueEditors.Context(config, v.bounds());
@@ -812,7 +784,7 @@ public final class ParametersDialog {
      * and adding the right one: an in-place editor for those would need a commit gesture per row, and a
      * three-item choice list is not where that ceremony earns its keep.
      */
-    private Node optionRow(Entry entry, ValueType base, ValueEditors.Context ctx,
+    private Node optionRow(JavaParameter entry, ValueType base, ValueEditors.Context ctx,
                            List<String> options, int at) {
         String option = options.get(at);
         Node shown;
@@ -873,12 +845,12 @@ public final class ParametersDialog {
      * it was worse than nothing — a declared step of 0.1 puts 0.05 out of the arrows' reach, making the
      * editor a coarser instrument than the type it edits.
      */
-    private Node buildBoundsEditor(Entry entry) {
+    private Node buildBoundsEditor(JavaParameter entry) {
         TextField min = boundField(entry.row().bounds().min(), "no minimum");
         TextField max = boundField(entry.row().bounds().max(), "no maximum");
         Runnable commit = () -> {
             Range declared = new Range(min.getText(), max.getText());
-            Entry held = find(entry.group(), entry.row().name());
+            JavaParameter held = find(entry.className(), entry.row().name());
             if (held == null || declared.equals(held.row().bounds())) return;
             edit(held, "the range", current -> current.toBuilder().bounds(declared).build());
         };
@@ -935,7 +907,7 @@ public final class ParametersDialog {
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
                 ValueForm form = type.form();
-                Optional<ParameterRow> stored = ParameterSurface.add(config, state, selectedClass, candidate,
+                Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
                         form, ValueWire.defaultInitializer(form), tag, "");
                 if (stored.isEmpty()) {
                     error("“" + candidate + "” was not written — " + selectedClass + " may already declare "
@@ -994,7 +966,7 @@ public final class ParametersDialog {
         return true;
     }
 
-    private void commitRename(Entry entry, TextField field) {
+    private void commitRename(JavaParameter entry, TextField field) {
         String candidate = field.getText() == null ? "" : field.getText().trim();
         if (candidate.equals(entry.row().name())) return;
         if (!isValidIdentifier(candidate)) {
@@ -1009,7 +981,7 @@ public final class ParametersDialog {
         }
     }
 
-    private void replaceOptions(Entry entry, List<String> options) {
+    private void replaceOptions(JavaParameter entry, List<String> options) {
         error("");
         edit(entry, "the choices", current -> current.toBuilder().options(options).build());
     }
@@ -1023,12 +995,12 @@ public final class ParametersDialog {
      * changing a parameter's type do nothing at all once its value had been touched. And a pre-built row
      * would carry the stale value back in with it, undoing the flush it was queued behind.
      */
-    private void edit(Entry entry, String what, UnaryOperator<ParameterRow> change) {
+    private void edit(JavaParameter entry, String what, UnaryOperator<ParameterRow> change) {
         edit(entry, what, change, null);
     }
 
     /** The same, optionally renaming to {@code newName}. Answers whether the owner stored anything. */
-    private boolean edit(Entry entry, String what, UnaryOperator<ParameterRow> change, String newName) {
+    private boolean edit(JavaParameter entry, String what, UnaryOperator<ParameterRow> change, String newName) {
         boolean[] stored = {false};
         change(what + " of " + entry.row().name(), () -> stored[0] = declare(entry, current -> {
             ParameterRow changed = change.apply(current);
@@ -1040,15 +1012,14 @@ public final class ParametersDialog {
     /**
      * One row, as the source reads it back after the change — or {@code false} when nothing was written.
      *
-     * <p>A plugin's row cannot be declared at all: only its value crosses, and that goes through
-     * {@link #flushValues}. A card for one never offers these controls, so this is the floor rather than the
-     * gate — an undo replaying an old snapshot lands here too.
+     * <p>The field is looked up again rather than trusted: an earlier edit in the same gesture may have moved
+     * it, and an undo replaying an old snapshot lands here too.
      */
-    private boolean declare(Entry entry, UnaryOperator<ParameterRow> change) {
-        Entry held = find(entry.group(), entry.row().name());
-        if (held == null || !held.isJava()) return false;
+    private boolean declare(JavaParameter entry, UnaryOperator<ParameterRow> change) {
+        JavaParameter held = find(entry.className(), entry.row().name());
+        if (held == null) return false;
         ParameterRow wanted = change.apply(held.row());
-        boolean stored = ParameterSurface.declare(config, state, held, wanted).isPresent();
+        boolean stored = JavaParameters.declare(config, state, held, wanted).isPresent();
         reload();
         rebuildRail();
         return stored;
@@ -1090,7 +1061,7 @@ public final class ParametersDialog {
      */
     private void commitPending(String label) {
         flushValues();
-        List<Entry> now = List.copyOf(rows);
+        List<JavaParameter> now = List.copyOf(rows);
         if (now.equals(committed)) return;
         history.record(label, committed, now);
         committed = now;
@@ -1106,30 +1077,25 @@ public final class ParametersDialog {
      *
      * <p><b>A field the snapshot holds and the project does not is written back in full</b>, which is how ↶
      * after a delete and ↷ after an add both land: the row carries its type, value, category and note, and
-     * {@link ParameterSurface#add} writes the declaration from them.
+     * {@link JavaParameters#add} writes the declaration from them.
      */
-    private void restore(List<Entry> snapshot) {
+    private void restore(List<JavaParameter> snapshot) {
         valueEditors.clear();
-        for (Entry entry : List.copyOf(rows)) {
-            if (entry.isJava()
-                    && snapshot.stream().noneMatch(kept -> kept.is(entry.group(), entry.row().name()))) {
-                ParameterSurface.remove(config, state, entry);
+        for (JavaParameter entry : List.copyOf(rows)) {
+            if (snapshot.stream().noneMatch(kept -> kept.is(entry.className(), entry.row().name()))) {
+                JavaParameters.remove(config, state, entry);
             }
         }
-        for (Entry entry : snapshot) {
+        for (JavaParameter entry : snapshot) {
             ParameterRow row = entry.row();
-            Entry held = find(entry.group(), row.name());
-            if (held == null && entry.isJava()) {
-                ParameterSurface.add(config, state, entry.java().className(), row.name(), row.form(),
+            JavaParameter held = find(entry.className(), row.name());
+            if (held == null) {
+                JavaParameters.add(config, state, entry.className(), row.name(), row.form(),
                         row.value(), row.category(), row.description());
-                held = find(entry.group(), row.name());
+                held = find(entry.className(), row.name());
             }
             if (held == null) continue;
-            if (held.isJava()) {
-                ParameterSurface.declare(config, state, held, row);
-            } else if (!held.row().value().equals(row.value())) {
-                ParameterSurface.setValue(config, state, held, row.value());
-            }
+            JavaParameters.declare(config, state, held, row);
             reload();
         }
         reload();
@@ -1138,14 +1104,14 @@ public final class ParametersDialog {
     }
 
     /**
-     * The row called {@code name} in {@code group}, or null.
+     * The field called {@code name} in the class {@code group}, or null.
      *
-     * <p><b>The handle is the pair, not the name.</b> A name is unique inside its plugin's section and only
-     * there, so two plugins may both have a {@code Timeout} — and a widget holding just the name would find
+     * <p><b>The handle is the pair, not the name.</b> A name is unique inside its own class and only there,
+     * so two classes may both declare a {@code timeout} — and a widget holding just the name would find
      * whichever came first and write the other one's value into it.
      */
-    private Entry find(String group, String name) {
-        for (Entry entry : rows) {
+    private JavaParameter find(String group, String name) {
+        for (JavaParameter entry : rows) {
             if (entry.is(group, name)) return entry;
         }
         return null;
@@ -1156,8 +1122,8 @@ public final class ParametersDialog {
         if (valueEditors.isEmpty()) return;
         for (ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {
-                Entry entry = rows.get(i);
-                if (!editor.describes(entry.group(), entry.row().name())) continue;
+                JavaParameter entry = rows.get(i);
+                if (!editor.describes(entry.className(), entry.row().name())) continue;
                 // The widget reads back the Java the field takes, which is what a row holds. Blank means this
                 // cell has no source spelling for what is in it — an empty radio group, a leaf whose codec
                 // declined — and writing nothing is the only honest answer to that.
@@ -1166,9 +1132,8 @@ public final class ParametersDialog {
                 // The answer is the row as *stored*, which may differ from what was typed — a clamp, a
                 // canonical spelling from a plugin, an initialiser as the codec spells it. That is what goes
                 // into the list, so the next redraw shows what the bot will actually get.
-                Optional<ParameterRow> stored = ParameterSurface.setValue(config, state, entry, typed);
-                stored.ifPresent(row ->
-                        rows.set(rows.indexOf(entry), new Entry(entry.group(), row, entry.java())));
+                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed);
+                stored.ifPresent(row -> rows.set(rows.indexOf(entry), entry.withRow(row)));
                 break;
             }
         }
