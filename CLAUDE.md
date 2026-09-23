@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **SDK 2.0.0 (2026-09-23) changed two things the dated sections below describe.** (1) The SDK's plugin half
+> is `com.botmaker.sdk.plugin.*` now: read `sdk.internal.plugin.X` below as `sdk.plugin.X`, with `capture`
+> split into `plugin.screen` and `plugin.source`, `templates` into `plugin.pictures`, `internal.authoring`
+> into `plugin.types` (`docs/refactor/34-plugin-package-tree.md`). (2) **The recorder is Studio's again**:
+> `plugin/record/` (`Gestures`, `RecordingWriter`) records input, picks the plugin method annotated
+> `@Records(Gesture, rank)` and fills it by type (plugin-host's `Recordings`), writing the statement through
+> the grammar. The SDK's `internal.plugin.record` (`MacroRecorderDialog`, `MacroTranslator`) is deleted, and
+> `ActionContext.insertAtCursor` with it.
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,

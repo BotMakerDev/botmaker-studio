@@ -6,7 +6,9 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — no plugin reads or writes Java.** `ValueGrammar` reads a type declared with no
+- **2026-09-23 (latest) — docs after SDK 2.0.0.** `CLAUDE.md` opens with a note mapping the SDK's old
+  `internal.plugin.*` paths to `plugin.*` and saying the recorder is Studio's `plugin/record/` again.
+- **2026-09-23 — no plugin reads or writes Java.** `ValueGrammar` reads a type declared with no
   component of its own (the SDK's `CaptureSource`) as whichever declared call builds one, a part typed as it
   included, and writes one through the component of its runtime class; `freshSpelling` gives a fresh value
   with simple names and imports (the recorder's capture source). `ManagedConstants.Lookup` reads
