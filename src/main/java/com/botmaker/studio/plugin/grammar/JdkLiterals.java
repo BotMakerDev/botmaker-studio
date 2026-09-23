@@ -1,6 +1,5 @@
 package com.botmaker.studio.plugin.grammar;
 
-import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.BooleanLiteral;
 import org.eclipse.jdt.core.dom.CharacterLiteral;
 import org.eclipse.jdt.core.dom.Expression;
@@ -72,9 +71,14 @@ public final class JdkLiterals {
      * because javac accepts it there and people write it that way.
      */
     public static Optional<Object> read(String typeName, String source) {
+        return SourceNode.parse(source).flatMap(parsed -> read(typeName, parsed.node()));
+    }
+
+    /** {@link #read(String, String)} over an expression already parsed. */
+    public static Optional<Object> read(String typeName, Expression node) {
         String type = canonical(typeName);
         if (type == null) return Optional.empty();
-        Optional<Object> any = readAny(source);
+        Optional<Object> any = readAny(node);
         if (any.isEmpty()) return Optional.empty();
         Object value = any.get();
         return switch (type) {
@@ -105,12 +109,12 @@ public final class JdkLiterals {
      * activity's outcomes as a {@code List<String>}, and its declaration can only say {@code List.class}.
      */
     public static Optional<Object> readAny(String source) {
-        Expression expression = JavaExpressions.parse(source);
-        if (expression == null || (expression.getFlags() & (ASTNode.MALFORMED | ASTNode.RECOVERED)) != 0) {
-            return Optional.empty();
-        }
-        if (expression.getLength() != source.strip().length()) return Optional.empty();
-        return literal(expression, false);
+        return SourceNode.parse(source).flatMap(parsed -> readAny(parsed.node()));
+    }
+
+    /** {@link #readAny(String)} over an expression already parsed. */
+    public static Optional<Object> readAny(Expression node) {
+        return node == null ? Optional.empty() : literal(node, false);
     }
 
     private static Optional<Object> literal(Expression expression, boolean negated) {

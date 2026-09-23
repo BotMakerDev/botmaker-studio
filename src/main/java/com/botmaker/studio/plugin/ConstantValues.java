@@ -1,8 +1,10 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import org.eclipse.jdt.core.dom.QualifiedName;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,12 +26,20 @@ public final class ConstantValues {
     /** No constants: a context with no project behind it. */
     public static final Supplier<List<ManagedConstants.Constant>> NONE = List::of;
 
-    /** {@code source} as a {@code form}, with a constant reference read as the constant's value. */
+    /** {@code node} as a {@code form}, with a constant reference read as the constant's value. */
+    public static Optional<Object> read(ValueGrammar grammar, Supplier<List<ManagedConstants.Constant>> constants,
+                                        ValueForm form, SourceNode node) {
+        if (node == null || node.node() == null) return Optional.empty();
+        Optional<Object> read = grammar.read(form, node);
+        // A constant reference is only ever written Owner.FIELD, qualified or not.
+        if (read.isPresent() || !(node.node() instanceof QualifiedName name)) return read;
+        return lookup(grammar, constants).read(name.getFullyQualifiedName());
+    }
+
+    /** {@link #read(ValueGrammar, Supplier, ValueForm, SourceNode)} over stored text, parsed once. */
     public static Optional<Object> read(ValueGrammar grammar, Supplier<List<ManagedConstants.Constant>> constants,
                                         ValueForm form, String source) {
-        Optional<Object> read = grammar.read(form, source);
-        if (read.isPresent() || !ManagedConstants.isName(source)) return read;
-        return lookup(grammar, constants).read(source);
+        return SourceNode.parse(source).flatMap(node -> read(grammar, constants, form, node));
     }
 
     /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */

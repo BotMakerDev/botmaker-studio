@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.SlotRun;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
@@ -66,7 +67,8 @@ public final class HostSlotRun implements SlotRun {
         for (int i = fromIndex; i < arguments.size(); i++) {
             if (!(arguments.get(i) instanceof Expression argument)) continue;
             String source = argument.toString();
-            out.add(new Element(HostSlotContext.read(context, element, source).orElse(null), source));
+            out.add(new Element(HostSlotContext.read(context, element, new SourceNode(argument, null)).orElse(null),
+                    source));
         }
         return out;
     }

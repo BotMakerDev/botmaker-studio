@@ -93,13 +93,4 @@ class ManagedConstantsTest {
                 ManagedConstants.scan(config, null).stream().map(ManagedConstants.Constant::field).toList());
         assertEquals(afterFirst + 1, ManagedConstants.parses(), "one file changed, one parsed");
     }
-
-    @Test
-    void onlyADottedNameCanBeAConstantReference() {
-        assertTrue(ManagedConstants.isName("Pictures.ORE"));
-        assertTrue(ManagedConstants.isName("com.bot.Pictures.ORE"));
-        assertFalse(ManagedConstants.isName("ORE"));
-        assertFalse(ManagedConstants.isName("new Picture(\"x\")"));
-        assertFalse(ManagedConstants.isName("Pictures.of()"));
-    }
 }

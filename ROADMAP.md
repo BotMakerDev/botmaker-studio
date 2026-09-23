@@ -6,10 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — a factory is an `Executable` (doc 35, phase 5a).** `plugin/grammar/Factory` is
+- **2026-09-23 (latest) — the typed value reader (doc 35, phase 5b).** `plugin/grammar/ExpressionReader`
+  reads a JDT `Expression` (`SourceNode` carries the text a part is shown as): declared constructors, static
+  factories, instance-factory chains, enum constants and `public static final` fields of declared classes,
+  with `Factory.matches` deciding a call by node. `SourceSplit` and `ValueContainer.factorySource()` are
+  deleted; `ValueGrammar.Part` holds a node; slots, `@Param` and `@Managed` readers pass the node they hold.
+  `ChainValuesTest`.
+- **2026-09-23 — a factory is an `Executable` (doc 35, phase 5a).** `plugin/grammar/Factory` is
   the host's view of `ComponentType.factory()` (constructor, static, or an instance method it reads and never
-  writes); `ValueGrammar` and the three host containers spell calls through it. Reading still splits strings
-  until 5b's typed reader.
+  writes); `ValueGrammar` and the three host containers spell calls through it.
 - **2026-09-23 — constants cached, and read in Parameters rows.** `ManagedConstants.scan` keeps
   each file's last parse keyed on its path and checked against its text (`String.equals`), so an untouched
   file costs a comparison and a changed one is parsed again — no revision counter to forget to bump.

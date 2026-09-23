@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 
 /**
  * The constants of every {@code @Managed} type in the bot's own source — {@code Pictures.COLLECT} and its
@@ -129,15 +128,6 @@ public final class ManagedConstants {
             return Optional.empty();
         }
     }
-
-    /** Whether {@code source} is written as a dotted name — the only shape a constant reference can have. */
-    public static boolean isName(String source) {
-        return source != null && NAME.matcher(source.strip()).matches();
-    }
-
-    private static final Pattern NAME =
-            Pattern.compile("[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
-                            + "(\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)+");
 
     /** The constants of the {@code @Managed} top-level types in one file. */
     static List<Constant> read(String source) {

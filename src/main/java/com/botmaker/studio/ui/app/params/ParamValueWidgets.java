@@ -206,7 +206,7 @@ public final class ParamValueWidgets {
                                   ValueForm.Leaf leaf, List<String> options, ValueEditors.Context ctx,
                                   List<ValueEditor> sink) {
         List<String> held = ValueWire.partsOrNone(form, row.value()).stream()
-                .map(part -> canonical(grammar, leaf, part.initializer()))
+                .map(part -> canonical(grammar, leaf, part))
                 .toList();
         List<CheckBox> boxes = new ArrayList<>();
         VBox column = new VBox(2);
@@ -246,7 +246,7 @@ public final class ParamValueWidgets {
         List<ValueGrammar.Part> parts = ValueWire.partsOrNone(form, row.value());
         if ("java.lang.String".equals(grammar.qualify(leaf.typeName()))) {
             List<String> items = parts.stream()
-                    .map(part -> grammar.valueOf(leaf, part.initializer()).orElse(null))
+                    .map(part -> grammar.valueOf(leaf, part.written()).orElse(null))
                     .filter(value -> value instanceof String)
                     .map(value -> (String) value)
                     .toList();
@@ -287,7 +287,7 @@ public final class ParamValueWidgets {
             column.getChildren().add(add);
         };
 
-        for (ValueGrammar.Part part : parts) editors.add(ValueEditors.editorFor(leaf, part.initializer(), ctx));
+        for (ValueGrammar.Part part : parts) editors.add(ValueEditors.editorFor(leaf, part.source(), ctx));
         add.setOnAction(e -> {
             editors.add(ValueEditors.editorFor(leaf, null, ctx));
             rebuild[0].run();
@@ -319,9 +319,9 @@ public final class ParamValueWidgets {
 
         List<Entry> entries = new ArrayList<>();
         for (ValueGrammar.Part part : ValueWire.partsOrNone(form, row.value())) {
-            List<ValueGrammar.Part> pair = ValueWire.partsOrNone(part.form(), part.initializer());
+            List<ValueGrammar.Part> pair = ValueWire.partsOrNone(part.form(), part.written());
             if (pair.size() != 2) continue;
-            entries.add(new Entry(pair.get(0).initializer(), pair.get(1).initializer()));
+            entries.add(new Entry(pair.get(0).source(), pair.get(1).source()));
         }
 
         List<Cell> cells = new ArrayList<>();
@@ -403,7 +403,7 @@ public final class ParamValueWidgets {
         List<ValueEditors.Editor> readers = new ArrayList<>(components.size());
         for (int i = 0; i < components.size(); i++) {
             BotRecords.Component component = components.get(i);
-            String written = i < held.size() ? held.get(i).initializer() : "";
+            String written = i < held.size() ? held.get(i).source() : "";
             Label name = new Label(component.name());
             name.getStyleClass().add("dialog-hint-text");
             name.setMinWidth(72);
@@ -513,6 +513,13 @@ public final class ParamValueWidgets {
                 .flatMap(value -> grammar.spell(leaf, value))
                 .map(ValueGrammar.Written::source)
                 .orElse(source == null ? "" : source.strip());
+    }
+
+    private static String canonical(ValueGrammar grammar, ValueForm.Leaf leaf, ValueGrammar.Part part) {
+        return grammar.valueOf(leaf, part.written())
+                .flatMap(value -> grammar.spell(leaf, value))
+                .map(ValueGrammar.Written::source)
+                .orElse(part.source());
     }
 
     // --- small helpers ------------------------------------------------------------------------------------

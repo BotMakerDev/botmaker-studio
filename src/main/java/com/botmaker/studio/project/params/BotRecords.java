@@ -1,14 +1,15 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.BotSources;
-import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.RecordDeclaration;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Type;
@@ -207,8 +208,8 @@ public final class BotRecords {
     public Optional<List<ValueGrammar.Part>> partsOf(ValueForm.Declared declared, String source) {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
         if (shape == null || source == null || source.isBlank()) return Optional.empty();
-        String trimmed = source.strip();
-        if (!(JavaParameterSource.expression(trimmed) instanceof ClassInstanceCreation creation)) {
+        Optional<SourceNode> parsed = SourceNode.parse(source);
+        if (parsed.isEmpty() || !(parsed.get().node() instanceof ClassInstanceCreation creation)) {
             return Optional.empty();
         }
         if (!names(creation.getType()).equals(shape.simpleName())
@@ -220,8 +221,8 @@ public final class BotRecords {
 
         List<ValueGrammar.Part> parts = new ArrayList<>(arguments.size());
         for (int i = 0; i < arguments.size(); i++) {
-            String written = JavaParameterSource.text(trimmed, (ASTNode) arguments.get(i));
-            if (written.isBlank()) return Optional.empty();
+            SourceNode written = parsed.get().child((Expression) arguments.get(i));
+            if (written.source().isBlank()) return Optional.empty();
             parts.add(new ValueGrammar.Part(shape.components().get(i).form(), written));
         }
         return Optional.of(List.copyOf(parts));

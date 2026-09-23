@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -43,6 +44,11 @@ public final class ValueWire {
     /** The same, as the list a cell seeds its rows from — a source nothing can read seeds an empty one. */
     public static List<ValueGrammar.Part> partsOrNone(ValueForm form, String source) {
         return parts(form, source).orElse(List.of());
+    }
+
+    /** {@link #partsOrNone(ValueForm, String)} one level further down: a part is taken apart as it was parsed. */
+    public static List<ValueGrammar.Part> partsOrNone(ValueForm form, SourceNode written) {
+        return grammar().partsOfInitializer(form, written).orElse(List.of());
     }
 
     /** Parts, already written as source, composed back into the call this form's container spells. */

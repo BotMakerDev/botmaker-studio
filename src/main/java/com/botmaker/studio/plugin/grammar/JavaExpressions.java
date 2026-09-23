@@ -9,12 +9,9 @@ import org.eclipse.jdt.core.dom.Expression;
 import java.util.Map;
 
 /**
- * One Java expression parsed on its own, with no bindings — the one parser configuration the grammar and
- * {@code project/params} share.
- *
- * <p>A real parser rather than a bracket-matching split wherever a literal's <em>meaning</em> is asked:
- * a string's escapes, a character literal, a hexadecimal number with underscores in it. The split in
- * {@link SourceSplit} only finds where one argument ends and the next begins.
+ * One Java expression parsed on its own, with no bindings — the one parser the grammar reads with, and the
+ * configuration {@code project/params} shares. {@link SourceNode#parse} is the door that also checks the
+ * text was exactly one expression.
  */
 public final class JavaExpressions {
 

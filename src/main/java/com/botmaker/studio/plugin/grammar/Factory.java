@@ -1,6 +1,15 @@
 package com.botmaker.studio.plugin.grammar;
 
 import com.botmaker.plugin.api.value.ComponentType;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.Name;
+import org.eclipse.jdt.core.dom.NameQualifiedType;
+import org.eclipse.jdt.core.dom.ParameterizedType;
+import org.eclipse.jdt.core.dom.QualifiedType;
+import org.eclipse.jdt.core.dom.SimpleType;
+import org.eclipse.jdt.core.dom.Type;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
@@ -76,11 +85,41 @@ public record Factory(Executable executable) {
     }
 
     /**
-     * What today's string reader matches before the bracket: {@code java.time.Duration.ofMillis}, or the
-     * class name for a constructor. The typed reader replaces the string reader and deletes this.
+     * Whether {@code call} is a call to this method: a static one on its owner, or an instance one on any
+     * receiver. A static call written with no receiver, which a static import allows, counts only when
+     * {@code bare}.
      */
-    String callSource() {
-        String owner = JavaNames.canonical(owner());
-        return kind() == Kind.CONSTRUCTOR ? owner : owner + "." + name();
+    public boolean matches(MethodInvocation call, boolean bare) {
+        if (kind() == Kind.CONSTRUCTOR || !call.getName().getIdentifier().equals(name())) return false;
+        if (!fits(call.arguments().size() + (kind() == Kind.RECEIVER ? 1 : 0))) return false;
+        Expression receiver = call.getExpression();
+        if (kind() == Kind.RECEIVER) return receiver != null;
+        if (receiver == null) return bare;
+        return receiver instanceof Name written && names(written.getFullyQualifiedName(), owner());
+    }
+
+    /** Whether {@code creation} is {@code new Owner(…)} with a count this constructor takes. */
+    public boolean matches(ClassInstanceCreation creation) {
+        return kind() == Kind.CONSTRUCTOR && creation.getAnonymousClassDeclaration() == null
+                && creation.getExpression() == null
+                && names(typeName(creation.getType()), owner()) && fits(creation.arguments().size());
+    }
+
+    /** Whether a written dotted name — {@code Map}, {@code java.util.Map}, {@code Flow.Limits} — names {@code type}. */
+    public static boolean names(String written, Class<?> type) {
+        if (written == null || written.isEmpty()) return false;
+        String canonical = JavaNames.canonical(type);
+        return canonical.equals(written) || canonical.endsWith("." + written);
+    }
+
+    private static String typeName(Type type) {
+        return switch (type) {
+            case SimpleType simple -> simple.getName().getFullyQualifiedName();
+            case QualifiedType qualified -> typeName(qualified.getQualifier()) + "." + qualified.getName().getIdentifier();
+            case NameQualifiedType qualified ->
+                    qualified.getQualifier().getFullyQualifiedName() + "." + qualified.getName().getIdentifier();
+            case ParameterizedType parameterized -> typeName(parameterized.getType());
+            default -> "";
+        };
     }
 }

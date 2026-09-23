@@ -84,7 +84,7 @@ class BotRecordsTest {
 
         List<ValueGrammar.Part> parts = records.partsOf(point(), "new Point(1, 2)").orElseThrow();
 
-        assertEquals(List.of("1", "2"), parts.stream().map(ValueGrammar.Part::initializer).toList());
+        assertEquals(List.of("1", "2"), parts.stream().map(ValueGrammar.Part::source).toList());
         assertEquals(TestValues.WHOLE_NUMBER, parts.getFirst().form());
         assertEquals("new com.example.bot.Point(3, 4)",
                 records.initializerOfParts(point(), List.of("3", "4")).orElseThrow());
@@ -97,7 +97,7 @@ class BotRecordsTest {
                 .partsOf(point(), "new Point(Math.max(1, 2), 3)").orElseThrow();
 
         assertEquals(List.of("Math.max(1, 2)", "3"), parts.stream()
-                .map(ValueGrammar.Part::initializer).toList());
+                .map(ValueGrammar.Part::source).toList());
     }
 
     /**
@@ -178,7 +178,7 @@ class BotRecordsTest {
         assertNull(records.whyNotEditable(declared));
         assertEquals(List.of("new Point(0, 0)", "new Point(1, 1)"),
                 records.partsOf(declared, "new Line(new Point(0, 0), new Point(1, 1))").orElseThrow()
-                        .stream().map(ValueGrammar.Part::initializer).toList());
+                        .stream().map(ValueGrammar.Part::source).toList());
     }
 
     /** A record that contains itself has no value to write, and says that rather than being walked. */

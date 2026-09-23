@@ -19,8 +19,8 @@ import java.util.Set;
  * <p><b>What this is.</b> The host half of {@code docs/refactor/32-generic-values.md} after the codec went:
  * one writer and one reader over the whole type tree, both total. A plugin declares a type once — a
  * {@link PluginType}, and a {@link ComponentType} beside it when its Java is a call — and never sees Java
- * source. The host writes {@code new Point(10, 20)} from {@code components(point)} and reads it back by
- * matching the prefix and splitting at depth zero. It replaced {@code ValueCatalog}'s grammar half, which
+ * source. The host writes {@code new Point(10, 20)} from {@code components(point)} and reads it back off the
+ * JDT expression ({@link ExpressionReader}). It replaced {@code ValueCatalog}'s grammar half, which
  * did the same walk through a codec per leaf; its registry half (ids, codecs, clashes, the stored-text
  * bridges) was deleted rather than moved.
  *
@@ -32,6 +32,10 @@ import java.util.Set;
  *   <li>a <b>component type</b> a plugin declares: a call, taken apart through {@code components} and put
  *       back through {@code build};</li>
  *   <li>an <b>enum</b>: {@code Owner.CONSTANT};</li>
+ *   <li>a <b>chain</b> a person writes by hand ({@code Precision.TIGHT.minArea(400)}), read through a
+ *       component whose factory is an instance method, and a {@code public static final} constant of a
+ *       declared class ({@code Precision.TIGHT}). Both are read and never written: an edited value is written
+ *       through the component that owns its class;</li>
  *   <li>a type a plugin <b>declares with no component of its own</b> — the SDK's {@code CaptureSource},
  *       an interface: it is read as whichever declared call builds one of it
  *       ({@code CaptureSource.window("Game")}), and otherwise crosses as the source it is written as;</li>
@@ -49,7 +53,8 @@ import java.util.Set;
  *   <li><b>A partial reading is not a reading.</b> One part that cannot be read empties the whole answer, so
  *       a map with one unreadable value is shown whole and untouched rather than silently losing an
  *       entry.</li>
- *   <li><b>The split is not a parser.</b> It reads back what this wrote; anything else answers empty.</li>
+ *   <li><b>Only what a declaration builds is read.</b> An expression no declared call, constant or literal
+ *       accounts for is shown as written.</li>
  * </ul>
  *
  * <p><b>Plugin code is contained.</b> {@code components}, {@code build} and {@code fresh} are third-party
@@ -68,32 +73,52 @@ public final class ValueGrammar {
 
     private final Map<String, ComponentType<?>> componentByName;
 
-    /** Every enum a plugin mentions — declared, or a component's part — for reading an untyped constant. */
-    private final List<Class<?>> enums;
+    /** The read half, over parsed expressions. Built last, from the registries above. */
+    private final ExpressionReader reader;
 
     private ValueGrammar(List<? extends PluginType<?>> types, List<? extends ComponentType<?>> components) {
         Map<String, PluginType<?>> byName = new LinkedHashMap<>();
         Map<String, ComponentType<?>> componentsByName = new LinkedHashMap<>();
-        Set<Class<?>> enumSet = new LinkedHashSet<>();
+        // Every enum a plugin mentions — declared, or a component's part — for reading an untyped constant.
+        Set<Class<?>> enums = new LinkedHashSet<>();
+        // Every class a plugin names as a type, the only classes whose constants are read.
+        Set<Class<?>> declared = new LinkedHashSet<>();
+        // Every way a declared value is written, receivers included: the reader's registry.
+        List<ExpressionReader.Call> calls = new ArrayList<>();
         for (PluginType<?> type : types) {
             Class<?> cls = classOf(type);
             if (cls == null) continue;
             byName.putIfAbsent(JavaNames.canonical(cls), type);
-            if (type instanceof ComponentType<?> component && writes(component)) {
-                componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
+            declared.add(cls);
+            if (type instanceof ComponentType<?> component) {
+                register(component, cls, componentsByName, calls);
+                for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
             }
-            if (cls.isEnum()) enumSet.add(cls);
+            if (cls.isEnum()) enums.add(cls);
         }
         for (ComponentType<?> component : components) {
             Class<?> cls = classOf(component);
             if (cls == null) continue;
-            if (writes(component)) componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
-            for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enumSet.add(part);
+            declared.add(cls);
+            register(component, cls, componentsByName, calls);
+            for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
         }
         this.types = List.copyOf(byName.values());
         this.typeByName = Map.copyOf(byName);
         this.componentByName = Map.copyOf(componentsByName);
-        this.enums = List.copyOf(enumSet);
+        this.reader = new ExpressionReader(this, calls, List.copyOf(enums), List.copyOf(declared));
+    }
+
+    /**
+     * {@code component} as the reader sees it, and — the first time its class is seen, when its factory is
+     * not a chain on part 0 — as the one the writer writes that class with.
+     */
+    private static void register(ComponentType<?> component, Class<?> cls, Map<String, ComponentType<?>> writers,
+                                 List<ExpressionReader.Call> calls) {
+        Optional<Factory> factory = Factory.of(component);
+        if (factory.isEmpty()) return;
+        calls.add(new ExpressionReader.Call(component, factory.get()));
+        if (factory.get().kind() != Factory.Kind.RECEIVER) writers.putIfAbsent(JavaNames.canonical(cls), component);
     }
 
     /**
@@ -204,27 +229,12 @@ public final class ValueGrammar {
      * what makes an unbounded type tree safe rather than dangerous.
      */
     public Optional<Object> valueOf(ValueForm form, String initializer) {
-        if (form == null || initializer == null || initializer.isBlank()) return Optional.empty();
-        String source = initializer.strip();
-        return switch (form) {
-            case ValueForm.Leaf leaf -> readNamed(leaf.typeName(), source);
-            case ValueForm.Of of -> {
-                Optional<List<String>> split =
-                        SourceSplit.arguments(source, of.container().factorySource());
-                if (split.isEmpty()) yield Optional.empty();
-                List<String> written = split.get();
-                List<ValueForm> forms = of.container().partForms(of.arguments(), written.size());
-                if (forms.size() != written.size()) yield Optional.empty();
-                List<Object> parts = new ArrayList<>(written.size());
-                for (int i = 0; i < written.size(); i++) {
-                    Optional<Object> part = valueOf(forms.get(i), written.get(i));
-                    if (part.isEmpty()) yield Optional.empty();
-                    parts.add(part.get());
-                }
-                yield Optional.ofNullable(of.container().build(parts));
-            }
-            case ValueForm.Declared ignored -> Optional.empty();
-        };
+        return SourceNode.parse(initializer).flatMap(node -> valueOf(form, node));
+    }
+
+    /** {@link #valueOf(ValueForm, String)} over an expression already parsed, with the text it came from. */
+    public Optional<Object> valueOf(ValueForm form, SourceNode node) {
+        return reader.read(form, node);
     }
 
     /**
@@ -233,120 +243,12 @@ public final class ValueGrammar {
      * resolve, and the element of a list a component declares only as {@code List.class}.
      */
     public Optional<Object> valueOfAny(String source) {
-        if (source == null || source.isBlank()) return Optional.empty();
-        String trimmed = source.strip();
-        Optional<Object> literal = JdkLiterals.readAny(trimmed);
-        if (literal.isPresent()) return literal;
-        for (ComponentType<?> component : componentByName.values()) {
-            if (callArguments(component, trimmed, false).isPresent()) return readCall(component, trimmed);
-        }
-        for (ValueContainer<?> container : ValueContainer.ALL) {
-            Optional<List<String>> split = SourceSplit.arguments(trimmed, container.factorySource(), false);
-            if (split.isEmpty()) continue;
-            List<Object> parts = new ArrayList<>();
-            for (String written : split.get()) {
-                Optional<Object> part = valueOfAny(written);
-                if (part.isEmpty()) return Optional.empty();
-                parts.add(part.get());
-            }
-            return Optional.ofNullable(container.build(parts));
-        }
-        for (Class<?> type : enums) {
-            Optional<Object> constant = readEnum(type, trimmed, false);
-            if (constant.isPresent()) return constant;
-        }
-        return Optional.empty();
+        return SourceNode.parse(source).flatMap(this::valueOfAny);
     }
 
-    private Optional<Object> readNamed(String typeName, String source) {
-        String name = qualify(typeName);
-        if (name == null) return Optional.empty();
-        if (JdkLiterals.handles(name)) return JdkLiterals.read(name, source);
-        ComponentType<?> component = componentByName.get(name);
-        if (component != null) return readCall(component, source);
-        PluginType<?> type = typeByName.get(name);
-        if (type == null) return Optional.empty();
-        Class<?> cls = classOf(type);
-        if (cls != null && cls.isEnum()) return readEnum(cls, source, true);
-        return readInstance(cls, source).or(() -> Optional.of(source));
-    }
-
-    /**
-     * A type declared with no component of its own — an interface such as the SDK's {@code CaptureSource} —
-     * read as whichever declared call {@code source} is, when that call builds one of it. Empty otherwise,
-     * and the caller then hands the source over as written.
-     */
-    private Optional<Object> readInstance(Class<?> type, String source) {
-        if (type == null || source.isBlank()) return Optional.empty();
-        return valueOfAny(source).filter(type::isInstance);
-    }
-
-    /** One component of a call, read as the class its declaration says it is. */
-    private Optional<Object> readClass(Class<?> type, String source) {
-        if (type == null) return valueOfAny(source);
-        String name = JavaNames.canonical(type);
-        if (JdkLiterals.handles(name)) return JdkLiterals.read(name, source);
-        ComponentType<?> component = componentByName.get(name);
-        if (component != null) return readCall(component, source);
-        if (type.isEnum()) return readEnum(type, source, true);
-        if (isHostContainer(type)) return valueOfAny(source);
-        // A part typed as an interface — a region's CaptureSource — is whichever declared call builds one.
-        // Nothing else reads it and the plugin said this is what the part is, so it crosses as it is written.
-        return readInstance(type, source)
-                .or(() -> source.isBlank() ? Optional.empty() : Optional.of(source.strip()));
-    }
-
-    private Optional<Object> readCall(ComponentType<?> component, String source) {
-        Optional<List<String>> split = callArguments(component, source, true);
-        if (split.isEmpty()) return Optional.empty();
-        List<String> written = split.get();
-        List<Class<?>> declared = componentTypesOf(component);
-        List<Object> parts = new ArrayList<>(written.size());
-        for (int i = 0; i < written.size(); i++) {
-            Optional<Object> part = readClass(partType(declared, i, written.size()), written.get(i));
-            if (part.isEmpty()) return Optional.empty();
-            parts.add(part.get());
-        }
-        try {
-            return Optional.ofNullable(component.build(List.copyOf(parts)));
-        } catch (RuntimeException | LinkageError e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * The arguments of the call {@code component} writes, or empty when {@code source} is not that call.
-     * {@code bare} accepts a static import's bare factory name, which only a caller that already knows the
-     * type may.
-     */
-    private static Optional<List<String>> callArguments(ComponentType<?> component, String source, boolean bare) {
-        Optional<Factory> factory = Factory.of(component);
-        if (factory.isEmpty()) return Optional.empty();
-        return factory.get().kind() == Factory.Kind.CONSTRUCTOR
-                ? SourceSplit.constructorArguments(source, factory.get().callSource())
-                : SourceSplit.arguments(source, factory.get().callSource(), bare);
-    }
-
-    /**
-     * {@code Owner.CONSTANT}, {@code com.x.Owner.CONSTANT}, or — when {@code bare}, for a caller that knows
-     * the type — {@code CONSTANT} alone, which a static import writes.
-     */
-    private static Optional<Object> readEnum(Class<?> type, String source, boolean bare) {
-        String trimmed = source.strip();
-        int dot = trimmed.lastIndexOf('.');
-        String constant = dot < 0 ? trimmed : trimmed.substring(dot + 1);
-        if (dot < 0 && !bare) return Optional.empty();
-        if (dot >= 0) {
-            String owner = trimmed.substring(0, dot);
-            String canonical = JavaNames.canonical(type);
-            if (!canonical.equals(owner) && !canonical.endsWith("." + owner)) return Optional.empty();
-        }
-        Object[] constants = type.getEnumConstants();
-        if (constants == null) return Optional.empty();
-        for (Object each : constants) {
-            if (((Enum<?>) each).name().equals(constant)) return Optional.of(each);
-        }
-        return Optional.empty();
+    /** {@link #valueOfAny(String)} over an expression already parsed. */
+    public Optional<Object> valueOfAny(SourceNode node) {
+        return reader.readAny(node);
     }
 
     // ---- writing ---------------------------------------------------------------------------------------
@@ -510,27 +412,33 @@ public final class ValueGrammar {
 
     // ---- a composite, one level at a time --------------------------------------------------------------
 
-    /** One part of a composite: the source it is written as, and the form that source is of. */
-    public record Part(ValueForm form, String initializer) {}
+    /**
+     * One part of a composite: the expression it is written as, and the form that expression is of.
+     * {@link #source()} is how it was written, for showing a part nothing reads.
+     */
+    public record Part(ValueForm form, SourceNode written) {
+
+        public String source() {
+            return written.source();
+        }
+    }
 
     /**
      * A container's initialiser taken apart one level: the parts as they are <em>written</em>, each with its
      * own form. Empty for anything that is not a call to the container's factory.
      *
-     * <p>Source rather than values, because a cell edits one part at a time and a part it cannot read must be
-     * shown as written rather than dropped — a map with one unreadable value still draws as a map, with that
-     * one row read-only. Recursion is the caller's: a {@code Map}'s parts are entries, passed back in.
+     * <p>Expressions rather than values, because a cell edits one part at a time and a part it cannot read
+     * must be shown as written rather than dropped — a map with one unreadable value still draws as a map,
+     * with that one row read-only. Recursion is the caller's: a {@code Map}'s parts are entries, passed back
+     * in.
      */
     public Optional<List<Part>> partsOfInitializer(ValueForm form, String initializer) {
-        if (!(form instanceof ValueForm.Of of) || initializer == null) return Optional.empty();
-        Optional<List<String>> split = SourceSplit.arguments(initializer.strip(), of.container().factorySource());
-        if (split.isEmpty()) return Optional.empty();
-        List<String> written = split.get();
-        List<ValueForm> forms = of.container().partForms(of.arguments(), written.size());
-        if (forms.size() != written.size()) return Optional.empty();
-        List<Part> parts = new ArrayList<>(written.size());
-        for (int i = 0; i < written.size(); i++) parts.add(new Part(forms.get(i), written.get(i)));
-        return Optional.of(List.copyOf(parts));
+        return SourceNode.parse(initializer).flatMap(node -> partsOfInitializer(form, node));
+    }
+
+    /** {@link #partsOfInitializer(ValueForm, String)} over an expression already parsed. */
+    public Optional<List<Part>> partsOfInitializer(ValueForm form, SourceNode node) {
+        return reader.parts(form, node);
     }
 
     /**
@@ -541,7 +449,8 @@ public final class ValueGrammar {
         if (!(form instanceof ValueForm.Of of) || parts == null) return Optional.empty();
         if (parts.stream().anyMatch(part -> part == null || part.isBlank())) return Optional.empty();
         if (of.container().partForms(of.arguments(), parts.size()).size() != parts.size()) return Optional.empty();
-        return Optional.of(of.container().factorySource() + "(" + String.join(", ", parts) + ")");
+        Factory factory = of.container().factory();
+        return Optional.of(JavaNames.canonical(factory.owner()) + "." + factory.name() + "(" + String.join(", ", parts) + ")");
     }
 
     // ---- a fresh value ---------------------------------------------------------------------------------
@@ -670,8 +579,13 @@ public final class ValueGrammar {
      * the one reading a value context does, so the canvas and the Parameters window cannot disagree.
      */
     public Optional<Object> read(ValueForm form, String source) {
-        if (form instanceof ValueForm.Leaf leaf && qualify(leaf.typeName()) == null) return valueOfAny(source);
-        return valueOf(form, source);
+        return SourceNode.parse(source).flatMap(node -> read(form, node));
+    }
+
+    /** {@link #read(ValueForm, String)} over an expression already parsed. */
+    public Optional<Object> read(ValueForm form, SourceNode node) {
+        if (form instanceof ValueForm.Leaf leaf && qualify(leaf.typeName()) == null) return valueOfAny(node);
+        return valueOf(form, node);
     }
 
     /**
@@ -703,7 +617,7 @@ public final class ValueGrammar {
      * The declared type of part {@code i} of {@code count}. Positional when the counts agree; for a call
      * written with more arguments than declared types, the last type repeats — a varargs tail.
      */
-    private static Class<?> partType(List<Class<?>> declared, int i, int count) {
+    static Class<?> partType(List<Class<?>> declared, int i, int count) {
         if (declared.isEmpty()) return null;
         if (i < declared.size()) return declared.get(i);
         return count > declared.size() ? declared.getLast() : null;
@@ -714,7 +628,23 @@ public final class ValueGrammar {
         return false;
     }
 
-    private static Class<?> classOf(PluginType<?> type) {
+    /** The declaration registered under a canonical name, or {@code null}: for the reader. */
+    PluginType<?> declaration(String canonicalName) {
+        return typeByName.get(canonicalName);
+    }
+
+    /** The class a component registered under {@code canonicalName} builds, or {@code null}. */
+    Class<?> componentClass(String canonicalName) {
+        ComponentType<?> component = componentByName.get(canonicalName);
+        return component == null ? null : classOf(component);
+    }
+
+    /** The component that writes {@code type}, or {@code null}: the writer's registry. */
+    ComponentType<?> canonical(Class<?> type) {
+        return type == null ? null : componentByName.get(JavaNames.canonical(type));
+    }
+
+    static Class<?> classOf(PluginType<?> type) {
         try {
             return type == null ? null : type.type();
         } catch (RuntimeException | LinkageError e) {
@@ -722,7 +652,7 @@ public final class ValueGrammar {
         }
     }
 
-    private static Class<?> classOf(ComponentType<?> type) {
+    static Class<?> classOf(ComponentType<?> type) {
         try {
             return type == null ? null : type.type();
         } catch (RuntimeException | LinkageError e) {
@@ -730,22 +660,13 @@ public final class ValueGrammar {
         }
     }
 
-    private static List<Class<?>> componentTypesOf(ComponentType<?> component) {
+    static List<Class<?>> componentTypesOf(ComponentType<?> component) {
         try {
             List<Class<?>> declared = component.componentTypes();
             return declared == null ? List.of() : declared;
         } catch (RuntimeException | LinkageError e) {
             return List.of();
         }
-    }
-
-    /**
-     * Whether {@code component} can write its class: it has a factory, and the factory is not a chain on
-     * part 0. A component with neither is skipped, so its class reads as a declared type with no call rather
-     * than as a call read half-way.
-     */
-    private static boolean writes(ComponentType<?> component) {
-        return Factory.of(component).filter(factory -> factory.kind() != Factory.Kind.RECEIVER).isPresent();
     }
 
     /** How one write spells a type: qualified, or simple with the import collected. */

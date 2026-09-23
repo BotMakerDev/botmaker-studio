@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.slot.SlotContext;
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
@@ -103,7 +104,7 @@ public final class HostSlotContext implements SlotContext {
      */
     @Override
     public <T> Optional<T> value(Class<T> type) {
-        return read(context, form(), slot.source()).flatMap(value -> ValueGrammar.as(value, type));
+        return read(context, form(), new SourceNode(slot.node(), null)).flatMap(value -> ValueGrammar.as(value, type));
     }
 
     /**
@@ -118,9 +119,12 @@ public final class HostSlotContext implements SlotContext {
                 rewrite(slot.node(), written.source(), written.imports().toArray(String[]::new)));
     }
 
-    /** {@code source} as a {@code form}, with a constant reference read as the constant's value. */
-    static Optional<Object> read(CodeEditorService context, ValueForm form, String source) {
-        return ConstantValues.read(grammar(), constants(context), form, source);
+    /**
+     * {@code node} as a {@code form}, with a constant reference read as the constant's value. A node of the
+     * editor's tree carries no text of its own, so a part nothing reads is shown as JDT prints it.
+     */
+    static Optional<Object> read(CodeEditorService context, ValueForm form, SourceNode node) {
+        return ConstantValues.read(grammar(), constants(context), form, node);
     }
 
     /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */

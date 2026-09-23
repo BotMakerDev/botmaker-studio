@@ -64,10 +64,12 @@ class ValueContainerTest {
 
     @Test
     void theFactoryCallIsDerivedNotSupplied() {
-        assertEquals("java.util.List.of", ValueContainer.LIST.factorySource());
-        assertEquals("java.util.Map.ofEntries", ValueContainer.MAP.factorySource());
-        // Map.entry is declared on Map, not on Map.Entry — which is why factoryOwner is separable.
-        assertEquals("java.util.Map.entry", ValueContainer.ENTRY.factorySource());
+        assertEquals(List.class, ValueContainer.LIST.factory().owner());
+        assertEquals("of", ValueContainer.LIST.factory().name());
+        assertEquals("ofEntries", ValueContainer.MAP.factory().name());
+        // Map.entry is declared on Map, not on Map.Entry — which is why the factory's owner is not the type.
+        assertEquals(java.util.Map.class, ValueContainer.ENTRY.factory().owner());
+        assertEquals("entry", ValueContainer.ENTRY.factory().name());
         assertEquals("java.util.Map.Entry", ValueContainer.ENTRY.sourceName());
         assertEquals("java.util.Map", ValueContainer.ENTRY.importName());
     }

@@ -16,8 +16,8 @@ import java.util.List;
  * <h2>Nothing here is a string function</h2>
  *
  * <p>A container takes a composite apart into parts and puts it back together from parts. It never sees
- * Java source: the host writes {@code Owner.factory(p₁, …, pₙ)} once for all of them and reads it back by
- * matching that prefix and splitting at depth zero.
+ * Java source: the host writes {@code Owner.factory(p₁, …, pₙ)} once for all of them and reads it back off
+ * the parsed expression.
  *
  * <h2>Arity counts types; parts count values</h2>
  *
@@ -87,11 +87,6 @@ public interface ValueContainer<C> {
     /** The class a file importing this container names. */
     default String importName() {
         return JavaNames.importName(type());
-    }
-
-    /** The call a generator writes before the opening bracket: {@code java.util.Map.ofEntries}. */
-    default String factorySource() {
-        return factory().callSource();
     }
 
     /** What a menu calls wrapping a form in this container. */

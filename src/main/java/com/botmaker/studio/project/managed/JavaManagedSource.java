@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.params.BotRecords;
@@ -86,7 +87,7 @@ public final class JavaManagedSource {
         // read one — so the second reader is asked for exactly that case and for no other.
         boolean readable = !expression.isEmpty() && (form instanceof ValueForm.Declared declared
                 ? records.partsOf(declared, expression).isPresent()
-                : grammar.valueOf(form, expression).isPresent());
+                : grammar.valueOf(form, new SourceNode(returned, source)).isPresent());
         String note = whyNotEditable(grammar, method, form, records, readable, expression);
         return new ManagedMethod(file, className, method.getName().getIdentifier(), id, form, expression,
                 note.isEmpty(), note);

@@ -343,7 +343,8 @@ class ValueGrammarTest {
         assertTrue(GRAMMAR.valueOf(list, "java.util.Set.of(\"a\")").isEmpty());
         // A map read as a list is not a partial success either.
         assertTrue(GRAMMAR.valueOf(list, "java.util.Map.ofEntries()").isEmpty());
-        assertTrue(GRAMMAR.valueOf(COLOR, "Color.RED").isEmpty(), "a constant is not the constructor");
+        assertTrue(GRAMMAR.valueOf(COLOR, "Color.NOPE").isEmpty(), "a constant the class does not declare");
+        assertTrue(GRAMMAR.valueOf(COLOR, "Colour.RED").isEmpty(), "a class nothing declares");
         assertTrue(GRAMMAR.valueOf(COUNT, "1 + 2").isEmpty(), "an expression is not a literal");
     }
 
@@ -377,12 +378,12 @@ class ValueGrammarTest {
                 .orElseThrow();
 
         assertEquals(2, entries.size());
-        assertEquals("java.util.Map.entry(\"a\", 1)", entries.getFirst().initializer());
+        assertEquals("java.util.Map.entry(\"a\", 1)", entries.getFirst().source());
         // A map's parts are entries, so a cell reaches the key and the value by asking again.
         List<ValueGrammar.Part> pair = GRAMMAR
-                .partsOfInitializer(entries.getFirst().form(), entries.getFirst().initializer())
+                .partsOfInitializer(entries.getFirst().form(), entries.getFirst().written())
                 .orElseThrow();
-        assertEquals(List.of("\"a\"", "1"), pair.stream().map(ValueGrammar.Part::initializer).toList());
+        assertEquals(List.of("\"a\"", "1"), pair.stream().map(ValueGrammar.Part::source).toList());
         assertEquals(TEXT, pair.getFirst().form());
         assertEquals(COUNT, pair.get(1).form());
     }
@@ -394,7 +395,7 @@ class ValueGrammarTest {
                 .partsOfInitializer(ValueForm.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))")
                 .orElseThrow();
 
-        assertEquals(List.of("Duration.parse(\"5s\")"), parts.stream().map(ValueGrammar.Part::initializer).toList());
+        assertEquals(List.of("Duration.parse(\"5s\")"), parts.stream().map(ValueGrammar.Part::source).toList());
         // The whole-value reader still declines, which is what keeps the file untouched.
         assertTrue(GRAMMAR.valueOf(ValueForm.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))").isEmpty());
     }

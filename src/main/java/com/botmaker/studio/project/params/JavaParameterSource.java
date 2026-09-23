@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.grammar.JavaExpressions;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -156,7 +157,8 @@ public final class JavaParameterSource {
         // read one — so the second reader is asked for exactly that case and for no other.
         boolean readable = form instanceof ValueForm.Declared declared
                 ? records.partsOf(declared, initializer).isPresent()
-                : grammar.valueOf(form, initializer).isPresent();
+                : fragment.getInitializer() != null
+                        && grammar.valueOf(form, new SourceNode(fragment.getInitializer(), source)).isPresent();
 
         String note = whyNotEditable(grammar, field, form, records, readable, initializer);
         // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
