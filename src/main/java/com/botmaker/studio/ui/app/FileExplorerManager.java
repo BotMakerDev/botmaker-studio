@@ -2,7 +2,6 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ActivityBodies;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -296,7 +295,8 @@ public class FileExplorerManager {
     // one more ActivityDefinition in it. It is deleted rather than moved, because the window that owns that
     // file is the SDK plugin's now and a second writer behind it is the exact hazard the move was ordered
     // around. What it did beyond the write — opening the activity's body if the user had already written one
-    // — is ActivityBodies.find, which is still here and still used by the overlay.
+    // — is the overlay's activity picker, which finds a flow's method reference (MethodReferences) and
+    // opens the file declaring it.
 
     // sanitizeActivityName went with the prompt above: it kept a typed activity name to letters and digits,
     // so that the name read the same in the explorer as in the string literal the user's own code matches.

@@ -163,7 +163,7 @@ public class CodeEditorService {
 
         // An ActivitiesChangedEvent subscription stood here and is gone (2026-09-11), with the event, the
         // service and the two generated classes it evicted. Nothing writes a project's Java any more — an
-        // activity is a define() call in a file the user owns — so there is no file behind the editor's back
+        // activity is a method the flow references, in a file the user owns — so there is no file behind the editor's back
         // to forget, and a plugin writing its own JSON changes no source the editor has open.
 
         // The project's plugins have been re-bound, so the blocks on screen have to be built again. A block

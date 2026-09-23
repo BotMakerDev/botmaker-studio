@@ -612,7 +612,7 @@ public class ProjectAnalyzer {
     // getActivityVariables, variableHolder, variableQualifier and getActivityNames stood here and are gone
     // (2026-09-11). All four answered out of a cached parse of activities.json, which is one plugin's file:
     // the first three are `plugin/HostParameters` now, asked of whichever plugin declares the parameter, and
-    // the fourth is `ActivityBodies.names`, read out of the bot's own source. This class needs a
+    // the fourth is `MethodReferences.scan`, read out of the bot's own source. This class needs a
     // ProjectConfig for neither, which is why they are not here — it holds a library index and the editor's
     // state, and the pinned SDK version is a property of the project.
 

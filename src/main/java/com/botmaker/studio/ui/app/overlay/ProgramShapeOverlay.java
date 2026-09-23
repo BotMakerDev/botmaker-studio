@@ -490,7 +490,8 @@ public final class ProgramShapeOverlay {
             }
         }));
 
-        // Keep the activity picker current when a define() call is written, renamed or deleted. It listened
+        // Keep the activity picker current when a method reference in a @Managed value is written, renamed or
+        // deleted. It listened
         // for ActivitiesChangedEvent until 2026-09-11, which announced a write to activities.json; the list
         // comes out of the bot's own source now, so what changes it is an edit to that source — which is the
         // very event above, re-used rather than given a second subscription that would fire in lockstep.

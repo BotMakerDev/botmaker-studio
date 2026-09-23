@@ -29,7 +29,6 @@ final class MenuIcons {
     // Structural submenus the two menus build themselves (not backed by a palette record).
     static final String VARIABLES = "𝑥";
     static final String PARAMETERS = "◎";
-    static final String ACTIVITY_NAME = "🏷";
     static final String ENUM = "▤";
     static final String FUNCTION_CALL = "ƒ";
     static final String LIBRARY = "📚";

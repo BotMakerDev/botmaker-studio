@@ -29,8 +29,8 @@ public class ProjectState {
 
     // --- Activities: not here, and not anywhere in the editor (2026-09-11). The project's activities and the
     //     values their parameters hold are the SDK plugin's file; the host asks for ParameterRows through
-    //     PluginHost when it needs to draw them, and asks the bot's own source (ActivityBodies) when it needs
-    //     to know which activities have a body. A cached parse of another plugin's file is exactly the stale
+    //     PluginHost when it needs to draw them, and asks the bot's own source (managed/MethodReferences)
+    //     when it needs to know which methods the flow runs. A cached parse of another plugin's file is exactly the stale
     //     copy the parameter surface exists to remove.
 
     // --- Editor settings (capture targets, etc.) ---

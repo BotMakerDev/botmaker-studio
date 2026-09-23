@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.studio.project.ActivityBodies;
+import com.botmaker.studio.project.managed.MethodReferences;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.geometry.Pos;
@@ -54,6 +54,8 @@ final class OverlayTargetPicker {
     private final ComboBox<String> methodBox = new ComboBox<>();
     /** Label of the method currently rendered/edited, or {@code null} to fall back to every top-level body. */
     private String selectedMethod;
+    /** The method the chosen reference names ({@code body}), opened on first; {@code null} for a hook file. */
+    private String preferredMethod;
     /**
      * The activity that is actually open. A failed pick reverts the combo to this rather than leaving it naming
      * a file the overlay never opened — the combo is the only thing telling the user where their blocks land.
@@ -112,16 +114,17 @@ final class OverlayTargetPicker {
     }
 
     /**
-     * The activities this bot defines, read out of its own source.
+     * The methods this bot's {@code @Managed} values reference — {@code Collect::body} in the flow — read out
+     * of its own source ({@link MethodReferences}).
      *
-     * <p>It was the flow's list, out of {@code activities.json} through {@code ActivityService}, until
-     * 2026-09-11 — one plugin's file, parsed by the host. What this picker is for is choosing a
-     * {@code define} call to insert blocks into, so asking the source is both the honest question and a
-     * narrower one: an activity wired in the flow with no body has nowhere to author into and is no longer
-     * offered, and one written by hand and never wired now is.
+     * <p>It was the {@code Activities.define("…")} calls until SDK 2.0 deleted {@code define}, and the flow's
+     * list out of {@code activities.json} before 2026-09-11. A method reference is what a flow names now, so
+     * it is what the picker offers: choosing one opens the file declaring the class and scopes the tree to
+     * the method.
      */
     private List<String> activityNames() {
-        return ActivityBodies.names(context.getConfig(), context.getState());
+        return MethodReferences.scan(context.getConfig(), context.getState()).stream()
+                .map(MethodReferences.Target::label).toList();
     }
 
     /**
@@ -203,19 +206,20 @@ final class OverlayTargetPicker {
     /**
      * Resolves the picked target to a file and reports it.
      *
-     * <p>For an activity that means <b>finding</b> its {@code Activities.define("<name>", …)} call
-     * ({@link ActivityBodies}), because nothing writes a user's sources and so nothing knows where the body
-     * is. For a scaffold hook it is {@code <name>.java} beside the main source — {@link #targetNames} offers
-     * both, so this resolves both.
+     * <p>For a method reference that means <b>finding</b> the file declaring its class
+     * ({@link MethodReferences}), because nothing writes a user's sources and so nothing knows where it is;
+     * the method it names is then the one the tree opens scoped to. For a scaffold hook it is
+     * {@code <name>.java} beside the main source — {@link #targetNames} offers both, so this resolves both.
      *
-     * <p>An activity with no body yet is an ordinary state, not damage: it takes its {@code DISABLED} wire
-     * and the flow runs without it. So the combo reverts to whatever is actually open and the status line
-     * says what to write, rather than offering to restore a file that was never there.
+     * <p>A reference whose class is not in the bot's sources — a library's method, a class not written yet —
+     * has nothing to open. The combo reverts to whatever is actually open and the status line names the
+     * class, rather than offering to create a file.
      */
     private void selectActivity(String name) {
         if (name == null || SCAFFOLD_HEADER.equals(name)) return;
-        Path file = ActivityBodies.find(context.getConfig(), context.getState(), name);
-        if (file == null) {
+        MethodReferences.Target target = MethodReferences.find(context.getConfig(), context.getState(), name);
+        Path file = target == null ? null : target.file();
+        if (target == null) {
             Path pkg = context.getConfig().mainSourceFile().getParent();
             if (pkg != null && Files.isRegularFile(pkg.resolve(name + ".java"))) {
                 file = pkg.resolve(name + ".java");
@@ -223,12 +227,14 @@ final class OverlayTargetPicker {
         }
         if (file == null || !Files.isRegularFile(file)) {
             activityBox.setValue(openTarget);
-            callbacks.onStatus().accept(name + " has no body yet — write Activities.define(\"" + name
-                    + "\", ctx -> …) anywhere in your code");
+            callbacks.onStatus().accept(target != null
+                    ? name + " — no class " + target.simpleClassName() + " in this bot's sources to open"
+                    : name + " is not in this bot's sources");
             return;
         }
         openTarget = name;
         selectedMethod = null;   // a different file — the previous selection doesn't apply here
+        preferredMethod = target == null ? null : target.method();
         callbacks.onActivityFile().accept(file);
         settings.update(settings.current().withLastRecordedActivity(name));
     }
@@ -256,8 +262,9 @@ final class OverlayTargetPicker {
 
     /**
      * Repopulates the method list from the current file. Leaves an already-valid selection alone (so an edit
-     * elsewhere in the file doesn't yank the view away from what the user is looking at); picks {@code run}
-     * (or the first method) when the selection is unset or no longer exists.
+     * elsewhere in the file doesn't yank the view away from what the user is looking at); picks the method the
+     * chosen reference names ({@code body} for {@code Collect::body}), else {@code run}, else the first method,
+     * when the selection is unset or no longer exists.
      *
      * @param labels every method in the file, as {@link BlockTree.Index#methodLabels()} names them
      * @return {@code true} when the selection changed and the caller must re-home the caret into it
@@ -266,7 +273,9 @@ final class OverlayTargetPicker {
         methodBox.getItems().setAll(labels);
         boolean changed = false;
         if (selectedMethod == null || !labels.contains(selectedMethod)) {
-            selectedMethod = labels.stream().filter(l -> l.startsWith("run(")).findFirst()
+            selectedMethod = labels.stream()
+                    .filter(l -> preferredMethod != null && l.startsWith(preferredMethod + "(")).findFirst()
+                    .or(() -> labels.stream().filter(l -> l.startsWith("run(")).findFirst())
                     .orElse(labels.isEmpty() ? null : labels.get(0));
             changed = true;
         }

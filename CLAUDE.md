@@ -799,17 +799,17 @@ point of it.**
     own text alone (`Bot.start` / `Bot.supervise`), the file-presence fallback having had no list to check.
   - **`ActivityService` was `activities.json` and nothing else, and is deleted (2026-09-11).** Adding an
     activity creates no file, renaming one moves nothing, deleting one leaves whatever the user wrote where
-    it is — an activity's behaviour is an `Activities.define("Mining", ctx -> …)` call in a file BotMaker
+    it is — an activity's behaviour is a method the flow references (`Collect::body`) in a file BotMaker
     has never known the location of. That file is the SDK plugin's now, written by its own flow editor.
-  - **So opening an activity is a search, not a path (`project/ActivityBodies`, 2026-08-30).** It matches
-    `define("<name>"` — the method name alone, so a `static import` is found, with the literal matched whole
-    so `Mining` does not open `MiningDeep` — over `BotSources.firstMatch`, the read-only half of the walk
-    `forEach` already did, buffer before disk. **Finding nothing is an ordinary answer**: an activity with no
-    `define` takes its `DISABLED` wire and the flow runs without it, so `OverlayTargetPicker` says *"no body
-    yet"* and names the call to write. What it replaced said *"File ▸ Recover Project Files restores it"* —
-    an offer to write into a user's project, about a file that was never there. The same applies to creating
-    an activity in the explorer: it opens the body if the user has already written one, and otherwise opens
-    nothing.
+  - **So opening an activity is a search, not a path.** Since SDK 2.0 (2026-09-23) it follows a method
+    reference: `project/managed/MethodReferences` reads every `Owner::method` inside a `@Managed` method's
+    body (lambdas skipped) and resolves `Owner` by simple name to the first bot file declaring that type,
+    nested types included, over `BotSources.scan`, buffer before disk. No plugin is named, so any plugin
+    whose value holds references gets the same navigation. `OverlayTargetPicker` lists the labels
+    (`Collect::body`), opens the file and scopes the method picker to `body`. **Finding nothing is an
+    ordinary answer**: a reference to a class the bot does not declare is a status line naming the class,
+    never an offer to write a file. It was `project/ActivityBodies` (2026-08-30), a text search for
+    `define("<name>"`, until SDK 2.0 deleted `Activities.define` and the search found nothing.
   - **A project the old generator wrote keeps every file it wrote, and is told so once (2026-08-30).**
     `Activities.java`, `Parameters.java`, `Templates.java`, `ActivityRegistry.java`, `FlowDriver.java` and
     the whole `activities/` package are ordinary user files: nothing regenerates, reconciles or deletes them,
@@ -1064,7 +1064,7 @@ The `ui/` package is split by concern:
   the Runner stayed. **`activities.json` has no reader in Studio at all**: `project/activity/`,
   `services/ActivityService`, `ActivitiesChangedEvent` and `ProjectState.activities` went with it. What a
   menu or a picker needs instead is `plugin/HostParameters` (the parameters every loaded plugin declares)
-  and `project/ActivityBodies.names` (the activities the bot's own source defines).
+  and `project/managed/MethodReferences` (the methods the bot's `@Managed` values reference).
 - **`project/params/`** — **a user parameter is a `@Param` field in the bot's own Java** (2026-09-17), and
   this package is how Studio reads and writes one. Five classes, split by what each needs: **
   `JavaParameterSource`** parses one source into `ParameterRow`s (JDT, **no bindings** — a type is whatever

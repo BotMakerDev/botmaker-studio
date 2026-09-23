@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — the user picks which plugin records each gesture.** Right-click ⏺ Record on the
+- **2026-09-23 (latest) — activity navigation from method references.** `project/managed/MethodReferences`
+  reads every `ExpressionMethodReference`/`TypeMethodReference` inside a `@Managed` method's body (lambdas
+  skipped, each label once, in walk order) and resolves the class by simple name to the first bot file
+  declaring it, nested types included; it names no plugin. `OverlayTargetPicker` lists those labels
+  (`Collect::body`), opens the file and prefers the referenced method in the method picker; an unresolved
+  class is a status line. `project/ActivityBodies` (the `define("…")` search SDK 2.0 made empty) and its
+  test are deleted, and so is `ExpressionMenu`'s *Activity name* submenu (receiver `Activity`,
+  `MenuIcons.ACTIVITY_NAME`). New `MethodReferencesTest`; 1274 tests.
+- **2026-09-23 — the user picks which plugin records each gesture.** Right-click ⏺ Record on the
   HUD: *Record with* lists every gesture two or more plugins' `@Records` methods write, each with *Automatic
   (highest rank)* and one choice per plugin. Saved per project as `settings.json`'s `preferredRecorders`
   (`Gesture` name → plugin id); `RecordingWriter` applies it with `EditorContest.ordered`, the *Edit with*

@@ -20,9 +20,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   becomes is the plugins' to say; with the SDK, a click on one of your pictures is written
   `ImageClicker.click(Pictures.X)`, a click elsewhere `Mouse.click(…, x, y)`, and a pause that ends on a
   picture `ImageWaiter.waitFor(Pictures.X, …)`. Linux (X11) only, as before.
+- **You choose which plugin records a gesture two plugins can write.** Right-click ⏺ Record: *Record with*
+  lists each such gesture with *Automatic (highest rank)* and one choice per plugin, saved per project. The
+  chosen plugin is tried first; a gesture it cannot write still falls to the next one.
 
 ### Changed
 
+- **The HUD's activity picker lists the methods your flow runs.** It lists `Collect::body` for each method
+  reference in a plugin value (the SDK's flow), opens the file declaring the class and scopes the tree to the
+  method. It searched for `Activities.define("…")`, which SDK 2.0 deleted, and so found nothing. A reference
+  to a class your project does not declare says so on the status line. The canvas's *Activity name* submenu
+  on `Activity.enable("…")` is gone with the `Activity` class it keyed on; the SDK's own editor for
+  `Activities.enable`/`disable`/`active`/`setEnabled` offers the names.
 - **A plugin value named by one of your constants reads as that value, and a picked value is written as
   the constant.** A picture slot holding `Pictures.ORE` shows the ore picture, a run of pictures shows each
   one, and choosing a picture your `Pictures` class already holds writes `Pictures.X` rather than its path.

@@ -8,7 +8,6 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.plugin.HostParameters;
-import com.botmaker.studio.project.ActivityBodies;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -24,8 +23,6 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ITypeBinding;
-import org.eclipse.jdt.core.dom.MethodInvocation;
-import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.util.ArrayList;
@@ -259,9 +256,9 @@ public final class ExpressionMenu {
 
         String q = query == null ? "" : query.trim().toLowerCase();
 
-        // The name argument of Activity.enable("…")/disable("…"): offer the project's defined activity names as a
-        // dropdown instead of a free-typed string, so the name always matches a real activity.
-        boolean activitySlot = context != null && isActivityNameSlot(contextNode);
+        // There is no activity-name dropdown here any more (2026-09-23). It keyed on a receiver spelled
+        // `Activity` and listed Activities.define("…") names, both gone with SDK 2.0; the SDK's own slot editor
+        // claims Activities.enable/disable/active/setEnabled's name argument now, which is the plugin's place.
 
         // Active search: a flat, filtered list of the leaf quick picks — no submenus to dig through.
         if (!q.isEmpty()) {
@@ -269,17 +266,10 @@ public final class ExpressionMenu {
                     .stream()
                     .filter(mi -> mi.getText() != null && mi.getText().toLowerCase().contains(q))
                     .collect(Collectors.toList());
-            if (activitySlot) {
-                for (String name : ActivityBodies.names(context.getConfig(), context.getState())) {
-                    if (name.toLowerCase().contains(q)) matches.add(0, activityNameItem(name, onSelect));
-                }
-            }
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matches"));
             else menu.getItems().addAll(matches);
             return;
         }
-
-        if (activitySlot) menu.getItems().add(activityNameSubmenu(context, onSelect));
 
         // Parity with the statement menu: lead with a submenu per SDK facade (in catalog order), each listing
         // that facade's static members whose return type fits this slot (buildScopeMenu drops empty facades).
@@ -521,49 +511,6 @@ public final class ExpressionMenu {
             }
         });
         return menu;
-    }
-
-    /**
-     * Whether {@code contextNode} is the first (name) argument of an {@code Activity.enable(...)} /
-     * {@code Activity.disable(...)} call — the slot the activity-name dropdown targets. Matches on the AST
-     * (receiver {@code Activity} + method name + arg position), independent of type resolution, so it works even
-     * before the SDK jar's parameter types resolve. Facades are referenced by simple name (not import), as
-     * elsewhere in the palette.
-     */
-    private static boolean isActivityNameSlot(ASTNode contextNode) {
-        if (contextNode == null || !(contextNode.getParent() instanceof MethodInvocation call)) {
-            return false;
-        }
-        String method = call.getName().getIdentifier();
-        if (!method.equals("enable") && !method.equals("disable")) {
-            return false;
-        }
-        if (!(call.getExpression() instanceof SimpleName receiver) || !receiver.getIdentifier().equals("Activity")) {
-            return false;
-        }
-        List<?> args = call.arguments();
-        return !args.isEmpty() && args.get(0) == contextNode;
-    }
-
-    /** "Activity name": the project's defined activity names, each inserted as a string literal. */
-    private static Menu activityNameSubmenu(CodeEditorService context, Consumer<Object> onSelect) {
-        Menu menu = MenuIcons.decorate(new Menu("Activity name"), MenuIcons.ACTIVITY_NAME);
-        List<String> names = ActivityBodies.names(context.getConfig(), context.getState());
-        if (names.isEmpty()) {
-            menu.getItems().add(MenuBuilders.disabledItem("(No activities defined)"));
-        } else {
-            for (String name : names) {
-                menu.getItems().add(activityNameItem(name, onSelect));
-            }
-        }
-        return menu;
-    }
-
-    /** A menu item that inserts {@code name} as a quoted string literal (activity names are valid identifiers). */
-    private static MenuItem activityNameItem(String name, Consumer<Object> onSelect) {
-        MenuItem item = new MenuItem(name);
-        item.setOnAction(e -> onSelect.accept(new ExpressionChoice.RawExpression("\"" + name + "\"")));
-        return item;
     }
 
     private static Menu specificEnumSubmenu(ResolvedType enumType, Consumer<Object> onSelect) {
