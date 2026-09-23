@@ -10,6 +10,7 @@ import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueForm;
@@ -62,8 +63,9 @@ import java.util.function.Supplier;
  * {@code palette.SdkType}, a hand-mirrored enum of the SDK's class list which had the same scope and the
  * same job but no author but us — a class renamed in the SDK broke a menu at runtime instead of this build.
  *
- * <p>Both are memoised: building a catalog resolves every entry's method reference through a
- * {@code SerializedLambda}, which is cheap but not free, and the menus ask on every open.
+ * <p>Each plugin's share is {@link Palettes#of}: its own {@code catalog()} when it builds one, otherwise the
+ * {@code @Palette} classes found in its jar. Both are memoised, because discovery reads the plugin's jar and
+ * the menus ask on every open.
  */
 public final class PluginHost {
 
@@ -724,7 +726,7 @@ public final class PluginHost {
     private static PaletteCatalog merge(List<StudioPlugin> set) {
         PaletteCatalog merged = PaletteCatalog.empty();
         for (StudioPlugin plugin : set) {
-            PaletteCatalog offered = quietly(plugin, "build its palette", plugin::catalog);
+            PaletteCatalog offered = quietly(plugin, "build its palette", () -> Palettes.of(plugin));
             if (offered != null) merged = merged.mergedWith(offered);
         }
         return merged;

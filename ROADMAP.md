@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — the host owns the value grammar.** `plugin/grammar/` (`ValueForm` with
+- **2026-09-23 (latest) — the palette is discovered, not listed.** `PluginHost.merge` reads each plugin's
+  share through `botmaker-plugin-host`'s `Palettes.of`: the plugin's own `catalog()`, or the `@Palette`
+  classes in its jar when that is the empty default. The SDK no longer lists its 54 classes.
+- **2026-09-23 — the host owns the value grammar.** `plugin/grammar/` (`ValueForm` with
   `Leaf(String typeName)`, `ValueContainer` closed to List/Map/Entry, `SourceSplit`, new `JavaNames`,
   `JavaExpressions`, `JdkLiterals`, `ValueGrammar`) replaces the contract's `ValueCatalog`; `PluginHost`
   composes it from `types()` + `componentTypes()`, wraps each `PluginType.editor` as a slot editor, and

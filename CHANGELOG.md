@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The palette comes from `@Palette` on a plugin's classes.** Studio finds every annotated class in each
+  plugin's jar when the plugin builds no catalog of its own, so the SDK's palette now also offers
+  `Activities` and `Flows`, which its old hand-written list had missed.
+
 - **A colour, a duration or any other plugin value opened in the Parameters window and closed without an
   edit comes back byte-identical.** Studio used to read a value as text, run it through a codec it could
   not check and write it back — a `java.awt.Color` came out as `new java.awt.Color(255, 255, 255)`. Studio
