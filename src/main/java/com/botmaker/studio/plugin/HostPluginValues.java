@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.JavaManagedValues;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedMethod;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 
@@ -95,7 +96,8 @@ public final class HostPluginValues implements PluginValues {
         if (found.isEmpty() || !found.get().editable()) return Optional.empty();
         ManagedMethod value = found.get();
         return Optional.of(HostValueContext.of(value.form(), value.expression(), services,
-                (expression, imports) -> write(value, expression, imports)));
+                (expression, imports) -> write(value, expression, imports),
+                () -> ManagedConstants.scan(config, state)));
     }
 
     /**

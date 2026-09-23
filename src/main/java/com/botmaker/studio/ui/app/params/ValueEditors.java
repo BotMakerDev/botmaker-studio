@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.slot.SlotEditor;
+import com.botmaker.studio.plugin.ConstantValues;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostValueContext;
@@ -8,6 +9,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import javafx.scene.Node;
 import javafx.scene.control.Control;
 import javafx.scene.control.TextField;
@@ -64,6 +66,16 @@ public final class ValueEditors {
         public static Context none() {
             return new Context(null);
         }
+
+        /**
+         * The bot's {@code @Managed} constants, so a row holding {@code Pictures.ORE} is edited as the picture
+         * and a picture equal to one is written back as the constant. Read from disk: a capture writes
+         * {@code Pictures.java} to buffer and disk both, and a constant typed into the editor and not yet
+         * saved is the one case this misses — the row then shows the name as written.
+         */
+        Supplier<List<ManagedConstants.Constant>> constants() {
+            return project == null ? ConstantValues.NONE : () -> ManagedConstants.scan(project, null);
+        }
     }
 
     /**
@@ -103,7 +115,8 @@ public final class ValueEditors {
      * closed with no edit reads back exactly as it was.
      */
     private static Editor fromPlugin(ValueForm.Leaf leaf, String source, Context ctx) {
-        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null);
+        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
+                ctx.constants());
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.create(context);
@@ -164,7 +177,8 @@ public final class ValueEditors {
      */
     static Node optionGraphic(ValueForm.Leaf leaf, String source, Context ctx) {
         if (source == null || source.isBlank()) return null;
-        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null);
+        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
+                ctx.constants());
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.preview(context);

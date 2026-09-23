@@ -14,6 +14,7 @@ import org.eclipse.jdt.core.dom.Expression;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * A {@link SlotContext} over one slot of a bot's Java source — the second of the two places Studio edits a
@@ -119,21 +120,21 @@ public final class HostSlotContext implements SlotContext {
 
     /** {@code source} as a {@code form}, with a constant reference read as the constant's value. */
     static Optional<Object> read(CodeEditorService context, ValueForm form, String source) {
-        Optional<Object> read = grammar().read(form, source);
-        if (read.isPresent() || !ManagedConstants.isName(source)) return read;
-        return constants(context).read(source);
+        return ConstantValues.read(grammar(), constants(context), form, source);
     }
 
     /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
     static Optional<ValueGrammar.Written> write(CodeEditorService context, ValueForm form, Object value) {
-        return constants(context).spell(value).or(() -> grammar().write(form, value));
+        return ConstantValues.write(grammar(), constants(context), form, value);
     }
 
-    /** The bot's {@code @Managed} constants, scanned now: a picture captured a moment ago is one of them. */
-    private static ManagedConstants.Lookup constants(CodeEditorService context) {
-        List<ManagedConstants.Constant> found = context == null ? List.of()
-                : ManagedConstants.scan(context.getConfig(), context.getState());
-        return new ManagedConstants.Lookup(found, grammar());
+    /**
+     * The bot's {@code @Managed} constants as they stand now — a picture captured a moment ago is one of
+     * them. {@link ManagedConstants#scan} parses only a file whose text changed since it last did.
+     */
+    private static Supplier<List<ManagedConstants.Constant>> constants(CodeEditorService context) {
+        return context == null ? ConstantValues.NONE
+                : () -> ManagedConstants.scan(context.getConfig(), context.getState());
     }
 
     private static ValueGrammar grammar() {

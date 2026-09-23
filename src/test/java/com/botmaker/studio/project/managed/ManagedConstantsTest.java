@@ -3,8 +3,13 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,6 +72,26 @@ class ManagedConstantsTest {
         assertEquals("Pictures.GOLD", written.source());
         assertEquals(List.of("com.bot.plugins.sdk.Pictures"), written.imports());
         assertTrue(lookup().spell(new Picture("images/new.png")).isEmpty(), "no constant holds it");
+    }
+
+    /** An unchanged file is not parsed again; a file whose text changed is, and its new constant is found. */
+    @Test
+    void aScanParsesOnlyWhatChanged(@TempDir Path root) throws IOException {
+        ProjectConfig config = ProjectConfig.forProject("MyFarmer", root);
+        Path pkg = config.mainSourceFile().getParent();
+        Files.createDirectories(pkg);
+        Path pictures = pkg.resolve("Pictures.java");
+        Files.writeString(pictures, PICTURES);
+
+        assertEquals(2, ManagedConstants.scan(config, null).size());
+        int afterFirst = ManagedConstants.parses();
+        assertEquals(2, ManagedConstants.scan(config, null).size());
+        assertEquals(afterFirst, ManagedConstants.parses(), "nothing changed, nothing parsed");
+
+        Files.writeString(pictures, PICTURES.replace("static final Picture HIDDEN", "public static final Picture HIDDEN"));
+        assertEquals(List.of("ORE", "GOLD", "HIDDEN"),
+                ManagedConstants.scan(config, null).stream().map(ManagedConstants.Constant::field).toList());
+        assertEquals(afterFirst + 1, ManagedConstants.parses(), "one file changed, one parsed");
     }
 
     @Test

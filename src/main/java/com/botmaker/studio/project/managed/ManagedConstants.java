@@ -12,9 +12,14 @@ import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -40,17 +45,48 @@ public final class ManagedConstants {
         }
     }
 
+    /** One file's text as it was last parsed, and the constants it declared then. */
+    private record Parsed(String source, List<Constant> constants) {}
+
+    /**
+     * The last parse of every file, keyed on its path and checked against its text.
+     *
+     * <p><b>Keyed on the text itself, not on a revision counter</b> (2026-09-23): every read and write of a
+     * slot asks for the constants, and parsing every file each time was the cost. Comparing a file's text
+     * with the text last parsed is a {@code String.equals} — the length first, then characters — where
+     * parsing it is a JDT run, so a file nobody touched costs a comparison and one that changed by a
+     * character is parsed again. There is no counter to forget to bump: a picture captured a moment ago is
+     * text in {@code Pictures.java}, buffer and disk, and that is what is compared.
+     */
+    private static final Map<Path, Parsed> PARSED = Collections.synchronizedMap(new HashMap<>());
+
+    /** How many files have been parsed — what a test asks to see that an unchanged file is not. */
+    private static final AtomicInteger PARSES = new AtomicInteger();
+
     /** Every constant of every {@code @Managed} top-level type in the bot's sources, in file order. */
     public static List<Constant> scan(ProjectConfig config, ProjectState state) {
         List<Constant> out = new ArrayList<>();
         if (config == null) return out;
         try {
-            BotSources.scan(config, state, (file, source) -> out.addAll(read(source)));
+            BotSources.scan(config, state, (file, source) -> out.addAll(cached(file, source)));
         } catch (RuntimeException unreadable) {
             // A project mid-save reads as having no constants: every value is then spelled out, which compiles.
             return List.of();
         }
         return List.copyOf(out);
+    }
+
+    private static List<Constant> cached(Path file, String source) {
+        Parsed last = PARSED.get(file);
+        if (last != null && last.source().equals(source)) return last.constants();
+        PARSES.incrementAndGet();
+        List<Constant> constants = List.copyOf(read(source));
+        PARSED.put(file, new Parsed(source, constants));
+        return constants;
+    }
+
+    static int parses() {
+        return PARSES.get();
     }
 
     /**

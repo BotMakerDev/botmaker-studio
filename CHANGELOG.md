@@ -35,6 +35,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **A plugin value named by one of your constants reads as that value, and a picked value is written as
   the constant.** A picture slot holding `Pictures.ORE` shows the ore picture, a run of pictures shows each
   one, and choosing a picture your `Pictures` class already holds writes `Pictures.X` rather than its path.
+  The Parameters window does the same for a `@Param` field holding `Pictures.ORE`.
 - **A capture source is a value everywhere.** `CaptureSource.window("Game")`, a monitor, an emulator, a
   region and `Source.current()` read and write through the SDK's declarations, and a recorded click writes
   `Mouse.click(Source.current(), x, y)` with the import rather than the fully qualified name. A narrowed

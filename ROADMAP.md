@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — a fresh call is a `Method`.** The contract's `freshSource()` text became
+- **2026-09-23 (latest) — constants cached, and read in Parameters rows.** `ManagedConstants.scan` keeps
+  each file's last parse keyed on its path and checked against its text (`String.equals`), so an untouched
+  file costs a comparison and a changed one is parsed again — no revision counter to forget to bump.
+  `plugin/ConstantValues` is the read/write rule `HostSlotContext` had privately (grammar first, then the
+  bot's constants); `HostSlotContext`, `HostSlotRun` and now `HostValueContext` use it. A Parameters row
+  (`ValueEditors.Context.constants()`, from disk) and a plugin's managed value (`HostPluginValues.open`,
+  buffers first) read `Pictures.ORE` as the picture and write an equal picture as the constant. Closes the
+  two items deferred by the "no plugin reads or writes Java" entry below. New
+  `HostValueContextConstantsTest`, `ManagedConstantsTest.aScanParsesOnlyWhatChanged`; 1279 tests.
+- **2026-09-23 — a fresh call is a `Method`.** The contract's `freshSource()` text became
   `freshCall()`; `ValueGrammar.fresh` writes it through `Names` — qualified for `freshInitializer`
   (`InitializerFactory`, `ListBlock`), simple plus import for `freshSpelling` (the recorder) — and writes
   nothing for a method that is not public static, takes arguments or returns another type.
