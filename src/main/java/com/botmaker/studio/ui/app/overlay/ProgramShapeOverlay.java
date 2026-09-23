@@ -2,7 +2,9 @@ package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.api.record.Gesture;
 import com.botmaker.plugin.host.Recordings;
+import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.plugin.HostOverlayContext;
 import com.botmaker.studio.plugin.PluginHost;
@@ -40,7 +42,12 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.RadioMenuItem;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -568,8 +575,14 @@ public final class ProgramShapeOverlay {
         boolean canRecord = InputCapture.isSupported();
         recordButton.setDisable(!canRecord);
         recordButton.setTooltip(new Tooltip(canRecord
-                ? "Record your clicks and keys in the game, and add them at the cursor when you stop"
+                ? "Record your clicks and keys in the game, and add them at the cursor when you stop."
+                        + " Right-click to choose which plugin writes each gesture down"
                 : "Recording is available on Linux (X11) only"));
+        // Built on each request rather than once: a Reload Plugins can change who records what.
+        recordButton.setOnContextMenuRequested(e -> {
+            recordWithMenu().show(recordButton, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
         stepRow.getChildren().add(recordButton);
 
         status = new Label("");
@@ -692,7 +705,7 @@ public final class ProgramShapeOverlay {
         // Read on the FX thread: the project's buffers are confined to it. The writing below runs off it,
         // because a plugin reading a value off a frame may match pictures.
         RecordingWriter writer = new RecordingWriter(recordingWriters, PluginHost.grammar(),
-                itemContext().services(), ManagedConstants.scan(context.getConfig(), state));
+                itemContext().services(), ManagedConstants.scan(context.getConfig(), state), recorderChoices());
         status("Writing down what you did…");
         Thread t = new Thread(() -> {
             List<RecordingWriter.Statement> statements = writer.write(Gestures.recognize(events, target));
@@ -706,6 +719,64 @@ public final class ProgramShapeOverlay {
         }, "overlay-recording-write");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * The plugin the user chose for each gesture, read now: the choices are a snapshot of the settings at
+     * the moment a recording is written down.
+     */
+    private java.util.function.Function<Gesture, String> recorderChoices() {
+        StudioProjectSettings current = settings == null ? null : settings.current();
+        return gesture -> current == null ? null : current.preferredRecorderFor(gesture.name());
+    }
+
+    /**
+     * The <i>Record with</i> menu: one submenu per gesture two or more plugins can write down, each with
+     * <i>Automatic</i> (highest rank, then load order) and one choice per plugin.
+     *
+     * <p>The same verdict as the canvas's <i>Edit with</i> menu, and for the same reason: two plugins each
+     * writing a click honestly is not a clash the host can settle, so the user does. A choice orders the
+     * writers rather than excluding any, so a gesture the chosen plugin cannot fill — a click on nothing it
+     * can name — is still written by the next one.
+     */
+    private ContextMenu recordWithMenu() {
+        ContextMenu menu = new ContextMenu();
+        List<RecordingWriter.Contest> contests = RecordingWriter.contests(Recordings.of(PluginHost.plugins()));
+        if (contests.isEmpty()) {
+            MenuItem none = new MenuItem("Each gesture has one plugin to write it down — nothing to choose");
+            none.setDisable(true);
+            menu.getItems().add(none);
+            return menu;
+        }
+        MenuItem title = new MenuItem("Record with");
+        title.setDisable(true);
+        menu.getItems().add(title);
+        java.util.function.Function<Gesture, String> chosen = recorderChoices();
+        for (RecordingWriter.Contest contest : contests) {
+            Menu gestureMenu = new Menu(contest.label());
+            ToggleGroup group = new ToggleGroup();
+            String current = chosen.apply(contest.gesture());
+            boolean known = contest.claims().stream().anyMatch(c -> c.pluginId().equals(current));
+            RadioMenuItem automatic = new RadioMenuItem("Automatic (highest rank)");
+            automatic.setToggleGroup(group);
+            automatic.setSelected(!known);
+            automatic.setOnAction(e -> chooseRecorder(contest.gesture(), null));
+            gestureMenu.getItems().add(automatic);
+            for (EditorContest.Claim claim : contest.claims()) {
+                RadioMenuItem item = new RadioMenuItem(claim.pluginName());
+                item.setToggleGroup(group);
+                item.setSelected(claim.pluginId().equals(current));
+                item.setOnAction(e -> chooseRecorder(contest.gesture(), claim.pluginId()));
+                gestureMenu.getItems().add(item);
+            }
+            menu.getItems().add(gestureMenu);
+        }
+        return menu;
+    }
+
+    private void chooseRecorder(Gesture gesture, String pluginId) {
+        if (settings == null) return;
+        settings.update(settings.current().withPreferredRecorder(gesture.name(), pluginId));
     }
 
     /** The HUD's own bounds on screen, which the recording ignores clicks inside. */

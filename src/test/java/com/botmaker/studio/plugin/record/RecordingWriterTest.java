@@ -61,10 +61,21 @@ class RecordingWriterTest {
 
     private static final StudioPlugin PLUGIN = () -> "test.record";
 
+    private static final StudioPlugin OTHER = new StudioPlugin() {
+        @Override public String id() { return "test.other"; }
+        @Override public String displayName() { return "Other"; }
+    };
+
     private static Recordings.Writer writer(String method, Gesture gesture, int rank, Recordings.Slot... slots)
             throws ReflectiveOperationException {
+        return writer(PLUGIN, method, gesture, rank, slots);
+    }
+
+    private static Recordings.Writer writer(StudioPlugin plugin, String method, Gesture gesture, int rank,
+                                            Recordings.Slot... slots) throws ReflectiveOperationException {
         Class<?>[] types = switch (method) {
             case "click" -> new Class<?>[]{Where.class, int.class, int.class};
+            case "clickXY" -> new Class<?>[]{int.class, int.class};
             case "clickThing" -> new Class<?>[]{Thing.class};
             case "type" -> new Class<?>[]{String.class};
             case "combo" -> new Class<?>[]{Key[].class};
@@ -72,11 +83,38 @@ class RecordingWriterTest {
             case "awaitThing" -> new Class<?>[]{Thing.class, int.class};
             default -> throw new IllegalArgumentException(method);
         };
-        return new Recordings.Writer(PLUGIN, Pad.class.getMethod(method, types), gesture, rank, List.of(slots));
+        return new Recordings.Writer(plugin, Pad.class.getMethod(method, types), gesture, rank, List.of(slots));
     }
 
     private static RecordingWriter recorder(List<ManagedConstants.Constant> constants) throws ReflectiveOperationException {
-        return new RecordingWriter(List.of(
+        return new RecordingWriter(ownWriters(), GRAMMAR, null, constants);
+    }
+
+    /** This plugin's writers plus a second plugin's two CLICK writers, the chosen plugin tried first. */
+    private static RecordingWriter contested(String chosenForClick) throws ReflectiveOperationException {
+        List<Recordings.Writer> writers = new java.util.ArrayList<>(ownWriters());
+        writers.addAll(otherWriters());
+        return new RecordingWriter(writers, GRAMMAR, null, List.of(),
+                gesture -> gesture == Gesture.CLICK ? chosenForClick : null);
+    }
+
+    private static List<Recordings.Writer> otherWriters() throws ReflectiveOperationException {
+        return List.of(
+                writer(OTHER, "clickThing", Gesture.CLICK, 0, new Recordings.Slot.Recorded(THING_AT_FAR)),
+                writer(OTHER, "clickXY", Gesture.CLICK, 0,
+                        new Recordings.Slot.Number(int.class), new Recordings.Slot.Number(int.class)));
+    }
+
+    /** A picture at x of 200 or more, nothing nearer. */
+    private static final RecordedValue<Thing> THING_AT_FAR = new RecordedValue<>() {
+        @Override public Class<Thing> type() { return Thing.class; }
+        @Override public Optional<Thing> at(StudioServices services, Spot spot) {
+            return spot.x() >= 200 ? Optional.of(new Thing("far.png")) : Optional.empty();
+        }
+    };
+
+    private static List<Recordings.Writer> ownWriters() throws ReflectiveOperationException {
+        return List.of(
                 writer("clickThing", Gesture.CLICK, 10, new Recordings.Slot.Recorded(THING_AT)),
                 writer("click", Gesture.CLICK, 0, new Recordings.Slot.Fresh(Where.class.getName()),
                         new Recordings.Slot.Number(int.class), new Recordings.Slot.Number(int.class)),
@@ -84,8 +122,7 @@ class RecordingWriterTest {
                 writer("combo", Gesture.COMBO, 0, new Recordings.Slot.Keys(Key.class, true)),
                 writer("pause", Gesture.PAUSE, 0, new Recordings.Slot.Parts(DURATION_TYPE, List.of(long.class))),
                 writer("awaitThing", Gesture.AWAIT, 0, new Recordings.Slot.Recorded(THING_AT),
-                        new Recordings.Slot.Number(int.class))),
-                GRAMMAR, null, constants);
+                        new Recordings.Slot.Number(int.class)));
     }
 
     private static Gestures.Recognized click(int x, int y, long at) {
@@ -152,6 +189,50 @@ class RecordingWriterTest {
     }
 
     @Test
+    void with_no_choice_a_tie_goes_to_the_highest_rank() throws Exception {
+        List<RecordingWriter.Statement> out = contested(null).write(List.of(click(10, 20, 0)));
+
+        assertEquals(List.of("Pad.clickThing(new Thing(\"a.png\"));"), sources(out));
+    }
+
+    @Test
+    void the_chosen_plugin_writes_the_gesture_whatever_its_rank() throws Exception {
+        List<RecordingWriter.Statement> out = contested(OTHER.id()).write(List.of(click(10, 20, 0)));
+
+        assertEquals(List.of("Pad.clickXY(10, 20);"), sources(out));
+    }
+
+    @Test
+    void the_chosen_plugins_own_order_is_kept_and_its_first_writer_that_fills_wins() throws Exception {
+        List<RecordingWriter.Statement> out = contested(OTHER.id()).write(List.of(click(250, 20, 0)));
+
+        assertEquals(List.of("Pad.clickThing(new Thing(\"far.png\"));"), sources(out));
+    }
+
+    @Test
+    void a_choice_naming_a_plugin_that_is_gone_changes_nothing() throws Exception {
+        List<RecordingWriter.Statement> out = contested("test.uninstalled").write(List.of(click(10, 20, 0)));
+
+        assertEquals(List.of("Pad.clickThing(new Thing(\"a.png\"));"), sources(out));
+    }
+
+    @Test
+    void only_a_gesture_two_plugins_write_is_a_contest() throws Exception {
+        List<Recordings.Writer> writers = new java.util.ArrayList<>(ownWriters());
+        writers.addAll(otherWriters());
+        writers.sort(java.util.Comparator.comparingInt((Recordings.Writer w) -> w.gesture().ordinal())
+                .thenComparing(java.util.Comparator.comparingInt(Recordings.Writer::rank).reversed()));
+
+        List<RecordingWriter.Contest> contests = RecordingWriter.contests(writers);
+
+        assertEquals(1, contests.size());
+        assertEquals(Gesture.CLICK, contests.getFirst().gesture());
+        assertEquals(List.of("test.record", "test.other"),
+                contests.getFirst().claims().stream().map(c -> c.pluginId()).toList());
+        assertEquals("Click", contests.getFirst().label());
+    }
+
+    @Test
     void a_key_the_plugins_enum_does_not_have_writes_nothing() throws Exception {
         List<RecordingWriter.Statement> out = recorder(List.of()).write(List.of(
                 new Gestures.Recognized(Gesture.COMBO, List.of("CTRL", "F13"), null, 0)));
@@ -164,6 +245,7 @@ class RecordingWriterTest {
 final class Pad {
     private Pad() {}
     public static void click(Where where, int x, int y) {}
+    public static void clickXY(int x, int y) {}
     public static void clickThing(Thing thing) {}
     public static void type(String text) {}
     public static void combo(Key... keys) {}

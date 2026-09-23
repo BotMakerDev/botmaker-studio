@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — docs after SDK 2.0.0.** `CLAUDE.md` opens with a note mapping the SDK's old
+- **2026-09-23 (latest) — the user picks which plugin records each gesture.** Right-click ⏺ Record on the
+  HUD: *Record with* lists every gesture two or more plugins' `@Records` methods write, each with *Automatic
+  (highest rank)* and one choice per plugin. Saved per project as `settings.json`'s `preferredRecorders`
+  (`Gesture` name → plugin id); `RecordingWriter` applies it with `EditorContest.ordered`, the *Edit with*
+  verdict, so the chosen plugin is tried first and a gesture it cannot fill still falls to the next writer.
+  `RecordingWriter.contests` is the pure half. New `PreferredRecordersTest`; five new `RecordingWriterTest`
+  cases; 1334 tests.
+- **2026-09-23 — docs after SDK 2.0.0.** `CLAUDE.md` opens with a note mapping the SDK's old
   `internal.plugin.*` paths to `plugin.*` and saying the recorder is Studio's `plugin/record/` again.
 - **2026-09-23 — no plugin reads or writes Java.** `ValueGrammar` reads a type declared with no
   component of its own (the SDK's `CaptureSource`) as whichever declared call builds one, a part typed as it
