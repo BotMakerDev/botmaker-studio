@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.1.9] — 2026-09-23
 
 ### Added
 
