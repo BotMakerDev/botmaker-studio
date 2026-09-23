@@ -6,7 +6,18 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — recording is the host's again.** `plugin/record/`: `InputCapture` (XRecord listener,
+- **2026-09-23 (latest) — no plugin reads or writes Java.** `ValueGrammar` reads a type declared with no
+  component of its own (the SDK's `CaptureSource`) as whichever declared call builds one, a part typed as it
+  included, and writes one through the component of its runtime class; `freshSpelling` gives a fresh value
+  with simple names and imports (the recorder's capture source). `ManagedConstants.Lookup` reads
+  `Pictures.ORE` as its value and writes a value equal to a constant as the constant; `HostSlotContext` and
+  `HostSlotRun` use it. `HostSlotRun` crosses `SlotRun.Element`s and takes values back, with the element type
+  from the varargs signature. `setSource`, `enclosingCall` and `replaceEnclosingCall` are gone from both host
+  contexts. New `InterfaceValuesTest`, `ManagedConstantsTest`; 1267 tests.
+  *Deferred*: the constant lookup scans the bot's sources on every read of a dotted name the grammar cannot
+  read and on every write; a cache keyed on the buffers is the fix if a large bot makes it visible. Parameters rows
+  (`HostValueContext`) do not resolve constants yet.
+- **2026-09-23 — recording is the host's again.** `plugin/record/`: `InputCapture` (XRecord listener,
   HUD exclusion, a frame at each press when a plugin reads values off one), `Gestures` (pure recognition into
   the contract's `Gesture`s, neutral key names), `RecordingWriter` (the highest-ranked `@Records` writer that
   fills, spelled by `ValueGrammar`; `@Managed` constants via `project/managed/ManagedConstants`; a pause

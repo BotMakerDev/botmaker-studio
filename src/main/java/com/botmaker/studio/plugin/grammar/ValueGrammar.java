@@ -30,8 +30,9 @@ import java.util.Set;
  *   <li>a <b>component type</b> a plugin declares: a call, taken apart through {@code components} and put
  *       back through {@code build};</li>
  *   <li>an <b>enum</b>: {@code Owner.CONSTANT};</li>
- *   <li>a type a plugin <b>declares and cannot take apart</b> — the SDK's {@code CaptureSource}, whose
- *       starting value is a call the bot re-evaluates: it crosses as the source it is written as;</li>
+ *   <li>a type a plugin <b>declares with no component of its own</b> — the SDK's {@code CaptureSource},
+ *       an interface: it is read as whichever declared call builds one of it
+ *       ({@code CaptureSource.window("Game")}), and otherwise crosses as the source it is written as;</li>
  *   <li>and anything else, which is <b>unknown</b>: shown as written, never rewritten.</li>
  * </ul>
  *
@@ -263,7 +264,17 @@ public final class ValueGrammar {
         if (type == null) return Optional.empty();
         Class<?> cls = classOf(type);
         if (cls != null && cls.isEnum()) return readEnum(cls, source, true);
-        return Optional.of(source);
+        return readInstance(cls, source).or(() -> Optional.of(source));
+    }
+
+    /**
+     * A type declared with no component of its own — an interface such as the SDK's {@code CaptureSource} —
+     * read as whichever declared call {@code source} is, when that call builds one of it. Empty otherwise,
+     * and the caller then hands the source over as written.
+     */
+    private Optional<Object> readInstance(Class<?> type, String source) {
+        if (type == null || source.isBlank()) return Optional.empty();
+        return valueOfAny(source).filter(type::isInstance);
     }
 
     /** One component of a call, read as the class its declaration says it is. */
@@ -275,8 +286,10 @@ public final class ValueGrammar {
         if (component != null) return readCall(component, source);
         if (type.isEnum()) return readEnum(type, source, true);
         if (isHostContainer(type)) return valueOfAny(source);
-        // Nothing reads it and the plugin said this is what the part is, so it crosses as it is written.
-        return source.isBlank() ? Optional.empty() : Optional.of(source.strip());
+        // A part typed as an interface — a region's CaptureSource — is whichever declared call builds one.
+        // Nothing else reads it and the plugin said this is what the part is, so it crosses as it is written.
+        return readInstance(type, source)
+                .or(() -> source.isBlank() ? Optional.empty() : Optional.of(source.strip()));
     }
 
     private Optional<Object> readCall(ComponentType<?> component, String source) {
@@ -409,7 +422,16 @@ public final class ValueGrammar {
         if (type == null) return Optional.empty();
         Class<?> cls = classOf(type);
         if (cls != null && cls.isEnum()) return writeEnum(cls, value, names);
-        return value instanceof String source && !source.isBlank() ? Optional.of(source.strip()) : Optional.empty();
+        return writeInstance(cls, value, names);
+    }
+
+    /**
+     * {@link #readInstance} forwards: a value of a declared class is written through the component of its
+     * own runtime class, and a {@code String} is source handed over as written.
+     */
+    private Optional<String> writeInstance(Class<?> type, Object value, Names names) {
+        if (value instanceof String source) return source.isBlank() ? Optional.empty() : Optional.of(source.strip());
+        return type != null && type.isInstance(value) ? writeAny(value, names) : Optional.empty();
     }
 
     private Optional<String> writeClass(Class<?> type, Object value, Names names) {
@@ -421,7 +443,7 @@ public final class ValueGrammar {
         if (component != null) return writeCall(component, value, names);
         if (type.isEnum()) return writeEnum(type, value, names);
         if (isHostContainer(type)) return writeAny(value, names);
-        return value instanceof String source && !source.isBlank() ? Optional.of(source.strip()) : Optional.empty();
+        return writeInstance(type, value, names);
     }
 
     private Optional<String> writeAny(Object value, Names names) {
@@ -527,6 +549,19 @@ public final class ValueGrammar {
      * choose, and a declaration with no initialiser is legal Java for every type.
      */
     public Optional<String> freshInitializer(ValueForm form) {
+        return fresh(form, new Names(true)).map(Written::source);
+    }
+
+    /**
+     * {@link #freshInitializer} with every type by its simple name and the imports that needs — for a
+     * statement in a file a person reads. A {@code freshSource()} is the plugin's own text and stays as the
+     * plugin wrote it.
+     */
+    public Optional<Written> freshSpelling(ValueForm form) {
+        return fresh(form, new Names(false));
+    }
+
+    private Optional<Written> fresh(ValueForm form, Names names) {
         return switch (form) {
             case null -> Optional.empty();
             case ValueForm.Leaf leaf -> {
@@ -541,12 +576,13 @@ public final class ValueGrammar {
                     yield Optional.empty();
                 }
                 if (fresh != null) {
-                    Optional<String> written = initializer(form, fresh);
+                    Optional<Written> written = write(form, fresh, names);
                     if (written.isPresent()) yield written;
                 }
-                yield freshSource == null || freshSource.isBlank() ? Optional.empty() : Optional.of(freshSource.strip());
+                yield freshSource == null || freshSource.isBlank() ? Optional.empty()
+                        : Optional.of(new Written(freshSource.strip(), List.of()));
             }
-            case ValueForm.Of of -> initializer(form, of.container().build(List.of()));
+            case ValueForm.Of of -> write(form, of.container().build(List.of()), names);
             case ValueForm.Declared ignored -> Optional.empty();
         };
     }

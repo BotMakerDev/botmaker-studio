@@ -7,7 +7,6 @@ import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -130,11 +129,6 @@ public final class HostValueContext implements ValueContext {
         return source;
     }
 
-    @Override
-    public void setSource(String javaExpression, Class<?>... imports) {
-        change(javaExpression == null ? "" : javaExpression, importNames(imports));
-    }
-
     private void change(String newSource, List<String> newImports) {
         source = newSource;
         imports = newImports == null ? List.of() : List.copyOf(newImports);
@@ -148,17 +142,6 @@ public final class HostValueContext implements ValueContext {
      */
     public List<String> imports() {
         return imports;
-    }
-
-    /** The import names of the classes a plugin said its expression needs, nulls and {@code java.lang} dropped. */
-    static List<String> importNames(Class<?>... imports) {
-        List<String> names = new ArrayList<>();
-        if (imports == null) return names;
-        for (Class<?> needed : imports) {
-            String name = JavaNames.importName(needed);
-            if (!name.isEmpty() && !names.contains(name)) names.add(name);
-        }
-        return List.copyOf(names);
     }
 
     @Override

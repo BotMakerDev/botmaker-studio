@@ -821,7 +821,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // local defeats that: since block reuse (2026-09-14) this block can outlive the parse it was drawn
         // for, and a node from the discarded tree is what ASTRewrite refuses.
         return PickerRegistry.runNodeFor(slot,
-                HostSlotRun.of(context, () -> (MethodInvocation) this.astNode, from));
+                HostSlotRun.of(context, () -> (MethodInvocation) this.astNode, from, element));
     }
 
     /**

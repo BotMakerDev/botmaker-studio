@@ -43,14 +43,14 @@ public final class RecordingWriter {
     private final List<Recordings.Writer> writers;
     private final ValueGrammar grammar;
     private final StudioServices services;
-    private final List<ManagedConstants.Constant> constants;
+    private final ManagedConstants.Lookup constants;
 
     public RecordingWriter(List<Recordings.Writer> writers, ValueGrammar grammar, StudioServices services,
                            List<ManagedConstants.Constant> constants) {
         this.writers = List.copyOf(writers);
         this.grammar = grammar;
         this.services = services;
-        this.constants = List.copyOf(constants);
+        this.constants = new ManagedConstants.Lookup(constants, grammar);
     }
 
     /** The statements for {@code gestures}, in order. A gesture nothing can write is left out. */
@@ -116,7 +116,11 @@ public final class RecordingWriter {
                     next += names.size();
                     argument = names.isEmpty() ? Optional.empty() : keys(keys.enumType(), names, imports);
                 }
-                case Recordings.Slot.Fresh fresh -> argument = grammar.freshInitializer(ValueForm.of(fresh.typeName()));
+                case Recordings.Slot.Fresh fresh -> argument = grammar.freshSpelling(ValueForm.of(fresh.typeName()))
+                        .map(written -> {
+                            imports.addAll(written.imports());
+                            return written.source();
+                        });
             }
             if (argument.isEmpty()) return Optional.empty();
             arguments.add(argument.get());
@@ -139,15 +143,10 @@ public final class RecordingWriter {
             return Optional.empty();
         }
         if (value == null || value.isEmpty()) return Optional.empty();
-        Optional<String> canonical = grammar.initializerOfAny(value.get());
-        if (canonical.isPresent()) {
-            for (ManagedConstants.Constant constant : constants) {
-                Optional<String> theirs = grammar.valueOfAny(constant.initializer()).flatMap(grammar::initializerOfAny);
-                if (theirs.equals(canonical)) {
-                    imports.add(constant.owner());
-                    return Optional.of(constant.simpleOwner() + "." + constant.field());
-                }
-            }
+        Optional<ValueGrammar.Written> constant = constants.spell(value.get());
+        if (constant.isPresent()) {
+            imports.addAll(constant.get().imports());
+            return Optional.of(constant.get().source());
         }
         return spell(value.get(), imports);
     }

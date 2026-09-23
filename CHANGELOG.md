@@ -23,6 +23,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A plugin value named by one of your constants reads as that value, and a picked value is written as
+  the constant.** A picture slot holding `Pictures.ORE` shows the ore picture, a run of pictures shows each
+  one, and choosing a picture your `Pictures` class already holds writes `Pictures.X` rather than its path.
+- **A capture source is a value everywhere.** `CaptureSource.window("Game")`, a monitor, an emulator, a
+  region and `Source.current()` read and write through the SDK's declarations, and a recorded click writes
+  `Mouse.click(Source.current(), x, y)` with the import rather than the fully qualified name. A narrowed
+  source is written `CaptureSource.region(source, new Rect(…))`.
+- **The duration editor has no *Random range* toggle** — it rewrote the call around a slot as text, which
+  no plugin can do any more. Write `Wait.between` from the palette.
 - **The palette comes from `@Palette` on a plugin's classes.** Studio finds every annotated class in each
   plugin's jar when the plugin builds no catalog of its own, so the SDK's palette now also offers
   `Activities` and `Flows`, which its old hand-written list had missed.

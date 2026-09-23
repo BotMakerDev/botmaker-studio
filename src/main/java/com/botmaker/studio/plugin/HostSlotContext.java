@@ -7,10 +7,10 @@ import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
-import org.eclipse.jdt.core.dom.MethodInvocation;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,8 +21,9 @@ import java.util.Optional;
  *
  * <p>{@link HostValueContext} is the other: a value with no call site behind it — a row of the Parameters
  * window, or the expression a {@code @Managed} method returns. The pair is the whole of the host's side of
- * the contract, and the one thing a slot has that the other does not is an <b>enclosing call</b>. It had two
- * more until 2026-09-20, when every value became Java text with imports rather than a row of stored strings.
+ * the contract, and the one thing a slot has that the other does not is the <b>names</b> of its call site.
+ * It reads a constant of the bot's {@code @Managed} types ({@code Pictures.ORE}) as that constant's value, and
+ * writes a value equal to one as the constant.
  *
  * <p><b>The slot is asked, never captured.</b> {@link ValueSlot} resolves its expression on every call, so an
  * editor whose popup outlives the re-parse its own edit caused writes into the <em>new</em> node. Handing a
@@ -85,31 +86,54 @@ public final class HostSlotContext implements SlotContext {
      * by the expression's own spelling instead.
      */
     private ValueForm form() {
-        if (paramType == null) return ValueForm.of("");
-        String qualified = nullToEmpty(paramType.qualifiedName());
-        return ValueForm.of(qualified.isEmpty() ? nullToEmpty(paramType.simpleName()) : qualified);
+        return formOf(paramType);
     }
 
+    /** A leaf of {@code type}, or the untyped leaf that reads a value by its own spelling. */
+    static ValueForm formOf(ResolvedType type) {
+        if (type == null) return ValueForm.of("");
+        String qualified = nullToEmpty(type.qualifiedName());
+        return ValueForm.of(qualified.isEmpty() ? nullToEmpty(type.simpleName()) : qualified);
+    }
+
+    /**
+     * The value the slot holds: read by the grammar, or — for {@code Pictures.ORE} and its like — the value
+     * of the bot's {@code @Managed} constant the slot names.
+     */
     @Override
     public <T> Optional<T> value(Class<T> type) {
-        return grammar().read(form(), slot.source()).flatMap(value -> ValueGrammar.as(value, type));
+        return read(context, form(), slot.source()).flatMap(value -> ValueGrammar.as(value, type));
     }
 
     /**
      * Writes {@code value} with every type by its simple name and the imports that needs — a bot's source is
-     * a file a person reads. A value the grammar cannot spell is ignored rather than written half-way.
+     * a file a person reads — or as the bot's {@code @Managed} constant holding it. A value the grammar
+     * cannot spell is ignored rather than written half-way.
      */
     @Override
     public void set(Object value) {
         if (slot.node() == null) return;
-        grammar().write(form(), value).ifPresent(written ->
+        write(context, form(), value).ifPresent(written ->
                 rewrite(slot.node(), written.source(), written.imports().toArray(String[]::new)));
     }
 
-    @Override
-    public void setSource(String javaExpression, Class<?>... imports) {
-        if (javaExpression == null || javaExpression.isBlank() || slot.node() == null) return;
-        rewrite(slot.node(), javaExpression, HostValueContext.importNames(imports).toArray(String[]::new));
+    /** {@code source} as a {@code form}, with a constant reference read as the constant's value. */
+    static Optional<Object> read(CodeEditorService context, ValueForm form, String source) {
+        Optional<Object> read = grammar().read(form, source);
+        if (read.isPresent() || !ManagedConstants.isName(source)) return read;
+        return constants(context).read(source);
+    }
+
+    /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
+    static Optional<ValueGrammar.Written> write(CodeEditorService context, ValueForm form, Object value) {
+        return constants(context).spell(value).or(() -> grammar().write(form, value));
+    }
+
+    /** The bot's {@code @Managed} constants, scanned now: a picture captured a moment ago is one of them. */
+    private static ManagedConstants.Lookup constants(CodeEditorService context) {
+        List<ManagedConstants.Constant> found = context == null ? List.of()
+                : ManagedConstants.scan(context.getConfig(), context.getState());
+        return new ManagedConstants.Lookup(found, grammar());
     }
 
     private static ValueGrammar grammar() {
@@ -136,38 +160,10 @@ public final class HostSlotContext implements SlotContext {
         return argIndex;
     }
 
-    @Override
-    public Optional<String> enclosingCall() {
-        MethodInvocation call = enclosingInvocation();
-        return call == null ? Optional.empty() : Optional.of(call.toString());
-    }
+    // enclosingCall() and replaceEnclosingCall(…) left the contract on 2026-09-23: they handed a plugin the
+    // call as text. What a slot knows of its call is its names, above.
 
-    @Override
-    public void replaceEnclosingCall(String javaExpression, String... importsNeeded) {
-        MethodInvocation call = enclosingInvocation();
-        if (call == null || javaExpression == null || javaExpression.isBlank()) return;
-        rewrite(call, javaExpression, importsNeeded);
-    }
-
-    /**
-     * The call this slot is an argument of, resolved now rather than remembered — the same rule the slot
-     * itself follows, and for the same reason: an editor's popup may outlive the re-parse its own first edit
-     * caused, and a node from the old AST is what {@code ASTRewrite} refuses.
-     *
-     * <p>Only a {@link MethodInvocation}, and only when the slot is genuinely one of its arguments: a slot
-     * that is the <em>receiver</em> of a call ({@code x.foo()}) has that call as its parent too, and
-     * replacing it would delete the call on the strength of editing the thing it was called on.
-     *
-     * <p><b>Named {@code enclosingInvocation} rather than {@code enclosingCall}</b>: the contract's own
-     * {@link #enclosingCall()} is the public answer and a private method cannot narrow a public one. This is
-     * the node; that is its source.
-     */
-    private MethodInvocation enclosingInvocation() {
-        return slot.node() != null && slot.node().getParent() instanceof MethodInvocation call
-               && call.arguments().contains(slot.node()) ? call : null;
-    }
-
-    /** One rewrite, whether the target is the slot or the call around it. */
+    /** One rewrite of the slot, with every import it needs. */
     private void rewrite(Expression target, String javaExpression, String... importsNeeded) {
         if (importsNeeded == null || importsNeeded.length == 0) {
             context.getCodeEditor().replaceWithRawExpression(target, javaExpression);
