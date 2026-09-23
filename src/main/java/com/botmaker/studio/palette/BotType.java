@@ -40,7 +40,7 @@ import java.util.Optional;
  * it here, which is the back door the platform exists to close.
  *
  * <p>It read {@code SourceSeed}s until 2026-09-22, which carried the fresh value as Java text. A declared
- * {@code PluginType} carries it as a value, written by the host's grammar, or as {@code freshSource()} for a
+ * {@code PluginType} carries it as a value, written by the host's grammar, or as {@code freshCall()} for a
  * type whose starting value is a call the bot re-evaluates. The curation argument survived the change: the
  * declared list <em>is</em> the curation, written by the plugin that knows which of its types are worth
  * holding.

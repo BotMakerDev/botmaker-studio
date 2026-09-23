@@ -458,7 +458,7 @@ public final class PluginHost {
      * {@code sourceSeeds()} until 2026-09-22 — the same answer as Java text a plugin typed, which javac
      * never looked at; now the plugin hands over a value and the grammar writes it.
      */
-    public static String freshSource(String typeName) {
+    public static String freshInitializer(String typeName) {
         return grammar.freshInitializer(ValueForm.of(typeName == null ? "" : typeName)).orElse(null);
     }
 

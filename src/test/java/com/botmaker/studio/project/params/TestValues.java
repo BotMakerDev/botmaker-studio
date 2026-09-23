@@ -53,10 +53,21 @@ public final class TestValues {
     public static final DurationType DURATION_TYPE = new DurationType();
 
     /** Declared with a starting expression and nothing to read it with. */
+    /** What a fresh {@link Body} is written as: a call the bot would evaluate. */
+    public static Body anyBody() {
+        return new Body("");
+    }
+
     public static final PluginType<Body> BODY_TYPE = new PluginType<>() {
         @Override public Class<Body> type() { return Body.class; }
         @Override public Body fresh() { return null; }
-        @Override public String freshSource() { return "com.example.bot.Rest::body"; }
+        @Override public java.lang.reflect.Method freshCall() {
+            try {
+                return TestValues.class.getMethod("anyBody");
+            } catch (NoSuchMethodException e) {
+                throw new AssertionError(e);
+            }
+        }
         @Override public Node editor(ValueContext ctx) { return null; }
     };
 

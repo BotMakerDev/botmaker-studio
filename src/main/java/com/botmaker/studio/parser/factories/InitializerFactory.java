@@ -105,10 +105,10 @@ public class InitializerFactory {
         //
         // Two arms lived here until 2026-09-01, naming CaptureSource and Precision — the host holding one
         // plugin's vocabulary because the host was written first. What replaced them is the plugin's own
-        // declaration of the type — its fresh() written by the host's grammar, or its freshSource() — and a
-        // second plugin's interface-typed slot now gets an answer where before it got `new T()`.
-        String seed = PluginHost.freshSource(richType.leafType().qualifiedName());
-        if (seed == null) seed = PluginHost.freshSource(richType.leafType().simpleName());
+        // declaration of the type — its fresh() or its freshCall(), written by the host's grammar fully
+        // qualified — and a second plugin's interface-typed slot now gets an answer where before it got `new T()`.
+        String seed = PluginHost.freshInitializer(richType.leafType().qualifiedName());
+        if (seed == null) seed = PluginHost.freshInitializer(richType.leafType().simpleName());
         if (seed != null) {
             Expression seeded = parseExpr(ast, seed);
             if (seeded != null) return seeded;

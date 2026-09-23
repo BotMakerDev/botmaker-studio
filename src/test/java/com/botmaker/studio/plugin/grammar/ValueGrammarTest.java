@@ -61,12 +61,20 @@ class ValueGrammarTest {
     }
 
     /** A value the bot evaluates: declared, never taken apart, starting as a call. */
-    record Source(String written) {}
+    record Source(String written) {
+        public static Source current() { return new Source(""); }
+    }
 
     static final class SourceType implements PluginType<Source> {
         @Override public Class<Source> type() { return Source.class; }
         @Override public Source fresh() { return null; }
-        @Override public String freshSource() { return "com.example.Source.current()"; }
+        @Override public java.lang.reflect.Method freshCall() {
+            try {
+                return Source.class.getMethod("current");
+            } catch (NoSuchMethodException e) {
+                throw new AssertionError(e);
+            }
+        }
         @Override public Node editor(ValueContext ctx) { return null; }
     }
 
@@ -206,10 +214,34 @@ class ValueGrammarTest {
         assertTrue(GRAMMAR.known(source));
     }
 
+    /** A fresh call of the wrong shape is never written: it would not compile in the bot's file. */
+    @Test
+    void aFreshCallOfTheWrongShapeWritesNothing() {
+        PluginType<Source> takesAnArgument = new PluginType<>() {
+            @Override public Class<Source> type() { return Source.class; }
+            @Override public Source fresh() { return null; }
+            @Override public java.lang.reflect.Method freshCall() {
+                try {
+                    return String.class.getMethod("valueOf", Object.class);
+                } catch (NoSuchMethodException e) {
+                    throw new AssertionError(e);
+                }
+            }
+            @Override public Node editor(ValueContext ctx) { return null; }
+        };
+        ValueGrammar grammar = ValueGrammar.of(List.of(takesAnArgument), List.of());
+
+        assertTrue(grammar.freshInitializer(ValueForm.of(Source.class)).isEmpty());
+    }
+
     @Test
     void aFreshValueIsTheDeclarationsOwnWrittenOrItsStartingCall() {
         assertEquals(Optional.of("new java.awt.Color(255, 255, 255)"), GRAMMAR.freshInitializer(COLOR));
-        assertEquals(Optional.of("com.example.Source.current()"), GRAMMAR.freshInitializer(ValueForm.of(Source.class)));
+        assertEquals(Optional.of(Source.class.getCanonicalName() + ".current()"),
+                GRAMMAR.freshInitializer(ValueForm.of(Source.class)));
+        ValueGrammar.Written spelled = GRAMMAR.freshSpelling(ValueForm.of(Source.class)).orElseThrow();
+        assertEquals("ValueGrammarTest.Source.current()", spelled.source(), "a fresh call is written by the host");
+        assertEquals(List.of(ValueGrammarTest.class.getName()), spelled.imports());
         assertEquals(Optional.of("java.util.List.of()"), GRAMMAR.freshInitializer(ValueForm.listOf(COLOR)));
         assertTrue(GRAMMAR.freshInitializer(ValueForm.of("discord.Channel")).isEmpty(), "nothing invented");
         assertTrue(GRAMMAR.freshInitializer(new ValueForm.Declared("com.mybot.Box", List.of())).isEmpty());

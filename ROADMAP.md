@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — activity navigation from method references.** `project/managed/MethodReferences`
+- **2026-09-23 (latest) — a fresh call is a `Method`.** The contract's `freshSource()` text became
+  `freshCall()`; `ValueGrammar.fresh` writes it through `Names` — qualified for `freshInitializer`
+  (`InitializerFactory`, `ListBlock`), simple plus import for `freshSpelling` (the recorder) — and writes
+  nothing for a method that is not public static, takes arguments or returns another type.
+  `PluginHost.freshSource` is renamed `freshInitializer`, which is what it always answered. Test fixtures
+  (`TestValues.BODY_TYPE`, `ValueGrammarTest.SourceType`, `RecordingWriterTest`'s `Where`) hand over real
+  static methods; new `aFreshCallOfTheWrongShapeWritesNothing`. 1275 tests.
+- **2026-09-23 — activity navigation from method references.** `project/managed/MethodReferences`
   reads every `ExpressionMethodReference`/`TypeMethodReference` inside a `@Managed` method's body (lambdas
   skipped, each label once, in walk order) and resolves the class by simple name to the first bot file
   declaring it, nested types included; it names no plugin. `OverlayTargetPicker` lists those labels

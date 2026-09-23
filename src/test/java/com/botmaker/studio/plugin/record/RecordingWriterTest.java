@@ -53,7 +53,13 @@ class RecordingWriterTest {
     private static final PluginType<Where> WHERE_TYPE = new PluginType<>() {
         @Override public Class<Where> type() { return Where.class; }
         @Override public Where fresh() { return null; }
-        @Override public String freshSource() { return "com.example.Where.current()"; }
+        @Override public java.lang.reflect.Method freshCall() {
+            try {
+                return Where.class.getMethod("current");
+            } catch (NoSuchMethodException e) {
+                throw new AssertionError(e);
+            }
+        }
         @Override public Node editor(ValueContext ctx) { return null; }
     };
 
@@ -145,7 +151,8 @@ class RecordingWriterTest {
     void a_click_elsewhere_falls_back_to_the_spot_with_the_fresh_source() throws Exception {
         List<RecordingWriter.Statement> out = recorder(List.of()).write(List.of(click(100, 20, 0)));
 
-        assertEquals(List.of("Pad.click(com.example.Where.current(), 100, 20);"), sources(out));
+        assertEquals(List.of("Pad.click(Where.current(), 100, 20);"), sources(out));
+        assertEquals(List.of(PAD.replace("Pad", "Where"), PAD), out.getFirst().imports());
     }
 
     @Test
@@ -256,8 +263,9 @@ final class Pad {
 /** A picture: a value the host cannot read off the screen. */
 record Thing(String path) {}
 
-/** A capture source: a type written only through its fresh source. */
+/** A capture source: a type written only through its fresh call. */
 final class Where {
+    public static Where current() { return new Where(); }
     private Where() {}
 }
 

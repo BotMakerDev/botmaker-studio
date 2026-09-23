@@ -3,6 +3,8 @@ package com.botmaker.studio.plugin.grammar;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -543,7 +545,7 @@ public final class ValueGrammar {
      * The Java a freshly declared field of {@code form} is initialised with, or empty when there is none.
      *
      * <p>A leaf starts as its declaration's {@code fresh()}, written through this grammar; a type whose
-     * starting value is a call the bot re-evaluates starts as its {@code freshSource()}; a container starts
+     * starting value is a call the bot re-evaluates starts as a call to its {@code freshCall()}; a container starts
      * empty — a blank entry in every new map is a value nobody chose. A type nothing declares, and a class
      * the bot declares, get nothing: a placeholder written into a user's file is a value they did not
      * choose, and a declaration with no initialiser is legal Java for every type.
@@ -554,8 +556,8 @@ public final class ValueGrammar {
 
     /**
      * {@link #freshInitializer} with every type by its simple name and the imports that needs — for a
-     * statement in a file a person reads. A {@code freshSource()} is the plugin's own text and stays as the
-     * plugin wrote it.
+     * statement in a file a person reads. A {@code freshCall()} is spelled the same way:
+     * {@code Vision.lastMatch()} and its import.
      */
     public Optional<Written> freshSpelling(ValueForm form) {
         return fresh(form, new Names(false));
@@ -568,10 +570,10 @@ public final class ValueGrammar {
                 Optional<PluginType<?>> type = type(leaf.typeName());
                 if (type.isEmpty()) yield Optional.empty();
                 Object fresh;
-                String freshSource;
+                Method freshCall;
                 try {
                     fresh = type.get().fresh();
-                    freshSource = type.get().freshSource();
+                    freshCall = type.get().freshCall();
                 } catch (RuntimeException | LinkageError e) {
                     yield Optional.empty();
                 }
@@ -579,12 +581,29 @@ public final class ValueGrammar {
                     Optional<Written> written = write(form, fresh, names);
                     if (written.isPresent()) yield written;
                 }
-                yield freshSource == null || freshSource.isBlank() ? Optional.empty()
-                        : Optional.of(new Written(freshSource.strip(), List.of()));
+                yield call(freshCall, type.get(), names);
             }
             case ValueForm.Of of -> write(form, of.container().build(List.of()), names);
             case ValueForm.Declared ignored -> Optional.empty();
         };
+    }
+
+    /**
+     * {@code Owner.method()} for a type's {@code freshCall()}, or empty for none or one of the wrong shape.
+     *
+     * <p>The shape the contract states is checked again here rather than trusted: a call that takes
+     * arguments, is not static or returns another type would be written into somebody's file and not
+     * compile. {@code botmaker plugin validate} refuses the same plugin earlier; this is the host not
+     * depending on that having run.
+     */
+    private static Optional<Written> call(Method method, PluginType<?> type, Names names) {
+        if (method == null || !Modifier.isStatic(method.getModifiers()) || !Modifier.isPublic(method.getModifiers())
+                || method.getParameterCount() != 0 || type.type() == null
+                || !method.getReturnType().getName().equals(type.type().getName())) {
+            return Optional.empty();
+        }
+        String source = names.of(method.getDeclaringClass()) + "." + method.getName() + "()";
+        return Optional.of(new Written(source, names.imports()));
     }
 
     /**
