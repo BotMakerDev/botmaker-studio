@@ -1134,6 +1134,19 @@ public class CodeEditor {
     }
 
     /**
+     * {@link #pasteCode(BodyBlock, int, String)} for code whose imports are known exactly — a recorded call,
+     * whose classes came from the plugin that declared it. One edit, so one undo step.
+     */
+    public void pasteCode(BodyBlock targetBody, int index, String codeToPaste, List<String> imports) {
+        if (!canInsertAt(targetBody, index)) return;
+        edit(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+            EditContext ctx = ctx(cu);
+            for (String qualified : imports) ctx.addImport(qualified);
+            return pasteCodeString(ctx, code, targetBody, index, codeToPaste);
+        });
+    }
+
+    /**
      * A move is two edits, so both ends must permit it: dragging a statement <em>out of</em> a locked body
      * removes code from it just as surely as dropping one in adds code. Checking only the destination would
      * let a drag empty out a generated method.

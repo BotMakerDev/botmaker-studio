@@ -2,9 +2,14 @@ package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.host.Recordings;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.plugin.HostOverlayContext;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.record.Gestures;
+import com.botmaker.studio.plugin.record.InputCapture;
+import com.botmaker.studio.plugin.record.RecordingWriter;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
@@ -93,24 +98,14 @@ import static com.botmaker.studio.ui.app.overlay.OverlayStyles.warn;
  * facades as chips, plus an <em>＋ Add block</em> button opening the full categorized statement menu (control
  * flow, variables, print, …).
  *
- * <p><b>Record mode lived here until 2026-09-02 and does not any more.</b> Pressing Record observed real
- * clicks and keys and inserted the translated blocks at the cursor — which meant the editor owned
- * {@code MacroTranslator}, and therefore owned five SDK class literals deciding that a click is a
- * {@code Mouse}. That is a vocabulary and it belongs to the plugin whose types it spells, so the whole
- * recorder moved into the SDK plugin ({@code com.botmaker.sdk.internal.plugin.record}) and is reached from
- * the toolbar. <b>The cursor did not go with it, and now it has.</b> For ten days a recording was delivered
- * as text to copy, because there was no contract capability for inserting statements at an editor's cursor
- * and one shaped to a single caller is the back door the platform exists to close. What answers that
- * objection is not a better argument but a <em>second caller</em>: {@code ToolbarGroup.OVERLAY} gives this
- * HUD a row any plugin may contribute to, so {@link ActionContext#insertAtCursor} serves the recorder, a
- * paste-a-click item and whatever a third plugin puts there. The loss is recorded above rather than smoothed
- * over because the reasoning that accepted it was right at the time.
+ * <p><b>Record.</b> The HUD records the mouse and keyboard over its window and inserts what was done at the
+ * cursor. Recording is the host's ({@code plugin/record/}); which call each gesture becomes is the plugins',
+ * declared with {@code @Records} on their own methods, so nothing here names a plugin type.
  *
  * <p><b>The plugin row.</b> Below the tree sits every {@code ToolbarGroup.OVERLAY} item, built by the same
- * {@code ToolbarItems} the main bar uses. Its context is {@link HostOverlayContext}, which answers three
- * things no plugin could learn for itself: the title of the window this HUD is drawn over, where that window
- * sits right now, and the insertion cursor. A plugin can enumerate every window on the machine — what it
- * cannot know is which one the host chose to draw over.
+ * {@code ToolbarItems} the main bar uses. Its context is {@link HostOverlayContext}, which answers two
+ * things no plugin could learn for itself: the title of the window this HUD is drawn over, and where that
+ * window sits right now.
  *
  * <p><b>Where the blocks land.</b> The HUD names its target: an activity picker switches the editor to
  * {@code activities/<Name>.java} and parks the cursor inside that activity's {@code run()}. It has to, because
@@ -178,6 +173,15 @@ public final class ProgramShapeOverlay {
 
     /** When on, inserting a call opens its argument config popover as soon as the re-parsed block is available. */
     private CheckBox autoFillArgs;
+
+    /** ⏺ Record / ■ Stop. */
+    private Button recordButton;
+    /** The running recording, or {@code null}. */
+    private InputCapture recording;
+    /** The writers read when the running recording started. */
+    private List<Recordings.Writer> recordingWriters = List.of();
+    /** The HUD's bounds on screen, republished from FX for the input listener's thread. */
+    private volatile java.awt.Rectangle hudBounds;
 
     /**
      * The plugin row — every {@code ToolbarGroup.OVERLAY} item. See {@link OverlayItemRow}.
@@ -420,6 +424,8 @@ public final class ProgramShapeOverlay {
             }
             subscriptions.forEach(EventBus.Subscription::close);
             subscriptions.clear();
+            if (recording != null) recording.stop();   // abandoned, not written: the HUD it lands in is gone
+            recording = null;
             if (active == this) active = null;
         });
         // Keyboard navigation of the compact block tree: → step into, Shift+→ cycle to the next branch of the
@@ -445,6 +451,14 @@ public final class ProgramShapeOverlay {
             }
             e.consume();
         });
+
+        // A recording runs on the input listener's thread and must not read stage properties, so the HUD's
+        // bounds are republished here as it is dragged or resized.
+        javafx.beans.InvalidationListener trackHud = o -> hudBounds = currentHudBounds();
+        stage.xProperty().addListener(trackHud);
+        stage.yProperty().addListener(trackHud);
+        stage.widthProperty().addListener(trackHud);
+        stage.heightProperty().addListener(trackHud);
 
         stage.show();
         OverlayToolbars.installDrag(header.node(), stage);   // borderless: drag by the header bar
@@ -549,6 +563,15 @@ public final class ProgramShapeOverlay {
         HBox stepRow = new HBox(6, label("Step:"), up, down, into, branch, out, refresh);
         stepRow.setAlignment(Pos.CENTER_LEFT);
 
+        recordButton = new Button("⏺ Record");
+        recordButton.setOnAction(e -> toggleRecording());
+        boolean canRecord = InputCapture.isSupported();
+        recordButton.setDisable(!canRecord);
+        recordButton.setTooltip(new Tooltip(canRecord
+                ? "Record your clicks and keys in the game, and add them at the cursor when you stop"
+                : "Recording is available on Linux (X11) only"));
+        stepRow.getChildren().add(recordButton);
+
         status = new Label("");
         status.setStyle(LABEL);
         status.setWrapText(true);
@@ -622,8 +645,73 @@ public final class ProgramShapeOverlay {
                 () -> "",
                 () -> window == null ? null : window.titleSubstring(),
                 () -> windowBounds == null ? null : new ActionContext.Area(
-                        windowBounds.x, windowBounds.y, windowBounds.width, windowBounds.height),
-                this::insertStatementsAtCursor);
+                        windowBounds.x, windowBounds.y, windowBounds.width, windowBounds.height));
+    }
+
+    // ── recording ───────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Starts a recording, or stops the running one and inserts what it recorded at the cursor.
+     *
+     * <p>The writers are read when recording starts, so a plugin rebound mid-recording does not change what a
+     * gesture becomes half way through. The frames a plugin reads values off are grabbed only when some writer
+     * needs one.
+     */
+    private void toggleRecording() {
+        if (recording != null && recording.isRecording()) {
+            stopRecording();
+            return;
+        }
+        List<Recordings.Writer> writers = Recordings.of(PluginHost.plugins());
+        if (writers.isEmpty()) {
+            status("Nothing to record with — no plugin in this project writes down clicks or keys.");
+            return;
+        }
+        boolean frames = writers.stream().anyMatch(w -> w.slots().stream()
+                .anyMatch(s -> s instanceof Recordings.Slot.Recorded));
+        java.awt.Rectangle target = windowBounds;
+        hudBounds = currentHudBounds();
+        InputCapture capture = new InputCapture(() -> target, () -> hudBounds, frames);
+        try {
+            capture.start();
+        } catch (RuntimeException | Error e) {
+            status("Couldn't start recording: " + e.getMessage());
+            return;
+        }
+        recording = capture;
+        recordingWriters = writers;
+        recordButton.setText("■ Stop");
+        status("Recording — act in the game, then press Stop.");
+    }
+
+    private void stopRecording() {
+        List<Gestures.Captured> events = recording.stop();
+        recording = null;
+        recordButton.setText("⏺ Record");
+        java.awt.Rectangle target = windowBounds;
+        // Read on the FX thread: the project's buffers are confined to it. The writing below runs off it,
+        // because a plugin reading a value off a frame may match pictures.
+        RecordingWriter writer = new RecordingWriter(recordingWriters, PluginHost.grammar(),
+                itemContext().services(), ManagedConstants.scan(context.getConfig(), state));
+        status("Writing down what you did…");
+        Thread t = new Thread(() -> {
+            List<RecordingWriter.Statement> statements = writer.write(Gestures.recognize(events, target));
+            Platform.runLater(() -> {
+                if (statements.isEmpty()) {
+                    status("Nothing to add — no gesture was recorded that a plugin writes down.");
+                } else {
+                    insertStatementsAtCursor(statements);
+                }
+            });
+        }, "overlay-recording-write");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** The HUD's own bounds on screen, which the recording ignores clicks inside. */
+    private java.awt.Rectangle currentHudBounds() {
+        return stage == null ? null : new java.awt.Rectangle((int) stage.getX(), (int) stage.getY(),
+                (int) stage.getWidth(), (int) stage.getHeight());
     }
 
     // ── where blocks go ─────────────────────────────────────────────────────────────────────────────────
@@ -697,23 +785,14 @@ public final class ProgramShapeOverlay {
     }
 
     /**
-     * Places whole statements at the cursor — the host side of {@link ActionContext#insertAtCursor}.
+     * Places recorded statements at the cursor, through {@code CodeEditor.pasteCode} with their exact imports —
+     * the same rewrite, re-parse, undo entry and diagnostics refresh every other edit goes through.
      *
-     * <p>It goes through {@code CodeEditor.pasteCode}, which is the editor's existing source-text insert: it
-     * brings the imports a pasted call needs along with it, and it runs through the same rewrite, re-parse,
-     * undo entry and diagnostics refresh every other edit does. A second parse-and-insert path is how a HUD
-     * edit ends up invisible to the main editor, and how a statement lands in a file that never imported the
-     * type it names.
-     *
-     * <p>Statements are placed in order and the cursor is left after the last one, so a plugin handing over
-     * three lines gets three lines in the order it wrote them. Each one is a separate edit because each is a
-     * separate undo step — a recording of eleven clicks that can only be undone as one is worse than eleven
-     * undos.
-     *
-     * <p>Every refusal speaks through {@link #status}: a plugin's item is pressed on a surface with no
-     * console, and a silent no-op reads as a broken plugin.
+     * <p>Statements are placed in order and the cursor is left after the last one. Each one is a separate edit
+     * because each is a separate undo step — a recording of eleven clicks that can only be undone as one is
+     * worse than eleven undos.
      */
-    private void insertStatementsAtCursor(String[] statements) {
+    private void insertStatementsAtCursor(List<RecordingWriter.Statement> statements) {
         Platform.runLater(() -> {
             InsertionCursor c = cursor();
             if (c == null) {
@@ -725,8 +804,7 @@ public final class ProgramShapeOverlay {
                 return;
             }
             int placed = 0;
-            for (String statement : statements) {
-                if (statement == null || statement.isBlank()) continue;
+            for (RecordingWriter.Statement statement : statements) {
                 // Re-read the cursor on each pass: pasteCode re-parses, which replaces every block object,
                 // so the body held from before the first insert is stale for the second.
                 InsertionCursor at = placed == 0 ? c : cursor();
@@ -734,7 +812,7 @@ public final class ProgramShapeOverlay {
                 int insertIndex = Math.min(at.index() + 1, at.body().getStatements().size());
                 pendingInsert = new PendingFocus(
                         new BlockTree.Position(index().ordinalOf(at.body()), insertIndex), false);
-                context.getCodeEditor().pasteCode(at.body(), insertIndex, statement.strip());
+                context.getCodeEditor().pasteCode(at.body(), insertIndex, statement.source(), statement.imports());
                 placed++;
             }
             status(placed == 0 ? "Nothing to insert." : "Added " + placed

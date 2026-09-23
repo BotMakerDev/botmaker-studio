@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **⏺ Record is back on the overlay HUD, and it inserts at the cursor.** Press Record, act in the game, press
+  Stop: each click, double click, right or middle click, drag, scroll, typed text, key, key combination and
+  pause becomes one statement at the cursor, each its own undo step, with its imports. Which call a gesture
+  becomes is the plugins' to say; with the SDK, a click on one of your pictures is written
+  `ImageClicker.click(Pictures.X)`, a click elsewhere `Mouse.click(…, x, y)`, and a pause that ends on a
+  picture `ImageWaiter.waitFor(Pictures.X, …)`. Linux (X11) only, as before.
+
 ### Changed
 
 - **The palette comes from `@Palette` on a plugin's classes.** Studio finds every annotated class in each

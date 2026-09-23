@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — the palette is discovered, not listed.** `PluginHost.merge` reads each plugin's
+- **2026-09-23 (latest) — recording is the host's again.** `plugin/record/`: `InputCapture` (XRecord listener,
+  HUD exclusion, a frame at each press when a plugin reads values off one), `Gestures` (pure recognition into
+  the contract's `Gesture`s, neutral key names), `RecordingWriter` (the highest-ranked `@Records` writer that
+  fills, spelled by `ValueGrammar`; `@Managed` constants via `project/managed/ManagedConstants`; a pause
+  before a nameable click becomes an `AWAIT`). ⏺ Record on the HUD's step row; `CodeEditor.pasteCode` takes
+  exact imports; `HostOverlayContext` lost its insert channel with `ActionContext.insertAtCursor`.
+  *Deferred*: a per-gesture choice when two plugins tie on rank (today: plugin order), and simple names for a
+  fresh source (`com.botmaker.sdk.api.capture.Source.current()` is written qualified until phase 6 makes the
+  capture source a value type).
+- **2026-09-23 — the palette is discovered, not listed.** `PluginHost.merge` reads each plugin's
   share through `botmaker-plugin-host`'s `Palettes.of`: the plugin's own `catalog()`, or the `@Palette`
   classes in its jar when that is the empty default. The SDK no longer lists its 54 classes.
 - **2026-09-23 — the host owns the value grammar.** `plugin/grammar/` (`ValueForm` with
