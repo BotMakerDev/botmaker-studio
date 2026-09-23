@@ -34,7 +34,7 @@ public final class PickerRegistry {
             // The emulator instance name was the last call-site-matched picker Studio owned, kept here on
             // 2026-08-28 because the dialog behind it reached Studio's own emulator probe, app cache and
             // phone-pairing dialog. All three moved on 2026-08-31, so it is the SDK's
-            // (internal.plugin.emulator.EmulatorEditors) and reaches this merge through PluginPickers like
+            // (plugin.emulator.EmulatorEditors) and reaches this merge through PluginPickers like
             // every other. Nothing about it ever needed the host: botmaker-shared is published.
 
             // The Steam/Epic launch id, the program path, the trailing launch options and the bounded

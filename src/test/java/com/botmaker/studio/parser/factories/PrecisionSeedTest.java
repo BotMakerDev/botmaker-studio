@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  * <p>The rest of what this file used to hold — the source text the editor commits, the parse that reads it
  * back, and which knobs each call can act on — went to the SDK with the editor itself on 2026-08-30
- * ({@code com.botmaker.sdk.internal.plugin.editors.PrecisionEditors}, tested by {@code PrecisionEditorTest}
+ * ({@code com.botmaker.sdk.plugin.editors.PrecisionEditors}, tested by {@code PrecisionEditorTest}
  * there). The seed stays here because it is not the editor's: {@link InitializerFactory} runs when a block is
  * placed, before any editor is asked for, and a wrong seed is uncompilable Java in the user's project rather
  * than a widget that looks odd.
