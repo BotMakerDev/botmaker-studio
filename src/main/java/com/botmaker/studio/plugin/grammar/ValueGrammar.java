@@ -79,13 +79,15 @@ public final class ValueGrammar {
             Class<?> cls = classOf(type);
             if (cls == null) continue;
             byName.putIfAbsent(JavaNames.canonical(cls), type);
-            if (type instanceof ComponentType<?> component) componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
+            if (type instanceof ComponentType<?> component && writes(component)) {
+                componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
+            }
             if (cls.isEnum()) enumSet.add(cls);
         }
         for (ComponentType<?> component : components) {
             Class<?> cls = classOf(component);
             if (cls == null) continue;
-            componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
+            if (writes(component)) componentsByName.putIfAbsent(JavaNames.canonical(cls), component);
             for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enumSet.add(part);
         }
         this.types = List.copyOf(byName.values());
@@ -318,11 +320,11 @@ public final class ValueGrammar {
      * type may.
      */
     private static Optional<List<String>> callArguments(ComponentType<?> component, String source, boolean bare) {
-        String factory = factoryOf(component);
-        Class<?> type = classOf(component);
-        if (type == null) return Optional.empty();
-        if (factory.isEmpty()) return SourceSplit.constructorArguments(source, JavaNames.canonical(type));
-        return SourceSplit.arguments(source, JavaNames.canonical(ownerOf(component)) + "." + factory, bare);
+        Optional<Factory> factory = Factory.of(component);
+        if (factory.isEmpty()) return Optional.empty();
+        return factory.get().kind() == Factory.Kind.CONSTRUCTOR
+                ? SourceSplit.constructorArguments(source, factory.get().callSource())
+                : SourceSplit.arguments(source, factory.get().callSource(), bare);
     }
 
     /**
@@ -405,7 +407,8 @@ public final class ValueGrammar {
                     if (part.isEmpty()) yield Optional.empty();
                     written.add(part.get());
                 }
-                yield Optional.of(names.of(of.container().factoryOwner()) + "." + of.container().factory()
+                Factory factory = of.container().factory();
+                yield Optional.of(names.of(factory.owner()) + "." + factory.name()
                         + "(" + String.join(", ", written) + ")");
             }
             // A class the bot declares is BotRecords' to write: only the host's view of the bot's own source
@@ -461,7 +464,8 @@ public final class ValueGrammar {
                 if (spelled.isEmpty()) return Optional.empty();
                 written.add(spelled.get());
             }
-            return Optional.of(names.of(container.factoryOwner()) + "." + container.factory()
+            Factory factory = container.factory();
+            return Optional.of(names.of(factory.owner()) + "." + factory.name()
                     + "(" + String.join(", ", written) + ")");
         }
         ComponentType<?> exact = componentByName.get(JavaNames.canonical(value.getClass()));
@@ -490,11 +494,12 @@ public final class ValueGrammar {
             if (part.isEmpty()) return Optional.empty();
             written.add(part.get());
         }
+        Optional<Factory> factory = Factory.of(component);
+        if (factory.isEmpty() || factory.get().kind() == Factory.Kind.RECEIVER) return Optional.empty();
         String arguments = "(" + String.join(", ", written) + ")";
-        String factory = factoryOf(component);
-        return Optional.of(factory.isEmpty()
+        return Optional.of(factory.get().kind() == Factory.Kind.CONSTRUCTOR
                 ? "new " + names.of(type) + arguments
-                : names.of(ownerOf(component)) + "." + factory + arguments);
+                : names.of(factory.get().owner()) + "." + factory.get().name() + arguments);
     }
 
     private static Optional<String> writeEnum(Class<?> type, Object value, Names names) {
@@ -734,22 +739,13 @@ public final class ValueGrammar {
         }
     }
 
-    private static String factoryOf(ComponentType<?> component) {
-        try {
-            String factory = component.factory();
-            return factory == null ? "" : factory.strip();
-        } catch (RuntimeException | LinkageError e) {
-            return "";
-        }
-    }
-
-    private static Class<?> ownerOf(ComponentType<?> component) {
-        try {
-            Class<?> owner = component.factoryOwner();
-            return owner == null ? component.type() : owner;
-        } catch (RuntimeException | LinkageError e) {
-            return classOf(component);
-        }
+    /**
+     * Whether {@code component} can write its class: it has a factory, and the factory is not a chain on
+     * part 0. A component with neither is skipped, so its class reads as a declared type with no call rather
+     * than as a call read half-way.
+     */
+    private static boolean writes(ComponentType<?> component) {
+        return Factory.of(component).filter(factory -> factory.kind() != Factory.Kind.RECEIVER).isPresent();
     }
 
     /** How one write spells a type: qualified, or simple with the import collected. */

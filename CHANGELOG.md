@@ -26,6 +26,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A plugin's factory is read as a constructor or method, not a name.** `plugin/grammar/Factory` is the
+  host's view of the contract's `ComponentType.factory()` — constructor, static method, or an instance
+  method on part 0 — and the grammar asks it how a call is spelled. The host's `List.of`, `Map.ofEntries`
+  and `Map.entry` are real `Method`s too. Reading still splits source text; the typed reader follows.
 - **The HUD's activity picker lists the methods your flow runs.** It lists `Collect::body` for each method
   reference in a plugin value (the SDK's flow), opens the file declaring the class and scopes the tree to the
   method. It searched for `Activities.define("…")`, which SDK 2.0 deleted, and so found nothing. A reference

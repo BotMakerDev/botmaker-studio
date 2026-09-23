@@ -74,7 +74,7 @@ public final class TestValues {
     /** {@code Span.of(label, length)}, a component type nothing declares on its own. */
     public static final ComponentType<Span> SPAN = new ComponentType<>() {
         @Override public Class<Span> type() { return Span.class; }
-        @Override public String factory() { return "of"; }
+        @Override public java.lang.reflect.Executable factory() { return method(Span.class, "of", String.class, int.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(String.class, int.class); }
         @Override public List<Object> components(Span value) { return List.of(value.label(), value.length()); }
         @Override public Span build(List<Object> parts) {
@@ -102,11 +102,20 @@ public final class TestValues {
         @Override public Class<Duration> type() { return Duration.class; }
         @Override public Duration fresh() { return Duration.ZERO; }
         @Override public Node editor(ValueContext ctx) { return null; }
-        @Override public String factory() { return "ofMillis"; }
+        @Override public java.lang.reflect.Executable factory() { return method(Duration.class, "ofMillis", long.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
         @Override public List<Object> components(Duration value) { return List.of(value.toMillis()); }
         @Override public Duration build(List<Object> parts) {
             return parts.size() == 1 && parts.getFirst() instanceof Number n ? Duration.ofMillis(n.longValue()) : null;
+        }
+    }
+
+    /** {@code owner.name(parameters)} for a fixture's factory; a missing one fails the test that asked. */
+    public static java.lang.reflect.Method method(Class<?> owner, String name, Class<?>... parameters) {
+        try {
+            return owner.getMethod(name, parameters);
+        } catch (NoSuchMethodException e) {
+            throw new AssertionError(e);
         }
     }
 

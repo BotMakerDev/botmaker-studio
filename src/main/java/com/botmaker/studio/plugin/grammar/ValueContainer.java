@@ -52,13 +52,11 @@ public interface ValueContainer<C> {
     /** How many type arguments a form supplies: one for {@code List<E>}, two for {@code Map<K, V>}. */
     int arity();
 
-    /** The class the factory is declared on, which is usually the container itself — {@code Map} for an entry. */
-    default Class<?> factoryOwner() {
-        return type();
-    }
-
-    /** The static factory's name: {@code "of"}, {@code "ofEntries"}, {@code "entry"}. */
-    String factory();
+    /**
+     * What the container is written with: a static JDK method — {@code List.of}, {@code Map.ofEntries},
+     * {@code Map.entry}, the last declared on {@code Map} rather than on the entry.
+     */
+    Factory factory();
 
     /**
      * This composite's parts, in the order they should be written.
@@ -93,7 +91,7 @@ public interface ValueContainer<C> {
 
     /** The call a generator writes before the opening bracket: {@code java.util.Map.ofEntries}. */
     default String factorySource() {
-        return JavaNames.canonical(factoryOwner()) + "." + factory();
+        return factory().callSource();
     }
 
     /** What a menu calls wrapping a form in this container. */

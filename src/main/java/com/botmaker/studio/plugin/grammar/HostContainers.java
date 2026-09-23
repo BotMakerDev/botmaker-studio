@@ -25,9 +25,11 @@ final class HostContainers {
             return 1;
         }
 
+        private static final Factory OF = Factory.method(List.class, "of", Object[].class);
+
         @Override
-        public String factory() {
-            return "of";
+        public Factory factory() {
+            return OF;
         }
 
         @Override
@@ -71,9 +73,11 @@ final class HostContainers {
             return 2;
         }
 
+        private static final Factory OF_ENTRIES = Factory.method(Map.class, "ofEntries", Map.Entry[].class);
+
         @Override
-        public String factory() {
-            return "ofEntries";
+        public Factory factory() {
+            return OF_ENTRIES;
         }
 
         @Override
@@ -116,14 +120,11 @@ final class HostContainers {
             return 2;
         }
 
-        @Override
-        public Class<?> factoryOwner() {
-            return Map.class;
-        }
+        private static final Factory ENTRY = Factory.method(Map.class, "entry", Object.class, Object.class);
 
         @Override
-        public String factory() {
-            return "entry";
+        public Factory factory() {
+            return ENTRY;
         }
 
         @Override

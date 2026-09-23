@@ -3,10 +3,12 @@ package com.botmaker.studio.plugin.grammar;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.studio.project.params.TestValues;
 import javafx.scene.Node;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
+import java.lang.reflect.Executable;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
@@ -47,7 +49,7 @@ class ValueGrammarTest {
         @Override public Class<Duration> type() { return Duration.class; }
         @Override public Duration fresh() { return Duration.ZERO; }
         @Override public Node editor(ValueContext ctx) { return null; }
-        @Override public String factory() { return "ofMillis"; }
+        @Override public Executable factory() { return TestValues.method(Duration.class, "ofMillis", long.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
         @Override public List<Object> components(Duration d) { return List.of(d.toMillis()); }
         @Override public Duration build(List<Object> parts) { return Duration.ofMillis((long) parts.getFirst()); }
@@ -79,17 +81,23 @@ class ValueGrammarTest {
     }
 
     /** A flow in miniature: parts written as calls inside one call, one of them a name kept as source. */
-    record Step(String body, String name, List<String> outcomes) {}
+    public record Step(String body, String name, List<String> outcomes) {}
 
-    record Plan(List<Step> steps, String start) {}
+    public record Plan(List<Step> steps, String start) {
+        public static Plan of(List<Step> steps, String start) { return new Plan(steps, start); }
+        public static Step step(Body body, String name, List<String> outcomes) {
+            return new Step(String.valueOf(body), name, outcomes);
+        }
+    }
 
     /** The part a step's body is: nothing declares it, so it crosses as the source it is written as. */
-    interface Body {}
+    public interface Body {}
 
     static final ComponentType<Step> STEP = new ComponentType<>() {
         @Override public Class<Step> type() { return Step.class; }
-        @Override public String factory() { return "step"; }
-        @Override public Class<?> factoryOwner() { return Plan.class; }
+        @Override public Executable factory() {
+            return TestValues.method(Plan.class, "step", Body.class, String.class, List.class);
+        }
         @Override public List<Class<?>> componentTypes() { return List.of(Body.class, String.class, List.class); }
         @Override public List<Object> components(Step s) { return List.of(s.body(), s.name(), s.outcomes()); }
         @SuppressWarnings("unchecked")
@@ -100,7 +108,7 @@ class ValueGrammarTest {
 
     static final ComponentType<Plan> PLAN = new ComponentType<>() {
         @Override public Class<Plan> type() { return Plan.class; }
-        @Override public String factory() { return "of"; }
+        @Override public Executable factory() { return TestValues.method(Plan.class, "of", List.class, String.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(List.class, String.class); }
         @Override public List<Object> components(Plan p) { return List.of(p.steps(), p.start()); }
         @SuppressWarnings("unchecked")

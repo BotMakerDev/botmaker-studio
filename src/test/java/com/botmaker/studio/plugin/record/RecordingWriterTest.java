@@ -44,7 +44,9 @@ class RecordingWriterTest {
 
     private static final ComponentType<Duration> DURATION_TYPE = new ComponentType<>() {
         @Override public Class<Duration> type() { return Duration.class; }
-        @Override public String factory() { return "ofMillis"; }
+        @Override public java.lang.reflect.Executable factory() {
+            return com.botmaker.studio.project.params.TestValues.method(Duration.class, "ofMillis", long.class);
+        }
         @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
         @Override public List<Object> components(Duration d) { return List.of(d.toMillis()); }
         @Override public Duration build(List<Object> parts) { return Duration.ofMillis(((Number) parts.getFirst()).longValue()); }

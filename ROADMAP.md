@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — constants cached, and read in Parameters rows.** `ManagedConstants.scan` keeps
+- **2026-09-23 (latest) — a factory is an `Executable` (doc 35, phase 5a).** `plugin/grammar/Factory` is
+  the host's view of `ComponentType.factory()` (constructor, static, or an instance method it reads and never
+  writes); `ValueGrammar` and the three host containers spell calls through it. Reading still splits strings
+  until 5b's typed reader.
+- **2026-09-23 — constants cached, and read in Parameters rows.** `ManagedConstants.scan` keeps
   each file's last parse keyed on its path and checked against its text (`String.equals`), so an untouched
   file costs a comparison and a changed one is parsed again — no revision counter to forget to bump.
   `plugin/ConstantValues` is the read/write rule `HostSlotContext` had privately (grammar first, then the

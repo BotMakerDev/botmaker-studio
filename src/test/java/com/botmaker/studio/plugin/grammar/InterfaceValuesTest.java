@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin.grammar;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.studio.project.params.TestValues;
 import javafx.scene.Node;
 import org.junit.jupiter.api.Test;
 
@@ -21,13 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InterfaceValuesTest {
 
-    interface Place {}
+    public interface Place {
+        static Place here() { return new Here(); }
+        static Place named(String title) { return new Named(title); }
+        static Place inside(Place of, int margin) { return new Inside(of, margin); }
+    }
 
-    record Here() implements Place {}
+    public record Here() implements Place {}
 
-    record Named(String title) implements Place {}
+    public record Named(String title) implements Place {}
 
-    record Inside(Place of, int margin) implements Place {}
+    public record Inside(Place of, int margin) implements Place {}
 
     static final class PlaceType implements PluginType<Place> {
         @Override public Class<Place> type() { return Place.class; }
@@ -36,13 +41,13 @@ class InterfaceValuesTest {
     }
 
     /** One call per implementation, each on the interface. */
-    static <T extends Place> ComponentType<T> call(Class<T> type, String factory, List<Class<?>> parts,
+    static <T extends Place> ComponentType<T> call(Class<T> type, java.lang.reflect.Method factory,
+                                                   List<Class<?>> parts,
                                                    java.util.function.Function<T, List<Object>> components,
                                                    java.util.function.Function<List<Object>, T> build) {
         return new ComponentType<>() {
             @Override public Class<T> type() { return type; }
-            @Override public String factory() { return factory; }
-            @Override public Class<?> factoryOwner() { return Place.class; }
+            @Override public java.lang.reflect.Executable factory() { return factory; }
             @Override public List<Class<?>> componentTypes() { return parts; }
             @Override public List<Object> components(T value) { return components.apply(value); }
             @Override public T build(List<Object> values) { return build.apply(values); }
@@ -50,10 +55,11 @@ class InterfaceValuesTest {
     }
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(new PlaceType()), List.of(
-            call(Here.class, "here", List.of(), h -> List.of(), p -> new Here()),
-            call(Named.class, "named", List.of(String.class), n -> List.of(n.title()),
-                    p -> new Named((String) p.getFirst())),
-            call(Inside.class, "inside", List.of(Place.class, int.class), i -> List.of(i.of(), i.margin()),
+            call(Here.class, TestValues.method(Place.class, "here"), List.of(), h -> List.of(), p -> new Here()),
+            call(Named.class, TestValues.method(Place.class, "named", String.class), List.of(String.class),
+                    n -> List.of(n.title()), p -> new Named((String) p.getFirst())),
+            call(Inside.class, TestValues.method(Place.class, "inside", Place.class, int.class),
+                    List.of(Place.class, int.class), i -> List.of(i.of(), i.margin()),
                     p -> new Inside((Place) p.get(0), (int) p.get(1)))));
 
     private static final ValueForm PLACE = ValueForm.of(Place.class);
