@@ -10,6 +10,111 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.1.9; re-released for updated upstream pins.
+
+### Added
+
+- **⏺ Record is back on the overlay HUD, and it inserts at the cursor.** Press Record, act in the game, press
+  Stop: each click, double click, right or middle click, drag, scroll, typed text, key, key combination and
+  pause becomes one statement at the cursor, each its own undo step, with its imports. Which call a gesture
+  becomes is the plugins' to say; with the SDK, a click on one of your pictures is written
+  `ImageClicker.click(Pictures.X)`, a click elsewhere `Mouse.click(…, x, y)`, and a pause that ends on a
+  picture `ImageWaiter.waitFor(Pictures.X, …)`. Linux (X11) only, as before.
+- **You choose which plugin records a gesture two plugins can write.** Right-click ⏺ Record: *Record with*
+  lists each such gesture with *Automatic (highest rank)* and one choice per plugin, saved per project. The
+  chosen plugin is tried first; a gesture it cannot write still falls to the next one.
+
+### Changed
+
+- **A plugin's factory is read as a constructor or method, not a name.** `plugin/grammar/Factory` is the
+  host's view of the contract's `ComponentType.factory()` — constructor, static method, or an instance
+  method on part 0 — and the grammar asks it how a call is spelled. The host's `List.of`, `Map.ofEntries`
+  and `Map.entry` are real `Method`s too.
+- **A value is read off the parsed Java, not its text, and hand-written chains are editable.** The grammar
+  walks the JDT expression (`plugin/grammar/ExpressionReader`), so `Precision.TIGHT.minArea(400)` and
+  `CaptureSource.window("G").region(new Rect(…))` draw as editable pills rather than as text, and a
+  `public static final` constant of a class a plugin declares (`Precision.TIGHT`, `Color.RED`) reads as its
+  value. An edited chain is written in the one-call form the plugin declares. A part nothing reads is shown
+  exactly as you typed it. `SourceSplit`, the depth-zero comma splitter, is gone.
+- **The HUD's activity picker lists the methods your flow runs.** It lists `Collect::body` for each method
+  reference in a plugin value (the SDK's flow), opens the file declaring the class and scopes the tree to the
+  method. It searched for `Activities.define("…")`, which SDK 2.0 deleted, and so found nothing. A reference
+  to a class your project does not declare says so on the status line. The canvas's *Activity name* submenu
+  on `Activity.enable("…")` is gone with the `Activity` class it keyed on; the SDK's own editor for
+  `Activities.enable`/`disable`/`active`/`setEnabled` offers the names.
+- **A plugin value named by one of your constants reads as that value, and a picked value is written as
+  the constant.** A picture slot holding `Pictures.ORE` shows the ore picture, a run of pictures shows each
+  one, and choosing a picture your `Pictures` class already holds writes `Pictures.X` rather than its path.
+  The Parameters window does the same for a `@Param` field holding `Pictures.ORE`.
+- **A capture source is a value everywhere.** `CaptureSource.window("Game")`, a monitor, an emulator, a
+  region and `Source.current()` read and write through the SDK's declarations, and a recorded click writes
+  `Mouse.click(Source.current(), x, y)` with the import rather than the fully qualified name. A narrowed
+  source is written `CaptureSource.region(source, new Rect(…))`.
+- **The duration editor has no *Random range* toggle** — it rewrote the call around a slot as text, which
+  no plugin can do any more. Write `Wait.between` from the palette.
+- **The palette comes from `@Palette` on a plugin's classes.** Studio finds every annotated class in each
+  plugin's jar when the plugin builds no catalog of its own, so the SDK's palette now also offers
+  `Activities` and `Flows`, which its old hand-written list had missed.
+
+- **A colour, a duration or any other plugin value opened in the Parameters window and closed without an
+  edit comes back byte-identical.** Studio used to read a value as text, run it through a codec it could
+  not check and write it back — a `java.awt.Color` came out as `new java.awt.Color(255, 255, 255)`. Studio
+  now reads every value as the value it is, through each plugin's own declaration of its type, and writes
+  it back only when an editor changes it.
+- **Every value editor is a plugin's.** The check box, spinners, date and time pickers, direction pad, mouse
+  diagram and key list Studio drew itself now come from the plugin that declares the type (plugin-basics for
+  the JDK's, the SDK for its own), so the Parameters window, the Runner and a block draw the same editor.
+  One thing is lost: a declared `@Param(min, max)` no longer narrows a number's editor; it is still read,
+  shown and kept.
+- **A value written into your own file uses simple names and adds the import**, where it used to write
+  `com.botmaker.sdk.api.geometry.Point` in full.
+- **Retyping a parameter to a type with no starting value** (one of your own records) declares it with no
+  initialiser rather than refusing.
+- `@Param` bounds are written as numbers (`min = 1`); text bounds from older bots (`min = "1"`) still read.
+- **Manage Plugins no longer reads an entry's `valueTypeIds`.** Nothing did anything with it, and the
+  registry stopped asking for it. Entries that still carry the field read as before.
+
+### Removed
+
+- **Studio no longer writes a plugin's file into your project.** `PluginSourceFiles` ran on every plugin
+  bind — opening a project, and again after any pom edit — copying in whatever Java each loaded plugin
+  shipped. It is deleted with the contract method behind it.
+  Reading those files is unchanged: the flow editor and 🖼 Manage Pictures still find `@Managed` methods in
+  your own source and still rewrite one returned expression at a time, and the explorer still groups
+  `plugins/<name>/` under *Generated by BotMaker*. What is gone is the writing.
+  **A project made from a template already has the file.** A blank project that installs the SDK now gets
+  no `plugins/sdk/Sdk.java` — the flow window offering to create one is owed and not in this release.
+
+- **The Parameters window has one kind of section, and it is a class of your bot.** Studio no longer asks a
+  plugin for parameter sections, rows or edits: `PluginHost.parameterGroups`/`parameterGroup`/`parameterRows`/
+  `parameterEdited`, `HostParameters`' group half and `project/params/ParameterSurface` are all gone, and
+  what is left is `JavaParameters`, which reads and writes `@Param` fields off your own source.
+  Nothing a plugin ever declared is lost, because no plugin ever declared one — the surface read a
+  pre-2026-09-17 project's JSON and answered empty for every project made since. **A plugin that wants a row
+  of its own puts a `@Param` field in the file it ships**, and the window finds it like any other: a field in
+  `plugins/sdk/Sdk.java` is listed under `Sdk.java`, editable, with the same value cell.
+  Visible differences, all of them the sections: a heading reads `Parameters.java` rather than a plugin's
+  title, a plugin with no parameters no longer draws an empty section, and the rail's categories are the
+  distinct `@Param(category = …)` strings your bot actually uses.
+
+### Changed
+
+- **Rebuilt against the plugin contract's new package layout.** Studio's plugin host imports
+  `com.botmaker.plugin.api.slot`, `.parameters`, `.toolbar` and `.source` now. Imports only — nothing in the
+  canvas, the Parameters window or the plugin loader behaves differently. A plugin built against
+  `botmaker-studio-api` v0.1.5 or earlier will not load in this Studio; rebuild it against v0.1.6.
+
+- **The walkthrough describes the bot you actually get.** Getting Started and `WORKFLOW.md` still said a
+  variable's value lived in `activities.json` and was read at startup by a generated `Activities.java`, that
+  Studio maintained one source file per activity plus a registry, and that a run was driven by a generated
+  `FlowDriver`. None of that has been true since a plugin's values became Java the plugin ships: a variable
+  is a `@Param` field in your own `Parameters.java`, an activity is a `public static Outcome
+  body(ActivityContext ctx)` the flow names as `Collect::body`, and the flow is a value in your own
+  `plugins/sdk/Sdk.java`. The steps, the order and the runtime diagram's shape are unchanged — only the
+  sentences that described the old machinery.
+
 ## [1.1.9] — 2026-09-23
 
 ### Added
