@@ -75,6 +75,19 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **Blocks you insert compile in more places.**
+  - *Call Function* in `main` no longer writes `clone();`. A static method is offered only static methods,
+    and `Object`'s own methods are never offered.
+  - A value for a type with no public constructor is one of its constants (`Key.ENTER`) instead of
+    `new Key()`, or `null` when it has none.
+  - A second *Define Enum* is named `MyEnum2`.
+  - A `throw` offers exceptions only. Changing the class resets the arguments, so `new ArrayList("")` is
+    gone.
+  - A loop's variable, and a `try` resource, are no longer offered after the loop or the `try`.
+- **Only one block menu is open at a time.** Opening a menu closes the one that was open.
+- **The zoom control is always there.** Bottom right of the canvas, "− 100% +": the percentage resets.
+- **Manage Plugins no longer offers *Install* on a plugin another plugin already brings.** For example,
+  basics under the SDK now reads *Included*, and its tooltip explains why.
 - **A blank project's first parameter compiles.** Adding a parameter wrote `@Param` into a project whose pom
   named no plugin, so nothing brought `botmaker-studio-api` and the build failed with `package
   com.botmaker.plugin.api.params does not exist`. Studio now declares the contract (the tag it was built

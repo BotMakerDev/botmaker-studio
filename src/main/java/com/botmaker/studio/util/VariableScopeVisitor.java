@@ -184,6 +184,17 @@ public class VariableScopeVisitor extends ASTVisitor {
     @Override public boolean visit(CatchClause node)       { pushAll(); return true; }
     @Override public void endVisit(CatchClause node)       { popAll(); }
 
+    // A loop's own variable and a try's resources end with the statement, not with the enclosing block: without
+    // these, `for (int i …)` left `i` offered after the loop, and a pick of it did not compile.
+    @Override public boolean visit(ForStatement node)          { pushAll(); return true; }
+    @Override public void endVisit(ForStatement node)          { popAll(); }
+
+    @Override public boolean visit(EnhancedForStatement node)  { pushAll(); return true; }
+    @Override public void endVisit(EnhancedForStatement node)  { popAll(); }
+
+    @Override public boolean visit(TryStatement node)          { pushAll(); return true; }
+    @Override public void endVisit(TryStatement node)          { popAll(); }
+
     // -----------------------------------------------------------------------
     // Declarations — endVisit so RHS doesn't see its own symbol
     // -----------------------------------------------------------------------
@@ -279,8 +290,13 @@ public class VariableScopeVisitor extends ASTVisitor {
             variableStack.peek().put(name.getIdentifier(), vb);
     }
 
+    /**
+     * A supertype's methods, stopping at {@code Object}: {@code clone}, {@code finalize} and {@code wait} are
+     * nothing a bot calls, and being first in the list made them what "Call Function" wrote into {@code main}.
+     */
     private void collectInheritedMethods(ITypeBinding type) {
         if (type == null || methodStack.isEmpty()) return;
+        if ("java.lang.Object".equals(type.getQualifiedName())) return;
         for (IMethodBinding m : type.getDeclaredMethods())
             methodStack.peek().put(methodKey(m), m);
         collectInheritedMethods(type.getSuperclass());

@@ -7,6 +7,7 @@ import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
@@ -41,7 +42,9 @@ public class ThrowBlock extends AbstractStatementBlock implements BlockWithChild
         return ComponentSpec.builder()
                 .label("kw", () -> SentenceLayoutBuilder.keywordNode("throw"))
                 .slot("exception", () ->
-                        SentenceLayoutBuilder.expressionSlotNode(exception, context, ResolvedType.UNKNOWN))
+                        SentenceLayoutBuilder.expressionSlotNode(exception, context, exception == null
+                                ? ResolvedType.UNKNOWN
+                                : ProjectAnalyzer.inferExpectedType(exception.getAstNode())))
                 .build();
     }
 

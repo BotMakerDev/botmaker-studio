@@ -17,7 +17,7 @@ public final class InteractionDecorator implements BlockDecorator {
     public void decorate(Node node, AbstractCodeBlock block, CodeEditorService context) {
         if (block.isReadOnly()) return;
 
-        ContextMenu menu = new ContextMenu();
+        ContextMenu menu = com.botmaker.studio.ui.render.menu.MenuTracker.track(new ContextMenu());
 
         var blockItems = block.blockMenuItems(context);
         if (!blockItems.isEmpty()) {

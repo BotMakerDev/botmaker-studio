@@ -427,24 +427,71 @@ public class ProjectAnalyzer {
         // 1. Project source (rich binding)
         ResolvedType projectType = findProjectType(className);
         if (projectType instanceof ResolvedType.Bound bound) {
-            return constructorsOf(bound.binding());
+            ITypeBinding binding = bound.binding();
+            if (binding.isEnum() || binding.isInterface() || Modifier.isAbstract(binding.getModifiers())) {
+                return List.of();
+            }
+            return constructorsOf(binding);
         }
 
-        // 2. Library index
+        // 2. Library index. Public constructors of a class that can be instantiated: an enum's constructor is
+        // private and an interface has none, and offering either wrote `new Key()` into a bot.
         if (libraryIndex != null) {
             Optional<ClassInfo> libType = libraryIndex.findBySimpleName(className);
+            if (libType.isEmpty()) libType = libraryIndex.findByQualifiedName(className);
             if (libType.isPresent()) {
                 ClassInfo ci = libType.get();
+                if (ci.isEnum() || ci.isInterface() || ci.isAbstract()) return List.of();
                 return ci.getConstructorInfo().stream()
+                        .filter(MethodInfo::isPublic)
                         .map(mi -> toConstructorSignature(mi, ci.getSimpleName()))
                         .collect(Collectors.toList());
             }
         }
 
-        // 3. Fallback: default no-arg constructor
+        // 3. A name neither the project nor the index knows — a JDK class such as ArrayList, which nothing here
+        // indexes. The no-arg constructor is a guess, and the compile check after an insert is what catches it.
         return List.of(new MethodSignature(
                 className, List.of(), List.of(), ResolvedType.named(className)
         ));
+    }
+
+    /**
+     * A value of {@code type} that is not a constructor call, for a type that has none a bot can use: the first
+     * constant of an enum, else the first {@code public static final} field typed as the class itself
+     * ({@code Key.ENTER}, {@code Precision.DEFAULT}). Written {@code Simple.NAME}; empty when there is none.
+     * Covers the library index too, since an SDK type is unbound in a parse without the jar's bindings.
+     */
+    public Optional<String> constantOf(ResolvedType type) {
+        if (type == null) return Optional.empty();
+        if (!(type instanceof ResolvedType.Bound)) {
+            ResolvedType project = findProjectType(type.leafType().simpleName());
+            if (project instanceof ResolvedType.Bound) type = project;
+        }
+        if (type instanceof ResolvedType.Bound bound) {
+            ITypeBinding b = bound.binding();
+            for (IVariableBinding f : b.getDeclaredFields()) {
+                int mods = f.getModifiers();
+                boolean constant = f.isEnumConstant()
+                        || (Modifier.isPublic(mods) && Modifier.isStatic(mods) && Modifier.isFinal(mods)
+                        && f.getType().getErasure().isEqualTo(b.getErasure()));
+                if (constant) return Optional.of(b.getName() + "." + f.getName());
+            }
+            return Optional.empty();
+        }
+        if (libraryIndex == null) return Optional.empty();
+        String name = type.leafType().qualifiedName();
+        Optional<ClassInfo> found = libraryIndex.findByQualifiedName(name);
+        if (found.isEmpty()) found = libraryIndex.findBySimpleName(type.leafType().simpleName());
+        if (found.isEmpty()) return Optional.empty();
+        ClassInfo ci = found.get();
+        for (FieldInfo f : ci.getFieldInfo()) {
+            boolean ownType = f.getTypeDescriptor().toString().equals(ci.getName());
+            if (f.isPublic() && f.isStatic() && f.isFinal() && (f.isEnum() || ownType)) {
+                return Optional.of(ci.getSimpleName() + "." + f.getName());
+            }
+        }
+        return Optional.empty();
     }
 
     /** Public constructor signatures from a resolved type binding. */
@@ -962,6 +1009,11 @@ public class ProjectAnalyzer {
             case PrefixExpression pre when pre.getOperator() == PrefixExpression.Operator.NOT -> {
                 return ResolvedType.BOOLEAN;
             }
+            // `throw ⟨x⟩` takes a Throwable; without this arm the slot was UNKNOWN and offered `new ArrayList("")`.
+            case ThrowStatement stmt when stmt.getExpression() == node -> {
+                ITypeBinding throwable = node.getAST().resolveWellKnownType("java.lang.Throwable");
+                return throwable != null ? ResolvedType.of(throwable) : ResolvedType.of(Throwable.class);
+            }
             case VariableDeclarationFragment frag when frag.getInitializer() == node -> {
                 ASTNode gp = frag.getParent();
                 if (gp instanceof VariableDeclarationStatement vds) return resolveType(vds.getType());
@@ -1192,6 +1244,21 @@ public class ProjectAnalyzer {
             }
             current = current.getParent();
         }
+    }
+
+    /**
+     * Whether code at {@code node} runs with no {@code this}: the nearest enclosing member (method, initializer
+     * or field) is {@code static}. A lambda changes nothing — it sees the {@code this} of the member it is in —
+     * and a local or anonymous class's own member is the nearest one, so its instance methods are instance code.
+     */
+    public static boolean isStaticContext(ASTNode node) {
+        for (ASTNode cur = node; cur != null; cur = cur.getParent()) {
+            if (cur instanceof BodyDeclaration member) {
+                if (member instanceof AbstractTypeDeclaration) return false;
+                return Modifier.isStatic(member.getModifiers());
+            }
+        }
+        return false;
     }
 
     private static boolean isAccessibleMethod(MethodDeclaration md, boolean staticOnly) {

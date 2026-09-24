@@ -45,7 +45,7 @@ public final class MenuComponents {
      */
     public static <T> void showListMenu(Node anchor, List<T> items, Function<T, String> label,
                                         Consumer<T> onPick, String emptyText) {
-        ContextMenu menu = new ContextMenu();
+        ContextMenu menu = MenuTracker.track(new ContextMenu());
         populate(menu.getItems(), items, label, onPick, emptyText);
         menu.show(anchor, Side.BOTTOM, 0, 0);
     }

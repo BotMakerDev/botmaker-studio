@@ -22,6 +22,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -410,6 +411,19 @@ public final class ManagePluginsDialog {
             HBox.setHgrow(text, Priority.ALWAYS);
 
             boolean here = plugin.isInstalledIn(installed);
+            // Brought by another plugin: nothing to install, and nothing this pom can remove. Saying
+            // "Install" and then refusing the click is what this label replaces.
+            String provided = alreadyProvided(plugin, installed, boundPluginIds());
+            if (!provided.isEmpty()) {
+                Label state = new Label("Included");
+                state.setTooltip(new Tooltip(provided));
+                state.getStyleClass().add("plugin-provided-label");
+                HBox row = new HBox(10, text, state);
+                row.setAlignment(Pos.CENTER_LEFT);
+                row.setPadding(new Insets(6, 2, 6, 2));
+                setGraphic(row);
+                return;
+            }
             Button action = new Button(here ? "Remove" : "Install");
             action.setOnAction(e -> {
                 if (here) {

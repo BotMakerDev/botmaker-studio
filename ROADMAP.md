@@ -6,7 +6,19 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — Assistant tab: models listed from the provider.** `ModelFactory.models` over
+- **2026-09-24 (latest) — Blocks round 2, phase 1: insertion bugs, one menu, zoom control.**
+  - Changes:
+    - `VariableScopeVisitor` scopes for `for`, for-each and `try`, and stops at `Object`.
+    - `ProjectAnalyzer.isStaticContext` filters `firstCallableMethod` and the "This" group.
+    - `getConstructors` refuses enums, interfaces, abstract classes and non-public constructors.
+    - `constantOf` gives the seed in their place.
+    - Throw slot is a `Throwable` (`inferExpectedType` arm, `InstantiationBlock` exceptions and re-seeded arguments).
+    - `uniqueTypeName` names a local enum.
+    - `MenuTracker` keeps one menu open.
+    - `EditorCanvas.zoomBadge` is an always-visible `− % +` control.
+    - `ManagePluginsDialog` shows *Included* for a plugin another plugin brings.
+  - Plan: `~/.claude/plans/pasted-content-id-9c03-in-base-zazzy-fern.md` (round 2, 6 phases).
+- **2026-09-24 — Assistant tab: models listed from the provider.** `ModelFactory.models` over
   LangChain4j's `ModelCatalog`s (OpenAI, compatible, Anthropic, Gemini) and `OllamaModels`; the model field is
   an editable combo + ↻. `Provider` names no model any more (Anthropic's `claude-opus-5` was not a real id).
   `ModelListingTest` against a loopback `HttpServer`.

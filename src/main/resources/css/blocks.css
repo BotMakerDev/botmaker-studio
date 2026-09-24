@@ -245,20 +245,43 @@
     -fx-text-fill: -fx-text-background-color;
 }
 
-/* The canvas's zoom chip (EditorCanvas.zoomBadge): only there off 100%, and a click resets. Chrome, not a
-   block, so it takes the shell's band and hairline and reads in every theme through them. */
+/* The canvas's zoom control (EditorCanvas.zoomBadge): "− 100% +", always shown, the percentage resets.
+   Chrome, not a block, so it takes the shell's band and hairline and reads in every theme through them. */
 .zoom-badge {
     -fx-background-color: -bm-band;
     -fx-border-color: -bm-divider;
-    -fx-border-radius: 10;
-    -fx-background-radius: 10;
-    -fx-padding: 2 9 2 9;
-    -fx-font-size: 11px;
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+    -fx-padding: 2;
+    -fx-spacing: 2;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 6, 0, 0, 1);
+}
+.zoom-badge .zoom-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 12;
+    -fx-padding: 3 9 3 9;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
     -fx-text-fill: -fx-text-background-color;
-    -fx-opacity: 0.85;
     -fx-cursor: hand;
 }
-.zoom-badge:hover { -fx-opacity: 1; }
+.zoom-badge .zoom-percent {
+    -fx-font-size: 11px;
+    -fx-font-weight: normal;
+    -fx-min-width: 46;
+}
+.zoom-badge .zoom-button:hover { -fx-background-color: -bm-divider; }
+.zoom-badge .zoom-button:disabled { -fx-opacity: 0.35; }
+
+/* Manage Plugins: a plugin another plugin brings, in place of an Install button that would be refused. */
+.plugin-provided-label {
+    -fx-padding: 3 10 3 10;
+    -fx-background-color: -bm-band;
+    -fx-border-color: -bm-divider;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-font-size: 11px;
+}
 
 /* ---------------------------------------------------------------------------
  * Dialog chrome — the handful of looks every secondary window builds by hand.

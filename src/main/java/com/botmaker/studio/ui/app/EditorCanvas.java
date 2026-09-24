@@ -306,26 +306,42 @@ final class EditorCanvas {
         BlockStylePreference.styleProperty().addListener(new WeakInvalidationListener(listener));
     }
 
-    /** Bottom-right "150%" chip: shown only off 100%, and a click puts it back. */
+    /**
+     * Bottom-right "− 100% +" control, always shown: the only zoom a user finds without knowing a shortcut.
+     * The percentage resets on click; each end is disabled at its limit.
+     */
     private static Node zoomBadge() {
-        Button badge = new Button();
-        badge.getStyleClass().add("zoom-badge");
-        badge.setFocusTraversable(false);
-        badge.setTooltip(new Tooltip("Canvas zoom — click to reset (Ctrl+0)"));
-        badge.setOnAction(e -> CanvasZoom.reset());
+        Button out = zoomButton("−", "Zoom out (Ctrl+-)", CanvasZoom::zoomOut);
+        Button in = zoomButton("+", "Zoom in (Ctrl+=)", CanvasZoom::zoomIn);
+        Button percent = zoomButton("", "Reset zoom (Ctrl+0)", CanvasZoom::reset);
+        percent.getStyleClass().add("zoom-percent");
+        HBox control = new HBox(out, percent, in);
+        control.getStyleClass().add("zoom-badge");
+        control.setAlignment(Pos.CENTER);
+        control.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         Runnable refresh = () -> {
             double factor = CanvasZoom.factor();
-            badge.setText(CanvasZoom.percent(factor));
-            badge.setVisible(factor != CanvasZoom.DEFAULT);
+            percent.setText(CanvasZoom.percent(factor));
+            out.setDisable(factor <= CanvasZoom.MIN);
+            in.setDisable(factor >= CanvasZoom.MAX);
         };
         refresh.run();
-        // Weak: the badge dies with its canvas, the preference does not.
+        // Weak: the control dies with its canvas, the preference does not.
         InvalidationListener listener = obs -> refresh.run();
-        badge.getProperties().put("zoom-listener", listener);
+        control.getProperties().put("zoom-listener", listener);
         CanvasZoom.factorProperty().addListener(new WeakInvalidationListener(listener));
-        StackPane.setAlignment(badge, Pos.BOTTOM_RIGHT);
-        StackPane.setMargin(badge, new Insets(0, 18, 18, 0));
-        return badge;
+        StackPane.setAlignment(control, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(control, new Insets(0, 18, 18, 0));
+        return control;
+    }
+
+    private static Button zoomButton(String text, String tip, Runnable action) {
+        Button button = new Button(text);
+        button.getStyleClass().add("zoom-button");
+        button.setFocusTraversable(false);
+        button.setTooltip(new Tooltip(tip));
+        button.setOnAction(e -> action.run());
+        return button;
     }
 
     /** The "Reading — switch to Editor to change" banner shown above the canvas for an installed bot. */

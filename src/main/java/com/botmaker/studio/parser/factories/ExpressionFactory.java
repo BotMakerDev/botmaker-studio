@@ -155,7 +155,8 @@ public class ExpressionFactory {
                     ast.newSimpleName(constName)
             );
         }
-        return ast.newQualifiedName(ast.newSimpleName("MyEnum"), ast.newSimpleName("VALUE"));
+        // No enum is expected here, so there is no constant to name; `MyEnum.VALUE` named a type nothing declares.
+        return ast.newNullLiteral();
     }
 
     private static Expression createInfixExpression(AST ast, Op op) {

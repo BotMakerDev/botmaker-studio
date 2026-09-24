@@ -67,6 +67,63 @@ class VariableScopeVisitorTest {
                 .collect(Collectors.toSet());
     }
 
+    // --- Statements that end a variable's scope themselves ---
+
+    /** {@code double number = i;} after a loop was offered and did not compile: the loop owns its index. */
+    @Test
+    void aLoopIndexAndATryResourceEndWithTheirStatement() {
+        CompilationUnit cu = parse("""
+                package com.example;
+                public class Demo {
+                    void run() throws Exception {
+                        for (int i = 0; i < 3; i++) { String in = "@inLoop"; }
+                        for (String s : new String[0]) { }
+                        try (java.io.StringReader r = new java.io.StringReader("")) { String t = "@inTry"; }
+                        String after = "@after";
+                    }
+                }
+                """);
+        assertTrue(visibleAt(cu, "@inLoop").contains("i"));
+        assertTrue(visibleAt(cu, "@inTry").contains("r"));
+        Set<String> after = visibleAt(cu, "@after");
+        assertFalse(after.contains("i"), "the loop index must not outlive the loop: " + after);
+        assertFalse(after.contains("s"), "nor the for-each variable: " + after);
+        assertFalse(after.contains("r"), "nor a try resource: " + after);
+    }
+
+    /** {@code Object}'s methods were the first "methods in scope", and so what Call Function wrote. */
+    @Test
+    void objectsMethodsAreNotInScope() {
+        CompilationUnit cu = parse("""
+                package com.example;
+                public class Demo {
+                    static void tick() { }
+                    public static void main(String[] args) { String x = "@here"; }
+                }
+                """);
+        Set<String> methods = VariableScopeVisitor.getAvailableMethods(marker(cu, "@here")).stream()
+                .map(org.eclipse.jdt.core.dom.IMethodBinding::getName)
+                .collect(Collectors.toSet());
+        assertTrue(methods.contains("tick"), methods.toString());
+        assertFalse(methods.contains("clone"), methods.toString());
+        assertFalse(methods.contains("hashCode"), methods.toString());
+    }
+
+    @Test
+    void aStaticMemberIsAStaticContextAndALambdaDoesNotChangeIt() {
+        CompilationUnit cu = parse("""
+                package com.example;
+                public class Demo {
+                    static void s() { Runnable r = () -> { String a = "@staticLambda"; }; }
+                    void i() { String b = "@instance"; }
+                    static void t() { new Object() { void m() { String c = "@anon"; } }; }
+                }
+                """);
+        assertTrue(ProjectAnalyzer.isStaticContext(marker(cu, "@staticLambda")));
+        assertFalse(ProjectAnalyzer.isStaticContext(marker(cu, "@instance")));
+        assertFalse(ProjectAnalyzer.isStaticContext(marker(cu, "@anon")));
+    }
+
     // --- Fields and locals ---
 
     @Test
@@ -374,18 +431,22 @@ class VariableScopeVisitorTest {
                 "sibling methods are visible regardless of declaration order");
     }
 
+    /** Up the chain, and stopping at {@code Object}, whose members were what Call Function seeded into main. */
     @Test
     void inheritedMethodsAreCollectedFromTheSuperclassChain() {
         CompilationUnit cu = parse("""
                 package com.example;
-                public class Demo {
+                public class Demo extends java.util.ArrayList<String> {
                     void run() { String x = "@here"; }
                 }
                 """);
 
-        assertTrue(VariableScopeVisitor.getAvailableMethods(marker(cu, "@here")).stream()
-                        .anyMatch(m -> "toString".equals(m.getName())),
-                "Object's members are inherited by everything and must be offerable");
+        Set<String> methods = VariableScopeVisitor.getAvailableMethods(marker(cu, "@here")).stream()
+                .map(org.eclipse.jdt.core.dom.IMethodBinding::getName)
+                .collect(Collectors.toSet());
+        assertTrue(methods.contains("add"), "ArrayList's own members are inherited: " + methods);
+        assertTrue(methods.contains("isEmpty"), "and AbstractCollection's above it: " + methods);
+        assertFalse(methods.contains("wait"), "but not Object's: " + methods);
     }
 
     // --- The whole-file map ---

@@ -18,6 +18,11 @@ import java.util.List;
 
 public class InstantiationBlock extends AbstractExpressionBlock {
 
+    /** What a {@code throw} slot offers beside the project's own exception classes. All in {@code java.lang}. */
+    private static final List<String> COMMON_EXCEPTIONS = List.of(
+            "IllegalStateException", "IllegalArgumentException", "RuntimeException",
+            "UnsupportedOperationException", "Exception");
+
     private final String className;
     private final List<ExpressionBlock> arguments = new ArrayList<>();
 
@@ -51,17 +56,24 @@ public class InstantiationBlock extends AbstractExpressionBlock {
         if (isCompatibleWithArrayList(expectedType) && !classSelector.getItems().contains("ArrayList")) {
             classSelector.getItems().add("ArrayList");
         }
+        if (expectedType.qualifiedName().equals(Throwable.class.getName())) {
+            for (String exception : COMMON_EXCEPTIONS) {
+                if (!classSelector.getItems().contains(exception)) classSelector.getItems().add(exception);
+            }
+        }
 
         classSelector.setValue(className);
 
         classSelector.setOnAction(e -> {
             String selected = classSelector.getValue();
             if (selected != null && !selected.equals(className)) {
-                context.getCodeEditor().updateInstantiation(
-                        (ClassInstanceCreation) this.astNode,
-                        selected,
-                        null
-                );
+                // The new class's own simplest constructor, seeded fresh: keeping the old arguments put
+                // `new ArrayList("")` where an exception's message had been.
+                List<ResolvedType> seed = context.getProjectAnalyzer().getConstructors(selected).stream()
+                        .min(java.util.Comparator.comparingInt(sig -> sig.paramTypes().size()))
+                        .map(MethodSignature::paramTypes)
+                        .orElse(List.of());
+                context.getCodeEditor().updateInstantiation((ClassInstanceCreation) this.astNode, selected, seed);
             }
         });
 

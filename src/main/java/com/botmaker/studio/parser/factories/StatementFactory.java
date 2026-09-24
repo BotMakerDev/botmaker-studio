@@ -34,7 +34,7 @@ public class StatementFactory {
             case BlockType.VarDecl v -> buildVarDecl(ctx, v, context);
             case BlockType.LibraryCall l -> buildLibraryCall(ctx, l);
             case BlockType.LambdaCall l -> buildLambdaCall(ctx, l);
-            case BlockType.EnumDecl ignored -> createEnumDeclaration(ctx.ast());
+            case BlockType.EnumDecl ignored -> createEnumDeclaration(ctx.ast(), context);
             case BlockType.MethodMember ignored -> null; // a method is a class member, not a body statement
         };
     }
@@ -204,6 +204,28 @@ public class StatementFactory {
             analyzer.getVisibleVariables(context, ResolvedType.UNKNOWN).stream()
                     .map(ProjectAnalyzer.VariableOption::name)
                     .forEach(taken::add);
+        }
+        if (!taken.contains(base)) return base;
+        for (int i = 2; ; i++) {
+            String candidate = base + i;
+            if (!taken.contains(candidate)) return candidate;
+        }
+    }
+
+    /**
+     * {@code base}, or {@code base2}, {@code base3}… past every class, interface, enum and record the file
+     * declares, top-level, nested or local. Syntactic, like {@link #declaredNamesAround}; the whole file rather
+     * than the method, because a local type may not reuse an enclosing type's name either.
+     */
+    static String uniqueTypeName(ASTNode context, String base) {
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        if (context != null) {
+            context.getRoot().accept(new ASTVisitor() {
+                @Override
+                public void preVisit(ASTNode node) {
+                    if (node instanceof AbstractTypeDeclaration type) taken.add(type.getName().getIdentifier());
+                }
+            });
         }
         if (!taken.contains(base)) return base;
         for (int i = 2; ; i++) {
@@ -547,10 +569,14 @@ public class StatementFactory {
         return doStatement;
     }
 
-    private static Statement createEnumDeclaration(AST ast) {
+    /**
+     * A local {@code enum}, named {@code MyEnum}, {@code MyEnum2}… past every type the file already declares:
+     * a fixed name made the second one "enum MyEnum is already defined in method main".
+     */
+    private static Statement createEnumDeclaration(AST ast, ASTNode context) {
         TypeDeclarationStatement typeDeclStmt = ast.newTypeDeclarationStatement(ast.newEnumDeclaration());
         EnumDeclaration enumDecl = (EnumDeclaration) typeDeclStmt.getDeclaration();
-        enumDecl.setName(ast.newSimpleName("MyEnum"));
+        enumDecl.setName(ast.newSimpleName(uniqueTypeName(context, "MyEnum")));
         EnumConstantDeclaration const1 = ast.newEnumConstantDeclaration();
         const1.setName(ast.newSimpleName("OPTION_A"));
         enumDecl.enumConstants().add(const1);
@@ -668,7 +694,8 @@ public class StatementFactory {
     /**
      * The first method callable unqualified at {@code context}. Constructors are skipped (they aren't statements)
      * and so is the enclosing method itself — seeding a block with a call to the method you're editing would be
-     * unbounded recursion, which compiles but is never what was meant.
+     * unbounded recursion, which compiles but is never what was meant. In a static member only static methods
+     * qualify: {@code main} has no {@code this} to call an instance method on.
      */
     private static IMethodBinding firstCallableMethod(ProjectAnalyzer analyzer, ASTNode context) {
         if (analyzer == null || context == null) return null;
@@ -679,9 +706,11 @@ public class StatementFactory {
                 break;
             }
         }
+        boolean staticOnly = ProjectAnalyzer.isStaticContext(context);
         for (IMethodBinding m : analyzer.getAvailableScopes(context).methods()) {
             if (m.isConstructor() || m.isSynthetic()) continue;
             if (m.getName().equals(enclosing)) continue;
+            if (staticOnly && !Modifier.isStatic(m.getModifiers())) continue;
             return m;
         }
         return null;

@@ -188,6 +188,81 @@ class StatementFactoryTest {
         assertTrue(text(BlockCatalog.DECLARE_ENUM).contains("enum"), text(BlockCatalog.DECLARE_ENUM));
     }
 
+    /** A second Define Enum in one file used to write a second {@code enum MyEnum}, a compile error. */
+    @Test
+    void aSecondEnumIsNamedPastEveryTypeTheFileDeclares() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public static void main(String[] args) {
+                        enum MyEnum { A }
+                    }
+                }
+                """;
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), host, TestSupport.SOURCE_ROOT);
+        assertNotNull(cu);
+        MethodDeclaration main = (MethodDeclaration) ((TypeDeclaration) cu.types().getFirst())
+                .bodyDeclarations().getFirst();
+
+        Statement second = StatementFactory.createStatement(
+                EditContext.of(cu, null, new ProjectState()), BlockCatalog.DECLARE_ENUM, main.getBody());
+
+        assertTrue(second.toString().contains("enum MyEnum2"), second.toString());
+        assertEquals("Subject2", StatementFactory.uniqueTypeName(main.getBody(), "Subject"));
+    }
+
+    /** A throw's slot takes a Throwable; typed UNKNOWN it offered {@code new ArrayList("")}. */
+    @Test
+    void aThrowSlotExpectsAThrowable() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public static void main(String[] args) {
+                        throw new IllegalStateException("");
+                    }
+                }
+                """;
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), host, TestSupport.SOURCE_ROOT);
+        assertNotNull(cu);
+        MethodDeclaration main = ((TypeDeclaration) cu.types().getFirst()).getMethods()[0];
+        org.eclipse.jdt.core.dom.ThrowStatement stmt =
+                (org.eclipse.jdt.core.dom.ThrowStatement) main.getBody().statements().getFirst();
+
+        assertEquals("java.lang.Throwable",
+                ProjectAnalyzer.inferExpectedType(stmt.getExpression()).qualifiedName());
+    }
+
+    /**
+     * "Call Function" dropped in {@code static main} took the first method in scope, which was {@code clone()}
+     * from {@code Object}: "non-static method clone() cannot be referenced from a static context". In a static
+     * member only a static method of the project may be called, and none of {@code Object}'s.
+     */
+    @Test
+    void callFunctionInAStaticMethodNamesOnlyAStaticMethod() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public void helper() { }
+                    public static void tick() { }
+                    public static void main(String[] args) {
+                    }
+                }
+                """;
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), host, TestSupport.SOURCE_ROOT);
+        assertNotNull(cu);
+        MethodDeclaration main = ((TypeDeclaration) cu.types().getFirst()).getMethods()[2];
+        ProjectState state = new ProjectState();
+
+        Statement call = StatementFactory.createStatement(
+                EditContext.of(cu, new ProjectAnalyzer(null, state), state),
+                controlFlow(Kind.FUNCTION_CALL), main.getBody());
+
+        assertEquals("tick();", call.toString().trim());
+    }
+
     /**
      * A method is a class member, not a body statement. The factory says so by returning {@code null} — the
      * one live null path through {@code CodeEditor.addStatement}, and the reason B11 has a third site.

@@ -62,7 +62,7 @@ public final class StatementMenu {
                                      Consumer<BlockType> onSelection) {
         Predicate<BlockType> allowed =
                 targetBody == null ? b -> true : b -> StatementPlacement.allows(b, targetBody);
-        ContextMenu menu = new ContextMenu();
+        ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search blocks…",
                 (m, query) -> rebuildItems(m, query, analyzer, surface, allowed, onSelection));
         return menu;

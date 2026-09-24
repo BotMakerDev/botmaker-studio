@@ -131,7 +131,7 @@ public final class BlockUIComponents {
         bodyLabel.setMaxWidth(340);
         content.getChildren().addAll(titleLabel, bodyLabel);
 
-        ContextMenu popover = new ContextMenu();
+        ContextMenu popover = com.botmaker.studio.ui.render.menu.MenuTracker.track(new ContextMenu());
         popover.getItems().add(new CustomMenuItem(content, false)); // hideOnClick=false → text stays put
         btn.setOnAction(e -> popover.show(btn, Side.BOTTOM, 0, 0));
         return btn;

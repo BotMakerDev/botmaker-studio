@@ -50,6 +50,17 @@ class ConstructorPlaceholderTest {
     }
 
     /**
+     * {@code Keyboard.combo(new Key())} reached a bot: an enum has no constructor a bot can call, and a type
+     * with no public one either. The first constant stands in; a type with no constant of itself is {@code null}.
+     */
+    @Test
+    void anEnumOrATypeWithNoPublicConstructorIsNeverNewed() {
+        assertEquals("Key.ENTER", seed("Key"));
+        assertEquals("Mode.FAST", seed("Mode"));
+        assertEquals("null", seed("Sealed"));
+    }
+
+    /**
      * Without an analyzer there is nothing to ask, so the old text stands. This is the live path for the short
      * {@code createDefaultInitializer} overloads ({@code CodeEditor}, {@code TypeHandler}) — which is also why
      * the special cases below cannot be retired in favour of the rule.
@@ -145,6 +156,21 @@ class ConstructorPlaceholderTest {
                 public class Holder {
                     public Holder(Template template) {}
                 }
+                """);
+        addClass(state, analyzer, "Key", """
+                package test;
+                public enum Key { ENTER, ESCAPE }
+                """);
+        addClass(state, analyzer, "Mode", """
+                package test;
+                public final class Mode {
+                    public static final Mode FAST = new Mode();
+                    private Mode() {}
+                }
+                """);
+        addClass(state, analyzer, "Sealed", """
+                package test;
+                public interface Sealed { }
                 """);
         return analyzer;
     }

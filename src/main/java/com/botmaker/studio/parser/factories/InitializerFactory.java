@@ -159,8 +159,15 @@ public class InitializerFactory {
             if (seeded != null) return seeded;
         }
 
-        // 3. Objects
+        // 3. Objects. A type with no constructor a bot can call — a library enum the parse has no binding for,
+        // an interface, a class of constants — is a constant of itself (`Key.ENTER`), and failing that `null`:
+        // a bare `new Key()` was the one answer guaranteed not to compile.
         if (!richType.isUnknown()) {
+            if (analyzer != null && analyzer.getConstructors(richType.leafType().simpleName()).isEmpty()) {
+                return analyzer.constantOf(richType)
+                        .map(constant -> parseExpr(ast, constant))
+                        .orElseGet(ast::newNullLiteral);
+            }
             return newInstance(ast, richType, analyzer);
         }
 

@@ -115,7 +115,7 @@ public final class ExpressionMenu {
             boolean allowArrayDims,
             boolean allowVoid,
             Consumer<ResolvedType> onTypeSelected) {
-        ContextMenu menu = new ContextMenu();
+        ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search types…", (m, query) ->
                 rebuildTypeItems(m, query, currentType, context, contextNode, allowArrayDims, allowVoid, onTypeSelected));
         menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
@@ -238,7 +238,7 @@ public final class ExpressionMenu {
             Predicate<ExpressionType> filter,
             Consumer<Object> onSelect) {
 
-        ContextMenu menu = new ContextMenu();
+        ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search…", (m, query) ->
                 rebuildExpressionItems(m, query, expectedType, constantOnly, context, contextNode, filter, onSelect));
         return menu;
@@ -555,12 +555,13 @@ public final class ExpressionMenu {
         List<Menu> scopeMenus = new ArrayList<>();
         SdkSurfaceService surface = (context != null) ? context.getSdkSurface() : null;
 
-        // 1. Enclosing class's own methods — local call (no receiver).
+        // 1. Enclosing class's own methods — local call (no receiver). Static ones only in a static member:
+        // `main` has no `this`, and an instance method picked there does not compile.
         String enclosingClass = enclosingClassName(contextNode);
         if (analyzer != null && enclosingClass != null) {
             MenuBuilders.addIfNonNull(scopeMenus, MenuBuilders.buildScopeMenu(
-                    "This (" + enclosingClass + ")", "", enclosingClass, false, expectedType, analyzer,
-                    surface, onSelect));
+                    "This (" + enclosingClass + ")", "", enclosingClass,
+                    ProjectAnalyzer.isStaticContext(contextNode), expectedType, analyzer, surface, onSelect));
         }
 
         // 2. Visible variables (instance members) + 3. in-scope static classes. Each submenu is dropped when

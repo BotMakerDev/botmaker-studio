@@ -272,7 +272,7 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
          */
         private ContextMenu enumCaseMenu(CodeEditorService context, ResolvedType enumType,
                                          Set<String> usedLabels, SwitchStatement parentSwitch) {
-            ContextMenu menu = new ContextMenu();
+            ContextMenu menu = com.botmaker.studio.ui.render.menu.MenuTracker.track(new ContextMenu());
             String current = caseExpression != null ? caseExpression.getAstNode().toString() : null;
 
             List<String> remaining = enumType.enumConstants().stream()
