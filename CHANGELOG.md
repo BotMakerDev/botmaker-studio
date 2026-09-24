@@ -16,6 +16,9 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A plugin can ask Studio for its missing file.** When a project has no `Sdk.java`, the Activity Flow
+  window's *Create Sdk.java* has Studio write `plugins/sdk/Sdk.java` once, with an empty flow and the whole
+  desktop as the capture source. An existing file is never overwritten, and `main` is left for you to edit.
 - **An Assistant tab.** Ask a model in plain words to change the open file's blocks. Choose Ollama (local,
   no key), OpenAI, any OpenAI-compatible server, Anthropic or Gemini; a key is read from the environment
   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and never saved. The tab shows each tool call

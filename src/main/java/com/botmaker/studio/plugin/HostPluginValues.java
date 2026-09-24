@@ -1,12 +1,16 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.ValueContext;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.JavaManagedValues;
+import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedMethod;
 import com.botmaker.studio.project.vcs.ProjectVcs;
@@ -99,6 +103,39 @@ public final class HostPluginValues implements PluginValues {
         return Optional.of(HostValueContext.of(value.form(), value.expression(), services,
                 expression -> write(value, expression),
                 () -> ManagedConstants.scan(config, state)));
+    }
+
+    /**
+     * Writes the holder of {@code id} when the project has none ({@link ManagedHolders}), never over a file
+     * that exists. The declaring plugin is found among the bound ones by the id it declared.
+     */
+    @Override
+    public Optional<String> create(String id) {
+        if (id == null || id.isBlank()) return Optional.of("No value was named.");
+        if (JavaManagedValues.find(config, state, id).isPresent()) return Optional.empty();
+        for (StudioPlugin plugin : PluginHost.plugins()) {
+            List<ManagedValue> declared;
+            try {
+                declared = plugin.managedValues();
+            } catch (RuntimeException | LinkageError e) {
+                continue;
+            }
+            if (declared == null) continue;
+            for (ManagedValue value : declared) {
+                if (value == null || !id.equals(value.id())) continue;
+                ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.id(), value, declared,
+                        PluginHost.grammar());
+                if (plan instanceof ManagedHolders.Plan.Refused refused) return Optional.of(refused.reason());
+                ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan;
+                try {
+                    ProjectWrites.create(config, write.file(), write.source(), "Create " + write.relative());
+                } catch (java.io.UncheckedIOException e) {
+                    return Optional.of("Could not write " + write.relative() + ": " + e.getCause().getMessage());
+                }
+                return Optional.empty();
+            }
+        }
+        return Optional.of("No plugin in this project declares a value called \"" + id + "\".");
     }
 
     /**

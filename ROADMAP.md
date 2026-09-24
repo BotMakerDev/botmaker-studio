@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 2, follow-up: snug C mouths, deeper dark fills.**
+- **2026-09-25 (latest) — Blocks round 2, phase 6: the host creates a missing `@Managed` holder.**
+  - Changes:
+    - `HostPluginValues.create(id)` (contract `PluginValues.create`, studio-api 0.3.0): nothing when the id is already in the bot; else finds the bound plugin declaring it and writes its holder through `ProjectWrites.create` (never overwrites, snapshots first).
+    - `project/managed/ManagedHolders.plan` builds the file: package `<bot package>.plugins.<last id segment>`, one `@Managed` method per method-shaped sibling with the same holder (name from the id), each returning `grammar.spell(type, initial)` or `grammar.freshSpelling(type)`; a type-level value is an empty annotated class. A value with no holder, or one no plugin can write a start for, is refused with a sentence.
+  - Tests: `ManagedHoldersTest` (5): siblings share one holder and read back editable, type-level class, refusal, written once never overwritten, id → method name. By hand: the file generated against the real SDK grammar compiles against the gamebot classpath.
+
+- **2026-09-25 — Blocks round 2, follow-up: snug C mouths, deeper dark fills.**
   - Changes:
     - `.shape-c > .bc-body` and `.shape-hat > .block-body-wrapper` lose their padding inside the hole: the stack sits against the arm and under the header. `GutterDecorator` skips a `BodyBlock` — it reserved a 12px breakpoint strip on the list of lines itself, which was most of the gap. `BodyBlock` stamps `.body-first` on its first statement, whose notch is hidden.
     - An else-if link (`IfBlock.isElseIf`) carries `.else-if-link` (no lip, no bottom arm, no radius) and `joinsStack()` false, a new `AbstractCodeBlock` hook `getUINode` consults before `StackJoints.attach`.
