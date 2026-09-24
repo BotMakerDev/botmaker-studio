@@ -464,6 +464,34 @@ class MavenServiceSdkTest {
                 "a blank version pins nothing, the same rule writeUserLibraries has always had");
     }
 
+    /**
+     * The template pins its SDK as {@code ${botmaker.sdk.version}} so the umbrella can build it against the
+     * reactor. A project copied from it must read the property's value, and an upgrade must move the property
+     * rather than overwrite the placeholder with a literal.
+     */
+    @Test
+    void aPropertyPinIsReadThroughAndMovedInPlace() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("TestBot", projectsRoot);
+        Path projectDir = cfg.projectPath();
+        MavenService.writePom(projectDir, cfg, "1.1.5");
+        Model model = readModel(projectDir);
+        model.getProperties().setProperty("botmaker.sdk.version", "1.1.14");
+        model.getDependencies().stream()
+                .filter(d -> "botmaker-sdk".equals(d.getArtifactId()))
+                .forEach(d -> d.setVersion("${botmaker.sdk.version}"));
+        writeModel(projectDir, model);
+
+        assertEquals("1.1.14", MavenService.readSdkVersion(projectDir).orElse(""));
+
+        MavenService.setDependencyVersions(projectDir, java.util.Map.of("com.github.LiQiyeDev:botmaker-sdk", "2.0.0"));
+
+        Model after = readModel(projectDir);
+        assertEquals("2.0.0", after.getProperties().getProperty("botmaker.sdk.version"));
+        assertTrue(after.getDependencies().stream().anyMatch(d -> "botmaker-sdk".equals(d.getArtifactId())
+                && "${botmaker.sdk.version}".equals(d.getVersion())), "the placeholder was overwritten");
+        assertEquals("2.0.0", MavenService.readSdkVersion(projectDir).orElse(""));
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------
 
     private static void writeModel(Path projectDir, Model model) throws Exception {

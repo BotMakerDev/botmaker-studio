@@ -839,6 +839,9 @@ public final class MavenService {
      * a plugin is installed because its coordinate is in the pom, so this is the same question for every
      * plugin, plugin #1 included. Empty is not an error anywhere here — a project that does not declare a
      * plugin is an ordinary project, and every caller degrades rather than refusing.
+     *
+     * <p>A pin written as {@code ${property}} answers the property's value: the template pins its SDK as
+     * {@code ${botmaker.sdk.version}} (2026-09-24), and a resolver handed the placeholder text resolves nothing.
      */
     public static Optional<String> readDependencyVersion(Path projectDir, String groupId, String artifactId) {
         Model model = readModel(projectDir);
@@ -847,7 +850,16 @@ public final class MavenService {
                 .filter(d -> groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId()))
                 .map(Dependency::getVersion)
                 .filter(v -> v != null && !v.isBlank())
+                .map(v -> propertyOf(v).map(model.getProperties()::getProperty).orElse(v))
                 .findFirst();
+    }
+
+    /** {@code name} for a version written exactly {@code ${name}}, otherwise empty. */
+    private static Optional<String> propertyOf(String version) {
+        String v = version.strip();
+        return v.startsWith("${") && v.endsWith("}") && v.length() > 3
+                ? Optional.of(v.substring(2, v.length() - 1))
+                : Optional.empty();
     }
 
     /**
@@ -1020,12 +1032,18 @@ public final class MavenService {
         writeModel(projectDir, model);
     }
 
-    /** Sets the version of the matching dependency already present in the model (no-op if absent). */
+    /**
+     * Sets the version of the matching dependency already present in the model (no-op if absent). A pin
+     * written as {@code ${property}} the pom declares moves the property, so the pom keeps its spelling.
+     */
     private static void setManagedDependencyVersion(Model model, String groupId, String artifactId,
                                                     String version) {
         for (Dependency d : model.getDependencies()) {
             if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId())) {
-                d.setVersion(version);
+                Optional<String> property = d.getVersion() == null ? Optional.empty() : propertyOf(d.getVersion())
+                        .filter(model.getProperties()::containsKey);
+                if (property.isPresent()) model.getProperties().setProperty(property.get(), version);
+                else d.setVersion(version);
             }
         }
     }

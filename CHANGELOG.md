@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 No source changes since v1.1.9; re-released for updated upstream pins.
 
+### Fixed
+
+- **A plugin pinned as `${property}` reads and upgrades through the property.**
+  `MavenService.readDependencyVersion` answers the property's value, and *Project ▸ Upgrade…* moves the
+  property rather than overwriting the placeholder. The gamebot template pins its SDK as
+  `${botmaker.sdk.version}`, and a project copied from it would otherwise resolve no SDK jar.
+
 ### Added
 
 - **⏺ Record is back on the overlay HUD, and it inserts at the cursor.** Press Record, act in the game, press
