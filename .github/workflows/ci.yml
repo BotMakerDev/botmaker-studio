@@ -277,8 +277,11 @@ jobs:
         # always sees itself as the pom default 1.0.0 and re-prompts).
         # No -Dbotmaker.*.version: the step above installed all four upstreams at 0.0.0-SNAPSHOT, which is
         # exactly what this pom's four version properties already default to.
+        # -Dbotmaker.contract.tag is the one exception: it is not a version this build resolves but the tag a
+        # USER's project is given when Studio writes its first @Param (config/HostContract), so it must be
+        # the real contract tag rather than the 0.0.0-SNAPSHOT installed above.
         shell: bash
-        run: mvn -B -Pdist package -DskipTests -Djavacpp.platform=${{ matrix.javacpp }} -Dapp.version=${{ steps.ver.outputs.appversion }}
+        run: mvn -B -Pdist package -DskipTests -Djavacpp.platform=${{ matrix.javacpp }} -Dapp.version=${{ steps.ver.outputs.appversion }} -Dbotmaker.contract.tag=${{ steps.deps.outputs.studioapi }}
 
       # The portable app-image (zipped) is kept as a no-install fallback; the native installers
       # (.deb/.rpm on Linux, .msi on Windows) are emitted by `-Pdist` into target/dist alongside it.

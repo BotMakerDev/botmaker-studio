@@ -92,6 +92,25 @@ public final class LibraryService {
     }
 
     /**
+     * Makes sure the project can compile {@code @Param}: declares the plugin contract when the resolved
+     * classpath lacks it, then re-resolves in the background. Answers whether the pom was written.
+     *
+     * <p>The pom write is synchronous on purpose — a Run pressed the moment after must already see it — and
+     * only the slow re-resolve is not. See {@link ContractDependency} for why present is judged on the
+     * classpath rather than the pom.
+     */
+    public boolean ensureContract() {
+        try {
+            if (!ContractDependency.ensure(config.projectPath(), state.getResolvedClasspath())) return false;
+        } catch (Exception e) {
+            System.err.println("Could not declare the plugin contract: " + e.getMessage());
+            return false;
+        }
+        CompletableFuture.runAsync(this::rebind);
+        return true;
+    }
+
+    /**
      * Re-resolve, re-bind the plugins, re-index, announce — everything that follows a pom write.
      *
      * <p>One copy, because three callers had grown it: a wrong answer here is a project whose editor is

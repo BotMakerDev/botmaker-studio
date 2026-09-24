@@ -55,6 +55,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **A blank project's first parameter compiles.** Adding a parameter wrote `@Param` into a project whose pom
+  named no plugin, so nothing brought `botmaker-studio-api` and the build failed with `package
+  com.botmaker.plugin.api.params does not exist`. Studio now declares the contract (the tag it was built
+  against) when the project's classpath lacks it — never beside an SDK that already brings it — and a
+  project already in that state is repaired when it is opened.
+
 - **A plugin pinned as `${property}` reads and upgrades through the property.**
   `MavenService.readDependencyVersion` answers the property's value, and *Project ▸ Upgrade…* moves the
   property rather than overwriting the placeholder. The gamebot template pins its SDK as

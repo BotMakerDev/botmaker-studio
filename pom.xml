@@ -25,6 +25,12 @@
              the *host* side of it — it implements SlotContext/StudioServices and consumes what a plugin
              contributes. -->
         <botmaker.studioapi.version>0.0.0-SNAPSHOT</botmaker.studioapi.version>
+        <!-- The contract TAG a project is given when Studio writes the first @Param into it
+             (config/HostContract). Not botmaker.studioapi.version: the release build installs the contract
+             from source at 0.0.0-SNAPSHOT, so that property never holds a tag a user's project could
+             resolve from JitPack. ci.yml passes STUDIO_API_TAG from .deps.env; a dev build keeps
+             0.0.0-SNAPSHOT, which resolves from ~/.m2. -->
+        <botmaker.contract.tag>0.0.0-SNAPSHOT</botmaker.contract.tag>
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
         <botmaker.pluginhost.version>0.0.0-SNAPSHOT</botmaker.pluginhost.version>
@@ -350,6 +356,20 @@
     </dependencies>
 
     <build>
+        <!-- One file is filtered, and only one: every other resource is copied byte for byte, so a CSS
+             `${…}` or a template's placeholder is never touched by Maven. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes><exclude>botmaker/host.properties</exclude></excludes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes><include>botmaker/host.properties</include></includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

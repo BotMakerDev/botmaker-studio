@@ -775,6 +775,24 @@ public final class MavenService {
     }
 
     /**
+     * Declares {@code library} at {@code compile} scope unless the pom already names its coordinate, and
+     * answers whether it wrote. A declared version is never moved: that is Manage Libraries' question.
+     */
+    public static boolean declareIfAbsent(Path projectDir, UserLibrary library) throws IOException {
+        Model model = requireModel(projectDir);
+        boolean present = model.getDependencies().stream()
+                .anyMatch(d -> sameArtifact(d, library.groupId(), library.artifactId()));
+        if (present) return false;
+        Dependency dep = new Dependency();
+        dep.setGroupId(library.groupId());
+        dep.setArtifactId(library.artifactId());
+        dep.setVersion(library.version());
+        model.getDependencies().add(dep);
+        writeModel(projectDir, model);
+        return true;
+    }
+
+    /**
      * Removes {@code groupId:artifactId} from {@code projectDir/pom.xml}, with the
      * {@code editorDependencies} {@link #installPlugin} declared alongside it.
      *

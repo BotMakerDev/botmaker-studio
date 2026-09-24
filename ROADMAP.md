@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — bound values (doc 36, phases 2–5).** `@Param`/`@Managed` identified by class
+- **2026-09-24 (latest) — a blank project gets the contract jar with its first `@Param`.**
+  `services/ContractDependency` (present = `Param.class` on the resolved classpath, never a jar name),
+  `LibraryService.ensureContract` from `ParametersDialog`, a repair at `BotProject.open` step 5a, and the tag
+  baked as `botmaker/host.properties` (`botmaker.contract.tag`, passed by `ci.yml` from `.deps.env`).
+
+- **2026-09-24 — bound values (doc 36, phases 2–5).** `@Param`/`@Managed` identified by class
   (`project/source/BotAnnotation`); a value's type is a `java.lang.reflect.Type` resolved once in
   `project/source/ValueTypeResolver`, and `ValueForm` is deleted; values are written as JDT trees
   (`plugin/grammar/ValueWriter` → `JavaValue`, copied into the file's AST — no `createStringPlaceholder` on

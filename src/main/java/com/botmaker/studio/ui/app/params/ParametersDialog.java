@@ -11,6 +11,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.StudioWindow;
@@ -112,6 +113,12 @@ public final class ParametersDialog {
      */
     private final ProjectState state;
 
+    /**
+     * Declares the plugin contract before a field is added, when the project cannot compile {@code @Param}
+     * yet — a blank project names no plugin, so nothing else brings it.
+     */
+    private final LibraryService libraries;
+
     /** Lit on the rail row a dragged parameter is over — styled in {@code blocks.css}, never inline. */
     private static final PseudoClass RAIL_DROP = PseudoClass.getPseudoClass("rail-drop");
 
@@ -163,10 +170,11 @@ public final class ParametersDialog {
     private static final Duration TYPING_TICK = Duration.millis(700);
     private Timeline typingWatch;
 
-    public ParametersDialog(Window owner, ProjectConfig config, ProjectState state) {
+    public ParametersDialog(Window owner, ProjectConfig config, ProjectState state, LibraryService libraries) {
         this.owner = owner;
         this.config = config;
         this.state = state;
+        this.libraries = libraries;
     }
 
     public void show() {
@@ -953,7 +961,10 @@ public final class ParametersDialog {
                             + "a field of that name, or no installed plugin declares this type.");
                     return;
                 }
-                error(fresh ? "Created " + selectedClass + ".java for it." : "");
+                // After the field, not before: a name refused above must not cost the project a dependency.
+                boolean declared = libraries.ensureContract();
+                String created = fresh ? "Created " + selectedClass + ".java for it." : "";
+                error(declared ? (created + " Added botmaker-studio-api to pom.xml for @Param.").trim() : created);
                 name.clear();
                 reload();
                 rebuildRail();
