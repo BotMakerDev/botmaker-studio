@@ -163,7 +163,11 @@ public class InitializerFactory {
         // an interface, a class of constants — is a constant of itself (`Key.ENTER`), and failing that `null`:
         // a bare `new Key()` was the one answer guaranteed not to compile.
         if (!richType.isUnknown()) {
-            if (analyzer != null && analyzer.getConstructors(richType.leafType().simpleName()).isEmpty()) {
+            boolean noConstructor = richType instanceof ResolvedType.Bound bound
+                    ? !hasPublicConstructor(bound.binding())
+                    : analyzer != null && analyzer.getConstructors(richType.leafType().simpleName()).isEmpty();
+            if (noConstructor) {
+                if (analyzer == null) return ast.newNullLiteral();
                 return analyzer.constantOf(richType)
                         .map(constant -> parseExpr(ast, constant))
                         .orElseGet(ast::newNullLiteral);
@@ -197,6 +201,24 @@ public class InitializerFactory {
      * recursion here: under this restriction an argument is never itself a {@code new}, so a depth cap and a
      * cycle guard would have nothing to guard. Thread the rewriter through if a real type ever needs more.
      */
+    /**
+     * Whether code anywhere may write {@code new T(…)} — a class, not abstract, with a public constructor. A
+     * binding answers this for a JDK type too, which the library index does not hold and the analyzer could
+     * only guess at with a made-up no-argument constructor ({@code new Class()}).
+     */
+    private static boolean hasPublicConstructor(ITypeBinding binding) {
+        ITypeBinding type = binding.getErasure();
+        if (!type.isClass() || Modifier.isAbstract(type.getModifiers())) return false;
+        boolean declaresOne = false;
+        for (IMethodBinding method : type.getDeclaredMethods()) {
+            if (!method.isConstructor()) continue;
+            declaresOne = true;
+            if (Modifier.isPublic(method.getModifiers())) return true;
+        }
+        // A source class with no constructor written has the implicit one, as public as the class.
+        return !declaresOne && Modifier.isPublic(type.getModifiers());
+    }
+
     static ClassInstanceCreation newInstance(AST ast, ResolvedType type, ProjectAnalyzer analyzer) {
         ClassInstanceCreation cic = ast.newClassInstanceCreation();
         cic.setType(ProjectAnalyzer.createTypeNode(ast, type));

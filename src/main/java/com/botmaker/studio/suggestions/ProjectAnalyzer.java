@@ -556,9 +556,17 @@ public class ProjectAnalyzer {
         if (node == null) return List.of();
         List<VariableOption> results = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (IVariableBinding b : VariableScopeVisitor.getAvailableVariables(node)) {
+        // An instance field cannot be named from static code, so it is not offered there — naming it is the
+        // "Cannot make a static reference to the non-static field" a seed or a menu pick used to write.
+        boolean staticContext = isStaticContext(node);
+        // A block is asked about as the place a statement is appended to: its end, after its own locals.
+        List<IVariableBinding> inScope = node instanceof Block block
+                ? VariableScopeVisitor.getAvailableVariablesAtEnd(block)
+                : VariableScopeVisitor.getAvailableVariables(node);
+        for (IVariableBinding b : inScope) {
             String name = b.getName();
             if (HIDDEN_VARIABLES.contains(name)) continue;
+            if (staticContext && b.isField() && !Modifier.isStatic(b.getModifiers())) continue;
             ResolvedType varType = ResolvedType.of(b.getType());
             if (!isCompatible(varType, requiredType)) continue;
             if (seen.add(name)) {
@@ -1073,7 +1081,8 @@ public class ProjectAnalyzer {
                 Type elementType = createTypeNode(ast, ResolvedType.of(binding.getElementType()));
                 return ast.newArrayType(elementType, binding.getDimensions());
             }
-            return ast.newSimpleType(ast.newName(binding.getName()));
+            // The erasure: a parameterized or wildcard binding's name is `Class<?>`, which is no identifier.
+            return ast.newSimpleType(ast.newName(binding.getErasure().getName()));
         }
 
         // Primitive / FromIndex / Named — build from the (qualified) name.

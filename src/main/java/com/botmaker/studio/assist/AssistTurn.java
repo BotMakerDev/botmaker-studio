@@ -13,6 +13,7 @@ import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.parser.ExpressionChoice;
+import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectState;
@@ -20,7 +21,6 @@ import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.util.MethodSignature;
-import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.*;
 
 import java.lang.reflect.Type;
@@ -126,7 +126,7 @@ public final class AssistTurn {
 
     /** The errors the working copy compiles with, one sentence each — what a model reads before it edits. */
     public List<String> errors() {
-        return describe(errorsOf(source), source);
+        return CompileGuard.describe(guard().errorsOf(source), source);
     }
 
     // ---- editing -----------------------------------------------------------------------------------------
@@ -214,12 +214,11 @@ public final class AssistTurn {
         if (stage.published == null) {
             return new Outcome.Refused(stage.status.isEmpty() ? List.of("That edit changed nothing.") : stage.status);
         }
-        List<Problem> introduced = new ArrayList<>(errorsOf(stage.published));
-        for (Problem existing : errorsOf(source)) introduced.remove(existing);
+        List<CompileGuard.Problem> introduced = guard().introduced(source, stage.published);
         if (!introduced.isEmpty()) {
             List<String> reasons = new ArrayList<>();
             reasons.add("That edit would not compile, so nothing was changed:");
-            reasons.addAll(describe(introduced, stage.published));
+            reasons.addAll(CompileGuard.describe(introduced, stage.published));
             return new Outcome.Refused(reasons);
         }
         source = stage.published;
@@ -227,37 +226,8 @@ public final class AssistTurn {
         return new Outcome.Accepted(summary);
     }
 
-    /** One compile error, identified the way two versions of a file can agree on: id plus arguments. */
-    private record Problem(int id, List<String> arguments, String message, int offset) {
-        @Override public boolean equals(Object o) {
-            return o instanceof Problem p && p.id == id && p.arguments.equals(arguments);
-        }
-        @Override public int hashCode() {
-            return Objects.hash(id, arguments);
-        }
-    }
-
-    private List<Problem> errorsOf(String code) {
-        CompilationUnit cu = new BotParser(workspace.classpath(), workspace.sourceRoot()).parse(workspace.file(), code);
-        List<Problem> problems = new ArrayList<>();
-        for (IProblem problem : cu.getProblems()) {
-            if (!problem.isError()) continue;
-            problems.add(new Problem(problem.getID(), List.of(problem.getArguments()), problem.getMessage(),
-                    problem.getSourceStart()));
-        }
-        return problems;
-    }
-
-    private static List<String> describe(List<Problem> problems, String code) {
-        return problems.stream().map(p -> "line " + lineOf(code, p.offset) + ": " + p.message).toList();
-    }
-
-    private static int lineOf(String code, int offset) {
-        int line = 1;
-        for (int i = 0; i < Math.min(offset, code.length()); i++) {
-            if (code.charAt(i) == '\n') line++;
-        }
-        return line;
+    private CompileGuard guard() {
+        return new CompileGuard(new BotParser(workspace.classpath(), workspace.sourceRoot()), workspace.file());
     }
 
     // ---- one step's private editor -----------------------------------------------------------------------

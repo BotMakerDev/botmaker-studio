@@ -33,6 +33,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   and a slot value is read by the value grammar as the slot's type and written back in the host's spelling.
   Each edit is compiled against the project's classpath and dropped if it adds an error; a turn lands as one
   undo step.
+- **An insert that would not compile is refused, and you are told why.** A block from the insert menu, a
+  pick from a value menu, a dropped palette block or a new variable is compiled before it is written. If it
+  adds an error the file did not have, nothing changes and the status line names the error. An error the
+  file already had never blocks you.
+- **Define Enum asks for the name and the values first.** OK stays disabled while the name is taken or not
+  a valid Java name. *View ▸ Ask for Names When Inserting* turns this off, and the variable window after a
+  new variable with it.
 
 ### Changed
 
@@ -76,6 +83,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 ### Fixed
 
 - **Blocks you insert compile in more places.**
+  - *Assign* and *Switch* in `main` no longer name an instance field; value menus in static code no longer
+    offer one. A block inserted after a variable can use it.
+  - A value for a `Class<?>` slot no longer crashes the menu, and a JDK type with no public constructor is
+    never written as `new T()`.
   - *Call Function* in `main` no longer writes `clone();`. A static method is offered only static methods,
     and `Object`'s own methods are never offered.
   - A value for a type with no public constructor is one of its constants (`Key.ENTER`) instead of

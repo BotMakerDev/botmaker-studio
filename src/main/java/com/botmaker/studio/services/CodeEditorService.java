@@ -13,6 +13,7 @@ import com.botmaker.studio.parser.BlockReuse;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.parser.SlotVacancy;
 import com.botmaker.studio.parser.StatementPlacement;
+import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.helpers.BlockNodes;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectFile;
@@ -226,7 +227,8 @@ public class CodeEditorService {
                                 FunctionDraft.freeName("newMethod", declaredMethodNames(typeDecl)),
                                 "void", info.insertionIndex());
                 case BlockType.EnumDecl ignored ->
-                        codeEditor.addEnumToClass(typeDecl, "NewEnum", info.insertionIndex());
+                        codeEditor.addEnumToClass(typeDecl,
+                                StatementFactory.uniqueTypeName(typeDecl, "NewEnum"), info.insertionIndex());
                 default -> { /* no other block type reports isClassMember() */ }
             }
         }

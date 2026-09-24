@@ -11,6 +11,8 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import com.botmaker.studio.parser.factories.StatementFactory;
+import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Statement;
 
 import java.util.ArrayList;
@@ -153,10 +155,22 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
      */
     private static void insertAndOpenIfVariable(CodeEditorService context, Node anchor, BodyBlock body,
                                                 com.botmaker.studio.palette.BlockType type, int index) {
+        javafx.stage.Window owner = anchor.getScene() == null ? null : anchor.getScene().getWindow();
+        Runnable insert = () -> context.getCodeEditor().addStatement(body, type, index);
+        if (!com.botmaker.studio.ui.app.vars.NamingPreference.ask()) {
+            insert.run();
+            return;
+        }
+        // An enum is named before it is written, so a second one never lands under the first one's name.
+        if (type instanceof com.botmaker.studio.palette.BlockType.EnumDecl) {
+            ASTNode at = body.getAstNode();
+            com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
+                            StatementFactory.uniqueTypeName(at, "MyEnum"), StatementFactory.declaredTypeNames(at))
+                    .ifPresent(draft -> context.getCodeEditor().addEnumStatement(body, index, draft));
+            return;
+        }
         // The insert is handed over rather than done here: identifying the new variable means reading the file
         // before and after the write, and the "before" has to be taken before it. See insertAndOpen.
-        com.botmaker.studio.ui.app.vars.EditVariableDialog.insertAndOpen(context,
-                anchor.getScene() == null ? null : anchor.getScene().getWindow(), type,
-                () -> context.getCodeEditor().addStatement(body, type, index));
+        com.botmaker.studio.ui.app.vars.EditVariableDialog.insertAndOpen(context, owner, type, insert);
     }
 }

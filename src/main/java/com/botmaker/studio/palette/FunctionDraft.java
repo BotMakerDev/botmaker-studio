@@ -129,7 +129,8 @@ public record FunctionDraft(String name, SignatureType returnType, List<Paramete
         }
     }
 
-    private static Optional<String> identifierProblem(String raw, String what) {
+    /** Why {@code raw} cannot name a {@code what} ("function", "enum", …), or empty when it can. */
+    public static Optional<String> identifierProblem(String raw, String what) {
         String name = raw == null ? "" : raw.trim();
         if (name.isEmpty()) return Optional.of("Give the " + what + " a name.");
         if (RESERVED.contains(name)) {

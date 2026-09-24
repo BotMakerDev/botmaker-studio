@@ -6,7 +6,19 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — Blocks round 2, phase 1: insertion bugs, one menu, zoom control.**
+- **2026-09-24 (latest) — Blocks round 2, phase 2: compile-safe insertion.**
+  - Changes:
+    - `parser/guard/CompileGuard` is the "only a new error refuses" rule, moved out of `AssistTurn`.
+    - `CodeEditor.insert` runs it for every menu, palette and picker insert; a refusal is a status line.
+    - The guard is skipped with no resolved classpath.
+    - Seeds read scope at the insertion point (`insertionContext`, `getAvailableVariablesAtEnd`).
+    - Instance fields are not offered in static code.
+    - `InitializerFactory` asks a binding whether `new T()` exists; `createTypeNode` writes the erasure.
+    - `DefineEnumDialog` + `EnumDraft` name an enum before it is inserted.
+    - `NamingPreference` (View ▸ Ask for Names When Inserting) turns it and the variable dialog off.
+    - `PaletteCompilesTest` inserts every statement into `main`, an instance method and a loop.
+    - It also picks every value form into ten slot types, static and instance.
+- **2026-09-24 — Blocks round 2, phase 1: insertion bugs, one menu, zoom control.**
   - Changes:
     - `VariableScopeVisitor` scopes for `for`, for-each and `try`, and stops at `Object`.
     - `ProjectAnalyzer.isStaticContext` filters `firstCallableMethod` and the "This" group.

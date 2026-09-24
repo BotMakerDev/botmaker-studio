@@ -29,6 +29,12 @@ class ArgumentImportsTest {
                     Vision.find("gold.png");
                 }
             }
+            class Vision {
+                static void find(String picture) {}
+            }
+            class Pixel {
+                static void find(java.awt.Color color) {}
+            }
             """;
 
     private static MethodInvocation findCall(CompilationUnit cu) {

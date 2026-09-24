@@ -47,6 +47,32 @@ public class VariableScopeVisitor extends ASTVisitor {
         return getScopeAt(node).types();
     }
 
+    /**
+     * Variables in scope at the end of {@code block} — where a statement appended to it lands, so it sees
+     * every local the block declares. {@link #getAvailableVariables(ASTNode)} on the block answers for its
+     * start, which is right for nothing inserted into it.
+     */
+    public static List<IVariableBinding> getAvailableVariablesAtEnd(Block block) {
+        if (block.statements().isEmpty() || !(block.getRoot() instanceof CompilationUnit cu)) {
+            return getAvailableVariables(block);
+        }
+        ASTNode last = (ASTNode) block.statements().getLast();
+        List<IVariableBinding> captured = new ArrayList<>();
+        boolean[] done = {false};
+        cu.accept(new VariableScopeVisitor() {
+            // postVisit runs after the statement's endVisit has declared its locals, and before the block's
+            // endVisit pops them.
+            @Override
+            public void postVisit(ASTNode candidate) {
+                if (!done[0] && candidate == last) {
+                    done[0] = true;
+                    captured.addAll(snapshotVariables());
+                }
+            }
+        });
+        return captured;
+    }
+
     public static List<IVariableBinding> getAvailableVariables(ASTNode node, ITypeBinding type) {
         return getAvailableVariables(node).stream()
                 .filter(b -> b.getType().isAssignmentCompatible(type))

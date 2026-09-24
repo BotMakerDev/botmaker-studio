@@ -5,6 +5,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -23,6 +24,7 @@ import com.botmaker.studio.parser.handlers.StatementSourceHandler;
 import com.botmaker.studio.parser.handlers.SwitchNormalizer;
 import com.botmaker.studio.parser.handlers.TryHandler;
 import com.botmaker.studio.parser.handlers.TypeHandler;
+import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -363,6 +365,38 @@ public class CodeEditor {
         if (newCode != null) triggerUpdate(newCode, markUnedited, target, kind);
     }
 
+    /**
+     * {@link #edit}, for an edit that writes Java the user did not type — a block from a menu, a value from a
+     * picker — and so is refused when it would add a compile error. See {@link #wouldNotCompile}.
+     */
+    private void insert(ASTNode target, EditKind kind, boolean markUnedited,
+                        BiFunction<CompilationUnit, String, String> op) {
+        if (!canModify(target, kind)) return;
+        CompilationUnit cu = getCompilationUnit();
+        if (cu == null) return;
+        String newCode = op.apply(cu, getCurrentCode());
+        if (newCode == null || wouldNotCompile(newCode)) return;
+        triggerUpdate(newCode, markUnedited, target, kind);
+    }
+
+    /**
+     * Whether {@code newCode} compiles with an error the current code does not have — told to the user in a
+     * status line naming it. {@link CompileGuard} is the rule; this is the canvas's use of it, beside the
+     * syntax gate in {@link #wouldBreak} that every edit passes.
+     *
+     * <p>Only with a resolved classpath. Without one every class a plugin declares reads as unknown, so the
+     * first call to it would refuse; the syntax gate is all a project with no classpath gets, as before.
+     */
+    private boolean wouldNotCompile(String newCode) {
+        String before = getCurrentCode();
+        if (before == null || newCode.equals(before) || state.getResolvedClasspath().isEmpty()) return false;
+        List<CompileGuard.Problem> introduced = CompileGuard.of(state).introduced(before, newCode);
+        if (introduced.isEmpty()) return false;
+        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                "That would not compile here, so nothing was changed: " + introduced.getFirst().message()));
+        return true;
+    }
+
     // =================================================================================
     // TYPE / INSTANTIATION
     // =================================================================================
@@ -380,11 +414,11 @@ public class CodeEditor {
     }
 
     public void replaceWithInstantiation(Expression toReplace, String typeName, List<ResolvedType> paramTypes) {
-        edit(toReplace, EditKind.BODY, true, (cu, code) -> InstantiationHandler.replaceWithInstantiation(ctx(cu), code, toReplace, ResolvedType.named(typeName), paramTypes));
+        insert(toReplace, EditKind.BODY, true, (cu, code) -> InstantiationHandler.replaceWithInstantiation(ctx(cu), code, toReplace, ResolvedType.named(typeName), paramTypes));
     }
 
     public void replaceWithVariable(Expression toReplace, String variableName) {
-        edit(toReplace, EditKind.BODY, false, (cu, code) -> replaceNode(cu, code, toReplace, cu.getAST().newSimpleName(variableName)));
+        insert(toReplace, EditKind.BODY, false, (cu, code) -> replaceNode(cu, code, toReplace, cu.getAST().newSimpleName(variableName)));
     }
 
     /** Replaces {@code toReplace} with a ready-made expression snippet (e.g. a capture-source helper call). */
@@ -430,7 +464,7 @@ public class CodeEditor {
      * reference when there is no enclosing block to host the declaration.
      */
     public void declareVariableBeforeAndReference(Expression toReplace, ResolvedType type, String name) {
-        edit(toReplace, EditKind.BODY, true, (cu, code) -> {
+        insert(toReplace, EditKind.BODY, true, (cu, code) -> {
             AST ast = cu.getAST();
             ASTRewrite rewriter = ASTRewrite.create(ast);
 
@@ -546,7 +580,7 @@ public class CodeEditor {
     }
 
     public void addArgumentToMethodInvocation(MethodInvocation mi, ExpressionType type) {
-        edit(mi, EditKind.BODY, true, (cu, code) -> MethodHandler.addArgumentToMethodInvocation(ctx(cu), code, mi, type));
+        insert(mi, EditKind.BODY, true, (cu, code) -> MethodHandler.addArgumentToMethodInvocation(ctx(cu), code, mi, type));
     }
 
     public void addArgumentToMethodInvocation(MethodInvocation mi, Expression expr) {
@@ -567,7 +601,7 @@ public class CodeEditor {
      * slot rather than a compile error.
      */
     public void addVarargsArgument(MethodInvocation mi, ResolvedType elementType) {
-        edit(mi, EditKind.BODY, true, (cu, code) ->
+        insert(mi, EditKind.BODY, true, (cu, code) ->
                 MethodHandler.addVarargsArgument(ctx(cu), code, mi, elementType));
     }
 
@@ -583,21 +617,21 @@ public class CodeEditor {
             targetNode = toReplace.getParent();
         }
         Expression target = (Expression) targetNode;
-        edit(target, EditKind.BODY, false, (cu, code) -> MethodHandler.replaceWithMethodCall(ctx(cu), code, target, choice));
+        insert(target, EditKind.BODY, false, (cu, code) -> MethodHandler.replaceWithMethodCall(ctx(cu), code, target, choice));
     }
 
     public void addMethodCallStatement(BodyBlock targetBody, ExpressionChoice.Method choice, int index) {
         if (!canInsertAt(targetBody, index)) return;
-        edit(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> MethodHandler.addMethodCallStatement(ctx(cu), code, targetBody, choice, index));
+        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> MethodHandler.addMethodCallStatement(ctx(cu), code, targetBody, choice, index));
     }
 
     public void addMethodToClass(TypeDeclaration typeDecl, String methodName, String returnType, int index) {
-        edit(typeDecl, EditKind.SIGNATURE, true, (cu, code) -> MethodHandler.addMethodToClass(cu, code, typeDecl, methodName, ResolvedType.named(returnType), index));
+        insert(typeDecl, EditKind.SIGNATURE, true, (cu, code) -> MethodHandler.addMethodToClass(cu, code, typeDecl, methodName, ResolvedType.named(returnType), index));
     }
 
     /** Adds a function the user described in the Add Function dialog. See {@link FunctionDraft}. */
     public void addFunctionToClass(TypeDeclaration typeDecl, FunctionDraft draft, int index) {
-        edit(typeDecl, EditKind.SIGNATURE, true,
+        insert(typeDecl, EditKind.SIGNATURE, true,
                 (cu, code) -> MethodHandler.addFunctionToClass(ctx(cu), code, typeDecl, draft, index));
     }
 
@@ -719,12 +753,12 @@ public class CodeEditor {
     // =================================================================================
 
     public void replaceWithEnumConstant(Expression toReplace, String enumType, String constantName) {
-        edit(toReplace, EditKind.BODY, false, (cu, code) -> EnumManipulationHandler.replaceWithEnumConstant(ctx(cu), code, toReplace, enumType, constantName));
+        insert(toReplace, EditKind.BODY, false, (cu, code) -> EnumManipulationHandler.replaceWithEnumConstant(ctx(cu), code, toReplace, enumType, constantName));
     }
 
     /** Replaces with a field reference {@code scope.fieldName} (same {@code QualifiedName} shape as an enum constant). */
     public void replaceWithFieldReference(Expression toReplace, String scope, String fieldName) {
-        edit(toReplace, EditKind.BODY, false, (cu, code) -> EnumManipulationHandler.replaceWithEnumConstant(ctx(cu), code, toReplace, scope, fieldName));
+        insert(toReplace, EditKind.BODY, false, (cu, code) -> EnumManipulationHandler.replaceWithEnumConstant(ctx(cu), code, toReplace, scope, fieldName));
     }
 
     public void renameEnum(EnumDeclaration enumNode, String newName) {
@@ -744,7 +778,7 @@ public class CodeEditor {
     }
 
     public void addEnumToClass(TypeDeclaration typeDecl, String enumName, int index) {
-        edit(typeDecl, EditKind.SIGNATURE, true, (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, enumName, index));
+        insert(typeDecl, EditKind.SIGNATURE, true, (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, enumName, index));
     }
 
     public void deleteEnumFromClass(EnumDeclaration enumDecl) {
@@ -787,7 +821,7 @@ public class CodeEditor {
     // =================================================================================
 
     public void addElementToList(ASTNode listNode, ExpressionType type, int insertIndex) {
-        edit(listNode, EditKind.BODY, true, (cu, code) -> ListHandler.addElementToList(ctx(cu), code, listNode, type, insertIndex));
+        insert(listNode, EditKind.BODY, true, (cu, code) -> ListHandler.addElementToList(ctx(cu), code, listNode, type, insertIndex));
     }
 
     /**
@@ -796,7 +830,7 @@ public class CodeEditor {
      * {@code elementType} is the list's inferred element type, used to build sensible default arguments.
      */
     public void insertIntoList(ASTNode listNode, int insertIndex, Object selection, ResolvedType elementType) {
-        edit(listNode, EditKind.BODY, true, (cu, code) -> ListHandler.insertChoiceIntoList(ctx(cu), code, listNode, insertIndex, selection, elementType));
+        insert(listNode, EditKind.BODY, true, (cu, code) -> ListHandler.insertChoiceIntoList(ctx(cu), code, listNode, insertIndex, selection, elementType));
     }
 
     /** Moves the list element at {@code fromIndex} to {@code toIndex} (used by the per-row up/down buttons). */
@@ -808,7 +842,7 @@ public class CodeEditor {
      * a change to what the bot does.
      */
     public void addBranchLink(Statement chain, int afterIndex) {
-        edit(chain, EditKind.BODY, true,
+        insert(chain, EditKind.BODY, true,
                 (cu, code) -> BranchChainHandler.applyAddLink(ctx(cu), code, chain, afterIndex));
     }
 
@@ -830,7 +864,7 @@ public class CodeEditor {
      * writes it as a {@code SourceSeed}; the host's job is only to put the element in the list.
      */
     public void addSeededElementToList(ASTNode listNode, int insertIndex, ResolvedType elementType) {
-        edit(listNode, EditKind.BODY, true,
+        insert(listNode, EditKind.BODY, true,
                 (cu, code) -> ListHandler.addSeededElement(ctx(cu), code, listNode, insertIndex, elementType));
     }
 
@@ -844,12 +878,12 @@ public class CodeEditor {
 
     /** {@code selection} is an {@link ExpressionType} or an {@link ExpressionChoice} (variable/method/…). */
     public void setVariableInitializer(VariableDeclarationStatement varDecl, Object selection) {
-        edit(varDecl, EditKind.BODY, true, (cu, code) -> setVariableInitializer(ctx(cu), code, varDecl, selection));
+        insert(varDecl, EditKind.BODY, true, (cu, code) -> setVariableInitializer(ctx(cu), code, varDecl, selection));
     }
 
     /** {@code selection} is an {@link ExpressionType} or an {@link ExpressionChoice} (variable/method/…). */
     public void setFieldInitializer(FieldDeclaration fieldDecl, Object selection) {
-        edit(fieldDecl, EditKind.SIGNATURE, true, (cu, code) -> setFieldInitializer(ctx(cu), code, fieldDecl, selection));
+        insert(fieldDecl, EditKind.SIGNATURE, true, (cu, code) -> setFieldInitializer(ctx(cu), code, fieldDecl, selection));
     }
 
     public void setFieldInitializerToDefault(FieldDeclaration fieldDecl, ResolvedType fieldType) {
@@ -874,7 +908,7 @@ public class CodeEditor {
      */
     public void fillEmptySlotFromSelection(ASTNode owner, Object selection, ResolvedType expected) {
         if (owner == null || selection == null) return;
-        edit(owner, EditKind.BODY, true, (cu, code) -> {
+        insert(owner, EditKind.BODY, true, (cu, code) -> {
             EditContext context = ctx(cu);
             Expression value = NodeCreator.createExpression(context, selection,
                     expected == null ? ResolvedType.UNKNOWN : expected);
@@ -895,7 +929,7 @@ public class CodeEditor {
      * alone — the drag layer refuses those before they reach here, and this is the second door.
      */
     public void fillSlotFromPalette(Expression toReplace, BlockType type) {
-        edit(toReplace, EditKind.BODY, true, (cu, code) -> {
+        insert(toReplace, EditKind.BODY, true, (cu, code) -> {
             EditContext context = ctx(cu);
             Statement built = NodeCreator.createDefaultStatement(context, type, toReplace);
             if (!(built instanceof ExpressionStatement stmt)) return code;
@@ -1025,7 +1059,7 @@ public class CodeEditor {
     /** Fills an empty expression slot with a palette block, the drag counterpart of picking it from the menu. */
     public void fillEmptySlotFromPalette(ASTNode owner, BlockType type) {
         if (owner == null || type == null) return;
-        edit(owner, EditKind.BODY, true, (cu, code) -> {
+        insert(owner, EditKind.BODY, true, (cu, code) -> {
             EditContext context = ctx(cu);
             Statement built = NodeCreator.createDefaultStatement(context, type, owner);
             if (!(built instanceof ExpressionStatement stmt)) return code;
@@ -1052,7 +1086,7 @@ public class CodeEditor {
     }
 
     public void replaceExpression(Expression toReplace, ExpressionType type) {
-        edit(toReplace, EditKind.BODY, true, (cu, code) -> replaceExpression(cu, code, toReplace, type, analyzer));
+        insert(toReplace, EditKind.BODY, true, (cu, code) -> replaceExpression(cu, code, toReplace, type, analyzer));
     }
 
     public void replaceLiteralValue(Expression toReplace, String newLiteralValue) {
@@ -1117,11 +1151,30 @@ public class CodeEditor {
         CompilationUnit cu = getCompilationUnit();
         if (cu == null) return;
         String newCode = addStatement(ctx(cu), getCurrentCode(), targetBody, type, index);
-        if (newCode == null) return;
+        if (newCode == null || wouldNotCompile(newCode)) return;
         // The refusal has to take the announcement with it: a BlockAddedEvent for a block that was never
         // published scrolls the canvas to a block that isn't there.
         if (!triggerUpdate(newCode, true, targetBody.getAstNode(), EditKind.BODY)) return;
         eventBus.publish(new CoreApplicationEvents.BlockAddedEvent(type));
+    }
+
+    /**
+     * Inserts the enum the Define Enum dialog described — its name and its values, as the user gave them
+     * rather than the palette's {@code MyEnum { OPTION_A, OPTION_B }}. A name the file already uses is refused
+     * by the compile check like any other insert, so the dialog's own check is a courtesy, not the guard.
+     */
+    public void addEnumStatement(BodyBlock targetBody, int index, EnumDraft draft) {
+        if (draft == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+            EditContext ctx = ctx(cu);
+            Statement statement = StatementFactory.createEnumDeclaration(cu.getAST(), draft);
+            ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody);
+            PendingInsert deferred = insertIntoList(listRewrite, targetBody, statement, index, statement.toString());
+            if (deferred != null) {
+                return AstRewriteHelper.applyRewriteAndInsertAt(ctx.rewriter(), code, deferred.offset(), deferred.text());
+            }
+            return AstRewriteHelper.applyRewrite(ctx.rewriter(), code);
+        });
     }
 
     public void deleteStatement(Statement toDelete) {
@@ -1161,7 +1214,7 @@ public class CodeEditor {
      */
     public void insertStatement(BodyBlock targetBody, int index, Statement statement, List<String> imports) {
         if (statement == null || !canInsertAt(targetBody, index)) return;
-        edit(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             for (String qualified : imports) ctx.addImport(qualified);
             ASTRewrite rewriter = ctx.rewriter();
@@ -1493,9 +1546,22 @@ public class CodeEditor {
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
     }
 
+    /**
+     * The node a new statement's seeds read their scope off: the statement it lands before, whose scope is
+     * exactly what the new one will see, or the body itself when it lands last — which the analyzer reads as
+     * the body's end. The body was always passed, and read as its <em>start</em>: an assignment appended to
+     * {@code main} could not see the {@code count} declared a line above it.
+     */
+    private static ASTNode insertionContext(BodyBlock targetBody, int index) {
+        ASTNode body = targetBody.getAstNode();
+        if (!(body instanceof Block block)) return body;
+        int at = toStatementIndex(targetBody, index);
+        return at < block.statements().size() ? (ASTNode) block.statements().get(at) : block;
+    }
+
     private static String addStatement(EditContext ctx, String originalCode, BodyBlock targetBody, BlockType type, int index) {
         ASTRewrite rewriter = ctx.rewriter();
-        Statement newStatement = NodeCreator.createDefaultStatement(ctx, type, targetBody.getAstNode());
+        Statement newStatement = NodeCreator.createDefaultStatement(ctx, type, insertionContext(targetBody, index));
         if (newStatement == null) return originalCode;
         ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, targetBody);
         PendingInsert deferred = insertIntoList(listRewrite, targetBody, newStatement, index, newStatement.toString());

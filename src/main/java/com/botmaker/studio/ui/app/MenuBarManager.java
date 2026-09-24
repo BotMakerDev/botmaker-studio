@@ -3,6 +3,8 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.config.AppVersion;
 import com.botmaker.studio.ui.render.theme.BlockStyle;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
+import com.botmaker.studio.ui.app.vars.NamingPreference;
+import javafx.scene.control.CheckMenuItem;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
@@ -392,7 +394,8 @@ public class MenuBarManager {
                 previewAsUserItem,
                 new SeparatorMenuItem(),
                 themeMenu,
-                blockStyleMenu()
+                blockStyleMenu(),
+                askForNamesItem()
         );
 
         return viewMenu;
@@ -414,6 +417,13 @@ public class MenuBarManager {
             menu.getItems().add(item);
         }
         return menu;
+    }
+
+    /** View ▸ Ask for Names When Inserting — see {@link NamingPreference}. */
+    private static CheckMenuItem askForNamesItem() {
+        CheckMenuItem item = new CheckMenuItem("Ask for Names When Inserting");
+        item.selectedProperty().bindBidirectional(NamingPreference.askProperty());
+        return item;
     }
 
     /** Sets the action for View ▸ Preview as user (opens the project in the Runner window for this session). */

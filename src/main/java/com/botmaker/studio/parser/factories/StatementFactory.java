@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.palette.EnumDraft;
+import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.Initializer;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
@@ -217,21 +219,8 @@ public class StatementFactory {
      * declares, top-level, nested or local. Syntactic, like {@link #declaredNamesAround}; the whole file rather
      * than the method, because a local type may not reuse an enclosing type's name either.
      */
-    static String uniqueTypeName(ASTNode context, String base) {
-        java.util.Set<String> taken = new java.util.HashSet<>();
-        if (context != null) {
-            context.getRoot().accept(new ASTVisitor() {
-                @Override
-                public void preVisit(ASTNode node) {
-                    if (node instanceof AbstractTypeDeclaration type) taken.add(type.getName().getIdentifier());
-                }
-            });
-        }
-        if (!taken.contains(base)) return base;
-        for (int i = 2; ; i++) {
-            String candidate = base + i;
-            if (!taken.contains(candidate)) return candidate;
-        }
+    public static String uniqueTypeName(ASTNode context, String base) {
+        return FunctionDraft.freeName(base, declaredTypeNames(context));
     }
 
     /**
@@ -574,16 +563,35 @@ public class StatementFactory {
      * a fixed name made the second one "enum MyEnum is already defined in method main".
      */
     private static Statement createEnumDeclaration(AST ast, ASTNode context) {
+        return createEnumDeclaration(ast,
+                new EnumDraft(uniqueTypeName(context, "MyEnum"), EnumDraft.DEFAULT_CONSTANTS));
+    }
+
+    /** A local {@code enum <name> { <constants> }} — what the Define Enum dialog describes. */
+    public static Statement createEnumDeclaration(AST ast, EnumDraft draft) {
         TypeDeclarationStatement typeDeclStmt = ast.newTypeDeclarationStatement(ast.newEnumDeclaration());
         EnumDeclaration enumDecl = (EnumDeclaration) typeDeclStmt.getDeclaration();
-        enumDecl.setName(ast.newSimpleName(uniqueTypeName(context, "MyEnum")));
-        EnumConstantDeclaration const1 = ast.newEnumConstantDeclaration();
-        const1.setName(ast.newSimpleName("OPTION_A"));
-        enumDecl.enumConstants().add(const1);
-        EnumConstantDeclaration const2 = ast.newEnumConstantDeclaration();
-        const2.setName(ast.newSimpleName("OPTION_B"));
-        enumDecl.enumConstants().add(const2);
+        enumDecl.setName(ast.newSimpleName(draft.name()));
+        for (String constant : draft.constants()) {
+            EnumConstantDeclaration declaration = ast.newEnumConstantDeclaration();
+            declaration.setName(ast.newSimpleName(constant));
+            enumDecl.enumConstants().add(declaration);
+        }
         return typeDeclStmt;
+    }
+
+    /** Every type name the file around {@code context} declares, nested and local ones included. */
+    public static java.util.Set<String> declaredTypeNames(ASTNode context) {
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        if (context != null) {
+            context.getRoot().accept(new ASTVisitor() {
+                @Override
+                public void preVisit(ASTNode node) {
+                    if (node instanceof AbstractTypeDeclaration type) taken.add(type.getName().getIdentifier());
+                }
+            });
+        }
+        return taken;
     }
 
     /** {@code <var> = <default for its type>} over the first variable in scope; an empty slot when there is none. */
