@@ -1,34 +1,33 @@
 package com.botmaker.studio.assist;
 
 /**
- * Who answers the assistant pane. A closed set, because each one is a LangChain4j module Studio ships with;
- * the model inside it is free text the user types.
+ * Who answers the assistant pane. A closed set, because each one is a LangChain4j module Studio ships with.
+ * No model is named here: which ones exist is the provider's answer ({@link ModelFactory#models}), and a
+ * name written down in Studio goes stale the week the provider ships the next one.
  *
  * <p>A key is read from the environment and nowhere else — {@link #keyVariable} names the variable — so
  * Studio never writes one to disk and never shows one on screen.
  */
 public enum Provider {
-    OLLAMA("ollama", "Ollama (local)", null, "http://localhost:11434", "qwen3"),
-    OPENAI("openai", "OpenAI", "OPENAI_API_KEY", null, ""),
+    OLLAMA("ollama", "Ollama (local)", null, "http://localhost:11434"),
+    OPENAI("openai", "OpenAI", "OPENAI_API_KEY", null),
     /** Any server that speaks OpenAI's chat API: LM Studio, vLLM, OpenRouter, a company gateway. */
-    OPENAI_COMPATIBLE("openai-compatible", "OpenAI-compatible", "OPENAI_API_KEY", "http://localhost:1234/v1", ""),
-    ANTHROPIC("anthropic", "Anthropic", "ANTHROPIC_API_KEY", null, "claude-opus-5"),
-    GEMINI("gemini", "Google Gemini", "GEMINI_API_KEY", null, ""),
+    OPENAI_COMPATIBLE("openai-compatible", "OpenAI-compatible", "OPENAI_API_KEY", "http://localhost:1234/v1"),
+    ANTHROPIC("anthropic", "Anthropic", "ANTHROPIC_API_KEY", null),
+    GEMINI("gemini", "Google Gemini", "GEMINI_API_KEY", null),
     /** A settings file naming a provider this build does not have. Builds no model. */
-    UNKNOWN("unknown", "Unknown", null, null, "");
+    UNKNOWN("unknown", "Unknown", null, null);
 
     private final String id;
     private final String displayName;
     private final String keyVariable;
     private final String defaultBaseUrl;
-    private final String defaultModel;
 
-    Provider(String id, String displayName, String keyVariable, String defaultBaseUrl, String defaultModel) {
+    Provider(String id, String displayName, String keyVariable, String defaultBaseUrl) {
         this.id = id;
         this.displayName = displayName;
         this.keyVariable = keyVariable;
         this.defaultBaseUrl = defaultBaseUrl;
-        this.defaultModel = defaultModel;
     }
 
     /** The stable id a setting is saved under. */
@@ -57,11 +56,6 @@ public enum Provider {
 
     public String defaultBaseUrl() {
         return defaultBaseUrl == null ? "" : defaultBaseUrl;
-    }
-
-    /** A model to start from, or {@code ""} where naming one would be a guess about someone else's catalogue. */
-    public String defaultModel() {
-        return defaultModel;
     }
 
     /** The provider {@code id} names, {@link #UNKNOWN} for anything else. Total. */

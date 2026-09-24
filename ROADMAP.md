@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — MCP endpoint, phase 3 of LLM block editing.** `assist/McpEndpoint` (MCP Java SDK
+- **2026-09-24 (latest) — Assistant tab: models listed from the provider.** `ModelFactory.models` over
+  LangChain4j's `ModelCatalog`s (OpenAI, compatible, Anthropic, Gemini) and `OllamaModels`; the model field is
+  an editable combo + ↻. `Provider` names no model any more (Anthropic's `claude-opus-5` was not a real id).
+  `ModelListingTest` against a loopback `HttpServer`.
+- **2026-09-24 — MCP endpoint, phase 3 of LLM block editing.** `assist/McpEndpoint` (MCP Java SDK
   2.0.1 core + Jackson 2 mapper, streamable HTTP servlet on embedded Jetty 12.1 ee11), `127.0.0.1` only,
   bearer token; `assist/McpTools` serves the same six tools, each accepted edit its own commit/undo step;
   `McpConfig` (`mcp.json` in the cache root, 0600, port 7431); `ui/app/LiveEditorFile` hops to the FX thread.

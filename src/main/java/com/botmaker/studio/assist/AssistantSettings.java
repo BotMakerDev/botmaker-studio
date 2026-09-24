@@ -22,9 +22,9 @@ public record AssistantSettings(String provider, String model, String baseUrl) {
         return forProvider(Provider.OLLAMA);
     }
 
-    /** {@code provider} with its own starting model and server. */
+    /** {@code provider} at its own server, with no model chosen yet: the pane fills it from the provider's list. */
     public static AssistantSettings forProvider(Provider provider) {
-        return new AssistantSettings(provider.id(), provider.defaultModel(), provider.defaultBaseUrl());
+        return new AssistantSettings(provider.id(), "", provider.defaultBaseUrl());
     }
 
     @JsonIgnore

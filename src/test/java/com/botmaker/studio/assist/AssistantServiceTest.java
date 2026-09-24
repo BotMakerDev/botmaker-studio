@@ -112,14 +112,25 @@ class AssistantServiceTest {
 
     @Test
     void aHostedProviderWithoutItsKeyNamesTheVariable() {
-        ModelFactory.Built built = ModelFactory.build(AssistantSettings.forProvider(Provider.ANTHROPIC), name -> null);
+        ModelFactory.Built built = ModelFactory.build(
+                new AssistantSettings(Provider.ANTHROPIC.id(), "claude-sonnet-5", ""), name -> null);
         ModelFactory.Built.Problem problem = assertInstanceOf(ModelFactory.Built.Problem.class, built);
         assertTrue(problem.reason().contains("ANTHROPIC_API_KEY"), problem.reason());
     }
 
     @Test
     void ollamaNeedsNoKey() {
-        assertInstanceOf(ModelFactory.Built.Model.class, ModelFactory.build(AssistantSettings.defaults(), name -> null));
+        assertInstanceOf(ModelFactory.Built.Model.class, ModelFactory.build(
+                new AssistantSettings(Provider.OLLAMA.id(), "qwen3", ""), name -> null));
+    }
+
+    @Test
+    void aFreshProviderHasNoModelUntilOneIsChosen() {
+        AssistantSettings fresh = AssistantSettings.forProvider(Provider.ANTHROPIC);
+        assertEquals("", fresh.model());
+        ModelFactory.Built.Problem problem =
+                assertInstanceOf(ModelFactory.Built.Problem.class, ModelFactory.build(fresh, name -> "key"));
+        assertTrue(problem.reason().startsWith("Choose a model"), problem.reason());
     }
 
     @Test

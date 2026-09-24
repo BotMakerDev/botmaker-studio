@@ -20,6 +20,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   no key), OpenAI, any OpenAI-compatible server, Anthropic or Gemini; a key is read from the environment
   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and never saved. The tab shows each tool call
   the model made, and its edits land together when it answers, as one step Undo takes back.
+  The model is picked from the provider's own list: the Ollama models installed on this machine, or what
+  OpenAI, Anthropic, Gemini or the OpenAI-compatible server offers (chat models only, newest first). ↻ asks
+  again, a model the list lacks can still be typed, and a missing key or a server that is down is said on the
+  same line.
 - **Studio as an MCP server.** *Serve to MCP clients* in the Assistant tab lets Claude Code, Cursor or any
   other MCP client edit the open file with the same tools and checks. It listens on `127.0.0.1:7431` only and
   needs a token; *Copy Claude Code setup* copies the `claude mcp add` command with both. Each accepted edit

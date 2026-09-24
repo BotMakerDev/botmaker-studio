@@ -6,6 +6,7 @@ import com.botmaker.studio.assist.AssistantService;
 import com.botmaker.studio.assist.AssistantSettings;
 import com.botmaker.studio.assist.McpConfig;
 import com.botmaker.studio.assist.McpEndpoint;
+import com.botmaker.studio.assist.ModelFactory;
 import com.botmaker.studio.assist.Provider;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
@@ -20,8 +21,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
@@ -31,6 +34,8 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -51,9 +56,17 @@ final class AssistantPane {
 
     private final BorderPane root = new BorderPane();
     private final ComboBox<Provider> provider = new ComboBox<>();
-    private final TextField model = new TextField();
+    /** Editable: the provider's list fills it, and an id the list lacks can still be typed. */
+    private final ComboBox<String> model = new ComboBox<>();
+    private final Button refreshModels = new Button("↻");
     private final TextField baseUrl = new TextField();
-    private final Label keyStatus = new Label();
+    private final Label modelStatus = new Label();
+    /** A listed model's nicer name, by id, for the dropdown's cells. */
+    private final Map<String, String> modelLabels = new HashMap<>();
+    /** Bumped per listing request, so a slow answer never lands over a newer one. */
+    private int listing;
+    private String listedUrl = "";
+    private boolean showing;
     private final TextArea transcript = new TextArea();
     private final TextArea input = new TextArea();
     private final Button send = new Button("Send");
@@ -139,20 +152,39 @@ final class AssistantPane {
         provider.getItems().addAll(Arrays.stream(Provider.values()).filter(p -> p != Provider.UNKNOWN).toList());
         provider.setOnAction(e -> {
             Provider chosen = provider.getValue();
-            if (chosen != null) show(AssistantSettings.forProvider(chosen));
+            if (chosen != null && !showing) show(AssistantSettings.forProvider(chosen));
         });
+        model.setEditable(true);
         model.setPromptText("model");
-        model.setPrefColumnCount(16);
+        model.setPrefWidth(220);
+        model.setCellFactory(list -> new ListCell<>() {
+            @Override
+            protected void updateItem(String id, boolean empty) {
+                super.updateItem(id, empty);
+                String label = empty || id == null ? null : modelLabels.getOrDefault(id, id);
+                setText(label == null ? null : label.equals(id) ? id : label + "  (" + id + ")");
+            }
+        });
+        model.getEditor().textProperty().addListener((obs, was, now) -> updateSend());
+        refreshModels.getStyleClass().add("dialog-compact");
+        refreshModels.setTooltip(new Tooltip("List the models this provider offers again"));
+        refreshModels.setOnAction(e -> listModels());
         baseUrl.setPromptText("server address");
         baseUrl.setPrefColumnCount(18);
-        keyStatus.getStyleClass().add("dialog-hint");
+        // A server address is committed with Enter or by leaving the field, not per keystroke: each listing
+        // is a request, and a half-typed URL is a request to nowhere.
+        baseUrl.setOnAction(e -> listModels());
+        baseUrl.focusedProperty().addListener((obs, was, focused) -> {
+            if (!focused && !baseUrl.getText().strip().equals(listedUrl)) listModels();
+        });
+        modelStatus.getStyleClass().add("dialog-hint");
         Button clear = new Button("New conversation");
         clear.getStyleClass().add("dialog-compact");
         clear.setOnAction(e -> {
             service.reset();
             transcript.clear();
         });
-        HBox bar = new HBox(8, new Label("Model"), provider, model, baseUrl, keyStatus, spacer(), clear);
+        HBox bar = new HBox(8, new Label("Model"), provider, baseUrl, model, refreshModels, modelStatus, spacer(), clear);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("diagnostics-filter-bar");
 
@@ -203,32 +235,85 @@ final class AssistantPane {
         return gap;
     }
 
-    /** Puts {@code settings} in the controls, and says whether its key is there. */
+    /** Puts {@code settings} in the controls and asks the provider which models it has. */
     private void show(AssistantSettings settings) {
         Provider kind = settings.providerKind() == Provider.UNKNOWN ? Provider.OLLAMA : settings.providerKind();
-        provider.setValue(kind);
-        model.setText(settings.model());
+        // setValue fires the combo's action, which would show this provider's fresh settings over the saved ones.
+        showing = true;
+        try {
+            provider.setValue(kind);
+        } finally {
+            showing = false;
+        }
+        modelLabels.clear();
+        model.getItems().clear();
+        model.getEditor().setText(settings.model());
         baseUrl.setText(settings.baseUrl());
         baseUrl.setVisible(kind.takesBaseUrl());
         baseUrl.setManaged(kind.takesBaseUrl());
-        if (kind.keyVariable() == null) {
-            keyStatus.setText("runs locally, no key");
-        } else {
-            String key = System.getenv(kind.keyVariable());
-            boolean present = key != null && !key.isBlank();
-            keyStatus.setText(present ? kind.keyVariable() + " found"
-                    : kind.requiresKey() ? "set " + kind.keyVariable() + " before starting Studio" : "no key needed");
+        listModels();
+    }
+
+    /**
+     * Asks the chosen provider for its models, off the FX thread, and fills the dropdown with the answer. A
+     * missing key or a server that is down becomes the status line; the field stays editable either way.
+     */
+    private void listModels() {
+        Provider kind = provider.getValue() == null ? Provider.OLLAMA : provider.getValue();
+        String url = kind.takesBaseUrl() ? baseUrl.getText().strip() : "";
+        listedUrl = url;
+        int request = ++listing;
+        modelStatus.setText("Listing models…");
+        Thread lister = new Thread(() -> {
+            ModelFactory.Listing answer = ModelFactory.models(kind, url, System::getenv);
+            Platform.runLater(() -> {
+                if (request == listing && !disposed) showModels(kind, answer);
+            });
+        }, "assistant-models");
+        lister.setDaemon(true);
+        lister.start();
+    }
+
+    private void showModels(Provider kind, ModelFactory.Listing answer) {
+        switch (answer) {
+            case ModelFactory.Listing.Problem problem -> modelStatus.setText(problem.reason());
+            case ModelFactory.Listing.Models listed -> {
+                String typed = modelText();
+                modelLabels.clear();
+                listed.models().forEach(choice -> modelLabels.put(choice.id(), choice.label()));
+                model.getItems().setAll(listed.models().stream().map(ModelFactory.Choice::id).toList());
+                // What the user chose or typed stays, listed or not; only a blank field takes the newest.
+                if (typed.isBlank() && !model.getItems().isEmpty()) model.getEditor().setText(model.getItems().getFirst());
+                int count = model.getItems().size();
+                modelStatus.setText(count > 0 ? count + (count == 1 ? " model" : " models")
+                        : kind == Provider.OLLAMA ? "No models installed. Run: ollama pull qwen3"
+                        : "The server listed no chat models. Type one.");
+            }
         }
+        updateSend();
+    }
+
+    private String modelText() {
+        String text = model.getEditor().getText();
+        return text == null ? "" : text.strip();
+    }
+
+    private void updateSend() {
+        send.setDisable(working || modelText().isEmpty());
     }
 
     private AssistantSettings current() {
         Provider kind = provider.getValue() == null ? Provider.OLLAMA : provider.getValue();
-        return new AssistantSettings(kind.id(), model.getText(), kind.takesBaseUrl() ? baseUrl.getText() : "");
+        return new AssistantSettings(kind.id(), modelText(), kind.takesBaseUrl() ? baseUrl.getText() : "");
     }
 
     private void submit() {
         String message = input.getText().strip();
         if (message.isEmpty() || working) return;
+        if (modelText().isEmpty()) {
+            setStatus("Choose a model first.", true);
+            return;
+        }
         if (state.getActiveFile() == null) {
             setStatus("Open a file first.", true);
             return;
@@ -291,7 +376,7 @@ final class AssistantPane {
 
     private void setWorking(boolean now) {
         working = now;
-        send.setDisable(now);
+        updateSend();
         if (now) setStatus("Working…", false);
     }
 
