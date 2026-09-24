@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — every expression has a block.** `dispatchExpression` reaches
+- **2026-09-24 (latest) — the assistant's tool layer, phase 1 of LLM block editing.** New `assist/`:
+  `AssistTurn` (palette, tree, insert, set slot, delete, errors, commit), over a private working copy of
+  the file (`AssistWorkspace`). Palette ids only, values read and re-written by `ValueGrammar`, every edit
+  compiled with bindings and rolled back on a new error; a turn commits as one `CodeUpdatedEvent`, and never
+  over an edit the user made meanwhile. Headless, no model yet (`AssistTurnTest`). Next: LangChain4j pane, MCP.
+- **2026-09-24 — every expression has a block.** `dispatchExpression` reaches
   `UnknownExpressionBlock` for no JDT expression kind (`ExpressionBlocksTest.noExpressionFallsToTheUnknownBlock`).
   New `blocks/expr/`: `ConditionalBlock`, `CastBlock`, `InstanceofBlock` (pattern name via
   `CodeEditor.renamePatternVariable`, block-scoped, binding-matched), `LambdaBlock` (value slot or body),

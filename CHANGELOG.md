@@ -14,6 +14,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 No source changes since v1.1.9; re-released for updated upstream pins.
 
+### Added
+
+- **The tool layer an assistant will edit blocks through** (`assist/AssistTurn`, not reachable from the UI
+  yet). A model reads the palette and the file's statements and slots by id, and inserts, sets or deletes
+  through the same `CodeEditor` calls the canvas makes. It cannot write Java: an insert names a palette entry,
+  and a slot value is read by the value grammar as the slot's type and written back in the host's spelling.
+  Each edit is compiled against the project's classpath and dropped if it adds an error; a turn lands as one
+  undo step.
+
 ### Changed
 
 - **A plugin's editor is handed the resolved call and a type it can only ask about by class** (contract
