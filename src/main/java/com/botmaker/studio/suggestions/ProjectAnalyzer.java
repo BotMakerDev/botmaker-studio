@@ -145,8 +145,9 @@ public class ProjectAnalyzer {
         parser.setUnitName(unitName != null ? unitName : deriveUnitName(javaCode));
 
         String[] cpArray = classPaths.toArray(new String[0]);
-        String[] sourcesArray = { sourcePath.toAbsolutePath().toString() };
-        String[] encodingsArray = { "UTF-8" };
+        // No source root is legal: bindings then come from the classpath and the unit itself.
+        String[] sourcesArray = sourcePath == null ? new String[0] : new String[] { sourcePath.toAbsolutePath().toString() };
+        String[] encodingsArray = sourcePath == null ? new String[0] : new String[] { "UTF-8" };
         parser.setEnvironment(cpArray, sourcesArray, encodingsArray, true);
 
         Map<String, String> options = JavaCore.getOptions();

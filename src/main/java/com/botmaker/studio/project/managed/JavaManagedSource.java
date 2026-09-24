@@ -5,17 +5,15 @@ import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.Expression;
-import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ReturnStatement;
-import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
-import org.eclipse.jdt.core.dom.StringLiteral;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,8 +23,9 @@ import java.util.List;
  * Reads {@code @Managed} methods out of <b>one</b> Java source, with no project, no filesystem and no host.
  *
  * <p><b>The same shape as {@code JavaParameterSource}, deliberately.</b> Pure, so the reading can be tested
- * over source text headlessly; syntax only, no bindings, so a bot whose dependencies do not resolve still
- * shows its plugin's values instead of an empty window. The form derivation, the parser configuration and
+ * over source text headlessly; parsed by the caller's {@link BotParser}, and {@code @Managed} identified by
+ * class ({@link BotAnnotation#MANAGED}), so a bot whose dependencies do not resolve still shows its plugin's
+ * values instead of an empty window. The form derivation, the parser configuration and
  * the annotation match are that class's — asked here rather than copied, because a second set of compiler
  * options is a second thing to keep in step.
  *
@@ -37,15 +36,6 @@ import java.util.List;
  * {@code whyNotEditable} already gives a computed {@code @Param} initialiser, applied one level up.
  */
 public final class JavaManagedSource {
-
-    /** The annotation's simple name, which is how it is matched. Its package is not resolvable here. */
-    static final String ANNOTATION = "Managed";
-
-    /**
-     * The annotation's fully qualified name, which is what an import or a qualified use spells. The
-     * contract's since 2026-09-22; a use spelling plugin-basics' older one still matches by simple name.
-     */
-    public static final String ANNOTATION_FQN = "com.botmaker.plugin.api.managed.Managed";
 
     private JavaManagedSource() {}
 
@@ -60,8 +50,14 @@ public final class JavaManagedSource {
      */
     public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records) {
+        return read(file, source, grammar, records, BotParser.SYNTAX);
+    }
+
+    /** The same, parsed by {@code parser} — the project's, so {@code @Managed} and its id are resolved. */
+    public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar,
+                                           BotRecords records, BotParser parser) {
         List<ManagedMethod> out = new ArrayList<>();
-        JavaParameterSource.parse(source).accept(new ASTVisitor() {
+        parser.parse(file, source).accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodDeclaration method) {
                 Annotation annotation = managedAnnotation(method);
@@ -156,37 +152,16 @@ public final class JavaManagedSource {
      * makes either one managed is stated here once.
      */
     public static Annotation managedAnnotation(BodyDeclaration declaration) {
-        for (Object modifier : declaration.modifiers()) {
-            if (!(modifier instanceof Annotation annotation)) continue;
-            String name = annotation.getTypeName().getFullyQualifiedName();
-            if (name.equals(ANNOTATION) || name.equals(ANNOTATION_FQN) || name.endsWith("." + ANNOTATION)) {
-                return annotation;
-            }
-        }
-        return null;
+        return BotAnnotation.MANAGED.on(declaration);
     }
 
     /**
      * The id an annotation names, or {@code ""} for one that names nothing constant.
      *
-     * <p>Only a string literal is read, the rule every annotation reader in this project follows:
-     * {@code @Managed(SOME_CONSTANT)} compiles and means something a parser without bindings cannot know,
-     * and a guessed id is a value edited under a name nobody wrote.
+     * <p>A constant the classpath resolves is read as its value; without bindings only a string literal is,
+     * because a guessed id is a value edited under a name nobody wrote.
      */
     public static String idOf(Annotation annotation) {
-        if (annotation instanceof SingleMemberAnnotation single) {
-            return literal(single.getValue());
-        }
-        if (annotation instanceof NormalAnnotation normal) {
-            for (Object each : normal.values()) {
-                MemberValuePair pair = (MemberValuePair) each;
-                if (pair.getName().getIdentifier().equals("value")) return literal(pair.getValue());
-            }
-        }
-        return "";
-    }
-
-    private static String literal(Expression expression) {
-        return expression instanceof StringLiteral string ? string.getLiteralValue() : "";
+        return BotAnnotation.MANAGED.members(annotation).get("value") instanceof String id ? id : "";
     }
 }

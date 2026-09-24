@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.ValueForm;
@@ -8,6 +9,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
@@ -77,8 +79,9 @@ public final class JavaParameters {
         // declares has to be known in full before the first field is read.
         BotRecords records = BotRecords.scan(config, state, grammar);
         List<JavaParameter> out = new ArrayList<>();
+        BotParser parser = BotParser.of(state);
         BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaParameterSource.read(file, source, grammar, records)));
+                out.addAll(JavaParameterSource.read(file, source, grammar, records, parser)));
         return List.copyOf(out);
     }
 
@@ -299,7 +302,7 @@ public final class JavaParameters {
 
                     private %s() {}
                 }
-                """.formatted(config.mainPackage(), JavaParameterSource.ANNOTATION_FQN, className,
+                """.formatted(config.mainPackage(), Param.class.getCanonicalName(), className,
                 className, className);
         return ProjectWrites.create(config, file, source, "Create " + className);
     }

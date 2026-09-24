@@ -36,6 +36,8 @@ class ManagedConstantsTest {
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
 
+            import com.botmaker.plugin.api.managed.Managed;
+
             @Managed("pictures")
             public final class Pictures {
                 public static final Picture ORE = new %s("images/ore.png");

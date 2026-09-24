@@ -5,6 +5,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
@@ -42,8 +43,9 @@ public final class JavaManagedValues {
         // managed walk has not reached yet, so what the bot declares has to be known before the first read.
         BotRecords records = BotRecords.scan(config, state, grammar);
         List<ManagedMethod> out = new ArrayList<>();
+        BotParser parser = BotParser.of(state);
         BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaManagedSource.read(file, source, grammar, records)));
+                out.addAll(JavaManagedSource.read(file, source, grammar, records, parser)));
         return List.copyOf(out);
     }
 

@@ -14,6 +14,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 No source changes since v1.1.9; re-released for updated upstream pins.
 
+### Changed
+
+- **`@Param` and `@Managed` are identified by class, not by a name ending in `Param`.**
+  `project/source/BotAnnotation` answers from the JDT binding when the unit was parsed against the project's
+  classpath (`project/source/BotParser`), and otherwise resolves the written name through the unit's imports
+  the way javac does (`SourceNames`). An annotation named `Param` from any other package — or a bare one
+  nothing imports — is no longer read as a parameter. The pre-2.0 `botmaker-plugin-basics` annotations are
+  still accepted by their exact names. With bindings, `@Param(category = SOME_CONSTANT)` reads the constant's
+  value instead of dropping it. Replacing an annotation keeps the author's spelling of its name.
+
 ### Fixed
 
 - **A plugin pinned as `${property}` reads and upgrades through the property.**

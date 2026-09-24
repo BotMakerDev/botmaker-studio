@@ -3,36 +3,30 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.grammar.JavaExpressions;
-import com.botmaker.studio.plugin.grammar.JdkLiterals;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
-import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
-import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ParameterizedType;
-import org.eclipse.jdt.core.dom.QualifiedName;
-import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
-import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,23 +39,13 @@ import java.util.Optional;
  * of it is what goes wrong when a field is read incorrectly. Splitting the parse out is what lets the
  * reading be tested over source text, headlessly, without a project on disk.
  *
- * <p><b>Syntax only, no bindings.</b> The parser is given source and nothing else — no classpath, no
- * project — so a type is whatever it is <em>written</em> as: {@code Duration} matches the registered type
- * whose Java name ends in {@code Duration}, and {@code List<Rect>} is a list of one. That is weaker than a
- * resolved binding and is the right weakness: a bot whose dependencies do not resolve (mid-edit, a pom
- * being changed, a plugin not yet installed) still shows its parameters instead of an empty window.
+ * <p><b>Bindings when the caller has a project</b> ({@link BotParser}, 2026-09-24): {@code @Param} and its
+ * constants are identified by class ({@link BotAnnotation#PARAM}), through the unit's imports when there is
+ * no classpath, never by a name that ends in {@code Param}. A bot whose dependencies do not resolve still
+ * shows its parameters: binding recovery keeps the tree, and the imports still say which annotation it is.
+ * Field <em>types</em> are still read by spelling here; that moves to bindings next.
  */
 public final class JavaParameterSource {
-
-    /** The annotation's simple name, which is how it is matched. Its package is not resolvable here. */
-    static final String ANNOTATION = "Param";
-
-    /**
-     * The annotation's fully qualified name, which is what an import or a qualified use spells. The
-     * contract's since 2026-09-22; plugin-basics held it before, and a use spelling that one still matches,
-     * because the annotation is matched by its simple name.
-     */
-    public static final String ANNOTATION_FQN = "com.botmaker.plugin.api.params.Param";
 
     private JavaParameterSource() {}
 
@@ -124,8 +108,17 @@ public final class JavaParameterSource {
      */
     public static List<JavaParameter> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records) {
+        return read(file, source, grammar, records, BotParser.SYNTAX);
+    }
+
+    /**
+     * The same, parsed by {@code parser} — the project's, so the annotation and its constants are the ones the
+     * classpath declares.
+     */
+    public static List<JavaParameter> read(Path file, String source, ValueGrammar grammar,
+                                           BotRecords records, BotParser parser) {
         List<JavaParameter> out = new ArrayList<>();
-        parse(source).accept(new ASTVisitor() {
+        parser.parse(file, source).accept(new ASTVisitor() {
             @Override
             public boolean visit(FieldDeclaration field) {
                 Annotation annotation = paramAnnotation(field);
@@ -146,7 +139,7 @@ public final class JavaParameterSource {
     private static JavaParameter read(Path file, String source, ValueGrammar grammar, BotRecords records,
                                       String className, FieldDeclaration field, Annotation annotation,
                                       VariableDeclarationFragment fragment) {
-        Map<String, Object> members = members(annotation);
+        Map<String, Object> members = BotAnnotation.PARAM.members(annotation);
         String name = fragment.getName().getIdentifier();
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
@@ -277,85 +270,7 @@ public final class JavaParameterSource {
      * a field a parameter is stated here once, and the canvas refusing to edit one asks the same question.
      */
     public static Annotation paramAnnotation(FieldDeclaration field) {
-        for (Object modifier : field.modifiers()) {
-            if (!(modifier instanceof Annotation annotation)) continue;
-            String name = annotation.getTypeName().getFullyQualifiedName();
-            if (name.equals(ANNOTATION) || name.equals(ANNOTATION_FQN)
-                    || name.endsWith("." + ANNOTATION)) {
-                return annotation;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * The annotation's members as written — a {@code String} for a single value, a {@code List<String>} for
-     * an array.
-     *
-     * <p>Only constant text is read. {@code @Param(category = SOME_CONSTANT)} compiles and means something
-     * a parser without bindings cannot know, so it reads as absent rather than as the constant's name: an
-     * empty category is a parameter in the default group, and a wrong one is a parameter under a heading
-     * nobody wrote.
-     */
-    static Map<String, Object> members(Annotation annotation) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (annotation instanceof SingleMemberAnnotation single) {
-            // @Param("Limits") is not legal — there is no `value()` member — but a future one would be, and
-            // reading it as `value` costs nothing and is what every other annotation reader does.
-            constant(single.getValue()).ifPresent(v -> out.put("value", v));
-            return out;
-        }
-        if (!(annotation instanceof NormalAnnotation normal)) return out;
-        for (Object each : normal.values()) {
-            MemberValuePair pair = (MemberValuePair) each;
-            String name = pair.getName().getIdentifier();
-            if (pair.getValue() instanceof ArrayInitializer array) {
-                List<String> items = new ArrayList<>();
-                for (Object element : array.expressions()) {
-                    constant((Expression) element).ifPresent(items::add);
-                }
-                out.put(name, List.copyOf(items));
-            } else {
-                Optional<String> text = constant(pair.getValue());
-                if (text.isPresent()) out.put(name, text.get());
-                else numeric(pair.getValue()).ifPresent(v -> out.put(name, v));
-            }
-        }
-        return out;
-    }
-
-    /**
-     * A numeric literal's value — {@code min = 0}, {@code max = 2.5}, {@code min = -1} — or empty for
-     * anything else. {@code @Param}'s bounds have been {@code double} since 2026-09-22; they were text only
-     * because a codec parsed them.
-     */
-    private static Optional<Double> numeric(Expression expression) {
-        return JdkLiterals.readAny(expression.toString())
-                .filter(Number.class::isInstance)
-                .map(value -> ((Number) value).doubleValue());
-    }
-
-    /**
-     * A string literal's content, or empty for anything that is not one — with one exception.
-     *
-     * <p><b>{@code Param.PUBLIC} and {@code Param.EDITOR} are resolved</b>, because the annotation declares
-     * those two constants precisely so that nobody writes the strings down, and a reader that could not
-     * read its own vocabulary would turn the better spelling into a silent "absent". Only a
-     * <em>qualified</em> name is taken, and only one qualified by {@code Param} — a bare {@code PUBLIC}
-     * could be any constant in the file, and guessing at it is what the rest of this method exists not to
-     * do. The value is the contract's own {@link Visibility} id, so there is no third copy of the strings.
-     */
-    private static Optional<String> constant(Expression expression) {
-        if (expression instanceof StringLiteral literal) return Optional.of(literal.getLiteralValue());
-        if (expression instanceof QualifiedName qualified
-                && qualified.getQualifier().getFullyQualifiedName().endsWith(ANNOTATION)) {
-            return switch (qualified.getName().getIdentifier()) {
-                case "PUBLIC" -> Optional.of(Visibility.PUBLIC.id());
-                case "EDITOR" -> Optional.of(Visibility.EDITOR_ONLY.id());
-                default -> Optional.empty();
-            };
-        }
-        return Optional.empty();
+        return BotAnnotation.PARAM.on(field);
     }
 
     private static String string(Map<String, Object> members, String name) {
@@ -404,12 +319,6 @@ public final class JavaParameterSource {
 
     /** Whether any modifier list already carries {@code @Param} — used when adding one. */
     static boolean isParam(List<IExtendedModifier> modifiers) {
-        for (IExtendedModifier modifier : modifiers) {
-            if (modifier instanceof Annotation annotation
-                    && annotation.getTypeName().getFullyQualifiedName().endsWith(ANNOTATION)) {
-                return true;
-            }
-        }
-        return false;
+        return BotAnnotation.PARAM.isOn(modifiers);
     }
 }

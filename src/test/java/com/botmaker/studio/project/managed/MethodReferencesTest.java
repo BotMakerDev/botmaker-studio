@@ -49,6 +49,7 @@ class MethodReferencesTest {
     @Test
     void aQualifiedReferenceIsMatchedOnItsSimpleName() {
         MethodReferences.Target target = MethodReferences.read("""
+                import com.botmaker.plugin.api.managed.Managed;
                 class Sdk {
                     @Managed("flow") static Object flow() { return use(com.acme.bot.Collect::body); }
                 }

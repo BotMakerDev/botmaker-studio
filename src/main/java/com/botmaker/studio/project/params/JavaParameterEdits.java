@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -8,6 +9,7 @@ import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.ArrayInitializer;
@@ -236,8 +238,8 @@ public final class JavaParameterEdits {
         if (description != null && !description.isBlank()) {
             members.add("description = " + quote(description));
         }
-        String annotation = members.isEmpty() ? "@" + JavaParameterSource.ANNOTATION
-                : "@" + JavaParameterSource.ANNOTATION + "(" + String.join(", ", members) + ")";
+        String name = Param.class.getSimpleName();
+        String annotation = members.isEmpty() ? "@" + name : "@" + name + "(" + String.join(", ", members) + ")";
         String value = initializer == null || initializer.isBlank() ? "" : " = " + initializer;
         return annotation + "\npublic static " + typeName + " " + fieldName + value + ";";
     }
@@ -353,7 +355,8 @@ public final class JavaParameterEdits {
                                              Annotation existing) {
         if (existing instanceof NormalAnnotation normal) return normal;
         NormalAnnotation normal = ast.newNormalAnnotation();
-        normal.setTypeName(ast.newSimpleName(JavaParameterSource.ANNOTATION));
+        // The name as the author wrote it: whichever import or qualification made it the annotation still does.
+        normal.setTypeName((Name) ASTNode.copySubtree(ast, existing.getTypeName()));
         rewrite.getListRewrite(field, FieldDeclaration.MODIFIERS2_PROPERTY)
                 .replace(existing, normal, null);
         return normal;

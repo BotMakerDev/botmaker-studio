@@ -257,6 +257,8 @@ class JavaParameterSourceTest {
         List<JavaParameter> found = read("""
                 package com.example.bot;
 
+                import com.botmaker.plugin.api.params.Param;
+
                 public final class Parameters {
                     @Param public static int imported = 1;
                     @com.botmaker.plugin.basics.params.Param public static int qualified = 2;
@@ -264,6 +266,21 @@ class JavaParameterSourceTest {
                 """);
 
         assertEquals(List.of("imported", "qualified"), found.stream().map(JavaParameter::name).toList());
+    }
+
+    @Test
+    void aParamNothingImportsIsNotAParameter() {
+        // Resolved as javac would: a bare `Param` in com.example.bot is com.example.bot.Param, which is not the
+        // contract's. The suffix match this replaced listed it.
+        List<JavaParameter> found = read("""
+                package com.example.bot;
+
+                public final class Parameters {
+                    @Param public static int stray = 1;
+                }
+                """);
+
+        assertEquals(List.of(), found);
     }
 
     // ---- what is listed but not editable, and what it says --------------------------------------------
