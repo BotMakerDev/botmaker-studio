@@ -77,7 +77,26 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 - **The debugger's highlight and a compile error are rings round the block**, so they show on every colour —
   an error on a red block used to be invisible.
 
+- **`new X(…)` reads on every block.** It kept a light teal card of its own, so its words were white on
+  near-white (1.1:1) on every filled block, and its class name #333 on the dark themes' locked grey. An
+  expression with no block yet (`i++` as a value) was muted grey on the block's colour (1.5:1 on the loop
+  green). Both now take the block's own colours.
+
 ### Added
+
+- **Every statement is on the canvas.** A `try` / `catch` / `finally` is a block with a body per clause,
+  `+ catch` and `+ finally`, a catch type you type (`IOException | InterruptedException` works) and a name
+  that renames only inside its clause. So are the counting loop (`for (int i = 0; i < 10; i++)`, drawn as
+  *for int i from 0 while … each time …*), `throw`, `synchronized`, `assert`, a labelled loop (and the label
+  on `break outer`), `this(…)` / `super(…)` in a constructor, and any other expression run for its effect
+  (`new Worker();`). What still has no block of its own — a class declared inside a method, `int a = 1, b;` —
+  is shown as the Java it is, with ✎ to edit it as text; text that is not Java is refused, not written.
+  These statements used to be missing from the canvas while they stayed in the file.
+- **Insert menu: Counting Loop, Try / Catch, Synchronized, Throw Error, Assert.** Each is seeded to compile
+  where it is dropped (a fresh loop index, `catch (Exception e)`, the lock on the enclosing class).
+- **An `if` or loop whose body is one statement without braces gets braces when the file is opened**, the
+  way an arrow `case` already did, so its body has somewhere to drop a block. A file Studio does not rewrite
+  (locked, read-only) shows such a statement as its Java instead.
 
 - **Blocks look like blocks.** Every block is drawn in its category's colour with a darker lip under it; a
   loop, an `if` or a `switch` wraps its body like a C, so what is inside it is plainly inside; a method is a

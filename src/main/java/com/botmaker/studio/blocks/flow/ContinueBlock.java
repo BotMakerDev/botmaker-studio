@@ -20,12 +20,14 @@ public class ContinueBlock extends AbstractStatementBlock {
         return BlockCategory.CONTROL;
     }
 
-    /** One word, like {@link BreakBlock}. */
+    /** One word, like {@link BreakBlock} — two when it names the labelled loop it continues. */
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
-        return ComponentSpec.builder()
-                .label("kw", () -> SentenceLayoutBuilder.keywordNode("continue"))
-                .build();
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("continue"));
+        var label = ((ContinueStatement) astNode).getLabel();
+        if (label != null) spec.label("label", () -> SentenceLayoutBuilder.labelNode(label.getIdentifier()));
+        return spec.build();
     }
 
     @Override

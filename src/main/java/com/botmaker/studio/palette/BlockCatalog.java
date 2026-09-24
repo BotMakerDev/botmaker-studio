@@ -32,6 +32,8 @@ public final class BlockCatalog {
     // --- Flow control ---
     public static final BlockType IF = cf("IF", "If Statement", FLOW, Kind.IF);
     public static final BlockType SWITCH = cf("SWITCH", "Switch", FLOW, Kind.SWITCH);
+    public static final BlockType TRY = cf("TRY", "Try / Catch", FLOW, Kind.TRY);
+    public static final BlockType SYNCHRONIZED = cf("SYNCHRONIZED", "Synchronized", FLOW, Kind.SYNCHRONIZED);
     // MATCHES_SWITCH ("Check Image Combinations") stood here. It was never in ALL — it could only compile
     // inside a group-lambda body, so it reached the canvas by being seeded there rather than by being
     // dropped. Both the seed and the guarded switch it built are deleted (2026-09-01): branching on what was
@@ -40,12 +42,15 @@ public final class BlockCatalog {
     // --- Loops ---
     public static final BlockType WHILE = cf("WHILE", "While Loop", LOOPS, Kind.WHILE);
     public static final BlockType FOR = cf("FOR", "For Each Loop", LOOPS, Kind.FOR);
+    public static final BlockType FOR_CLASSIC = cf("FOR_CLASSIC", "Counting Loop", LOOPS, Kind.FOR_CLASSIC);
     public static final BlockType DO_WHILE = cf("DO_WHILE", "Do While", LOOPS, Kind.DO_WHILE);
 
     // --- Control commands ---
     public static final BlockType BREAK = cf("BREAK", "Break", CONTROL, Kind.BREAK);
     public static final BlockType CONTINUE = cf("CONTINUE", "Continue", CONTROL, Kind.CONTINUE);
     public static final BlockType RETURN = cf("RETURN", "Return", CONTROL, Kind.RETURN);
+    public static final BlockType THROW = cf("THROW", "Throw Error", CONTROL, Kind.THROW);
+    public static final BlockType ASSERT = cf("ASSERT", "Assert", CONTROL, Kind.ASSERT);
     // Activity enable/disable and stop-the-bot are standard SDK facade calls now — Activity.enable/disable("X")
     // and Bot.stop() come from the Activity/Bot facade submenus and render with the normal SDK-block chrome, so
     // there are no bespoke CONTROL blocks for them (they used to be DISABLE_ACTIVITY/ENABLE_ACTIVITY/STOP_BOT).
@@ -137,9 +142,9 @@ public final class BlockCatalog {
      */
     private static final List<BlockType> LANGUAGE = List.of(
             PRINT,
-            IF, SWITCH,
-            WHILE, FOR, DO_WHILE,
-            BREAK, CONTINUE, RETURN,
+            IF, SWITCH, TRY, SYNCHRONIZED,
+            WHILE, FOR, FOR_CLASSIC, DO_WHILE,
+            BREAK, CONTINUE, RETURN, THROW, ASSERT,
             DECLARE_INT, DECLARE_DOUBLE, DECLARE_BOOLEAN, DECLARE_STRING, DECLARE_ARRAY,
             ASSIGNMENT,
             FUNCTION_CALL, METHOD_DECLARATION, DECLARE_ENUM);

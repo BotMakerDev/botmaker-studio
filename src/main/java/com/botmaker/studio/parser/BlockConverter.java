@@ -8,12 +8,16 @@ import com.botmaker.studio.blocks.func.LibraryCallBlock;
 import com.botmaker.studio.blocks.func.MainBlock;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
+import com.botmaker.studio.blocks.func.ConstructorCallBlock;
+import com.botmaker.studio.blocks.loop.ClassicForBlock;
 import com.botmaker.studio.blocks.loop.DoWhileBlock;
 import com.botmaker.studio.blocks.loop.ForBlock;
 import com.botmaker.studio.blocks.loop.WhileBlock;
 import com.botmaker.studio.blocks.misc.CommentBlock;
+import com.botmaker.studio.blocks.misc.ExpressionStatementBlock;
 import com.botmaker.studio.blocks.misc.InitializerBlock;
 import com.botmaker.studio.blocks.misc.PrintBlock;
+import com.botmaker.studio.blocks.misc.SourceStatementBlock;
 import com.botmaker.studio.blocks.var.AssignmentBlock;
 import com.botmaker.studio.blocks.var.DeclareClassVariableBlock;
 import com.botmaker.studio.blocks.var.DeclareEnumBlock;
@@ -347,35 +351,167 @@ public class BlockConverter {
         return result;
     }
 
+    /**
+     * The block for {@code stmt} — never empty since 2026-09-24. Every arm below that cannot draw its statement
+     * faithfully, and every statement kind no arm names, ends in {@link #sourceStatement}: the statement drawn
+     * as the Java it is, and editable as text. The empty this method used to return was dropped by every
+     * caller, which took the statement off the canvas while it stayed in the file (see
+     * {@code StatementRoundTripTest}).
+     */
     private Optional<StatementBlock> dispatchStatement(Statement stmt, ParseContext ctx) {
+        Optional<StatementBlock> block = Optional.empty();
         try {
-            if (stmt instanceof Block b) return Optional.of(parseBodyBlock(b, ctx));
-            if (stmt instanceof TypeDeclarationStatement t) return parseTypeDeclaration(t, ctx);
-            if (stmt instanceof VariableDeclarationStatement v) return parseVariableDecl(v, ctx);
-            if (stmt instanceof IfStatement i) return parseIf(i, ctx);
-            if (stmt instanceof WhileStatement w) return parseWhile(w, ctx);
-            if (stmt instanceof EnhancedForStatement f) return parseFor(f, ctx);
-            if (stmt instanceof DoStatement d) return parseDoWhile(d, ctx);
-            // A guarded arrow switch had its own arm here until 2026-09-01, ahead of this one. Nothing
-            // composes one now — branching on what was found is a chain of calls (BranchChainHandler) — so a
-            // switch of any form is an ordinary switch again, which is what this arm always handled.
-            if (stmt instanceof SwitchStatement s) return parseSwitch(s, ctx);
-            if (stmt instanceof BreakStatement b) return Optional.of(new BreakBlock(BlockId.of(b), b));
-            if (stmt instanceof ContinueStatement c) return Optional.of(new ContinueBlock(BlockId.of(c), c));
-            if (stmt instanceof ReturnStatement r) return parseReturn(r, ctx);
-            // A TryStatement arm stood here until 2026-09-13. It matched one shape —
-            // `try { Thread.sleep(n) } catch (InterruptedException e)` — and drew it as a bespoke WaitBlock
-            // captioned `Wait … ms`. Waiting is a plugin's verb: the SDK spells it `Wait.time(Duration)`,
-            // which arrives here as an ordinary facade call with the plugin's own editors, and the palette's
-            // hand-written Wait entry went on 2026-09-01. Recognising the raw-sleep spelling as well left the
-            // host offering a second, host-flavoured way to say one plugin's word, under a caption Studio
-            // invented. Every other try has always fallen through to the empty below, and so does this one.
-            if (stmt instanceof ExpressionStatement e) return parseExprStmt(e, ctx);
+            block = dispatchModelled(stmt, ctx);
         } catch (Exception e) {
             System.err.println("Error parsing statement: " + stmt);
             e.printStackTrace();
         }
+        return block.isPresent() ? block
+                : Optional.of(sourceStatement(stmt, ctx, "This statement has no block of its own yet."));
+    }
+
+    private Optional<StatementBlock> dispatchModelled(Statement stmt, ParseContext ctx) {
+        if (stmt instanceof Block b) return Optional.of(parseBodyBlock(b, ctx));
+        if (stmt instanceof TypeDeclarationStatement t) return parseTypeDeclaration(t, ctx);
+        if (stmt instanceof VariableDeclarationStatement v) return parseVariableDecl(v, ctx);
+        // A body that is one bare statement is braced when the file opens (SwitchNormalizer); a file that is
+        // not normalised — locked, read-only — still arrives with one, and drawing the block without its body
+        // would hide that statement. It is drawn as written instead.
+        if (hasBareBody(stmt)) {
+            return Optional.of(sourceStatement(stmt, ctx,
+                    "Its body is a single statement without braces, and this file is not rewritten to add them."));
+        }
+        if (stmt instanceof IfStatement i) return parseIf(i, ctx);
+        if (stmt instanceof WhileStatement w) return parseWhile(w, ctx);
+        if (stmt instanceof EnhancedForStatement f) return parseFor(f, ctx);
+        if (stmt instanceof ForStatement f) return parseClassicFor(f, ctx);
+        if (stmt instanceof DoStatement d) return parseDoWhile(d, ctx);
+        // A try arm stood here until 2026-09-13 that matched one shape — `try { Thread.sleep(n) } catch …` —
+        // and drew it as a bespoke WaitBlock. Waiting is a plugin's verb (`Wait.time(Duration)`), so that went;
+        // this arm draws every try as the try it is, the raw sleep included.
+        if (stmt instanceof TryStatement t) return parseTry(t, ctx);
+        if (stmt instanceof ThrowStatement t) return parseThrow(t, ctx);
+        if (stmt instanceof SynchronizedStatement s) return parseSynchronized(s, ctx);
+        if (stmt instanceof AssertStatement a) return parseAssert(a, ctx);
+        if (stmt instanceof LabeledStatement l) return parseLabeled(l, ctx);
+        if (stmt instanceof YieldStatement y) return parseYield(y, ctx);
+        if (stmt instanceof ConstructorInvocation c) return parseConstructorCall(c, c.arguments(), ctx);
+        if (stmt instanceof SuperConstructorInvocation c) return parseConstructorCall(c, c.arguments(), ctx);
+        // A guarded arrow switch had its own arm here until 2026-09-01, ahead of this one. Nothing composes one
+        // now — branching on what was found is a chain of calls (BranchChainHandler) — so a switch of any form
+        // is an ordinary switch again, which is what this arm always handled.
+        if (stmt instanceof SwitchStatement s) return parseSwitch(s, ctx);
+        if (stmt instanceof BreakStatement b) return Optional.of(new BreakBlock(BlockId.of(b), b));
+        if (stmt instanceof ContinueStatement c) return Optional.of(new ContinueBlock(BlockId.of(c), c));
+        if (stmt instanceof ReturnStatement r) return parseReturn(r, ctx);
+        if (stmt instanceof ExpressionStatement e) return parseExprStmt(e, ctx);
         return Optional.empty();
+    }
+
+    /** {@code stmt} drawn as its own source text; see {@link SourceStatementBlock}. */
+    private SourceStatementBlock sourceStatement(Statement stmt, ParseContext ctx, String reason) {
+        String source = null;
+        if (ctx.sourceCode() != null) {
+            int start = stmt.getStartPosition();
+            int end = start + stmt.getLength();
+            if (start >= 0 && end <= ctx.sourceCode().length()) source = ctx.sourceCode().substring(start, end);
+        }
+        SourceStatementBlock block = new SourceStatementBlock(BlockId.of(stmt), stmt, source, reason);
+        ctx.nodeToBlockMap().put(stmt, block);
+        return block;
+    }
+
+    /** Whether {@code stmt} is an if or a loop with a one-statement body (or else) written without braces. */
+    private static boolean hasBareBody(Statement stmt) {
+        return switch (stmt) {
+            case IfStatement i -> !(i.getThenStatement() instanceof Block)
+                    || (i.getElseStatement() != null && !(i.getElseStatement() instanceof Block)
+                    && !(i.getElseStatement() instanceof IfStatement));
+            case WhileStatement w -> !(w.getBody() instanceof Block);
+            case DoStatement d -> !(d.getBody() instanceof Block);
+            case ForStatement f -> !(f.getBody() instanceof Block);
+            case EnhancedForStatement f -> !(f.getBody() instanceof Block);
+            default -> false;
+        };
+    }
+
+    private Optional<StatementBlock> parseClassicFor(ForStatement stmt, ParseContext ctx) {
+        ClassicForBlock block = new ClassicForBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        VariableDeclarationFragment counter = ClassicForBlock.counter(stmt);
+        if (counter != null) {
+            if (counter.getInitializer() != null) {
+                parseExpression(counter.getInitializer(), ctx).ifPresent(block::setStart);
+            }
+        } else {
+            for (Object init : stmt.initializers()) {
+                parseExpression((Expression) init, ctx).ifPresent(block::addInitializer);
+            }
+        }
+        if (stmt.getExpression() != null) parseExpression(stmt.getExpression(), ctx).ifPresent(block::setCondition);
+        for (Object update : stmt.updaters()) {
+            parseExpression((Expression) update, ctx).ifPresent(block::addUpdater);
+        }
+        if (stmt.getBody() instanceof Block b) block.setBody(parseBodyBlock(b, ctx));
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseTry(TryStatement stmt, ParseContext ctx) {
+        TryBlock block = new TryBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        for (Object resource : stmt.resources()) {
+            parseExpression((Expression) resource, ctx).ifPresent(block::addResource);
+        }
+        block.setTryBody(parseBodyBlock(stmt.getBody(), ctx));
+        for (Object clause : stmt.catchClauses()) {
+            block.addCatchBody(parseBodyBlock(((CatchClause) clause).getBody(), ctx));
+        }
+        if (stmt.getFinally() != null) block.setFinallyBody(parseBodyBlock(stmt.getFinally(), ctx));
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseThrow(ThrowStatement stmt, ParseContext ctx) {
+        ThrowBlock block = new ThrowBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        parseExpression(stmt.getExpression(), ctx).ifPresent(block::setException);
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseSynchronized(SynchronizedStatement stmt, ParseContext ctx) {
+        SynchronizedBlock block = new SynchronizedBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        parseExpression(stmt.getExpression(), ctx).ifPresent(block::setLock);
+        block.setBody(parseBodyBlock(stmt.getBody(), ctx));
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseAssert(AssertStatement stmt, ParseContext ctx) {
+        AssertBlock block = new AssertBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        parseExpression(stmt.getExpression(), ctx).ifPresent(block::setCondition);
+        if (stmt.getMessage() != null) parseExpression(stmt.getMessage(), ctx).ifPresent(block::setMessage);
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseLabeled(LabeledStatement stmt, ParseContext ctx) {
+        LabeledBlock block = new LabeledBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        parseStatement(stmt.getBody(), ctx).ifPresent(block::setInner);
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseYield(YieldStatement stmt, ParseContext ctx) {
+        YieldBlock block = new YieldBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        if (stmt.getExpression() != null) parseExpression(stmt.getExpression(), ctx).ifPresent(block::setValue);
+        return Optional.of(block);
+    }
+
+    private Optional<StatementBlock> parseConstructorCall(Statement stmt, List<?> arguments, ParseContext ctx) {
+        ConstructorCallBlock block = new ConstructorCallBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        for (Object arg : arguments) parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
+        return Optional.of(block);
     }
 
     private Optional<StatementBlock> parseReturn(ReturnStatement stmt, ParseContext ctx) {
@@ -392,7 +528,9 @@ public class BlockConverter {
             ctx.nodeToBlockMap().put(enumDecl, block);
             return Optional.of(block);
         }
-        return Optional.empty();
+        // A local class, record or interface: a type's members are not statements, and no block draws them.
+        return Optional.of(sourceStatement(stmt, ctx,
+                "A class declared inside a method is shown as written."));
     }
 
     private Optional<StatementBlock> parseExprStmt(ExpressionStatement stmt, ParseContext ctx) {
@@ -454,7 +592,11 @@ public class BlockConverter {
             }
             return Optional.of(block);
         }
-        return Optional.empty();
+        // Any other expression run for its effect — `new Worker(queue);`, `super.stop();`.
+        ExpressionStatementBlock block = new ExpressionStatementBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        parseExpression(expr, ctx).ifPresent(block::setExpression);
+        return Optional.of(block);
     }
 
     /**
@@ -506,6 +648,12 @@ public class BlockConverter {
     }
 
     private Optional<StatementBlock> parseVariableDecl(VariableDeclarationStatement stmt, ParseContext ctx) {
+        // The declare block draws one name and one value. `int a = 1, b;` drew as `a = 1` and hid `b`, which
+        // an edit to the block then rewrote from what it showed.
+        if (stmt.fragments().size() > 1) {
+            return Optional.of(sourceStatement(stmt, ctx,
+                    "It declares several variables at once; the variable block holds one."));
+        }
         VariableDeclarationBlock block = new VariableDeclarationBlock(BlockId.of(stmt), stmt);
         ctx.nodeToBlockMap().put(stmt, block);
         VariableDeclarationFragment frag = (VariableDeclarationFragment) stmt.fragments().getFirst();

@@ -20,12 +20,18 @@ public class BreakBlock extends AbstractStatementBlock {
         return BlockCategory.CONTROL;
     }
 
-    /** One word, and that is the whole block — the smallest spec there is. */
+    /**
+     * One word, and that is the whole block — the smallest spec there is. Two when it names the labelled
+     * statement it leaves ({@code break outer}): drawn as a bare {@code break} it would read as leaving the
+     * innermost loop, which is not what it does.
+     */
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
-        return ComponentSpec.builder()
-                .label("kw", () -> SentenceLayoutBuilder.keywordNode("break"))
-                .build();
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode("break"));
+        var label = ((BreakStatement) astNode).getLabel();
+        if (label != null) spec.label("label", () -> SentenceLayoutBuilder.labelNode(label.getIdentifier()));
+        return spec.build();
     }
 
     @Override

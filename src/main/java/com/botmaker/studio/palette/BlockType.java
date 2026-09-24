@@ -51,8 +51,11 @@ public sealed interface BlockType
             // WAIT stood between RETURN and ASSIGNMENT until 2026-09-13, unreachable since its palette entry
             // went on 2026-09-01. It built a raw `Thread.sleep` in a try/catch: waiting is a plugin's verb,
             // and the plugin offers it as an ordinary member call.
+            //
+            // FOR is the enhanced for (`for each`), as it always was; the three-part loop is FOR_CLASSIC.
             PRINT, IF, WHILE, FOR, DO_WHILE, SWITCH,
-            BREAK, CONTINUE, RETURN, ASSIGNMENT, FUNCTION_CALL, COMMENT, ARRAY
+            BREAK, CONTINUE, RETURN, ASSIGNMENT, FUNCTION_CALL, COMMENT, ARRAY,
+            FOR_CLASSIC, TRY, THROW, SYNCHRONIZED, ASSERT
         }
 
         // A call to one of the user's own functions is a value like any other call. ASSIGNMENT is deliberately

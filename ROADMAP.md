@@ -6,7 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — block redesign, token-driven.** Four classes on every block root, none set by a
+- **2026-09-24 (latest) — no statement leaves the canvas (B12/SP6).** `dispatchStatement` never answers
+  empty: every statement kind JDT has reaches a block, and what cannot be drawn faithfully is
+  `blocks/misc/SourceStatementBlock` — its source cut from the file, ✎ to edit as text through
+  `CodeEditor.replaceStatementSource` (`handlers/StatementSourceHandler`: statements that parse or a refusal).
+  New blocks: `ClassicForBlock`, `TryBlock` (`handlers/TryHandler`: add/remove catch and finally, never the
+  last; typed catch type incl. multi-catch), `ThrowBlock`, `SynchronizedBlock`, `AssertBlock`,
+  `LabeledBlock`, `YieldBlock` (reachable with phase 5's switch expression), `ConstructorCallBlock`,
+  `ExpressionStatementBlock`; `break`/`continue` show their label. `renameScopedVariable`
+  (`AstRewriteHelper.renameWithinScope`) renames a catch parameter or loop index inside its statement only.
+  Palette: `FOR_CLASSIC`, `TRY`, `THROW`, `SYNCHRONIZED`, `ASSERT`. `SwitchNormalizer` gained a third pass
+  that braces a bare if/else/loop body on open; unnormalised (locked) files draw those as source. Shown as
+  source by design: local classes, multi-name declarations. `StatementRoundTripTest`'s disabled test is on;
+  `StatementBlocksTest`; the contrast test runs a second program (`BlockGalleryTest.STATEMENTS`), which found
+  `InstantiationBlock`'s own teal card and `UnknownExpressionBlock`'s muted text — both now the reporter's.
+
+- **2026-09-24 — block redesign, token-driven.** Four classes on every block root, none set by a
   block: `block`, `shape-*` (`core/render/BlockShape`, from the syntax tree), `block-category`,
   `category-*`; `bc-*` per component kind; `blocks-filled`/`-outlined` on the canvas (`BlockStyle`, View ▸
   Block Style). `blocks.css` BLOCK STYLE is colour → state → shape × variant, with Modena's look-ups

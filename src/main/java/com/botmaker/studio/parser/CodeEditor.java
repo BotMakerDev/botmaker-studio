@@ -18,7 +18,9 @@ import com.botmaker.studio.parser.handlers.ListHandler;
 import com.botmaker.studio.parser.handlers.MethodHandler;
 import com.botmaker.studio.parser.handlers.OperatorReplacementHandler;
 import com.botmaker.studio.parser.handlers.RawExpressionHandler;
+import com.botmaker.studio.parser.handlers.StatementSourceHandler;
 import com.botmaker.studio.parser.handlers.SwitchNormalizer;
+import com.botmaker.studio.parser.handlers.TryHandler;
 import com.botmaker.studio.parser.handlers.TypeHandler;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
@@ -1208,8 +1210,9 @@ public class CodeEditor {
 
     /**
      * Puts every {@code switch} in the active file into the shape the editor renders — the missing
-     * {@code break} on a falling-through colon case, braces around a bare arrow-rule body (see
-     * {@link SwitchNormalizer}). Called when a file is opened, so the {@code break} the switch block draws as
+     * {@code break} on a falling-through colon case, braces around a bare arrow-rule body — and, despite the
+     * name, braces around a bare if/else/loop body (see {@link SwitchNormalizer}). Called when a file is opened,
+     * so the {@code break} the switch block draws as
      * fixed case chrome is backed by a real one and every branch it offers as a drop target has a block to drop
      * into. A no-op — no edit, no history entry, no {@code CodeUpdatedEvent} — when both are already true,
      * which is the normal case.
@@ -1224,6 +1227,74 @@ public class CodeEditor {
 
     public void moveSwitchCase(SwitchCase caseNode, boolean moveUp) {
         edit(caseNode, EditKind.BODY, false, (cu, code) -> moveSwitchCase(cu, code, caseNode, moveUp));
+    }
+
+    /**
+     * Replaces {@code statement} with Java the user typed — the one edit a statement drawn as its own source
+     * has. Text that is not Java statements is refused with a status line rather than written: a file that no
+     * longer parses draws as an empty canvas.
+     */
+    public void replaceStatementSource(Statement statement, String newSource) {
+        if (statement == null || !canModify(statement, EditKind.BODY)) return;
+        if (newSource == null || newSource.strip().equals(statement.toString().strip())) return;
+        String newCode = StatementSourceHandler.replace(getCurrentCode(), statement, newSource);
+        if (newCode == null) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                    "That is not a Java statement, so the code was left as it was."));
+            return;
+        }
+        if (!newCode.equals(getCurrentCode())) triggerUpdate(newCode, false, statement, EditKind.BODY);
+    }
+
+    public void addCatchClause(TryStatement tryStmt) {
+        edit(tryStmt, EditKind.BODY, false, (cu, code) -> TryHandler.addCatch(ctx(cu), code, tryStmt));
+    }
+
+    /** Removes a {@code catch}; refused, with a status line, when it is all that keeps the {@code try} legal. */
+    public void deleteCatchClause(TryStatement tryStmt, int index) {
+        edit(tryStmt, EditKind.BODY, false, (cu, code) -> refusedWith(
+                TryHandler.deleteCatch(ctx(cu), code, tryStmt, index),
+                "A try needs a catch or a finally, so its last one stays."));
+    }
+
+    public void addFinallyClause(TryStatement tryStmt) {
+        edit(tryStmt, EditKind.BODY, false, (cu, code) -> TryHandler.addFinally(ctx(cu), code, tryStmt));
+    }
+
+    public void deleteFinallyClause(TryStatement tryStmt) {
+        edit(tryStmt, EditKind.BODY, false, (cu, code) -> refusedWith(
+                TryHandler.deleteFinally(ctx(cu), code, tryStmt),
+                "A try needs a catch or a finally, so its last one stays."));
+    }
+
+    /** Makes {@code clause} catch {@code typeText} ({@code IOException}, or {@code A | B}). */
+    public void setCatchType(CatchClause clause, String typeText) {
+        if (typeText == null || typeText.strip().equals(TryHandler.catchTypeText(clause))) return;
+        edit(clause, EditKind.BODY, false, (cu, code) -> refusedWith(
+                TryHandler.setCatchType(ctx(cu), code, clause, typeText),
+                "\"" + typeText.strip() + "\" is not an exception type name."));
+    }
+
+    /**
+     * Renames a variable scoped to one statement — a {@code catch} parameter, a classic {@code for}'s index —
+     * with its references inside that statement only. See {@link AstRewriteHelper#renameWithinScope}.
+     */
+    public void renameScopedVariable(SimpleName declName, String newName) {
+        if (declName == null || newName == null || newName.isBlank()
+                || newName.equals(declName.getIdentifier())) return;
+        ASTNode scope = declName.getParent();
+        while (scope != null && !(scope instanceof CatchClause) && !(scope instanceof ForStatement)) {
+            scope = scope.getParent();
+        }
+        ASTNode found = scope;
+        edit(declName, EditKind.BODY, false,
+                (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
+    }
+
+    /** {@code newCode}, or {@code null} after saying why when a handler refused the edit. */
+    private String refusedWith(String newCode, String reason) {
+        if (newCode == null) eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(reason));
+        return newCode;
     }
 
     // The Matches switch had five editor methods here — setMatchesCheckMode, setMatchesGuard, addMatchesCase,

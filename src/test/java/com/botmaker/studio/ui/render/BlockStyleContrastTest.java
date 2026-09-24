@@ -79,7 +79,17 @@ class BlockStyleContrastTest extends FxHeadlessTest {
 
     @Test
     void everyWordOnABlockIsReadableInEveryThemeAndStyle() throws Exception {
-        EditorFixture fixture = new EditorFixture(com.botmaker.studio.ui.app.BlockGalleryTest.PROGRAM);
+        checkProgram(com.botmaker.studio.ui.app.BlockGalleryTest.PROGRAM, 200);
+    }
+
+    /** The statement blocks added with Phase 4 of the block plan — try, the counting loop, throw, the source block. */
+    @Test
+    void everyWordOnAStatementBlockIsReadableInEveryThemeAndStyle() throws Exception {
+        checkProgram(com.botmaker.studio.ui.app.BlockGalleryTest.STATEMENTS, 150);
+    }
+
+    private void checkProgram(String program, int minimumWords) throws Exception {
+        EditorFixture fixture = new EditorFixture(program);
         // The service is what renders on UIRefreshRequested, and it is built lazily — build it first.
         fixture.context();
         onFx(() -> fixture.subscribeBlocksUpdated(block -> {
@@ -112,8 +122,7 @@ class BlockStyleContrastTest extends FxHeadlessTest {
             // Locked: every block read-only, the look a generated file has. Faded on purpose, so held to the
             // secondary floor — but held to it, since a locked file is the one whose code the user can only read.
             onFx(() -> {
-                var locked = fixture.reparse(com.botmaker.studio.ui.app.BlockGalleryTest.PROGRAM,
-                        com.botmaker.studio.parser.BlockReuse.NONE);
+                var locked = fixture.reparse(program, com.botmaker.studio.parser.BlockReuse.NONE);
                 fixture.state.getNodeToBlockMap().values().forEach(block -> block.setReadOnly(true));
                 locked.root().setReadOnly(true);
                 Parent canvas = new StackPane(locked.root().getUINode(fixture.context()));
@@ -136,7 +145,8 @@ class BlockStyleContrastTest extends FxHeadlessTest {
             });
         }
 
-        assertTrue(measured[0] > 200, "the program should put a few hundred words on blocks, measured " + measured[0]);
+        assertTrue(measured[0] > minimumWords,
+                "the program should put a few hundred words on blocks, measured " + measured[0]);
         assertTrue(failures.isEmpty(), failures.size() + " unreadable words:\n" + String.join("\n", failures));
     }
 

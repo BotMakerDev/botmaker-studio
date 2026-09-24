@@ -56,7 +56,106 @@ public class StatementFactory {
             case FUNCTION_CALL -> createFunctionCallStatement(ctx, context);
             case ARRAY -> createArrayDeclaration(ctx, context);
             case COMMENT -> (Statement) ctx.rewriter().createStringPlaceholder("// Comment", ASTNode.EMPTY_STATEMENT);
+            case FOR_CLASSIC -> createClassicForStatement(ast, ctx.analyzer(), context);
+            case TRY -> createTryStatement(ast, ctx.analyzer(), context);
+            case THROW -> createThrowStatement(ast);
+            case SYNCHRONIZED -> createSynchronizedStatement(ast, context);
+            case ASSERT -> createAssertStatement(ast);
         };
+    }
+
+    // --- The statements added with their blocks on 2026-09-24 ---
+    //
+    // Each is seeded to compile where it lands, like the rest of this file: a name it declares is made unique
+    // at the drop site, and everything it names is java.lang — no import.
+
+    /** {@code for (int i = 0; i < 10; i++) { }} — ten turns, the count in plain sight to change. */
+    private static Statement createClassicForStatement(AST ast, ProjectAnalyzer analyzer, ASTNode context) {
+        String index = uniqueName(analyzer, context, "i");
+        VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
+        fragment.setName(ast.newSimpleName(index));
+        fragment.setInitializer(ast.newNumberLiteral("0"));
+        VariableDeclarationExpression init = ast.newVariableDeclarationExpression(fragment);
+        init.setType(ast.newPrimitiveType(PrimitiveType.INT));
+
+        InfixExpression condition = ast.newInfixExpression();
+        condition.setLeftOperand(ast.newSimpleName(index));
+        condition.setOperator(InfixExpression.Operator.LESS);
+        condition.setRightOperand(ast.newNumberLiteral("10"));
+
+        PostfixExpression update = ast.newPostfixExpression();
+        update.setOperand(ast.newSimpleName(index));
+        update.setOperator(PostfixExpression.Operator.INCREMENT);
+
+        ForStatement loop = ast.newForStatement();
+        loop.initializers().add(init);
+        loop.setExpression(condition);
+        loop.updaters().add(update);
+        loop.setBody(ast.newBlock());
+        return loop;
+    }
+
+    /**
+     * {@code try { } catch (Exception e) { }}. {@code Exception} because it catches what any call a bot makes
+     * can throw, checked or not — a narrower default would not compile around a call that throws something
+     * else, and the type is one click to narrow.
+     */
+    private static Statement createTryStatement(AST ast, ProjectAnalyzer analyzer, ASTNode context) {
+        SingleVariableDeclaration param = ast.newSingleVariableDeclaration();
+        param.setType(ast.newSimpleType(ast.newSimpleName(
+                com.botmaker.studio.parser.handlers.TryHandler.DEFAULT_CATCH_TYPE)));
+        param.setName(ast.newSimpleName(uniqueName(analyzer, context, "e")));
+        CatchClause clause = ast.newCatchClause();
+        clause.setException(param);
+
+        TryStatement tryStmt = ast.newTryStatement();
+        tryStmt.setBody(ast.newBlock());
+        tryStmt.catchClauses().add(clause);
+        return tryStmt;
+    }
+
+    /** {@code throw new IllegalStateException("");} — the exception a bot throws when it finds a state it cannot handle. */
+    private static Statement createThrowStatement(AST ast) {
+        ClassInstanceCreation exception = ast.newClassInstanceCreation();
+        exception.setType(ast.newSimpleType(ast.newSimpleName("IllegalStateException")));
+        StringLiteral message = ast.newStringLiteral();
+        message.setLiteralValue("");
+        exception.arguments().add(message);
+        ThrowStatement throwStmt = ast.newThrowStatement();
+        throwStmt.setExpression(exception);
+        return throwStmt;
+    }
+
+    /**
+     * {@code synchronized (Owner.class) { }} — locked on the enclosing class, which exists in a static method
+     * and an instance one alike; {@code this} does not compile in the first. {@code this} only when there is no
+     * enclosing class to name (a headless build with no drop site).
+     */
+    private static Statement createSynchronizedStatement(AST ast, ASTNode context) {
+        SynchronizedStatement sync = ast.newSynchronizedStatement();
+        AbstractTypeDeclaration owner = null;
+        for (ASTNode n = context; n != null && owner == null; n = n.getParent()) {
+            if (n instanceof AbstractTypeDeclaration type) owner = type;
+        }
+        if (owner == null) {
+            sync.setExpression(ast.newThisExpression());
+        } else {
+            TypeLiteral literal = ast.newTypeLiteral();
+            literal.setType(ast.newSimpleType(ast.newSimpleName(owner.getName().getIdentifier())));
+            sync.setExpression(literal);
+        }
+        sync.setBody(ast.newBlock());
+        return sync;
+    }
+
+    /** {@code assert true : "";} — a check that holds until its condition is filled in. */
+    private static Statement createAssertStatement(AST ast) {
+        AssertStatement assertStmt = ast.newAssertStatement();
+        assertStmt.setExpression(ast.newBooleanLiteral(true));
+        StringLiteral message = ast.newStringLiteral();
+        message.setLiteralValue("");
+        assertStmt.setMessage(message);
+        return assertStmt;
     }
 
     // --- Scope-aware defaults ------------------------------------------------

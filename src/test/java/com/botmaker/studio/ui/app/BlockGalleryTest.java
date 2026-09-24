@@ -86,6 +86,37 @@ public class BlockGalleryTest extends FxHeadlessTest {
             }
             """;
 
+    /**
+     * Every statement block added in Phase 4 of the block plan, plus the source block the rest fall back to.
+     * A second program rather than more lines in {@link #PROGRAM}, whose block counts other tests pin.
+     */
+    public static final String STATEMENTS = """
+            package com.mybot;
+
+            public class Statements {
+
+                private final Object lock = new Object();
+
+                public void guard(int rounds) {
+                    outer:
+                    for (int i = 0; i < rounds; i++) {
+                        try {
+                            synchronized (lock) {
+                                assert i >= 0 : "negative round";
+                            }
+                        } catch (IllegalStateException | IllegalArgumentException e) {
+                            break outer;
+                        } finally {
+                            System.out.println("round done");
+                        }
+                    }
+                    int low = 1, high = 9;
+                    new StringBuilder("unused");
+                    throw new IllegalStateException("stopped");
+                }
+            }
+            """;
+
     private StackPane root;
     private Scene scene;
 
@@ -192,6 +223,26 @@ public class BlockGalleryTest extends FxHeadlessTest {
                     root.getChildren().setAll(pane);
                 });
                 snapProgram(out.resolve(reader ? "reader-mode.png" : "locked.png"));
+            }
+
+            // The statement blocks: try, the counting loop, throw, the source block — in each style, light and dark.
+            for (BlockStyle style : BlockStyle.values()) {
+                for (BlockTheme.ThemeType theme : List.of(BlockTheme.ThemeType.DEFAULT, BlockTheme.ThemeType.DARK)) {
+                    onFx(() -> {
+                        BlockTheme.setTheme(theme);
+                        ThemedWindows.applyThemeClass(root);
+                        var drawn = fixture.reparse(STATEMENTS, com.botmaker.studio.parser.BlockReuse.NONE);
+                        VBox canvas = new VBox(drawn.root().getUINode(fixture.context()));
+                        canvas.getStyleClass().addAll("blocks-canvas", style.styleClass());
+                        canvas.setPadding(new javafx.geometry.Insets(20));
+                        ScrollPane pane = new ScrollPane(canvas);
+                        pane.setFitToWidth(true);
+                        pane.getStyleClass().add("code-scroll-pane");
+                        root.getChildren().setAll(pane);
+                    });
+                    snapProgram(out.resolve("statements-" + style.id() + "-"
+                            + theme.name().toLowerCase().replace('_', '-') + ".png"));
+                }
             }
         } finally {
             onFx(() -> {

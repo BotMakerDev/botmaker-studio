@@ -4,7 +4,6 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.Statement;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -150,15 +149,33 @@ class StatementRoundTripTest {
     // ---- What SP6 must fix ----
 
     /**
-     * All five in one test because SP6 fixes them with one change — a fall-through
-     * {@code UnknownStatementBlock} mirroring the expression side — so they go green together.
+     * Green since 2026-09-24 (Phase 4 of the block plan): each kind has a block of its own, or — a local class —
+     * the {@code SourceStatementBlock} every statement no arm draws falls back to.
      */
     @Test
-    @Disabled("B12 is unfixed: verified red on this commit — throw/synchronized/assert/labelled/classic-for "
-            + "fall through dispatchStatement, and plain try/catch and local classes are dropped by "
-            + "parseTry/parseTypeDeclaration. Delete this line in Phase 4 with SP6.")
     void everyUnmodelledStatementKindStillProducesABlock() {
         assertAll(unmodelled().stream().map(k -> (org.junit.jupiter.api.function.Executable)
+                () -> assertEveryStatementHasABlock(k)).toList());
+    }
+
+    /**
+     * The shapes found after B12 was written, each of which the converter also used to lose: the second name
+     * of a two-name declaration, an expression statement that is not a call, and a bare one-statement body in
+     * a file that is not rewritten on open.
+     */
+    private static List<Kind> foundLater() {
+        return List.of(
+                new Kind("two names in one declaration", "int low = 1, high = 9;"),
+                new Kind("instance creation as a statement", "new StringBuilder(\"x\");"),
+                new Kind("super method call", "super.toString();"),
+                new Kind("empty statement", ";"),
+                new Kind("if with a bare body", "if (lock == null) return;"),
+                new Kind("while with a bare body", "while (lock == null) Thread.onSpinWait();"));
+    }
+
+    @Test
+    void theShapesFoundLaterProduceABlockToo() {
+        assertAll(foundLater().stream().map(k -> (org.junit.jupiter.api.function.Executable)
                 () -> assertEveryStatementHasABlock(k)).toList());
     }
 }

@@ -226,6 +226,40 @@ public class AstRewriteHelper {
     }
 
     /**
+     * Renames a variable whose whole scope is one node — a {@code catch} parameter (its clause), a classic
+     * {@code for}'s index (its loop) — together with every reference inside that node.
+     *
+     * <p>Scoped to {@code scope} rather than to the method because both names are reused by habit: every
+     * {@code catch} in a method is {@code e}, every loop is {@code i}, and {@link #renameLocalVariable}'s
+     * method-wide walk would rename all of them at once. Inside the scope it matches by identifier, for the
+     * reason {@link #renameWithinMethod} gives.
+     */
+    public static String renameWithinScope(CompilationUnit cu, String originalCode, SimpleName declName,
+                                           String newName, ASTNode scope) {
+        if (scope == null) return renameSimpleName(cu, originalCode, declName, newName);
+        ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
+        String oldName = declName.getIdentifier();
+        rewriter.set(declName, SimpleName.IDENTIFIER_PROPERTY, newName, null);
+        scope.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(LambdaExpression nested) {
+                return nested.parameters().stream()
+                        .map(AstRewriteHelper::lambdaParamIdentifier)
+                        .noneMatch(oldName::equals);
+            }
+
+            @Override
+            public boolean visit(SimpleName node) {
+                if (node != declName && node.getIdentifier().equals(oldName) && isVariableReference(node)) {
+                    rewriter.set(node, SimpleName.IDENTIFIER_PROPERTY, newName, null);
+                }
+                return true;
+            }
+        });
+        return applyRewrite(rewriter, originalCode);
+    }
+
+    /**
      * Every {@link SimpleName} in {@code method}'s body that reads or writes the variable {@code name} —
      * the declaration itself excluded. What "is this variable used?" means to the Variables screen, which
      * refuses a delete that would leave those uses dangling and says how many there are.

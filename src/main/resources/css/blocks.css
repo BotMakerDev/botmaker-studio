@@ -644,8 +644,11 @@
     -bm-block-fill: -bm-locked-fill;
     -bm-block-on-fill: -bm-theme-text;
     /* The locked fill is translucent, and Modena ladders a well's text against its well colour — which a
-       derive() of a translucent fill does not describe. The canvas is opaque and is what shows through. */
+       derive() of a translucent fill does not describe. The canvas is opaque and is what shows through. The
+       same for a button's or a combo's surface: laddered off the translucent fill, `new Object()`'s class
+       name came out #333 on the dark themes' locked grey, 1.2:1. */
     -fx-control-inner-background: -bm-canvas;
+    -fx-base: -bm-canvas;
 }
 
 /*
@@ -1669,19 +1672,13 @@
  * InstantiationBlock ("Create <Class>( … )"). Moved here from inline setStyle(...) strings in
  * InstantiationBlock.createUINode so block appearance lives with the rest of the block styling.
  */
-.instantiation-block {
-    -fx-background-color: linear-gradient(to bottom, #ecfaf7, #dff5ef);
-    -fx-background-radius: 12;
-    -fx-border-color: -bm-cat-vision;
-    -fx-border-width: 1.5;
-    -fx-border-radius: 12;
-    -fx-padding: 4 10 4 10;
-    -fx-effect: dropshadow(gaussian, rgba(26, 188, 156, 0.18), 4, 0, 0, 1);
-}
-
+/*
+ * Geometry only since 2026-09-24. It is a reporter, and its surface and text are the reporter's (BLOCK STYLE);
+ * the light-teal gradient and teal text it had here were a card of its own that ignored the block it sat on —
+ * white "Create" on near-white on every filled block, 1.1:1 (BlockStyleContrastTest, the statements program).
+ */
 .instantiation-block .class-selector {
     -fx-font-weight: bold;
-    -fx-text-fill: #148f77;
     -fx-background-color: transparent;
     -fx-padding: 0 2 0 0;
 }
@@ -1690,17 +1687,10 @@
     -fx-font-size: 9px;
     -fx-padding: 2 5 2 5;
     -fx-background-radius: 10;
-    -fx-background-color: rgba(26, 188, 156, 0.15);
-    -fx-text-fill: #148f77;
-}
-
-.instantiation-block .constructor-button:hover {
-    -fx-background-color: rgba(26, 188, 156, 0.30);
 }
 
 .instantiation-block .param-name-label {
     -fx-font-size: 9px;
-    -fx-text-fill: #999;
 }
 
 /*
@@ -2254,15 +2244,21 @@
  * silently dropped. Deliberately plain-but-visible: it marks a gap in the block
  * model, so it should look inert without looking like an error.
  * --------------------------------------------------------------------------- */
+/* It is a reporter (shape-reporter), so its surface is the reporter wash and its text the block's on-colour; a
+ * muted grey of its own read 1.5:1 on the loop green (BlockStyleContrastTest). The dashed edge is the marker. */
 .unknown-expression-block {
     -fx-font-family: "monospace";
-    -fx-text-fill: -bm-muted;
-    -fx-background-color: rgba(127, 140, 141, 0.10);
-    -fx-background-radius: 3px;
-    -fx-border-color: rgba(127, 140, 141, 0.35);
-    -fx-border-radius: 3px;
+    -fx-border-color: -bm-text-on-color;
+    -fx-border-radius: 12;
     -fx-border-style: dashed;
-    -fx-padding: 1 4 1 4;
+    -fx-border-width: 1;
+}
+
+/* A statement drawn as its own source (SourceStatementBlock). Geometry and font only: the text colour is the
+ * block's on-fill, which the state layer re-points, so it reads on every category fill in every theme. */
+.source-statement-text,
+.source-statement-editor {
+    -fx-font-family: "monospace";
 }
 
 /* Class header inheritance clause (`extends Activity`) — ClassBlock.createHeader. */
