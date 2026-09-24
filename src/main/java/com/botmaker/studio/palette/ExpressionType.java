@@ -15,7 +15,7 @@ package com.botmaker.studio.palette;
  */
 public sealed interface ExpressionType
         permits ExpressionType.Literal, ExpressionType.Reference,
-                ExpressionType.InfixOp, ExpressionType.PrefixOp {
+                ExpressionType.InfixOp, ExpressionType.PrefixOp, ExpressionType.Form {
 
     String id();
     String displayName();
@@ -47,6 +47,16 @@ public sealed interface ExpressionType
             };
             case InfixOp op -> op.operator().symbol();
             case PrefixOp op -> op.operator().symbol();
+            case Form f -> switch (f.kind()) {
+                case CHOOSE -> "?:";
+                case NEGATE -> "−x";
+                case CAST -> "(T)";
+                case INSTANCEOF -> "is";
+                case NEW_ARRAY -> "[n]";
+                case CHARACTER -> "'a'";
+                case CLASS_LITERAL -> ".class";
+                case LAMBDA -> "→";
+            };
         };
     }
 
@@ -91,5 +101,15 @@ public sealed interface ExpressionType
     /** A unary prefix operator expression ({@code !a}). */
     record PrefixOp(String id, String displayName, ExpressionCategory category, Op operator) implements ExpressionType {
         @Override public boolean isConstant() { return false; }
+    }
+
+    /**
+     * A value form with slots or a type of its own: a choice between two values, a negation, a cast, a type
+     * check, a new array, a character, a class literal, a lambda. Seeded so it compiles where it lands
+     * ({@code ExpressionFactory}); which slots it fits is {@code ExpressionCatalog}'s.
+     */
+    record Form(String id, String displayName, ExpressionCategory category, Kind kind) implements ExpressionType {
+        public enum Kind { CHOOSE, NEGATE, CAST, INSTANCEOF, NEW_ARRAY, CHARACTER, CLASS_LITERAL, LAMBDA }
+        @Override public boolean isConstant() { return kind == Kind.CHARACTER; }
     }
 }

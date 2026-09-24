@@ -1,7 +1,12 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.BlockShape;
+import com.botmaker.studio.parser.handlers.ExpressionFormHandler;
+import com.botmaker.studio.ui.render.components.TextFieldComponents;
+import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
+import org.eclipse.jdt.core.dom.ITypeBinding;
 
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.palette.ExpressionType;
@@ -79,6 +84,40 @@ public abstract class AbstractExpressionBlock extends AbstractCodeBlock implemen
         Button changeBtn = createChangeButton(e ->
                 showExpressionMenuAndReplace((Button) e.getSource(), context, paramType, (Expression) arg.getAstNode()));
         return BlockUIComponents.createArgumentPill(leadingLabel, arg.getUINode(context), changeBtn);
+    }
+
+    /**
+     * Declares one operand of this value: its slot, and beside it the small button that replaces it from the
+     * menu — the pair every operand of an operator block is. The button is absent on a locked block and on an
+     * empty slot, which has nothing to replace.
+     */
+    protected void addOperand(ComponentSpec.Builder spec, String id, ExpressionBlock value,
+                              CodeEditorService context, ResolvedType expected) {
+        spec.slot(id, () -> SentenceLayoutBuilder.expressionSlotNode(value, context, expected))
+                .picker(id + "-change", () -> {
+                    if (value == null) return null;
+                    Button change = createChangeButton(e -> showExpressionMenuAndReplace((Button) e.getSource(),
+                            context, expected, (Expression) value.getAstNode()));
+                    if (change != null) change.getStyleClass().add("small-change-button");
+                    return change;
+                });
+    }
+
+    /**
+     * The type {@code owner} names, as a field that retypes it — a cast's, a check's, a class literal's — or
+     * the same text as a label when this block is locked. Typed rather than picked: a type is an open set, and
+     * {@code List<Point>} is written the way Java writes it.
+     */
+    protected Node typeField(ASTNode owner, CodeEditorService context) {
+        return TextFieldComponents.createVariableName(ExpressionFormHandler.typeText(owner), !isReadOnly(),
+                text -> context.getCodeEditor().setExpressionType(owner, text));
+    }
+
+    /** This value's type from its own binding, or {@code UNKNOWN} when the tree has none. */
+    protected ResolvedType ownType() {
+        if (!(astNode instanceof Expression expression)) return ResolvedType.UNKNOWN;
+        ITypeBinding binding = expression.resolveTypeBinding();
+        return binding == null ? ResolvedType.UNKNOWN : ResolvedType.of(binding);
     }
 
     protected void showExpressionMenuAndReplace(Button button,

@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -114,6 +115,45 @@ public class BlockGalleryTest extends FxHeadlessTest {
                     new StringBuilder("unused");
                     throw new IllegalStateException("stopped");
                 }
+            }
+            """;
+
+    /** Every value block added in Phase 5 of the block plan, one per line, plus the source block they fall back to. */
+    public static final String EXPRESSIONS = """
+            package com.mybot;
+
+            public class Values extends Base {
+
+                private Object found = "ore";
+                private int[] counts = {3, 1};
+
+                public void look(int round) {
+                    int bonus = round > 3 ? round * 2 : 0;
+                    int whole = (int) 2.5 + counts[round - 1] + round++;
+                    boolean isText = found instanceof String name && !name.isEmpty();
+                    Runnable tick = () -> System.out.println(round);
+                    java.util.function.IntUnaryOperator twice = x -> {
+                        return x * 2;
+                    };
+                    int[] slots = new int[round];
+                    char mark = 'x';
+                    int mask = 0xFF;
+                    String note = \"""
+                        two
+                        lines\""";
+                    Class<?> kind = String.class;
+                    Object self = this;
+                    int parentSize = super.size - -round;
+                    int days = switch (round) {
+                        case 1, 2 -> 28;
+                        default -> 31;
+                    };
+                    Runnable later = new Runnable() { public void run() { } };
+                }
+            }
+
+            class Base {
+                protected int size;
             }
             """;
 
@@ -225,13 +265,15 @@ public class BlockGalleryTest extends FxHeadlessTest {
                 snapProgram(out.resolve(reader ? "reader-mode.png" : "locked.png"));
             }
 
-            // The statement blocks: try, the counting loop, throw, the source block — in each style, light and dark.
+            // The statement blocks (try, the counting loop, throw, the source block) and the value blocks (a
+            // choice, a cast, a lambda, a switch value…) — in each style, light and dark.
+            for (Map.Entry<String, String> program : Map.of("statements", STATEMENTS, "expressions", EXPRESSIONS).entrySet()) {
             for (BlockStyle style : BlockStyle.values()) {
                 for (BlockTheme.ThemeType theme : List.of(BlockTheme.ThemeType.DEFAULT, BlockTheme.ThemeType.DARK)) {
                     onFx(() -> {
                         BlockTheme.setTheme(theme);
                         ThemedWindows.applyThemeClass(root);
-                        var drawn = fixture.reparse(STATEMENTS, com.botmaker.studio.parser.BlockReuse.NONE);
+                        var drawn = fixture.reparse(program.getValue(), com.botmaker.studio.parser.BlockReuse.NONE);
                         VBox canvas = new VBox(drawn.root().getUINode(fixture.context()));
                         canvas.getStyleClass().addAll("blocks-canvas", style.styleClass());
                         canvas.setPadding(new javafx.geometry.Insets(20));
@@ -240,9 +282,10 @@ public class BlockGalleryTest extends FxHeadlessTest {
                         pane.getStyleClass().add("code-scroll-pane");
                         root.getChildren().setAll(pane);
                     });
-                    snapProgram(out.resolve("statements-" + style.id() + "-"
+                    snapProgram(out.resolve(program.getKey() + "-" + style.id() + "-"
                             + theme.name().toLowerCase().replace('_', '-') + ".png"));
                 }
+            }
             }
         } finally {
             onFx(() -> {

@@ -68,6 +68,14 @@ public sealed interface ResolvedType
     default boolean isUnknown() { return false; }
 
     /**
+     * Whether a lambda can be written where this type is expected — an interface with one abstract method.
+     * Only a binding can say; a type known by name alone answers no.
+     */
+    default boolean isFunctionalInterface() {
+        return this instanceof Bound bound && bound.binding().getFunctionalInterfaceMethod() != null;
+    }
+
+    /**
      * Whether this type <em>is</em> {@code jdkType}. The qualified name always counts; the bare simple name
      * counts only for {@code java.lang}, which is the one package the language auto-imports — a source file
      * writing {@code String} can mean nothing else, whereas a bare {@code List} could be a project class.

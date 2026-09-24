@@ -12,6 +12,7 @@ import com.botmaker.studio.parser.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.handlers.BranchChainHandler;
 import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
+import com.botmaker.studio.parser.handlers.ExpressionFormHandler;
 import com.botmaker.studio.parser.handlers.InstantiationHandler;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.handlers.ListHandler;
@@ -25,6 +26,7 @@ import com.botmaker.studio.parser.handlers.TypeHandler;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.parser.helpers.Precedence;
 import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.parser.refactor.CallMigrator;
@@ -104,7 +106,13 @@ public class CodeEditor {
             Map.entry("-=", Assignment.Operator.MINUS_ASSIGN),
             Map.entry("*=", Assignment.Operator.TIMES_ASSIGN),
             Map.entry("/=", Assignment.Operator.DIVIDE_ASSIGN),
-            Map.entry("%=", Assignment.Operator.REMAINDER_ASSIGN)
+            Map.entry("%=", Assignment.Operator.REMAINDER_ASSIGN),
+            Map.entry("&=", Assignment.Operator.BIT_AND_ASSIGN),
+            Map.entry("|=", Assignment.Operator.BIT_OR_ASSIGN),
+            Map.entry("^=", Assignment.Operator.BIT_XOR_ASSIGN),
+            Map.entry("<<=", Assignment.Operator.LEFT_SHIFT_ASSIGN),
+            Map.entry(">>=", Assignment.Operator.RIGHT_SHIFT_SIGNED_ASSIGN),
+            Map.entry(">>>=", Assignment.Operator.RIGHT_SHIFT_UNSIGNED_ASSIGN)
     );
     private static final Map<String, PrefixExpression.Operator> PREFIX_OPS = Map.ofEntries(
             Map.entry("++", PrefixExpression.Operator.INCREMENT),
@@ -1283,12 +1291,66 @@ public class CodeEditor {
         if (declName == null || newName == null || newName.isBlank()
                 || newName.equals(declName.getIdentifier())) return;
         ASTNode scope = declName.getParent();
-        while (scope != null && !(scope instanceof CatchClause) && !(scope instanceof ForStatement)) {
+        while (scope != null && !(scope instanceof CatchClause) && !(scope instanceof ForStatement)
+                && !(scope instanceof TryStatement)) {
             scope = scope.getParent();
         }
         ASTNode found = scope;
         edit(declName, EditKind.BODY, false,
                 (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
+    }
+
+    /**
+     * Renames the variable an {@code instanceof} pattern declares ({@code o instanceof Point p}). Its scope is
+     * decided by flow — {@code if (!(o instanceof Point p)) return;} puts {@code p} in scope for the rest of
+     * the block — so the rename covers the block the check sits in, matched by binding where there is one.
+     */
+    public void renamePatternVariable(SimpleName declName, String newName) {
+        if (declName == null || newName == null || newName.isBlank()
+                || newName.equals(declName.getIdentifier())) return;
+        ASTNode scope = declName.getParent();
+        while (scope != null && !(scope instanceof Block) && !(scope instanceof LambdaExpression)) {
+            scope = scope.getParent();
+        }
+        ASTNode found = scope;
+        edit(declName, EditKind.BODY, false,
+                (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
+    }
+
+    /** Makes a cast, a type check, a class literal, a declaration or an array creation name {@code typeText}. */
+    public void setExpressionType(ASTNode owner, String typeText) {
+        if (typeText == null || typeText.strip().equals(ExpressionFormHandler.typeText(owner))) return;
+        edit(owner, EditKind.BODY, false, (cu, code) -> refusedWith(
+                ExpressionFormHandler.setType(ctx(cu), code, owner, typeText),
+                "\"" + typeText.strip() + "\" is not a type that can go there."));
+    }
+
+    public void setCharacter(CharacterLiteral literal, String text) {
+        if (text == null || String.valueOf(literal.charValue()).equals(text)) return;
+        edit(literal, EditKind.BODY, false, (cu, code) -> refusedWith(
+                ExpressionFormHandler.setCharacter(ctx(cu), code, literal, text),
+                "A character holds exactly one letter, digit or symbol."));
+    }
+
+    public void setTextBlock(TextBlock block, String content) {
+        if (content == null || content.equals(block.getLiteralValue())) return;
+        edit(block, EditKind.BODY, false, (cu, code) -> ExpressionFormHandler.setTextBlock(ctx(cu), code, block, content));
+    }
+
+    /** Respells a number literal ({@code 0xFF}, {@code 1_000}); refused when the text is not one number. */
+    public void setNumberToken(NumberLiteral literal, String token) {
+        if (token == null || token.strip().equals(literal.getToken())) return;
+        edit(literal, EditKind.BODY, false, (cu, code) -> refusedWith(
+                ExpressionFormHandler.setNumberToken(ctx(cu), code, literal, token),
+                "\"" + token.strip() + "\" is not a number Java can read."));
+    }
+
+    /** Replaces {@code target} with the Java expression the user typed; refused when it is not one. */
+    public void replaceExpressionSource(Expression target, String text) {
+        if (text == null || text.strip().isEmpty()) return;
+        edit(target, EditKind.BODY, false, (cu, code) -> refusedWith(
+                ExpressionFormHandler.replaceWithSource(code, target, text),
+                "That is not a Java expression, so the value was left as it was."));
     }
 
     /** {@code newCode}, or {@code null} after saying why when a handler refused the edit. */
@@ -1397,10 +1459,12 @@ public class CodeEditor {
 
     private static String replaceExpression(CompilationUnit cu, String originalCode, Expression toReplace, ExpressionType type, ProjectAnalyzer analyzer) {
         EditContext ctx = EditContext.of(cu, analyzer, null);
-        String contextType = ProjectAnalyzer.inferExpectedType(toReplace).simpleName();
+        // The resolved type, not its simple name: a lambda is seeded from the functional interface's method,
+        // which only a binding knows.
+        ResolvedType contextType = ProjectAnalyzer.inferExpectedType(toReplace);
         Expression newExpression = NodeCreator.createDefaultExpression(ctx, type, contextType);
         if (newExpression == null) return originalCode;
-        ctx.rewriter().replace(toReplace, newExpression, null);
+        ctx.rewriter().replace(toReplace, Precedence.wrapIfNeeded(ctx.ast(), newExpression, toReplace), null);
         return ctx.applyTo(originalCode);
     }
 

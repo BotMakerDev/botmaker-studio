@@ -88,6 +88,12 @@ class BlockStyleContrastTest extends FxHeadlessTest {
         checkProgram(com.botmaker.studio.ui.app.BlockGalleryTest.STATEMENTS, 150);
     }
 
+    /** The value blocks added with Phase 5 — a choice, a cast, a lambda, a switch value, a text block, a character. */
+    @Test
+    void everyWordOnAValueBlockIsReadableInEveryThemeAndStyle() throws Exception {
+        checkProgram(com.botmaker.studio.ui.app.BlockGalleryTest.EXPRESSIONS, 120);
+    }
+
     private void checkProgram(String program, int minimumWords) throws Exception {
         EditorFixture fixture = new EditorFixture(program);
         // The service is what renders on UIRefreshRequested, and it is built lazily — build it first.

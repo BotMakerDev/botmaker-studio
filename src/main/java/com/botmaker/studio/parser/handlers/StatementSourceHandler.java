@@ -1,9 +1,8 @@
 package com.botmaker.studio.parser.handlers;
 
-import org.eclipse.jdt.core.dom.AST;
+import com.botmaker.studio.parser.helpers.JavaSnippets;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
-import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SwitchStatement;
@@ -40,18 +39,8 @@ public final class StatementSourceHandler {
 
     /** How many statements {@code source} holds, or 0 when it is not well-formed Java statements. */
     static int statementCount(String source) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_STATEMENTS);
-        parser.setSource(source.toCharArray());
-        ASTNode parsed = parser.createAST(null);
+        ASTNode parsed = JavaSnippets.parser(ASTParser.K_STATEMENTS, source).createAST(null);
         if (!(parsed instanceof Block block)) return 0;
-        boolean[] damaged = {false};
-        block.accept(new ASTVisitor() {
-            @Override
-            public void preVisit(ASTNode node) {
-                if ((node.getFlags() & (ASTNode.MALFORMED | ASTNode.RECOVERED)) != 0) damaged[0] = true;
-            }
-        });
-        return damaged[0] ? 0 : block.statements().size();
+        return JavaSnippets.isDamaged(block) ? 0 : block.statements().size();
     }
 }

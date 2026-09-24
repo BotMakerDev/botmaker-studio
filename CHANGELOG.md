@@ -82,6 +82,18 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   expression with no block yet (`i++` as a value) was muted grey on the block's colour (1.5:1 on the loop
   green). Both now take the block's own colours.
 
+- **`a + b + c` shows `c`.** A sum or a chain of `&&` with three or more operands drew the first two; the
+  rest were in the file and missing from the block.
+
+- **A value dropped inside an operator keeps its meaning.** Picking *Addition* for `n` in `n * 2` wrote
+  `0 + 0 * 2`, which Java reads as `0 + (0 * 2)`; it writes `(0 + 0) * 2` now. The same holds for a value
+  typed as Java.
+
+- **`new int[n]` keeps its size.** It was drawn as an empty list and lost `n` on the next edit.
+
+- **`flags |= MASK` no longer shows "set to".** An operator missing from the selector showed its first entry,
+  and picking anything wrote over the author's operator.
+
 ### Added
 
 - **Every statement is on the canvas.** A `try` / `catch` / `finally` is a block with a body per clause,
@@ -97,6 +109,20 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 - **An `if` or loop whose body is one statement without braces gets braces when the file is opened**, the
   way an arrow `case` already did, so its body has somewhere to drop a block. A file Studio does not rewrite
   (locked, read-only) shows such a statement as its Java instead.
+- **Every value has a block.** `c ? a : b` reads *if … then … else …*; `(int) x` reads *x as int*; `o
+  instanceof Point p` reads *o is a Point called p*, and renaming `p` renames it where it is in scope; a lambda
+  is its parameters and either a value slot or a body to drop into; `a[i]` reads *item i of a*; `new int[n]`
+  reads *new list of int size n*; `-x`, `~x`, `++i` and `i++` show their operator where Java writes it; a
+  switch that is a value (`case A -> 1;`) is a block with a row per case. `this`, `super.x`, `super.m(…)`,
+  `X.class`, a character, a text block and a number written as `0xFF` or `1_000` each have one too, and a
+  type in a cast, a check, a class literal or a new array is typed in. An assignment used as a value and a
+  declaration inside `for (…)` or `try (…)` are blocks as well. An anonymous class and a `case X:` switch
+  value are shown as their Java, with ✎.
+- **Expression menu: If … Then … Else, Negative, Convert Type (cast), Is A (instanceof), Empty List of Size,
+  Character, Class, Code Value (lambda).** Each is offered only where it fits — a lambda where a functional
+  interface is expected, with one parameter per parameter of its method.
+- **All twelve assignment operators** in the assignment block's selector: `%=`, `&=`, `|=`, `^=`, `<<=`,
+  `>>=` and `>>>=` joined `=`, `+=`, `-=`, `*=` and `/=`.
 
 - **Blocks look like blocks.** Every block is drawn in its category's colour with a darker lip under it; a
   loop, an `if` or a `switch` wraps its body like a C, so what is inside it is plainly inside; a method is a

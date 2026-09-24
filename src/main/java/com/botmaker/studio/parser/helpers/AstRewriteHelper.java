@@ -239,6 +239,10 @@ public class AstRewriteHelper {
         if (scope == null) return renameSimpleName(cu, originalCode, declName, newName);
         ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
         String oldName = declName.getIdentifier();
+        // Where the tree was parsed with bindings, a name is ours only if it binds to our declaration: two
+        // `if (o instanceof Point p)` in one block declare two different `p`s. Without bindings the name is all
+        // there is, and the scope is what keeps the rename where it belongs.
+        IBinding declared = declName.resolveBinding();
         rewriter.set(declName, SimpleName.IDENTIFIER_PROPERTY, newName, null);
         scope.accept(new ASTVisitor() {
             @Override
@@ -250,6 +254,10 @@ public class AstRewriteHelper {
 
             @Override
             public boolean visit(SimpleName node) {
+                if (declared != null && node.resolveBinding() != null
+                        && !declared.isEqualTo(node.resolveBinding())) {
+                    return true;
+                }
                 if (node != declName && node.getIdentifier().equals(oldName) && isVariableReference(node)) {
                     rewriter.set(node, SimpleName.IDENTIFIER_PROPERTY, newName, null);
                 }

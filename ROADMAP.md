@@ -6,7 +6,24 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — no statement leaves the canvas (B12/SP6).** `dispatchStatement` never answers
+- **2026-09-24 (latest) — every expression has a block.** `dispatchExpression` reaches
+  `UnknownExpressionBlock` for no JDT expression kind (`ExpressionBlocksTest.noExpressionFallsToTheUnknownBlock`).
+  New `blocks/expr/`: `ConditionalBlock`, `CastBlock`, `InstanceofBlock` (pattern name via
+  `CodeEditor.renamePatternVariable`, block-scoped, binding-matched), `LambdaBlock` (value slot or body),
+  `ArrayAccessBlock`, `ArrayCreationBlock` (was drawn as an empty `ListBlock` and lost its size), `UnaryBlock`,
+  `AssignmentValueBlock`, `DeclarationExpressionBlock` (for-init, try resource), `SuperAccessBlock`,
+  `ThisBlock`, `TypeLiteralBlock`, `TokenLiteralBlock` (hex/underscore/exponent numbers, char, text block),
+  `SwitchExpressionBlock` (arrow form; a `case X:` one is source), `SourceExpressionBlock` (anonymous class,
+  patterns, annotations; ✎ via `replaceExpressionSource`). Parentheses are the block of what they hold.
+  `handlers/ExpressionFormHandler` (typed types, char, text block, number token, source splice),
+  `helpers/JavaSnippets` (latest-level snippet parse, also under `StatementSourceHandler`), `helpers/Precedence`
+  (a replacement inside an operator is parenthesised — `replaceExpression` wrote `0 + 0 * 2`).
+  `renameWithinScope` skips a name bound elsewhere. Extended operands (`a + b + c`) are drawn. Menu:
+  `ExpressionType.Form` (CHOOSE, NEGATE, CAST, INSTANCEOF, NEW_ARRAY, CHARACTER, CLASS_LITERAL, LAMBDA),
+  `ResolvedType.isFunctionalInterface`. Assignment selector has all twelve operators. Third contrast program
+  `BlockGalleryTest.EXPRESSIONS`; no CSS was needed.
+
+- **2026-09-24 — no statement leaves the canvas (B12/SP6).** `dispatchStatement` never answers
   empty: every statement kind JDT has reaches a block, and what cannot be drawn faithfully is
   `blocks/misc/SourceStatementBlock` — its source cut from the file, ✎ to edit as text through
   `CodeEditor.replaceStatementSource` (`handlers/StatementSourceHandler`: statements that parse or a refusal).

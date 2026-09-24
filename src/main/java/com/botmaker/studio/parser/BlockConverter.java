@@ -797,6 +797,14 @@ public class BlockConverter {
             inner.ifPresent(b -> ctx.nodeToBlockMap().put(expr, b));
             return inner;
         }
+        // Parentheses are grouping, and nesting already draws grouping: `(a + b) * c` is a product with a sum
+        // block in one slot. So the block is the inside's. Replacing it replaces the inside, and the parentheses
+        // stay in the file around whatever goes there.
+        if (expr instanceof ParenthesizedExpression parens) {
+            Optional<ExpressionBlock> inner = parseExpression(parens.getExpression(), ctx);
+            inner.ifPresent(b -> ctx.nodeToBlockMap().put(expr, b));
+            return inner;
+        }
         Optional<ExpressionBlock> result = dispatchExpression(expr, ctx);
         result.ifPresent(b -> applyReadOnly(b, ctx));
         return result;
@@ -805,6 +813,10 @@ public class BlockConverter {
     private Optional<ExpressionBlock> dispatchExpression(Expression expr, ParseContext ctx) {
         Map<ASTNode, CodeBlock> map = ctx.nodeToBlockMap();
 
+        if (expr instanceof ClassInstanceCreation cic && cic.getAnonymousClassDeclaration() != null) {
+            return Optional.of(sourceExpression(expr, ctx,
+                    "It creates an object with a class body written in place, and a class is edited as Java."));
+        }
         if (expr instanceof ClassInstanceCreation cic) {
             InstantiationBlock block = new InstantiationBlock(BlockId.of(expr), cic);
             map.put(expr, block);
@@ -838,8 +850,19 @@ public class BlockConverter {
                 parseExpression(prefix.getOperand(), ctx).ifPresent(b::setOperand);
                 return Optional.of(b);
             }
+            UnaryBlock b = new UnaryBlock(BlockId.of(expr), prefix);
+            map.put(expr, b);
+            parseExpression(prefix.getOperand(), ctx).ifPresent(b::setOperand);
+            return Optional.of(b);
         }
-        if (isListStructure(expr)) {
+        if (expr instanceof PostfixExpression postfix) {
+            UnaryBlock b = new UnaryBlock(BlockId.of(expr), postfix);
+            map.put(expr, b);
+            parseExpression(postfix.getOperand(), ctx).ifPresent(b::setOperand);
+            return Optional.of(b);
+        }
+        // `new int[n]` has no elements to list; drawn as a list it lost its size, so it goes to its own block.
+        if (isListStructure(expr) && !(expr instanceof ArrayCreation ac && ac.getInitializer() == null)) {
             ListBlock b = new ListBlock(BlockId.of(expr), expr);
             map.put(expr, b);
             for (Expression item : getListItems(expr)) parseExpression(item, ctx).ifPresent(b::addElement);
@@ -912,12 +935,18 @@ public class BlockConverter {
                 map.put(expr, b);
                 parseExpression(infix.getLeftOperand(), ctx).ifPresent(b::setLeftOperand);
                 parseExpression(infix.getRightOperand(), ctx).ifPresent(b::setRightOperand);
+                for (Object extra : infix.extendedOperands()) {
+                    parseExpression((Expression) extra, ctx).ifPresent(b::addExtendedOperand);
+                }
                 return Optional.of(b);
             } else {
                 BinaryExpressionBlock b = new BinaryExpressionBlock(BlockId.of(expr), infix);
                 map.put(expr, b);
                 parseExpression(infix.getLeftOperand(), ctx).ifPresent(b::setLeftOperand);
                 parseExpression(infix.getRightOperand(), ctx).ifPresent(b::setRightOperand);
+                for (Object extra : infix.extendedOperands()) {
+                    parseExpression((Expression) extra, ctx).ifPresent(b::addExtendedOperand);
+                }
                 return Optional.of(b);
             }
         }
@@ -926,6 +955,8 @@ public class BlockConverter {
             map.put(expr, b);
             return Optional.of(b);
         }
+        Optional<ExpressionBlock> form = dispatchForm(expr, ctx);
+        if (form.isPresent()) return form;
         // Fallback: never return empty. Callers use `.ifPresent(block::addArgument)`, so an empty Optional
         // silently DROPS the argument — the block then shows fewer args than the source has, and a later
         // rewrite from block state can delete them for real. Render it verbatim instead so it stays visible
@@ -933,6 +964,163 @@ public class BlockConverter {
         UnknownExpressionBlock unknown = new UnknownExpressionBlock(BlockId.of(expr), expr);
         map.put(expr, unknown);
         return Optional.of(unknown);
+    }
+
+    /**
+     * The value forms that are not calls, names or operators with a block of their own above: a choice between
+     * two values, a cast, a type check, a lambda, an array element or a new array, an assignment or a
+     * declaration used as a value, a class literal, {@code this}, {@code super.x}, a literal kept as spelled,
+     * and a switch that is a value. Empty only for a node none of them is, which then falls to the unknown
+     * block.
+     */
+    private Optional<ExpressionBlock> dispatchForm(Expression expr, ParseContext ctx) {
+        Map<ASTNode, CodeBlock> map = ctx.nodeToBlockMap();
+        ExpressionBlock block = switch (expr) {
+            case ConditionalExpression c -> {
+                ConditionalBlock b = new ConditionalBlock(BlockId.of(expr), c);
+                map.put(expr, b);
+                parseExpression(c.getExpression(), ctx).ifPresent(b::setCondition);
+                parseExpression(c.getThenExpression(), ctx).ifPresent(b::setWhenTrue);
+                parseExpression(c.getElseExpression(), ctx).ifPresent(b::setWhenFalse);
+                yield b;
+            }
+            case CastExpression c -> {
+                CastBlock b = new CastBlock(BlockId.of(expr), c);
+                map.put(expr, b);
+                parseExpression(c.getExpression(), ctx).ifPresent(b::setOperand);
+                yield b;
+            }
+            case InstanceofExpression i -> {
+                InstanceofBlock b = new InstanceofBlock(BlockId.of(expr), i);
+                map.put(expr, b);
+                parseExpression(i.getLeftOperand(), ctx).ifPresent(b::setOperand);
+                yield b;
+            }
+            case PatternInstanceofExpression i -> {
+                InstanceofBlock b = new InstanceofBlock(BlockId.of(expr), i);
+                map.put(expr, b);
+                parseExpression(i.getLeftOperand(), ctx).ifPresent(b::setOperand);
+                yield b;
+            }
+            case LambdaExpression l -> {
+                LambdaBlock b = new LambdaBlock(BlockId.of(expr), l);
+                map.put(expr, b);
+                if (l.getBody() instanceof Block body) b.setBlockBody(parseBodyBlock(body, ctx));
+                else parseExpression((Expression) l.getBody(), ctx).ifPresent(b::setExpressionBody);
+                yield b;
+            }
+            case ArrayAccess a -> {
+                ArrayAccessBlock b = new ArrayAccessBlock(BlockId.of(expr), a);
+                map.put(expr, b);
+                parseExpression(a.getArray(), ctx).ifPresent(b::setArray);
+                parseExpression(a.getIndex(), ctx).ifPresent(b::setIndex);
+                yield b;
+            }
+            case ArrayCreation a -> {
+                ArrayCreationBlock b = new ArrayCreationBlock(BlockId.of(expr), a);
+                map.put(expr, b);
+                for (Object dimension : a.dimensions()) {
+                    parseExpression((Expression) dimension, ctx).ifPresent(b::addDimension);
+                }
+                yield b;
+            }
+            case Assignment a -> {
+                AssignmentValueBlock b = new AssignmentValueBlock(BlockId.of(expr), a);
+                map.put(expr, b);
+                parseExpression(a.getLeftHandSide(), ctx).ifPresent(b::setTarget);
+                parseExpression(a.getRightHandSide(), ctx).ifPresent(b::setValue);
+                yield b;
+            }
+            case VariableDeclarationExpression v -> {
+                DeclarationExpressionBlock b = new DeclarationExpressionBlock(BlockId.of(expr), v);
+                map.put(expr, b);
+                for (Object f : v.fragments()) {
+                    VariableDeclarationFragment fragment = (VariableDeclarationFragment) f;
+                    if (fragment.getInitializer() != null) {
+                        parseExpression(fragment.getInitializer(), ctx)
+                                .ifPresent(init -> b.setInitializer(fragment, init));
+                    }
+                }
+                yield b;
+            }
+            case SuperMethodInvocation s -> {
+                SuperAccessBlock b = new SuperAccessBlock(BlockId.of(expr), s);
+                map.put(expr, b);
+                for (Object arg : s.arguments()) parseExpression((Expression) arg, ctx).ifPresent(b::addArgument);
+                yield b;
+            }
+            case SuperFieldAccess s -> put(map, new SuperAccessBlock(BlockId.of(expr), s));
+            case ThisExpression t -> put(map, new ThisBlock(BlockId.of(expr), t));
+            case TypeLiteral t -> put(map, new TypeLiteralBlock(BlockId.of(expr), t));
+            case NumberLiteral n -> put(map, new TokenLiteralBlock(BlockId.of(expr), n));
+            case CharacterLiteral c -> put(map, new TokenLiteralBlock(BlockId.of(expr), c));
+            case TextBlock t -> put(map, new TokenLiteralBlock(BlockId.of(expr), t));
+            // A dotted name nothing above resolved: `a.b.c` read as a chain of field accesses, which is what a
+            // qualified name in a value position is.
+            case QualifiedName q -> put(map, new FieldAccessBlock(BlockId.of(expr), q, ctx.markNewIdentifiersAsUnedited()));
+            case SwitchExpression s -> parseSwitchExpression(s, ctx);
+            case Pattern p -> sourceExpression(expr, ctx, "It is a pattern, which is edited as Java.");
+            case CaseDefaultExpression c -> sourceExpression(expr, ctx, "It is the default label of a pattern switch.");
+            case Annotation a -> sourceExpression(expr, ctx, "It is an annotation, which is edited as Java.");
+            default -> null;
+        };
+        return Optional.ofNullable(block);
+    }
+
+    private static ExpressionBlock put(Map<ASTNode, CodeBlock> map, ExpressionBlock block) {
+        map.put(block.getAstNode(), block);
+        return block;
+    }
+
+    /**
+     * A switch that is a value, one {@link SwitchExpressionBlock.Case} per {@code case … ->}: the value it
+     * yields, the block it runs, or the statement it throws with. A switch expression written with colon labels
+     * is statements with {@code yield}s among them, and is drawn as source.
+     */
+    private ExpressionBlock parseSwitchExpression(SwitchExpression expr, ParseContext ctx) {
+        List<?> statements = expr.statements();
+        boolean arrows = statements.stream()
+                .filter(SwitchCase.class::isInstance)
+                .allMatch(s -> ((SwitchCase) s).isSwitchLabeledRule());
+        if (!arrows) {
+            return sourceExpression(expr, ctx,
+                    "It is a switch value written with `case X:` labels; only the `case X ->` form is drawn as blocks.");
+        }
+        SwitchExpressionBlock block = new SwitchExpressionBlock(BlockId.of(expr), expr);
+        ctx.nodeToBlockMap().put(expr, block);
+        parseExpression(expr.getExpression(), ctx).ifPresent(block::setSubject);
+        SwitchExpressionBlock.Case current = null;
+        for (Object o : statements) {
+            Statement s = (Statement) o;
+            if (s instanceof SwitchCase sc) {
+                current = new SwitchExpressionBlock.Case(sc.isDefault());
+                for (Object label : sc.expressions()) {
+                    parseExpression((Expression) label, ctx).ifPresent(current::addLabel);
+                }
+                block.addCase(current);
+            } else if (current != null) {
+                switch (s) {
+                    case YieldStatement y when y.isImplicit() && y.getExpression() != null ->
+                            parseExpression(y.getExpression(), ctx).ifPresent(current::setValue);
+                    case Block b -> current.setBody(parseBodyBlock(b, ctx));
+                    default -> parseStatement(s, ctx).ifPresent(current::setStatement);
+                }
+            }
+        }
+        return block;
+    }
+
+    /** {@code expr} drawn as the Java it is, cut from the file, with the one-sentence {@code reason}. */
+    private SourceExpressionBlock sourceExpression(Expression expr, ParseContext ctx, String reason) {
+        String source = null;
+        if (ctx.sourceCode() != null) {
+            int start = expr.getStartPosition();
+            int end = start + expr.getLength();
+            if (start >= 0 && end <= ctx.sourceCode().length()) source = ctx.sourceCode().substring(start, end);
+        }
+        SourceExpressionBlock block = new SourceExpressionBlock(BlockId.of(expr), expr, source, reason);
+        ctx.nodeToBlockMap().put(expr, block);
+        return block;
     }
 
     // =========================================================================

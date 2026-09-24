@@ -1,5 +1,6 @@
 package com.botmaker.studio.palette;
 
+import com.botmaker.studio.palette.ExpressionType.Form;
 import com.botmaker.studio.palette.ExpressionType.InfixOp;
 import com.botmaker.studio.palette.ExpressionType.Literal;
 import com.botmaker.studio.palette.ExpressionType.Op;
@@ -7,6 +8,7 @@ import com.botmaker.studio.palette.ExpressionType.PrefixOp;
 import com.botmaker.studio.palette.ExpressionType.Reference;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.types.JdkType;
+import com.botmaker.studio.types.PrimitiveKind;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.types.TypeExpectation;
 
@@ -59,12 +61,22 @@ public final class ExpressionCatalog {
     public static final ExpressionType OR = new InfixOp("OR", "Or (||)", LOGIC, Op.OR);
     public static final ExpressionType NOT = new PrefixOp("NOT", "Not (!)", LOGIC, Op.NOT);
 
+    // --- Forms (2026-09-24) ---
+    public static final ExpressionType CHARACTER = new Form("CHARACTER", "Character ('a')", LITERAL, Form.Kind.CHARACTER);
+    public static final ExpressionType CLASS_LITERAL = new Form("CLASS_LITERAL", "Class (X.class)", LITERAL, Form.Kind.CLASS_LITERAL);
+    public static final ExpressionType NEGATE = new Form("NEGATE", "Negative (-x)", MATH, Form.Kind.NEGATE);
+    public static final ExpressionType INSTANCEOF = new Form("INSTANCEOF", "Is A (instanceof)", COMPARISON, Form.Kind.INSTANCEOF);
+    public static final ExpressionType CHOOSE = new Form("CHOOSE", "If … Then … Else (? :)", LOGIC, Form.Kind.CHOOSE);
+    public static final ExpressionType CAST = new Form("CAST", "Convert Type (cast)", STRUCTURE, Form.Kind.CAST);
+    public static final ExpressionType NEW_ARRAY = new Form("NEW_ARRAY", "Empty List of Size", STRUCTURE, Form.Kind.NEW_ARRAY);
+    public static final ExpressionType LAMBDA = new Form("LAMBDA", "Code Value (lambda)", STRUCTURE, Form.Kind.LAMBDA);
+
     private static final List<ExpressionType> ALL = List.of(
-            TEXT, NUMBER, TRUE, FALSE,
-            VARIABLE, ACTIVITY, FUNCTION_CALL, ENUM_CONSTANT, LIST, INSTANTIATION,
-            ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO,
-            EQUALS, NOT_EQUALS, GREATER, LESS, GREATER_EQUALS, LESS_EQUALS,
-            AND, OR, NOT);
+            TEXT, NUMBER, TRUE, FALSE, CHARACTER, CLASS_LITERAL,
+            VARIABLE, ACTIVITY, FUNCTION_CALL, ENUM_CONSTANT, LIST, INSTANTIATION, NEW_ARRAY, CAST, LAMBDA,
+            ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, NEGATE,
+            EQUALS, NOT_EQUALS, GREATER, LESS, GREATER_EQUALS, LESS_EQUALS, INSTANCEOF,
+            AND, OR, NOT, CHOOSE);
 
     /** All insertable expressions in menu display order. */
     public static List<ExpressionType> all() {
@@ -89,6 +101,7 @@ public final class ExpressionCatalog {
     }
 
     public static boolean isCompatibleWith(ExpressionType expr, ResolvedType targetType, ProjectState state) {
+        if (expr instanceof Form f) return formFits(f.kind(), targetType);
         if (targetType == null || targetType.isUnknown()) {
             // Instantiation requires a known type to construct; everything else is allowed.
             return !(expr instanceof Reference r && r.kind() == Reference.Kind.INSTANTIATION);
@@ -142,6 +155,27 @@ public final class ExpressionCatalog {
             };
             case PrefixOp ignored -> TypeExpectation.BOOLEAN;
             case Reference ignored -> TypeExpectation.ANY; // unreached (handled above)
+            case Form ignored -> TypeExpectation.ANY;      // unreached (handled above)
+        };
+    }
+
+    /**
+     * Whether a form fits a slot of {@code targetType}. An unknown slot takes what needs no type to be written
+     * — a choice, a negation, a cast to {@code Object}, a check, a character, a class — and refuses a new array
+     * and a lambda, which cannot be written without knowing what they are of.
+     */
+    private static boolean formFits(Form.Kind kind, ResolvedType targetType) {
+        boolean unknown = targetType == null || targetType.isUnknown();
+        if (unknown) return kind != Form.Kind.NEW_ARRAY && kind != Form.Kind.LAMBDA;
+        boolean object = isObject(targetType);
+        return switch (kind) {
+            case CHOOSE, CAST -> true;
+            case NEGATE -> object || TypeExpectation.of(targetType) == TypeExpectation.NUMERIC;
+            case INSTANCEOF -> object || targetType.isBoolean();
+            case NEW_ARRAY -> targetType.isArray();
+            case CHARACTER -> object || targetType.is(PrimitiveKind.CHAR) || targetType.is(JdkType.CHARACTER);
+            case CLASS_LITERAL -> object || targetType.qualifiedName().startsWith("java.lang.Class");
+            case LAMBDA -> targetType.isFunctionalInterface();
         };
     }
 

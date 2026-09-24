@@ -16,6 +16,7 @@ public class ComparisonExpressionBlock extends AbstractExpressionBlock {
 
     private ExpressionBlock leftOperand;
     private ExpressionBlock rightOperand;
+    private final java.util.List<ExpressionBlock> extendedOperands = new java.util.ArrayList<>();
     private String operator;
     private final ITypeBinding returnType;
 
@@ -38,6 +39,8 @@ public class ComparisonExpressionBlock extends AbstractExpressionBlock {
 
     public void setLeftOperand(ExpressionBlock leftOperand) { this.leftOperand = leftOperand; }
     public void setRightOperand(ExpressionBlock rightOperand) { this.rightOperand = rightOperand; }
+    /** An operand after the second, in {@code a && b && c}: the same operator joins each one on. */
+    public void addExtendedOperand(ExpressionBlock operand) { extendedOperands.add(operand); }
 
     @Override
     protected Node createUINode(CodeEditorService context) {
@@ -81,6 +84,16 @@ public class ComparisonExpressionBlock extends AbstractExpressionBlock {
                 showExpressionMenuAndReplace((Button)e.getSource(), context, targetType,
                         rightOperand != null ? (Expression) rightOperand.getAstNode() : null)
         ));
+
+        // `a && b && c` is one InfixExpression with `c` as an extended operand; drawn from left and right
+        // alone it read `a && b`, and `c` was invisible.
+        for (ExpressionBlock extra : extendedOperands) {
+            sentence.addKeyword(operator);
+            sentence.addExpressionSlot(extra, context, targetType);
+            sentence.addNode(createChangeButton(e ->
+                    showExpressionMenuAndReplace((Button) e.getSource(), context, targetType,
+                            (Expression) extra.getAstNode())));
+        }
 
         Node root = sentence.build();
 

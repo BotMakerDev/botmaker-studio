@@ -17,13 +17,38 @@ public class AssignmentBlock extends AbstractStatementBlock {
     private ExpressionBlock rightHandSide;
     private String operator;
 
-    private static final String[] OPERATOR_NAMES = {
-            "set to", "add", "subtract", "multiply by", "divide by", "increment", "decrement"
+    /**
+     * Every assignment operator Java has, by the word the selector shows. The last six were missing until
+     * 2026-09-24, so {@code flags |= MASK} drew a selector showing "set to" — and picking anything from it
+     * wrote that over the author's operator.
+     */
+    public static final String[] ASSIGN_NAMES = {
+            "set to", "add", "subtract", "multiply by", "divide by", "keep remainder of dividing by",
+            "bitwise and with", "bitwise or with", "bitwise xor with",
+            "shift left by", "shift right by", "shift right (unsigned) by"
     };
 
-    private static final String[] OPERATOR_SYMBOLS = {
-            "=", "+=", "-=", "*=", "/=", "++", "--"
+    public static final String[] ASSIGN_SYMBOLS = {
+            "=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", ">>>="
     };
+
+    private static final String[] OPERATOR_NAMES = concat(ASSIGN_NAMES, "increment", "decrement");
+
+    private static final String[] OPERATOR_SYMBOLS = concat(ASSIGN_SYMBOLS, "++", "--");
+
+    private static String[] concat(String[] head, String... tail) {
+        String[] all = java.util.Arrays.copyOf(head, head.length + tail.length);
+        System.arraycopy(tail, 0, all, head.length, tail.length);
+        return all;
+    }
+
+    /** The word the selector shows for {@code symbol} ({@code "="} → "set to"), or the symbol itself. */
+    public static String operatorName(String symbol) {
+        for (int i = 0; i < OPERATOR_SYMBOLS.length; i++) {
+            if (OPERATOR_SYMBOLS[i].equals(symbol)) return OPERATOR_NAMES[i];
+        }
+        return symbol;
+    }
 
     public AssignmentBlock(String id, ExpressionStatement astNode) {
         super(id, astNode);
@@ -106,10 +131,7 @@ public class AssignmentBlock extends AbstractStatementBlock {
 
     /** The friendly name the selector would show for the current operator symbol ("=" → "set to"). */
     private String operatorDisplayName() {
-        for (int i = 0; i < OPERATOR_SYMBOLS.length; i++) {
-            if (OPERATOR_SYMBOLS[i].equals(operator)) return OPERATOR_NAMES[i];
-        }
-        return operator;
+        return operatorName(operator);
     }
 
     private void showExpressionMenu(javafx.scene.control.Button button, CodeEditorService context) {

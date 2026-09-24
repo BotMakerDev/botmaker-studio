@@ -1,12 +1,15 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.studio.palette.ExpressionType.Form;
 import com.botmaker.studio.palette.ExpressionType.InfixOp;
 import com.botmaker.studio.palette.ExpressionType.Literal;
 import com.botmaker.studio.palette.ExpressionType.Op;
 import com.botmaker.studio.palette.ExpressionType.PrefixOp;
 import com.botmaker.studio.palette.ExpressionType.Reference;
 import com.botmaker.studio.parser.EditContext;
+import com.botmaker.studio.parser.handlers.LambdaCallHandler;
+import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.DefaultNames;
 import org.eclipse.jdt.core.dom.*;
@@ -39,7 +42,91 @@ public class ExpressionFactory {
             };
             case InfixOp op -> createInfixExpression(ast, op.operator());
             case PrefixOp op -> createPrefixExpression(ast, mapPrefix(op.operator()));
+            case Form f -> createForm(ctx, f.kind(), contextType);
         };
+    }
+
+    /**
+     * A form seeded so it compiles where it lands: each slot holds a value of the type the slot wants (the
+     * same defaults a dropped block's arguments get), each type is the slot's type or {@code Object}.
+     */
+    private static Expression createForm(EditContext ctx, Form.Kind kind, ResolvedType contextType) {
+        AST ast = ctx.ast();
+        boolean known = contextType != null && !contextType.isUnknown();
+        return switch (kind) {
+            case CHOOSE -> {
+                ConditionalExpression choose = ast.newConditionalExpression();
+                choose.setExpression(ast.newBooleanLiteral(true));
+                choose.setThenExpression(defaultValue(ctx, contextType));
+                choose.setElseExpression(defaultValue(ctx, contextType));
+                yield choose;
+            }
+            case NEGATE -> {
+                PrefixExpression negate = ast.newPrefixExpression();
+                negate.setOperator(PrefixExpression.Operator.MINUS);
+                negate.setOperand(ast.newNumberLiteral("1"));
+                yield negate;
+            }
+            case CAST -> {
+                ResolvedType type = known ? contextType : ResolvedType.named("Object");
+                CastExpression cast = ast.newCastExpression();
+                cast.setType(ProjectAnalyzer.createSimpleTypeNode(ast, type));
+                cast.setExpression(defaultValue(ctx, type));
+                ctx.addImportForType(type);
+                yield cast;
+            }
+            case INSTANCEOF -> {
+                InstanceofExpression check = ast.newInstanceofExpression();
+                check.setLeftOperand(ast.newNullLiteral());
+                check.setRightOperand(ast.newSimpleType(ast.newSimpleName("Object")));
+                yield check;
+            }
+            case NEW_ARRAY -> {
+                ResolvedType type = known && contextType.isArray() ? contextType : ResolvedType.named("int[]");
+                ArrayCreation creation = ast.newArrayCreation();
+                Type node = ProjectAnalyzer.createSimpleTypeNode(ast, type);
+                creation.setType(node instanceof ArrayType array ? array : ast.newArrayType(node));
+                creation.dimensions().add(ast.newNumberLiteral("10"));
+                ctx.addImportForType(type);
+                yield creation;
+            }
+            case CHARACTER -> {
+                CharacterLiteral character = ast.newCharacterLiteral();
+                character.setCharValue('a');
+                yield character;
+            }
+            case CLASS_LITERAL -> {
+                TypeLiteral literal = ast.newTypeLiteral();
+                literal.setType(ast.newSimpleType(ast.newSimpleName("Object")));
+                yield literal;
+            }
+            case LAMBDA -> createLambda(ctx, contextType);
+        };
+    }
+
+    /**
+     * A lambda for a functional interface slot: one parameter per parameter of its method, a block body for a
+     * method that returns nothing, and a default value as the body for one that returns something.
+     */
+    private static Expression createLambda(EditContext ctx, ResolvedType contextType) {
+        AST ast = ctx.ast();
+        IMethodBinding method = contextType instanceof ResolvedType.Bound bound
+                ? bound.binding().getFunctionalInterfaceMethod() : null;
+        int arity = method == null ? 0 : method.getParameterTypes().length;
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (int i = 0; i < arity; i++) names.add(arity == 1 ? "value" : "value" + (i + 1));
+        LambdaExpression lambda = LambdaCallHandler.emptyBlockLambda(ast, names);
+        if (method != null && !"void".equals(method.getReturnType().getName())) {
+            lambda.setBody(defaultValue(ctx, ResolvedType.of(method.getReturnType())));
+        }
+        return lambda;
+    }
+
+    /** A value of {@code type} that compiles, or {@code null} for a type nothing seeds. */
+    private static Expression defaultValue(EditContext ctx, ResolvedType type) {
+        if (type == null || type.isUnknown()) return ctx.ast().newNullLiteral();
+        Expression value = InitializerFactory.createDefaultInitializer(ctx, type);
+        return value != null ? value : ctx.ast().newNullLiteral();
     }
 
     private static Expression createInstantiation(EditContext ctx, ResolvedType contextType) {

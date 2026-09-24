@@ -17,6 +17,7 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
 
     private ExpressionBlock leftOperand;
     private ExpressionBlock rightOperand;
+    private final java.util.List<ExpressionBlock> extendedOperands = new java.util.ArrayList<>();
     private String operator;
     private final ITypeBinding returnType;
 
@@ -31,6 +32,8 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
 
     public void setLeftOperand(ExpressionBlock leftOperand) { this.leftOperand = leftOperand; }
     public void setRightOperand(ExpressionBlock rightOperand) { this.rightOperand = rightOperand; }
+    /** An operand after the second, in {@code a + b + c}: the same operator joins each one on. */
+    public void addExtendedOperand(ExpressionBlock operand) { extendedOperands.add(operand); }
 
     @Override
     protected Node createUINode(CodeEditorService context) {
@@ -85,6 +88,22 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
             if (changeRight != null) {
                 changeRight.getStyleClass().add("small-change-button");
                 expressionBox.getChildren().add(changeRight);
+            }
+        }
+
+        // `a + b + c` is one InfixExpression with `c` as an extended operand; drawn from left and right alone it
+        // read `a + b`, and `c` was invisible.
+        for (ExpressionBlock extra : extendedOperands) {
+            expressionBox.getChildren().add(createOperatorLabel(operator));
+            Node extraNode = extra.getUINode(context);
+            ExpressionSlots.makeDroppable(extraNode, extra, context, ResolvedType.UNKNOWN);
+            expressionBox.getChildren().add(extraNode);
+            Button changeExtra = createChangeButton(e ->
+                    showExpressionMenuAndReplace((Button) e.getSource(), context, ResolvedType.INT,
+                            (Expression) extra.getAstNode()));
+            if (changeExtra != null) {
+                changeExtra.getStyleClass().add("small-change-button");
+                expressionBox.getChildren().add(changeExtra);
             }
         }
 
