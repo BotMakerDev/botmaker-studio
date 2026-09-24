@@ -134,7 +134,7 @@ class PluginCompositionTest {
 
         PluginHost.Composition composed = PluginHost.compose(List.of(plugin));
 
-        String written = composed.grammar().initializerOfAny(new Channel("general")).orElseThrow();
+        String written = composed.grammar().initializerOfAny(new Channel("general")).orElseThrow().source();
         assertEquals("new " + Channel.class.getCanonicalName() + "(\"general\")", written);
         assertEquals(new Channel("general"), composed.grammar().valueOfAny(written).orElseThrow());
     }

@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.JavaManagedValues;
@@ -96,7 +97,7 @@ public final class HostPluginValues implements PluginValues {
         if (found.isEmpty() || !found.get().editable()) return Optional.empty();
         ManagedMethod value = found.get();
         return Optional.of(HostValueContext.of(value.form(), value.expression(), services,
-                (expression, imports) -> write(value, expression, imports),
+                expression -> write(value, expression),
                 () -> ManagedConstants.scan(config, state)));
     }
 
@@ -107,9 +108,9 @@ public final class HostPluginValues implements PluginValues {
      * on every keystroke would record every one of them. That is why the built-in editors commit on OK
      * rather than as the user types (2026-09-20), and why a plugin's should too.
      */
-    private void write(ManagedMethod value, String expression, List<String> imports) {
+    private void write(ManagedMethod value, JavaValue expression) {
         snapshot();
-        JavaManagedValues.setValue(config, state, value, expression, imports);
+        JavaManagedValues.setValue(config, state, value, expression);
     }
 
     private void snapshot() {

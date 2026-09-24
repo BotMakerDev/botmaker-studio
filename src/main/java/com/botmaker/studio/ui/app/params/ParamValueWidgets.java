@@ -3,7 +3,8 @@ package com.botmaker.studio.ui.app.params;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
-import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -25,20 +26,18 @@ import javafx.scene.layout.VBox;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Supplier;
 
 /**
  * Builds the value-entry widget for one {@link ParameterRow}, seeded from the Java its value is written as,
- * and hands back a reader turning the widget's live state back into Java.
+ * and hands back a reader turning the widget's live state back into a {@link JavaValue} tree.
  *
- * <p><b>Source in, source out (2026-09-20).</b> A row's value is the initialiser its field takes, because a
- * composite has no other canonical form — so a cell reads and writes that spelling and nothing else. A leaf is
- * a plugin's editor over that leaf's own Java; a composite is taken apart one level at a time into parts that
- * are themselves source, edited, and composed back through its container's own factory.
+ * <p><b>Source in, a tree out (2026-09-20, trees since 2026-09-24).</b> A row's value is the initialiser its
+ * field takes, because a composite has no other canonical form. A leaf is a plugin's editor over that leaf's
+ * own Java; a composite is taken apart one level at a time into parts, edited, and composed back through its
+ * container's own factory as a tree — a part nothing edited is its own expression, kept, never its text.
  *
  * <p><b>There is no second spelling of a leaf any more (2026-09-22).</b> A leaf's control used to hold a
  * "wire" text and this class translated at the boundary — {@code ValueWire.wire} in, {@code literal} out —
@@ -69,17 +68,16 @@ public final class ParamValueWidgets {
     private ParamValueWidgets() {}
 
     /**
-     * A variable's handle plus a reader turning its widget's UI state back into the Java the field takes, and
-     * the imports that Java needs.
+     * A variable's handle plus a reader turning its widget's UI state back into the value the field takes, as
+     * a tree with the imports it names.
      *
-     * <p>A blank reading means <em>this widget has no source spelling for what is in it</em> — an empty radio
-     * group, a leaf no editor could draw — and a caller writes nothing rather than guessing.
+     * <p>An empty reading means <em>this widget has no Java for what is in it</em> — an empty radio group, a
+     * leaf no editor could draw — and a caller writes nothing rather than guessing.
      */
-    public record ValueEditor(String group, String name, Supplier<String> read, Supplier<List<String>> imports) {
+    public record ValueEditor(String group, String name, Supplier<Optional<JavaValue>> read) {
 
-        static ValueEditor of(String group, ParameterRow row, Supplier<String> read,
-                              Supplier<List<String>> imports) {
-            return new ValueEditor(group, row.name(), read, imports);
+        static ValueEditor of(String group, ParameterRow row, Supplier<Optional<JavaValue>> read) {
+            return new ValueEditor(group, row.name(), read);
         }
 
         /** True when this reader was built from the row called {@code rowName} in {@code rowGroup}. */
@@ -161,7 +159,7 @@ public final class ParamValueWidgets {
         ValueEditors.Editor editor = ValueEditors.editorFor(leaf, row.value(), ctx);
         Node widget = editor.node();
         ValueEditors.stretch(widget);
-        sink.add(ValueEditor.of(group, row, editor.read(), editor.imports()));
+        sink.add(ValueEditor.of(group, row, editor.read()));
         return widget;
     }
 
@@ -176,29 +174,27 @@ public final class ParamValueWidgets {
                                  List<String> options, ValueEditors.Context ctx, List<ValueEditor> sink) {
         ToggleGroup toggles = new ToggleGroup();
         VBox column = new VBox(2);
-        String current = canonical(grammar, leaf, row.value());
+        Optional<JavaValue> current = canonical(grammar, leaf, SourceNode.parse(row.value()));
         for (String option : options) {
-            Optional<ValueGrammar.Written> written = optionSource(grammar, leaf, option);
+            Optional<JavaValue> written = optionSource(grammar, leaf, option);
             RadioButton button = new RadioButton(option);
             button.setToggleGroup(toggles);
             button.setUserData(written.orElse(null));
             button.setDisable(written.isEmpty());
             written.ifPresent(w -> {
                 button.setGraphic(ValueEditors.optionGraphic(leaf, w.source(), ctx));
-                button.setSelected(w.source().equals(current));
+                button.setSelected(w.sameJava(current.orElse(null)));
             });
             column.getChildren().add(button);
         }
         if (options.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(group, row,
-                () -> chosen(toggles).map(ValueGrammar.Written::source).orElse(""),
-                () -> chosen(toggles).map(ValueGrammar.Written::imports).orElse(List.of())));
+        sink.add(ValueEditor.of(group, row, () -> chosen(toggles)));
         return column;
     }
 
-    private static Optional<ValueGrammar.Written> chosen(ToggleGroup toggles) {
+    private static Optional<JavaValue> chosen(ToggleGroup toggles) {
         Toggle selected = toggles.getSelectedToggle();
-        return selected != null && selected.getUserData() instanceof ValueGrammar.Written written
+        return selected != null && selected.getUserData() instanceof JavaValue written
                 ? Optional.of(written) : Optional.empty();
     }
 
@@ -206,32 +202,29 @@ public final class ParamValueWidgets {
     private static Node checkList(ValueGrammar grammar, String group, ParameterRow row, Type form,
                                   Type leaf, List<String> options, ValueEditors.Context ctx,
                                   List<ValueEditor> sink) {
-        List<String> held = ValueWire.partsOrNone(form, row.value()).stream()
-                .map(part -> canonical(grammar, leaf, part))
+        List<JavaValue> held = ValueWire.partsOrNone(form, row.value()).stream()
+                .flatMap(part -> canonical(grammar, leaf, Optional.of(part.written())).stream())
                 .toList();
         List<CheckBox> boxes = new ArrayList<>();
         VBox column = new VBox(2);
         for (String option : options) {
-            Optional<ValueGrammar.Written> written = optionSource(grammar, leaf, option);
+            Optional<JavaValue> written = optionSource(grammar, leaf, option);
             CheckBox box = new CheckBox(option);
             box.setUserData(written.orElse(null));
             box.setDisable(written.isEmpty());
             written.ifPresent(w -> {
                 box.setGraphic(ValueEditors.optionGraphic(leaf, w.source(), ctx));
-                box.setSelected(held.contains(w.source()));
+                box.setSelected(held.stream().anyMatch(w::sameJava));
             });
             boxes.add(box);
             column.getChildren().add(box);
         }
         if (boxes.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        Supplier<List<ValueGrammar.Written>> ticked = () -> boxes.stream()
+        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, boxes.stream()
                 .filter(CheckBox::isSelected)
-                .map(box -> box.getUserData() instanceof ValueGrammar.Written w ? w : null)
+                .map(box -> box.getUserData() instanceof JavaValue w ? w : null)
                 .filter(w -> w != null)
-                .toList();
-        sink.add(ValueEditor.of(group, row,
-                () -> ValueWire.compose(form, ticked.get().stream().map(ValueGrammar.Written::source).toList()),
-                () -> importsOf(ticked.get().stream().map(ValueGrammar.Written::imports).toList())));
+                .toList())));
         return column;
     }
 
@@ -255,8 +248,8 @@ public final class ParamValueWidgets {
             area.setPrefRowCount(Math.max(3, Math.min(8, items.size() + 1)));
             area.setPromptText("One per line");
             sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, lines(area).stream()
-                    .map(JdkLiterals::quote)
-                    .toList()), List::of));
+                    .flatMap(line -> grammar.spell(String.class, line).stream())
+                    .toList())));
             return area;
         }
 
@@ -295,12 +288,9 @@ public final class ParamValueWidgets {
         });
         rebuild[0].run();
 
-        sink.add(ValueEditor.of(group, row,
-                () -> ValueWire.compose(form, editors.stream()
-                        .map(editor -> editor.read().get())
-                        .filter(source -> !source.isBlank())
-                        .toList()),
-                () -> importsOf(editors.stream().map(editor -> editor.imports().get()).toList())));
+        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, editors.stream()
+                .flatMap(editor -> editor.read().get().stream())
+                .toList())));
         return column;
     }
 
@@ -361,25 +351,18 @@ public final class ParamValueWidgets {
         rebuild[0].run();
 
         sink.add(ValueEditor.of(group, row, () -> {
-            List<String> written = new ArrayList<>();
-            List<String> seen = new ArrayList<>();
+            List<JavaValue> written = new ArrayList<>();
+            List<JavaValue> seen = new ArrayList<>();
             for (Cell cell : cells) {
-                String key = cell.key().read().get();
-                String value = cell.value().read().get();
+                Optional<JavaValue> key = cell.key().read().get();
+                Optional<JavaValue> value = cell.value().read().get();
                 // The duplicate is refused here as well as at the cell, because a key may be typed into a row
                 // that is never focused out of. The first one written wins, which is the one on screen above.
-                if (key.isBlank() || value.isBlank() || seen.contains(key)) continue;
-                seen.add(key);
-                written.add(ValueWire.compose(entryForm, List.of(key, value)));
+                if (key.isEmpty() || value.isEmpty() || seen.stream().anyMatch(key.get()::sameJava)) continue;
+                seen.add(key.get());
+                ValueWire.compose(entryForm, List.of(key.get(), value.get())).ifPresent(written::add);
             }
             return ValueWire.compose(form, written);
-        }, () -> {
-            List<List<String>> all = new ArrayList<>();
-            for (Cell cell : cells) {
-                all.add(cell.key().imports().get());
-                all.add(cell.value().imports().get());
-            }
-            return importsOf(all);
         }));
         return column;
     }
@@ -404,7 +387,8 @@ public final class ParamValueWidgets {
         List<ValueEditors.Editor> readers = new ArrayList<>(components.size());
         for (int i = 0; i < components.size(); i++) {
             BotRecords.Component component = components.get(i);
-            String written = i < held.size() ? held.get(i).source() : "";
+            Optional<ValueGrammar.Part> part = i < held.size() ? Optional.of(held.get(i)) : Optional.empty();
+            String written = part.map(ValueGrammar.Part::source).orElse("");
             Label name = new Label(component.name());
             name.getStyleClass().add("dialog-hint-text");
             name.setMinWidth(72);
@@ -417,7 +401,9 @@ public final class ParamValueWidgets {
                 shown.getStyleClass().add("dialog-hint-text");
                 shown.setTooltip(new Tooltip("Kept as written: " + ValueTypes.sourceName(component.form())
                                              + " is edited where the record is."));
-                editor = new ValueEditors.Editor(shown, () -> written, List::of);
+                // Written back as the tree it was read as, never re-parsed from what the label shows.
+                Optional<JavaValue> kept = part.map(ValueGrammar.Part::kept);
+                editor = new ValueEditors.Editor(shown, () -> kept);
             }
             readers.add(editor);
 
@@ -428,10 +414,10 @@ public final class ParamValueWidgets {
         }
         if (components.isEmpty()) column.getChildren().add(hint("This record has no components."));
 
-        sink.add(ValueEditor.of(group, row,
-                () -> records.initializerOfParts(declared,
-                        readers.stream().map(editor -> editor.read().get()).toList()).orElse(""),
-                () -> importsOf(readers.stream().map(editor -> editor.imports().get()).toList())));
+        // Every component or none: compose declines a record with a component missing.
+        sink.add(ValueEditor.of(group, row, () -> records.compose(declared, readers.stream()
+                .map(editor -> editor.read().get().orElse(null))
+                .toList())));
         return column;
     }
 
@@ -452,15 +438,15 @@ public final class ParamValueWidgets {
     /**
      * Marks every map row whose key a row above it already has.
      *
-     * <p>Compared as the <b>source</b> each key is written as, which is what {@code Map.ofEntries} is handed:
+     * <p>Compared as the <b>tree</b> each key is written as, which is what {@code Map.ofEntries} is handed:
      * two rows writing one key are one key, whatever either field displays.
      */
     private static void markDuplicates(List<Cell> cells) {
-        List<String> seen = new ArrayList<>();
+        List<JavaValue> seen = new ArrayList<>();
         for (Cell cell : cells) {
-            String key = cell.key().read().get();
-            boolean clash = !key.isBlank() && seen.contains(key);
-            if (!clash && !key.isBlank()) seen.add(key);
+            Optional<JavaValue> key = cell.key().read().get();
+            boolean clash = key.isPresent() && seen.stream().anyMatch(key.get()::sameJava);
+            if (!clash) key.ifPresent(seen::add);
             cell.key().node().getStyleClass().remove("field-error");
             if (clash) cell.key().node().getStyleClass().add("field-error");
             Tooltip.install(cell.key().node(), clash
@@ -499,7 +485,7 @@ public final class ParamValueWidgets {
      * a choice of text. Either way it is then written by the grammar, so a choice and a stored value that
      * mean the same thing are spelled the same and compare equal.
      */
-    static Optional<ValueGrammar.Written> optionSource(ValueGrammar grammar, Type leaf, String option) {
+    static Optional<JavaValue> optionSource(ValueGrammar grammar, Type leaf, String option) {
         if (option == null || option.isBlank()) return Optional.empty();
         Optional<Object> value = grammar.valueOf(leaf, option);
         if (value.isEmpty() && leaf == String.class) {
@@ -508,28 +494,17 @@ public final class ParamValueWidgets {
         return value.flatMap(v -> grammar.spell(leaf, v));
     }
 
-    /** {@code source} as the grammar would write the value it holds — itself, when it cannot be read. */
-    private static String canonical(ValueGrammar grammar, Type leaf, String source) {
-        return grammar.valueOf(leaf, source)
+    /**
+     * {@code written} as the grammar would write the value it holds — what a choice is compared against — or
+     * the expression kept as it stands when the grammar cannot read it.
+     */
+    private static Optional<JavaValue> canonical(ValueGrammar grammar, Type leaf, Optional<SourceNode> written) {
+        return written.map(node -> grammar.valueOf(leaf, node)
                 .flatMap(value -> grammar.spell(leaf, value))
-                .map(ValueGrammar.Written::source)
-                .orElse(source == null ? "" : source.strip());
-    }
-
-    private static String canonical(ValueGrammar grammar, Type leaf, ValueGrammar.Part part) {
-        return grammar.valueOf(leaf, part.written())
-                .flatMap(value -> grammar.spell(leaf, value))
-                .map(ValueGrammar.Written::source)
-                .orElse(part.source());
+                .orElse(JavaValue.kept(node)));
     }
 
     // --- small helpers ------------------------------------------------------------------------------------
-
-    private static List<String> importsOf(List<List<String>> lists) {
-        Set<String> out = new LinkedHashSet<>();
-        for (List<String> each : lists) if (each != null) out.addAll(each);
-        return List.copyOf(out);
-    }
 
     private static List<String> lines(TextArea area) {
         return area.getText() == null ? List.of()

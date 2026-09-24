@@ -16,6 +16,19 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Changed
 
+- **A value is written as a JDT tree, never as text.** The grammar builds the expression node by node
+  (`plugin/grammar/ValueWriter`) and answers a `JavaValue` — the node plus the classes it names by simple name
+  — which replaces `ValueGrammar.Written`. Every sink copies that tree into its own file's tree: a Parameters
+  row (`JavaParameterEdits`), a `@Managed` method's return (`JavaManagedEdits`), a canvas slot
+  (`CodeEditor.replaceWithValue`), a varargs run (`setTrailingArguments`) and a recorded call
+  (`CodeEditor.insertStatement`). `createStringPlaceholder` is gone from all of them, and a new parameter's
+  field is a `FieldDeclaration` node laid out by the formatter. `HostValueContext` holds the value an editor set
+  and its tree instead of a source string; a list, map or record cell composes its parts as trees
+  (`ValueGrammar.compose`, `BotRecords.compose`), and a part nothing edited is written back as its own
+  expression. A `@Managed` constant reference is matched through the file's imports (`SourceNames`), not by
+  its spelling. Visible differences: a retyped or added field names `List`/`Map` by simple name with the
+  import, and a field Studio adds imports `@Param` when the file did not.
+
 - **A value's type is a `java.lang.reflect.Type`, and `ValueForm` is deleted.** A leaf is the plugin's own
   `Class`, a list or map is a `ParameterizedType` (`ValueTypes.Parameterized`), a bot's record is
   `ValueTypes.BotClass`, and anything else is `ValueTypes.Unknown`, shown and never written. A field's written

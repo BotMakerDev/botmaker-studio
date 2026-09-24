@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.JavaNames;
@@ -53,9 +54,9 @@ public final class ValueWire {
         return grammar().partsOfInitializer(form, written).orElse(List.of());
     }
 
-    /** Parts, already written as source, composed back into the call this form's container spells. */
-    public static String compose(Type form, List<String> parts) {
-        return grammar().initializerOfParts(form, parts).orElse("");
+    /** Parts that are already values, composed back into the call this form's container is written as. */
+    public static Optional<JavaValue> compose(Type form, List<JavaValue> parts) {
+        return grammar().compose(form, parts);
     }
 
     /** The host's containers — what a picker offers to wrap a form in. */

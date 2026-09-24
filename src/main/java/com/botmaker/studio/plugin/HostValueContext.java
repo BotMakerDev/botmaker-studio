@@ -4,6 +4,8 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedConstants;
@@ -11,7 +13,7 @@ import com.botmaker.studio.project.managed.ManagedConstants;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -23,12 +25,16 @@ import java.util.function.Supplier;
  * only that there is no enclosing call to read or rewrite.
  *
  * <p><b>An editor is handed the value, never the text</b> (2026-09-22). {@link #value(Class)} reads the
- * held source through the {@link ValueGrammar} and {@link #set(Object)} writes one back through it, so the
- * plugin that owns the type never parses and never spells Java. {@link #source()} is only for showing an
+ * seed expression through the {@link ValueGrammar} and {@link #set(Object)} writes one back through it, so
+ * the plugin that owns the type never parses and never spells Java. {@link #source()} is only for showing an
  * expression the grammar could not read.
  *
+ * <p><b>What is held is the value and its tree</b> (2026-09-24), not text. The seed is parsed once, here;
+ * after a {@code set}, {@link #value} answers the value that was set and {@link #current()} the tree the
+ * grammar built for it, which is what a sink copies into its file. Nothing re-parses a string this wrote.
+ *
  * <p><b>The value is held here, not read back out of the widget.</b> An editor writes whenever the user
- * changes something, and the host reads {@link #source()} when it is time to store — the reason a plugin's
+ * changes something, and the host reads {@link #current()} when it is time to store — the reason a plugin's
  * editor needs no lifecycle of its own.
  */
 public final class HostValueContext implements ValueContext {
@@ -37,13 +43,16 @@ public final class HostValueContext implements ValueContext {
     private final Type form;
     private final ValueGrammar grammar;
     private final StudioServices services;
-    private final BiConsumer<String, List<String>> onChange;
+    private final Consumer<JavaValue> onChange;
     private final Supplier<List<ManagedConstants.Constant>> constants;
-    private String source;
-    private List<String> imports = List.of();
+    private final String seedText;
+    private final SourceNode seed;
+    /** The last value an editor set, and the tree it was written as; {@code null} before any write. */
+    private Object held;
+    private JavaValue written;
 
     public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
-                            StudioServices services, BiConsumer<String, List<String>> onChange) {
+                            StudioServices services, Consumer<JavaValue> onChange) {
         this(type, form, grammar, source, services, onChange, ConstantValues.NONE);
     }
 
@@ -52,7 +61,7 @@ public final class HostValueContext implements ValueContext {
      *                  {@code Pictures.ORE} reads as the picture, and a picture equal to one is written as it
      */
     public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
-                            StudioServices services, BiConsumer<String, List<String>> onChange,
+                            StudioServices services, Consumer<JavaValue> onChange,
                             Supplier<List<ManagedConstants.Constant>> constants) {
         this.type = type;
         this.form = form == null ? ValueTypes.NONE : form;
@@ -60,31 +69,32 @@ public final class HostValueContext implements ValueContext {
         this.services = services;
         this.onChange = onChange;
         this.constants = constants == null ? ConstantValues.NONE : constants;
-        this.source = source == null ? "" : source;
+        this.seedText = source == null ? "" : source;
+        this.seed = SourceNode.parse(seedText).orElse(null);
     }
 
     /** The context for a value of {@code form}, read and written through the bound plugins' grammar. */
     public static HostValueContext of(Type form, String source, StudioServices services,
-                                      BiConsumer<String, List<String>> onChange) {
+                                      Consumer<JavaValue> onChange) {
         return of(form, PluginHost.grammar(), source, services, onChange, ConstantValues.NONE);
     }
 
     /** The same, reading and writing the bot's {@code @Managed} constants as the values they hold. */
     public static HostValueContext of(Type form, String source, StudioServices services,
-                                      BiConsumer<String, List<String>> onChange,
+                                      Consumer<JavaValue> onChange,
                                       Supplier<List<ManagedConstants.Constant>> constants) {
         return of(form, PluginHost.grammar(), source, services, onChange, constants);
     }
 
     /** The same, through {@code grammar} — the seam a test drives with the types it declares. */
     public static HostValueContext of(Type form, ValueGrammar grammar, String source,
-                                      StudioServices services, BiConsumer<String, List<String>> onChange) {
+                                      StudioServices services, Consumer<JavaValue> onChange) {
         return of(form, grammar, source, services, onChange, ConstantValues.NONE);
     }
 
     /** The same, through {@code grammar} and with {@code constants}. */
     public static HostValueContext of(Type form, ValueGrammar grammar, String source,
-                                      StudioServices services, BiConsumer<String, List<String>> onChange,
+                                      StudioServices services, Consumer<JavaValue> onChange,
                                       Supplier<List<ManagedConstants.Constant>> constants) {
         Type safe = form == null ? ValueTypes.NONE : form;
         return new HostValueContext(typeRef(safe, grammar), safe, grammar, source, services, onChange,
@@ -145,38 +155,38 @@ public final class HostValueContext implements ValueContext {
 
     @Override
     public <T> Optional<T> value(Class<T> type) {
-        return ConstantValues.read(grammar, constants, form, source).flatMap(value -> ValueGrammar.as(value, type));
+        Optional<Object> value = written != null ? Optional.of(held)
+                : seed == null ? Optional.empty() : ConstantValues.read(grammar, constants, form, seed);
+        return value.flatMap(v -> ValueGrammar.as(v, type));
     }
 
     /**
      * Writes {@code value} through the grammar, or as the bot's constant holding it. A value the grammar
-     * cannot spell for this form is ignored rather than written half-way: there is no expression for it, and
+     * cannot write for this form is ignored rather than written half-way: there is no expression for it, and
      * the field keeps what it had.
      */
     @Override
     public void set(Object value) {
-        ConstantValues.write(grammar, constants, form, value)
-                .ifPresent(written -> change(written.source(), written.imports()));
+        ConstantValues.write(grammar, constants, form, value).ifPresent(tree -> {
+            held = value;
+            written = tree;
+            if (onChange != null) onChange.accept(tree);
+        });
     }
 
     @Override
     public String source() {
-        return source;
-    }
-
-    private void change(String newSource, List<String> newImports) {
-        source = newSource;
-        imports = newImports == null ? List.of() : List.copyOf(newImports);
-        if (onChange != null) onChange.accept(source, imports);
+        return written != null ? written.source() : seedText;
     }
 
     /**
-     * The imports the last write said its Java needs — empty before any write, since the source the context
-     * was seeded with is already in the file with whatever it imports. What a host composing several values
-     * into one initialiser collects, where a single value hands them straight to {@code onChange}.
+     * The value as it stands: the tree the last write built, or — before any write — the seed kept exactly as
+     * written, so a value opened and closed with no edit reads back as it was. Empty for a seed that is not
+     * one expression. What a host composing several values into one initialiser collects, where a single
+     * value hands its write straight to {@code onChange}.
      */
-    public List<String> imports() {
-        return imports;
+    public Optional<JavaValue> current() {
+        return written != null ? Optional.of(written) : Optional.ofNullable(seed).map(JavaValue::kept);
     }
 
     @Override

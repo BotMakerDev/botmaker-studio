@@ -4,11 +4,18 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.record.Gesture;
 import com.botmaker.plugin.api.record.RecordedValue;
 import com.botmaker.plugin.host.Recordings;
+import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ExpressionStatement;
+import org.eclipse.jdt.core.dom.MethodInvocation;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -33,11 +40,34 @@ import java.util.function.Function;
  */
 public final class RecordingWriter {
 
-    /** One statement, and the classes it names by simple name. */
-    public record Statement(String source, List<String> imports) {
+    /**
+     * One statement as a tree, and the classes it names by simple name. {@link #source()} is for showing it;
+     * what is inserted is {@link #node()}.
+     */
+    public record Statement(org.eclipse.jdt.core.dom.Statement node, List<String> imports, String source) {
 
         public Statement {
             imports = List.copyOf(imports);
+        }
+
+        /** {@code Owner.method(arguments…);}, each argument's tree copied in and its imports carried. */
+        static Statement call(Method method, List<JavaValue> arguments) {
+            AST ast = AST.newAST(AST.getJLSLatest(), false);
+            Set<String> imports = new LinkedHashSet<>();
+            Class<?> owner = method.getDeclaringClass();
+            String importName = JavaNames.importName(owner);
+            MethodInvocation call = ast.newMethodInvocation();
+            call.setExpression(ast.newName(JavaNames.simple(owner)));
+            call.setName(ast.newSimpleName(method.getName()));
+            @SuppressWarnings("unchecked")
+            List<Expression> list = call.arguments();
+            for (JavaValue argument : arguments) {
+                list.add(argument.copyInto(ast));
+                imports.addAll(argument.imports());
+            }
+            if (!importName.isEmpty()) imports.add(importName);
+            ExpressionStatement statement = ast.newExpressionStatement(call);
+            return new Statement(statement, List.copyOf(imports), SourceFormatter.statement(statement.toString()));
         }
     }
 
@@ -146,53 +176,47 @@ public final class RecordingWriter {
     }
 
     private Optional<Statement> fill(Recordings.Writer writer, List<Object> values, RecordedValue.Spot spot) {
-        Set<String> imports = new LinkedHashSet<>();
-        List<String> arguments = new ArrayList<>();
+        List<JavaValue> arguments = new ArrayList<>();
         int next = 0;
         for (Recordings.Slot slot : writer.slots()) {
-            Optional<String> argument;
+            Optional<List<JavaValue>> argument;
             switch (slot) {
-                case Recordings.Slot.Recorded recorded -> argument = recorded(recorded.answer(), spot, imports);
+                case Recordings.Slot.Recorded recorded -> argument = one(recorded(recorded.answer(), spot));
                 case Recordings.Slot.Number number -> {
-                    argument = next < values.size() ? number(number.type(), values.get(next++), imports)
+                    argument = next < values.size() ? one(number(number.type(), values.get(next++)))
                             : Optional.empty();
                 }
                 case Recordings.Slot.Parts parts -> {
                     int count = parts.components().size();
                     if (next + count > values.size()) return Optional.empty();
-                    argument = built(parts, values.subList(next, next + count), imports);
+                    argument = one(built(parts, values.subList(next, next + count)));
                     next += count;
                 }
                 case Recordings.Slot.Text text -> {
                     argument = next < values.size() && values.get(next) instanceof String s
-                            ? spell(s, imports) : Optional.empty();
+                            ? one(grammar.spellAny(s)) : Optional.empty();
                     next++;
                 }
                 case Recordings.Slot.Keys keys -> {
                     List<Object> names = keys.many() ? values.subList(Math.min(next, values.size()), values.size())
                             : next < values.size() ? List.of(values.get(next)) : List.of();
                     next += names.size();
-                    argument = names.isEmpty() ? Optional.empty() : keys(keys.enumType(), names, imports);
+                    argument = names.isEmpty() ? Optional.empty() : keys(keys.enumType(), names);
                 }
-                case Recordings.Slot.Fresh fresh -> argument = grammar.freshSpelling(fresh.type())
-                        .map(written -> {
-                            imports.addAll(written.imports());
-                            return written.source();
-                        });
+                case Recordings.Slot.Fresh fresh -> argument = one(grammar.freshSpelling(fresh.type()));
             }
             if (argument.isEmpty()) return Optional.empty();
-            arguments.add(argument.get());
+            arguments.addAll(argument.get());
         }
-        Class<?> owner = writer.method().getDeclaringClass();
-        String importName = JavaNames.importName(owner);
-        if (!importName.isEmpty()) imports.add(importName);
-        String source = JavaNames.simple(owner) + "." + writer.method().getName()
-                + "(" + String.join(", ", arguments) + ");";
-        return Optional.of(new Statement(source, List.copyOf(imports)));
+        return Optional.of(Statement.call(writer.method(), arguments));
     }
 
-    /** A plugin's value at the spot: its {@code @Managed} constant when the bot has one, else spelled out. */
-    private Optional<String> recorded(RecordedValue<?> answer, RecordedValue.Spot spot, Set<String> imports) {
+    private static Optional<List<JavaValue>> one(Optional<JavaValue> value) {
+        return value.map(List::of);
+    }
+
+    /** A plugin's value at the spot: its {@code @Managed} constant when the bot has one, else written out. */
+    private Optional<JavaValue> recorded(RecordedValue<?> answer, RecordedValue.Spot spot) {
         if (spot == null) return Optional.empty();
         Optional<?> value;
         try {
@@ -201,22 +225,17 @@ public final class RecordingWriter {
             return Optional.empty();
         }
         if (value == null || value.isEmpty()) return Optional.empty();
-        Optional<ValueGrammar.Written> constant = constants.spell(value.get());
-        if (constant.isPresent()) {
-            imports.addAll(constant.get().imports());
-            return Optional.of(constant.get().source());
-        }
-        return spell(value.get(), imports);
+        return constants.spell(value.get()).or(() -> grammar.spellAny(value.get()));
     }
 
-    private Optional<String> number(Class<?> type, Object value, Set<String> imports) {
+    private Optional<JavaValue> number(Class<?> type, Object value) {
         if (!(value instanceof Number n)) return Optional.empty();
         Object coerced = type == long.class ? (Object) n.longValue()
                 : type == double.class ? (Object) n.doubleValue() : (Object) n.intValue();
-        return spell(coerced, imports);
+        return grammar.spellAny(coerced);
     }
 
-    private Optional<String> built(Recordings.Slot.Parts parts, List<Object> values, Set<String> imports) {
+    private Optional<JavaValue> built(Recordings.Slot.Parts parts, List<Object> values) {
         List<Object> coerced = new ArrayList<>();
         for (int i = 0; i < values.size(); i++) {
             if (!(values.get(i) instanceof Number n)) return Optional.empty();
@@ -230,12 +249,13 @@ public final class RecordingWriter {
         } catch (RuntimeException | LinkageError e) {
             return Optional.empty();
         }
-        return value == null ? Optional.empty() : spell(value, imports);
+        return value == null ? Optional.empty() : grammar.spellAny(value);
     }
 
+    /** One argument per key: a varargs tail, {@code Key.CTRL, Key.C}. */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Optional<String> keys(Class<?> enumType, List<Object> names, Set<String> imports) {
-        List<String> written = new ArrayList<>();
+    private Optional<List<JavaValue>> keys(Class<?> enumType, List<Object> names) {
+        List<JavaValue> written = new ArrayList<>();
         for (Object name : names) {
             if (!(name instanceof String key)) return Optional.empty();
             Object constant;
@@ -244,17 +264,10 @@ public final class RecordingWriter {
             } catch (IllegalArgumentException e) {
                 return Optional.empty();
             }
-            Optional<String> spelled = spell(constant, imports);
+            Optional<JavaValue> spelled = grammar.spellAny(constant);
             if (spelled.isEmpty()) return Optional.empty();
             written.add(spelled.get());
         }
-        return Optional.of(String.join(", ", written));
-    }
-
-    private Optional<String> spell(Object value, Set<String> imports) {
-        return grammar.spellAny(value).map(written -> {
-            imports.addAll(written.imports());
-            return written.source();
-        });
+        return Optional.of(List.copyOf(written));
     }
 }

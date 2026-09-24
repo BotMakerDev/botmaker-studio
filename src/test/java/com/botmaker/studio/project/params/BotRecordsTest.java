@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,10 @@ class BotRecordsTest {
         return found.getFirst();
     }
 
+    private static JavaValue java(String source) {
+        return JavaValue.parse(source).orElseThrow();
+    }
+
     private static ValueTypes.BotClass point() {
         return new ValueTypes.BotClass("com.example.bot.Point", List.of());
     }
@@ -87,7 +92,7 @@ class BotRecordsTest {
         assertEquals(List.of("1", "2"), parts.stream().map(ValueGrammar.Part::source).toList());
         assertEquals(TestValues.WHOLE_NUMBER, parts.getFirst().form());
         assertEquals("new com.example.bot.Point(3, 4)",
-                records.initializerOfParts(point(), List.of("3", "4")).orElseThrow());
+                records.compose(point(), List.of(java("3"), java("4"))).orElseThrow().source());
     }
 
     /** A real parser, not a comma count: an argument may contain commas of its own. */
@@ -112,8 +117,8 @@ class BotRecordsTest {
         assertTrue(records.partsOf(point(), "Point.origin()").isEmpty());
         assertTrue(records.partsOf(point(), "new Point(1)").isEmpty());
         assertTrue(records.partsOf(point(), "new Size(1, 2)").isEmpty());
-        assertTrue(records.initializerOfParts(point(), List.of("1")).isEmpty());
-        assertTrue(records.initializerOfParts(point(), List.of("1", "")).isEmpty());
+        assertTrue(records.compose(point(), List.of(java("1"))).isEmpty());
+        assertTrue(records.compose(point(), java.util.Arrays.asList(java("1"), null)).isEmpty());
     }
 
     @Test

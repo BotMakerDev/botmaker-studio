@@ -282,7 +282,7 @@ public final class BotType {
             String qualified = JavaNames.canonical(cls);
             boolean known = all.stream().anyMatch(t -> simple(t.typeName).equals(simple(qualified)));
             if (known) continue;
-            grammar.freshInitializer(cls).ifPresent(fresh -> all.add(fromPlugin(qualified, fresh)));
+            grammar.freshInitializer(cls).ifPresent(fresh -> all.add(fromPlugin(qualified, fresh.source())));
         }
         return List.copyOf(all);
     }

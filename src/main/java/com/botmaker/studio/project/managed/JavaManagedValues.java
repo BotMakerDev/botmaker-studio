@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -71,9 +72,9 @@ public final class JavaManagedValues {
      * the file no longer has a single return for — and the caller says so rather than failing.
      */
     public static boolean setValue(ProjectConfig config, ProjectState state, ManagedMethod value,
-                                   String expression, List<String> imports) {
+                                   JavaValue expression) {
         return rewrite(config, state, value.file(), source -> JavaManagedEdits.setValue(
-                source, value.className(), value.methodName(), expression, imports));
+                source, value.className(), value.methodName(), expression));
     }
 
     /** Applies {@code edit} to one file, buffer and disk, and answers whether it changed anything. */

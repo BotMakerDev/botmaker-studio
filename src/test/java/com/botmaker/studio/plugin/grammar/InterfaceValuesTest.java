@@ -84,7 +84,7 @@ class InterfaceValuesTest {
     void aValueIsWrittenThroughTheComponentOfItsOwnClass() {
         Place value = new Inside(new Named("Game"), 3);
 
-        String written = GRAMMAR.initializer(PLACE, value).orElseThrow();
+        String written = GRAMMAR.initializer(PLACE, value).orElseThrow().source();
 
         assertEquals(owner() + ".inside(" + owner() + ".named(\"Game\"), 3)", written);
         assertEquals(value, GRAMMAR.valueOf(PLACE, written).orElseThrow(), "it reads back as itself");
@@ -100,10 +100,10 @@ class InterfaceValuesTest {
 
     @Test
     void aFreshValueIsSpelledWithItsImport() {
-        ValueGrammar.Written fresh = GRAMMAR.freshSpelling(PLACE).orElseThrow();
+        JavaValue fresh = GRAMMAR.freshSpelling(PLACE).orElseThrow();
 
         assertTrue(fresh.source().endsWith(".here()"), fresh.source());
         assertEquals(List.of(JavaNames.importName(Place.class)), fresh.imports());
-        assertEquals(owner() + ".here()", GRAMMAR.freshInitializer(PLACE).orElseThrow());
+        assertEquals(owner() + ".here()", GRAMMAR.freshInitializer(PLACE).orElseThrow().source());
     }
 }

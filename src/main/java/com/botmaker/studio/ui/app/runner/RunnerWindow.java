@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
@@ -522,10 +523,9 @@ public final class RunnerWindow implements ProjectWindow {
             for (int i = 0; i < rows.size(); i++) {
                 JavaParameter entry = rows.get(i);
                 if (!editor.describes(entry.className(), entry.row().name())) continue;
-                String typed = editor.read().get();
-                if (typed.isBlank() || typed.equals(entry.row().value())) break;
-                Optional<ParameterRow> stored =
-                        JavaParameters.setValue(config, state, entry, typed, editor.imports().get());
+                Optional<JavaValue> typed = editor.read().get();
+                if (typed.isEmpty() || typed.get().source().equals(entry.row().value())) break;
+                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed.get());
                 int at = i;
                 stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
                 break;

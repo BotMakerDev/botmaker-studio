@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
@@ -46,8 +47,8 @@ class JavaParameterEditsTest {
             """;
 
     /**
-     * A value edit spelled the way a window spells one: the grammar writes the Java, and the rewrite takes
-     * it already written — since 2026-09-20 the initialiser <em>is</em> the value.
+     * A value edit made the way a window makes one: the grammar writes the value as a tree, and the rewrite
+     * copies that tree into the file.
      */
     private static String setValue(String source, String field, Type form, Object value) {
         return JavaParameterEdits.setValue(source, "Parameters", field, initializer(form, value));
@@ -59,8 +60,13 @@ class JavaParameterEditsTest {
                 initializer(form, value), category, description);
     }
 
-    private static String initializer(Type form, Object value) {
-        return TestValues.GRAMMAR.initializer(form, value).orElse("");
+    private static JavaValue initializer(Type form, Object value) {
+        return TestValues.GRAMMAR.initializer(form, value).orElse(null);
+    }
+
+    /** Java as a value to write, kept as written and naming {@code imports}. */
+    private static JavaValue java(String source, String... imports) {
+        return new JavaValue(JavaValue.parse(source).orElseThrow().node(), List.of(imports), source);
     }
 
     // ---- values ---------------------------------------------------------------------------------------
@@ -90,7 +96,7 @@ class JavaParameterEditsTest {
     @Test
     void aFieldThatIsNotThereChangesNothing() {
         assertSame(SOURCE, setValue(SOURCE, "notDeclared", NUMBER, 1));
-        assertSame(SOURCE, JavaParameterEdits.setValue(SOURCE, "Elsewhere", "maxAttempts", "1"));
+        assertSame(SOURCE, JavaParameterEdits.setValue(SOURCE, "Elsewhere", "maxAttempts", java("1")));
     }
 
     @Test
@@ -104,10 +110,20 @@ class JavaParameterEditsTest {
     void aValueWrittenBySimpleNameBringsItsImport() {
         String source = SOURCE.replace("import java.time.Duration;\n", "");
         String edited = JavaParameterEdits.setValue(source, "Parameters", "restBetween",
-                "Duration.ofMillis(5L)", List.of("java.time.Duration"));
+                TestValues.GRAMMAR.spell(DURATION, Duration.ofMillis(5)).orElseThrow());
 
         assertTrue(edited.contains("import java.time.Duration;"), edited);
         assertTrue(edited.contains("restBetween = Duration.ofMillis(5L);"), edited);
+    }
+
+    /** What reaches the file is the grammar's tree, laid out by the rewrite — spaced as a person writes it. */
+    @Test
+    void aNestedValueIsLaidOutLikeTheRestOfTheFile() {
+        Map<String, Integer> value = new LinkedHashMap<>();
+        value.put("a", 1);
+        String edited = setValue(SOURCE, "maxAttempts", ValueTypes.mapOf(TEXT, NUMBER), value);
+
+        assertTrue(edited.contains("maxAttempts = java.util.Map.ofEntries(java.util.Map.entry(\"a\", 1));"), edited);
     }
 
     // ---- renames --------------------------------------------------------------------------------------
@@ -162,8 +178,7 @@ class JavaParameterEditsTest {
                 DURATION);
 
         // By its simple name, since the file imports it — and the import would have been added if not.
-        assertTrue(edited.contains("public static Duration maxAttempts"), edited);
-        assertTrue(edited.contains("= java.time.Duration.ofMillis(0L);"), edited);
+        assertTrue(edited.contains("public static Duration maxAttempts = Duration.ofMillis(0L);"), edited);
     }
 
     @Test
@@ -196,9 +211,9 @@ class JavaParameterEditsTest {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
                 ValueTypes.listOf(TestValues.WHOLE_NUMBER));
 
-        // Boxed: List<int> does not compile.
-        assertTrue(edited.contains("java.util.List<Integer> maxAttempts"), edited);
-        assertTrue(edited.contains("java.util.List.of()"), edited);
+        // Boxed: List<int> does not compile. The container by its simple name, with its import.
+        assertTrue(edited.contains("public static List<Integer> maxAttempts = List.of();"), edited);
+        assertTrue(edited.contains("import java.util.List;"), edited);
     }
 
     /** A map is a type a bot may declare, so it is a type this window may write. */
@@ -207,8 +222,8 @@ class JavaParameterEditsTest {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
                 ValueTypes.mapOf(TestValues.TEXT, TestValues.DURATION));
 
-        assertTrue(edited.contains("java.util.Map<String, Duration> maxAttempts"), edited);
-        assertTrue(edited.contains("java.util.Map.ofEntries()"), edited);
+        assertTrue(edited.contains("public static Map<String, Duration> maxAttempts = Map.ofEntries();"), edited);
+        assertTrue(edited.contains("import java.util.Map;"), edited);
     }
 
     // ---- annotation members ---------------------------------------------------------------------------
@@ -262,6 +277,26 @@ class JavaParameterEditsTest {
         assertTrue(edited.contains("public static String label = \"hello\";"), edited);
         // Appended: the author's own order is theirs.
         assertTrue(edited.indexOf("restBetween") < edited.indexOf("label"), edited);
+    }
+
+    /**
+     * The annotation is written {@code @Param}, so a file that did not import it gains the import — and one
+     * that imports a class of that simple name already is left with it, since a second would not compile.
+     */
+    @Test
+    void anAddedParameterBringsTheAnnotationsImportUnlessTheNameIsTaken() {
+        String bare = """
+                package com.example.bot;
+
+                public final class Settings {
+                }
+                """;
+        String edited = add(bare, "Settings", "label", TEXT, "hello", "", "");
+        assertTrue(edited.contains("import " + com.botmaker.plugin.api.params.Param.class.getCanonicalName() + ";"),
+                edited);
+
+        String taken = add(SOURCE, "Parameters", "label", TEXT, "hello", "", "");
+        assertFalse(taken.contains("import com.botmaker.plugin.api.params.Param;"), taken);
     }
 
     @Test

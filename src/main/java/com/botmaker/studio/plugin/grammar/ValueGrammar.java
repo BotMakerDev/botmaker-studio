@@ -3,8 +3,6 @@ package com.botmaker.studio.plugin.grammar;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,6 +20,10 @@ import java.util.Set;
  * {@link PluginType}, and a {@link ComponentType} beside it when its Java is a call — and never sees Java
  * source. The host writes {@code new Point(10, 20)} from {@code components(point)} and reads it back off the
  * JDT expression ({@link ExpressionReader}).
+ *
+ * <p><b>Both directions are trees</b> since 2026-09-24: a write builds the expression node by node
+ * ({@link ValueWriter}) and answers a {@link JavaValue}, which a sink copies into its own file's tree. No
+ * write concatenates Java, and no sink places text into a rewrite.
  *
  * <p><b>A value's type is a {@link java.lang.reflect.Type}</b> since 2026-09-24 ({@link ValueTypes}): the
  * plugin's own {@link Class}, a {@link ValueTypes.Parameterized} host container, a bot's own class, or an
@@ -71,6 +73,9 @@ public final class ValueGrammar {
     /** The read half, over parsed expressions. Built last, from the registries above. */
     private final ExpressionReader reader;
 
+    /** The write half, building expression trees over the same registries. */
+    private final ValueWriter writer;
+
     private ValueGrammar(List<? extends PluginType<?>> types, List<? extends ComponentType<?>> components) {
         Map<String, PluginType<?>> byName = new LinkedHashMap<>();
         Map<String, ComponentType<?>> componentsByName = new LinkedHashMap<>();
@@ -102,6 +107,7 @@ public final class ValueGrammar {
         this.typeByName = Map.copyOf(byName);
         this.componentByName = Map.copyOf(componentsByName);
         this.reader = new ExpressionReader(this, calls, List.copyOf(enums), List.copyOf(declared));
+        this.writer = new ValueWriter(this);
     }
 
     /**
@@ -230,139 +236,42 @@ public final class ValueGrammar {
     }
 
     // ---- writing ---------------------------------------------------------------------------------------
-
-    /** Java source and the imports it needs — empty when it was written fully qualified. */
-    public record Written(String source, List<String> imports) {
-
-        public Written {
-            source = source == null ? "" : source;
-            imports = imports == null ? List.of() : List.copyOf(imports);
-        }
-    }
+    //
+    // Every write answers a JavaValue: a tree built node by node (ValueWriter), never Java concatenated as
+    // text. "Qualified" names every class in full and needs no import; "spelled" names each by its simple name
+    // and carries the imports that makes necessary — what a user's own file, which a person reads, is given.
 
     /**
      * {@code value} written as the initialiser a field of {@code type} takes, fully qualified — or empty when
      * any part of it cannot be written.
      */
-    public Optional<String> initializer(Type type, Object value) {
-        return write(type, value, new Names(true)).map(Written::source);
+    public Optional<JavaValue> initializer(Type type, Object value) {
+        return write(type, value, new ValueWriter.Names(true));
     }
 
     /**
      * {@code value} written with every type by its simple name, and the imports that makes necessary — what
      * a slot in a user's own file is given, since that file is one a person reads.
      */
-    public Optional<Written> spell(Type type, Object value) {
-        return write(type, value, new Names(false));
+    public Optional<JavaValue> spell(Type type, Object value) {
+        return write(type, value, new ValueWriter.Names(false));
     }
 
     /** {@code value} written by its own runtime class, fully qualified — the untyped counterpart of {@link #valueOfAny}. */
-    public Optional<String> initializerOfAny(Object value) {
-        return writeAny(value, new Names(true));
+    public Optional<JavaValue> initializerOfAny(Object value) {
+        ValueWriter.Names names = new ValueWriter.Names(true);
+        return writer.any(value, names).map(names::value);
     }
 
     /** {@link #initializerOfAny}, with simple names and the imports they need. */
-    public Optional<Written> spellAny(Object value) {
-        Names names = new Names(false);
-        return writeAny(value, names).map(source -> new Written(source, names.imports()));
+    public Optional<JavaValue> spellAny(Object value) {
+        ValueWriter.Names names = new ValueWriter.Names(false);
+        return writer.any(value, names).map(names::value);
     }
 
-    private Optional<Written> write(Type type, Object value, Names names) {
+    private Optional<JavaValue> write(Type type, Object value, ValueWriter.Names names) {
         if (type == null) return Optional.empty();
-        return writeType(type, value, names).map(source -> new Written(source, names.imports()));
-    }
-
-    private Optional<String> writeType(Type type, Object value, Names names) {
-        if (type instanceof Class<?> cls) return writeClass(cls, value, names);
-        Optional<ValueContainer<?>> container = ValueTypes.container(type);
-        // A class the bot declares is BotRecords' to write; an unknown type is never written.
-        if (container.isEmpty()) return Optional.empty();
-        if (value == null || !container.get().type().isInstance(value)) return Optional.empty();
-        List<Object> parts = container.get().partsOf(value);
-        List<Type> partTypes = container.get().partTypes(ValueTypes.arguments(type), parts.size());
-        if (partTypes.size() != parts.size()) return Optional.empty();
-        List<String> written = new ArrayList<>(parts.size());
-        for (int i = 0; i < parts.size(); i++) {
-            Optional<String> part = writeType(partTypes.get(i), parts.get(i), names);
-            if (part.isEmpty()) return Optional.empty();
-            written.add(part.get());
-        }
-        Factory factory = container.get().factory();
-        return Optional.of(names.of(factory.owner()) + "." + factory.name() + "(" + String.join(", ", written) + ")");
-    }
-
-    /**
-     * A value of a declared class: a JDK literal, the component that writes it, an enum constant, or — for a
-     * type declared with no component — the value by its own runtime class, and a {@code String} as the
-     * source it is written as.
-     */
-    private Optional<String> writeClass(Class<?> type, Object value, Names names) {
-        if (value == null) return Optional.empty();
-        if (type == null) return writeAny(value, names);
-        if (JdkLiterals.handles(type)) return JdkLiterals.write(type, value);
-        ComponentType<?> component = componentByName.get(JavaNames.canonical(type));
-        if (component != null) return writeCall(component, value, names);
-        if (type.isEnum()) return writeEnum(type, value, names);
-        if (isHostContainer(type)) return writeAny(value, names);
-        if (value instanceof String source) return source.isBlank() ? Optional.empty() : Optional.of(source.strip());
-        return type.isInstance(value) ? writeAny(value, names) : Optional.empty();
-    }
-
-    private Optional<String> writeAny(Object value, Names names) {
-        if (value == null) return Optional.empty();
-        Optional<String> literal = JdkLiterals.writeAny(value);
-        if (literal.isPresent()) return literal;
-        if (value instanceof Enum<?> constant) return writeEnum(constant.getDeclaringClass(), value, names);
-        for (ValueContainer<?> container : ValueContainer.ALL) {
-            if (!container.type().isInstance(value)) continue;
-            List<String> written = new ArrayList<>();
-            for (Object part : container.partsOf(value)) {
-                Optional<String> spelled = writeAny(part, names);
-                if (spelled.isEmpty()) return Optional.empty();
-                written.add(spelled.get());
-            }
-            Factory factory = container.factory();
-            return Optional.of(names.of(factory.owner()) + "." + factory.name()
-                    + "(" + String.join(", ", written) + ")");
-        }
-        ComponentType<?> exact = componentByName.get(JavaNames.canonical(value.getClass()));
-        if (exact != null) return writeCall(exact, value, names);
-        for (ComponentType<?> component : componentByName.values()) {
-            Class<?> type = classOf(component);
-            if (type != null && type.isInstance(value)) return writeCall(component, value, names);
-        }
-        return Optional.empty();
-    }
-
-    private Optional<String> writeCall(ComponentType<?> component, Object value, Names names) {
-        Class<?> type = classOf(component);
-        if (type == null || !type.isInstance(value)) return Optional.empty();
-        List<Object> parts;
-        try {
-            parts = component.componentsOf(value);
-        } catch (RuntimeException | LinkageError e) {
-            return Optional.empty();
-        }
-        if (parts == null) return Optional.empty();
-        List<Class<?>> declared = componentTypesOf(component);
-        List<String> written = new ArrayList<>(parts.size());
-        for (int i = 0; i < parts.size(); i++) {
-            Optional<String> part = writeClass(partType(declared, i, parts.size()), parts.get(i), names);
-            if (part.isEmpty()) return Optional.empty();
-            written.add(part.get());
-        }
-        Optional<Factory> factory = Factory.of(component);
-        if (factory.isEmpty() || factory.get().kind() == Factory.Kind.RECEIVER) return Optional.empty();
-        String arguments = "(" + String.join(", ", written) + ")";
-        return Optional.of(factory.get().kind() == Factory.Kind.CONSTRUCTOR
-                ? "new " + names.of(type) + arguments
-                : names.of(factory.get().owner()) + "." + factory.get().name() + arguments);
-    }
-
-    private static Optional<String> writeEnum(Class<?> type, Object value, Names names) {
-        return value instanceof Enum<?> constant && type.isInstance(value)
-                ? Optional.of(names.of(type) + "." + constant.name())
-                : Optional.empty();
+        return writer.type(type, value, names).map(names::value);
     }
 
     // ---- a composite, one level at a time --------------------------------------------------------------
@@ -375,6 +284,11 @@ public final class ValueGrammar {
 
         public String source() {
             return written.source();
+        }
+
+        /** The part as it stands, to be written back untouched when nothing edited it. */
+        public JavaValue kept() {
+            return JavaValue.kept(written);
         }
     }
 
@@ -392,72 +306,32 @@ public final class ValueGrammar {
     }
 
     /**
-     * {@link #partsOfInitializer} written forwards: the call a container spells over parts already written as
-     * source. Empty when a part is blank or the container cannot hold that many parts — an entry of three.
+     * {@link #partsOfInitializer} written forwards: the call a container is written as, over parts that are
+     * already values. Empty when a part is missing or the container cannot hold that many — an entry of three.
      */
-    public Optional<String> initializerOfParts(Type type, List<String> parts) {
-        Optional<ValueContainer<?>> container = ValueTypes.container(type);
-        if (container.isEmpty() || parts == null) return Optional.empty();
-        if (parts.stream().anyMatch(part -> part == null || part.isBlank())) return Optional.empty();
-        if (container.get().partTypes(ValueTypes.arguments(type), parts.size()).size() != parts.size()) {
-            return Optional.empty();
-        }
-        Factory factory = container.get().factory();
-        return Optional.of(JavaNames.canonical(factory.owner()) + "." + factory.name() + "(" + String.join(", ", parts) + ")");
+    public Optional<JavaValue> compose(Type type, List<JavaValue> parts) {
+        return writer.compose(type, parts);
     }
 
     // ---- a fresh value ---------------------------------------------------------------------------------
 
     /**
-     * The Java a freshly declared field of {@code type} is initialised with, or empty when there is none.
+     * The Java a freshly declared field of {@code type} is initialised with, fully qualified, or empty when
+     * there is none.
      *
      * <p>A leaf starts as its declaration's {@code fresh()}, written through this grammar; a type whose
      * starting value is a call the bot re-evaluates starts as a call to its {@code freshCall()}; a container
      * starts empty. A type nothing declares, and a class the bot declares, get nothing.
      */
-    public Optional<String> freshInitializer(Type type) {
-        return fresh(type, new Names(true)).map(Written::source);
+    public Optional<JavaValue> freshInitializer(Type type) {
+        ValueWriter.Names names = new ValueWriter.Names(true);
+        return writer.fresh(type, names).map(names::value);
     }
 
     /** {@link #freshInitializer} with every type by its simple name and the imports that needs. */
-    public Optional<Written> freshSpelling(Type type) {
-        return fresh(type, new Names(false));
-    }
-
-    private Optional<Written> fresh(Type type, Names names) {
-        if (type instanceof Class<?> cls) {
-            Optional<PluginType<?>> declared = type(cls);
-            if (declared.isEmpty()) return Optional.empty();
-            Object fresh;
-            Method freshCall;
-            try {
-                fresh = declared.get().fresh();
-                freshCall = declared.get().freshCall();
-            } catch (RuntimeException | LinkageError e) {
-                return Optional.empty();
-            }
-            if (fresh != null) {
-                Optional<Written> written = write(type, fresh, names);
-                if (written.isPresent()) return written;
-            }
-            return call(freshCall, declared.get(), names);
-        }
-        Optional<ValueContainer<?>> container = ValueTypes.container(type);
-        return container.isPresent() ? write(type, container.get().build(List.of()), names) : Optional.empty();
-    }
-
-    /**
-     * {@code Owner.method()} for a type's {@code freshCall()}, or empty for none or one of the wrong shape —
-     * checked again here rather than trusted, since a wrong one would be written into somebody's file.
-     */
-    private static Optional<Written> call(Method method, PluginType<?> type, Names names) {
-        if (method == null || !Modifier.isStatic(method.getModifiers()) || !Modifier.isPublic(method.getModifiers())
-                || method.getParameterCount() != 0 || type.type() == null
-                || !method.getReturnType().getName().equals(type.type().getName())) {
-            return Optional.empty();
-        }
-        String source = names.of(method.getDeclaringClass()) + "." + method.getName() + "()";
-        return Optional.of(new Written(source, names.imports()));
+    public Optional<JavaValue> freshSpelling(Type type) {
+        ValueWriter.Names names = new ValueWriter.Names(false);
+        return writer.fresh(type, names).map(names::value);
     }
 
     /**
@@ -502,7 +376,7 @@ public final class ValueGrammar {
      * the value by its own runtime class. Never the second when the type <em>is</em> known: an
      * {@code Integer} handed to a {@code String} field is refused, not written as {@code 3}.
      */
-    public Optional<Written> write(Type type, Object value) {
+    public Optional<JavaValue> write(Type type, Object value) {
         if (type instanceof ValueTypes.Unknown) return spellAny(value);
         return spell(type, value);
     }
@@ -510,6 +384,11 @@ public final class ValueGrammar {
     // ---- plumbing --------------------------------------------------------------------------------------
 
     private enum Kind { JDK, COMPONENT, ENUM, SOURCE, UNKNOWN }
+
+    /** Every component that writes a class, in declaration order: the writer's fallback by {@code isInstance}. */
+    java.util.Collection<ComponentType<?>> components() {
+        return componentByName.values();
+    }
 
     private Kind kindOf(Class<?> type) {
         if (JdkLiterals.handles(type)) return Kind.JDK;
@@ -527,11 +406,6 @@ public final class ValueGrammar {
         if (declared.isEmpty()) return null;
         if (i < declared.size()) return declared.get(i);
         return count > declared.size() ? declared.getLast() : null;
-    }
-
-    private static boolean isHostContainer(Class<?> type) {
-        for (ValueContainer<?> container : ValueContainer.ALL) if (container.type() == type) return true;
-        return false;
     }
 
     /** The declaration of {@code type}, or {@code null}: for the reader. */
@@ -572,29 +446,6 @@ public final class ValueGrammar {
             return declared == null ? List.of() : declared;
         } catch (RuntimeException | LinkageError e) {
             return List.of();
-        }
-    }
-
-    /** How one write spells a type: qualified, or simple with the import collected. */
-    private static final class Names {
-
-        private final boolean qualified;
-        private final Set<String> imports = new LinkedHashSet<>();
-
-        Names(boolean qualified) {
-            this.qualified = qualified;
-        }
-
-        String of(Class<?> type) {
-            String importName = JavaNames.importName(type);
-            if (importName.isEmpty()) return JavaNames.simple(type);
-            if (qualified) return JavaNames.canonical(type);
-            imports.add(importName);
-            return JavaNames.simple(type);
-        }
-
-        List<String> imports() {
-            return List.copyOf(imports);
         }
     }
 }

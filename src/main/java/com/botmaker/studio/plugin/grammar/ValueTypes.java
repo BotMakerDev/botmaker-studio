@@ -1,11 +1,15 @@
 package com.botmaker.studio.plugin.grammar;
 
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.Name;
+
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The type of a value, in the JDK's own vocabulary: {@link java.lang.reflect.Type}.
@@ -201,6 +205,48 @@ public final class ValueTypes {
             case null -> "";
             default -> type.getTypeName();
         };
+    }
+
+    /**
+     * {@code type} as a node of {@code ast} — {@code Map<String, List<Duration>>} — naming every class by its
+     * simple name and adding what that needs to {@code imports}. Empty for a type with an unknown leaf
+     * anywhere, which nothing writes.
+     */
+    public static Optional<org.eclipse.jdt.core.dom.Type> node(AST ast, Type type, Set<String> imports) {
+        return switch (type) {
+            case Class<?> cls when cls.isPrimitive() -> Optional.of(ast.newPrimitiveType(
+                    org.eclipse.jdt.core.dom.PrimitiveType.toCode(cls.getName())));
+            case Class<?> cls -> Optional.of(ast.newSimpleType(name(ast, cls, imports)));
+            case Parameterized parameterized -> generic(ast,
+                    ast.newSimpleType(name(ast, parameterized.raw(), imports)), parameterized.arguments(), imports);
+            case BotClass bot -> generic(ast, ast.newSimpleType(ast.newName(bot.qualifiedName())),
+                    bot.arguments(), imports);
+            case null, default -> Optional.empty();
+        };
+    }
+
+    private static Optional<org.eclipse.jdt.core.dom.Type> generic(AST ast, org.eclipse.jdt.core.dom.Type raw,
+                                                                   List<Type> arguments, Set<String> imports) {
+        if (arguments.isEmpty()) return Optional.of(raw);
+        org.eclipse.jdt.core.dom.ParameterizedType out = ast.newParameterizedType(raw);
+        for (Type argument : arguments) {
+            // A type argument is never primitive: int inside angle brackets is written Integer.
+            Type boxed = argument instanceof Class<?> cls && cls.isPrimitive()
+                    ? java.lang.invoke.MethodType.methodType(cls).wrap().returnType() : argument;
+            Optional<org.eclipse.jdt.core.dom.Type> node = node(ast, boxed, imports);
+            if (node.isEmpty()) return Optional.empty();
+            @SuppressWarnings("unchecked")
+            List<org.eclipse.jdt.core.dom.Type> typeArguments = out.typeArguments();
+            typeArguments.add(node.get());
+        }
+        return Optional.of(out);
+    }
+
+    /** {@code cls} by its simple name, its import added — nothing added for a primitive or {@code java.lang}. */
+    static Name name(AST ast, Class<?> cls, Set<String> imports) {
+        String importName = JavaNames.importName(cls);
+        if (!importName.isEmpty()) imports.add(importName);
+        return ast.newName(JavaNames.simple(cls));
     }
 
     /** The class a file declaring a field of {@code type} imports for each class in it, first reached first. */

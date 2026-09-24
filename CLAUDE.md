@@ -23,6 +23,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > (`SourceNode.parse`, marked `JavaExpressions.detached`) still matches simple names, until values stay
 > attached to their unit.
 
+> **A value is written as a tree since 2026-09-24.** Read `ValueGrammar.Written` / `spell` / `initializer`
+> below as returning a `plugin/grammar/JavaValue` — an `Expression` node the grammar built
+> (`plugin/grammar/ValueWriter`), its imports, and a formatted `source()` for display only.
+> `initializerOfParts` is `ValueGrammar.compose(Type, List<JavaValue>)` (and `BotRecords.compose`). Sinks copy
+> the node (`JavaValue.copyInto(ast)`): `JavaParameterEdits.setValue/retype/add`, `JavaManagedEdits.setValue`,
+> `CodeEditor.replaceWithValue`, `setTrailingArguments(call, from, List<JavaValue>)`,
+> `CodeEditor.insertStatement` (recordings). **Never write a value with `createStringPlaceholder`** or join
+> Java as text; build nodes. An editor cell reads back `Supplier<Optional<JavaValue>>` (`ValueEditors.Editor`,
+> `ParamValueWidgets.ValueEditor`), and `HostValueContext` holds the value set plus its tree
+> (`current()`), with `onChange` a `Consumer<JavaValue>`. Still text, and not on the value path: the canvas's
+> clipboard paste, the `java.time` Date/Time pickers and `ExpressionMenu`'s raw code
+> (`replaceWithRawExpression`), and the palette's fresh-value strings (`PluginHost.freshInitializer`).
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,

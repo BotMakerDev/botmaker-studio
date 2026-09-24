@@ -50,6 +50,12 @@ public final class SourceFormatter {
     private static final CodeFormatter FORMATTER = ToolFactory.createCodeFormatter(options());
 
     /**
+     * The same layout for one expression or statement shown on its own — a cell's label, a value's
+     * {@code source()} — which is never wrapped: it has no column to fit and no indentation to continue at.
+     */
+    private static final CodeFormatter SNIPPETS = ToolFactory.createCodeFormatter(snippetOptions());
+
+    /**
      * {@code source} laid out, or {@code source} unchanged when the formatter declines it. Never null for
      * non-null input, and never throws: this sits on the edit path, where failing closed means losing a user's
      * change to a cosmetic pass.
@@ -114,6 +120,33 @@ public final class SourceFormatter {
     }
 
     /**
+     * One expression laid out as a file's would be — {@code new Point(10, 20)} for the {@code new Point(10,20)}
+     * JDT prints a node it built as. For showing a value the host wrote; the file itself gets the node, which
+     * {@code ASTRewrite} lays out on its own. The input unchanged when the formatter declines it.
+     */
+    public static String expression(String source) {
+        return snippet(CodeFormatter.K_EXPRESSION, source);
+    }
+
+    /** {@link #expression} for a statement, {@code Mouse.click(new Point(1, 2));}. */
+    public static String statement(String source) {
+        return snippet(CodeFormatter.K_STATEMENTS, source);
+    }
+
+    private static String snippet(int kind, String source) {
+        if (source == null || source.isBlank()) return source;
+        try {
+            TextEdit edit = SNIPPETS.format(kind, source, 0, source.length(), 0, LINE_SEPARATOR);
+            if (edit == null) return source;
+            IDocument document = new Document(source);
+            edit.apply(document);
+            return document.get().strip();
+        } catch (Exception e) {
+            return source;
+        }
+    }
+
+    /**
      * JDT's defaults with this repository's indentation, for {@link AstRewriteHelper}: {@code ASTRewrite}
      * indents what it inserts by these, and handed {@code null} it indents with a tab — into a file that is four
      * spaces everywhere else. Only the indentation is overridden, so nothing else about what a rewrite emits
@@ -124,6 +157,12 @@ public final class SourceFormatter {
         options.put(DefaultCodeFormatterConstants.FORMATTER_TAB_CHAR, JavaCore.SPACE);
         options.put(DefaultCodeFormatterConstants.FORMATTER_TAB_SIZE, String.valueOf(INDENT));
         options.put(DefaultCodeFormatterConstants.FORMATTER_INDENTATION_SIZE, String.valueOf(INDENT));
+        return options;
+    }
+
+    private static Map<String, String> snippetOptions() {
+        Map<String, String> options = options();
+        options.put(DefaultCodeFormatterConstants.FORMATTER_LINE_SPLIT, String.valueOf(Integer.MAX_VALUE / 2));
         return options;
     }
 

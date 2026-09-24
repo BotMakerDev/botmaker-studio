@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
@@ -33,7 +34,7 @@ public final class ConstantValues {
         Optional<Object> read = grammar.read(form, node);
         // A constant reference is only ever written Owner.FIELD, qualified or not.
         if (read.isPresent() || !(node.node() instanceof QualifiedName name)) return read;
-        return lookup(grammar, constants).read(name.getFullyQualifiedName());
+        return lookup(grammar, constants).read(name);
     }
 
     /** {@link #read(ValueGrammar, Supplier, Type, SourceNode)} over stored text, parsed once. */
@@ -42,10 +43,10 @@ public final class ConstantValues {
         return SourceNode.parse(source).flatMap(node -> read(grammar, constants, form, node));
     }
 
-    /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
-    public static Optional<ValueGrammar.Written> write(ValueGrammar grammar,
-                                                       Supplier<List<ManagedConstants.Constant>> constants,
-                                                       Type form, Object value) {
+    /** {@code value} as the constant holding it when the bot has one, and written out otherwise. */
+    public static Optional<JavaValue> write(ValueGrammar grammar,
+                                            Supplier<List<ManagedConstants.Constant>> constants,
+                                            Type form, Object value) {
         return lookup(grammar, constants).spell(value).or(() -> grammar.write(form, value));
     }
 

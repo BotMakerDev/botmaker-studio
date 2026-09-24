@@ -1,12 +1,11 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import org.eclipse.jdt.core.dom.AST;
-import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
@@ -36,17 +35,14 @@ public final class JavaManagedEdits {
     private JavaManagedEdits() {}
 
     /**
-     * Replaces the expression {@code className.methodName()} returns, adding any import it needs.
+     * Replaces the expression {@code className.methodName()} returns with {@code expression}'s tree, adding
+     * the imports it names. One already imported, or in the file's own package, is skipped.
      *
-     * <p>A blank expression answers the source unchanged: a method that returns nothing is not something
-     * this can write, and emptying one is not an edit anybody asked for.
-     *
-     * @param imports fully-qualified names the expression uses — what the host's grammar spelled the value with. One
-     *                already imported, or in the file's own package, is skipped.
+     * <p>No expression answers the source unchanged: a method that returns nothing is not something this can
+     * write, and emptying one is not an edit anybody asked for.
      */
-    public static String setValue(String source, String className, String methodName, String expression,
-                                  List<String> imports) {
-        if (expression == null || expression.isBlank()) return source;
+    public static String setValue(String source, String className, String methodName, JavaValue expression) {
+        if (expression == null) return source;
         CompilationUnit unit = JavaParameterSource.parse(source);
         AST ast = unit.getAST();
         ASTRewrite rewrite = ASTRewrite.create(ast);
@@ -60,13 +56,12 @@ public final class JavaManagedEdits {
                 if (JavaManagedSource.returnedExpression(method) == null) return false;
                 ReturnStatement returned = (ReturnStatement) method.getBody().statements().getFirst();
                 found[0] = true;
-                rewrite.set(returned, ReturnStatement.EXPRESSION_PROPERTY,
-                        expression(rewrite, expression), null);
+                rewrite.set(returned, ReturnStatement.EXPRESSION_PROPERTY, expression.copyInto(ast), null);
                 return false;
             }
         });
         if (!found[0]) return source;
-        addImports(unit, ast, rewrite, imports);
+        addImports(unit, ast, rewrite, expression.imports());
         return AstRewriteHelper.applyRewrite(rewrite, source);
     }
 
@@ -101,10 +96,5 @@ public final class JavaManagedEdits {
             declaration.setName(ast.newName(name));
             list.insertLast(declaration, null);
         }
-    }
-
-    /** Java source as an expression node, placed into the rewrite verbatim. */
-    private static Expression expression(ASTRewrite rewrite, String java) {
-        return (Expression) rewrite.createStringPlaceholder(java, ASTNode.SIMPLE_NAME);
     }
 }

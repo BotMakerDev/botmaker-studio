@@ -1,8 +1,8 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.SlotRun;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
@@ -10,10 +10,8 @@ import org.eclipse.jdt.core.dom.MethodInvocation;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -60,15 +58,22 @@ public final class HostSlotRun implements SlotRun {
 
     @Override
     public List<Element> elements() {
+        List<Element> out = new ArrayList<>();
+        for (Expression argument : arguments()) {
+            out.add(new Element(HostSlotContext.read(context, element, new SourceNode(argument, null)).orElse(null),
+                    argument.toString()));
+        }
+        return out;
+    }
+
+    /** The run's arguments as the call holds them now. */
+    private List<Expression> arguments() {
         MethodInvocation node = call == null ? null : call.get();
         if (node == null) return List.of();
-        List<Element> out = new ArrayList<>();
+        List<Expression> out = new ArrayList<>();
         List<?> arguments = node.arguments();
         for (int i = fromIndex; i < arguments.size(); i++) {
-            if (!(arguments.get(i) instanceof Expression argument)) continue;
-            String source = argument.toString();
-            out.add(new Element(HostSlotContext.read(context, element, new SourceNode(argument, null)).orElse(null),
-                    source));
+            if (arguments.get(i) instanceof Expression argument) out.add(argument);
         }
         return out;
     }
@@ -76,24 +81,29 @@ public final class HostSlotRun implements SlotRun {
     /**
      * Writes the whole tail in one rewrite. The list is refused — the source left alone — when an item is a
      * value the grammar cannot write, since a run written half-way would lose an argument.
+     *
+     * <p>An {@link Element} handed back is one of {@link #elements()}' own, kept: it is found among the
+     * arguments by being equal to the element the host made for it, and that argument's tree is written
+     * back — never the text it was shown as.
      */
     @Override
     public void replace(List<?> items) {
         MethodInvocation node = call == null ? null : call.get();
         if (node == null || items == null || items.size() < minimum()) return;
-        List<String> expressions = new ArrayList<>();
-        Set<String> imports = new LinkedHashSet<>();
+        List<Expression> arguments = arguments();
+        List<Element> current = elements();
+        List<JavaValue> values = new ArrayList<>();
         for (Object item : items) {
             if (item instanceof Element kept) {
-                if (kept.source().isBlank()) return;
-                expressions.add(kept.source());
+                int at = current.indexOf(kept);
+                if (at < 0) return;
+                values.add(JavaValue.kept(new SourceNode(arguments.get(at), null)));
                 continue;
             }
-            Optional<ValueGrammar.Written> written = HostSlotContext.write(context, element, item);
+            Optional<JavaValue> written = HostSlotContext.write(context, element, item);
             if (written.isEmpty()) return;
-            expressions.add(written.get().source());
-            imports.addAll(written.get().imports());
+            values.add(written.get());
         }
-        context.getCodeEditor().setTrailingArguments(node, fromIndex, expressions, imports.toArray(String[]::new));
+        context.getCodeEditor().setTrailingArguments(node, fromIndex, values);
     }
 }

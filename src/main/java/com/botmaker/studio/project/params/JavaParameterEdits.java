@@ -4,11 +4,15 @@ import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.parser.helpers.SourceFormatter;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.IExtendedModifier;
+import org.eclipse.jdt.core.dom.MarkerAnnotation;
+import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
@@ -27,8 +31,10 @@ import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The rewrites the Parameters window performs on a bot's own Java — one source in, one source out.
@@ -51,32 +57,22 @@ public final class JavaParameterEdits {
     private JavaParameterEdits() {}
 
     /**
-     * Replaces the value of {@code className.fieldName} with {@code initializer}.
+     * Replaces the value of {@code className.fieldName} with {@code initializer}, adding the imports it
+     * names — an editor writes {@code Duration.ofSeconds(3)} rather than the qualified name, because the file
+     * is one a person reads.
      *
-     * <p><b>The initialiser arrives written</b>, because since 2026-09-20 that is what a value <em>is</em>
-     * ({@code 32-generic-values.md} decision 6): whoever has the value in hand asks the host's
-     * {@code ValueGrammar} for its Java, which is the same call the canvas makes, and reading it back is
-     * {@code ValueGrammar.valueOf} — the round trip is a fixed point precisely because one spelling crosses
-     * rather than two.
+     * <p><b>The initialiser arrives as a tree</b> (2026-09-24): the grammar built it node by node, and it is
+     * copied into this file's tree and laid out by {@code ASTRewrite}. Reading it back is
+     * {@code ValueGrammar.valueOf}, so the round trip is a fixed point.
      *
-     * <p>A blank initialiser answers the source unchanged: a field with no value is not something this can
-     * write, and emptying one is not an edit anybody asked for.
+     * <p>No initialiser answers the source unchanged: a field with no value is not something this can write,
+     * and emptying one is not an edit anybody asked for.
      */
-    public static String setValue(String source, String className, String fieldName, String initializer) {
-        return setValue(source, className, fieldName, initializer, List.of());
-    }
-
-    /**
-     * The same, adding the imports {@code initializer} needs — an editor writes {@code Duration.ofSeconds(3)}
-     * rather than the qualified name, because the file is one a person reads.
-     */
-    public static String setValue(String source, String className, String fieldName, String initializer,
-                                  List<String> imports) {
-        if (initializer == null || initializer.isBlank()) return source;
+    public static String setValue(String source, String className, String fieldName, JavaValue initializer) {
+        if (initializer == null) return source;
         return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
-            rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
-                    expression(ast, rewrite, initializer), null);
-            addImports(unit, rewrite, imports);
+            rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY, initializer.copyInto(ast), null);
+            addImports(unit, rewrite, initializer.imports());
         });
     }
 
@@ -121,14 +117,17 @@ public final class JavaParameterEdits {
      */
     public static String retype(String source, ValueGrammar grammar, String className, String fieldName,
                                 Type form) {
-        String typeName = typeName(grammar, form);
-        if (typeName == null) return source;
-        String initializer = grammar.freshInitializer(form).orElse(null);
+        if (!writable(grammar, form)) return source;
+        JavaValue initializer = grammar.freshSpelling(form).orElse(null);
         return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
-            rewrite.set(field, FieldDeclaration.TYPE_PROPERTY, type(ast, rewrite, typeName), null);
+            Set<String> imports = new LinkedHashSet<>();
+            org.eclipse.jdt.core.dom.Type type = ValueTypes.node(ast, form, imports).orElse(null);
+            if (type == null) return;
+            rewrite.set(field, FieldDeclaration.TYPE_PROPERTY, type, null);
             rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY,
-                    initializer == null ? null : expression(ast, rewrite, initializer), null);
-            addImports(unit, rewrite, grammar.imports(form));
+                    initializer == null ? null : initializer.copyInto(ast), null);
+            if (initializer != null) imports.addAll(initializer.imports());
+            addImports(unit, rewrite, List.copyOf(imports));
         });
     }
 
@@ -208,46 +207,92 @@ public final class JavaParameterEdits {
      *
      * <p>Appended rather than inserted in sorted order: a source file is the author's, and a window that
      * reordered their declarations to suit its own list would be rewriting more than the user asked for.
-     * A blank {@code initializer} declares the field with none, which is legal Java for every type — a
-     * class the bot declares has no fresh value Studio may invent.
+     * No {@code initializer} declares the field with none, which is legal Java for every type — a class the
+     * bot declares has no fresh value Studio may invent.
+     *
+     * <p><b>The declaration is a tree</b> (2026-09-24), and it is laid out in a second step:
+     * {@code ASTRewrite} flattens a body declaration it generated onto one line with no spacing
+     * ({@code @Param public static String label="hello";}), and the field a person just added is the one they
+     * are most likely to look at. {@link SourceFormatter#formatChanged} lays out the lines the insert wrote and
+     * nothing else; the imports are added after, so the region it formats is the field alone.
      */
     public static String add(String source, ValueGrammar grammar, String className, String fieldName,
-                             Type form, String initializer, String category, String description) {
-        String typeName = typeName(grammar, form);
-        if (typeName == null || fieldName == null || fieldName.isBlank()) return source;
+                             Type form, JavaValue initializer, String category, String description) {
+        if (!writable(grammar, form) || fieldName == null || fieldName.isBlank()) return source;
         CompilationUnit unit = JavaParameterSource.parse(source);
         TypeDeclaration target = typeDeclaration(unit, className);
         if (target == null || declares(target, fieldName)) return source;
 
-        ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
-        // The declaration is written as TEXT and inserted as a placeholder, rather than built out of AST
-        // nodes: ASTRewrite's flattener emits a node it generated with no spacing at all
-        // (`public static String label="hello";`, all on one line), and the field a person just added is
-        // the one they are most likely to look at. A placeholder is copied through exactly as written.
-        String declaration = declaration(typeName, fieldName, initializer, category, description);
-        rewrite.getListRewrite(target, TypeDeclaration.BODY_DECLARATIONS_PROPERTY)
-                .insertLast(rewrite.createStringPlaceholder(declaration, ASTNode.FIELD_DECLARATION), null);
-        addImports(unit, rewrite, grammar.imports(form));
-        return AstRewriteHelper.applyRewrite(rewrite, source);
-    }
-
-    /** The source of a new parameter, spelled the way the rest of a bot's file is. */
-    private static String declaration(String typeName, String fieldName, String initializer,
-                                      String category, String description) {
-        List<String> members = new ArrayList<>();
-        if (category != null && !category.isBlank()) members.add("category = " + quote(category));
-        if (description != null && !description.isBlank()) {
-            members.add("description = " + quote(description));
+        AST ast = unit.getAST();
+        Set<String> imports = new LinkedHashSet<>();
+        // The annotation is written @Param, so the file must import it — unless it already imports a class of
+        // that simple name, which a second import would collide with; the author's fields beside it use that.
+        if (!importsSimpleName(unit, Param.class.getSimpleName())) imports.add(Param.class.getCanonicalName());
+        org.eclipse.jdt.core.dom.Type type = ValueTypes.node(ast, form, imports).orElse(null);
+        if (type == null) return source;
+        VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
+        fragment.setName(ast.newSimpleName(fieldName));
+        if (initializer != null) {
+            fragment.setInitializer(initializer.copyInto(ast));
+            imports.addAll(initializer.imports());
         }
-        String name = Param.class.getSimpleName();
-        String annotation = members.isEmpty() ? "@" + name : "@" + name + "(" + String.join(", ", members) + ")";
-        String value = initializer == null || initializer.isBlank() ? "" : " = " + initializer;
-        return annotation + "\npublic static " + typeName + " " + fieldName + value + ";";
+        FieldDeclaration field = ast.newFieldDeclaration(fragment);
+        field.setType(type);
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = field.modifiers();
+        modifiers.add(annotation(ast, category, description));
+        @SuppressWarnings("unchecked")
+        List<Modifier> keywords = ast.newModifiers(Modifier.PUBLIC | Modifier.STATIC);
+        modifiers.addAll(keywords);
+
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        rewrite.getListRewrite(target, TypeDeclaration.BODY_DECLARATIONS_PROPERTY).insertLast(field, null);
+        String declared = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+
+        CompilationUnit reparsed = JavaParameterSource.parse(declared);
+        ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
+        addImports(reparsed, importing, List.copyOf(imports));
+        return AstRewriteHelper.applyRewrite(importing, declared);
     }
 
-    /** A Java string literal. The members written here are ours, but an author's text is not. */
-    private static String quote(String text) {
-        return JdkLiterals.quote(text);
+    private static boolean importsSimpleName(CompilationUnit unit, String simple) {
+        for (Object each : unit.imports()) {
+            org.eclipse.jdt.core.dom.ImportDeclaration declaration = (org.eclipse.jdt.core.dom.ImportDeclaration) each;
+            if (declaration.isStatic() || declaration.isOnDemand()) continue;
+            Name name = declaration.getName();
+            if (name instanceof org.eclipse.jdt.core.dom.QualifiedName qualified
+                    && qualified.getName().getIdentifier().equals(simple)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code @Param}, with the members the author chose and no others. */
+    private static Annotation annotation(AST ast, String category, String description) {
+        List<MemberValuePair> members = new ArrayList<>();
+        if (category != null && !category.isBlank()) members.add(member(ast, "category", category));
+        if (description != null && !description.isBlank()) members.add(member(ast, "description", description));
+        if (members.isEmpty()) {
+            MarkerAnnotation marker = ast.newMarkerAnnotation();
+            marker.setTypeName(ast.newSimpleName(Param.class.getSimpleName()));
+            return marker;
+        }
+        NormalAnnotation normal = ast.newNormalAnnotation();
+        normal.setTypeName(ast.newSimpleName(Param.class.getSimpleName()));
+        @SuppressWarnings("unchecked")
+        List<MemberValuePair> values = normal.values();
+        values.addAll(members);
+        return normal;
+    }
+
+    private static MemberValuePair member(AST ast, String name, String text) {
+        MemberValuePair pair = ast.newMemberValuePair();
+        pair.setName(ast.newSimpleName(name));
+        StringLiteral literal = ast.newStringLiteral();
+        literal.setLiteralValue(text);
+        pair.setValue(literal);
+        return pair;
     }
 
     /**
@@ -407,30 +452,12 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * The Java type a form is written as — {@code java.util.Map<String, java.util.List<Duration>>} for one
-     * two levels deep.
-     *
-     * <p><b>The type spells itself</b> ({@link ValueTypes#sourceName}). A class is spelled by its simple name,
-     * and {@code ValueGrammar.imports} is what the caller adds beside it.
-     *
-     * <p>Null for a type with an unknown leaf anywhere, which is what makes every caller decline rather than
-     * write a field naming a class that does not exist.
+     * Whether a field of {@code form} may be declared: every leaf is one the grammar reads or a plugin
+     * declares. A type with an unknown leaf anywhere makes every caller decline rather than write a field
+     * naming a class that does not exist. The type itself is written as a tree ({@link ValueTypes#node}).
      */
-    private static String typeName(ValueGrammar grammar, Type form) {
-        if (form == null || grammar == null || !grammar.known(form)) return null;
-        String java = ValueTypes.sourceName(form);
-        return java == null || java.isBlank() ? null : java;
-    }
-
-    /** Java source as an expression node, placed into the rewrite verbatim. */
-    private static Expression expression(AST ast, ASTRewrite rewrite, String java) {
-        return (Expression) rewrite.createStringPlaceholder(java, ASTNode.SIMPLE_NAME);
-    }
-
-    /** Java source as a type node, placed into the rewrite verbatim. */
-    private static org.eclipse.jdt.core.dom.Type type(AST ast, ASTRewrite rewrite, String java) {
-        return (org.eclipse.jdt.core.dom.Type)
-                rewrite.createStringPlaceholder(java, ASTNode.SIMPLE_TYPE);
+    private static boolean writable(ValueGrammar grammar, Type form) {
+        return form != null && grammar != null && grammar.known(form) && !(form instanceof ValueTypes.Unknown);
     }
 
     /** The named top-level or nested type declaration, or {@code null}. */

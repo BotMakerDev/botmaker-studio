@@ -2,6 +2,7 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -64,7 +65,7 @@ class JavaParametersTest {
         ProjectConfig config = project(root);
 
         Optional<ParameterRow> stored = JavaParameters.add(config, null, "Parameters", "maxAttempts",
-                TestValues.WHOLE_NUMBER, "10", "Limits", "How many times to try", TestValues.GRAMMAR);
+                TestValues.WHOLE_NUMBER, java("10"), "Limits", "How many times to try", TestValues.GRAMMAR);
 
         assertTrue(stored.isPresent());
         assertEquals("10", stored.get().value());
@@ -83,7 +84,7 @@ class JavaParametersTest {
                 """));
 
         Optional<ParameterRow> refused = JavaParameters.add(config, null, "Parameters", "maxAttempts",
-                TestValues.TEXT, "\"x\"", "", "", TestValues.GRAMMAR);
+                TestValues.TEXT, java("\"x\""), "", "", TestValues.GRAMMAR);
 
         assertTrue(refused.isEmpty());
         assertEquals(1, JavaParameters.scan(config, null, TestValues.GRAMMAR).size());
@@ -193,7 +194,7 @@ class JavaParametersTest {
                 """));
 
         ParameterRow stored = JavaParameters.setValue(config, null, only(config),
-                "java.time.Duration.ofMillis(60000L)", List.of(), TestValues.GRAMMAR).orElseThrow();
+                java("java.time.Duration.ofMillis(60000L)"), TestValues.GRAMMAR).orElseThrow();
 
         assertEquals("java.time.Duration.ofMillis(60000L)", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
@@ -214,7 +215,7 @@ class JavaParametersTest {
         assertFalse(entry.editable());
         assertFalse(entry.note().isBlank(), "a read-only row says why");
         assertTrue(JavaParameters.setValue(config, null, entry,
-                "java.time.Duration.ofMillis(60000L)", List.of(), TestValues.GRAMMAR).isEmpty());
+                java("java.time.Duration.ofMillis(60000L)"), TestValues.GRAMMAR).isEmpty());
         assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")),
                 "the author's own expression is not rewritten");
     }
@@ -245,6 +246,10 @@ class JavaParametersTest {
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------
+
+    private static JavaValue java(String source) {
+        return JavaValue.parse(source).orElseThrow();
+    }
 
     private static JavaParameter only(ProjectConfig config) {
         return JavaParameters.scan(config, null, TestValues.GRAMMAR).getFirst();

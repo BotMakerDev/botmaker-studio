@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -137,22 +138,15 @@ public final class JavaParameters {
      * plugin's answer used to be rendered rather than the edit: what the file says is what the bot runs.
      */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
-                                                  JavaParameter parameter, String value) {
-        return setValue(config, state, parameter, value, List.of(), PluginHost.grammar());
-    }
-
-    /** The same, adding the imports the value's Java names — what an editor hands back beside it. */
-    public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
-                                                  JavaParameter parameter, String value, List<String> imports) {
-        return setValue(config, state, parameter, value, imports, PluginHost.grammar());
+                                                  JavaParameter parameter, JavaValue value) {
+        return setValue(config, state, parameter, value, PluginHost.grammar());
     }
 
     /** The same, against a given grammar. */
     public static Optional<ParameterRow> setValue(ProjectConfig config, ProjectState state,
-                                                  JavaParameter parameter, String value, List<String> imports,
-                                                  ValueGrammar grammar) {
+                                                  JavaParameter parameter, JavaValue value, ValueGrammar grammar) {
         if (parameter == null || !parameter.editable()) return Optional.empty();
-        writeValue(config, state, parameter, value, imports);
+        writeValue(config, state, parameter, value);
         return reread(config, state, parameter.className(), parameter.name(), grammar);
     }
 
@@ -225,7 +219,10 @@ public final class JavaParameters {
         }
 
         if (!wanted.value().equals(before.value()) && held.editable()) {
-            writeValue(config, state, held, wanted.value(), List.of());
+            // The row's value is Java some version of this file held — a snapshot being restored — so it is
+            // written back as that expression, kept.
+            JavaParameter target = held;
+            JavaValue.parse(wanted.value()).ifPresent(value -> writeValue(config, state, target, value));
         }
         return reread(config, state, className, name, grammar);
     }
@@ -244,15 +241,15 @@ public final class JavaParameters {
      * whose default cannot be spelled as Java, or a class that could not be created.
      */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, Type form, String value,
+                                             String name, Type form, JavaValue value,
                                              String category, String description) {
         return add(config, state, className, name, form, value, category, description,
                 PluginHost.grammar());
     }
 
-    /** The same, against a given grammar. */
+    /** The same, against a given grammar. {@code value} may be null: the field is declared with none. */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, Type form, String value,
+                                             String name, Type form, JavaValue value,
                                              String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
@@ -329,11 +326,11 @@ public final class JavaParameters {
     // resets the value, an annotation rewrite has to be re-read before the next edit finds the field. Each
     // answers whether anything changed.
 
-    /** Replaces a parameter's value with {@code initializer}, which is already the type's own Java. */
+    /** Replaces a parameter's value with {@code initializer}'s tree. */
     private static boolean writeValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                      String initializer, List<String> imports) {
+                                      JavaValue initializer) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
-                source, parameter.className(), parameter.name(), initializer, imports));
+                source, parameter.className(), parameter.name(), initializer));
     }
 
     /**

@@ -91,7 +91,7 @@ class ChainValuesTest {
         Object read = GRAMMAR.valueOf(FORM, "Tone.SOFT.louder(5).wider(2)").orElseThrow();
 
         assertEquals(Optional.of("new " + JavaNames.canonical(Tone.class) + "(5, 2)"),
-                GRAMMAR.initializer(FORM, read));
+                GRAMMAR.initializer(FORM, read).map(JavaValue::source));
     }
 
     @Test

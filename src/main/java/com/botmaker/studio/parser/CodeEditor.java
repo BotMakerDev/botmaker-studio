@@ -29,6 +29,7 @@ import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
@@ -399,6 +400,20 @@ public class CodeEditor {
     }
 
     /**
+     * Replaces {@code toReplace} with a value the host's grammar wrote — its tree copied into this file's,
+     * with every import it names, in one rewrite. No text is parsed on the way.
+     */
+    public void replaceWithValue(Expression toReplace, JavaValue value) {
+        if (value == null) return;
+        edit(toReplace, EditKind.BODY, false, (cu, code) -> {
+            ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
+            rewriter.replace(toReplace, value.copyInto(cu.getAST()), null);
+            for (String type : value.imports()) ImportManager.addImport(cu, rewriter, type);
+            return AstRewriteHelper.applyRewrite(rewriter, code);
+        });
+    }
+
+    /**
      * Declares a new local variable {@code type name = <default>;} just before the statement enclosing
      * {@code toReplace}, then references it in that slot — a single atomic rewrite. Lets the user create a
      * typed variable (e.g. a {@code Direction}) inline from the Variables submenu. Falls back to a plain
@@ -452,23 +467,22 @@ public class CodeEditor {
     // body that starts empty is the honest state now that branching is a call the palette offers.
 
     /**
-     * Replaces the trailing arguments of {@code call} from {@code fromIndex} with exactly
-     * {@code expressions}, adding {@code importsNeeded}.
+     * Replaces the trailing arguments of {@code call} from {@code fromIndex} with exactly {@code values}'
+     * trees, adding the imports each names.
      *
      * <p>This is {@link com.botmaker.studio.plugin.HostSlotRun}'s writer, and it is deliberately <b>ignorant
      * of what the arguments mean</b>. Its predecessor took a list of template <em>paths</em> and built
-     * {@code new ImageTemplate(path)} nodes itself, which is the host spelling the SDK's API for it; a plugin
-     * hands over the expressions it wants and this puts them where it says. That is the same trade
-     * {@code replaceWithRawExpression} makes for a single slot, and it is why a second plugin with a
-     * multi-valued call of its own needs nothing added here.
+     * {@code new ImageTemplate(path)} nodes itself, which is the host spelling the SDK's API for it; the
+     * grammar writes each value and this puts the trees where it says. That is the same trade
+     * {@link #replaceWithValue} makes for a single slot, and it is why a second plugin with a multi-valued
+     * call of its own needs nothing added here.
      *
      * <p>It takes the whole desired list rather than an index, so add, remove and change are one uniform
      * rewrite instead of three argument-list surgeries — and the empty list is a legal state: the call keeps
      * its fixed arguments and the row falls back to its prompt. Arguments before {@code fromIndex} are
      * untouched.
      */
-    public void setTrailingArguments(MethodInvocation call, int fromIndex,
-                                     java.util.List<String> expressions, String... importsNeeded) {
+    public void setTrailingArguments(MethodInvocation call, int fromIndex, List<JavaValue> values) {
         edit(call, EditKind.BODY, true, (cu, code) -> {
             AST ast = cu.getAST();
             ASTRewrite rewriter = ASTRewrite.create(ast);
@@ -478,15 +492,13 @@ public class CodeEditor {
             for (int i = fromIndex; i < existing.size(); i++) {
                 args.remove((ASTNode) existing.get(i), null);
             }
-            for (String expression : expressions) {
-                if (expression == null || expression.isBlank()) continue;
-                args.insertLast(rewriter.createStringPlaceholder(expression, ASTNode.METHOD_INVOCATION), null);
-            }
-            // Only what the caller asked for. The old writer also added the project's Templates class here,
-            // which the expressions a plugin hands over do not name — an import for a vocabulary this method
-            // no longer knows about.
-            if (importsNeeded != null) {
-                for (String type : importsNeeded) ImportManager.addImport(cu, rewriter, type);
+            // Only the imports the values name. The old writer also added the project's Templates class here,
+            // which the values a plugin hands over do not name — an import for a vocabulary this method no
+            // longer knows about.
+            for (JavaValue value : values) {
+                if (value == null) continue;
+                args.insertLast(value.copyInto(ast), null);
+                for (String type : value.imports()) ImportManager.addImport(cu, rewriter, type);
             }
             return AstRewriteHelper.applyRewrite(rewriter, code);
         });
@@ -1134,15 +1146,25 @@ public class CodeEditor {
     }
 
     /**
-     * {@link #pasteCode(BodyBlock, int, String)} for code whose imports are known exactly — a recorded call,
-     * whose classes came from the plugin that declared it. One edit, so one undo step.
+     * Inserts a statement the host built as a tree — a recorded call, whose classes came from the plugin that
+     * declared it — with exactly {@code imports}. One edit, so one undo step.
      */
-    public void pasteCode(BodyBlock targetBody, int index, String codeToPaste, List<String> imports) {
-        if (!canInsertAt(targetBody, index)) return;
+    public void insertStatement(BodyBlock targetBody, int index, Statement statement, List<String> imports) {
+        if (statement == null || !canInsertAt(targetBody, index)) return;
         edit(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             for (String qualified : imports) ctx.addImport(qualified);
-            return pasteCodeString(ctx, code, targetBody, index, codeToPaste);
+            ASTRewrite rewriter = ctx.rewriter();
+            Statement copied = (Statement) ASTNode.copySubtree(cu.getAST(), statement);
+            ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, targetBody);
+            // A statement after a comment has no list slot and is inserted as text at an offset: laid out as
+            // the formatter would, never as JDT's unspaced print of a node it built.
+            PendingInsert deferred = insertIntoList(listRewrite, targetBody, copied, index,
+                    SourceFormatter.statement(statement.toString()));
+            if (deferred != null) {
+                return AstRewriteHelper.applyRewriteAndInsertAt(rewriter, code, deferred.offset(), deferred.text());
+            }
+            return AstRewriteHelper.applyRewrite(rewriter, code);
         });
     }
 

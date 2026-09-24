@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -8,6 +9,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.services.BotSources;
+import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
@@ -217,16 +219,27 @@ public final class BotRecords {
     }
 
     /**
-     * Components already written as source, composed back into the constructor call — always fully
-     * qualified, so the line compiles wherever the field is declared and no import can be forgotten.
+     * Components that are already values, composed back into the constructor call as a tree — the record
+     * named fully qualified, so the line compiles wherever the field is declared and no import can be
+     * forgotten. Each component's own imports are carried.
      */
-    public Optional<String> initializerOfParts(ValueTypes.BotClass declared, List<String> parts) {
+    public Optional<JavaValue> compose(ValueTypes.BotClass declared, List<JavaValue> parts) {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
-        if (shape == null || parts == null || parts.size() != shape.components().size()) {
+        if (shape == null || parts == null || parts.size() != shape.components().size()
+                || parts.stream().anyMatch(java.util.Objects::isNull)) {
             return Optional.empty();
         }
-        if (parts.stream().anyMatch(part -> part == null || part.isBlank())) return Optional.empty();
-        return Optional.of("new " + shape.qualifiedName() + "(" + String.join(", ", parts) + ")");
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        ClassInstanceCreation creation = ast.newClassInstanceCreation();
+        creation.setType(ast.newSimpleType(ast.newName(shape.qualifiedName())));
+        Set<String> imports = new LinkedHashSet<>();
+        @SuppressWarnings("unchecked")
+        List<Expression> arguments = creation.arguments();
+        for (JavaValue part : parts) {
+            arguments.add(part.copyInto(ast));
+            imports.addAll(part.imports());
+        }
+        return Optional.of(JavaValue.built(creation, imports));
     }
 
     // ---- reading the bot's own sources -------------------------------------------------------------------

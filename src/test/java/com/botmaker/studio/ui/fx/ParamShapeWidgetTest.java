@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
@@ -53,7 +54,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     /** One row seeded with the form's fresh initialiser and carrying the declared choices as written. */
     private static ParameterRow row(String name, Type form, List<String> options) {
         return ParameterRow.named(name, ValueTypes.sourceName(form))
-                .value(PluginHost.grammar().freshInitializer(form).orElse(""))
+                .value(PluginHost.grammar().freshInitializer(form).map(JavaValue::source).orElse(""))
                 .options(options)
                 .build();
     }
@@ -106,7 +107,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
 
         assertEquals(3, rows.size());
         for (Node button : rows) assertInstanceOf(RadioButton.class, button);
-        assertEquals("2", ((ValueGrammar.Written) rows.get(1).getUserData()).source());
+        assertEquals("2", ((JavaValue) rows.get(1).getUserData()).source());
     }
 
     /** A choice that is not a value of the type cannot be picked, rather than being written as it is. */
@@ -154,7 +155,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
 
         assertEquals(1, sink.size());
-        assertEquals("\"slow\"", sink.getFirst().read().get());
+        assertEquals("\"slow\"", sink.getFirst().read().get().orElseThrow().source());
     }
 
     /** A stored value is matched against the choices by its value, so {@code "fast"} selects "fast". */

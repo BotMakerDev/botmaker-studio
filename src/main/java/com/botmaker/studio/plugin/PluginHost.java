@@ -13,6 +13,7 @@ import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
 import java.util.ArrayList;
@@ -458,7 +459,7 @@ public final class PluginHost {
      * never looked at; now the plugin hands over a value and the grammar writes it.
      */
     public static String freshInitializer(String canonicalName) {
-        return grammar.named(canonicalName).flatMap(grammar::freshInitializer).orElse(null);
+        return grammar.named(canonicalName).flatMap(grammar::freshInitializer).map(JavaValue::source).orElse(null);
     }
 
     /**

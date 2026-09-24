@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
@@ -238,7 +239,7 @@ public final class PickerGalleryWindow {
             }
             String read;
             try {
-                read = readers.getFirst().read().get();
+                read = readers.getFirst().read().get().map(JavaValue::source).orElse("");
             } catch (RuntimeException | Error e) {
                 write("✕ read: " + e, "");
                 return;
@@ -312,7 +313,7 @@ public final class PickerGalleryWindow {
         Type form = shape.formOf(type);
         ValueGrammar grammar = PluginHost.grammar();
         ParameterRow row = ParameterRow.named(identifier(type, shape), ValueTypes.sourceName(form))
-                .value(grammar.freshInitializer(form).orElse(""))
+                .value(grammar.freshInitializer(form).map(JavaValue::source).orElse(""))
                 .visibility(Visibility.PUBLIC)
                 .options(options)
                 .build();

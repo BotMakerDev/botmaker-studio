@@ -5,13 +5,13 @@ import com.botmaker.plugin.api.slot.SlotContext;
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
-import org.eclipse.jdt.core.dom.Expression;
 
 import java.lang.reflect.Type;
 import java.util.List;
@@ -116,13 +116,17 @@ public final class HostSlotContext implements SlotContext {
     /**
      * Writes {@code value} with every type by its simple name and the imports that needs — a bot's source is
      * a file a person reads — or as the bot's {@code @Managed} constant holding it. A value the grammar
-     * cannot spell is ignored rather than written half-way.
+     * cannot write is ignored rather than written half-way.
+     *
+     * <p>One rewrite for the tree and every import. It was one rewrite per import until 2026-09-23, which was
+     * harmless while an editor wrote one type; the grammar writes {@code new Rect(new Point(…), …)} with
+     * several, and a second rewrite would be handed the node the first had already replaced.
      */
     @Override
     public void set(Object value) {
         if (slot.node() == null) return;
         write(context, form(), value).ifPresent(written ->
-                rewrite(slot.node(), written.source(), written.imports().toArray(String[]::new)));
+                context.getCodeEditor().replaceWithValue(slot.node(), written));
     }
 
     /**
@@ -133,8 +137,8 @@ public final class HostSlotContext implements SlotContext {
         return ConstantValues.read(grammar(), constants(context), form, node);
     }
 
-    /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
-    static Optional<ValueGrammar.Written> write(CodeEditorService context, Type form, Object value) {
+    /** {@code value} as the constant holding it when the bot has one, and written out otherwise. */
+    static Optional<JavaValue> write(CodeEditorService context, Type form, Object value) {
         return ConstantValues.write(grammar(), constants(context), form, value);
     }
 
@@ -173,18 +177,6 @@ public final class HostSlotContext implements SlotContext {
 
     // enclosingCall() and replaceEnclosingCall(…) left the contract on 2026-09-23: they handed a plugin the
     // call as text. What a slot knows of its call is its names, above.
-
-    /** One rewrite of the slot, with every import it needs. */
-    private void rewrite(Expression target, String javaExpression, String... importsNeeded) {
-        if (importsNeeded == null || importsNeeded.length == 0) {
-            context.getCodeEditor().replaceWithRawExpression(target, javaExpression);
-            return;
-        }
-        // One rewrite for every import. This was one rewrite per import until 2026-09-23, which was harmless
-        // while an editor wrote one type; the grammar writes `new Rect(new Point(…), …)` with several, and a
-        // second rewrite would be handed the node the first had already replaced.
-        context.getCodeEditor().replaceWithRawExpression(target, javaExpression, List.of(importsNeeded));
-    }
 
     @Override
     public StudioServices services() {

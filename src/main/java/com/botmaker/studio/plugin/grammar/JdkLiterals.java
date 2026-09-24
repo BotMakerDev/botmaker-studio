@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin.grammar;
 
+import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.BooleanLiteral;
 import org.eclipse.jdt.core.dom.CharacterLiteral;
 import org.eclipse.jdt.core.dom.Expression;
@@ -217,6 +218,39 @@ public final class JdkLiterals {
             case Double d -> Double.isFinite(d) ? Optional.of(doubleLiteral(d)) : Optional.empty();
             case null, default -> Optional.empty();
         };
+    }
+
+    /** {@link #write(Class, Object)} as a node of {@code ast}. */
+    public static Optional<Expression> node(AST ast, Class<?> type, Object value) {
+        return write(type, value).map(token -> node(ast, token));
+    }
+
+    /** {@link #writeAny(Object)} as a node of {@code ast}. */
+    public static Optional<Expression> nodeAny(AST ast, Object value) {
+        return writeAny(value).map(token -> node(ast, token));
+    }
+
+    /**
+     * The node for one literal this class spelled — never for text from anywhere else, so the token's shape
+     * is known: quoted, a boolean, or a number with at most a leading minus.
+     */
+    private static Expression node(AST ast, String token) {
+        if (token.startsWith("\"")) {
+            StringLiteral literal = ast.newStringLiteral();
+            literal.setEscapedValue(token);
+            return literal;
+        }
+        if (token.startsWith("'")) {
+            CharacterLiteral literal = ast.newCharacterLiteral();
+            literal.setEscapedValue(token);
+            return literal;
+        }
+        if (token.equals("true") || token.equals("false")) return ast.newBooleanLiteral(token.equals("true"));
+        if (!token.startsWith("-")) return ast.newNumberLiteral(token);
+        PrefixExpression minus = ast.newPrefixExpression();
+        minus.setOperator(PrefixExpression.Operator.MINUS);
+        minus.setOperand(ast.newNumberLiteral(token.substring(1)));
+        return minus;
     }
 
     private static Optional<Long> whole(Object value) {

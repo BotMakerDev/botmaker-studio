@@ -857,8 +857,9 @@ public final class ProgramShapeOverlay {
     }
 
     /**
-     * Places recorded statements at the cursor, through {@code CodeEditor.pasteCode} with their exact imports —
-     * the same rewrite, re-parse, undo entry and diagnostics refresh every other edit goes through.
+     * Places recorded statements at the cursor, through {@code CodeEditor.insertStatement} with their exact
+     * imports — each statement's tree copied in, with the same rewrite, re-parse, undo entry and diagnostics
+     * refresh every other edit goes through.
      *
      * <p>Statements are placed in order and the cursor is left after the last one. Each one is a separate edit
      * because each is a separate undo step — a recording of eleven clicks that can only be undone as one is
@@ -884,7 +885,7 @@ public final class ProgramShapeOverlay {
                 int insertIndex = Math.min(at.index() + 1, at.body().getStatements().size());
                 pendingInsert = new PendingFocus(
                         new BlockTree.Position(index().ordinalOf(at.body()), insertIndex), false);
-                context.getCodeEditor().pasteCode(at.body(), insertIndex, statement.source(), statement.imports());
+                context.getCodeEditor().insertStatement(at.body(), insertIndex, statement.node(), statement.imports());
                 placed++;
             }
             status(placed == 0 ? "Nothing to insert." : "Added " + placed

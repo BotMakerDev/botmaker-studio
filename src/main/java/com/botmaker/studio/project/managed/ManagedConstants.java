@@ -1,14 +1,18 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.services.BotSources;
+import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
@@ -101,28 +105,36 @@ public final class ManagedConstants {
             constants = constants == null ? List.of() : List.copyOf(constants);
         }
 
-        /** The value {@code source} names when it is {@code Owner.FIELD} of a known constant, qualified or not. */
-        public Optional<Object> read(String source) {
-            String name = source == null ? "" : source.strip();
+        /**
+         * The value {@code name} names when it is {@code Owner.FIELD} of a known constant — the owner resolved
+         * the way javac would, through the file's imports ({@link SourceNames}), not matched by its spelling.
+         */
+        public Optional<Object> read(QualifiedName name) {
+            if (name == null) return Optional.empty();
             for (Constant constant : constants) {
-                String field = "." + constant.field();
-                if (name.equals(constant.owner() + field) || name.equals(constant.simpleOwner() + field)) {
+                if (name.getName().getIdentifier().equals(constant.field())
+                        && SourceNames.refersTo(name.getQualifier(), constant.owner())) {
                     return grammar.valueOfAny(constant.initializer());
                 }
             }
             return Optional.empty();
         }
 
-        /** {@code Owner.FIELD} and its import, for the first constant holding {@code value}; empty when none does. */
-        public Optional<ValueGrammar.Written> spell(Object value) {
-            Optional<String> canonical = value == null ? Optional.empty() : grammar.initializerOfAny(value);
+        /**
+         * {@code Owner.FIELD} and its import, for the first constant holding {@code value}; empty when none does.
+         * Two values are the same when the grammar writes them as the same tree.
+         */
+        public Optional<JavaValue> spell(Object value) {
+            Optional<JavaValue> canonical = value == null ? Optional.empty() : grammar.initializerOfAny(value);
             if (canonical.isEmpty()) return Optional.empty();
             for (Constant constant : constants) {
-                Optional<String> theirs = grammar.valueOfAny(constant.initializer())
+                Optional<JavaValue> theirs = grammar.valueOfAny(constant.initializer())
                         .flatMap(grammar::initializerOfAny);
-                if (theirs.equals(canonical)) {
-                    return Optional.of(new ValueGrammar.Written(
-                            constant.simpleOwner() + "." + constant.field(), List.of(constant.owner())));
+                if (theirs.isPresent() && theirs.get().sameJava(canonical.get())) {
+                    AST ast = AST.newAST(AST.getJLSLatest(), false);
+                    QualifiedName reference = ast.newQualifiedName(
+                            ast.newSimpleName(constant.simpleOwner()), ast.newSimpleName(constant.field()));
+                    return Optional.of(JavaValue.built(reference, List.of(constant.owner())));
                 }
             }
             return Optional.empty();

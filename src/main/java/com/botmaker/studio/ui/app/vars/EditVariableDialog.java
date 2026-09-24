@@ -6,6 +6,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -356,10 +357,9 @@ public final class EditVariableDialog {
 
         Button set = new Button("Set");
         set.setOnAction(e -> {
-            String source = editor.read().get();
-            if (source == null || source.isBlank()) return;
-            find().map(Local::initializer).ifPresent(node -> context.getCodeEditor()
-                    .replaceWithRawExpression(node, source, editor.imports().get()));
+            Optional<JavaValue> value = editor.read().get();
+            if (value.isEmpty()) return;
+            find().map(Local::initializer).ifPresent(node -> context.getCodeEditor().replaceWithValue(node, value.get()));
         });
         HBox box = new HBox(6, editor.node(), set);
         box.setAlignment(Pos.CENTER_LEFT);

@@ -46,7 +46,7 @@ class HostValueContextConstantsTest {
     void aValueEqualToAConstantIsWrittenAsTheConstantWithItsImport() {
         List<String> written = new ArrayList<>();
         HostValueContext context = HostValueContext.of(FORM, GRAMMAR, "", null,
-                (source, imports) -> { written.add(source); written.addAll(imports); }, () -> CONSTANTS);
+                value -> { written.add(value.source()); written.addAll(value.imports()); }, () -> CONSTANTS);
 
         context.set(new Picture("images/ore.png"));
 

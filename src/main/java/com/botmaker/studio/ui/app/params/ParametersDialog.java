@@ -8,6 +8,7 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.VariableRailModel;
@@ -718,12 +719,12 @@ public final class ParametersDialog {
      * constant's name for an enum, and the value's Java for everything else — which is what
      * {@code ParamValueWidgets.optionSource} reads back as the same value.
      */
-    private static String optionText(ValueGrammar grammar, Type leaf, String source) {
-        Optional<Object> value = grammar.valueOf(leaf, source);
+    private static String optionText(ValueGrammar grammar, Type leaf, Optional<JavaValue> written) {
+        Optional<Object> value = written.flatMap(tree -> grammar.valueOf(leaf, tree.written()));
         if (value.isEmpty()) return "";
         if (value.get() instanceof String text) return text;
         if (value.get() instanceof Enum<?> constant) return constant.name();
-        return grammar.initializer(leaf, value.get()).orElse("");
+        return grammar.initializer(leaf, value.get()).map(JavaValue::source).orElse("");
     }
 
     /** Where this parameter is listed — one category or none, never several: a parameter has one home. */
@@ -946,7 +947,7 @@ public final class ParametersDialog {
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
                 Type form = type.form();
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
-                        form, PluginHost.grammar().freshInitializer(form).orElse(""), tag, "");
+                        form, PluginHost.grammar().freshSpelling(form).orElse(null), tag, "");
                 if (stored.isEmpty()) {
                     error("“" + candidate + "” was not written — " + selectedClass + " may already declare "
                             + "a field of that name, or no installed plugin declares this type.");
@@ -1135,8 +1136,9 @@ public final class ParametersDialog {
             ParameterRow row = entry.row();
             JavaParameter held = find(entry.className(), row.name());
             if (held == null) {
+                // The snapshot's value is Java this file held, so it goes back as that expression, kept.
                 JavaParameters.add(config, state, entry.className(), row.name(), entry.form(),
-                        row.value(), row.category(), row.description());
+                        JavaValue.parse(row.value()).orElse(null), row.category(), row.description());
                 held = find(entry.className(), row.name());
             }
             if (held == null) continue;
@@ -1169,16 +1171,15 @@ public final class ParametersDialog {
             for (int i = 0; i < rows.size(); i++) {
                 JavaParameter entry = rows.get(i);
                 if (!editor.describes(entry.className(), entry.row().name())) continue;
-                // The widget reads back the Java the field takes, which is what a row holds. Blank means this
-                // cell has no source spelling for what is in it — an empty radio group, a leaf whose codec
-                // declined — and writing nothing is the only honest answer to that.
-                String typed = editor.read().get();
-                if (typed.isBlank() || typed.equals(entry.row().value())) break;
-                // The answer is the row as *stored*, which may differ from what was typed — a clamp, a
-                // canonical spelling from a plugin, an initialiser as the codec spells it. That is what goes
-                // into the list, so the next redraw shows what the bot will actually get.
-                Optional<ParameterRow> stored =
-                        JavaParameters.setValue(config, state, entry, typed, editor.imports().get());
+                // The widget reads back the value the field takes, as a tree. Empty means this cell has no Java
+                // for what is in it — an empty radio group, a leaf no editor draws — and writing nothing is the
+                // only honest answer to that. A value shown exactly as the row holds it is not an edit.
+                Optional<JavaValue> typed = editor.read().get();
+                if (typed.isEmpty() || typed.get().source().equals(entry.row().value())) break;
+                // The answer is the row as *stored*, which may differ from what was typed — a canonical
+                // spelling from the grammar, a constant for a value one holds. That is what goes into the
+                // list, so the next redraw shows what the bot will actually get.
+                Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed.get());
                 stored.ifPresent(row -> rows.set(rows.indexOf(entry), entry.withRow(row)));
                 break;
             }

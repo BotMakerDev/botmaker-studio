@@ -1,9 +1,16 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.studio.plugin.grammar.JavaExpressions;
 import com.botmaker.studio.plugin.grammar.JavaNames;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.params.JavaParameterSource;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.QualifiedName;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -62,14 +69,38 @@ class ManagedConstantsTest {
 
     @Test
     void aReferenceReadsAsTheConstantsValueQualifiedOrNot() {
-        assertEquals(new Picture("images/ore.png"), lookup().read("Pictures.ORE").orElseThrow());
-        assertEquals(new Picture("images/ore.png"), lookup().read("com.bot.plugins.sdk.Pictures.ORE").orElseThrow());
-        assertTrue(lookup().read("Pictures.SILVER").isEmpty());
+        assertEquals(new Picture("images/ore.png"), lookup().read(name("Pictures.ORE")).orElseThrow());
+        assertEquals(new Picture("images/ore.png"),
+                lookup().read(name("com.bot.plugins.sdk.Pictures.ORE")).orElseThrow());
+        assertTrue(lookup().read(name("Pictures.SILVER")).isEmpty());
+    }
+
+    /** The owner is resolved through the file's imports: another class called Pictures is another class. */
+    @Test
+    void aReferenceIsResolvedThroughItsFilesImports() {
+        String own = "package com.bot;\nimport com.bot.plugins.sdk.Pictures;\n"
+                     + "class Use { Object o = Pictures.ORE; }\n";
+        String other = "package com.bot;\nimport com.other.Pictures;\nclass Use { Object o = Pictures.ORE; }\n";
+
+        assertEquals(new Picture("images/ore.png"), lookup().read(fieldValue(own)).orElseThrow());
+        assertTrue(lookup().read(fieldValue(other)).isEmpty());
+    }
+
+    private static QualifiedName name(String source) {
+        return (QualifiedName) JavaExpressions.parse(source);
+    }
+
+    private static QualifiedName fieldValue(String source) {
+        CompilationUnit unit = JavaParameterSource.parse(source);
+        TypeDeclaration type = (TypeDeclaration) unit.types().getFirst();
+        VariableDeclarationFragment fragment =
+                (VariableDeclarationFragment) type.getFields()[0].fragments().getFirst();
+        return (QualifiedName) fragment.getInitializer();
     }
 
     @Test
     void aValueEqualToAConstantIsWrittenAsTheConstant() {
-        ValueGrammar.Written written = lookup().spell(new Picture("images/gold.png")).orElseThrow();
+        JavaValue written = lookup().spell(new Picture("images/gold.png")).orElseThrow();
 
         assertEquals("Pictures.GOLD", written.source());
         assertEquals(List.of("com.bot.plugins.sdk.Pictures"), written.imports());

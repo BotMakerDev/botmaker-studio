@@ -6,6 +6,7 @@ import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostValueContext;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
@@ -19,6 +20,7 @@ import javafx.scene.layout.Region;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -32,9 +34,9 @@ import java.util.function.Supplier;
  * on the canvas draw one editor rather than two that had to be kept saying the same thing. What is left is
  * the dispatch and the read-only field for a type nobody claims.
  *
- * <p><b>Java in, Java out.</b> An editor is given a {@link HostValueContext} over the value's source and
- * writes a value back through it; what this hands its caller is that context's current source and the
- * imports it said it needs. There is no second, "wire" spelling of a leaf any more, which is what stopped a
+ * <p><b>Java in, a tree out.</b> An editor is given a {@link HostValueContext} over the value's source and
+ * writes a value back through it; what this hands its caller is that context's {@code current()} tree, with
+ * the imports it names. There is no second, "wire" spelling of a leaf any more, which is what stopped a
  * {@code java.awt.Color} parameter being rewritten the moment the window opened.
  *
  * <p><b>What was lost with the switch, said out loud:</b> a declared {@code @Param(min, max)} no longer
@@ -46,14 +48,14 @@ public final class ValueEditors {
     private ValueEditors() {}
 
     /**
-     * A built editor: the control to show, the Java it currently holds ({@code ""} when it holds nothing
-     * writable), and the imports that Java needs.
+     * A built editor: the control to show, and the value it currently holds as a tree with its imports —
+     * empty when it holds nothing writable.
      */
-    public record Editor(Node node, Supplier<String> read, Supplier<List<String>> imports) {
+    public record Editor(Node node, Supplier<Optional<JavaValue>> read) {
 
         /** An editor that shows {@code node} and never writes. */
         static Editor readOnly(Node node) {
-            return new Editor(node, () -> "", List::of);
+            return new Editor(node, Optional::empty);
         }
     }
 
@@ -88,7 +90,9 @@ public final class ValueEditors {
      */
     public static Editor editorFor(Type leaf, String source, Context ctx) {
         ValueGrammar grammar = PluginHost.grammar();
-        String seed = source != null ? source : grammar.freshInitializer(leaf).orElse("");
+        // A fresh seed is written fully qualified: kept unedited, it is written back as it stands, and a kept
+        // expression carries no imports.
+        String seed = source != null ? source : grammar.freshInitializer(leaf).map(JavaValue::source).orElse("");
         Editor contributed = fromPlugin(leaf, seed, ctx);
         if (contributed != null) return contributed;
         // A type no plugin draws, and — read-only — a type nothing declares. The host cannot offer a
@@ -121,7 +125,7 @@ public final class ValueEditors {
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.create(context);
-                if (node != null) return new Editor(node, context::source, context::imports);
+                if (node != null) return new Editor(node, context::current);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin's editor is third-party code drawn inside our dialog: one that throws must cost the
                 // user that row's widget, never the window. The next editor is offered the value, and the

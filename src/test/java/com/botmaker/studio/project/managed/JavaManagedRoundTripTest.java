@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.params.TestValues;
@@ -69,9 +70,8 @@ class JavaManagedRoundTripTest {
 
     /** Writes {@code value} into the file, reads the method back, and answers what came out. */
     private static Object roundTrip(String returnType, Type form, Object value) {
-        String expression = CATALOG.initializer(form, value).orElseThrow();
-        String written = JavaManagedEdits.setValue(fileReturning(returnType, "null"), "Sdk", "value",
-                expression, CATALOG.imports(form));
+        JavaValue expression = CATALOG.initializer(form, value).orElseThrow();
+        String written = JavaManagedEdits.setValue(fileReturning(returnType, "null"), "Sdk", "value", expression);
         ManagedMethod read = only(written);
         assertTrue(read.editable(), read.note());
         return CATALOG.valueOf(read.form(), read.expression()).orElseThrow();
@@ -126,7 +126,7 @@ class JavaManagedRoundTripTest {
         assertEquals(value, read);
         assertEquals("TestValues.Span", ValueTypes.sourceName(TestValues.SPAN_FORM));
         assertEquals("com.botmaker.studio.project.params.TestValues.Span.of(\"phase one\", 12)",
-                CATALOG.initializer(TestValues.SPAN_FORM, value).orElseThrow());
+                CATALOG.initializer(TestValues.SPAN_FORM, value).orElseThrow().source());
     }
 
     // ---- what must not round-trip -----------------------------------------------------------------------
@@ -152,8 +152,13 @@ class JavaManagedRoundTripTest {
         // mistake half a body for the value.
         assertEquals("", read.expression());
         // And the writer declines it, so a window that ignored the note still could not overwrite the code.
-        assertSame(source, JavaManagedEdits.setValue(source, "Sdk", "value", "", List.of()));
-        assertEquals(source, JavaManagedEdits.setValue(source, "Sdk", "value", "\"x\"", List.of()));
+        assertSame(source, JavaManagedEdits.setValue(source, "Sdk", "value", null));
+        assertEquals(source, JavaManagedEdits.setValue(source, "Sdk", "value", java("\"x\"")));
+    }
+
+    /** Java as a value to write, kept as written and naming {@code imports}. */
+    private static JavaValue java(String source, String... imports) {
+        return new JavaValue(JavaValue.parse(source).orElseThrow().node(), List.of(imports), source);
     }
 
     @Test
@@ -171,8 +176,7 @@ class JavaManagedRoundTripTest {
     void everythingButTheExpressionIsUntouched() {
         String before = fileReturning("java.time.Duration", "java.time.Duration.ofMillis(1L)");
         // Written fully qualified, so it needs no import and the file gains no line.
-        String after = JavaManagedEdits.setValue(before, "Sdk", "value",
-                "java.time.Duration.ofMillis(3000L)", List.of());
+        String after = JavaManagedEdits.setValue(before, "Sdk", "value", java("java.time.Duration.ofMillis(3000L)"));
 
         assertTrue(after.contains("java.time.Duration.ofMillis(3000L)"), after);
         assertTrue(after.contains("/** The plugin's values for this bot."), "the javadoc is still there");
@@ -197,12 +201,10 @@ class JavaManagedRoundTripTest {
                 }
                 """;
 
-        String once = JavaManagedEdits.setValue(source, "Sdk", "value", "java.util.List.of(\"a\")",
-                List.of("java.util.List"));
+        String once = JavaManagedEdits.setValue(source, "Sdk", "value", java("List.of(\"a\")", "java.util.List"));
         assertEquals(1, count(once, "import java.util.List;"), once);
 
-        String twice = JavaManagedEdits.setValue(once, "Sdk", "value", "java.util.List.of(\"b\")",
-                List.of("java.util.List"));
+        String twice = JavaManagedEdits.setValue(once, "Sdk", "value", java("List.of(\"b\")", "java.util.List"));
         assertEquals(1, count(twice, "import java.util.List;"), twice);
     }
 
@@ -210,8 +212,8 @@ class JavaManagedRoundTripTest {
     void aMethodTheFileDoesNotHaveChangesNothing() {
         String source = fileReturning("String", "\"a\"");
 
-        assertSame(source, JavaManagedEdits.setValue(source, "Sdk", "missing", "\"b\"", List.of()));
-        assertSame(source, JavaManagedEdits.setValue(source, "Other", "value", "\"b\"", List.of()));
+        assertSame(source, JavaManagedEdits.setValue(source, "Sdk", "missing", java("\"b\"")));
+        assertSame(source, JavaManagedEdits.setValue(source, "Other", "value", java("\"b\"")));
     }
 
     // ---- what is found at all ---------------------------------------------------------------------------
