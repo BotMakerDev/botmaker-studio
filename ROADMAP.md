@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-23 (latest) — the typed value reader (doc 35, phase 5b).** `plugin/grammar/ExpressionReader`
+- **2026-09-24 (latest) — bound values (doc 36, phases 2–5).** `@Param`/`@Managed` identified by class
+  (`project/source/BotAnnotation`); a value's type is a `java.lang.reflect.Type` resolved once in
+  `project/source/ValueTypeResolver`, and `ValueForm` is deleted; values are written as JDT trees
+  (`plugin/grammar/ValueWriter` → `JavaValue`, copied into the file's AST — no `createStringPlaceholder` on
+  the value path); plugin editors get a binding-built `TypeRef` and the resolved `Executable`
+  (`plugin/HostTypes`, studio-api 0.3.0). Open: detached seeds (`ParameterRow.value` is a `String`), import
+  clashes beyond `@Param`, and the text paths off the value path — doc 36 *Still open*.
+- **2026-09-23 — the typed value reader (doc 35, phase 5b).** `plugin/grammar/ExpressionReader`
   reads a JDT `Expression` (`SourceNode` carries the text a part is shown as): declared constructors, static
   factories, instance-factory chains, enum constants and `public static final` fields of declared classes,
   with `Factory.matches` deciding a call by node. `SourceSplit` and `ValueContainer.factorySource()` are

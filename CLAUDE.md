@@ -36,6 +36,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > clipboard paste, the `java.time` Date/Time pickers and `ExpressionMenu`'s raw code
 > (`replaceWithRawExpression`), and the palette's fresh-value strings (`PluginHost.freshInitializer`).
 
+> **A plugin's editor asks about a class and gets an `Executable` since 2026-09-24** (studio-api 0.3.0,
+> `docs/refactor/36-bound-values.md`). `plugin/HostTypes` is the one bridge: a `TypeRef` from the
+> `ITypeBinding` (erasure's binary name plus every supertype), from a ClassGraph `ClassInfo`, or from a
+> binary name loaded on `PluginHost.classLoader()`; a bare simple name is unresolved. A slot's call is the
+> `IMethodBinding` (`PickerContext.call()`, `MethodInvocationBlock.callBinding()`), loaded as an
+> `Executable` on the plugin loader by name and erased parameter types. Read `enclosingClassName` /
+> `enclosingMethodName`, `className`/`methodName` on `PickerContext` and `TypeRef.simpleName/qualifiedName`
+> below as gone. `HostValueContext.typeName()` is the *Edit with* key the canvas also uses.
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,
