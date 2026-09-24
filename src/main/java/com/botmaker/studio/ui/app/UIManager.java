@@ -217,6 +217,8 @@ public class UIManager implements ProjectWindow {
             workspaceLayout = null;
         }
         BlockTheme.removeThemeChangeListener(themeListener);
+        // The MCP endpoint holds a port and serves this window's project; the next window starts its own.
+        assistantPane.dispose();
         if (identityCluster != null) {
             identityCluster.dispose();
             identityCluster = null;

@@ -4,6 +4,8 @@ import com.botmaker.studio.assist.AssistTurn;
 import com.botmaker.studio.assist.AssistWorkspace;
 import com.botmaker.studio.assist.AssistantService;
 import com.botmaker.studio.assist.AssistantSettings;
+import com.botmaker.studio.assist.McpConfig;
+import com.botmaker.studio.assist.McpEndpoint;
 import com.botmaker.studio.assist.Provider;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
@@ -15,14 +17,18 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -52,6 +58,12 @@ final class AssistantPane {
     private final TextArea input = new TextArea();
     private final Button send = new Button("Send");
     private final Label status = new Label();
+    private final CheckBox serve = new CheckBox("Serve to MCP clients");
+    private final Label mcpStatus = new Label();
+    private final Button copySetup = new Button("Copy Claude Code setup");
+    private McpConfig mcpConfig = McpConfig.load();
+    private McpEndpoint endpoint;
+    private boolean disposed;
     private boolean working;
 
     AssistantPane(StudioContext ctx) {
@@ -61,10 +73,66 @@ final class AssistantPane {
         this.eventBus = ctx.eventBus();
         build();
         show(ProjectPreferences.loadAssistant());
+        serve.setSelected(mcpConfig.enabled());
+        setServing(mcpConfig.enabled());
     }
 
     Node node() {
         return root;
+    }
+
+    /** Stops the MCP endpoint, if it is running. The window calls this when it goes. */
+    void dispose() {
+        disposed = true;
+        stopEndpoint();
+    }
+
+    /**
+     * Starts or stops the MCP endpoint and remembers the choice. Starting is off the FX thread — a Jetty start
+     * is quick, but a taken port is a bind timeout on some systems — and a failure unticks the box.
+     */
+    private void setServing(boolean on) {
+        mcpConfig = mcpConfig.withEnabled(on);
+        mcpConfig.save();
+        copySetup.setDisable(!on);
+        if (!on) {
+            stopEndpoint();
+            mcpStatus.setText("Off. Turn on to let an MCP client (Claude Code, Cursor, …) edit the open file.");
+            return;
+        }
+        if (endpoint != null) return;
+        mcpStatus.setText("Starting…");
+        McpConfig starting = mcpConfig;
+        Thread starter = new Thread(() -> {
+            try {
+                McpEndpoint started = McpEndpoint.start(starting.port(), starting.token(), new LiveEditorFile(ctx));
+                Platform.runLater(() -> {
+                    // A start that finishes after the box was unticked or the window closed must let go of
+                    // the port, or the next window's endpoint cannot bind it.
+                    if (disposed || !serve.isSelected()) {
+                        started.close();
+                        return;
+                    }
+                    endpoint = started;
+                    mcpStatus.setText("Serving " + started.url() + " (token required)");
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    serve.setSelected(false);
+                    mcpConfig = mcpConfig.withEnabled(false);
+                    copySetup.setDisable(true);
+                    mcpStatus.setText("Could not listen on port " + starting.port() + ": " + e.getMessage());
+                });
+            }
+        }, "mcp-start");
+        starter.setDaemon(true);
+        starter.start();
+    }
+
+    private void stopEndpoint() {
+        if (endpoint == null) return;
+        endpoint.close();
+        endpoint = null;
     }
 
     private void build() {
@@ -87,6 +155,19 @@ final class AssistantPane {
         HBox bar = new HBox(8, new Label("Model"), provider, model, baseUrl, keyStatus, spacer(), clear);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("diagnostics-filter-bar");
+
+        serve.setOnAction(e -> setServing(serve.isSelected()));
+        mcpStatus.getStyleClass().add("dialog-hint");
+        copySetup.getStyleClass().add("dialog-compact");
+        copySetup.setOnAction(e -> {
+            ClipboardContent content = new ClipboardContent();
+            content.putString(mcpConfig.claudeCodeCommand());
+            Clipboard.getSystemClipboard().setContent(content);
+            mcpStatus.setText("Copied. Paste it in a terminal; other clients take the same URL and header.");
+        });
+        HBox mcpBar = new HBox(8, serve, mcpStatus, spacer(), copySetup);
+        mcpBar.setAlignment(Pos.CENTER_LEFT);
+        mcpBar.getStyleClass().add("diagnostics-filter-bar");
 
         transcript.setEditable(false);
         transcript.setWrapText(true);
@@ -111,7 +192,7 @@ final class AssistantPane {
         bottom.setBottom(status);
         bottom.setPadding(new Insets(6));
 
-        root.setTop(bar);
+        root.setTop(new VBox(bar, mcpBar));
         root.setCenter(transcript);
         root.setBottom(bottom);
     }

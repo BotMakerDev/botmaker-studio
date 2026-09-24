@@ -20,6 +20,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   no key), OpenAI, any OpenAI-compatible server, Anthropic or Gemini; a key is read from the environment
   (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and never saved. The tab shows each tool call
   the model made, and its edits land together when it answers, as one step Undo takes back.
+- **Studio as an MCP server.** *Serve to MCP clients* in the Assistant tab lets Claude Code, Cursor or any
+  other MCP client edit the open file with the same tools and checks. It listens on `127.0.0.1:7431` only and
+  needs a token; *Copy Claude Code setup* copies the `claude mcp add` command with both. Each accepted edit
+  is applied at once, as its own undo step. Off by default.
 - **The tool layer an assistant edits blocks through** (`assist/AssistTurn`). A model reads the palette and the file's statements and slots by id, and inserts, sets or deletes
   through the same `CodeEditor` calls the canvas makes. It cannot write Java: an insert names a palette entry,
   and a slot value is read by the value grammar as the slot's type and written back in the host's spelling.

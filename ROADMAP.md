@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — Assistant bottom tab, phase 2 of LLM block editing.** `ui/app/AssistantPane` over
+- **2026-09-24 (latest) — MCP endpoint, phase 3 of LLM block editing.** `assist/McpEndpoint` (MCP Java SDK
+  2.0.1 core + Jackson 2 mapper, streamable HTTP servlet on embedded Jetty 12.1 ee11), `127.0.0.1` only,
+  bearer token; `assist/McpTools` serves the same six tools, each accepted edit its own commit/undo step;
+  `McpConfig` (`mcp.json` in the cache root, 0600, port 7431); `ui/app/LiveEditorFile` hops to the FX thread.
+  Assistant tab: *Serve to MCP clients* + *Copy Claude Code setup*. `McpEndpointTest` speaks real HTTP.
+- **2026-09-24 — Assistant bottom tab, phase 2 of LLM block editing.** `ui/app/AssistantPane` over
   `assist/AssistantService` (LangChain4j 1.20 `AiServices`, tool loop over `AssistTools`' `@Tool` methods).
   Providers `Ollama`/`OpenAI`/`OpenAI-compatible`/`Anthropic`/`Gemini` (`assist/Provider`, `ModelFactory`);
   keys from environment only; settings in `ProjectPreferences.assistant`. Jackson 2.17 → 2.22.1 (LangChain4j's),
