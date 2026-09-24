@@ -39,11 +39,15 @@ public final class BlockUIComponents {
         return btn;
     }
 
-    // UNIFIED: Change button now looks like Add button
+    /**
+     * "▾" beside a filled slot: replace what is there. Told apart from {@link #createAddButton}'s "+" because
+     * the two did different things under one glyph — one fills a hole, the other throws a value away.
+     */
     public static Button createChangeButton(EventHandler<ActionEvent> handler) {
-        Button btn = new Button("+");
-        btn.getStyleClass().addAll("icon-button", "expression-add-button");
+        Button btn = new Button("▾");
+        btn.getStyleClass().addAll("icon-button", "expression-change-button");
         btn.setOnAction(handler);
+        javafx.scene.control.Tooltip.install(btn, new javafx.scene.control.Tooltip("Change this value"));
         return btn;
     }
 

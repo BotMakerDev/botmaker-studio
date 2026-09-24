@@ -15,8 +15,6 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.types.SlotFit;
 import com.botmaker.studio.types.TypeExpectation;
-import com.botmaker.studio.ui.render.theme.BlockTheme;
-import com.botmaker.studio.ui.render.theme.StyleBuilder;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.ITypeBinding;
@@ -315,142 +313,34 @@ public class BlockDragAndDropManager {
     }
 
     /**
-     * A slot between two statements. With {@code withInsertButton} false it is a plain gap — no hover, no "+".
+     * A seam between two statements ({@link InsertionSeam}): no height of its own, a hover strip across the
+     * seam, a "+" under the pointer. With {@code withInsertButton} false it is inert — no strip, no "+".
      *
      * <p>Read-only bodies pass false. Leaving the button out of the scene is the point: it is hidden until
      * hover, so merely not wiring its action produced a "+" that appeared under the cursor and then did
      * nothing — an invitation to insert into scaffolding that could never be accepted.
      */
     public Pane createSeparator(boolean withInsertButton) {
-        // Changed to Pane to allow absolute positioning of the button
-        Pane separator = new Pane();
-        double height = 12.0;
-        separator.setMinHeight(height);
-        separator.setMaxHeight(height);
-        // No inline -fx-background-color here: it would override the :drag-over-* pseudo-class rules in
-        // blocks.css (inline styles beat author stylesheets). A Pane is transparent by default anyway.
-
-        if (!withInsertButton) return separator;
-
-        // 1. The Insert Button (+)
-        Button insertBtn = new Button("+");
-        insertBtn.setFocusTraversable(false);
-        insertBtn.setVisible(false); // Hidden by default
-        insertBtn.getStyleClass().add("separator-insert-button");
-
-        // Use Theme Colors
-        String primaryColor = BlockTheme.current().colors().primary(); // e.g. #3498DB
-        String hoverColor = BlockTheme.current().colors().hover();
-
-        double btnWidth = 40.0;
-        double btnHeight = 16.0;
-
-        // Apply base style using StyleBuilder
-        StyleBuilder.create()
-                .backgroundColor(primaryColor)
-                .backgroundRadius(10) // Pill shape
-                .textColor("white")
-                .fontSize(10)
-                .fontWeight("bold")
-                .padding(0)
-                .cursor("hand")
-                .applyTo(insertBtn);
-
-        // Enforce pill shape dimensions
-        insertBtn.setMinWidth(btnWidth);
-        insertBtn.setMaxWidth(btnWidth);
-        insertBtn.setMinHeight(btnHeight);
-        insertBtn.setMaxHeight(btnHeight);
-
-        // Center vertically in the Pane
-        insertBtn.setLayoutY((height - btnHeight) / 2.0);
-
-        // Add internal hover effect for the button itself
-        insertBtn.setOnMouseEntered(e -> {
-            insertBtn.setStyle(insertBtn.getStyle().replace(primaryColor, hoverColor));
-        });
-        insertBtn.setOnMouseExited(e -> {
-            insertBtn.setStyle(insertBtn.getStyle().replace(hoverColor, primaryColor));
-        });
-
-        // 2. Logic to show button when hovering the separator area
-        separator.setOnMouseEntered(e -> {
-            if (!e.isPrimaryButtonDown()) { // Don't show if dragging
-                insertBtn.setVisible(true);
-                insertBtn.toFront(); // Ensure button is on top within the pane
-
-                // Bring the whole separator to the visual front so adjacent blocks don't cover the button
-                // We use setViewOrder (negative is closer to camera/top) instead of toFront()
-                // because toFront() reorders the VBox children, breaking layout.
-                separator.setViewOrder(-100.0);
-
-                // Initial placement on entry
-                updateButtonPosition(insertBtn, separator.getWidth(), e.getX());
-            }
-        });
-
-        separator.setOnMouseMoved(e -> {
-            if (insertBtn.isVisible()) {
-                updateButtonPosition(insertBtn, separator.getWidth(), e.getX());
-            }
-        });
-
-        separator.setOnMouseExited(e -> {
-            // Restore visual order
-            separator.setViewOrder(0.0);
-
-            // Fix: Don't hide if menu is open
-            if (insertBtn.getUserData() instanceof ContextMenu) {
-                ContextMenu menu = (ContextMenu) insertBtn.getUserData();
-                if (menu.isShowing()) return;
-            }
-            insertBtn.setVisible(false);
-        });
-
-        separator.getChildren().add(insertBtn);
-        return separator;
-    }
-
-    private void updateButtonPosition(Button btn, double containerWidth, double mouseX) {
-        double btnWidth = 40.0; // Fixed width from creation
-        double newX = mouseX - (btnWidth / 2.0);
-
-        // Clamp to bounds
-        if (newX < 0) newX = 0;
-        if (newX + btnWidth > containerWidth) newX = containerWidth - btnWidth;
-
-        btn.setLayoutX(newX);
+        return InsertionSeam.create(withInsertButton);
     }
 
     /** @param targetBody the body the "+" inserts into — blocks illegal there are left out of the menu */
     public void enableSeparatorClick(Pane separator, com.botmaker.studio.suggestions.ProjectAnalyzer analyzer,
                                    com.botmaker.studio.services.SdkSurfaceService surface,
                                    ASTNode targetBody, Consumer<BlockType> onInsert) {
-        for (Node child : separator.getChildren()) {
-            if (child instanceof Button) {
-                Button btn = (Button) child;
-                btn.setOnAction(e -> {
-                    ContextMenu menu = StatementMenu.create(analyzer, surface, targetBody, onInsert);
-
-                    // Store reference to menu so MouseExited knows not to hide button
-                    btn.setUserData(menu);
-
-                    // Clean up on hide
-                    menu.setOnHidden(ev -> {
-                        btn.setUserData(null);
-                        // If mouse isn't over separator anymore, hide button now
-                        if (!separator.isHover()) {
-                            btn.setVisible(false);
-                            separator.setViewOrder(0.0);
-                        }
-                    });
-
-                    menu.show(btn, javafx.geometry.Side.BOTTOM, 0, 0);
-                    e.consume();
-                });
-                break;
-            }
-        }
+        Button plus = InsertionSeam.plusOf(separator);
+        if (plus == null) return;
+        plus.setOnAction(e -> {
+            ContextMenu menu = StatementMenu.create(analyzer, surface, targetBody, onInsert);
+            // Stashed so the seam's mouse-exit leaves the "+" up while its menu is open.
+            plus.setUserData(menu);
+            menu.setOnHidden(ev -> {
+                plus.setUserData(null);
+                if (!separator.isHover()) InsertionSeam.hide(separator, plus);
+            });
+            menu.show(plus, javafx.geometry.Side.BOTTOM, 0, 0);
+            e.consume();
+        });
     }
 
     // --- Drop targets ---
@@ -564,11 +454,8 @@ public class BlockDragAndDropManager {
     }
 
     private void hideInsertButton(Pane separator) {
-        for (Node child : separator.getChildren()) {
-            if (child instanceof Button) {
-                child.setVisible(false);
-            }
-        }
+        Button plus = InsertionSeam.plusOf(separator);
+        if (plus != null) plus.setVisible(false);
     }
 
     public void addClassMemberDropHandlers(Region separator, ClassBlock targetClass, int insertionIndex) {

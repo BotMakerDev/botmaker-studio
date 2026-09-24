@@ -51,13 +51,14 @@ keystroke: empty query → `BlockCatalog.botActions()` promoted flat, then categ
 `setOnAction` calls `onSelection.accept(block)`. `menu.setOnShown` focuses the search field.
 
 **Triggers (both mouse-driven, not DnD, not right-click):**
-- **"+" separator button** — `BlockDragAndDropManager.enableSeparatorClick(separator, onInsert)`
-  (`:218`). The "+" `Button` (`.separator-insert-button`) is **hidden until hover**
-  (`separator.setOnMouseEntered`, `:170`); click → `menu.show(btn, Side.BOTTOM, 0, 0)`. Handler:
-  `codeEditor.addStatement(targetBody, type, insertionIndex)` (`BodyBlock.createSeparatorWithHandlers`).
-- **Empty-body placeholder** — `BodyBlock.java:66` `placeholder.setOnMouseClicked` shows the same menu;
-  handler `addStatement(this, type, 0)`. Placeholder label text: **"Click to add a block"**
-  (`.empty-body-placeholder`).
+- **"+" on a seam** — `BlockDragAndDropManager.enableSeparatorClick(separator, onInsert)`. A seam
+  (`ui/dnd/InsertionSeam`, `.block-seam`) has no height: blocks touch, and an 8px hit strip across the seam
+  shows a line and a round "+" (`.separator-insert-button`) under the pointer; click →
+  `menu.show(btn, Side.BOTTOM, 0, 0)`. Handler: `codeEditor.addStatement(targetBody, type, insertionIndex)`
+  (`BodyBlock.createSeparatorWithHandlers`).
+- **Empty-body placeholder** — `BodyBlock` `placeholder.setOnMouseClicked` shows the same menu;
+  handler `addStatement(this, type, 0)`. Placeholder label text: **"+  Add a block"**
+  (`.empty-body-placeholder.empty-body-add`, a pill).
 
 **Bug hotspot:** the hover→visibility→menu z-order state machine around the "+" button (`setUserData`
 stashes the open menu so `setOnMouseExited` won't hide the button; `setViewOrder(-100)` juggling;

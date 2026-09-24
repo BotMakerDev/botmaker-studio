@@ -101,6 +101,8 @@ class BlockStyleContrastTest extends FxHeadlessTest {
         onFx(() -> fixture.subscribeBlocksUpdated(block -> {
             Parent canvas = new StackPane(block.getUINode(fixture.context()));
             canvas.getStyleClass().add("blocks-canvas");
+            // Measured in the font the canvas is written in: a heavier cut is more ink, a lighter one less.
+            com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
             root.getChildren().setAll(canvas);
         }));
         onFx(fixture::rerender);
@@ -133,6 +135,7 @@ class BlockStyleContrastTest extends FxHeadlessTest {
                 locked.root().setReadOnly(true);
                 Parent canvas = new StackPane(locked.root().getUINode(fixture.context()));
                 canvas.getStyleClass().addAll("blocks-canvas", BlockStyle.DEFAULT.styleClass());
+                com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
                 root.getChildren().setAll(canvas);
             });
             for (BlockTheme.ThemeType theme : BlockTheme.ThemeType.values()) {
@@ -192,9 +195,16 @@ class BlockStyleContrastTest extends FxHeadlessTest {
         return false;
     }
 
-    /** A ghosted glyph button: a secondary cue by design, full strength under the pointer. */
+    /**
+     * A ghosted glyph button: a secondary cue by design, full strength under the pointer. The value buttons
+     * ("+" and "▾") are not ghosts since they became solid discs, so they are measured like any word.
+     */
     private static boolean isIcon(Node node) {
         for (Node n = node; n != null; n = n.getParent()) {
+            if (n.getStyleClass().contains("expression-add-button")
+                    || n.getStyleClass().contains("expression-change-button")) {
+                return false;
+            }
             if (n.getStyleClass().contains("icon-button")) return true;
             if (n.getStyleClass().contains("block")) return false;
         }

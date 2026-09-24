@@ -406,7 +406,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
 
         for (Node n : descendants(node[0])) {
             if (n instanceof javafx.scene.control.Label label) {
-                assertNotEquals("Click to add a block", label.getText(),
+                assertNotEquals("+  Add a block", label.getText(),
                         "a locked body must not offer an insertion it will refuse");
             }
         }

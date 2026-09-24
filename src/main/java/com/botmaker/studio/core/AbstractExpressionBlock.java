@@ -101,10 +101,8 @@ public abstract class AbstractExpressionBlock extends AbstractCodeBlock implemen
         spec.slot(id, () -> SentenceLayoutBuilder.expressionSlotNode(value, context, expected))
                 .picker(id + "-change", () -> {
                     if (value == null) return null;
-                    Button change = createChangeButton(e -> showExpressionMenuAndReplace((Button) e.getSource(),
+                    return createChangeButton(e -> showExpressionMenuAndReplace((Button) e.getSource(),
                             context, expected, (Expression) value.getAstNode()));
-                    if (change != null) change.getStyleClass().add("small-change-button");
-                    return change;
                 });
     }
 

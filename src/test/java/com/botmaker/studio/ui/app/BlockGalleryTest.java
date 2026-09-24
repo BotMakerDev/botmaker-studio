@@ -255,6 +255,7 @@ public class BlockGalleryTest extends FxHeadlessTest {
                     locked.root().setReadOnly(true);
                     VBox canvas = new VBox(locked.root().getUINode(fixture.context()));
                     canvas.getStyleClass().addAll("blocks-canvas", BlockStyle.DEFAULT.styleClass());
+                    com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
                     if (reader) canvas.getStyleClass().add("reader-mode");
                     canvas.setPadding(new javafx.geometry.Insets(20));
                     ScrollPane pane = new ScrollPane(canvas);
@@ -276,6 +277,7 @@ public class BlockGalleryTest extends FxHeadlessTest {
                         var drawn = fixture.reparse(program.getValue(), com.botmaker.studio.parser.BlockReuse.NONE);
                         VBox canvas = new VBox(drawn.root().getUINode(fixture.context()));
                         canvas.getStyleClass().addAll("blocks-canvas", style.styleClass());
+                        com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
                         canvas.setPadding(new javafx.geometry.Insets(20));
                         ScrollPane pane = new ScrollPane(canvas);
                         pane.setFitToWidth(true);

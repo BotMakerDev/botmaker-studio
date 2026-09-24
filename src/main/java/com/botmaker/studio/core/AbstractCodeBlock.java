@@ -164,6 +164,10 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             // into an outline, so no block class names a colour or a radius (docs/refactor/37-block-styling.md).
             BlockShape shape = shape();
             if (shape != BlockShape.NONE) uiNode.getStyleClass().addAll(BLOCK_STYLE_CLASS, shape.styleClass());
+            if ((shape == BlockShape.STACK || shape == BlockShape.C_BLOCK)
+                    && uiNode instanceof javafx.scene.layout.Pane pane) {
+                com.botmaker.studio.core.render.StackJoints.attach(pane);
+            }
             BlockCategory category = category();
             if (category != null) uiNode.getStyleClass().addAll(CATEGORY_STYLE_CLASS, category.styleClass());
 

@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 2, phase 4: type chip and type picker.**
+- **2026-09-25 (latest) — Blocks round 2, phase 5: glued stacking, seams, solid value buttons, Nunito.**
+  - Changes:
+    - `ui/dnd/InsertionSeam` replaces the 12px separator: zero height, view order −1, an 8px hit strip over the join, a line and a round "+" (`:seam-hover`); `createSeparator` delegates, the drop handlers and `enableSeparatorClick` are unchanged in shape. The inline `StyleBuilder` "+" is a `blocks.css` rule.
+    - `core/render/StackJoints` adds an unmanaged notch and tab to every stack and C block (`AbstractCodeBlock.getUINode`); `BodyBlock` gives statement *i* view order *i* so a tab lies over the next dent. Outlined hides both.
+    - `createChangeButton` is "▾" with `expression-change-button`; both value buttons are solid discs (`-bm-text-on-color` / `-bm-block-fill`); `small-change-button` and the 8px `argument-pill` rule are gone. `BlockStyleContrastTest` measures them.
+    - `ui/render/theme/BlockFont` + `BlockFontPreference` + `ui/app/BlockFontDialog`, *View ▸ Block Font*; Nunito Regular/SemiBold/Bold/ExtraBold + OFL under `resources/fonts/`. `EditorCanvas.followBlockFont`; the gallery and contrast tests apply the default font.
+    - Empty body: "+  Add a block" pill (`.empty-body-add`). Umbrella doc 37 §4 Stack and §9a, screenshots regenerated.
+  - Not done: the persistent "+" at the end of a non-empty body (the last seam covers it); `BodyLayoutBuilder`'s 5px header-to-body gap kept, being inside a C and not between blocks; menus and dialogs keep the system font.
+- **2026-09-25 — Blocks round 2, phase 4: type chip and type picker.**
   - Changes:
     - `ui/render/components/TypeChip` draws a JDT `Type` by structure (primitive, class, `‹ ›` arguments as nested wells, `[ ]` per dimension, union `|`, `var`), and `replace(root, part, text)` respells the whole type with one part changed, on a copy.
     - `ui/render/menu/TypePicker`: `Filter` (ANY, REFERENCE, THROWABLE), `Options` (void, dimensions, type arguments), sections Primitives / This project / From plugins (`ValueGrammar.names()`) / Java / Libraries ▸, and *Use "…"* for a typed type `JavaSnippets.type` reads. `chip(...)` binds the two; a type-argument part is picked from reference types.

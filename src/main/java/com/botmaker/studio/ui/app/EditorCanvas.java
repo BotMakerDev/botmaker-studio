@@ -8,6 +8,8 @@ import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.BlockEvent;
 import com.botmaker.studio.ui.render.theme.BlockStyle;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
+import com.botmaker.studio.ui.render.theme.BlockFont;
+import com.botmaker.studio.ui.render.theme.BlockFontPreference;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
@@ -73,6 +75,7 @@ final class EditorCanvas {
         blocksContainer.getStyleClass().add("blocks-canvas");
         blocksContainer.setPadding(new Insets(20));
         followBlockStyle(blocksContainer);
+        followBlockFont(blocksContainer);
 
         // Accept block drags over the whole canvas so the OS "forbidden" cursor doesn't flash over gaps/padding.
         // Real drop zones (separators / block hitboxes) sit on top and consume the event; this only fires over
@@ -304,6 +307,19 @@ final class EditorCanvas {
         InvalidationListener listener = obs -> refresh.run();
         canvas.getProperties().put("block-style-listener", listener);
         BlockStylePreference.styleProperty().addListener(new WeakInvalidationListener(listener));
+    }
+
+    /**
+     * Keeps {@code canvas} written in the current {@link BlockFont}: its family and base size inline, since the
+     * family is an open set no stylesheet can list, and its class, which is what selects Nunito's own heavier
+     * families. Weak for {@link #followBlockStyle}'s reason.
+     */
+    static void followBlockFont(Node canvas) {
+        Runnable refresh = () -> BlockFontPreference.font().applyTo(canvas);
+        refresh.run();
+        InvalidationListener listener = obs -> refresh.run();
+        canvas.getProperties().put("block-font-listener", listener);
+        BlockFontPreference.fontProperty().addListener(new WeakInvalidationListener(listener));
     }
 
     /**

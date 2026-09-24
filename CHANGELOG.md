@@ -55,6 +55,8 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   `Foo.class`, `new int[…]`, a `catch`, a `for` counter and the variables in `for`/`try (…)`; a variable's,
   a field's and a function's types are drawn the same way.
 - **A catch offers only exceptions**, and *+ or* adds another one (`catch (A | B e)`).
+- **View ▸ Block Font.** Blocks are written in Nunito, which Studio now ships, or in your system font, or in
+  any font installed on your computer (*Other Installed Font…*, a searchable list showing each font).
 
 ### Changed
 
@@ -63,6 +65,14 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   is.
 - **A new `synchronized` block locks on `this`** in an instance method; a static one still locks on the
   class.
+- **Blocks stack touching, like Scratch.** The gap between two blocks is gone; each filled block has a notch
+  on top and a tab below that fits the next one. Hover the join between two blocks for a line and a round
+  "+" to insert there; drag over it and the same line shows where the block will land. An empty body is a
+  "+ Add a block" pill.
+- **The value buttons are easy to see.** "+" fills an empty slot and "▾" changes a filled one (both were
+  a faint "+"); each is a solid disc in the block's text colour.
+- **Keywords are heavier and words are rounder**: Nunito ExtraBold for `while`, `if`, `Print`, SemiBold for
+  the words between the values, at a 13px base.
 
 - **A plugin's editor is handed the resolved call and a type it can only ask about by class** (contract
   0.3.0). `plugin/HostTypes` builds the `TypeRef` from the binding (its erasure's binary name and every

@@ -1580,6 +1580,122 @@
     -fx-font-style: italic;
 }
 
+/*
+ * 4. JOINTS AND SEAMS. Statements stack touching (BodyBlock lays them out with no gap), and two small shapes say
+ * they fit: a dent in the canvas colour at the top of a stack or C block, and a tab in the block's lip colour
+ * under it (core/render/StackJoints). The block below is drawn behind the one above, so a tab lies over the
+ * next block's dent. Outlined blocks keep a flat seam: that style is a card, not a piece.
+ */
+.block-notch,
+.block-tab {
+    -fx-shape: "M0 0 L18 0 L14 4 L4 4 Z";
+    -fx-scale-shape: true;
+}
+.block-notch {
+    -fx-background-color: -bm-canvas;
+}
+.block-tab {
+    -fx-background-color: -bm-block-edge;
+}
+.blocks-outlined .block-notch,
+.blocks-outlined .block-tab {
+    visibility: hidden;
+}
+
+/*
+ * The seam between two statements (ui/dnd/InsertionSeam) takes no room. Hovering its hit strip draws a line
+ * along it and a round "+" under the pointer; a drag over it lights the same line in the drop colour — the
+ * insertion bar the 12px gap used to be, drawn over the join instead of between the blocks.
+ */
+.block-seam .seam-line {
+    -fx-background-color: transparent;
+    -fx-background-radius: 1;
+}
+.block-seam:seam-hover .seam-line {
+    -fx-background-color: -bm-primary;
+}
+.block-seam:drag-over-copy .seam-line {
+    -fx-background-color: #007bff;
+}
+.block-seam:drag-over-move .seam-line {
+    -fx-background-color: #28a745;
+}
+.block-seam:drag-over-illegal .seam-line {
+    -fx-background-color: #dc3545;
+}
+.separator-insert-button {
+    -fx-background-color: -bm-primary;
+    -fx-background-radius: 999;
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-padding: 0;
+    -fx-alignment: center;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 4, 0, 0, 1);
+}
+.separator-insert-button:hover {
+    -fx-background-color: derive(-bm-primary, 15%);
+}
+
+/*
+ * BLOCK FONT (ui/render/theme/BlockFont). The canvas carries the family and a 13px base inline; Nunito's two
+ * heavier cuts are families of their own to JavaFX, so its keywords and connecting words name them here. A
+ * weight left bold on such a family would ask for a bold cut it has not got, so each rule resets it.
+ */
+.font-nunito .bc-label {
+    -fx-font-family: "Nunito SemiBold";
+    -fx-font-weight: normal;
+}
+.font-nunito .keyword-label,
+.font-nunito .header-keyword-label {
+    -fx-font-family: "Nunito ExtraBold";
+    -fx-font-weight: normal;
+}
+
+/* An empty body is one "+ Add a block" pill, the persistent form of the seam's "+". */
+.empty-body-add {
+    -fx-background-color: transparent;
+    -fx-border-color: -bm-primary;
+    -fx-border-style: dashed;
+    -fx-border-radius: 999;
+    -fx-background-radius: 999;
+    -fx-padding: 2 12 2 12;
+    -fx-text-fill: -bm-primary;
+    -fx-font-weight: bold;
+}
+.empty-body-add:hover {
+    -fx-background-color: -bm-band;
+}
+
+/*
+ * The value buttons — "+" to fill a slot, "▾" to change what fills it — are the most used controls on a
+ * block, so they are drawn solid: a disc in the block's text colour carrying the block's fill as its glyph,
+ * the same pair the block's own words are measured against, swapped. They were half-strength ghosts at 9px.
+ */
+.block .expression-add-button,
+.block .expression-change-button {
+    -fx-background-color: -bm-text-on-color;
+    -fx-text-fill: -bm-block-fill;
+    -fx-background-radius: 999;
+    -fx-opacity: 1.0;
+    -fx-min-width: 18px;
+    -fx-pref-width: 18px;
+    -fx-min-height: 18px;
+    -fx-pref-height: 18px;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 0;
+}
+.block .expression-add-button:hover,
+.block .expression-add-button:focused,
+.block .expression-change-button:hover,
+.block .expression-change-button:focused {
+    -fx-background-color: -bm-block-accent, -bm-text-on-color;
+    -fx-background-insets: -2, 0;
+    -fx-opacity: 1.0;
+}
+
 /* A read-only method's parameter name, which would otherwise be an editable TextField. */
 .param-name-label {
     -fx-font-size: 12px;
@@ -1732,11 +1848,6 @@
     -fx-background-color: ladder(-bm-text-on-color, rgba(0, 0, 0, 0.05) 49%, rgba(255, 255, 255, 0.10) 50%);
     -fx-background-radius: 4;
     -fx-padding: 2;
-}
-
-.argument-pill .expression-add-button {
-    -fx-font-size: 8px;
-    -fx-padding: 1px 3px;
 }
 
 .argument-pill .arg-type-label {

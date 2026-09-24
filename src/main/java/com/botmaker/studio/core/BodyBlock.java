@@ -66,10 +66,11 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
         if (statements.isEmpty()) {
             // A locked empty body says what it is; it must not invite a click it will refuse.
             javafx.scene.control.Label placeholder =
-                    new javafx.scene.control.Label(isReadOnly() ? "(generated)" : "Click to add a block");
+                    new javafx.scene.control.Label(isReadOnly() ? "(generated)" : "+  Add a block");
             placeholder.getStyleClass().add("empty-body-placeholder");
 
             if (!isReadOnly()) {
+                placeholder.getStyleClass().add("empty-body-add");
                 placeholder.setMouseTransparent(false);
                 placeholder.setCursor(Cursor.HAND);
                 placeholder.setOnMouseClicked(e -> {
@@ -87,7 +88,9 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             container.setMinHeight(30);
         } else {
             // Lay out as sep[0], stmt[0], sep[1], stmt[1], …, sep[n]; keep the separator Panes so each statement
-            // node can light the one above/below it as its drop indicator.
+            // node can light the one above/below it as its drop indicator. A separator is a seam with no height
+            // (InsertionSeam), so the statements touch. Each statement is drawn ahead of the ones below it, so
+            // the tab under a block lies over the notch at the top of the next.
             List<Pane> separators = new ArrayList<>();
             List<Node> statementNodes = new ArrayList<>();
 
@@ -98,6 +101,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             for (int i = 0; i < statements.size(); i++) {
                 StatementBlock statement = statements.get(i);
                 Node statementNode = statement.getUINode(context);
+                statementNode.setViewOrder(i);
                 makeStatementDraggable(statementNode, statement);
                 statementNodes.add(statementNode);
                 container.getChildren().add(statementNode);

@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.fx;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
+import com.botmaker.studio.ui.dnd.InsertionSeam;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
@@ -71,7 +72,7 @@ class SeparatorInsertButtonTest extends FxHeadlessTest {
         interact(() -> separator.getOnMouseEntered().handle(mouseEntered()));
 
         assertTrue(plusButton.isVisible(), "hovering the separator reveals the '+' button");
-        assertTrue(separator.getViewOrder() < 0,
+        assertTrue(separator.getViewOrder() < InsertionSeam.RESTING_VIEW_ORDER,
                 "the hovered separator is lifted so adjacent blocks don't cover the button");
     }
 
@@ -107,7 +108,7 @@ class SeparatorInsertButtonTest extends FxHeadlessTest {
         interact(menu::hide); // fires setOnHidden; separator is no longer hovered (headless), so the button hides
 
         assertFalse(plusButton.isVisible(), "closing the menu with the mouse away hides the '+' button");
-        assertTrue(separator.getViewOrder() == 0.0, "the separator's view order is restored");
+        assertTrue(separator.getViewOrder() == InsertionSeam.RESTING_VIEW_ORDER, "the seam's view order is restored");
     }
 
     // --- helpers ---

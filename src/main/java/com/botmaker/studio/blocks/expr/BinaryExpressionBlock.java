@@ -54,10 +54,7 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
                     showExpressionMenuAndReplace((Button)e.getSource(), context, ResolvedType.INT,
                             (Expression) leftOperand.getAstNode())
             );
-            if (changeLeft != null) {
-                changeLeft.getStyleClass().add("small-change-button");
-                expressionBox.getChildren().add(changeLeft);
-            }
+            if (changeLeft != null) expressionBox.getChildren().add(changeLeft);
         }
 
         // Operator Selector (a plain label when read-only: no live control on a locked block)
@@ -85,10 +82,7 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
                     showExpressionMenuAndReplace((Button)e.getSource(), context, ResolvedType.INT,
                             (Expression) rightOperand.getAstNode())
             );
-            if (changeRight != null) {
-                changeRight.getStyleClass().add("small-change-button");
-                expressionBox.getChildren().add(changeRight);
-            }
+            if (changeRight != null) expressionBox.getChildren().add(changeRight);
         }
 
         // `a + b + c` is one InfixExpression with `c` as an extended operand; drawn from left and right alone it
@@ -101,10 +95,7 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
             Button changeExtra = createChangeButton(e ->
                     showExpressionMenuAndReplace((Button) e.getSource(), context, ResolvedType.INT,
                             (Expression) extra.getAstNode()));
-            if (changeExtra != null) {
-                changeExtra.getStyleClass().add("small-change-button");
-                expressionBox.getChildren().add(changeExtra);
-            }
+            if (changeExtra != null) expressionBox.getChildren().add(changeExtra);
         }
 
         container.getChildren().add(expressionBox);

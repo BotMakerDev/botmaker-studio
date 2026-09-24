@@ -3,6 +3,8 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.config.AppVersion;
 import com.botmaker.studio.ui.render.theme.BlockStyle;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
+import com.botmaker.studio.ui.render.theme.BlockFont;
+import com.botmaker.studio.ui.render.theme.BlockFontPreference;
 import com.botmaker.studio.ui.app.vars.NamingPreference;
 import javafx.scene.control.CheckMenuItem;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
@@ -395,6 +397,7 @@ public class MenuBarManager {
                 new SeparatorMenuItem(),
                 themeMenu,
                 blockStyleMenu(),
+                blockFontMenu(),
                 askForNamesItem()
         );
 
@@ -416,6 +419,35 @@ public class MenuBarManager {
             item.setOnAction(e -> BlockStylePreference.set(style));
             menu.getItems().add(item);
         }
+        return menu;
+    }
+
+    /**
+     * View ▸ Block Font: Nunito (bundled), System, and any installed family through a searchable list. The
+     * chosen installed family shows as a third checked item, so the menu always says what the canvas uses.
+     */
+    private static Menu blockFontMenu() {
+        Menu menu = new Menu("Block Font");
+        Runnable rebuild = () -> {
+            menu.getItems().clear();
+            ToggleGroup group = new ToggleGroup();
+            BlockFont current = BlockFontPreference.font();
+            java.util.List<BlockFont> fixed = new java.util.ArrayList<>(java.util.List.of(BlockFont.NUNITO, BlockFont.SYSTEM));
+            if (!fixed.contains(current)) fixed.add(current);
+            for (BlockFont font : fixed) {
+                RadioMenuItem item = new RadioMenuItem(font.displayName());
+                item.setToggleGroup(group);
+                item.setSelected(font.equals(current));
+                item.setOnAction(e -> BlockFontPreference.set(font));
+                menu.getItems().add(item);
+            }
+            MenuItem other = new MenuItem("Other Installed Font…");
+            other.setOnAction(e -> BlockFontDialog.ask(null, BlockFontPreference.font())
+                    .ifPresent(BlockFontPreference::set));
+            menu.getItems().addAll(new SeparatorMenuItem(), other);
+        };
+        menu.setOnShowing(e -> rebuild.run());
+        rebuild.run();
         return menu;
     }
 

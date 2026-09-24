@@ -140,7 +140,6 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
     private Button changeButton(ExpressionBlock value, ResolvedType expected, CodeEditorService context) {
         Button change = createChangeButton(e -> showExpressionMenuAndReplace((Button) e.getSource(), context,
                 expected, (Expression) value.getAstNode()));
-        if (change != null) change.getStyleClass().add("small-change-button");
         return change;
     }
 
