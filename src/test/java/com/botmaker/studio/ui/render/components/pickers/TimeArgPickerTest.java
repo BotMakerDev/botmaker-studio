@@ -90,6 +90,6 @@ class TimeArgPickerTest {
         // dispatched by (method, argIndex). If an int slot on Time starts matching again, something has
         // reintroduced a hook — which is how the stale-table problem comes back.
         assertFalse(PickerRegistry.hasPicker(
-                new PickerContext(null, null, ResolvedType.named("int"), "Time", "isBetween", 0)));
+                new PickerContext(null, null, ResolvedType.named("int"), null, 0)));
     }
 }

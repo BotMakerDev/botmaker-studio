@@ -326,6 +326,16 @@ public final class PluginHost {
     }
 
     /**
+     * The loader the serving plugins came from — the open project's, or Studio's own for the bundled set. A
+     * call or a type a plugin's editor asks about is loaded here, so the {@code Class} it compares against is
+     * one that plugin could have named.
+     */
+    public static ClassLoader classLoader() {
+        PluginLoader bound = loader;
+        return bound != null ? bound.classLoader() : PluginHost.class.getClassLoader();
+    }
+
+    /**
      * Every loaded plugin's slot editors, in plugin order, for a value the host is about to render.
      *
      * <p>Consulted <b>after</b> the host's own built-in editors, which is the rule

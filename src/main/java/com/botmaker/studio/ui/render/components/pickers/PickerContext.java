@@ -3,31 +3,32 @@ package com.botmaker.studio.ui.render.components.pickers;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
+import org.eclipse.jdt.core.dom.IMethodBinding;
 
 /**
  * Everything a {@link SpecialTypePicker} needs to decide whether it applies and to build its editor:
  * the slot being edited ({@code arg} — a {@link ValueSlot}, so a picker works as well over a variable's
  * initializer as over a block on the canvas), the expected {@code paramType}, the {@code argIndex} of this
  * argument within the enclosing call, and — for method-specific pickers (e.g. the Steam game picker for
- * {@code Game.launchSteam}) — the enclosing call's {@code className}/{@code methodName}. Use {@link #of}
- * when there is no call context (e.g. a header slot or list element), which leaves the class/method null
- * and the index {@code -1}.
+ * {@code Game.launchSteam}) — the enclosing call's {@code call} binding, which a plugin is handed as the
+ * resolved {@code Executable}. Use {@link #of} when there is no call context (e.g. a header slot or list
+ * element), which leaves the call null and the index {@code -1}.
  */
 public record PickerContext(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
-                            String className, String methodName, int argIndex, boolean readOnly) {
+                            IMethodBinding call, int argIndex, boolean readOnly) {
 
     /**
      * The same for a caller that says nothing about writability — editable, which is what every caller meant
      * before {@code readOnly} existed (2026-09-19).
      */
     public PickerContext(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
-                         String className, String methodName, int argIndex) {
-        this(context, arg, paramType, className, methodName, argIndex, false);
+                         IMethodBinding call, int argIndex) {
+        this(context, arg, paramType, call, argIndex, false);
     }
 
-    /** A context with no enclosing-call info (class/method null, index -1) — for header slots and list elements. */
+    /** A context with no enclosing call (null, index -1) — for header slots and list elements. */
     public static PickerContext of(CodeEditorService context, ValueSlot arg, ResolvedType paramType) {
-        return new PickerContext(context, arg, paramType, null, null, -1);
+        return new PickerContext(context, arg, paramType, null, -1);
     }
 
     /**
@@ -41,7 +42,7 @@ public record PickerContext(CodeEditorService context, ValueSlot arg, ResolvedTy
      */
     public static PickerContext of(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
                                    boolean readOnly) {
-        return new PickerContext(context, arg, paramType, null, null, -1, readOnly);
+        return new PickerContext(context, arg, paramType, null, -1, readOnly);
     }
 
     /** True when {@code paramType} is the SDK type {@code sdkType}. */
@@ -58,9 +59,8 @@ public record PickerContext(CodeEditorService context, ValueSlot arg, ResolvedTy
 
     // The four Game predicates — the program path, the trailing launch options, and the Steam and Epic launch
     // ids — went with their editors on 2026-08-28 (plugin platform, phase 12c). They are
-    // that plugin's own call-site matchers now, written against SlotContext's enclosingClass /
-    // enclosingMethod / argIndex, which is the same three facts this record carries and is what the contract
-    // exposes them for.
+    // that plugin's own call-site matchers now, written against SlotContext's enclosingExecutable / argIndex,
+    // which is the same two facts this record carries and is what the contract exposes them for.
 
     // isEmulatorNameArg and isEmulatorMethod went on 2026-08-31 with the picker they selected. The same four
     // calls are matched by

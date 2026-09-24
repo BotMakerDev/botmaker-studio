@@ -330,7 +330,7 @@ public final class EditVariableDialog {
      */
     private List<Node> valueControls(Local local, ResolvedType type) {
         ValueSlot slot = ValueSlot.at(() -> find().map(Local::initializer).orElse(null));
-        Node picker = PickerRegistry.pickerNodeFor(new PickerContext(context, slot, type, null, null, -1));
+        Node picker = PickerRegistry.pickerNodeFor(PickerContext.of(context, slot, type));
         Node editor = picker != null ? picker : literalEditor(local, type);
         return List.of(editor, expressionButton(type));
     }

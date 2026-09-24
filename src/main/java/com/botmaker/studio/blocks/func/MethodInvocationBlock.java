@@ -94,6 +94,14 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     }
 
     /**
+     * What the call resolved to, or {@code null} when JDT could not resolve it — asked of the node this
+     * block holds now, never of one captured earlier: a reused block outlives the parse it was drawn for.
+     */
+    public IMethodBinding callBinding() {
+        return astNode instanceof MethodInvocation call ? call.resolveMethodBinding() : null;
+    }
+
+    /**
      * The parameter types of the overload this call currently matches, aligned to {@link #getArgumentBlocks()}
      * — so the overlay can hand each argument to {@code PickerRegistry} with the right expected type. Empty
      * when the method can't be resolved (e.g. SDK jar not indexed).
@@ -722,7 +730,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         String argName = (doc != null && doc.name() != null && !doc.name().isBlank()) ? doc.name() : null;
         String argDesc = (doc != null) ? doc.desc() : null;
 
-        Node editor = ArgumentEditors.editorFor(context, arg, paramType, plan.targetType(), methodName, index);
+        Node editor = ArgumentEditors.editorFor(context, arg, paramType, callBinding(), index);
         if (editor != null) {
             // Specialized picker (image/region/enum). Wrap it in the standard pill so it *also* gets the
             // "+" change button (open the expression menu to swap in a variable/other expression) — the
@@ -815,7 +823,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // An empty tail has no argument to anchor on, and that is the case the row exists for most: the whole
         // point is being able to add a first picture where the call has none.
         ValueSlot anchor = from < arguments.size() ? ValueSlot.of(arguments.get(from)) : ValueSlot.empty();
-        PickerContext slot = new PickerContext(context, anchor, element, null, methodName, from);
+        PickerContext slot = new PickerContext(context, anchor, element, callBinding(), from);
         // The supplier reads this.astNode when it fires, never a node captured here. HostSlotRun takes a
         // Supplier precisely so the call can be resolved on every use, and handing it an already-resolved
         // local defeats that: since block reuse (2026-09-14) this block can outlive the parse it was drawn

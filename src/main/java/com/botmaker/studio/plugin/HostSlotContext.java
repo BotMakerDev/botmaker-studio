@@ -13,6 +13,9 @@ import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 
+import org.eclipse.jdt.core.dom.IMethodBinding;
+
+import java.lang.reflect.Executable;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +27,7 @@ import java.util.function.Supplier;
  *
  * <p>{@link HostValueContext} is the other: a value with no call site behind it — a row of the Parameters
  * window, or the expression a {@code @Managed} method returns. The pair is the whole of the host's side of
- * the contract, and the one thing a slot has that the other does not is the <b>names</b> of its call site.
+ * the contract, and the one thing a slot has that the other does not is its <b>call site</b>, resolved.
  * It reads a constant of the bot's {@code @Managed} types ({@code Pictures.ORE}) as that constant's value, and
  * writes a value equal to one as the constant.
  *
@@ -38,15 +41,16 @@ public final class HostSlotContext implements SlotContext {
     private final CodeEditorService context;
     private final ValueSlot slot;
     private final ResolvedType paramType;
-    private final String className;
-    private final String methodName;
+    private final IMethodBinding call;
     private final int argIndex;
     private final StudioServices services;
     private final SlotRun run;
+    /** The call as a plugin sees it, loaded on first ask: most editors never ask. */
+    private Optional<Executable> executable;
 
     public HostSlotContext(CodeEditorService context, ValueSlot slot, ResolvedType paramType,
-                           String className, String methodName, int argIndex, StudioServices services) {
-        this(context, slot, paramType, className, methodName, argIndex, services, null);
+                           IMethodBinding call, int argIndex, StudioServices services) {
+        this(context, slot, paramType, call, argIndex, services, null);
     }
 
     /**
@@ -58,13 +62,11 @@ public final class HostSlotContext implements SlotContext {
      * re-deriving them in the context would be a second answer to each.
      */
     public HostSlotContext(CodeEditorService context, ValueSlot slot, ResolvedType paramType,
-                           String className, String methodName, int argIndex, StudioServices services,
-                           SlotRun run) {
+                           IMethodBinding call, int argIndex, StudioServices services, SlotRun run) {
         this.context = context;
         this.slot = slot == null ? ValueSlot.empty() : slot;
         this.paramType = paramType;
-        this.className = className;
-        this.methodName = methodName;
+        this.call = call;
         this.argIndex = argIndex;
         this.services = services;
         this.run = run;
@@ -77,7 +79,7 @@ public final class HostSlotContext implements SlotContext {
 
     @Override
     public TypeRef type() {
-        return typeRef(paramType);
+        return HostTypes.of(paramType);
     }
 
     /**
@@ -160,14 +162,11 @@ public final class HostSlotContext implements SlotContext {
         return slot.source();
     }
 
+    /** The call's binding, loaded on the plugin loader; empty for a call JDT could not resolve. */
     @Override
-    public Optional<String> enclosingClassName() {
-        return Optional.ofNullable(className);
-    }
-
-    @Override
-    public Optional<String> enclosingMethodName() {
-        return Optional.ofNullable(methodName);
+    public Optional<Executable> enclosingExecutable() {
+        if (executable == null) executable = HostTypes.executable(call);
+        return executable;
     }
 
     @Override
@@ -176,29 +175,12 @@ public final class HostSlotContext implements SlotContext {
     }
 
     // enclosingCall() and replaceEnclosingCall(…) left the contract on 2026-09-23: they handed a plugin the
-    // call as text. What a slot knows of its call is its names, above.
+    // call as text. What a slot knows of its call is the resolved declaration, above; until 2026-09-24 it was
+    // the class name the source wrote before the dot and the method's name.
 
     @Override
     public StudioServices services() {
         return services;
-    }
-
-    /**
-     * A {@link ResolvedType} as the contract's names-only view of it.
-     *
-     * <p>Never a {@code Class}: the host resolves a type out of the <em>bot's</em> classpath, which may hold a
-     * different version of it or not hold it at all. An unresolved type still answers a simple name, and an
-     * editor keying off that still fires — refusing to edit a value because the rest of the file does not
-     * compile is the worse failure.
-     */
-    public static TypeRef typeRef(ResolvedType type) {
-        String simple = type == null ? "" : nullToEmpty(type.simpleName());
-        String qualified = type == null ? "" : nullToEmpty(type.qualifiedName());
-        return new TypeRef() {
-            @Override public String simpleName() { return simple; }
-
-            @Override public String qualifiedName() { return qualified; }
-        };
     }
 
     private static String nullToEmpty(String s) {

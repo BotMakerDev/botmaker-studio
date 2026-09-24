@@ -16,6 +16,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Changed
 
+- **A plugin's editor is handed the resolved call and a type it can only ask about by class** (contract
+  0.3.0). `plugin/HostTypes` builds the `TypeRef` from the binding (its erasure's binary name and every
+  supertype) and the `Executable` from the call's `IMethodBinding`, loaded on the plugin loader by name and
+  erased parameter types. `PickerContext` carries the call's binding rather than the scope text and method
+  name. A call JDT could not resolve is no call, and a type known only by a bare simple name is unresolved:
+  a call-site or type-keyed editor is absent there instead of matching a spelling.
+
 - **A value is written as a JDT tree, never as text.** The grammar builds the expression node by node
   (`plugin/grammar/ValueWriter`) and answers a `JavaValue` — the node plus the classes it names by simple name
   — which replaces `ValueGrammar.Written`. Every sink copies that tree into its own file's tree: a Parameters

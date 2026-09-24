@@ -3,7 +3,6 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
-import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -102,44 +101,34 @@ public final class HostValueContext implements ValueContext {
     }
 
     /**
-     * A form as the Java type a plugin editor's predicate is written against: the leaf's canonical name
-     * when the grammar knows it, and the name as written otherwise — which {@link TypeRef} models as
-     * unresolved, and which an {@code isNamed} predicate still matches.
+     * A form as the Java type a plugin editor's predicate is written against: the class itself when the form
+     * is one — a JDK literal, a declared type, a component — a bot's own class by its name, and an unknown
+     * type as {@linkplain TypeRef#unresolved unresolved}, which no type-keyed editor claims.
      *
-     * <p>A container answers the container's own name, so an editor claiming {@code java.util.List} is
+     * <p>A container answers the container's own class, so an editor claiming {@code java.util.List} is
      * offered the list and one claiming its element is not.
      */
     public static TypeRef typeRef(Type form, ValueGrammar grammar) {
-        String qualified;
-        String simple;
-        switch (form) {
-            case Class<?> cls -> {
-                qualified = cls.getName();
-                simple = JavaNames.simple(cls);
-            }
-            case ValueTypes.Parameterized parameterized -> {
-                qualified = parameterized.raw().getName();
-                simple = parameterized.raw().getSimpleName();
-            }
-            case ValueTypes.BotClass bot -> {
-                qualified = bot.qualifiedName();
-                simple = bot.qualifiedName().substring(bot.qualifiedName().lastIndexOf('.') + 1);
-            }
-            case ValueTypes.Unknown unknown -> {
-                qualified = "";
-                simple = unknown.written();
-            }
-            case null, default -> {
-                qualified = "";
-                simple = "";
-            }
-        }
-        String q = qualified;
-        String s = simple;
-        return new TypeRef() {
-            @Override public String simpleName() { return s; }
+        return switch (form) {
+            case Class<?> cls -> TypeRef.of(cls);
+            case ValueTypes.Parameterized parameterized -> TypeRef.of(parameterized.raw());
+            case ValueTypes.BotClass bot -> HostTypes.named(bot.qualifiedName(),
+                    bot.qualifiedName().substring(bot.qualifiedName().lastIndexOf('.') + 1));
+            case ValueTypes.Unknown unknown -> TypeRef.unresolved(unknown.written());
+            case null, default -> TypeRef.unresolved("");
+        };
+    }
 
-            @Override public String qualifiedName() { return q; }
+    /**
+     * The key a user's <i>Edit with</i> verdict is stored under for this value's type — the binary name the
+     * canvas spells for the same type, so one verdict serves both; empty for a type that did not resolve.
+     */
+    public String typeName() {
+        return switch (form) {
+            case Class<?> cls -> cls.getName();
+            case ValueTypes.Parameterized parameterized -> parameterized.raw().getName();
+            case ValueTypes.BotClass bot -> bot.qualifiedName();
+            case null, default -> "";
         };
     }
 

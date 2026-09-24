@@ -50,7 +50,7 @@ final class PluginPickers {
         List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
         if (editors.isEmpty() || ctx == null) return null;
         HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),
-                ctx.className(), ctx.methodName(), ctx.argIndex(),
+                ctx.call(), ctx.argIndex(),
                 HostServices.forProject(ctx.context() == null ? null : ctx.context().getConfig()), null);
         List<PluginHost.OwnedEditor> claimants = new ArrayList<>();
         for (PluginHost.OwnedEditor owned : editors) {
@@ -91,7 +91,7 @@ final class PluginPickers {
         if (editors.isEmpty() || ctx == null) return null;
 
         HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),
-                ctx.className(), ctx.methodName(), ctx.argIndex(),
+                ctx.call(), ctx.argIndex(),
                 HostServices.forProject(ctx.context() == null ? null : ctx.context().getConfig()), run);
 
         // Every claimant, not the first — which is what makes a contest visible at all. matches() is cheap by

@@ -7,6 +7,7 @@ import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
 import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;
 import javafx.scene.Node;
+import org.eclipse.jdt.core.dom.IMethodBinding;
 
 /**
  * Thin facade over {@link PickerRegistry}: chooses the specialized, bot-first editor widget for a
@@ -26,24 +27,18 @@ public final class ArgumentEditors {
 
     /** The specialized editor for {@code paramType}, or {@code null} to use the generic pill. */
     public static Node editorFor(CodeEditorService context, ExpressionBlock arg, ResolvedType paramType) {
-        return editorFor(context, ValueSlot.of(arg), paramType, null, null, -1);
+        return PickerRegistry.pickerNodeFor(new PickerContext(context, ValueSlot.of(arg), paramType, null, -1));
     }
 
     /**
-     * The specialized editor for an argument, or {@code null} to use the generic pill. {@code className} /
-     * {@code methodName} identify the enclosing call so method-specific editors (e.g. the Steam game picker
-     * for {@code Game.launchSteam}) can be chosen; {@code argIndex} is the argument's position in that call
-     * so index-specific editors (e.g. the program path vs. launch-option slots of {@code Game.launch}) can
-     * be distinguished. Pass {@code null}/{@code null}/{@code -1} when there is no call context.
+     * The specialized editor for an argument, or {@code null} to use the generic pill. {@code call} is the
+     * enclosing call's binding, so method-specific editors (e.g. the Steam game picker for
+     * {@code Game.launchSteam}) can be chosen; {@code argIndex} is the argument's position in that call so
+     * index-specific editors (e.g. the program path vs. launch-option slots of {@code Game.launch}) can be
+     * distinguished. A {@code null} call is one JDT did not resolve, which such an editor declines.
      */
     public static Node editorFor(CodeEditorService context, ExpressionBlock arg, ResolvedType paramType,
-                                 String className, String methodName, int argIndex) {
-        return editorFor(context, ValueSlot.of(arg), paramType, className, methodName, argIndex);
-    }
-
-    /** The same, over a slot that no block drew — a variable's initializer, a field, a return value. */
-    public static Node editorFor(CodeEditorService context, ValueSlot arg, ResolvedType paramType,
-                                 String className, String methodName, int argIndex) {
-        return PickerRegistry.pickerNodeFor(new PickerContext(context, arg, paramType, className, methodName, argIndex));
+                                 IMethodBinding call, int argIndex) {
+        return PickerRegistry.pickerNodeFor(new PickerContext(context, ValueSlot.of(arg), paramType, call, argIndex));
     }
 }

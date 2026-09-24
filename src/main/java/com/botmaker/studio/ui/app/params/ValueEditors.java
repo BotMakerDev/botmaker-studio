@@ -160,7 +160,7 @@ public final class ValueEditors {
                 System.err.println("Plugin slot editor failed for type " + ValueTypes.sourceName(leaf) + ": " + e);
             }
         }
-        String typeName = context.type().qualifiedName();
+        String typeName = context.typeName();
         List<PluginHost.OwnedEditor> ordered = EditorContest.ordered(
                 claiming, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName));
 
