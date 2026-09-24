@@ -30,6 +30,9 @@ public final class GutterDecorator implements BlockDecorator {
         // pill in the editor, which is what made an expression slot's drag outline reach well to the left of
         // the expression it belongs to. The outline now hugs the slot because the slot is now its own size.
         if (block instanceof com.botmaker.studio.core.ExpressionBlock) return;
+        // Nor is a body: it is the list of lines, each with its own gutter. Its strip was a 12px gap between a
+        // C's arm and the stack it holds.
+        if (block instanceof com.botmaker.studio.core.BodyBlock) return;
 
         double gutter = BlockTheme.current().spacing().gutter();
         Insets existing = region.getPadding();

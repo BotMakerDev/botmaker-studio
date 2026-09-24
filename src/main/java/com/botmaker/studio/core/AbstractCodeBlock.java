@@ -135,6 +135,14 @@ public abstract class AbstractCodeBlock implements CodeBlock {
         return BlockShape.NONE;
     }
 
+    /**
+     * Whether this block is a piece of a stack and so gets the notch and tab ({@code StackJoints}). True for
+     * every stack or C block but one drawn as the continuation of another — an else-if link.
+     */
+    protected boolean joinsStack() {
+        return true;
+    }
+
     /** Style class every block root with a shape carries, whatever the shape: what the CSS scopes block widgets by. */
     public static final String BLOCK_STYLE_CLASS = "block";
 
@@ -164,7 +172,7 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             // into an outline, so no block class names a colour or a radius (docs/refactor/37-block-styling.md).
             BlockShape shape = shape();
             if (shape != BlockShape.NONE) uiNode.getStyleClass().addAll(BLOCK_STYLE_CLASS, shape.styleClass());
-            if ((shape == BlockShape.STACK || shape == BlockShape.C_BLOCK)
+            if ((shape == BlockShape.STACK || shape == BlockShape.C_BLOCK) && joinsStack()
                     && uiNode instanceof javafx.scene.layout.Pane pane) {
                 com.botmaker.studio.core.render.StackJoints.attach(pane);
             }

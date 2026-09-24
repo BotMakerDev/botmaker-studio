@@ -143,7 +143,7 @@
      * name no longer means the theme's colour:
      *   -bm-canvas      what shows through a C-block's body: the class card's surface.
      *   -bm-theme-text  the theme's own text colour, for a block that drops its fill (read-only, outlined).
-     *   -bm-field       the well a value is typed into on a filled block. White here, a lighter step of the
+     *   -bm-field       the well a value is typed into on a filled block. White here, a darker step of the
      *                   block's own fill in the dark themes (a white well on a dark block is a hole in it).
      */
     -bm-canvas: #ffffff;
@@ -720,14 +720,35 @@
  * A C-block's body is a hole in it: the canvas shows through, framed by the block's colour on three sides —
  * a 12px arm on the left, the header above, the lip below. Its left bar (.block-body) goes; the arm is the bar.
  * The body pane's padding comes from Java (LayoutComponents / BodyLayoutBuilder) and is replaced here so the
- * statements inside clear the arm.
+ * statements inside sit against the arm and under the header, touching both, as a stack touches itself: the
+ * hole shows only where no block is (an empty body, the ragged right of a stack). The first block's dent has
+ * nothing to fit, so it is hidden (.body-first, BodyBlock).
  */
 .block-category.shape-c > .bc-body {
     -fx-background-color: -bm-canvas;
-    -fx-background-insets: 2 0 2 12;
-    -fx-background-radius: 6 0 0 6;
+    -fx-background-insets: 0 0 0 12;
+    -fx-background-radius: 0;
     -fx-border-width: 0;
-    -fx-padding: 4 0 4 18;
+    -fx-padding: 0 0 0 12;
+}
+.body-first > .block-notch {
+    visibility: hidden;
+}
+
+/*
+ * The next link of an else-if chain is an if block drawn inside the one before it (IfBlock.chainedNode). It is
+ * that block's continuation, not a piece stacked in it: no lip, no joints, no bottom arm of its own — the
+ * first if of the chain closes it once.
+ */
+.block-category.shape-c.else-if-link {
+    -fx-background-color: -bm-block-fill;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 5 0 0 14;
+}
+.blocks-outlined .block-category.shape-c.else-if-link {
+    -fx-border-width: 0;
+    -fx-padding: 5 0 0 14;
 }
 .block-category.shape-c {
     -fx-padding: 5 0 8 14;
@@ -751,9 +772,9 @@
 .block-category.shape-hat > .block-body-wrapper {
     -fx-background-color: -bm-canvas;
     -fx-background-insets: 0 0 0 14;
-    -fx-background-radius: 8 0 0 8;
+    -fx-background-radius: 0;
     -fx-border-width: 0;
-    -fx-padding: 6 0 6 20;
+    -fx-padding: 0 0 0 14;
 }
 
 /*
@@ -936,13 +957,27 @@
 }
 
 /*
- * The dark themes' fills sit at ~20% lightness, and a lip darker than that is invisible on their canvas. So
+ * The dark themes' fills sit at ~30% lightness, and a lip darker than that is invisible on their canvas. So
  * the lip is the category's bright accent, stepped down: a lit edge rather than a shadow, which is what gives
  * a dark block its outline back without the 1px border the fills used to carry.
+ *
+ * Their controls sit a step below the fill rather than above it, and their text is the block's own on-colour
+ * outright. Modena ladders a button's or a combo's text off -fx-base's HSB brightness, and flips to grey past
+ * 45% — which a fill deep enough for white but still a colour (the amber at #936315 is 58%) crosses. Every
+ * such pair is measured: white on the stepped-down surface scores higher than on the fill.
  */
 .dark-theme .block-category,
 .black-theme .block-category {
     -bm-block-edge: derive(-bm-block-accent, -20%);
+    -fx-base: derive(-bm-block-fill, -18%);
+    -fx-light-text-color: -bm-text-on-color;
+    -fx-mid-text-color: -bm-text-on-color;
+    -fx-dark-text-color: -bm-text-on-color;
+    -fx-mark-color: -bm-text-on-color;
+}
+.dark-theme .block-category:read-only,
+.black-theme .block-category:read-only {
+    -fx-base: -bm-canvas;
 }
 
 /*
@@ -2694,25 +2729,26 @@
     -bm-cat-game: #19a883;
     -bm-cat-utility: #95a5a6;
 
-    /* Comment card — the amber at 22% lightness, matching the block surfaces above. White scores 9.7. */
+    /* Comment card — the amber at the block surfaces' depth. White scores 5.2. */
     -bm-cat-comment: #f5b041;
-    -bm-fill-comment: #4a3f14;
+    -bm-fill-comment: #7a5a1c;
     -bm-on-fill-comment: #ffffff;
 
-    /* Block surfaces — the same ten hues at 22% lightness. The accents above stay bright because they are
-       now only ever a 1px border, a badge or a header; the *fill* is what a whole block is painted with, and
-       a saturated fill on a dark canvas is what read as "the dark theme isn't applied to the blocks". White
-       clears AA on all ten by a wide margin (the tightest, vision, scores 7.0). */
-    -bm-fill-output: #13375d;
-    -bm-fill-input: #42234d;
-    -bm-fill-variables: #6b4406;
-    -bm-fill-flow: #65390b;
-    -bm-fill-loops: #155b34;
-    -bm-fill-control: #64150c;
-    -bm-fill-functions: #421f51;
-    -bm-fill-vision: #0e6252;
-    -bm-fill-game: #0f624c;
-    -bm-fill-utility: #333c3d;
+    /* Block surfaces — the same ten hues, deeper: ~33% lightness at up to 75% saturation, so a block is still
+       its colour on the dark canvas rather than a neon slab (the accents at full strength) or a near-black
+       tint of it (the 22% these were until 2026-09-25, which read as "dark mode made the blocks black").
+       Where 33% left white under 5:1 (loops, vision, game) the lightness steps down until it clears; the
+       tightest, loops, scores 5.02. */
+    -bm-fill-output: #1d538b;
+    -bm-fill-input: #633574;
+    -bm-fill-variables: #936315;
+    -bm-fill-flow: #935515;
+    -bm-fill-loops: #1d7f48;
+    -bm-fill-control: #932215;
+    -bm-fill-functions: #632f79;
+    -bm-fill-vision: #127d68;
+    -bm-fill-game: #127c61;
+    -bm-fill-utility: #4c5c5d;
 
     /* On-colours — measured against the fills above, same rule as :root. */
     -bm-on-fill-output: #ffffff;
@@ -2726,11 +2762,11 @@
     -bm-on-fill-game: #ffffff;
     -bm-on-fill-utility: #ffffff;
 
-    /* SDK surface — the same lilac at 20% lightness, one step lighter than -bm-fill-functions so an SDK call
-       still reads as distinct from the method declaration it sits in. White scores 14.53 / 10.89. */
-    -bm-fill-sdk: #3a1c4a;
+    /* SDK surface — the same lilac one step lighter than -bm-fill-functions, so an SDK call still reads as
+       distinct from the method declaration it sits in. White scores 8.04 / 6.26. */
+    -bm-fill-sdk: #6e3a86;
     -bm-on-fill-sdk: #ffffff;
-    -bm-badge-sdk: #55296e;
+    -bm-badge-sdk: #82489c;
     -bm-on-badge-sdk: #ffffff;
 
     /* Block surfaces */
@@ -2739,11 +2775,11 @@
     /* Read-only */
     -bm-locked-fill: rgba(149, 165, 166, 0.20);
 
-    /* Block style values (see :root). The field is the block's own fill two steps up, so a slot reads as a
-       well in the block rather than a hole through it; white text scores ≥ 7 on every one. */
+    /* Block style values (see :root). The field is the block's own fill a step down, so a slot reads as a
+       well in the block rather than a hole through it, and white text on it scores higher than on the fill. */
     -bm-canvas: #3c3c3c;
     -bm-theme-text: #e0e0e0;
-    -bm-field: derive(-bm-block-fill, 35%);
+    -bm-field: derive(-bm-block-fill, -30%);
 
     /* Window chrome + severities: lighter than the surface, where the light theme's are darker than it. */
     -bm-divider: #4a4a4a;
@@ -2807,22 +2843,22 @@
        no darker step left, so "off" has to read as lighter. */
     -bm-flow-card-off: derive(-fx-control-inner-background, 26%);
 
-    /* Comment card — as .dark-theme, one step deeper (16% lightness). */
+    /* Comment card — as .dark-theme, one step deeper. */
     -bm-cat-comment: #ffc107;
-    -bm-fill-comment: #3a3006;
+    -bm-fill-comment: #624a14;
     -bm-on-fill-comment: #ffffff;
 
-    /* Block surfaces — as .dark-theme, one step deeper (16% lightness) to sit on a pure-black canvas. */
-    -bm-fill-output: #042d4d;
-    -bm-fill-input: #3b0f43;
-    -bm-fill-variables: #523d00;
-    -bm-fill-flow: #523100;
-    -bm-fill-loops: #19391a;
-    -bm-fill-control: #4d0904;
-    -bm-fill-functions: #23143e;
-    -bm-fill-vision: #004852;
-    -bm-fill-game: #00524a;
-    -bm-fill-utility: #232b2f;
+    /* Block surfaces — as .dark-theme, one step deeper (27% lightness) to sit on a pure-black canvas. */
+    -bm-fill-output: #184472;
+    -bm-fill-input: #512b5f;
+    -bm-fill-variables: #785111;
+    -bm-fill-flow: #784511;
+    -bm-fill-loops: #1a7040;
+    -bm-fill-control: #781c11;
+    -bm-fill-functions: #512663;
+    -bm-fill-vision: #117864;
+    -bm-fill-game: #12785d;
+    -bm-fill-utility: #3e4b4c;
 
     /* On-colours — measured against the fills above, same rule as :root. */
     -bm-on-fill-output: #ffffff;
@@ -2836,10 +2872,10 @@
     -bm-on-fill-game: #ffffff;
     -bm-on-fill-utility: #ffffff;
 
-    /* SDK surface — as .dark-theme, one step deeper (16% lightness). White scores 16.93 / 13.95. */
-    -bm-fill-sdk: #2a1237;
+    /* SDK surface — as .dark-theme, one step deeper. White scores 10.32 / 8.04. */
+    -bm-fill-sdk: #5a2d6e;
     -bm-on-fill-sdk: #ffffff;
-    -bm-badge-sdk: #3f1c54;
+    -bm-badge-sdk: #6e3a86;
     -bm-on-badge-sdk: #ffffff;
 
     /* Block surfaces */
@@ -2851,7 +2887,7 @@
     /* Block style values — as .dark-theme, on the near-black card. */
     -bm-canvas: #0a0a0a;
     -bm-theme-text: #e0e0e0;
-    -bm-field: derive(-bm-block-fill, 40%);
+    -bm-field: derive(-bm-block-fill, -35%);
 
     /* Window chrome + severities */
     -bm-divider: #2a2a2a;

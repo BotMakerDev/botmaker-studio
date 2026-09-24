@@ -61,7 +61,7 @@ class SdkBlockContrastTest extends FxHeadlessTest {
             assertEquals(Color.web("#f3ecfb"), fillOf(sdkBlock), "light theme keeps the pale lilac");
 
             render(BlockTheme.ThemeType.DARK);
-            assertEquals(Color.web("#3a1c4a"), fillOf(sdkBlock),
+            assertEquals(Color.web("#6e3a86"), fillOf(sdkBlock),
                     "a literal fill is what no theme could reach — the dark theme must repaint it");
         });
     }

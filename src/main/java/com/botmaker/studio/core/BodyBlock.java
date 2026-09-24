@@ -19,6 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BodyBlock extends AbstractStatementBlock implements BlockWithChildren {
+    /** Style class of a body's first statement: it sits under the header, so its dent has nothing to fit. */
+    public static final String FIRST_STYLE_CLASS = "body-first";
+
     private final List<StatementBlock> statements = new ArrayList<>();
     private final BlockDragAndDropManager dragAndDropManager;
 
@@ -102,6 +105,8 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
                 StatementBlock statement = statements.get(i);
                 Node statementNode = statement.getUINode(context);
                 statementNode.setViewOrder(i);
+                statementNode.getStyleClass().remove(FIRST_STYLE_CLASS);
+                if (i == 0) statementNode.getStyleClass().add(FIRST_STYLE_CLASS);
                 makeStatementDraggable(statementNode, statement);
                 statementNodes.add(statementNode);
                 container.getChildren().add(statementNode);

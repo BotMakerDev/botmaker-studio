@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 2, phase 5: glued stacking, seams, solid value buttons, Nunito.**
+- **2026-09-25 (latest) — Blocks round 2, follow-up: snug C mouths, deeper dark fills.**
+  - Changes:
+    - `.shape-c > .bc-body` and `.shape-hat > .block-body-wrapper` lose their padding inside the hole: the stack sits against the arm and under the header. `GutterDecorator` skips a `BodyBlock` — it reserved a 12px breakpoint strip on the list of lines itself, which was most of the gap. `BodyBlock` stamps `.body-first` on its first statement, whose notch is hidden.
+    - An else-if link (`IfBlock.isElseIf`) carries `.else-if-link` (no lip, no bottom arm, no radius) and `joinsStack()` false, a new `AbstractCodeBlock` hook `getUINode` consults before `StackJoints.attach`.
+    - Dark fills ~33% lightness (Black ~27%) at up to 75% saturation, stepped down to keep white ≥ 5:1; SDK surface and comment card follow. In both dark themes a block's `-fx-base` is its fill −18% and Modena's light/mid/dark text and mark colours are pinned to the block's on-colour (the new fills cross the 45% HSB brightness where Modena's ladder turns control text grey); `-bm-field` steps down instead of up.
+  - Tests: `GluedStackTest` +2 (mouth geometry, else-if link); `SdkBlockContrastTest` expects the new SDK fill. Doc 37 §4/§8 and the gallery screenshots updated.
+
+- **2026-09-25 — Blocks round 2, phase 5: glued stacking, seams, solid value buttons, Nunito.**
   - Changes:
     - `ui/dnd/InsertionSeam` replaces the 12px separator: zero height, view order −1, an 8px hit strip over the join, a line and a round "+" (`:seam-hover`); `createSeparator` delegates, the drop handlers and `enableSeparatorClick` are unchanged in shape. The inline `StyleBuilder` "+" is a `blocks.css` rule.
     - `core/render/StackJoints` adds an unmanaged notch and tab to every stack and C block (`AbstractCodeBlock.getUINode`); `BodyBlock` gives statement *i* view order *i* so a tab lies over the next dent. Outlined hides both.

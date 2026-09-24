@@ -24,6 +24,9 @@ import org.eclipse.jdt.core.dom.Statement;
 
 public class IfBlock extends AbstractStatementBlock implements BlockWithChildren, BranchingBlock {
 
+    /** Style class of an if drawn as the next link of an else-if chain (blocks.css: no lip, no joints). */
+    public static final String ELSE_IF_LINK_STYLE_CLASS = "else-if-link";
+
     private ExpressionBlock condition;
     private BodyBlock thenBody;
     private StatementBlock elseStatement;
@@ -143,10 +146,18 @@ public class IfBlock extends AbstractStatementBlock implements BlockWithChildren
 
     @Override
     protected Node createUINode(CodeEditorService context) {
-        return renderSpecStacked(context)
+        Node node = renderSpecStacked(context)
                 .withStyleClass("if-block")
                 .withDeleteButton(deleteAction(context))
                 .build();
+        if (isElseIf) node.getStyleClass().add(ELSE_IF_LINK_STYLE_CLASS);
+        return node;
+    }
+
+    /** An else-if link continues the if above it; it is not a piece stacked in it. */
+    @Override
+    protected boolean joinsStack() {
+        return !isElseIf;
     }
 
     @Override

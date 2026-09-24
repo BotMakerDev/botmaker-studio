@@ -73,6 +73,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   a faint "+"); each is a solid disc in the block's text colour.
 - **Keywords are heavier and words are rounder**: Nunito ExtraBold for `while`, `if`, `Print`, SemiBold for
   the words between the values, at a 13px base.
+- **A loop, an `if` or a function holds its blocks snugly.** The blocks inside touch the C's arm and its
+  header, where they floated 18px in with a gap above and below. An `else if` no longer draws a second foot
+  under the chain.
+- **Dark and Black blocks are deep colours, not near-black.** Each category keeps its hue at about a third
+  of full lightness, white text still clears 5:1 on every one, and the dropdowns and fields on a block sit a
+  shade darker than it.
 
 - **A plugin's editor is handed the resolved call and a type it can only ask about by class** (contract
   0.3.0). `plugin/HostTypes` builds the `TypeRef` from the binding (its erasure's binary name and every

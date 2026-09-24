@@ -111,6 +111,59 @@ class GluedStackTest extends FxHeadlessTest {
                 .getViewOrder(), "a block is drawn ahead of the one below, so its tab lies over their join");
     }
 
+    private static EditorFixture nested() {
+        return new EditorFixture("""
+                package com.mybot;
+                public class Subject {
+                    public void run() {
+                        boolean x = true;
+                        while (x) {
+                            int a = 1;
+                        }
+                        if (x) {
+                            int b = 2;
+                        } else if (!x) {
+                            int c = 3;
+                        } else {
+                            int d = 4;
+                        }
+                    }
+                }
+                """);
+    }
+
+    private static List<Node> statementsOf(VBox body) {
+        return body.getChildren().stream().filter(n -> n.getStyleClass().contains("block")).toList();
+    }
+
+    @Test
+    void aCsMouthHoldsItsStackAgainstTheArmAndUnderTheHeader() {
+        VBox body = rendered(nested());
+        Parent loop = (Parent) statementsOf(body).get(1);
+        Region mouth = (Region) loop.lookup(".bc-body");
+        VBox inner = (VBox) mouth.lookup(".body-block");
+        Node first = statementsOf(inner).getFirst();
+        Bounds inMouth = mouth.sceneToLocal(first.localToScene(first.getLayoutBounds()));
+        assertEquals(12.0, inMouth.getMinX(), 0.5, "the stack sits against the arm: " + inMouth);
+        assertEquals(0.0, inMouth.getMinY(), 0.5, "the stack sits under the header: " + inMouth);
+        assertTrue(first.getStyleClass().contains(com.botmaker.studio.core.BodyBlock.FIRST_STYLE_CLASS));
+        assertTrue(!((Parent) first).lookup("." + StackJoints.NOTCH).isVisible(),
+                "the first block's dent has no tab above it to fit");
+    }
+
+    @Test
+    void anElseIfLinkIsTheChainNotAPieceInIt() {
+        VBox body = rendered(nested());
+        Parent chain = (Parent) statementsOf(body).get(2);
+        Node link = chain.lookupAll("." + com.botmaker.studio.blocks.flow.IfBlock.ELSE_IF_LINK_STYLE_CLASS)
+                .stream().findFirst().orElseThrow();
+        assertTrue(((Parent) link).getChildrenUnmodifiable().stream()
+                        .noneMatch(n -> n.getStyleClass().contains(StackJoints.NOTCH)
+                                || n.getStyleClass().contains(StackJoints.TAB)),
+                "an else-if link carries no joints");
+        assertEquals(0.0, ((Region) link).getPadding().getBottom(), 0.01, "the chain's first if closes it");
+    }
+
     @Test
     void fillAndChangeAreTwoGlyphs() {
         AtomicReference<Button> add = new AtomicReference<>();
