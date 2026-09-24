@@ -1,6 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.config.AppVersion;
+import com.botmaker.studio.ui.render.theme.CanvasZoom;
+import javafx.beans.InvalidationListener;
+import javafx.beans.WeakInvalidationListener;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.guard.RefusalJournal;
@@ -303,27 +306,35 @@ public class MenuBarManager {
     private Menu createViewMenu() {
         Menu viewMenu = new Menu("View");
 
-        // Placeholder items for future implementation
+        // The block canvas's zoom — a preference, not a project setting, so these need no project and call
+        // CanvasZoom directly. Ctrl+= rather than Ctrl+PLUS: on most layouts "+" is Shift+=, and the key a
+        // browser answers to for zoom-in is the unshifted one. EditorCanvas takes the keypad's +/-/0 and
+        // Ctrl+wheel itself.
         MenuItem zoomInItem = new MenuItem("Zoom In");
-        zoomInItem.setAccelerator(new KeyCodeCombination(
-                KeyCode.PLUS,
-                KeyCombination.CONTROL_DOWN
-        ));
-        zoomInItem.setDisable(true); // Not implemented yet
+        zoomInItem.setAccelerator(new KeyCodeCombination(KeyCode.EQUALS, KeyCombination.SHORTCUT_DOWN));
+        zoomInItem.setOnAction(e -> CanvasZoom.zoomIn());
 
         MenuItem zoomOutItem = new MenuItem("Zoom Out");
-        zoomOutItem.setAccelerator(new KeyCodeCombination(
-                KeyCode.MINUS,
-                KeyCombination.CONTROL_DOWN
-        ));
-        zoomOutItem.setDisable(true); // Not implemented yet
+        zoomOutItem.setAccelerator(new KeyCodeCombination(KeyCode.MINUS, KeyCombination.SHORTCUT_DOWN));
+        zoomOutItem.setOnAction(e -> CanvasZoom.zoomOut());
 
         MenuItem resetZoomItem = new MenuItem("Reset Zoom");
-        resetZoomItem.setAccelerator(new KeyCodeCombination(
-                KeyCode.DIGIT0,
-                KeyCombination.CONTROL_DOWN
-        ));
-        resetZoomItem.setDisable(true); // Not implemented yet
+        resetZoomItem.setAccelerator(new KeyCodeCombination(KeyCode.DIGIT0, KeyCombination.SHORTCUT_DOWN));
+        resetZoomItem.setOnAction(e -> CanvasZoom.reset());
+
+        // Greyed at the ends of the range, so a key that does nothing looks like it does nothing.
+        Runnable refreshZoomItems = () -> {
+            double factor = CanvasZoom.factor();
+            zoomInItem.setDisable(factor >= CanvasZoom.MAX);
+            zoomOutItem.setDisable(factor <= CanvasZoom.MIN);
+            resetZoomItem.setDisable(factor == CanvasZoom.DEFAULT);
+        };
+        refreshZoomItems.run();
+        // Weak, and held by the menu: a menu bar is rebuilt on every project open and reload, and a strong
+        // listener on the static preference would keep each old one alive.
+        InvalidationListener zoomListener = obs -> refreshZoomItems.run();
+        viewMenu.getProperties().put("zoom-listener", zoomListener);
+        CanvasZoom.factorProperty().addListener(new WeakInvalidationListener(zoomListener));
 
         // View ▸ Enable Remote Pilot… stood here until 2026-08-30. The pilot is the SDK plugin's feature now
         // and reaches the toolbar as a ToolbarItem; a plugin contributes no menu items, so this one goes

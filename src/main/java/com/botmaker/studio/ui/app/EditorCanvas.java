@@ -6,7 +6,10 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.BlockEvent;
+import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.application.Platform;
+import javafx.beans.InvalidationListener;
+import javafx.beans.WeakInvalidationListener;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,10 +17,15 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tooltip;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
+import javafx.scene.input.ZoomEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.util.List;
@@ -37,6 +45,7 @@ final class EditorCanvas {
     private final EventBus eventBus;
 
     private final VBox blocksContainer;
+    private final ZoomPane zoomPane;
     private final ScrollPane scrollPane;
     private final VBox column;
 
@@ -73,15 +82,23 @@ final class EditorCanvas {
             }
         });
 
-        this.scrollPane = new ScrollPane(blocksContainer);
+        // Zoom: the canvas is drawn CanvasZoom.factor() times its size and laid out at the width that leaves,
+        // so it re-wraps rather than overflowing — see ZoomPane. bind() holds the static property weakly, so a
+        // canvas thrown away on reload is not kept alive by the preference it follows.
+        this.zoomPane = new ZoomPane(blocksContainer);
+        zoomPane.zoomProperty().bind(CanvasZoom.factorProperty());
+
+        this.scrollPane = new ScrollPane(zoomPane);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
         scrollPane.getStyleClass().add("code-scroll-pane");
+        installZoomGestures();
 
         // Reader mode: a full-colour, control-free view of someone else's bot. A single banner carries the
         // state; the blocks themselves render without any controls (LockResolver suppresses interaction).
-        this.column = new VBox(scrollPane);
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        StackPane viewport = new StackPane(scrollPane, zoomBadge());
+        this.column = new VBox(viewport);
+        VBox.setVgrow(viewport, Priority.ALWAYS);
         if (readerMode) {
             blocksContainer.getStyleClass().add("reader-mode");
             column.getChildren().addFirst(readerBanner(projectName, onSwitchToEditor));
@@ -201,8 +218,10 @@ final class EditorCanvas {
         Node node = target != null ? target.getUINode() : null;
         if (node == null) return;
         Platform.runLater(() -> {
-            Bounds nodeInContent = blocksContainer.sceneToLocal(node.localToScene(node.getBoundsInLocal()));
-            double contentH = blocksContainer.getBoundsInLocal().getHeight();
+            // Measured in the zoom pane, not the container: the container's own bounds are pre-scale, and the
+            // scroll range is the scaled height.
+            Bounds nodeInContent = zoomPane.sceneToLocal(node.localToScene(node.getBoundsInLocal()));
+            double contentH = zoomPane.getHeight();
             double viewportH = scrollPane.getViewportBounds().getHeight();
             if (contentH > viewportH) {
                 double vvalue = (nodeInContent.getMinY() - 20) / (contentH - viewportH);
@@ -210,6 +229,77 @@ final class EditorCanvas {
             }
             node.requestFocus();
         });
+    }
+
+    // --- zoom ------------------------------------------------------------------------------------------------
+
+    /**
+     * Ctrl+wheel and a trackpad pinch zoom around the pointer; Ctrl+plus/minus/0 from the numeric keypad reach
+     * what the View menu's accelerators cannot (a menu item has one key, and the keypad's is a different code).
+     * Filters, so a slot's own scroll or key handling never sees a zoom gesture.
+     */
+    private void installZoomGestures() {
+        scrollPane.addEventFilter(ScrollEvent.SCROLL, e -> {
+            if (!e.isShortcutDown() || e.getDeltaY() == 0) return;
+            double factor = e.getDeltaY() > 0 ? CanvasZoom.stepUp(CanvasZoom.factor())
+                    : CanvasZoom.stepDown(CanvasZoom.factor());
+            zoomAround(factor, e.getY());
+            e.consume();
+        });
+        scrollPane.addEventFilter(ZoomEvent.ZOOM, e -> {
+            zoomAround(CanvasZoom.factor() * e.getZoomFactor(), e.getY());
+            e.consume();
+        });
+        scrollPane.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (!e.isShortcutDown()) return;
+            switch (e.getCode()) {
+                case ADD, PLUS -> CanvasZoom.zoomIn();
+                case SUBTRACT -> CanvasZoom.zoomOut();
+                case NUMPAD0 -> CanvasZoom.reset();
+                default -> { return; }
+            }
+            e.consume();
+        });
+    }
+
+    /**
+     * Sets {@code factor} and scrolls so the program line under {@code pointerY} (in the scroll pane's
+     * coordinates) is still under it afterwards — without this, zooming at the bottom of a long method throws
+     * the reader back to wherever the proportional scroll position happens to land.
+     */
+    private void zoomAround(double factor, double pointerY) {
+        double viewportH = scrollPane.getViewportBounds().getHeight();
+        double top = scrollPane.getVvalue() * Math.max(0, zoomPane.getHeight() - viewportH);
+        double programY = (top + pointerY) / CanvasZoom.factor();
+
+        CanvasZoom.set(factor);
+        scrollPane.layout();
+
+        double range = zoomPane.getHeight() - viewportH;
+        double wantedTop = programY * CanvasZoom.factor() - pointerY;
+        scrollPane.setVvalue(range > 0 ? Math.max(0, Math.min(1, wantedTop / range)) : 0);
+    }
+
+    /** Bottom-right "150%" chip: shown only off 100%, and a click puts it back. */
+    private static Node zoomBadge() {
+        Button badge = new Button();
+        badge.getStyleClass().add("zoom-badge");
+        badge.setFocusTraversable(false);
+        badge.setTooltip(new Tooltip("Canvas zoom — click to reset (Ctrl+0)"));
+        badge.setOnAction(e -> CanvasZoom.reset());
+        Runnable refresh = () -> {
+            double factor = CanvasZoom.factor();
+            badge.setText(CanvasZoom.percent(factor));
+            badge.setVisible(factor != CanvasZoom.DEFAULT);
+        };
+        refresh.run();
+        // Weak: the badge dies with its canvas, the preference does not.
+        InvalidationListener listener = obs -> refresh.run();
+        badge.getProperties().put("zoom-listener", listener);
+        CanvasZoom.factorProperty().addListener(new WeakInvalidationListener(listener));
+        StackPane.setAlignment(badge, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(badge, new Insets(0, 18, 18, 0));
+        return badge;
     }
 
     /** The "Reading — switch to Editor to change" banner shown above the canvas for an installed bot. */

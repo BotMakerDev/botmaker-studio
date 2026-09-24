@@ -68,6 +68,11 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **Zoom the block canvas.** View ▸ Zoom In / Zoom Out / Reset Zoom (Ctrl+=, Ctrl+-, Ctrl+0), Ctrl+wheel and
+  a trackpad pinch, from 50% to 200%. Blocks re-wrap to the width they are drawn in rather than being
+  stretched, the line under the pointer stays put, and a chip in the corner shows the zoom and resets it.
+  Remembered across projects and restarts.
+
 - **⏺ Record is back on the overlay HUD, and it inserts at the cursor.** Press Record, act in the game, press
   Stop: each click, double click, right or middle click, drag, scroll, typed text, key, key combination and
   pause becomes one statement at the cursor, each its own undo step, with its imports. Which call a gesture

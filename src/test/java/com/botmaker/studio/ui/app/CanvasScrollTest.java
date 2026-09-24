@@ -90,7 +90,8 @@ class CanvasScrollTest extends FxHeadlessTest {
         onFx(fixture::rerender);
 
         VBox column = made[0].node();
-        ScrollPane scroll = (ScrollPane) column.getChildren().get(0);
+        // By style class, not position: the scroll pane sits in a StackPane under the zoom chip.
+        ScrollPane scroll = (ScrollPane) column.lookup(".code-scroll-pane");
 
         // The toolkit is shared with every other FX test in the run, so how many pulses it takes for this
         // stage to be sized is not ours to predict. Lay out until the pane genuinely scrolls, then scroll it.

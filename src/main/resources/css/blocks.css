@@ -232,6 +232,21 @@
     -fx-text-fill: -fx-text-background-color;
 }
 
+/* The canvas's zoom chip (EditorCanvas.zoomBadge): only there off 100%, and a click resets. Chrome, not a
+   block, so it takes the shell's band and hairline and reads in every theme through them. */
+.zoom-badge {
+    -fx-background-color: -bm-band;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 2 9 2 9;
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-text-background-color;
+    -fx-opacity: 0.85;
+    -fx-cursor: hand;
+}
+.zoom-badge:hover { -fx-opacity: 1; }
+
 /* ---------------------------------------------------------------------------
  * Dialog chrome — the handful of looks every secondary window builds by hand.
  *

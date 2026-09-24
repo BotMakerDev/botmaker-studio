@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — a blank project gets the contract jar with its first `@Param`.**
+- **2026-09-24 (latest) — canvas zoom.** `ui/render/theme/CanvasZoom` (static preference like the theme,
+  stops 0.5–2.0) and `ui/app/ZoomPane` (a `Scale` plus layout at `width / zoom`, so blocks re-wrap). A
+  transform, not `em`: ~60 gaps/insets are set in Java and would not scale. Open: rows with hard minimum
+  widths (`while count [less than] [10]`) scroll sideways when zoomed in — the Phase 3 redesign's to fix.
+
+- **2026-09-24 — a blank project gets the contract jar with its first `@Param`.**
   `services/ContractDependency` (present = `Param.class` on the resolved classpath, never a jar name),
   `LibraryService.ensureContract` from `ParametersDialog`, a repair at `BotProject.open` step 5a, and the tag
   baked as `botmaker/host.properties` (`botmaker.contract.tag`, passed by `ci.yml` from `.deps.env`).
