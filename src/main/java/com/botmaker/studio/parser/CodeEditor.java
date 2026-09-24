@@ -1398,10 +1398,13 @@ public class CodeEditor {
                 "A try needs a catch or a finally, so its last one stays."));
     }
 
-    /** Makes {@code clause} catch {@code typeText} ({@code IOException}, or {@code A | B}). */
+    /**
+     * Makes {@code clause} catch {@code typeText} ({@code IOException}, or {@code A | B}). Compiled first, as a
+     * pick is: a checked exception the body never throws is refused with javac's reason.
+     */
     public void setCatchType(CatchClause clause, String typeText) {
         if (typeText == null || typeText.strip().equals(TryHandler.catchTypeText(clause))) return;
-        edit(clause, EditKind.BODY, false, (cu, code) -> refusedWith(
+        insert(clause, EditKind.BODY, false, (cu, code) -> refusedWith(
                 TryHandler.setCatchType(ctx(cu), code, clause, typeText),
                 "\"" + typeText.strip() + "\" is not an exception type name."));
     }
@@ -1440,10 +1443,13 @@ public class CodeEditor {
                 (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
     }
 
-    /** Makes a cast, a type check, a class literal, a declaration or an array creation name {@code typeText}. */
+    /**
+     * Makes a cast, a type check, a class literal, a declaration or an array creation name {@code typeText};
+     * refused, with javac's reason, when that would add a compile error.
+     */
     public void setExpressionType(ASTNode owner, String typeText) {
         if (typeText == null || typeText.strip().equals(ExpressionFormHandler.typeText(owner))) return;
-        edit(owner, EditKind.BODY, false, (cu, code) -> refusedWith(
+        insert(owner, EditKind.BODY, false, (cu, code) -> refusedWith(
                 ExpressionFormHandler.setType(ctx(cu), code, owner, typeText),
                 "\"" + typeText.strip() + "\" is not a type that can go there."));
     }

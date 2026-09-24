@@ -68,12 +68,6 @@ public final class BlockUIComponents {
         return com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder.keywordNode(text);
     }
 
-    public static Label createTypeLabel(String type) {
-        Label label = new Label(type);
-        label.getStyleClass().add("type-label");
-        return label;
-    }
-
     public static Label createOperatorLabel(String operator) {
         Label label = new Label(operator);
         label.getStyleClass().add("operator-label");

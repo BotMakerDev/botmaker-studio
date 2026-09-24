@@ -227,9 +227,11 @@ class ExpressionBlocksTest {
     void aTypeCheckAClassLiteralAndANewArrayAreRetyped() {
         EditorFixture f = new EditorFixture(source("boolean v = o instanceof String;"));
         f.editor.setExpressionType(initializer(f), "java.util.List<String>");
-        assertNotNull(f.lastCode);
+        assertNull(f.lastCode, "javac cannot check an Object for List<String>, so the retype is refused");
+        f.editor.setExpressionType(initializer(f), "java.util.List");
+        assertNotNull(f.lastCode, f.statusMessages.toString());
         assertParses(f.lastCode);
-        assertTrue(f.lastCode.contains("o instanceof java.util.List<String>"), f.lastCode);
+        assertTrue(f.lastCode.contains("o instanceof java.util.List"), f.lastCode);
 
         EditorFixture g = new EditorFixture(source("Class<?> v = String.class;"));
         g.editor.setExpressionType(initializer(g), "Integer");

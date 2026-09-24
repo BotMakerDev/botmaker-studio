@@ -24,7 +24,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.*;
 
-import static com.botmaker.studio.ui.render.components.BlockUIComponents.createTypeLabel;
+import com.botmaker.studio.ui.render.components.TypeChip;
 
 public class DeclareClassVariableBlock extends AbstractStatementBlock {
 
@@ -89,8 +89,8 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
     }
 
     /** The type chip, which opens the type selector unless the field is locked. */
-    private Label typeLabelNode(CodeEditorService context) {
-        Label typeLabel = createTypeLabel(fieldType.simpleName());
+    private Node typeLabelNode(CodeEditorService context) {
+        Node typeLabel = TypeChip.of(((FieldDeclaration) this.astNode).getType());
         if (!isReadOnly()) {
             ExpressionMenu.installTypeSelector(typeLabel, "Click to change type", () -> fieldType,
                     context, this.astNode,

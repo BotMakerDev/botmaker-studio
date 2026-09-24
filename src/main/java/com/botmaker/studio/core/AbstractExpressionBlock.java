@@ -3,10 +3,15 @@ package com.botmaker.studio.core;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.parser.handlers.ExpressionFormHandler;
-import com.botmaker.studio.ui.render.components.TextFieldComponents;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
+import com.botmaker.studio.ui.render.menu.TypePicker;
+import org.eclipse.jdt.core.dom.ArrayCreation;
 import org.eclipse.jdt.core.dom.ITypeBinding;
+import org.eclipse.jdt.core.dom.InstanceofExpression;
+import org.eclipse.jdt.core.dom.PatternInstanceofExpression;
+import org.eclipse.jdt.core.dom.TypeLiteral;
+import org.eclipse.jdt.core.dom.VariableDeclarationExpression;
 
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.palette.ExpressionType;
@@ -104,13 +109,28 @@ public abstract class AbstractExpressionBlock extends AbstractCodeBlock implemen
     }
 
     /**
-     * The type {@code owner} names, as a field that retypes it — a cast's, a check's, a class literal's — or
-     * the same text as a label when this block is locked. Typed rather than picked: a type is an open set, and
-     * {@code List<Point>} is written the way Java writes it.
+     * The type {@code owner} names — a cast's, a check's, a class literal's, a declaration's, an array's element
+     * — as a {@link com.botmaker.studio.ui.render.components.TypeChip} whose parts are picked, not typed; the
+     * same chip with nothing to click when this block is locked. It was a text field, where {@code int[]} and
+     * {@code Map<String, List<Point>>} were one run of punctuation to type right. A type the lists do not hold
+     * is still typed, in the picker's search.
      */
     protected Node typeField(ASTNode owner, CodeEditorService context) {
-        return TextFieldComponents.createVariableName(ExpressionFormHandler.typeText(owner), !isReadOnly(),
-                text -> context.getCodeEditor().setExpressionType(owner, text));
+        return TypePicker.chip(ExpressionFormHandler.typeNode(owner), typeOptions(owner), !isReadOnly(), context,
+                owner, text -> context.getCodeEditor().setExpressionType(owner, text));
+    }
+
+    /** What each owner's type may be: a check names no primitive, an array creation names its element. */
+    private static TypePicker.Options typeOptions(ASTNode owner) {
+        return switch (owner) {
+            case InstanceofExpression check -> TypePicker.Options.of(TypePicker.Filter.REFERENCE);
+            case PatternInstanceofExpression check -> TypePicker.Options.of(TypePicker.Filter.REFERENCE);
+            case TypeLiteral literal -> TypePicker.Options.of(TypePicker.Filter.ANY).withVoid();
+            case ArrayCreation creation -> TypePicker.Options.of(TypePicker.Filter.ANY).withoutArrays();
+            case VariableDeclarationExpression declaration ->
+                    TypePicker.Options.of(TypePicker.Filter.ANY).withTypeArguments();
+            default -> TypePicker.Options.of(TypePicker.Filter.ANY);
+        };
     }
 
     /** This value's type from its own binding, or {@code UNKNOWN} when the tree has none. */

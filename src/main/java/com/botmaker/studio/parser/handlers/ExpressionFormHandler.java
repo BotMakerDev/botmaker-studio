@@ -79,17 +79,23 @@ public final class ExpressionFormHandler {
 
     /** What {@code owner} names as its type, as {@link #setType} reads it back. */
     public static String typeText(ASTNode owner) {
+        Type type = typeNode(owner);
+        return type == null ? "" : type.toString();
+    }
+
+    /** The type node {@code owner} names — for an array creation, its element type — or {@code null}. */
+    public static Type typeNode(ASTNode owner) {
         return switch (owner) {
-            case CastExpression cast -> cast.getType().toString();
-            case InstanceofExpression check -> check.getRightOperand().toString();
+            case CastExpression cast -> cast.getType();
+            case InstanceofExpression check -> check.getRightOperand();
             case PatternInstanceofExpression check
                     when check.getPattern() instanceof TypePattern pattern
                     && pattern.getPatternVariable() instanceof SingleVariableDeclaration variable ->
-                    variable.getType().toString();
-            case TypeLiteral literal -> literal.getType().toString();
-            case VariableDeclarationExpression declaration -> declaration.getType().toString();
-            case ArrayCreation creation -> creation.getType().getElementType().toString();
-            case null, default -> "";
+                    variable.getType();
+            case TypeLiteral literal -> literal.getType();
+            case VariableDeclarationExpression declaration -> declaration.getType();
+            case ArrayCreation creation -> creation.getType().getElementType();
+            case null, default -> null;
         };
     }
 

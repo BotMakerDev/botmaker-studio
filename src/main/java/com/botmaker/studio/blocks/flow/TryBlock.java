@@ -13,6 +13,7 @@ import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
+import com.botmaker.studio.ui.render.menu.TypePicker;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Tooltip;
@@ -86,9 +87,10 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
             BodyBlock catchBody = catchBodies.get(i);
             int index = i;
             spec.label("catch-kw" + i, () -> SentenceLayoutBuilder.keywordNode("catch"))
-                    .custom("catch-type" + i, () -> TextFieldComponents.createVariableName(
-                            TryHandler.catchTypeText(clause), !isReadOnly(),
+                    .custom("catch-type" + i, () -> TypePicker.chip(clause.getException().getType(),
+                            CATCH_TYPES, !isReadOnly(), context, clause,
                             typeText -> context.getCodeEditor().setCatchType(clause, typeText)))
+                    .picker("catch-or" + i, () -> alsoCatchButton(clause, context))
                     .label("catch-as" + i, () -> SentenceLayoutBuilder.labelNode("as"))
                     .custom("catch-name" + i, () -> TextFieldComponents.createVariableName(
                             clause.getException().getName().getIdentifier(), !isReadOnly(),
@@ -127,6 +129,22 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
         button.getStyleClass().addAll("block-action-button", "block-action-button--mini");
         button.setOnAction(e -> action.run());
         Tooltip.install(button, new Tooltip(tip));
+        return button;
+    }
+
+    /** What a catch can name: what can be thrown, raw (a catch takes no type argument), never an array. */
+    private static final TypePicker.Options CATCH_TYPES =
+            TypePicker.Options.of(TypePicker.Filter.THROWABLE).withoutArrays();
+
+    /** "+ or": one more alternative for {@code clause}, which makes it a multi-catch ({@code A | B}). */
+    private Button alsoCatchButton(CatchClause clause, CodeEditorService context) {
+        if (isReadOnly()) return null;
+        Button button = new Button("+ or");
+        button.getStyleClass().addAll("block-action-button", "block-action-button--mini");
+        button.setOnAction(e -> TypePicker.show(button, CATCH_TYPES, null, context, clause,
+                choice -> context.getCodeEditor().setCatchType(clause,
+                        TryHandler.catchTypeText(clause) + " | " + choice.text())));
+        Tooltip.install(button, new Tooltip("Catch another exception too"));
         return button;
     }
 

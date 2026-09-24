@@ -24,7 +24,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import org.eclipse.jdt.core.dom.*;
 
-import static com.botmaker.studio.ui.render.components.BlockUIComponents.createTypeLabel;
+import com.botmaker.studio.ui.render.components.TypeChip;
 
 public class VariableDeclarationBlock extends AbstractStatementBlock {
 
@@ -63,7 +63,7 @@ public class VariableDeclarationBlock extends AbstractStatementBlock {
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
         return ComponentSpec.builder()
-                .label("type", () -> createTypeLabel(varType.simpleName()))
+                .label("type", () -> TypeChip.of(((VariableDeclarationStatement) astNode).getType()))
                 .custom("name", () -> TextFieldComponents.createVariableName(variableName, false, newName -> {}))
                 .label("eq", () -> SentenceLayoutBuilder.keywordNode("="))
                 .slot("value", () -> initializerNode(context))

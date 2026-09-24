@@ -28,7 +28,6 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,7 @@ public final class ExpressionMenu {
      * enum blocks so the cursor + tooltip + menu wiring lives in one place.
      */
     public static void installTypeSelector(
-            javafx.scene.control.Label label,
+            Node label,
             String tooltip,
             java.util.function.Supplier<ResolvedType> currentType,
             CodeEditorService context,
@@ -70,7 +69,7 @@ public final class ExpressionMenu {
 
     /** As {@link #installTypeSelector}, but {@code allowVoid} offers a {@code void} pick (method return types). */
     public static void installTypeSelector(
-            javafx.scene.control.Label label,
+            Node label,
             String tooltip,
             java.util.function.Supplier<ResolvedType> currentType,
             CodeEditorService context,
@@ -116,83 +115,8 @@ public final class ExpressionMenu {
             boolean allowArrayDims,
             boolean allowVoid,
             Consumer<ResolvedType> onTypeSelected) {
-        ContextMenu menu = MenuTracker.track(new ContextMenu());
-        MenuBuilders.withSearch(menu, "Search types…", (m, query) ->
-                rebuildTypeItems(m, query, currentType, context, contextNode, allowArrayDims, allowVoid, onTypeSelected));
-        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
-    }
-
-    /** Rebuilds the type menu body (everything below the search box at index 0) for the current {@code query}. */
-    private static void rebuildTypeItems(ContextMenu menu, String query, ResolvedType currentType,
-                                         CodeEditorService context, ASTNode contextNode, boolean allowArrayDims,
-                                         boolean allowVoid, Consumer<ResolvedType> onPick) {
-        MenuBuilders.clearBody(menu);
-        String q = query == null ? "" : query.trim().toLowerCase();
-
-        int dims = (allowArrayDims && currentType != null) ? currentType.arrayDimensions() : 0;
-        ResolvedType leaf = currentType != null ? currentType.leafType() : null;
-
-        // Array-dimension controls only make sense in the no-query, editing-an-existing-type view.
-        if (allowArrayDims && leaf != null && q.isEmpty()) {
-            MenuItem addDim = new MenuItem("Add Dimension []");
-            addDim.setOnAction(e -> onPick.accept(leaf.asArray(dims + 1)));
-            menu.getItems().add(addDim);
-            if (dims > 0) {
-                MenuItem removeDim = new MenuItem("Remove Dimension []");
-                removeDim.setOnAction(e -> onPick.accept(leaf.asArray(dims - 1)));
-                menu.getItems().add(removeDim);
-            }
-            menu.getItems().add(new SeparatorMenuItem());
-        }
-
-        // Collect primitives + classes, de-duped by simple name.
-        Set<String> fundamentals = new HashSet<>(ProjectAnalyzer.getFundamentalTypeNames());
-        Set<String> seen = new HashSet<>();
-        List<ResolvedType> primitives = new ArrayList<>();
-        List<ResolvedType> classes = new ArrayList<>();
-
-        if (allowVoid && seen.add("void")) primitives.add(ResolvedType.named("void"));
-        for (String name : ProjectAnalyzer.getFundamentalTypeNames()) {
-            if (seen.add(name)) primitives.add(ResolvedType.named(name));
-        }
-        for (ResolvedType type : context.getProjectAnalyzer().getAvailableTypes(contextNode)) {
-            if (type.isVoid()) continue;
-            if (!seen.add(type.simpleName())) continue;
-            (fundamentals.contains(type.simpleName()) ? primitives : classes).add(type);
-        }
-        primitives.sort(Comparator.comparing(ResolvedType::simpleName));
-        classes.sort(Comparator.comparing(ResolvedType::simpleName));
-
-        // Active search: a flat, filtered list — no sections to scan.
-        if (!q.isEmpty()) {
-            List<ResolvedType> all = new ArrayList<>(primitives);
-            all.addAll(classes);
-            List<MenuItem> matches = all.stream()
-                    .filter(t -> t.simpleName().toLowerCase().contains(q))
-                    .map(t -> typeMenuItem(t, dims, onPick))
-                    .collect(Collectors.toList());
-            if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matches"));
-            else menu.getItems().addAll(matches);
-            return;
-        }
-
-        if (!primitives.isEmpty()) {
-            menu.getItems().add(MenuBuilders.sectionHeader("PRIMITIVES"));
-            for (ResolvedType type : primitives) menu.getItems().add(typeMenuItem(type, dims, onPick));
-        }
-        if (!classes.isEmpty()) {
-            if (menu.getItems().size() > 1) menu.getItems().add(new SeparatorMenuItem());
-            menu.getItems().add(MenuBuilders.sectionHeader("CLASSES"));
-            for (ResolvedType type : classes) menu.getItems().add(typeMenuItem(type, dims, onPick));
-        }
-        if (menu.getItems().size() == 1) menu.getItems().add(MenuBuilders.disabledItem("(No types available)"));
-    }
-
-    /** A type entry that preserves the current array depth ({@code dims}) when picked. */
-    private static MenuItem typeMenuItem(ResolvedType baseType, int dims, Consumer<ResolvedType> onSelect) {
-        MenuItem item = new MenuItem(baseType.simpleName());
-        item.setOnAction(e -> onSelect.accept(dims > 0 ? baseType.asArray(dims) : baseType));
-        return item;
+        TypePicker.Options options = new TypePicker.Options(TypePicker.Filter.ANY, allowVoid, allowArrayDims, false);
+        TypePicker.show(anchor, options, currentType, context, contextNode, choice -> onTypeSelected.accept(choice.type()));
     }
 
     /**

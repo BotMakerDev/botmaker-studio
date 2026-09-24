@@ -130,9 +130,10 @@ public class StatementFactory {
     }
 
     /**
-     * {@code synchronized (Owner.class) { }} — locked on the enclosing class, which exists in a static method
-     * and an instance one alike; {@code this} does not compile in the first. {@code this} only when there is no
-     * enclosing class to name (a headless build with no drop site).
+     * {@code synchronized (this) { }} in instance code, the lock Java code reaches for first; in static code,
+     * where {@code this} does not compile, {@code synchronized (Owner.class) { }} — the enclosing class, whose
+     * name is a type chip the picker changes. {@code this} also when there is no enclosing class to name (a
+     * headless build with no drop site).
      */
     private static Statement createSynchronizedStatement(AST ast, ASTNode context) {
         SynchronizedStatement sync = ast.newSynchronizedStatement();
@@ -140,7 +141,7 @@ public class StatementFactory {
         for (ASTNode n = context; n != null && owner == null; n = n.getParent()) {
             if (n instanceof AbstractTypeDeclaration type) owner = type;
         }
-        if (owner == null) {
+        if (owner == null || !ProjectAnalyzer.isStaticContext(context)) {
             sync.setExpression(ast.newThisExpression());
         } else {
             TypeLiteral literal = ast.newTypeLiteral();

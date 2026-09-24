@@ -292,4 +292,20 @@ class StatementBlocksTest {
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("synchronized (Subject.class)"), f.lastCode);
     }
+
+    @Test
+    void anInstanceMethodLocksOnThis() {
+        EditorFixture f = new EditorFixture(source(""));
+        f.editor.addStatement(f.body("run"), BlockCatalog.SYNCHRONIZED, 0);
+        assertNotNull(f.lastCode, f.statusMessages.toString());
+        assertTrue(f.lastCode.contains("synchronized (this)"), f.lastCode);
+    }
+
+    @Test
+    void aCatchOfACheckedExceptionTheBodyNeverThrowsIsRefused() {
+        EditorFixture f = new EditorFixture(source("try { int a = 1; } catch (RuntimeException e) { }"));
+        f.editor.setCatchType((CatchClause) tryOf(f).catchClauses().getFirst(), "java.io.IOException");
+        assertNull(f.lastCode, "javac says the catch is unreachable");
+        assertTrue(f.statusMessages.stream().anyMatch(m -> m.contains("would not compile")), f.statusMessages.toString());
+    }
 }

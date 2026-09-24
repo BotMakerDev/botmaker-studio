@@ -9,9 +9,9 @@ import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
+import com.botmaker.studio.ui.render.menu.TypePicker;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.ForStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
@@ -82,8 +82,11 @@ public class ClassicForBlock extends AbstractStatementBlock implements BlockWith
                 .label("kw", () -> SentenceLayoutBuilder.keywordNode("for"));
 
         if (counter != null) {
-            String type = ((VariableDeclarationExpression) counter.getParent()).getType().toString();
-            spec.label("type", () -> BlockUIComponents.createTypeLabel(type))
+            VariableDeclarationExpression declaration = (VariableDeclarationExpression) counter.getParent();
+            spec.custom("type", () -> TypePicker.chip(declaration.getType(),
+                            TypePicker.Options.of(TypePicker.Filter.ANY).withTypeArguments(), !isReadOnly(),
+                            context, declaration,
+                            text -> context.getCodeEditor().setExpressionType(declaration, text)))
                     .custom("name", () -> nameField(counter.getName(), context));
             if (counter.getInitializer() != null) {
                 spec.label("from", () -> SentenceLayoutBuilder.labelNode("from"))

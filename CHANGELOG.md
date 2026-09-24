@@ -48,8 +48,21 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 - **Define Enum asks for the name and the values first.** OK stays disabled while the name is taken or not
   a valid Java name. *View ▸ Ask for Names When Inserting* turns this off, and the variable window after a
   new variable with it.
+- **Types are picked, not typed.** Every type on a block is a chip drawn by its structure: `int[]` is `int`
+  with `[ ]`, `Map<String, List<Point>>` is a `Map` chip holding two smaller ones. Click a part to pick it
+  from a list: primitives, *This project*, *From plugins*, *Java*, and other libraries one level down. A
+  type the lists lack is typed in the search and offered as *Use "…"*. This covers casts, type checks,
+  `Foo.class`, `new int[…]`, a `catch`, a `for` counter and the variables in `for`/`try (…)`; a variable's,
+  a field's and a function's types are drawn the same way.
+- **A catch offers only exceptions**, and *+ or* adds another one (`catch (A | B e)`).
 
 ### Changed
+
+- **A type change is compiled first.** A cast, check or catch that would not compile — a checked exception
+  the body never throws, `o instanceof List<String>` — is refused with javac's reason, as an inserted block
+  is.
+- **A new `synchronized` block locks on `this`** in an instance method; a static one still locks on the
+  class.
 
 - **A plugin's editor is handed the resolved call and a type it can only ask about by class** (contract
   0.3.0). `plugin/HostTypes` builds the `TypeRef` from the binding (its erasure's binary name and every

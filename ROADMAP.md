@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — Blocks round 2, phase 3: menus reviewed, call owner badge.**
+- **2026-09-25 (latest) — Blocks round 2, phase 4: type chip and type picker.**
+  - Changes:
+    - `ui/render/components/TypeChip` draws a JDT `Type` by structure (primitive, class, `‹ ›` arguments as nested wells, `[ ]` per dimension, union `|`, `var`), and `replace(root, part, text)` respells the whole type with one part changed, on a copy.
+    - `ui/render/menu/TypePicker`: `Filter` (ANY, REFERENCE, THROWABLE), `Options` (void, dimensions, type arguments), sections Primitives / This project / From plugins (`ValueGrammar.names()`) / Java / Libraries ▸, and *Use "…"* for a typed type `JavaSnippets.type` reads. `chip(...)` binds the two; a type-argument part is picked from reference types.
+    - `ExpressionMenu.showTypeMenu` delegates to it; `installTypeSelector` takes any `Node`.
+    - `AbstractExpressionBlock.typeField` (cast, instanceof, class literal, array creation, declaration expression), `TryBlock` catch (+ *or*), `ClassicForBlock` counter use the chip; variable, field, parameter and return types are drawn with it. `createTypeLabel` and the `type-label`, `param-type-label`, `return-type-label` rules are gone.
+    - `setExpressionType`/`setCatchType` go through `CodeEditor.insert` (compile guard).
+    - Synchronized seeds `this` outside static code.
+  - Not done: a variable's own type is still changed in the Variables window, not on its chip; no multi-catch alternative removal (retype the chip part instead).
+- **2026-09-24 — Blocks round 2, phase 3: menus reviewed, call owner badge.**
   - Changes:
     - `MenuRows` draws a palette row: category dot, glyph, name, and a `PaletteDescriptions` line.
     - `StatementMenu` has *Recent* (5 per session), *From plugins* and *Java* sections, counts search results, and drops class members.

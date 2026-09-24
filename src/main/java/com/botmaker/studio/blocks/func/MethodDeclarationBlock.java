@@ -18,6 +18,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
+import com.botmaker.studio.ui.render.components.TypeChip;
 import javafx.css.PseudoClass;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -39,7 +40,6 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
     protected static final PseudoClass COLLAPSED = PseudoClass.getPseudoClass("collapsed");
 
     private final String methodName;
-    private final String returnType;
     private BodyBlock body;
 
     protected boolean isDeletable = true; // False for Main method
@@ -71,11 +71,6 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
     public MethodDeclarationBlock(String id, MethodDeclaration astNode, BlockDragAndDropManager manager) {
         super(id, astNode);
         this.methodName = astNode.getName().getIdentifier();
-        if (astNode.getReturnType2() != null) {
-            this.returnType = astNode.getReturnType2().toString();
-        } else {
-            this.returnType = "void";
-        }
     }
 
     public void setBody(BodyBlock body) {
@@ -210,8 +205,9 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         Label returnsLabel = new Label("returns");
         returnsLabel.getStyleClass().add("method-returns-label");
 
-        Label returnTypeLabel = new Label(returnType);
-        returnTypeLabel.getStyleClass().add("return-type-label");
+        MethodDeclaration declaration = (MethodDeclaration) this.astNode;
+        Node returnTypeLabel = declaration.getReturnType2() == null
+                ? TypeChip.of("void") : TypeChip.of(declaration.getReturnType2());
 
         var topRowBuilder = BlockLayout.sentence()
                 .addNode(collapseBtn)
@@ -281,8 +277,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         box.setAlignment(Pos.CENTER_LEFT);
         box.getStyleClass().add("param-pill");
 
-        Label typeLabel = new Label(param.getType().toString());
-        typeLabel.getStyleClass().add("param-type-label");
+        Node typeLabel = TypeChip.of(param.getType());
 
         if (editable) {
             // Retyping one input is a signature change like any other, so it goes through the same scan and

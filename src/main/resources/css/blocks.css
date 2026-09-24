@@ -2085,19 +2085,6 @@
     -fx-background-radius: 4;
 }
 
-/* Clickable return-type chip in the method header (opens the unified searchable type menu). Its text was a
-   literal #FFD479 — readable on the purple header and on nothing else, including the outlined card. It is the
-   header's own text on a wash now, which is legible on whatever the header is painted with. */
-.return-type-label {
-    -fx-text-fill: -bm-text-on-color;
-    -fx-font-weight: bold;
-    -fx-font-size: 12px;
-    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.30) 49%, rgba(0, 0, 0, 0.22) 50%);
-    -fx-background-radius: 12;
-    -fx-padding: 1 8 1 8;
-    -fx-cursor: hand;
-}
-
 /* Parameter "pill" inside a method/constructor header: a value well, so it takes the block's well colour
    (-fx-control-inner-background, which BLOCK STYLE layer 2 re-points) and the text Modena ladders against it
    (-fx-text-inner-color). It was white with #333 text, which was a white hole in every dark theme. */
@@ -2105,12 +2092,6 @@
     -fx-background-color: -fx-control-inner-background;
     -fx-background-radius: 12;
     -fx-padding: 3 8 3 8;
-}
-
-.param-type-label {
-    -fx-text-fill: -fx-text-inner-color;
-    -fx-font-weight: bold;
-    -fx-font-size: 11px;
 }
 
 .param-name-field {
@@ -2890,30 +2871,46 @@
     -bm-severity-ok-text: #00ff00;
 }
 
-/* The declared type on a variable block. It had no rule at all, which is how the one part of a declare
-   block you most often want to change ended up looking exactly like a word. The editable variant gets a
-   pressable surface and a caret; the read-only one stays a plain word, which is the truth about it. */
-.type-label {
-    -fx-font-weight: bold;
-    -fx-padding: 1 4 1 4;
-}
-
-.type-label-editable {
+/* TYPE CHIP (ui/render/components/TypeChip): a type drawn by its structure. The chip is a value well, like a
+   parameter pill, so its text is the ladder Modena pairs with that well in every theme and both variants. A
+   class name is bold, a primitive plain; brackets, `[ ]` and `‹ ›` are lighter punctuation between them. A
+   type argument is a nested well with a hairline, so `Map‹String, List‹int[ ]››` reads as boxes in boxes. */
+.type-chip {
     -fx-background-color: -fx-control-inner-background;
-    -fx-background-radius: 4;
+    -fx-background-radius: 9;
+    -fx-padding: 1 7 1 7;
+}
+.type-chip-nested {
     -fx-border-color: -bm-divider;
-    -fx-border-radius: 4;
-    -fx-padding: 1 5 1 6;
-    -fx-graphic-text-gap: 4;
+    -fx-border-radius: 7;
+    -fx-background-radius: 7;
+    -fx-padding: 0 4 0 4;
 }
-
-.type-label-editable:hover {
+.type-chip-part,
+.type-chip-punctuation {
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-font-size: 11px;
+}
+.type-chip-class {
+    -fx-font-weight: bold;
+}
+.type-chip-primitive {
+    -fx-font-weight: normal;
+    -fx-font-style: italic;
+}
+.type-chip-keyword {
+    -fx-font-style: italic;
+}
+.type-chip-punctuation {
+    -fx-padding: 0 1 0 1;
+}
+.type-chip-clickable {
+    -fx-background-radius: 5;
+    -fx-padding: 0 2 0 2;
+}
+.type-chip-clickable:hover {
     -fx-background-color: -bm-band;
-}
-
-.type-label-editable > .label {
-    -fx-font-size: 9px;
-    -fx-opacity: 0.7;
+    -fx-underline: true;
 }
 
 /* Why a rename was refused, under the field it was refused in (ui/app/vars/EditVariableDialog). */
