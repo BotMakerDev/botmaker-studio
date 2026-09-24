@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.services.CodeEditorService;
@@ -22,6 +23,16 @@ import java.util.function.Predicate;
 public abstract class AbstractStatementBlock extends AbstractCodeBlock implements StatementBlock {
     public AbstractStatementBlock(String id, ASTNode astNode) {
         super(id, astNode);
+    }
+
+    /** A C around its body when it holds one, a plain stack block otherwise. */
+    @Override
+    protected BlockShape shape() {
+        if (this instanceof BlockWithChildren parent
+                && parent.getChildren().stream().anyMatch(BodyBlock.class::isInstance)) {
+            return BlockShape.C_BLOCK;
+        }
+        return BlockShape.STACK;
     }
 
     // --- Helpers used by subclasses ---

@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.render.layout;
 
 import javafx.geometry.Insets;
 import javafx.scene.Node;
+import javafx.scene.control.Control;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 
@@ -45,11 +46,24 @@ public class WrappingSentencePane extends HBox {
 
     @Override
     protected double computeMinWidth(double height) {
-        // Narrowest useful width: the widest single child, so a row can wrap down to one item per line.
+        // Narrowest useful width: the narrowest each child can honestly be, so a row can wrap down to one item
+        // per line.
         Insets in = getInsets();
         double widest = 0;
-        for (Node c : getManagedChildren()) widest = Math.max(widest, c.prefWidth(-1));
+        for (Node c : getManagedChildren()) widest = Math.max(widest, narrowest(c));
         return in.getLeft() + widest + in.getRight();
+    }
+
+    /**
+     * How narrow {@code child} can be drawn without hiding anything. A control — a word, a field, a dropdown —
+     * is never squeezed, so it counts at its preferred width. A container counts at its <em>minimum</em>,
+     * because a container may wrap: a nested sentence (a comparison inside a {@code while}) can fold onto
+     * several lines, and reporting its one-line width here made every row that held one as wide as that line.
+     * That is what put a horizontal scrollbar under a zoomed-in canvas (2026-09-24): at 150% the canvas lays
+     * out at two thirds of the window, and the rows could not say they fit.
+     */
+    private static double narrowest(Node child) {
+        return child instanceof Control ? child.prefWidth(-1) : child.minWidth(-1);
     }
 
     @Override

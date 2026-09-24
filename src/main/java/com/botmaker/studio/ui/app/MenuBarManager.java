@@ -1,6 +1,8 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.config.AppVersion;
+import com.botmaker.studio.ui.render.theme.BlockStyle;
+import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
@@ -389,10 +391,29 @@ public class MenuBarManager {
                 new SeparatorMenuItem(),
                 previewAsUserItem,
                 new SeparatorMenuItem(),
-                themeMenu
+                themeMenu,
+                blockStyleMenu()
         );
 
         return viewMenu;
+    }
+
+    /**
+     * View ▸ Block Style: filled or outlined, one radio item per {@link BlockStyle}. Built from the enum, so a
+     * third style is a constant there and a rule set in {@code blocks.css}, and nothing here.
+     */
+    private static Menu blockStyleMenu() {
+        Menu menu = new Menu("Block Style");
+        ToggleGroup group = new ToggleGroup();
+        for (BlockStyle style : BlockStyle.values()) {
+            RadioMenuItem item = new RadioMenuItem(style.displayName());
+            item.setToggleGroup(group);
+            item.setUserData(style);
+            item.setSelected(style == BlockStylePreference.style());
+            item.setOnAction(e -> BlockStylePreference.set(style));
+            menu.getItems().add(item);
+        }
+        return menu;
     }
 
     /** Sets the action for View ▸ Preview as user (opens the project in the Runner window for this session). */

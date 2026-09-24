@@ -144,6 +144,12 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         return BlockCategory.FUNCTIONS;
     }
 
+    /** The definition the program's lines sit in; constructors and {@code main} inherit it. */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return com.botmaker.studio.core.render.BlockShape.HAT;
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
         VBox container = new VBox(0);

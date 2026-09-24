@@ -4,7 +4,6 @@ import com.botmaker.studio.services.CodeEditorService;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
@@ -22,14 +21,12 @@ public class HeaderLayoutBuilder {
     private Node growingNode;
 
     public HeaderLayoutBuilder withKeyword(String text) {
-        Label label = new Label(text);
-        label.getStyleClass().add("keyword-label");
-        leftContent.add(label);
+        leftContent.add(SentenceLayoutBuilder.keywordNode(text));
         return this;
     }
 
     public HeaderLayoutBuilder withLabel(String text) {
-        leftContent.add(new Label(text));
+        leftContent.add(SentenceLayoutBuilder.labelNode(text));
         return this;
     }
 

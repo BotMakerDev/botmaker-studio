@@ -1217,7 +1217,12 @@ The `ui/` package is split by concern:
   `Spacing.gutter()` is the single source of the block gutter width).
 
 Cross-cutting block decoration lives in `core/render/` (the `BlockDecorator` pipeline, see **Block System**), and
-block state styling lives in `src/main/resources/css/blocks.css`. That file also carries the **window
+block state styling lives in `src/main/resources/css/blocks.css`. **How a block looks is umbrella
+`docs/refactor/37-block-styling.md` (2026-09-24)**: `getUINode` puts `block`, `shape-*` (`core/render/BlockShape`,
+worked out from the syntax tree), `block-category` and `category-*` on every root, the layout builders stamp
+`bc-*` per `BlockComponent.Kind`, and the canvas carries `blocks-filled`/`blocks-outlined` (`BlockStyle`,
+View ▸ Block Style). A new block overrides `category()` and, rarely, `shape()`, and writes no CSS; run
+`BlockStyleContrastTest` and `BM_BLOCK_GALLERY=<dir> mvn test -Dtest=BlockGalleryTest` after touching BLOCK STYLE. That file also carries the **window
 chrome** — the toolbar's hairline, the status line, the Errors filter bar and the diagnostic rows — as classes
 over the `-bm-*` design tokens each theme redefines. Style the shell there, never with `setStyle`: an inline
 style beats the stylesheet in *every* theme, which is exactly how the toolbar border came to override its own

@@ -65,9 +65,7 @@ public final class BlockUIComponents {
     }
 
     public static Label createKeywordLabel(String text) {
-        Label label = new Label(text);
-        label.getStyleClass().add("keyword-label");
-        return label;
+        return com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder.keywordNode(text);
     }
 
     public static Label createTypeLabel(String type) {

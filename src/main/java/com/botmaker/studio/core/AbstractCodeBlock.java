@@ -1,6 +1,7 @@
 package com.botmaker.studio.core;
 
 import com.botmaker.studio.core.render.BlockDecorator;
+import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.core.render.GutterDecorator;
 import com.botmaker.studio.core.render.InteractionDecorator;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
@@ -124,6 +125,23 @@ public abstract class AbstractCodeBlock implements CodeBlock {
     }
 
     /**
+     * The outline this block is drawn with — the other half of its style, beside {@link #category()}.
+     *
+     * <p>The statement and expression bases work it out from the syntax tree, so a block overrides this only
+     * when it is a shape its base cannot see: a method is a {@link BlockShape#HAT}, a body is
+     * {@link BlockShape#NONE}. {@code NONE} by default here, which is the class card's.
+     */
+    protected BlockShape shape() {
+        return BlockShape.NONE;
+    }
+
+    /** Style class every block root with a shape carries, whatever the shape: what the CSS scopes block widgets by. */
+    public static final String BLOCK_STYLE_CLASS = "block";
+
+    /** Style class every block root with a category carries, beside its {@code category-*}: what gets filled. */
+    public static final String CATEGORY_STYLE_CLASS = "block-category";
+
+    /**
      * Extra right-click entries this kind of block offers, above the copy/paste/breakpoint items every block
      * has. Empty by default; {@code InteractionDecorator} adds a separator after them when there are any.
      *
@@ -142,8 +160,12 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             uiNode.pseudoClassStateChanged(BREAKPOINT, breakpointActive.get());
             breakpointActive.addListener((obs, was, on) -> uiNode.pseudoClassStateChanged(BREAKPOINT, on));
 
+            // Colour and outline, as classes: blocks.css turns a category into three colour tokens and a shape
+            // into an outline, so no block class names a colour or a radius (docs/refactor/37-block-styling.md).
+            BlockShape shape = shape();
+            if (shape != BlockShape.NONE) uiNode.getStyleClass().addAll(BLOCK_STYLE_CLASS, shape.styleClass());
             BlockCategory category = category();
-            if (category != null) uiNode.getStyleClass().add(category.styleClass());
+            if (category != null) uiNode.getStyleClass().addAll(CATEGORY_STYLE_CLASS, category.styleClass());
 
             // The other half of the trail a focused widget follows home: the component id names which field
             // it is, this names which block declared it. Both are needed, because a component id is unique

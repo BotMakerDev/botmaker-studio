@@ -62,6 +62,12 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         }
     }
 
+    /** A call standing as a line is a stack block; a call whose value is used is a value like any other. */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return isStatementContext ? com.botmaker.studio.core.render.BlockShape.STACK : super.shape();
+    }
+
     // NEW: Setter for LibraryCallBlock to use
     public void setFixedScope(String className) {
         this.fixedScopeName = className;

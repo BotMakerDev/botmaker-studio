@@ -140,26 +140,39 @@ class BlockPaletteContrastTest {
     }
 
     /**
-     * The fill is only safe because the same rule re-points {@code -bm-text-on-color} at that category's
-     * on-colour: JavaFX looked-up colours cascade, so that one line is what fixes every descendant label. A
-     * rule that painted a fill and forgot it would render white-on-yellow and nothing else would complain.
+     * The fill is only safe because the text is re-pointed with it: JavaFX looked-up colours cascade, so one
+     * line on the block's root is what fixes every descendant label. A rule that painted a fill and forgot it
+     * would render white-on-yellow and nothing else would complain.
+     *
+     * <p>Since 2026-09-24 that is two rules, and both are checked: each category names <em>its own</em> fill and
+     * on-colour as a pair ({@code -bm-own-fill: -bm-fill-X} beside {@code -bm-own-on-fill: -bm-on-fill-X}, the
+     * same X — the pairing the test above measured), and the one {@code .block-category} rule paints with the
+     * block's fill and re-points the text at the block's on-colour (through {@code -bm-block-on-fill}, which
+     * the locked and outlined states swap).
      */
     @Test
-    void everyFilledCategoryRuleRepointsTheTextToken() throws IOException {
+    void everyCategoryNamesAMeasuredPairAndTheBlockRulePaintsWithIt() throws IOException {
         String css = css();
+        Pattern own = Pattern.compile("-bm-own-fill:\\s*-bm-fill-([a-z-]+);.*?-bm-own-on-fill:\\s*-bm-on-fill-([a-z-]+);");
         for (BlockCategory category : BlockCategory.values()) {
-            // The selector appears twice: once ending the shared geometry group, once as its own filled rule.
-            String rule = "." + category.styleClass() + " {";
-            String filled = null;
-            for (int open = css.indexOf(rule); open >= 0; open = css.indexOf(rule, open + 1)) {
-                String body = css.substring(open, css.indexOf('}', open));
-                if (body.contains("-fx-background-color: -bm-fill-")) filled = body;
-            }
-
-            assertNotNull(filled, category.styleClass() + " must have a rule filling it with its category token");
-            assertTrue(filled.contains("-bm-text-on-color: -bm-on-fill-"),
-                    category.styleClass() + " fills but never re-points -bm-text-on-color: " + filled);
+            String rule = "." + category.styleClass() + " ";
+            int open = css.indexOf(rule + "{");
+            if (open < 0) open = css.indexOf(rule);
+            assertTrue(open >= 0, category.styleClass() + " must have a colour rule");
+            String body = css.substring(open, css.indexOf('}', open));
+            Matcher pair = own.matcher(body);
+            assertTrue(pair.find(), category.styleClass() + " must name its own fill and on-colour: " + body);
+            assertEquals(pair.group(1), pair.group(2),
+                    category.styleClass() + " pairs a fill with another category's on-colour: " + body);
         }
+
+        int open = css.indexOf(".block-category {");
+        assertTrue(open >= 0, "blocks.css must have the .block-category state rule");
+        String state = css.substring(open, css.indexOf('}', open));
+        assertTrue(state.contains("-bm-block-fill: -bm-own-fill"), "the block must paint with its own fill: " + state);
+        assertTrue(state.contains("-bm-block-on-fill: -bm-own-on-fill")
+                        && state.contains("-bm-text-on-color: -bm-block-on-fill"),
+                "the block must re-point its text at its own on-colour: " + state);
     }
 
     /**

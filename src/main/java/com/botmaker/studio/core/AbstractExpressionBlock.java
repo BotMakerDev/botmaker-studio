@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.services.CodeEditorService;
@@ -28,6 +29,12 @@ public abstract class AbstractExpressionBlock extends AbstractCodeBlock implemen
 
     public AbstractExpressionBlock(String id, ASTNode astNode) {
         super(id, astNode);
+    }
+
+    /** A value is round-ended, a yes/no value square-ended — read off the expression, see {@link BlockShape#ofValue}. */
+    @Override
+    protected BlockShape shape() {
+        return BlockShape.ofValue(astNode);
     }
 
     public boolean isUnedited() { return isUnedited; }

@@ -66,7 +66,28 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   property rather than overwriting the placeholder. The gamebot template pins its SDK as
   `${botmaker.sdk.version}`, and a project copied from it would otherwise resolve no SDK jar.
 
+- **A zoomed-in canvas wraps instead of scrolling sideways.** Rows holding a comparison or a sum refused to be
+  narrower than their one-line width; they wrap now, and at 200% a 700px window still fits the program.
+
+- **Every word on a block clears WCAG AA in all four themes**, measured on the rendered canvas: the TRUE/FALSE
+  chips (white on green was 2.1:1), a method's red × (1.5:1 on purple), a variable's name (black on every
+  dark theme), "+ Add Function" on High Contrast's yellow, and a locked file, whose statements faded again at
+  every level of nesting (a word four deep was drawn at 42% opacity).
+
+- **The debugger's highlight and a compile error are rings round the block**, so they show on every colour —
+  an error on a red block used to be invisible.
+
 ### Added
+
+- **Blocks look like blocks.** Every block is drawn in its category's colour with a darker lip under it; a
+  loop, an `if` or a `switch` wraps its body like a C, so what is inside it is plainly inside; a method is a
+  rounded "hat" its lines sit in; values are round and conditions square-ended, so a condition slot and what
+  fills it can be told apart; an `if` / `else if` / `else` chain reads as one block. Typed-in values and
+  dropdowns are as wide as what they show (a `0` is no longer a 150px box), keywords are bold and full size,
+  and the `+` / `x` buttons are quiet until pointed at. **View ▸ Block Style** switches to *Outlined* — a
+  plain card with the category as a bar down its edge — in every theme, and remembers the choice.
+- **The block style is documented** in `docs/refactor/37-block-styling.md` (umbrella): the classes, the
+  tokens per theme, each shape's anatomy, the states, and the recipe for a new block, which needs no CSS.
 
 - **Zoom the block canvas.** View ▸ Zoom In / Zoom Out / Reset Zoom (Ctrl+=, Ctrl+-, Ctrl+0), Ctrl+wheel and
   a trackpad pinch, from 50% to 200%. Blocks re-wrap to the width they are drawn in rather than being

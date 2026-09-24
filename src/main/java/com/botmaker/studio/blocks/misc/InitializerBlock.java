@@ -47,6 +47,12 @@ public class InitializerBlock extends AbstractStatementBlock implements BlockWit
         this.body = body;
     }
 
+    /** A definition like a method: nothing calls it, the program's lines sit in it. */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return com.botmaker.studio.core.render.BlockShape.HAT;
+    }
+
     /** True for {@code static { … }}, false for the instance initializer. */
     public boolean isStatic() {
         return isStatic;

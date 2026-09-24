@@ -80,6 +80,8 @@ public final class ComponentLayoutBuilder {
             // which is what SpecReconciler decides a carry by. Stamped here rather than in each block, so
             // every declared component carries it and none can forget.
             ComponentNodes.stampComponent(node, component.id());
+            // And what it is, for the stylesheet: bc-label, bc-slot, bc-picker, bc-body.
+            component.kind().stamp(node);
             out.add(new Rendered(component, node));
         }
         return out;

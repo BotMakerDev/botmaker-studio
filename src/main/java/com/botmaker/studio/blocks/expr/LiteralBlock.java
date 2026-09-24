@@ -2,6 +2,7 @@ package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.ui.render.components.FieldSizing;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.TextField;
@@ -36,6 +37,15 @@ public class LiteralBlock<T> extends AbstractExpressionBlock {
         return value;
     }
 
+    /**
+     * No outline: a typed-in value is the slot's own well, not a block drawn inside the slot — Scratch's white
+     * round slot, which the field already is. A reporter wash around it would be a ring around a hole.
+     */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return com.botmaker.studio.core.render.BlockShape.NONE;
+    }
+
     @Override
     protected Node createUINode(CodeEditorService context) {
         String initialText = (value instanceof String) ? (String) value : String.valueOf(value);
@@ -44,6 +54,7 @@ public class LiteralBlock<T> extends AbstractExpressionBlock {
         if (initialText.isEmpty() && value instanceof String) {
             textField.setPromptText("Type a value...");
         }
+        FieldSizing.fitToText(textField);
 
         // READ-ONLY LOGIC
         if (isReadOnly()) {

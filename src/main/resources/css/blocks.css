@@ -137,6 +137,19 @@
     /* Read-only: a lock reads as *flat and quiet*, never as a colour of its own — see :read-only below. */
     -bm-locked-fill: rgba(127, 140, 141, 0.15);
 
+    /*
+     * Three colours the block style needs as *values*, not as Modena look-ups — because a painted block
+     * re-points Modena's look-ups at its own colours (BLOCK STYLE, layer 2), so from inside a block the Modena
+     * name no longer means the theme's colour:
+     *   -bm-canvas      what shows through a C-block's body: the class card's surface.
+     *   -bm-theme-text  the theme's own text colour, for a block that drops its fill (read-only, outlined).
+     *   -bm-field       the well a value is typed into on a filled block. White here, a lighter step of the
+     *                   block's own fill in the dark themes (a white well on a dark block is a hole in it).
+     */
+    -bm-canvas: #ffffff;
+    -bm-theme-text: #1a1a1a;
+    -bm-field: #ffffff;
+
     /* Window chrome: the hairlines between the shell's rows, and the quiet band a filter/status row sits on.
        Both used to be hex literals set inline from Java, which meant they stayed light grey in every theme. */
     -bm-divider: #dcdcdc;
@@ -508,6 +521,21 @@
     -fx-cursor: default;
     -fx-saturation: 0.4;
 }
+/* Once, not per level. Opacity multiplies down the tree, and in a locked file every block, body and field
+   carries :read-only, so a word four deep was drawn at 0.75³ ≈ 0.42 — 2.6:1, found by BlockStyleContrastTest
+   and plain in the gallery's locked.png. So the containers do not fade: a block, a body and the class card say
+   "locked" with their fill (-bm-locked-fill, below), and only the leaves — the words and fields — take the
+   0.75, once. (`*:read-only *:read-only` would have said this more briefly; JavaFX does not match it.) */
+.block:read-only,
+.bc-body:read-only,
+.body-block:read-only,
+.class-block:read-only {
+    -fx-opacity: 1.0;
+}
+/* Nor does a TRUE/FALSE chip: its colour is the value, and faded, near-black on the red scored 2.8:1. */
+.boolean-literal-block:read-only {
+    -fx-opacity: 1.0;
+}
 
 /* A read-only method's whole body: flat, dim, and set apart from the editable one above or below it. */
 .block-body:read-only {
@@ -536,101 +564,71 @@
 
 /*
  * ============================================================================================================
- * CATEGORY STYLING — one rule per BlockCategory (palette/BlockCategory#styleClass), applied to every block's
- * root node by AbstractCodeBlock. A block's colour follows from what it *does*.
+ * BLOCK STYLE — colour, then state, then shape × variant. docs/refactor/37-block-styling.md is the reference:
+ * token tables per theme, the anatomy of each shape, the contrast measurements and the recipe for a new block.
  * ============================================================================================================
  *
- * A block that overrides category() is *filled* with `-bm-fill-<cat>` and outlined with a 1px `-bm-cat-<cat>`
- * accent. It used to be a 3px left accent bar over the theme's default surface — which left every label
- * inside it painted the hardcoded white this file assumed everywhere, on a surface that was white in the
- * default theme. That is the "block text is unreadable" report: the palette had been written for coloured
- * fills that were never applied.
+ * A block root carries up to four classes, all put there by AbstractCodeBlock.getUINode and none by a block:
  *
- * The border is the accent hue rather than the on-colour, and 1px rather than 2. A 2px on-colour outline is a
- * maximum-contrast rectangle drawn around every block on the canvas, nested three deep — it reads as a table,
- * not as blocks. The accent is bright against its own fill without competing with the text on it.
+ *   block               every block with an outline (BlockShape other than NONE) — what widgets are scoped by
+ *   shape-<shape>       stack | c | reporter | boolean | hat — worked out from the syntax tree (BlockShape)
+ *   block-category      every block with a BlockCategory — what gets painted
+ *   category-<name>     which category — what colour it is painted in
  *
- * The `-bm-text-on-color` line in each rule is what makes the fill safe. JavaFX looked-up colours cascade,
- * so redefining it on the block's root node re-points every descendant label at once — there is no per-label
- * rule below that needs to know which category it landed in, and a block dropped inside another block picks
- * up its own category's on-colour rather than its parent's.
+ * and the canvas root carries one of .blocks-filled / .blocks-outlined (BlockStyle, View ▸ Block Style).
  *
- * The token is the single place each colour lives — do not put a hex literal in these rules.
+ * The rules come in three layers, and each knows nothing of the others:
+ *
+ *   1. COLOUR. A .category-* rule names its category's three colours as -bm-own-*, and nothing else.
+ *   2. STATE. .block-category picks which colours the block paints with (-bm-block-*): its own, or the locked
+ *      ones when :read-only, or its own again under .reader-mode. It also re-points Modena's look-ups at them,
+ *      which is what makes every stock control inside a block — a field, a dropdown, a button — take the
+ *      block's colour with no rule naming that control.
+ *   3. SHAPE × VARIANT. The .shape-* rules draw the outline from the -bm-block-* colours. Filled is the
+ *      default, so a block drawn outside a canvas still looks like a block; .blocks-outlined overrides.
+ *
+ * A block class never appears in these rules and a colour literal never appears in any of them. A new block
+ * that overrides category() and extends the right base is styled — the whole recipe is in the doc.
+ *
+ * The `-bm-text-on-color` line in layer 2 is what makes a fill safe. JavaFX looked-up colours cascade, so
+ * redefining it on the block's root node re-points every descendant label at once, and a block dropped inside
+ * another block picks up its own category's on-colour rather than its parent's.
  */
-.category-output,
-.category-input,
-.category-variables,
-.category-flow,
-.category-loops,
-.category-control,
-.category-functions,
-.category-game,
-.category-utility,
-.category-bot-variable {
-    -fx-border-width: 1;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
-    -fx-padding: 3 6 3 6;
-}
 
-.category-output {
-    -fx-background-color: -bm-fill-output;
-    -fx-border-color: -bm-cat-output;
-    -bm-text-on-color: -bm-on-fill-output;
-}
+/* 1. COLOUR — a category's three colours, from the theme's -bm-cat-* / -bm-fill-* / -bm-on-fill-* tokens. */
+.category-output       { -bm-own-accent: -bm-cat-output;    -bm-own-fill: -bm-fill-output;    -bm-own-on-fill: -bm-on-fill-output; }
+.category-input        { -bm-own-accent: -bm-cat-input;     -bm-own-fill: -bm-fill-input;     -bm-own-on-fill: -bm-on-fill-input; }
+.category-variables    { -bm-own-accent: -bm-cat-variables; -bm-own-fill: -bm-fill-variables; -bm-own-on-fill: -bm-on-fill-variables; }
+.category-flow         { -bm-own-accent: -bm-cat-flow;      -bm-own-fill: -bm-fill-flow;      -bm-own-on-fill: -bm-on-fill-flow; }
+.category-loops        { -bm-own-accent: -bm-cat-loops;     -bm-own-fill: -bm-fill-loops;     -bm-own-on-fill: -bm-on-fill-loops; }
+.category-control      { -bm-own-accent: -bm-cat-control;   -bm-own-fill: -bm-fill-control;   -bm-own-on-fill: -bm-on-fill-control; }
+.category-functions    { -bm-own-accent: -bm-cat-functions; -bm-own-fill: -bm-fill-functions; -bm-own-on-fill: -bm-on-fill-functions; }
+.category-game         { -bm-own-accent: -bm-cat-game;      -bm-own-fill: -bm-fill-game;      -bm-own-on-fill: -bm-on-fill-game; }
+.category-utility      { -bm-own-accent: -bm-cat-utility;   -bm-own-fill: -bm-fill-utility;   -bm-own-on-fill: -bm-on-fill-utility; }
+.category-bot-variable { -bm-own-accent: -bm-cat-vision;    -bm-own-fill: -bm-fill-vision;    -bm-own-on-fill: -bm-on-fill-vision; }
 
-.category-input {
-    -fx-background-color: -bm-fill-input;
-    -fx-border-color: -bm-cat-input;
-    -bm-text-on-color: -bm-on-fill-input;
-}
+/* 2. STATE — what the block paints with. Everything below reads -bm-block-*, never -bm-own-*. */
+.block-category {
+    -bm-block-accent: -bm-own-accent;
+    -bm-block-fill: -bm-own-fill;
+    -bm-block-on-fill: -bm-own-on-fill;
+    /* Through -bm-block-on-fill rather than directly, so a part of the block that names its own on-colour
+       (a hat's .block-header) can be pointed back at the block's — whatever state the block is in. */
+    -bm-text-on-color: -bm-block-on-fill;
+    /* The lip under a block: its own fill, darker. The dark themes use the accent instead (see the overlays). */
+    -bm-block-edge: derive(-bm-block-fill, -30%);
 
-.category-variables {
-    -fx-background-color: -bm-fill-variables;
-    -fx-border-color: -bm-cat-variables;
-    -bm-text-on-color: -bm-on-fill-variables;
-}
-
-.category-flow {
-    -fx-background-color: -bm-fill-flow;
-    -fx-border-color: -bm-cat-flow;
-    -bm-text-on-color: -bm-on-fill-flow;
-}
-
-.category-loops {
-    -fx-background-color: -bm-fill-loops;
-    -fx-border-color: -bm-cat-loops;
-    -bm-text-on-color: -bm-on-fill-loops;
-}
-
-.category-control {
-    -fx-background-color: -bm-fill-control;
-    -fx-border-color: -bm-cat-control;
-    -bm-text-on-color: -bm-on-fill-control;
-}
-
-.category-functions {
-    -fx-background-color: -bm-fill-functions;
-    -fx-border-color: -bm-cat-functions;
-    -bm-text-on-color: -bm-on-fill-functions;
-}
-
-.category-game {
-    -fx-background-color: -bm-fill-game;
-    -fx-border-color: -bm-cat-game;
-    -bm-text-on-color: -bm-on-fill-game;
-}
-
-.category-utility {
-    -fx-background-color: -bm-fill-utility;
-    -fx-border-color: -bm-cat-utility;
-    -bm-text-on-color: -bm-on-fill-utility;
-}
-
-.category-bot-variable {
-    -fx-background-color: -bm-fill-vision;
-    -fx-border-color: -bm-cat-vision;
-    -bm-text-on-color: -bm-on-fill-vision;
+    /* Modena's look-ups, re-pointed at the block (see the layer note above). -fx-text-background-color is a
+       Label's text; -fx-base is a Button's and a ComboBox's surface, whose text Modena then ladders to
+       contrast; -fx-control-inner-background is a TextField's well, whose text is laddered the same way. The
+       other four take Modena's bevels and borders away: a control on a block is a flat token, not a widget. */
+    -fx-text-background-color: -bm-text-on-color;
+    -fx-base: derive(-bm-block-fill, 12%);
+    -fx-control-inner-background: -bm-field;
+    -fx-text-box-border: transparent;
+    -fx-shadow-highlight-color: transparent;
+    -fx-inner-border: transparent;
+    -fx-outer-border: derive(-bm-block-fill, -18%);
 }
 
 /*
@@ -638,21 +636,16 @@
  * The `*:read-only` desaturation above would have washed the fill rather than removed it, which reads as "a
  * faded version of an active block" — the opposite of the flat, obviously-not-yours surface that rule exists
  * to produce. With no fill left, the on-colour would be wrong too, so hand the labels back to the theme's own
- * text colour (-fx-text-background-color, which every theme block below already sets).
+ * text colour. That is -bm-theme-text and not -fx-text-background-color, which layer 2 re-points at
+ * -bm-text-on-color: naming it here would be a loop.
  */
-.category-output:read-only,
-.category-input:read-only,
-.category-variables:read-only,
-.category-flow:read-only,
-.category-loops:read-only,
-.category-control:read-only,
-.category-functions:read-only,
-.category-game:read-only,
-.category-utility:read-only,
-.category-bot-variable:read-only {
-    -fx-border-color: -bm-muted;
-    -fx-background-color: -bm-locked-fill;
-    -bm-text-on-color: -fx-text-background-color;
+.block-category:read-only {
+    -bm-block-accent: -bm-muted;
+    -bm-block-fill: -bm-locked-fill;
+    -bm-block-on-fill: -bm-theme-text;
+    /* The locked fill is translucent, and Modena ladders a well's text against its well colour — which a
+       derive() of a translucent fill does not describe. The canvas is opaque and is what shows through. */
+    -fx-control-inner-background: -bm-canvas;
 }
 
 /*
@@ -663,6 +656,9 @@
  * canvas-level .reader-mode class we undo the wash and let the bot show in full colour and full legibility.
  * The generated-scaffold read-only case (a per-file distinction *inside* an editable project) is untouched —
  * it isn't under .reader-mode.
+ *
+ * One rule where there were ten: the category's own colours are still on the node as -bm-own-*, so putting
+ * them back is the same three lines for every category.
  */
 .reader-mode *:read-only {
     -fx-opacity: 1.0;
@@ -672,55 +668,299 @@
     -fx-border-color: transparent;
     -fx-background-color: transparent;
 }
-.reader-mode .category-output:read-only {
-    -fx-background-color: -bm-fill-output;
-    -fx-border-color: -bm-cat-output;
-    -bm-text-on-color: -bm-on-fill-output;
+.reader-mode .block-category:read-only {
+    -bm-block-accent: -bm-own-accent;
+    -bm-block-fill: -bm-own-fill;
+    -bm-block-on-fill: -bm-own-on-fill;
 }
-.reader-mode .category-input:read-only {
-    -fx-background-color: -bm-fill-input;
-    -fx-border-color: -bm-cat-input;
-    -bm-text-on-color: -bm-on-fill-input;
+
+/*
+ * 3. SHAPE × VARIANT — filled first, as the default; .blocks-outlined below overrides it.
+ *
+ * FILLED. Every painted block is its fill over a 3px lip of -bm-block-edge — two background layers, the fill
+ * inset from the bottom — so a stack of blocks reads as things that sit on one another, the way Scratch's do.
+ * Padding: 14px on the left is the breakpoint gutter (GutterDecorator's strip, which CSS padding replaces).
+ */
+.block-category {
+    -fx-background-color: -bm-block-edge, -bm-block-fill;
+    -fx-background-insets: 0, 0 0 3 0;
+    -fx-background-radius: 7;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 5 6 8 14;
 }
-.reader-mode .category-variables:read-only {
-    -fx-background-color: -bm-fill-variables;
-    -fx-border-color: -bm-cat-variables;
-    -bm-text-on-color: -bm-on-fill-variables;
+
+/*
+ * A C-block's body is a hole in it: the canvas shows through, framed by the block's colour on three sides —
+ * a 12px arm on the left, the header above, the lip below. Its left bar (.block-body) goes; the arm is the bar.
+ * The body pane's padding comes from Java (LayoutComponents / BodyLayoutBuilder) and is replaced here so the
+ * statements inside clear the arm.
+ */
+.block-category.shape-c > .bc-body {
+    -fx-background-color: -bm-canvas;
+    -fx-background-insets: 2 0 2 12;
+    -fx-background-radius: 6 0 0 6;
+    -fx-border-width: 0;
+    -fx-padding: 4 0 4 18;
 }
-.reader-mode .category-flow:read-only {
-    -fx-background-color: -bm-fill-flow;
-    -fx-border-color: -bm-cat-flow;
-    -bm-text-on-color: -bm-on-fill-flow;
+.block-category.shape-c {
+    -fx-padding: 5 0 8 14;
 }
-.reader-mode .category-loops:read-only {
-    -fx-background-color: -bm-fill-loops;
-    -fx-border-color: -bm-cat-loops;
-    -bm-text-on-color: -bm-on-fill-loops;
+
+/*
+ * A hat — a method, a constructor, a static block — is a C-block with a heavier header: a rounded top, its
+ * body a hole the program's lines sit in, a thick arm below it where the definition closes.
+ */
+.block-category.shape-hat {
+    -fx-background-radius: 16 16 8 8;
+    -fx-padding: 0 0 12 0;
 }
-.reader-mode .category-control:read-only {
-    -fx-background-color: -bm-fill-control;
-    -fx-border-color: -bm-cat-control;
-    -bm-text-on-color: -bm-on-fill-control;
+/* The header draws nothing of its own on a hat: the block's fill shows through, and its words take the block's
+   on-colour back from .block-header's own (white — right on the purple, invisible once the block is locked
+   or outlined). */
+.block-category.shape-hat > .block-header {
+    -fx-background-color: transparent;
+    -bm-text-on-color: -bm-block-on-fill;
 }
-.reader-mode .category-functions:read-only {
-    -fx-background-color: -bm-fill-functions;
-    -fx-border-color: -bm-cat-functions;
-    -bm-text-on-color: -bm-on-fill-functions;
+.block-category.shape-hat > .block-body-wrapper {
+    -fx-background-color: -bm-canvas;
+    -fx-background-insets: 0 0 0 14;
+    -fx-background-radius: 8 0 0 8;
+    -fx-border-width: 0;
+    -fx-padding: 6 0 6 20;
 }
-.reader-mode .category-game:read-only {
-    -fx-background-color: -bm-fill-game;
-    -fx-border-color: -bm-cat-game;
-    -bm-text-on-color: -bm-on-fill-game;
+
+/*
+ * A value is round-ended and a yes/no value is square-ended, so a condition slot and what fills it can be
+ * told apart at a glance. A value with a category (a variable) is a filled pill with a thinner lip; one with
+ * none (a sum, a comparison, a call) is a wash over whatever it sits on.
+ *
+ * The wash moves the surface AWAY from the text on it: ladder() reads the brightness of -bm-text-on-color and
+ * lightens under dark text, darkens under light text. The other way round looked the same and was measurably
+ * worse — a dark wash under near-black text took `count` on the green loop to 4.31:1, under AA
+ * (BlockStyleContrastTest) — and it compounds, since a reporter inside a condition is two washes deep.
+ *
+ * Radius 12, not 999: a one-line reporter is ~24px tall, so 12 is fully round — and one that wraps onto three
+ * lines (a list, a long call) stays a rounded card instead of becoming a stadium.
+ */
+.shape-reporter,
+.shape-boolean {
+    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.30) 49%, rgba(0, 0, 0, 0.22) 50%);
+    -fx-background-radius: 12;
+    -fx-padding: 2 6 2 6;
 }
-.reader-mode .category-utility:read-only {
-    -fx-background-color: -bm-fill-utility;
-    -fx-border-color: -bm-cat-utility;
-    -bm-text-on-color: -bm-on-fill-utility;
+.shape-boolean {
+    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.40) 49%, rgba(0, 0, 0, 0.30) 50%);
+    -fx-background-radius: 4;
 }
-.reader-mode .category-bot-variable:read-only {
-    -fx-background-color: -bm-fill-vision;
-    -fx-border-color: -bm-cat-vision;
-    -bm-text-on-color: -bm-on-fill-vision;
+.block-category.shape-reporter,
+.block-category.shape-boolean {
+    -fx-background-color: -bm-block-edge, -bm-block-fill;
+    -fx-background-insets: 0, 0 0 2 0;
+    -fx-padding: 1 8 3 8;
+}
+
+/*
+ * OUTLINED. A card in the canvas's colour with the category as a 4px bar down its left edge and a hairline
+ * round the rest — the look before the fills, tidied. The on-colour is the theme's text, fields sit in the
+ * band colour, and a C-block's body is marked by the same bar rather than a hole.
+ */
+.blocks-outlined .block-category {
+    -bm-block-fill: -bm-canvas;
+    -bm-block-on-fill: -bm-theme-text;
+    -fx-base: -bm-band;
+    -fx-control-inner-background: -bm-band;
+    -fx-outer-border: -bm-divider;
+    -fx-background-color: -bm-block-fill;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-block-accent;
+    -fx-border-width: 1 1 1 4;
+    -fx-border-radius: 6;
+    -fx-padding: 5 6 5 12;
+}
+.blocks-outlined .block-category:read-only {
+    -bm-block-accent: -bm-muted;
+    -bm-block-fill: -bm-locked-fill;
+}
+.blocks-outlined .reader-mode .block-category:read-only,
+.blocks-outlined.reader-mode .block-category:read-only {
+    -bm-block-accent: -bm-own-accent;
+    -bm-block-fill: -bm-canvas;
+}
+.blocks-outlined .block-category.shape-c > .bc-body {
+    -fx-background-color: transparent;
+    -fx-border-color: -bm-block-accent;
+    -fx-border-width: 0 0 0 2;
+    -fx-padding: 4 0 2 14;
+}
+.blocks-outlined .block-category.shape-c {
+    -fx-padding: 5 6 5 12;
+}
+.blocks-outlined .block-category.shape-hat {
+    -fx-padding: 0 0 6 0;
+    -fx-border-width: 1 1 1 4;
+}
+.blocks-outlined .block-category.shape-hat > .block-header {
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 0 0 1 0;
+}
+.blocks-outlined .block-category.shape-hat > .block-body-wrapper {
+    -fx-background-color: transparent;
+    -fx-padding: 6 0 0 12;
+}
+.blocks-outlined .shape-reporter,
+.blocks-outlined .shape-boolean {
+    -fx-background-color: -bm-band;
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+.blocks-outlined .shape-boolean {
+    -fx-border-radius: 4;
+}
+.blocks-outlined .block-category.shape-reporter,
+.blocks-outlined .block-category.shape-boolean {
+    -fx-border-color: -bm-block-accent;
+    -fx-border-width: 1 1 1 3;
+    -fx-padding: 1 8 1 6;
+}
+
+/*
+ * WIDGETS ON A BLOCK — geometry only. Their colours are already the block's (layer 2), so what is left is to
+ * make each one a token rather than a form control: round, compact, no bevel. Scoped by .block, so the same
+ * control outside a block (the class card, a dialog) is untouched. Only radius and padding are set here, so
+ * a widget class further down that sets a background (.block-inset-field, .block-selector) keeps it.
+ */
+.block .text-field {
+    -fx-background-radius: 999;
+    -fx-padding: 2 8 2 8;
+}
+.block .combo-box-base {
+    -fx-background-radius: 999;
+    -fx-padding: 0 2 0 4;
+}
+.block .combo-box-base > .list-cell {
+    -fx-padding: 2 2 2 6;
+}
+.block .combo-box-base > .arrow-button {
+    -fx-padding: 0 6 0 4;
+}
+.block .button {
+    -fx-background-radius: 999;
+}
+
+/*
+ * The glyph buttons — "+" beside a value, "X" at the end of a line. There is one beside every slot, so drawn
+ * as buttons they were most of the visual noise on the canvas. Drawn as ghosts: the block's text colour at
+ * half strength, a wash only under the pointer.
+ */
+.block .icon-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -bm-text-on-color;
+    -fx-opacity: 0.55;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+.block .icon-button:hover,
+.block .icon-button:focused {
+    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.40) 49%, rgba(0, 0, 0, 0.30) 50%);
+    -fx-opacity: 1.0;
+}
+
+/*
+ * TRUE / FALSE (BooleanLiteralBlock): the two answers as the two signal colours every theme already defines —
+ * the loop green and the control red — with the one on-colour that clears AA on both in all four themes
+ * (-bm-on-accent, near-black; tightest is the default theme's red at 4.56). It was inline white on two hex
+ * literals: 2.1:1 on the green.
+ */
+.boolean-chip {
+    -fx-text-fill: -bm-on-accent;
+    -fx-font-weight: bold;
+    -fx-font-size: 11px;
+    -fx-padding: 3 10 3 10;
+    -fx-background-radius: 12;
+    -fx-cursor: hand;
+}
+.boolean-chip--true {
+    -fx-background-color: -bm-cat-loops;
+}
+.boolean-chip--false {
+    -fx-background-color: -bm-cat-control;
+}
+
+/*
+ * HIGH CONTRAST keeps an outline on every painted block: its fills are saturated primaries on a black canvas,
+ * and the edge between two of them is exactly where this theme may not rely on hue alone.
+ */
+.high-contrast-theme .block-category {
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 1;
+    -fx-border-radius: 7;
+}
+.high-contrast-theme .block-category.shape-reporter {
+    -fx-border-radius: 12;
+}
+/* And no ghosts: a half-strength glyph is exactly what this theme exists to refuse. */
+.high-contrast-theme .block .icon-button {
+    -fx-opacity: 1.0;
+}
+.high-contrast-theme .block-category.shape-hat {
+    -fx-border-radius: 16 16 8 8;
+}
+
+/*
+ * The dark themes' fills sit at ~20% lightness, and a lip darker than that is invisible on their canvas. So
+ * the lip is the category's bright accent, stepped down: a lit edge rather than a shadow, which is what gives
+ * a dark block its outline back without the 1px border the fills used to carry.
+ */
+.dark-theme .block-category,
+.black-theme .block-category {
+    -bm-block-edge: derive(-bm-block-accent, -20%);
+}
+
+/*
+ * STATES — written once, for both variants and every theme, and last in BLOCK STYLE: every rule above sets a
+ * border (filled takes it away, outlined draws one), and the cross-cutting *:highlighted / *:error / *:breakpoint
+ * rules at the top of this file are a single pseudo-class, which those out-rank. Scoped by .blocks-canvas so
+ * these out-rank the variant rules by specificity as well as by order.
+ *
+ *   :highlighted  the line the debugger is on, or the block a search/scroll landed on — an accent ring
+ *   :error        the compiler's complaint about this block — a danger ring
+ *   :breakpoint   a breakpoint on this line — a danger bar left of the block, the gutter's circle beside it
+ *
+ * Drawn OUTSIDE the block (negative insets), over the canvas, not on the block's edge: a danger border on the
+ * red Control fill is invisible, and so is the accent on a blue Output one. Outside, each ring is read against
+ * the canvas, which is the one colour every block sits on. The radius is the shape's own plus the 3px gap, so
+ * the ring follows the outline's corners.
+ */
+.blocks-canvas .block:highlighted,
+.blocks-canvas .block:error {
+    -fx-border-color: -bm-primary;
+    -fx-border-width: 2;
+    -fx-border-insets: -3;
+    -fx-border-radius: 10;
+}
+.blocks-canvas .block:error {
+    -fx-border-color: -bm-danger;
+}
+.blocks-canvas .block:breakpoint {
+    -fx-border-color: -bm-danger;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-insets: 0 0 0 -5;
+    -fx-border-radius: 0;
+}
+.blocks-canvas .shape-reporter:highlighted,
+.blocks-canvas .shape-reporter:error {
+    -fx-border-radius: 15;
+}
+.blocks-canvas .shape-boolean:highlighted,
+.blocks-canvas .shape-boolean:error {
+    -fx-border-radius: 7;
+}
+.blocks-canvas .shape-hat:highlighted,
+.blocks-canvas .shape-hat:error {
+    -fx-border-radius: 19 19 11 11;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1076,9 +1316,11 @@
 /* The one action on a block that adds something of the user's own, rather than editing what is there.
    Grey-on-grey read as disabled next to the block's own body colour, which is exactly what "+ Add Function"
    is not. Filled with the accent every theme redefines, so it reads as the primary action in all of them. */
+/* Near-black, not white: white on the default blue scores 3.15 and on High Contrast's yellow nothing at all;
+   -bm-on-accent clears AA on -bm-primary in all four themes. */
 .block-action-button--primary {
     -fx-background-color: -bm-primary;
-    -fx-text-fill: white;
+    -fx-text-fill: -bm-on-accent;
 }
 .block-action-button--primary:hover {
     -fx-background-color: derive(-bm-primary, 15%);
@@ -1315,7 +1557,7 @@
 /* A read-only method's parameter name, which would otherwise be an editable TextField. */
 .param-name-label {
     -fx-font-size: 12px;
-    -fx-text-fill: #2c3e50;
+    -fx-text-fill: -fx-text-inner-color;
 }
 
 /*
@@ -1389,6 +1631,12 @@
     -fx-border-radius: 4;
     -fx-background-color: transparent;
     -fx-opacity: 1.0;
+}
+
+/* A variable's name (IdentifierBlock) is a bare Text node, which no Modena rule colours — so it was black on
+   every surface, including the dark ones. A type selector: a plain Text carries no style class. */
+.identifier-block > Text {
+    -fx-fill: -bm-text-on-color;
 }
 
 /*
@@ -1588,12 +1836,13 @@
     -fx-cursor: hand;
 }
 
+/* A block's keyword — "while", "if", "Print:" — is the first word read, so it is full strength and a step
+   above the 11px body text rather than the 10px, 85% caption it was. */
 .header-keyword-label,
 .keyword-label {
     -fx-text-fill: -bm-text-on-color;
-    -fx-opacity: 0.85;
     -fx-font-weight: bold;
-    -fx-font-size: 10px;
+    -fx-font-size: 12px;
 }
 
 /*
@@ -1727,12 +1976,19 @@
     -fx-border-width: 0 0 0 2;
 }
 
+/* The method's ×. The header's own text colour at rest and the danger red only under the pointer: red on the
+   purple header scored 1.54:1, and a red that cannot be read is not a warning. */
 .header-delete-button {
     -fx-background-color: transparent;
-    -fx-text-fill: -bm-danger;
+    -fx-text-fill: -bm-text-on-color;
     -fx-font-size: 16px;
-    -fx-padding: 0;
+    -fx-padding: 0 4 0 4;
     -fx-cursor: hand;
+}
+.header-delete-button:hover {
+    -fx-background-color: -bm-danger;
+    -fx-background-radius: 999;
+    -fx-text-fill: -bm-on-accent;
 }
 
 /*
@@ -1801,26 +2057,30 @@
     -fx-background-radius: 4;
 }
 
-/* Clickable return-type chip in the method header (opens the unified searchable type menu). */
+/* Clickable return-type chip in the method header (opens the unified searchable type menu). Its text was a
+   literal #FFD479 — readable on the purple header and on nothing else, including the outlined card. It is the
+   header's own text on a wash now, which is legible on whatever the header is painted with. */
 .return-type-label {
-    -fx-text-fill: #FFD479;
+    -fx-text-fill: -bm-text-on-color;
     -fx-font-weight: bold;
     -fx-font-size: 12px;
-    -fx-background-color: rgba(255, 255, 255, 0.15);
-    -fx-background-radius: 4;
+    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.30) 49%, rgba(0, 0, 0, 0.22) 50%);
+    -fx-background-radius: 12;
     -fx-padding: 1 8 1 8;
     -fx-cursor: hand;
 }
 
-/* Parameter "pill" inside a method/constructor header. */
+/* Parameter "pill" inside a method/constructor header: a value well, so it takes the block's well colour
+   (-fx-control-inner-background, which BLOCK STYLE layer 2 re-points) and the text Modena ladders against it
+   (-fx-text-inner-color). It was white with #333 text, which was a white hole in every dark theme. */
 .param-pill {
-    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-background-color: -fx-control-inner-background;
     -fx-background-radius: 12;
     -fx-padding: 3 8 3 8;
 }
 
 .param-type-label {
-    -fx-text-fill: -bm-cat-functions;
+    -fx-text-fill: -fx-text-inner-color;
     -fx-font-weight: bold;
     -fx-font-size: 11px;
 }
@@ -1829,12 +2089,11 @@
     -fx-background-color: transparent;
     -fx-padding: 0;
     -fx-font-size: 11px;
-    -fx-text-fill: #333;
+    -fx-text-fill: -fx-text-inner-color;
 }
 
 .param-name-field:focused {
-    -fx-background-color: white;
-    -fx-text-fill: black;
+    -fx-background-color: -fx-control-inner-background;
 }
 
 .param-delete-button {
@@ -1864,8 +2123,11 @@
     -fx-font-size: 11px;
 }
 
+/* "List (2)" over a list's items. It was a pale blue that vanished on every light fill; a caption is the
+   surface's own text, quieter. */
 .list-label-generic {
-    -fx-text-fill: #aaddff;
+    -fx-text-fill: -bm-text-on-color;
+    -fx-opacity: 0.75;
 }
 
 .list-empty-label {
@@ -1877,7 +2139,8 @@
 
 .list-index-label {
     -fx-font-family: monospace;
-    -fx-text-fill: #666;
+    -fx-text-fill: -bm-text-on-color;
+    -fx-opacity: 0.6;
     -fx-font-size: 9px;
     -fx-min-width: 10px;
 }
@@ -2308,6 +2571,12 @@
     /* Read-only */
     -bm-locked-fill: rgba(149, 165, 166, 0.20);
 
+    /* Block style values (see :root). The field is the block's own fill two steps up, so a slot reads as a
+       well in the block rather than a hole through it; white text scores ≥ 7 on every one. */
+    -bm-canvas: #3c3c3c;
+    -bm-theme-text: #e0e0e0;
+    -bm-field: derive(-bm-block-fill, 35%);
+
     /* Window chrome + severities: lighter than the surface, where the light theme's are darker than it. */
     -bm-divider: #4a4a4a;
 
@@ -2411,6 +2680,11 @@
     /* Read-only */
     -bm-locked-fill: rgba(176, 190, 197, 0.25);
 
+    /* Block style values — as .dark-theme, on the near-black card. */
+    -bm-canvas: #0a0a0a;
+    -bm-theme-text: #e0e0e0;
+    -bm-field: derive(-bm-block-fill, 40%);
+
     /* Window chrome + severities */
     -bm-divider: #2a2a2a;
     -bm-band: #141414;
@@ -2512,6 +2786,12 @@
 
     /* Read-only */
     -bm-locked-fill: rgba(255, 255, 255, 0.15);
+
+    /* Block style values. The field is black with white text (21:1) — a white well would be the same
+       brightness as half the fills it sits in. */
+    -bm-canvas: #000000;
+    -bm-theme-text: #ffffff;
+    -bm-field: #000000;
 
     /* Window chrome + severities — a white hairline, and severities that stay at full contrast. */
     -bm-divider: #ffffff;

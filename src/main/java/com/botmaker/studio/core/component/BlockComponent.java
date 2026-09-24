@@ -1,7 +1,9 @@
 package com.botmaker.studio.core.component;
 
+import com.botmaker.studio.core.AbstractCodeBlock;
 import javafx.scene.Node;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -45,7 +47,35 @@ public record BlockComponent(String id, Kind kind, Supplier<Node> node, Consumer
         /** A nested container of statements. */
         BODY,
         /** Anything a block builds itself and the schema does not model. */
-        CUSTOM
+        CUSTOM;
+
+        /**
+         * The CSS class a component of this kind carries — {@code bc-label}, {@code bc-slot}, … — so
+         * {@code blocks.css} styles a part of a block by what it is rather than by which block drew it.
+         * Stamped by the layout builders, which are the only places a component becomes a node.
+         */
+        public String styleClass() {
+            return switch (this) {
+                case LABEL -> "bc-label";
+                case EXPRESSION_SLOT -> "bc-slot";
+                case PICKER -> "bc-picker";
+                case BODY -> "bc-body";
+                case CUSTOM -> "bc-custom";
+            };
+        }
+
+        /**
+         * Adds this kind's class to {@code node}, once — unless {@code node} is a block's own root. A component
+         * can <em>be</em> a block: the value filling a slot, or the next link of an else-if chain, which is
+         * declared as a {@link #BODY} so it gets a row of its own. Such a node is styled as the block it is;
+         * stamped {@code bc-body}, the chain link was painted as the hole in a C rather than as the C.
+         */
+        public void stamp(Node node) {
+            if (node == null) return;
+            List<String> classes = node.getStyleClass();
+            if (classes.contains(AbstractCodeBlock.BLOCK_STYLE_CLASS) || classes.contains(styleClass())) return;
+            classes.add(styleClass());
+        }
     }
 
     public BlockComponent {

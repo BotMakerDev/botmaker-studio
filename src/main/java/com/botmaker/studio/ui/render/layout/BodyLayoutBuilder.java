@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.layout;
 
 import com.botmaker.studio.core.BodyBlock;
+import com.botmaker.studio.core.component.BlockComponent;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
@@ -77,6 +78,7 @@ public class BodyLayoutBuilder {
         // "block-body" draws the left accent bar (blocks.css) so the body reads as enclosed by the block,
         // not merely indented.
         bodyContainer.getStyleClass().add("block-body");
+        BlockComponent.Kind.BODY.stamp(bodyContainer);
         if (indentation != null) bodyContainer.setPadding(indentation);
         if (body != null) bodyContainer.getChildren().add(body.getUINode(context));
         return bodyContainer;

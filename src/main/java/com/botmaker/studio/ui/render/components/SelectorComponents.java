@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 public class SelectorComponents {
 
     public static ComboBox<String> createOperatorSelector(String[] names, String[] symbols, String currentSymbol, Consumer<String> onSymbolChange) {
-        ComboBox<String> selector = new ComboBox<>();
+        ComboBox<String> selector = new FittedComboBox<>();
         selector.getItems().addAll(names);
         selector.getStyleClass().add("operator-selector"); // or math-operator-selector based on context
         selector.setEditable(false);
@@ -40,7 +40,7 @@ public class SelectorComponents {
     }
 
     public static ComboBox<String> createSimpleSelector(String[] options, String current, Consumer<String> onChange) {
-        ComboBox<String> selector = new ComboBox<>();
+        ComboBox<String> selector = new FittedComboBox<>();
         selector.getItems().addAll(options);
         selector.setValue(current);
         selector.setOnAction(e -> {

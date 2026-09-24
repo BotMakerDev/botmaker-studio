@@ -2,7 +2,6 @@ package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.ui.render.theme.StyleBuilder;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -21,6 +20,12 @@ public class BooleanLiteralBlock extends AbstractExpressionBlock {
     public BooleanLiteralBlock(String id, BooleanLiteral astNode) {
         super(id, astNode);
         this.value = astNode.booleanValue();
+    }
+
+    /** No outline: like a typed-in number, a true/false toggle is the slot's value, and it draws its own chip. */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return com.botmaker.studio.core.render.BlockShape.NONE;
     }
 
     public boolean getValue() {
@@ -66,21 +71,14 @@ public class BooleanLiteralBlock extends AbstractExpressionBlock {
         return root;
     }
 
+    /**
+     * The chip's look is {@code .boolean-chip} in {@code blocks.css}, from theme tokens. It was an inline
+     * style of two hex literals with white text — which beat the stylesheet in every theme and scored 2.1:1
+     * on the green (BlockStyleContrastTest).
+     */
     private void updateLabelStyle(Label label, boolean val) {
-        String trueColor = "#2ecc71";  // Emerald Green
-        String falseColor = "#e74c3c"; // Alizarin Red
-        String color = val ? trueColor : falseColor;
-
-        StyleBuilder.create()
-                .textColor("white")
-                .fontWeight("bold")
-                .fontSize(11)
-                .fontFamily("'Segoe UI', sans-serif")
-                .padding(3, 10, 3, 10)
-                .backgroundColor(color)
-                .backgroundRadius(12)
-                .cursor("hand")
-                .applyTo(label);
+        label.getStyleClass().removeAll("boolean-chip", "boolean-chip--true", "boolean-chip--false");
+        label.getStyleClass().addAll("boolean-chip", val ? "boolean-chip--true" : "boolean-chip--false");
     }
 
     @Override

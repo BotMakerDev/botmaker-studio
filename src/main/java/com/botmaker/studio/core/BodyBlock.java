@@ -25,6 +25,12 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
         this.dragAndDropManager = dragAndDropManager;
     }
 
+    /** A list of statements has no outline; the block holding it draws the C around it. */
+    @Override
+    protected com.botmaker.studio.core.render.BlockShape shape() {
+        return com.botmaker.studio.core.render.BlockShape.NONE;
+    }
+
     public void addStatement(StatementBlock statement) {
         statements.add(statement);
     }

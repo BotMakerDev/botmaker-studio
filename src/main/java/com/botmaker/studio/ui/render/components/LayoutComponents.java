@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components;
 
+import com.botmaker.studio.core.component.BlockComponent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,6 +21,7 @@ public class LayoutComponents {
         if (styleClasses != null) {
             container.getStyleClass().addAll(styleClasses);
         }
+        BlockComponent.Kind.BODY.stamp(container);
         container.setPadding(STANDARD_INDENTATION);
         if (content != null) {
             container.getChildren().add(content);

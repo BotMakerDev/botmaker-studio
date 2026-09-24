@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.layout;
 
+import com.botmaker.studio.core.component.BlockComponent;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.components.SelectorComponents;
 import javafx.geometry.Pos;
@@ -37,12 +38,15 @@ public class SentenceLayoutBuilder {
     public static Label keywordNode(String text) {
         Label label = new Label(text);
         label.getStyleClass().add("keyword-label");
+        BlockComponent.Kind.LABEL.stamp(label);
         return noEllipsis(label);
     }
 
     /** A connecting word as the sentence layout builds one. */
     public static Label labelNode(String text) {
-        return noEllipsis(new Label(text));
+        Label label = new Label(text);
+        BlockComponent.Kind.LABEL.stamp(label);
+        return noEllipsis(label);
     }
 
     /**
@@ -91,6 +95,7 @@ public class SentenceLayoutBuilder {
         if (expression == null) {
             Label placeholder = new Label("⟨expression⟩");
             placeholder.getStyleClass().add("block-placeholder");
+            BlockComponent.Kind.EXPRESSION_SLOT.stamp(placeholder);
             return placeholder;
         }
         // A typed slot gets its specialized picker (image/group/rect/point/enum), same as call-argument
@@ -99,6 +104,7 @@ public class SentenceLayoutBuilder {
                 com.botmaker.studio.ui.render.components.pickers.PickerContext.of(context, com.botmaker.studio.core.ValueSlot.of(expression), expectedType));
         Node slotNode = picker != null ? picker : expression.getUINode(context);
         makeDroppable(slotNode, expression, context, expectedType);
+        (picker != null ? BlockComponent.Kind.PICKER : BlockComponent.Kind.EXPRESSION_SLOT).stamp(slotNode);
         return slotNode;
     }
 

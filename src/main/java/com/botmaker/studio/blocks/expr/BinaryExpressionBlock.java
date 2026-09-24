@@ -5,6 +5,7 @@ import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.render.layout.ExpressionSlots;
+import com.botmaker.studio.ui.render.layout.WrappingSentencePane;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.layout.HBox;
@@ -33,10 +34,12 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
 
     @Override
     protected Node createUINode(CodeEditorService context) {
-        HBox container = new HBox(5);
+        // Wrapping rows, not plain HBoxes: a sum nested in a sentence folds onto a second line when the canvas
+        // is narrow (or zoomed in) instead of holding every row above it at its one-line width.
+        HBox container = new WrappingSentencePane(5);
         container.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
-        HBox expressionBox = new HBox(5);
+        HBox expressionBox = new WrappingSentencePane(5);
         expressionBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         // Left operand + Change Button (null when read-only — nothing to change a locked operand by)

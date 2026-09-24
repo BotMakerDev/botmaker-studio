@@ -65,7 +65,7 @@ public class TextFieldComponents {
     public static TextField createVariableNameField(String initialText, Consumer<String> onCommit) {
         TextField nameField = new TextField(initialText);
         nameField.getStyleClass().add("variable-name-field");
-        nameField.setPrefWidth(100);
+        FieldSizing.fitToText(nameField);
 
         nameField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!newVal) onCommit.accept(nameField.getText());

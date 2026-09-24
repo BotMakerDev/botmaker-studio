@@ -6,10 +6,18 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — canvas zoom.** `ui/render/theme/CanvasZoom` (static preference like the theme,
+- **2026-09-24 (latest) — block redesign, token-driven.** Four classes on every block root, none set by a
+  block: `block`, `shape-*` (`core/render/BlockShape`, from the syntax tree), `block-category`,
+  `category-*`; `bc-*` per component kind; `blocks-filled`/`-outlined` on the canvas (`BlockStyle`, View ▸
+  Block Style). `blocks.css` BLOCK STYLE is colour → state → shape × variant, with Modena's look-ups
+  re-pointed per block. `FieldSizing`/`FittedComboBox` size values to their text; wrapping rows report a
+  container's minimum, closing phase 2's sideways scroll. `BlockStyleContrastTest` measures every rendered
+  word (4 themes × 2 styles + locked). Reference: umbrella `docs/refactor/37-block-styling.md`.
+
+- **2026-09-24 — canvas zoom.** `ui/render/theme/CanvasZoom` (static preference like the theme,
   stops 0.5–2.0) and `ui/app/ZoomPane` (a `Scale` plus layout at `width / zoom`, so blocks re-wrap). A
-  transform, not `em`: ~60 gaps/insets are set in Java and would not scale. Open: rows with hard minimum
-  widths (`while count [less than] [10]`) scroll sideways when zoomed in — the Phase 3 redesign's to fix.
+  transform, not `em`: ~60 gaps/insets are set in Java and would not scale. Rows with hard minimum widths
+  (`while count [less than] [10]`) scrolled sideways when zoomed in — closed by the redesign above.
 
 - **2026-09-24 — a blank project gets the contract jar with its first `@Param`.**
   `services/ContractDependency` (present = `Param.class` on the resolved classpath, never a jar name),

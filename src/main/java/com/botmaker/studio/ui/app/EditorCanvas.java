@@ -6,6 +6,8 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.BlockEvent;
+import com.botmaker.studio.ui.render.theme.BlockStyle;
+import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
@@ -70,6 +72,7 @@ final class EditorCanvas {
         this.blocksContainer = new VBox(10);
         blocksContainer.getStyleClass().add("blocks-canvas");
         blocksContainer.setPadding(new Insets(20));
+        followBlockStyle(blocksContainer);
 
         // Accept block drags over the whole canvas so the OS "forbidden" cursor doesn't flash over gaps/padding.
         // Real drop zones (separators / block hitboxes) sit on top and consume the event; this only fires over
@@ -203,6 +206,13 @@ final class EditorCanvas {
                     eventBus.publish(new CoreApplicationEvents.BreakpointToggledEvent(e.getBlock(), e.isEnabled())));
             blocksContainer.getChildren().add(rootNode);
         }
+        // Lay the new tree out now, so the scroll range is the real one when the position goes back; then once
+        // more after the pulse, for anything that only settles there. The pulse alone was a race: a first
+        // layout that took longer (a canvas of fitted fields and dropdowns measures each one) left the range
+        // collapsed when the restore ran, and CanvasScrollTest saw the canvas jump to the top.
+        scrollPane.applyCss();
+        scrollPane.layout();
+        scrollPane.setVvalue(vvalue);
         Platform.runLater(() -> scrollPane.setVvalue(vvalue));
     }
 
@@ -278,6 +288,22 @@ final class EditorCanvas {
         double range = zoomPane.getHeight() - viewportH;
         double wantedTop = programY * CanvasZoom.factor() - pointerY;
         scrollPane.setVvalue(range > 0 ? Math.max(0, Math.min(1, wantedTop / range)) : 0);
+    }
+
+    /**
+     * Keeps {@code canvas} carrying the current {@link BlockStyle}'s class — the one switch between the filled
+     * and outlined rules in {@code blocks.css}. Weak for the badge's reason: the canvas is rebuilt on every
+     * reload and the preference is process-lived.
+     */
+    static void followBlockStyle(Node canvas) {
+        Runnable refresh = () -> {
+            canvas.getStyleClass().removeAll(BlockStyle.styleClasses());
+            canvas.getStyleClass().add(BlockStylePreference.style().styleClass());
+        };
+        refresh.run();
+        InvalidationListener listener = obs -> refresh.run();
+        canvas.getProperties().put("block-style-listener", listener);
+        BlockStylePreference.styleProperty().addListener(new WeakInvalidationListener(listener));
     }
 
     /** Bottom-right "150%" chip: shown only off 100%, and a click puts it back. */
