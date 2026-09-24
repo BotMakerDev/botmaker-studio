@@ -166,9 +166,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         java.util.function.Supplier<ArgPlan> plan = once(() -> argPlan(context, controls.get()));
 
         ComponentSpec.Builder spec = ComponentSpec.builder()
-                .label("kind", () -> fixedScopeName == null
-                        ? SentenceLayoutBuilder.labelNode("Call")  // only generic blocks say "Call"
-                        : sdkBadge())
+                .label("kind", this::ownerBadge)
                 .custom("scope", () -> controls.get().scopeNode())
                 .label("dot", () -> SentenceLayoutBuilder.labelNode("."))
                 .custom("method", () -> methodNode(context, controls.get()));
@@ -246,9 +244,28 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     private record ArgPlan(MethodSignature signature, String targetType, List<SdkDocs.Param> docParams,
                            int imageVarargsFrom, int varargsFrom, Node imageRow) {}
 
-    private Label sdkBadge() {
-        Label badge = new Label("🤖 SDK");
-        badge.getStyleClass().add("sdk-badge");
+    /**
+     * What the call is before its method: the plugin's name on a plugin's facade call, "Java" or "Library"
+     * on a call into a jar, and "Call" on the bot's own — see {@link CallOwner}.
+     */
+    private Node ownerBadge() {
+        if (fixedScopeName != null) {
+            String plugin = PluginHost.pluginNameFor(fixedScopeName).orElse(CallOwner.PLUGIN.label());
+            Label badge = new Label(plugin);
+            badge.getStyleClass().add("sdk-badge");
+            badge.setTooltip(new javafx.scene.control.Tooltip(fixedScopeName + " comes from the " + plugin + " plugin."));
+            return badge;
+        }
+        CallOwner owner = CallOwner.of(callBinding());
+        if (owner == CallOwner.PROJECT) return SentenceLayoutBuilder.labelNode(owner.label());
+        Label badge = new Label(owner.label());
+        badge.getStyleClass().add("call-owner-badge");
+        IMethodBinding call = callBinding();
+        if (call != null && call.getDeclaringClass() != null) {
+            badge.setTooltip(new javafx.scene.control.Tooltip(
+                    call.getDeclaringClass().getErasure().getQualifiedName() + " — " + (owner == CallOwner.JAVA
+                            ? "part of Java itself." : "from a library on the project's classpath.")));
+        }
         return badge;
     }
 
@@ -465,7 +482,12 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // Resolve target class + static-ness, then ask ProjectAnalyzer — this resolves BOTH project source
         // (live bindings) and external-library types (ClassGraph index), so library calls populate too.
         String targetClassName = resolveTargetType(selectedScope, context);
-        boolean lookingForStatic = !isVariableScope(context, selectedScope);
+        // A class name lists its statics — except this file's own class, whose instance methods are callable
+        // too from instance code. From static code (`main`) only its statics are: an instance call there is
+        // "Cannot make a static reference", and it was offered.
+        boolean variable = isVariableScope(context, selectedScope);
+        boolean ownClass = !variable && selectedScope.equals(currentFileClass(context));
+        boolean lookingForStatic = !variable && (!ownClass || ProjectAnalyzer.isStaticContext(this.astNode));
 
         // When this call produces a value (expression context), only offer methods whose return type fits
         // the slot. As a bare statement there's no expected type, so everything (incl. void) is shown.
@@ -491,6 +513,11 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         }
 
         methodSelector.getItems().addAll(availableMethods);
+    }
+
+    private static String currentFileClass(CodeEditorService context) {
+        return context.getState() != null && context.getState().getActiveFile() != null
+                ? context.getState().getActiveFile().getClassName() : "";
     }
 
     // Helper to determine if a scope string is a variable or class name

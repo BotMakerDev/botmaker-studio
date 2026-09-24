@@ -55,7 +55,7 @@ public sealed interface BlockType
             // FOR is the enhanced for (`for each`), as it always was; the three-part loop is FOR_CLASSIC.
             PRINT, IF, WHILE, FOR, DO_WHILE, SWITCH,
             BREAK, CONTINUE, RETURN, ASSIGNMENT, FUNCTION_CALL, COMMENT, ARRAY,
-            FOR_CLASSIC, TRY, THROW, SYNCHRONIZED, ASSERT
+            FOR_CLASSIC, TRY, THROW, SYNCHRONIZED, ASSERT, YIELD
         }
 
         // A call to one of the user's own functions is a value like any other call. ASSIGNMENT is deliberately

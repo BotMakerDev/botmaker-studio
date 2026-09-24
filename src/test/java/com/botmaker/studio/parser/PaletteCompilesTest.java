@@ -60,6 +60,8 @@ class PaletteCompilesTest {
 
     /** Entries that are refused in some places by design, since no seed could make them compile there. */
     private static final Set<String> NEEDS_A_LOOP = Set.of("BREAK", "CONTINUE");
+    /** Only inside a switch value's case block, which {@code SwitchValueEditsTest} covers. */
+    private static final Set<String> NEEDS_A_SWITCH_VALUE = Set.of("YIELD");
 
     private static AssistWorkspace workspace() {
         return new AssistWorkspace(
@@ -91,7 +93,7 @@ class PaletteCompilesTest {
                 new Place("a loop body", true, PaletteCompilesTest::loop));
 
         for (BlockType type : BlockCatalog.all()) {
-            if (!type.isStatement()) continue;
+            if (!type.isStatement() || NEEDS_A_SWITCH_VALUE.contains(type.id())) continue;
             for (Place place : places) {
                 if (!place.loop() && NEEDS_A_LOOP.contains(type.id())) continue;
                 AssistTurn turn = new AssistTurn(workspace(), SOURCE);

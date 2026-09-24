@@ -3,7 +3,11 @@ package com.botmaker.studio.parser;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockType;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.BreakStatement;
+import org.eclipse.jdt.core.dom.LambdaExpression;
+import org.eclipse.jdt.core.dom.SwitchExpression;
+import org.eclipse.jdt.core.dom.YieldStatement;
 import org.eclipse.jdt.core.dom.ContinueStatement;
 import org.eclipse.jdt.core.dom.DoStatement;
 import org.eclipse.jdt.core.dom.EnhancedForStatement;
@@ -32,7 +36,8 @@ public final class StatementPlacement {
     /** The two statements whose legality depends on where they land. */
     public enum Jump {
         BREAK("Break", "a loop, or a switch written with \"case …:\" labels"),
-        CONTINUE("Continue", "a loop");
+        CONTINUE("Continue", "a loop"),
+        YIELD("Yield", "the block of a switch value (case … -> { … })");
 
         private final String label;
         private final String where;
@@ -52,6 +57,7 @@ public final class StatementPlacement {
     public static Jump jumpOf(BlockType type) {
         if (type == BlockCatalog.BREAK) return Jump.BREAK;
         if (type == BlockCatalog.CONTINUE) return Jump.CONTINUE;
+        if (type == BlockCatalog.YIELD) return Jump.YIELD;
         return null;
     }
 
@@ -59,6 +65,7 @@ public final class StatementPlacement {
     public static Jump jumpOf(ASTNode statement) {
         if (statement instanceof BreakStatement) return Jump.BREAK;
         if (statement instanceof ContinueStatement) return Jump.CONTINUE;
+        if (statement instanceof YieldStatement yield && !yield.isImplicit()) return Jump.YIELD;
         return null;
     }
 
@@ -70,6 +77,11 @@ public final class StatementPlacement {
         if (jump == null) return true;
         if (targetBodyNode == null) return false;
         for (ASTNode n = targetBodyNode; n != null; n = n.getParent()) {
+            // A switch value is a wall for every jump but its own: no break or continue may leave it, and a
+            // yield means nothing outside one. A method or a lambda ends the walk for all three.
+            if (n instanceof SwitchExpression) return jump == Jump.YIELD;
+            if (n instanceof BodyDeclaration || n instanceof LambdaExpression) return false;
+            if (jump == Jump.YIELD) continue;
             if (n instanceof WhileStatement || n instanceof DoStatement
                     || n instanceof ForStatement || n instanceof EnhancedForStatement) {
                 return true;

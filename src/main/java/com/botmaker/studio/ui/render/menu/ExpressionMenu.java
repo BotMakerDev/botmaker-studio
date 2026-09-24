@@ -4,6 +4,7 @@ import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionCategory;
 import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.studio.palette.PaletteDescriptions;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.project.ProjectState;
@@ -221,6 +222,8 @@ public final class ExpressionMenu {
                         context.getCodeEditor().declareVariableBeforeAndReference(toReplace, nv.type(), nv.name());
                 case ExpressionChoice.RawExpression rx ->
                         context.getCodeEditor().replaceWithRawExpression(toReplace, rx.code());
+                case ExpressionChoice.ArrayItem item ->
+                        context.getCodeEditor().replaceWithArrayItem(toReplace, item.arrayName());
             }
         }
     }
@@ -253,6 +256,10 @@ public final class ExpressionMenu {
         ProjectState state = (context != null) ? context.getState() : null;
         List<ExpressionType> available = ExpressionCatalog.getForType(expectedType, constantOnly, state);
         if (filter != null) available = available.stream().filter(filter).collect(Collectors.toList());
+        // A nested list `{ … }` is Java only inside another list's braces; anywhere else it does not compile.
+        if (!insideArrayInitializer(contextNode)) {
+            available = available.stream().filter(e -> e != ExpressionCatalog.LIST).collect(Collectors.toList());
+        }
 
         String q = query == null ? "" : query.trim().toLowerCase();
 
@@ -266,6 +273,7 @@ public final class ExpressionMenu {
                     .stream()
                     .filter(mi -> mi.getText() != null && mi.getText().toLowerCase().contains(q))
                     .collect(Collectors.toList());
+            menu.getItems().add(MenuRows.resultCount(matches.size()));
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matches"));
             else menu.getItems().addAll(matches);
             return;
@@ -302,7 +310,10 @@ public final class ExpressionMenu {
         List<MenuItem> leaves = new ArrayList<>();
         for (ExpressionType expr : available) {
             if (expr == ExpressionCatalog.VARIABLE) {
-                if (contextNode != null) collectVariableLeaves(expectedType, context, contextNode, onSelect, leaves);
+                if (contextNode != null) {
+                    collectVariableLeaves(expectedType, context, contextNode, onSelect, leaves);
+                    MenuBuilders.collectMenuLeaves(arrayItemSubmenu(expectedType, context, contextNode, onSelect), leaves);
+                }
             } else if (expr == ExpressionCatalog.ACTIVITY) {
                 MenuBuilders.collectMenuLeaves(parametersSubmenu(expectedType, context, onSelect), leaves);
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
@@ -317,7 +328,7 @@ public final class ExpressionMenu {
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT || expr == ExpressionCatalog.FUNCTION_CALL) {
                 // Global-enum / function-call fan-outs are left to the categorized view.
             } else {
-                leaves.add(createItem(expr, onSelect));
+                leaves.add(createItem(expr, onSelect, true));
             }
         }
         // Parity with the statement-menu search: flatten every SDK facade's slot-compatible members as
@@ -330,22 +341,50 @@ public final class ExpressionMenu {
     private static void appendReferenceSection(ContextMenu menu, List<ExpressionType> items, ResolvedType expectedType,
                                                CodeEditorService context, ASTNode contextNode, Consumer<Object> onSelect) {
         if (!menu.getItems().isEmpty()) menu.getItems().add(new SeparatorMenuItem());
+        // Every fan-out below answers null when it would be empty, and an empty submenu is not offered: a
+        // "Parameters" holding only "(Nothing of this type)" was a click that led nowhere.
         for (ExpressionType expr : items) {
             if (expr == ExpressionCatalog.VARIABLE) {
-                if (contextNode != null) menu.getItems().add(variableSubmenu(expectedType, context, contextNode, onSelect));
+                if (contextNode != null) {
+                    MenuBuilders.addIfNonNull(menu.getItems(), variableSubmenu(expectedType, context, contextNode, onSelect));
+                    MenuBuilders.addIfNonNull(menu.getItems(), arrayItemSubmenu(expectedType, context, contextNode, onSelect));
+                }
             } else if (expr == ExpressionCatalog.ACTIVITY) {
-                menu.getItems().add(parametersSubmenu(expectedType, context, onSelect));
+                MenuBuilders.addIfNonNull(menu.getItems(), parametersSubmenu(expectedType, context, onSelect));
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
-                Menu sub = specificEnumSubmenu(expectedType, onSelect);
-                if (sub != null) menu.getItems().add(sub);
+                MenuBuilders.addIfNonNull(menu.getItems(), specificEnumSubmenu(expectedType, onSelect));
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && (expectedType.isUnknown() || expectedType.simpleName().equals("Object"))) {
-                menu.getItems().add(globalEnumSubmenu(context, contextNode, onSelect));
+                MenuBuilders.addIfNonNull(menu.getItems(), globalEnumSubmenu(context, contextNode, onSelect));
             } else if (expr == ExpressionCatalog.FUNCTION_CALL) {
-                menu.getItems().add(functionCallSubmenu(expectedType, context, contextNode, onSelect));
+                MenuBuilders.addIfNonNull(menu.getItems(), functionCallSubmenu(expectedType, context, contextNode, onSelect));
             } else {
-                menu.getItems().add(createItem(expr, onSelect));
+                menu.getItems().add(createItem(expr, onSelect, false));
             }
         }
+    }
+
+    /**
+     * "Array Item": {@code name[0]} for each array in scope whose items fit the slot — reading one item of a
+     * list had no menu entry, only the block a file already held. {@code null} when there is none.
+     */
+    private static Menu arrayItemSubmenu(ResolvedType expectedType, CodeEditorService context, ASTNode contextNode,
+                                         Consumer<Object> onSelect) {
+        if (context == null || context.getProjectAnalyzer() == null) return null;
+        Menu menu = MenuIcons.decorate(new Menu("Array Item"), MenuIcons.VARIABLES);
+        for (ProjectAnalyzer.VariableOption var : context.getProjectAnalyzer().getVisibleVariables(contextNode, ResolvedType.UNKNOWN)) {
+            if (!var.type().isArray() || !ProjectAnalyzer.isUserVariable(var.name())) continue;
+            ResolvedType item = var.type().leafType().asArray(var.type().arrayDimensions() - 1);
+            if (!MethodSignature.typeSatisfies(item, expectedType)) continue;
+            MenuItem entry = new MenuItem(var.name() + "[0]");
+            entry.setOnAction(e -> onSelect.accept(new ExpressionChoice.ArrayItem(var.name())));
+            menu.getItems().add(entry);
+        }
+        return menu.getItems().isEmpty() ? null : menu;
+    }
+
+    /** Whether the slot is an element of a {@code { … }} list, where a nested list may go. */
+    private static boolean insideArrayInitializer(ASTNode contextNode) {
+        return contextNode != null && contextNode.getParent() instanceof org.eclipse.jdt.core.dom.ArrayInitializer;
     }
 
     /** Structure category: INSTANTIATION expands to the target type's constructors when the type is known. */
@@ -361,7 +400,7 @@ public final class ExpressionMenu {
                     subMenu.getItems().add(item);
                 }
             } else {
-                subMenu.getItems().add(createItem(expr, onSelect));
+                subMenu.getItems().add(createItem(expr, onSelect, false));
             }
         }
         if (!subMenu.getItems().isEmpty()) menu.getItems().add(subMenu);
@@ -370,7 +409,7 @@ public final class ExpressionMenu {
     /** Math / comparison / logic: a flat submenu of plain items. */
     private static void appendOperatorSection(ContextMenu menu, ExpressionCategory cat, List<ExpressionType> items, Consumer<Object> onSelect) {
         Menu subMenu = MenuIcons.decorate(new Menu(cat.getLabel()), MenuIcons.iconFor(cat));
-        for (ExpressionType expr : items) subMenu.getItems().add(createItem(expr, onSelect));
+        for (ExpressionType expr : items) subMenu.getItems().add(createItem(expr, onSelect, false));
         menu.getItems().add(subMenu);
     }
 
@@ -398,10 +437,7 @@ public final class ExpressionMenu {
         if (!members.isEmpty() && !vars.isEmpty()) varMenu.getItems().add(new SeparatorMenuItem());
         varMenu.getItems().addAll(members);
 
-        if (vars.isEmpty() && members.isEmpty()) {
-            varMenu.getItems().add(MenuBuilders.disabledItem("(No existing variables)"));
-        }
-        return varMenu;
+        return varMenu.getItems().isEmpty() ? null : varMenu;
     }
 
     /**
@@ -411,7 +447,9 @@ public final class ExpressionMenu {
      */
     private static void collectVariableLeaves(ResolvedType expectedType, CodeEditorService context, ASTNode contextNode,
                                               Consumer<Object> onSelect, List<MenuItem> out) {
-        for (MenuItem item : variableSubmenu(expectedType, context, contextNode, onSelect).getItems()) {
+        Menu variables = variableSubmenu(expectedType, context, contextNode, onSelect);
+        if (variables == null) return;
+        for (MenuItem item : variables.getItems()) {
             if (item instanceof Menu sub) {
                 List<MenuItem> nested = new ArrayList<>();
                 MenuBuilders.collectMenuLeaves(sub, nested);
@@ -483,10 +521,8 @@ public final class ExpressionMenu {
         Menu menu = MenuIcons.decorate(new Menu("Parameters"), MenuIcons.PARAMETERS);
         List<HostParameters.Parameter> variables =
                 HostParameters.compatibleWith(context.getConfig(), context.getState(), expectedType);
-        if (variables.isEmpty()) {
-            menu.getItems().add(MenuBuilders.disabledItem("(Nothing of this type)"));
-            return menu;
-        }
+        // No parameter fits — or no plugin declares any, as in a project without the SDK: no submenu at all.
+        if (variables.isEmpty()) return null;
         Map<String, List<HostParameters.Parameter>> byTag = new LinkedHashMap<>();
         for (HostParameters.Parameter v : variables) {
             byTag.computeIfAbsent(v.row().categoryOrGeneral(), t -> new ArrayList<>()).add(v);
@@ -536,9 +572,9 @@ public final class ExpressionMenu {
                 item.setOnAction(e -> onSelect.accept(new ExpressionChoice.EnumConstant(enumType.simpleName(), c)));
                 enumSub.getItems().add(item);
             }
-            enumRoot.getItems().add(enumSub);
+            if (!enumSub.getItems().isEmpty()) enumRoot.getItems().add(enumSub);
         }
-        return enumRoot;
+        return enumRoot.getItems().isEmpty() ? null : enumRoot;
     }
 
     /**
@@ -589,8 +625,7 @@ public final class ExpressionMenu {
             }
         }
 
-        if (scopeMenus.isEmpty()) functionMenu.getItems().add(MenuBuilders.disabledItem("(No visible objects/classes)"));
-        else functionMenu.getItems().addAll(scopeMenus);
+        functionMenu.getItems().addAll(scopeMenus);
 
         // 4. External-jar statics, grouped by package — populated lazily (the list can be very large).
         if (analyzer != null && analyzer.getLibraryIndex() != null) {
@@ -599,7 +634,7 @@ public final class ExpressionMenu {
             libMenu.setOnShowing(ev -> populateLibraryStatics(libMenu, expectedType, analyzer, surface, onSelect));
             functionMenu.getItems().add(libMenu);
         }
-        return functionMenu;
+        return functionMenu.getItems().isEmpty() ? null : functionMenu;
     }
 
     /** Simple name of the {@link TypeDeclaration} enclosing {@code node}, or {@code null}. */
@@ -643,9 +678,8 @@ public final class ExpressionMenu {
         if (libMenu.getItems().isEmpty()) libMenu.getItems().add(MenuBuilders.disabledItem("(None compatible)"));
     }
 
-    private static MenuItem createItem(ExpressionType expr, Consumer<Object> onSelect) {
-        MenuItem item = MenuIcons.decorate(new MenuItem(expr.displayName()), expr.icon());
-        item.setOnAction(e -> onSelect.accept(expr));
-        return item;
+    private static MenuItem createItem(ExpressionType expr, Consumer<Object> onSelect, boolean inline) {
+        return MenuRows.entry(expr.icon(), MenuRows.categoryClass(expr.category()), expr.displayName(),
+                PaletteDescriptions.of(expr), inline, () -> onSelect.accept(expr));
     }
 }

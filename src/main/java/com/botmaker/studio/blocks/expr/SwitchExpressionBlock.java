@@ -9,6 +9,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.LayoutComponents;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
@@ -84,13 +85,24 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
         addOperand(spec, "subject", subject, context, ResolvedType.UNKNOWN);
         for (int i = 0; i < cases.size(); i++) {
             Case c = cases.get(i);
-            spec.body("case" + i, () -> caseNode(c, context));
+            int index = i;
+            spec.body("case" + i, () -> caseNode(c, index, context));
         }
+        spec.body("add-case", () -> {
+            if (isReadOnly()) return null;
+            Button add = BlockUIComponents.createAddButton(e -> context.getCodeEditor()
+                    .addCaseToSwitchExpression((SwitchExpression) getAstNode()));
+            add.setText("+ case");
+            add.getStyleClass().add("switch-add-case");
+            javafx.scene.control.Tooltip.install(add, new javafx.scene.control.Tooltip(
+                    "Add a case with a label this switch does not use yet"));
+            return add;
+        });
         return spec.build();
     }
 
     /** One case: its label row, then — for a block or a throw — what it runs, indented beneath. */
-    private Node caseNode(Case c, CodeEditorService context) {
+    private Node caseNode(Case c, int index, CodeEditorService context) {
         ResolvedType subjectType = typeOf(subject);
         ResolvedType valueType = ownType();
         SentenceLayoutBuilder row = BlockLayout.sentence();
@@ -109,6 +121,12 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
         if (c.value != null) {
             row.addExpressionSlot(c.value, context, valueType);
             row.addNode(changeButton(c.value, valueType, context));
+        }
+        if (!isReadOnly() && cases.size() > 1) {
+            Button remove = BlockUIComponents.createDeleteButton(() -> context.getCodeEditor()
+                    .removeCaseFromSwitchExpression((SwitchExpression) getAstNode(), index));
+            javafx.scene.control.Tooltip.install(remove, new javafx.scene.control.Tooltip("Remove this case"));
+            row.addNode(remove);
         }
         VBox node = new VBox(2, row.build());
         if (c.body != null) {

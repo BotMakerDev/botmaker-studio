@@ -51,6 +51,8 @@ public final class BlockCatalog {
     public static final BlockType RETURN = cf("RETURN", "Return", CONTROL, Kind.RETURN);
     public static final BlockType THROW = cf("THROW", "Throw Error", CONTROL, Kind.THROW);
     public static final BlockType ASSERT = cf("ASSERT", "Assert", CONTROL, Kind.ASSERT);
+    /** Only offered inside the block of a switch value's case — see {@code StatementPlacement.Jump.YIELD}. */
+    public static final BlockType YIELD = cf("YIELD", "Yield Value", CONTROL, Kind.YIELD);
     // Activity enable/disable and stop-the-bot are standard SDK facade calls now — Activity.enable/disable("X")
     // and Bot.stop() come from the Activity/Bot facade submenus and render with the normal SDK-block chrome, so
     // there are no bespoke CONTROL blocks for them (they used to be DISABLE_ACTIVITY/ENABLE_ACTIVITY/STOP_BOT).
@@ -144,7 +146,7 @@ public final class BlockCatalog {
             PRINT,
             IF, SWITCH, TRY, SYNCHRONIZED,
             WHILE, FOR, FOR_CLASSIC, DO_WHILE,
-            BREAK, CONTINUE, RETURN, THROW, ASSERT,
+            BREAK, CONTINUE, YIELD, RETURN, THROW, ASSERT,
             DECLARE_INT, DECLARE_DOUBLE, DECLARE_BOOLEAN, DECLARE_STRING, DECLARE_ARRAY,
             ASSIGNMENT,
             FUNCTION_CALL, METHOD_DECLARATION, DECLARE_ENUM);

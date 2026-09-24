@@ -48,6 +48,12 @@ public class NodeCreator {
                 // NewVariable is handled specially (declaration + reference) in applyExpressionSelection and
                 // does not flow through here; yield just the reference as a safe fallback.
                 case ExpressionChoice.NewVariable nv -> ast.newSimpleName(nv.name());
+                case ExpressionChoice.ArrayItem item -> {
+                    ArrayAccess access = ast.newArrayAccess();
+                    access.setArray(ast.newSimpleName(item.arrayName()));
+                    access.setIndex(ast.newNumberLiteral("0"));
+                    yield access;
+                }
                 // A ready-made snippet (e.g. a capture-source helper call): parse and copy into this AST.
                 case ExpressionChoice.RawExpression rx -> {
                   ASTParser p = org.eclipse.jdt.core.dom.ASTParser.newParser(AST.getJLSLatest());

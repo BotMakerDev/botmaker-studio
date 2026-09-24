@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — Blocks round 2, phase 2: compile-safe insertion.**
+- **2026-09-24 (latest) — Blocks round 2, phase 3: menus reviewed, call owner badge.**
+  - Changes:
+    - `MenuRows` draws a palette row: category dot, glyph, name, and a `PaletteDescriptions` line.
+    - `StatementMenu` has *Recent* (5 per session), *From plugins* and *Java* sections, counts search results, and drops class members.
+    - `ExpressionMenu` fan-outs return null when empty; *Array Item* comes from `ExpressionChoice.ArrayItem`; *Sub-List* only inside `{ … }`.
+    - `BlockCatalog.YIELD` and `StatementPlacement.Jump.YIELD`; a switch value is a wall for `break`/`continue`.
+    - `CodeEditor.add/removeCaseToSwitchExpression`, with `SwitchCases.freshLabel`.
+    - `CallOwner` and `PluginHost.pluginOwning`/`pluginNameFor` give the call badge.
+    - `MethodInvocationBlock`'s own-class list follows static context.
+- **2026-09-24 — Blocks round 2, phase 2: compile-safe insertion.**
   - Changes:
     - `parser/guard/CompileGuard` is the "only a new error refuses" rule, moved out of `AssistTurn`.
     - `CodeEditor.insert` runs it for every menu, palette and picker insert; a refusal is a status line.

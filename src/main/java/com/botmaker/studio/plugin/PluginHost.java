@@ -150,6 +150,43 @@ public final class PluginHost {
     }
 
     /**
+     * The bound plugin whose jar holds {@code type}, or empty for a class no plugin ships — the bot's own, the
+     * JDK's, another library's. Decided by where the class was loaded from, not by its name: a jar is the
+     * one thing two plugins cannot share.
+     */
+    public static Optional<StudioPlugin> pluginOwning(Class<?> type) {
+        java.net.URL where = codeSource(type);
+        if (where == null) return Optional.empty();
+        for (StudioPlugin plugin : plugins) {
+            if (where.equals(codeSource(plugin.getClass()))) return Optional.of(plugin);
+        }
+        return Optional.empty();
+    }
+
+    /** The name a user reads for the plugin that offers facade {@code simpleName}, or empty for none. */
+    public static Optional<String> pluginNameFor(String simpleName) {
+        return ownerOf(simpleName)
+                .flatMap(facade -> pluginOwning(facade.type()))
+                .map(plugin -> {
+                    try {
+                        String name = plugin.displayName();
+                        return name == null || name.isBlank() ? plugin.id() : name;
+                    } catch (RuntimeException | LinkageError e) {
+                        return plugin.id();
+                    }
+                });
+    }
+
+    private static java.net.URL codeSource(Class<?> type) {
+        try {
+            java.security.CodeSource source = type.getProtectionDomain().getCodeSource();
+            return source == null ? null : source.getLocation();
+        } catch (SecurityException e) {
+            return null;
+        }
+    }
+
+    /**
      * Binds the plugins declared on {@code resolvedClasspath}, replacing whatever was bound before.
      *
      * <p>Called immediately after a project's classpath is resolved — on open, and again whenever the

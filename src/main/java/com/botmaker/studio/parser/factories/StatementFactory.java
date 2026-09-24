@@ -63,6 +63,7 @@ public class StatementFactory {
             case THROW -> createThrowStatement(ast);
             case SYNCHRONIZED -> createSynchronizedStatement(ast, context);
             case ASSERT -> createAssertStatement(ast);
+            case YIELD -> createYieldStatement(ctx, context);
         };
     }
 
@@ -158,6 +159,22 @@ public class StatementFactory {
         message.setLiteralValue("");
         assertStmt.setMessage(message);
         return assertStmt;
+    }
+
+    /**
+     * {@code yield <a value of the switch's type>;} — the value the enclosing switch value's case gives. The
+     * type is the switch expression's own; with no binding the seed is {@code null}, which the compile check
+     * refuses for a primitive switch rather than writing.
+     */
+    private static Statement createYieldStatement(EditContext ctx, ASTNode context) {
+        YieldStatement yield = ctx.ast().newYieldStatement();
+        ASTNode n = context;
+        while (n != null && !(n instanceof SwitchExpression)) n = n.getParent();
+        ITypeBinding type = n instanceof SwitchExpression sw ? sw.resolveTypeBinding() : null;
+        yield.setExpression(type == null
+                ? ctx.ast().newNullLiteral()
+                : InitializerFactory.createDefaultInitializer(ctx, ResolvedType.of(type)));
+        return yield;
     }
 
     // --- Scope-aware defaults ------------------------------------------------

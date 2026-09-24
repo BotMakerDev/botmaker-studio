@@ -86,9 +86,52 @@ class StatementMenuTest extends FxHeadlessTest {
         setSearch(menu, "zzzznotablock");
 
         List<MenuItem> body = menu.getItems().subList(1, menu.getItems().size());
-        assertEquals(1, body.size(), "only the placeholder remains");
-        assertTrue(body.get(0).isDisable(), "placeholder is disabled");
-        assertEquals("No matching blocks", body.get(0).getText());
+        assertEquals(2, body.size(), "only the count and the placeholder remain");
+        assertEquals("0 results", body.get(0).getText());
+        assertTrue(body.get(1).isDisable(), "placeholder is disabled");
+        assertEquals("No matching blocks", body.get(1).getText());
+    }
+
+    @Test
+    void declareFunctionIsNotOfferedInABody() {
+        ContextMenu menu = build(type -> {});
+        setSearch(menu, "function");
+        List<String> leaves = leafTexts(menu);
+        assertTrue(leaves.contains(BlockCatalog.FUNCTION_CALL.displayName()), leaves.toString());
+        assertFalse(leaves.contains(BlockCatalog.METHOD_DECLARATION.displayName()),
+                "a class member has no statement form: " + leaves);
+    }
+
+    @Test
+    void aSearchResultSaysWhatTheBlockDoes() {
+        ContextMenu menu = build(type -> {});
+        setSearch(menu, "while");
+        CustomMenuItem doWhile = (CustomMenuItem) leafItems(menu).stream()
+                .filter(i -> BlockCatalog.DO_WHILE.displayName().equals(i.getText())).findFirst().orElseThrow();
+        List<String> lines = new ArrayList<>();
+        collectLabels(doWhile.getContent(), lines);
+        assertTrue(lines.contains(com.botmaker.studio.palette.PaletteDescriptions.of(BlockCatalog.DO_WHILE)), lines.toString());
+    }
+
+    @Test
+    void thePickedBlockLeadsTheNextMenuUnderRecent() {
+        ContextMenu first = build(type -> {});
+        setSearch(first, BlockCatalog.IF.displayName());
+        MenuItem ifItem = leafItems(first).stream()
+                .filter(i -> BlockCatalog.IF.displayName().equals(i.getText())).findFirst().orElseThrow();
+        interact(ifItem::fire);
+
+        ContextMenu next = build(type -> {});
+        List<MenuItem> items = next.getItems();
+        assertEquals("RECENT", items.get(1).getText());
+        assertEquals(BlockCatalog.IF.displayName(), items.get(2).getText());
+    }
+
+    private static void collectLabels(javafx.scene.Node node, List<String> out) {
+        if (node instanceof javafx.scene.control.Label label) out.add(label.getText());
+        if (node instanceof javafx.scene.Parent parent) {
+            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) collectLabels(child, out);
+        }
     }
 
     @Test
@@ -110,6 +153,11 @@ class StatementMenuTest extends FxHeadlessTest {
 
     // --- helpers ---
 
+    @org.junit.jupiter.api.BeforeEach
+    void forgetRecentPicks() {
+        StatementMenu.forgetRecent();
+    }
+
     private ContextMenu build(java.util.function.Consumer<BlockType> onSelection) {
         AtomicReference<ContextMenu> ref = new AtomicReference<>();
         // Null analyzer: exercises the language-block path (no project/SDK jar resolved in a headless test).
@@ -122,11 +170,14 @@ class StatementMenuTest extends FxHeadlessTest {
         interact(() -> search.setText(query)); // fires the textProperty listener -> rebuildStatementItems
     }
 
-    /** Leaf (non-submenu, non-separator) menu items directly under the menu root. */
+    /**
+     * Block rows directly under the menu root: not the search box (index 0), a submenu, a separator, or a
+     * disabled section title.
+     */
     private static List<MenuItem> leafItems(ContextMenu menu) {
         List<MenuItem> out = new ArrayList<>();
-        for (MenuItem item : menu.getItems()) {
-            if (item instanceof CustomMenuItem || item instanceof SeparatorMenuItem || item instanceof Menu) continue;
+        for (MenuItem item : menu.getItems().subList(1, menu.getItems().size())) {
+            if (item instanceof SeparatorMenuItem || item instanceof Menu || item.isDisable()) continue;
             out.add(item);
         }
         return out;

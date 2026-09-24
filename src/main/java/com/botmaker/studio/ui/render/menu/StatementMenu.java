@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.render.menu;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.StatementPlacement;
@@ -92,17 +93,29 @@ public final class StatementMenu {
         if (!q.isEmpty()) {
             List<MenuItem> matches = new ArrayList<>();
             for (BlockType b : languageBlocks(allowed)) {
-                if (b.displayName().toLowerCase().contains(q)) matches.add(statementItem(b, onSelection));
+                if (matches(b, q)) matches.add(statementItem(b, onSelection, true));
             }
             for (SdkCall call : sdkCalls(analyzer, surface)) {
-                if (call.block().displayName().toLowerCase().contains(q)) {
-                    matches.add(MenuIcons.decorate(statementItem(call.block(), onSelection),
-                            MenuIcons.iconFor(call.facade())));
-                }
+                if (matches(call.block(), q)) matches.add(callItem(call, onSelection, true));
             }
+            menu.getItems().add(MenuRows.resultCount(matches.size()));
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matching blocks"));
             else menu.getItems().addAll(matches);
             return;
+        }
+
+        // What was inserted last, this session — the block a user reaches for again is usually one they just
+        // used. Only entries legal here are shown, and only while the menu is not being searched.
+        // A call on a facade this project's plugins do not serve (a block used in another project) is dropped.
+        List<BlockType> recent = RECENT.stream()
+                .filter(allowed)
+                .filter(b -> !(b instanceof BlockType.LibraryCall call)
+                        || PluginHost.isFacadeClass(call.facade().getSimpleName()))
+                .toList();
+        if (!recent.isEmpty()) {
+            menu.getItems().add(MenuBuilders.sectionHeader("RECENT"));
+            for (BlockType block : recent) menu.getItems().add(statementItem(block, onSelection, false));
+            menu.getItems().add(new SeparatorMenuItem());
         }
 
         // Default: one submenu per SDK facade class (in catalog order), enumerating that class's static methods.
@@ -118,20 +131,47 @@ public final class StatementMenu {
         // nothing enumerable answers the second — a method the analyzer resolves perfectly well may still not
         // be one we propose. The rule that keeps the two apart: filter what is OFFERED, never what is
         // RESOLVED. Blocks already in the file resolve through the analyzer, untouched.
+        List<Menu> facades = new ArrayList<>();
         for (FacadeEntry facade : menuFacades(surface)) {
-            Menu sub = sdkFacadeSubmenu(facade, analyzer, surface, onSelection);
-            if (sub != null) menu.getItems().add(sub);
+            MenuBuilders.addIfNonNull(facades, sdkFacadeSubmenu(facade, analyzer, surface, onSelection));
+        }
+        if (!facades.isEmpty()) {
+            menu.getItems().add(MenuBuilders.sectionHeader("FROM PLUGINS"));
+            menu.getItems().addAll(facades);
+            menu.getItems().add(new SeparatorMenuItem());
         }
 
-        // Then the language/structure block categories (SDK-facade calls excluded — reached via the submenus above).
-        if (menu.getItems().size() > 1) menu.getItems().add(new SeparatorMenuItem());
+        // Then the language/structure block categories (SDK-facade calls excluded — reached via the submenus
+        // above). A category with nothing legal here is left out rather than shown empty.
         Map<BlockCategory, List<BlockType>> grouped = languageBlocks(allowed).stream()
                 .collect(Collectors.groupingBy(BlockType::category, LinkedHashMap::new, Collectors.toList()));
+        menu.getItems().add(MenuBuilders.sectionHeader("JAVA"));
         for (BlockCategory category : LANGUAGE_CATEGORY_ORDER) {
             addCategoryMenu(menu, category, grouped, onSelection);
         }
 
         if (menu.getItems().size() == 1) menu.getItems().add(MenuBuilders.disabledItem("(No blocks available)"));
+    }
+
+    /** The last few blocks inserted from this menu, newest first, for the whole session. */
+    private static final int RECENT_LIMIT = 5;
+    private static final java.util.Deque<BlockType> RECENT = new java.util.ArrayDeque<>();
+
+    /** Remembers {@code block} as the most recent pick. Package-private for the menu tests. */
+    static synchronized void remember(BlockType block) {
+        RECENT.removeIf(b -> b.id().equals(block.id()));
+        RECENT.addFirst(block);
+        while (RECENT.size() > RECENT_LIMIT) RECENT.removeLast();
+    }
+
+    /** Forgets every recent pick. For tests, which share the session. */
+    public static synchronized void forgetRecent() {
+        RECENT.clear();
+    }
+
+    private static boolean matches(BlockType block, String query) {
+        return block.displayName().toLowerCase().contains(query)
+                || PaletteDescriptions.of(block).toLowerCase().contains(query);
     }
 
     /**
@@ -140,7 +180,9 @@ public final class StatementMenu {
      * offered through the generated per-class submenus instead.
      */
     private static List<BlockType> languageBlocks(Predicate<BlockType> allowed) {
+        // Declare Function is a class member: it has no statement form, and offered in a body it inserted nothing.
         return BlockCatalog.all().stream()
+                .filter(BlockType::isStatement)
                 .filter(b -> !isSdkFacadeCall(b))
                 .filter(allowed)
                 .collect(Collectors.toList());
@@ -163,12 +205,19 @@ public final class StatementMenu {
                                          Consumer<BlockType> onSelection) {
         if (analyzer == null) return null;
         Menu sub = new Menu(facade.simpleName());
-        String icon = MenuIcons.iconFor(facade);
         for (String method : facadeMethodNames(facade, analyzer, surface)) {
-            sub.getItems().add(MenuIcons.decorate(
-                    statementItem(sdkCall(facade, method, method), onSelection), icon));
+            sub.getItems().add(callItem(new SdkCall(facade, sdkCall(facade, method, method)), onSelection, false));
         }
-        return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, icon);
+        return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, MenuIcons.iconFor(facade));
+    }
+
+    /** A plugin call's row: the facade's glyph, and the plugin that offers it when the list is a search. */
+    private static MenuItem callItem(SdkCall call, Consumer<BlockType> onSelection, boolean inline) {
+        String from = PluginHost.pluginNameFor(call.facade().simpleName()).map(name -> " From " + name + ".")
+                .orElse("");
+        return MenuRows.entry(MenuIcons.iconFor(call.facade()), MenuRows.categoryClass(call.block().category()),
+                call.block().displayName(), PaletteDescriptions.of(call.block()) + from, inline,
+                () -> pick(call.block(), onSelection));
     }
 
     /** An SDK facade method as a statement block, paired with its facade so the search view can icon it. */
@@ -223,13 +272,21 @@ public final class StatementMenu {
         List<BlockType> blocks = grouped.get(category);
         if (blocks == null || blocks.isEmpty()) return;
         Menu categoryMenu = MenuIcons.decorate(new Menu(category.getLabel()), MenuIcons.iconFor(category));
-        for (BlockType block : blocks) categoryMenu.getItems().add(statementItem(block, onSelection));
+        for (BlockType block : blocks) categoryMenu.getItems().add(statementItem(block, onSelection, false));
         menu.getItems().add(categoryMenu);
     }
 
-    private static MenuItem statementItem(BlockType block, Consumer<BlockType> onSelection) {
-        MenuItem item = MenuIcons.decorate(new MenuItem(block.displayName()), MenuIcons.iconFor(block.category()));
-        item.setOnAction(e -> onSelection.accept(block));
-        return item;
+    private static MenuItem statementItem(BlockType block, Consumer<BlockType> onSelection, boolean inline) {
+        if (block instanceof BlockType.LibraryCall call && PluginHost.ownerOf(call.facade().getSimpleName()).isPresent()) {
+            return callItem(new SdkCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block),
+                    onSelection, inline);
+        }
+        return MenuRows.entry(MenuIcons.iconFor(block.category()), MenuRows.categoryClass(block.category()),
+                block.displayName(), PaletteDescriptions.of(block), inline, () -> pick(block, onSelection));
+    }
+
+    private static void pick(BlockType block, Consumer<BlockType> onSelection) {
+        remember(block);
+        onSelection.accept(block);
     }
 }

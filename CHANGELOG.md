@@ -37,6 +37,14 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   pick from a value menu, a dropped palette block or a new variable is compiled before it is written. If it
   adds an error the file did not have, nothing changes and the status line names the error. An error the
   file already had never blocks you.
+- **The insert and value menus say what each entry does.** A row shows a dot in its block's colour and a
+  one-line description (a tooltip; a second line in search results, which also count their matches). The
+  insert menu opens with your last five blocks under *Recent*, then *From plugins*, then *Java*.
+- **A call block says whose code it runs**: the plugin's name (*BotMaker SDK*) on a plugin call, *Java* on
+  a JDK call, *Library* on another jar's, and *Call* on your own function.
+- **New value and block entries.** *Array Item* (`scores[0]`) for each array in scope whose items fit the
+  slot; *Yield Value* inside a case block of a switch value; *+ case* and ✕ on a switch value's cases (a new
+  case takes a label the switch does not use yet).
 - **Define Enum asks for the name and the values first.** OK stays disabled while the name is taken or not
   a valid Java name. *View ▸ Ask for Names When Inserting* turns this off, and the variable window after a
   new variable with it.
@@ -82,7 +90,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **Menu entries that led nowhere are gone.** *Declare Function* is no longer offered inside a body (it
+  inserted nothing). *Parameters*, *Enums*, *Variables* and *Call Function* are left out when they would
+  open empty, and *Sub-List* is offered only inside another list. In `main`, a call block's method list no
+  longer offers this class's instance methods; in instance code it now offers them.
 - **Blocks you insert compile in more places.**
+  - *Break* and *Continue* are no longer offered inside a switch value's case.
   - *Assign* and *Switch* in `main` no longer name an instance field; value menus in static code no longer
     offer one. A block inserted after a variable can use it.
   - A value for a `Class<?>` slot no longer crashes the menu, and a JDK type with no public constructor is

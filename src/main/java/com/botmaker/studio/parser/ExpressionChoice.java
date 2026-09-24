@@ -15,7 +15,10 @@ import java.util.List;
 public sealed interface ExpressionChoice
         permits ExpressionChoice.Method, ExpressionChoice.Constructor,
                 ExpressionChoice.EnumConstant, ExpressionChoice.Variable, ExpressionChoice.Field,
-                ExpressionChoice.NewVariable, ExpressionChoice.RawExpression {
+                ExpressionChoice.NewVariable, ExpressionChoice.RawExpression, ExpressionChoice.ArrayItem {
+
+    /** The first item of the in-scope array {@code arrayName}, {@code arrayName[0]}; the index is a slot. */
+    record ArrayItem(String arrayName) implements ExpressionChoice {}
 
     /** Call {@code methodName} on {@code scope} (a variable name or a type name for statics). */
     record Method(String scope, String methodName, List<ResolvedType> paramTypes, boolean isStatic)

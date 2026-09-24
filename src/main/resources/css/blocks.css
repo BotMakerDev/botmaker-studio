@@ -1780,6 +1780,21 @@
     -fx-padding: 1 6 1 6;
 }
 
+/* Whose method a call runs (blocks/func/CallOwner): the plugin's name on a plugin call (the rule above), a
+   plain "Java" pill for the JDK and "Library" for any other jar. A call to the bot's own code says "Call". */
+.call-owner-badge {
+    -fx-font-size: 9px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 0 6 0 6;
+    -fx-background-color: transparent;
+    -fx-border-color: -bm-text-on-color;
+    -fx-border-width: 1;
+    -fx-text-fill: -bm-text-on-color;
+    -fx-opacity: 0.85;
+}
+
 .sdk-call-block .sdk-class-selector {
     -fx-font-weight: bold;
 }
@@ -2352,6 +2367,48 @@
 
 .menu-item:focused .check-box > .label {
     -fx-text-fill: -bm-on-popup-hover;
+}
+
+/* MENU — one palette entry (ui/render/menu/MenuRows): a dot in the colour its block is drawn in (the
+   category class sets -bm-own-accent), the glyph, the name, and — in search results — what it does. */
+.menu-cat-dot {
+    -fx-min-width: 8;
+    -fx-min-height: 8;
+    -fx-max-width: 8;
+    -fx-max-height: 8;
+    -fx-background-radius: 4;
+    -fx-background-color: -bm-own-accent;
+}
+
+.menu-entry-name {
+    -fx-text-fill: -bm-on-popup;
+    -fx-font-weight: bold;
+}
+
+.menu-entry-description {
+    -fx-text-fill: -bm-on-popup;
+    -fx-opacity: 0.7;
+    -fx-font-size: 10.5px;
+}
+
+.menu-item:focused .menu-entry-name,
+.menu-item:focused .menu-entry-description {
+    -fx-text-fill: -bm-on-popup-hover;
+}
+
+/* A section title inside a menu (RECENT, FROM PLUGINS, JAVA, "3 results"): small and left-aligned, so it
+   reads as a label over the rows rather than as a row itself. */
+.context-menu .block-section-header {
+    -fx-background-color: transparent;
+    -fx-alignment: center-left;
+    -fx-font-size: 10px;
+    -fx-padding: 6 10 2 10;
+}
+
+.context-menu .block-section-header .label {
+    -fx-text-fill: -bm-on-popup;
+    -fx-opacity: 0.6;
+    -fx-font-weight: bold;
 }
 
 /*

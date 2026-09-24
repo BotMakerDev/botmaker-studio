@@ -421,6 +421,12 @@ public class CodeEditor {
         insert(toReplace, EditKind.BODY, false, (cu, code) -> replaceNode(cu, code, toReplace, cu.getAST().newSimpleName(variableName)));
     }
 
+    /** Replaces {@code toReplace} with {@code arrayName[0]} — the menu's Array Item. */
+    public void replaceWithArrayItem(Expression toReplace, String arrayName) {
+        insert(toReplace, EditKind.BODY, true, (cu, code) -> replaceNode(cu, code, toReplace,
+                NodeCreator.createExpression(ctx(cu), new ExpressionChoice.ArrayItem(arrayName), ResolvedType.UNKNOWN)));
+    }
+
     /** Replaces {@code toReplace} with a ready-made expression snippet (e.g. a capture-source helper call). */
     public void replaceWithRawExpression(Expression toReplace, String exprCode) {
         edit(toReplace, EditKind.BODY, false, (cu, code) -> RawExpressionHandler.replaceWithExpression(cu, code, toReplace, exprCode));
@@ -1284,6 +1290,70 @@ public class CodeEditor {
         String newCode = SwitchNormalizer.normalize(cu, getCurrentCode());
         // No target: this normalises every switch in the file, so there is no one block it is editing.
         if (newCode != null) triggerUpdate(newCode, true, null, null);
+    }
+
+    /**
+     * Adds {@code case <label> -> <value>;} to a switch value, before its {@code default}. The label is one the
+     * switch does not use yet — the next enum constant, number or {@code "caseN"} — and the value is a default of
+     * the switch's type, so the new case compiles as it lands. An enum whose every constant is already a case
+     * has no label left, and that insert is refused by the compile check.
+     */
+    public void addCaseToSwitchExpression(SwitchExpression switchExpr) {
+        if (SwitchCases.freshLabel(switchExpr.getAST(), switchExpr) == null) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                    "This switch already has a case for every label it can take, or its subject's type is unknown."));
+            return;
+        }
+        insert(switchExpr, EditKind.BODY, true, (cu, code) -> {
+            EditContext ctx = ctx(cu);
+            AST ast = cu.getAST();
+            Expression label = SwitchCases.freshLabel(ast, switchExpr);
+            if (label == null) return code;
+            SwitchCase newCase = ast.newSwitchCase();
+            newCase.setSwitchLabeledRule(true);
+            newCase.expressions().add(label);
+            // `case X -> value;` is an implicit yield once parsed, and JDT will not build one (setImplicit is not
+            // public). The same text is an expression statement after the arrow, which is what is written here;
+            // the re-parse reads it back as the case's value.
+            ITypeBinding type = switchExpr.resolveTypeBinding();
+            ExpressionStatement value = ast.newExpressionStatement(type == null ? ast.newNullLiteral()
+                    : InitializerFactory.createDefaultInitializer(ctx, ResolvedType.of(type)));
+            ListRewrite list = ctx.rewriter().getListRewrite(switchExpr, SwitchExpression.STATEMENTS_PROPERTY);
+            SwitchCase defaultCase = null;
+            for (Object o : switchExpr.statements()) {
+                if (o instanceof SwitchCase sc && sc.isDefault()) { defaultCase = sc; break; }
+            }
+            if (defaultCase != null) {
+                list.insertBefore(newCase, defaultCase, null);
+                list.insertBefore(value, defaultCase, null);
+            } else {
+                list.insertLast(newCase, null);
+                list.insertLast(value, null);
+            }
+            return ctx.applyTo(code);
+        });
+    }
+
+    /**
+     * Removes case {@code caseIndex} of a switch value, with what it gives. The last case, or a {@code default}
+     * the switch needs to cover every value, cannot go: the compile check refuses the edit that would leave a
+     * switch value with nothing to give.
+     */
+    public void removeCaseFromSwitchExpression(SwitchExpression switchExpr, int caseIndex) {
+        insert(switchExpr, EditKind.BODY, false, (cu, code) -> {
+            ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
+            ListRewrite list = rewriter.getListRewrite(switchExpr, SwitchExpression.STATEMENTS_PROPERTY);
+            int seen = -1;
+            boolean removing = false;
+            for (Object o : switchExpr.statements()) {
+                if (o instanceof SwitchCase) {
+                    seen++;
+                    removing = seen == caseIndex;
+                }
+                if (removing) list.remove((ASTNode) o, null);
+            }
+            return seen < caseIndex ? code : AstRewriteHelper.applyRewrite(rewriter, code);
+        });
     }
 
     public void moveSwitchCase(SwitchCase caseNode, boolean moveUp) {
