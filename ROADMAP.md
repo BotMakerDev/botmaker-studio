@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-24 (latest) — the assistant's tool layer, phase 1 of LLM block editing.** New `assist/`:
+- **2026-09-24 (latest) — Assistant bottom tab, phase 2 of LLM block editing.** `ui/app/AssistantPane` over
+  `assist/AssistantService` (LangChain4j 1.20 `AiServices`, tool loop over `AssistTools`' `@Tool` methods).
+  Providers `Ollama`/`OpenAI`/`OpenAI-compatible`/`Anthropic`/`Gemini` (`assist/Provider`, `ModelFactory`);
+  keys from environment only; settings in `ProjectPreferences.assistant`. Jackson 2.17 → 2.22.1 (LangChain4j's),
+  `-parameters` on (tool argument names). Not yet run against a real model. Next: MCP endpoint.
+- **2026-09-24 — the assistant's tool layer, phase 1 of LLM block editing.** New `assist/`:
   `AssistTurn` (palette, tree, insert, set slot, delete, errors, commit), over a private working copy of
   the file (`AssistWorkspace`). Palette ids only, values read and re-written by `ValueGrammar`, every edit
   compiled with bindings and rolled back on a new error; a turn commits as one `CodeUpdatedEvent`, and never

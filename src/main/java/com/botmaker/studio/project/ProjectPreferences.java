@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.studio.assist.AssistantSettings;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,6 +66,8 @@ public class ProjectPreferences {
     private boolean hideWaylandNotice;
     /** How the project list is sorted, by {@code ProjectSelectionScreen.SortMode} name. Null = the default. */
     private String projectSortMode;
+    /** Which model the assistant pane talks to. Never a key: those come from the environment only. */
+    private AssistantSettings assistant;
 
     public ProjectPreferences() {}
 
@@ -91,6 +94,8 @@ public class ProjectPreferences {
     public void setHideWaylandNotice(boolean hide) { this.hideWaylandNotice = hide; }
     public String getProjectSortMode() { return projectSortMode; }
     public void setProjectSortMode(String mode) { this.projectSortMode = mode; }
+    public AssistantSettings getAssistant() { return assistant; }
+    public void setAssistant(AssistantSettings assistant) { this.assistant = assistant; }
 
     /**
      * Records {@code projectDir} as the project last opened and moves it to the front of the MRU. Two entries
@@ -266,6 +271,18 @@ public class ProjectPreferences {
     public static void saveDialogState(String key, WindowState state) {
         ProjectPreferences prefs = load();
         prefs.getDialogWindows().put(key, state);
+        prefs.save();
+    }
+
+    /** The assistant pane's model, or its defaults when never chosen. */
+    public static AssistantSettings loadAssistant() {
+        AssistantSettings saved = load().getAssistant();
+        return saved == null ? AssistantSettings.defaults() : saved;
+    }
+
+    public static void saveAssistant(AssistantSettings settings) {
+        ProjectPreferences prefs = load();
+        prefs.setAssistant(settings);
         prefs.save();
     }
 

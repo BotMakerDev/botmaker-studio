@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 /**
- * The five tabs of the bottom tool window, in the order they are added.
+ * The six tabs of the bottom tool window, in the order they are added.
  *
  * <p>A closed set rather than an {@code int}: the shell used to say {@code selectBottomTab(0)} for Terminal,
  * {@code selectBottomTab(1)} for Errors and carry a computed {@code vcsTabIndex} field for the third — three
@@ -14,7 +14,9 @@ enum BottomTab {
     /** What a refactor changed and could not finish — see {@link ReviewPanel}. */
     REVIEW("Review"),
     EVENT_LOG("Event Log"),
-    VCS("VCS");
+    VCS("VCS"),
+    /** A model changing the open file's blocks through the host's own edit checks — see {@link AssistantPane}. */
+    ASSISTANT("Assistant");
 
     private final String title;
 

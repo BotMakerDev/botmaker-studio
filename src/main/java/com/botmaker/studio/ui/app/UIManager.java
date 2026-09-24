@@ -122,6 +122,8 @@ public class UIManager implements ProjectWindow {
     private DiagnosticsPanel diagnosticsPanel;
     /** The Review bottom tab — the marks every refactor leaves. Built by {@link #createScene()}. */
     private ReviewPanel reviewPanel;
+    /** The Assistant bottom tab. Built with the window, so its conversation lasts as long as the window does. */
+    private final AssistantPane assistantPane;
     /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. */
     private final EnumMap<BottomTab, Tab> bottomTabs = new EnumMap<>(BottomTab.class);
     /** Restores the dividers and the open tab at open, and writes them back from {@link #dispose()}. */
@@ -178,6 +180,7 @@ public class UIManager implements ProjectWindow {
         this.openReport = ProjectOpenMigrations.run(config, state, eventBus);
 
         this.fileExplorerManager = new FileExplorerManager(ctx);
+        this.assistantPane = new AssistantPane(ctx);
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,
                 menuBarManager, toolbarManager,
@@ -438,6 +441,7 @@ public class UIManager implements ProjectWindow {
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
         bottomTabs.put(BottomTab.EVENT_LOG, bottomTab(BottomTab.EVENT_LOG, eventLogManager.getView()));
         bottomTabs.put(BottomTab.VCS, bottomTab(BottomTab.VCS, vcsPanel.getView()));
+        bottomTabs.put(BottomTab.ASSISTANT, bottomTab(BottomTab.ASSISTANT, assistantPane.node()));
 
         bottomTabPane = new TabPane();
         bottomTabPane.getTabs().addAll(bottomTabs.values());

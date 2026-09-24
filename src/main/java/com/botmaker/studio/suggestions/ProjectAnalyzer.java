@@ -97,6 +97,14 @@ public class ProjectAnalyzer {
         this.state = state;
     }
 
+    /**
+     * The library index this analyzer reads, or {@code null} in a test — for a caller that builds a second
+     * analyzer over a staged copy of the state (the assistant's {@code AssistWorkspace}).
+     */
+    public TypeSummaryManager libraryIndex() {
+        return libraryIndex;
+    }
+
     // =========================================================================
     // 1. COMPILATION UNIT CREATION
     // =========================================================================
