@@ -14,6 +14,7 @@ import org.eclipse.jdt.core.dom.SimpleName;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -55,48 +56,43 @@ final class ExpressionReader {
 
     // ---- by form -------------------------------------------------------------------------------------------
 
-    Optional<Object> read(ValueForm form, SourceNode node) {
-        if (form == null || node == null || node.node() == null) return Optional.empty();
-        return switch (form) {
-            case ValueForm.Leaf leaf -> readNamed(leaf.typeName(), node);
-            case ValueForm.Of of -> parts(of, node).flatMap(parts -> {
-                List<Object> values = new ArrayList<>(parts.size());
-                for (ValueGrammar.Part part : parts) {
-                    Optional<Object> value = read(part.form(), part.written());
-                    if (value.isEmpty()) return Optional.empty();
-                    values.add(value.get());
-                }
-                return Optional.ofNullable(of.container().build(values));
-            });
-            // A class the bot declares is BotRecords' to read.
-            case ValueForm.Declared ignored -> Optional.empty();
-        };
+    Optional<Object> read(Type type, SourceNode node) {
+        if (type == null || node == null || node.node() == null) return Optional.empty();
+        if (type instanceof Class<?> cls) return readDeclared(cls, node);
+        Optional<ValueContainer<?>> container = ValueTypes.container(type);
+        // A class the bot declares is BotRecords' to read; an unknown type is not read.
+        if (container.isEmpty()) return Optional.empty();
+        return parts(type, node).flatMap(parts -> {
+            List<Object> values = new ArrayList<>(parts.size());
+            for (ValueGrammar.Part part : parts) {
+                Optional<Object> value = read(part.form(), part.written());
+                if (value.isEmpty()) return Optional.empty();
+                values.add(value.get());
+            }
+            return Optional.ofNullable(container.get().build(values));
+        });
     }
 
-    Optional<List<ValueGrammar.Part>> parts(ValueForm form, SourceNode node) {
-        return form instanceof ValueForm.Of of && node != null && node.node() != null ? parts(of, node) : Optional.empty();
-    }
-
-    private Optional<List<ValueGrammar.Part>> parts(ValueForm.Of of, SourceNode node) {
+    Optional<List<ValueGrammar.Part>> parts(Type type, SourceNode node) {
+        Optional<ValueContainer<?>> container = ValueTypes.container(type);
+        if (container.isEmpty() || node == null || node.node() == null) return Optional.empty();
         if (!(unwrap(node.node()) instanceof MethodInvocation call)) return Optional.empty();
-        if (!of.container().factory().matches(call, false)) return Optional.empty();
+        if (!container.get().factory().matches(call, false)) return Optional.empty();
         List<Expression> arguments = arguments(call);
-        List<ValueForm> forms = of.container().partForms(of.arguments(), arguments.size());
-        if (forms.size() != arguments.size()) return Optional.empty();
+        List<Type> types = container.get().partTypes(ValueTypes.arguments(type), arguments.size());
+        if (types.size() != arguments.size()) return Optional.empty();
         List<ValueGrammar.Part> parts = new ArrayList<>(arguments.size());
         for (int i = 0; i < arguments.size(); i++) {
-            parts.add(new ValueGrammar.Part(forms.get(i), node.child(arguments.get(i))));
+            parts.add(new ValueGrammar.Part(types.get(i), node.child(arguments.get(i))));
         }
         return Optional.of(List.copyOf(parts));
     }
 
-    private Optional<Object> readNamed(String typeName, SourceNode node) {
-        String name = grammar.qualify(typeName);
-        if (name == null) return Optional.empty();
-        if (JdkLiterals.handles(name)) return JdkLiterals.read(name, unwrap(node.node()));
-        PluginType<?> type = grammar.declaration(name);
-        Class<?> cls = type == null ? grammar.componentClass(name) : ValueGrammar.classOf(type);
-        if (cls == null) return Optional.empty();
+    /** A value whose type is a class: a JDK literal, or one a plugin declares or a component builds. */
+    private Optional<Object> readDeclared(Class<?> cls, SourceNode node) {
+        if (JdkLiterals.handles(cls)) return JdkLiterals.read(cls, unwrap(node.node()));
+        PluginType<?> type = grammar.declaration(cls);
+        if (type == null && grammar.canonical(cls) == null) return Optional.empty();
         Optional<Object> read = value(node, cls, true);
         // A declared type nothing writes, such as an interface no call here constructs, crosses as written.
         if (read.isPresent() || type == null || cls.isEnum() || grammar.canonical(cls) != null) return read;
@@ -106,8 +102,7 @@ final class ExpressionReader {
     /** One part of a call, read as the class its declaration gives it. */
     private Optional<Object> readPart(Class<?> type, SourceNode node) {
         if (type == null || isHostContainer(type)) return readAny(node);
-        String name = JavaNames.canonical(type);
-        if (JdkLiterals.handles(name)) return JdkLiterals.read(name, unwrap(node.node()));
+        if (JdkLiterals.handles(type)) return JdkLiterals.read(type, unwrap(node.node()));
         Optional<Object> read = value(node, type, true);
         if (read.isPresent() || type.isEnum() || grammar.canonical(type) != null) return read;
         // The plugin said this part is a type nothing here writes — a flow's Collect::body — so it crosses
@@ -132,14 +127,14 @@ final class ExpressionReader {
         Optional<Object> read = switch (expression) {
             case ClassInstanceCreation creation -> construct(node.child(creation), expected);
             case MethodInvocation call -> invoke(node.child(call), expected, bare);
-            case QualifiedName qualified -> constant(qualified.getQualifier().getFullyQualifiedName(),
+            case QualifiedName qualified -> constant(qualified.getQualifier(),
                     qualified.getName().getIdentifier(), expected);
             case FieldAccess access when access.getExpression() instanceof Name owner ->
-                    constant(owner.getFullyQualifiedName(), access.getName().getIdentifier(), expected);
+                    constant(owner, access.getName().getIdentifier(), expected);
             case SimpleName simple when bare && expected != null && expected.isEnum() ->
                     enumConstant(expected, simple.getIdentifier());
             default -> expected != null && JdkLiterals.handles(expected)
-                    ? JdkLiterals.read(JavaNames.canonical(expected), expression)
+                    ? JdkLiterals.read(expected, expression)
                     : JdkLiterals.readAny(expression);
         };
         return read.filter(value -> expected == null || boxed(expected).isInstance(value));
@@ -211,7 +206,7 @@ final class ExpressionReader {
     }
 
     /** {@code Owner.NAME}: an enum constant, or a public static final field of a declared class. */
-    private Optional<Object> constant(String owner, String name, Class<?> expected) {
+    private Optional<Object> constant(Name owner, String name, Class<?> expected) {
         if (expected != null && expected.isEnum() && Factory.names(owner, expected)) {
             Optional<Object> constant = enumConstant(expected, name);
             if (constant.isPresent()) return constant;

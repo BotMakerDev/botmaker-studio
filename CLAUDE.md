@@ -11,6 +11,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > the grammar. The SDK's `internal.plugin.record` (`MacroRecorderDialog`, `MacroTranslator`) is deleted, and
 > `ActionContext.insertAtCursor` with it.
 
+> **A value's type is a `java.lang.reflect.Type` since 2026-09-24, and `ValueForm` is deleted.** Read
+> `ValueForm.Leaf` below as the plugin's own `Class`, `ValueForm.Of` as `ValueTypes.Parameterized` (a real
+> `ParameterizedType` over `List`/`Map`/`Map.Entry`), `ValueForm.Declared` as `ValueTypes.BotClass`, and an
+> unknown leaf as `ValueTypes.Unknown` (display only). A written type becomes one **once**, in
+> `project/source/ValueTypeResolver` — from the JDT binding when the unit was parsed against the project's
+> classpath (`project/source/BotParser`), otherwise through the unit's imports (`plugin/grammar/SourceNames`,
+> the JLS rules). `ValueGrammar.qualify`, `type(String)` and `containerForJava` are gone; `named(canonical)` is
+> the one exact lookup. `@Param`/`@Managed` are identified by class (`project/source/BotAnnotation`). No
+> suffix match (`endsWith("." + name)`) is left on the value path; an expression parsed on its own
+> (`SourceNode.parse`, marked `JavaExpressions.detached`) still matches simple names, until values stay
+> attached to their unit.
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,

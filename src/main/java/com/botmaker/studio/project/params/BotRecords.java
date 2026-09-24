@@ -1,16 +1,21 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ParameterizedType;
 import org.eclipse.jdt.core.dom.RecordDeclaration;
+import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -29,7 +34,7 @@ import java.util.Set;
  * <p><b>Why this is separate from the grammar.</b> A {@link ValueGrammar} describes what plugins declared; a
  * bot's own {@code record Point(int x, int y)} is declared by no plugin, and a second project's
  * {@code Point} is a different class. What the host has and no plugin does is the bot's source — so the
- * grammar declines a {@link ValueForm.Declared} ({@code ValueGrammar.initializer} says so in as many words)
+ * grammar declines a {@link ValueTypes.BotClass} ({@code ValueGrammar.initializer} says so in as many words)
  * and this class answers it instead, with the same shape of answer: parts as source with their forms, and a
  * call composed back over them.
  *
@@ -47,14 +52,15 @@ import java.util.Set;
  * there. That is why {@code ValueGrammar.freshInitializer} answers empty for a declared form and why nothing
  * here supplies one.
  *
- * <p><b>Syntax only, like everything else in this package.</b> A component's type is whatever it is
- * <em>written</em> as, a generic record's {@code T} is an unknown leaf, and a record that contains itself is
- * refused with that as the reason rather than walked forever.
+ * <p><b>Read without a classpath.</b> A record is keyed by its canonical name ({@code com.bot.Outer.Inner} for a
+ * member type), and a component's type is resolved through its unit's imports by {@link ValueTypeResolver}. A
+ * generic record's {@code T} is an unknown leaf, and a record that contains itself is refused with that as
+ * the reason rather than walked forever.
  */
 public final class BotRecords {
 
     /** One component of a record: what it is called, and the form its declared type means. */
-    public record Component(String name, ValueForm form) {}
+    public record Component(String name, java.lang.reflect.Type form) {}
 
     /**
      * One type the bot declares, by qualified name.
@@ -106,20 +112,13 @@ public final class BotRecords {
         for (String source : sources) collect(source, raw);
         if (raw.isEmpty()) return NONE;
 
-        Map<String, String> qualified = new LinkedHashMap<>();
-        for (Raw found : raw.values()) qualified.putIfAbsent(found.simpleName(), found.qualifiedName());
-        JavaParameterSource.Declarations declarations = written -> {
-            if (written == null) return null;
-            if (qualified.containsValue(written)) return written;
-            return qualified.get(written.substring(written.lastIndexOf('.') + 1));
-        };
-
+        Set<String> names = Set.copyOf(raw.keySet());
         Map<String, Shape> shapes = new LinkedHashMap<>();
         for (Raw found : raw.values()) {
             List<Component> components = new ArrayList<>(found.components().size());
             for (RawComponent component : found.components()) {
-                components.add(new Component(component.name(), JavaParameterSource.formOf(
-                        grammar, component.type(), component.extraDimensions(), declarations)));
+                components.add(new Component(component.name(), ValueTypeResolver.of(
+                        grammar, component.type(), component.extraDimensions(), names)));
             }
             shapes.put(found.qualifiedName(), new Shape(found.qualifiedName(), found.simpleName(),
                     found.isRecord(), List.copyOf(components)));
@@ -128,29 +127,21 @@ public final class BotRecords {
     }
 
     /**
-     * The qualified name of the record {@code written} means — {@link JavaParameterSource.Declarations} as
-     * this class answers it, so a field typed {@code Point} becomes a declared form rather than an unknown
-     * leaf.
+     * The canonical name of every class the bot declares — what the type resolver asks, so a field typed
+     * {@code Point} is the bot's {@code Point} rather than an unknown leaf.
      */
-    public String qualifyDeclared(String written) {
-        if (written == null || written.isBlank()) return null;
-        String name = written.strip();
-        if (byQualifiedName.containsKey(name)) return name;
-        String simple = name.substring(name.lastIndexOf('.') + 1);
-        for (Shape shape : byQualifiedName.values()) {
-            if (shape.simpleName().equals(simple)) return shape.qualifiedName();
-        }
-        return null;
+    public Set<String> declaredNames() {
+        return byQualifiedName.keySet();
     }
 
-    /** The record a form names, or empty when the bot does not declare one by that name. */
-    public Optional<Shape> find(ValueForm.Declared declared) {
+    /** The record a type names, or empty when the bot does not declare one by that name. */
+    public Optional<Shape> find(ValueTypes.BotClass declared) {
         return declared == null ? Optional.empty()
                 : Optional.ofNullable(byQualifiedName.get(declared.qualifiedName()));
     }
 
     /** This record's components in canonical order, or empty for a name the bot does not declare. */
-    public List<Component> componentsOf(ValueForm.Declared declared) {
+    public List<Component> componentsOf(ValueTypes.BotClass declared) {
         return find(declared).map(Shape::components).orElse(List.of());
     }
 
@@ -161,11 +152,11 @@ public final class BotRecords {
      * message the whole design exists to avoid: the author can register a type, change a component or stop
      * expecting a cell, and none of those is choosable from a sentence that does not say which one.
      */
-    public String whyNotEditable(ValueForm.Declared declared) {
+    public String whyNotEditable(ValueTypes.BotClass declared) {
         return whyNotEditable(declared, new LinkedHashSet<>());
     }
 
-    private String whyNotEditable(ValueForm.Declared declared, Set<String> seen) {
+    private String whyNotEditable(ValueTypes.BotClass declared, Set<String> seen) {
         Shape shape = byQualifiedName.get(declared.qualifiedName());
         if (shape == null || !shape.isRecord()) {
             return declared.qualifiedName() + " is a class this bot declares, and only a record has a "
@@ -183,14 +174,14 @@ public final class BotRecords {
                     + "they are written rather than resolving them";
         }
         for (Component component : shape.components()) {
-            if (component.form() instanceof ValueForm.Declared nested) {
+            if (component.form() instanceof ValueTypes.BotClass nested) {
                 String why = whyNotEditable(nested, seen);
                 if (why != null) return why;
                 continue;
             }
             if (!grammar.known(component.form())) {
                 return shape.simpleName() + "." + component.name() + " is a "
-                        + component.form().sourceName() + ", which no installed plugin declares as a value";
+                        + ValueTypes.sourceName(component.form()) + ", which no installed plugin declares as a value";
             }
         }
         seen.remove(shape.qualifiedName());
@@ -205,17 +196,14 @@ public final class BotRecords {
      * is not this record's canonical constructor — it is one of its other constructors, or a different class
      * entirely — and answering a partial reading of it would rewrite something nobody asked to rewrite.
      */
-    public Optional<List<ValueGrammar.Part>> partsOf(ValueForm.Declared declared, String source) {
+    public Optional<List<ValueGrammar.Part>> partsOf(ValueTypes.BotClass declared, String source) {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
         if (shape == null || source == null || source.isBlank()) return Optional.empty();
         Optional<SourceNode> parsed = SourceNode.parse(source);
         if (parsed.isEmpty() || !(parsed.get().node() instanceof ClassInstanceCreation creation)) {
             return Optional.empty();
         }
-        if (!names(creation.getType()).equals(shape.simpleName())
-                && !names(creation.getType()).equals(shape.qualifiedName())) {
-            return Optional.empty();
-        }
+        if (!names(creation.getType(), shape.qualifiedName())) return Optional.empty();
         List<?> arguments = creation.arguments();
         if (arguments.size() != shape.components().size()) return Optional.empty();
 
@@ -232,7 +220,7 @@ public final class BotRecords {
      * Components already written as source, composed back into the constructor call — always fully
      * qualified, so the line compiles wherever the field is declared and no import can be forgotten.
      */
-    public Optional<String> initializerOfParts(ValueForm.Declared declared, List<String> parts) {
+    public Optional<String> initializerOfParts(ValueTypes.BotClass declared, List<String> parts) {
         Shape shape = byQualifiedName.get(declared == null ? "" : declared.qualifiedName());
         if (shape == null || parts == null || parts.size() != shape.components().size()) {
             return Optional.empty();
@@ -250,8 +238,6 @@ public final class BotRecords {
 
     private static void collect(String source, Map<String, Raw> out) {
         CompilationUnit unit = JavaParameterSource.parse(source);
-        String packageName = unit.getPackage() == null ? ""
-                : unit.getPackage().getName().getFullyQualifiedName();
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(RecordDeclaration declaration) {
@@ -261,7 +247,7 @@ public final class BotRecords {
                     components.add(new RawComponent(component.getName().getIdentifier(),
                             component.getType(), component.getExtraDimensions()));
                 }
-                put(declaration.getName().getIdentifier(), true, components);
+                put(declaration, true, components);
                 return true;
             }
 
@@ -270,24 +256,24 @@ public final class BotRecords {
                 // A class and an interface are both carried, with no components: what they buy is the
                 // *reason* a field of one is read-only, which is about its constructor and not about the
                 // vocabulary. An enum is not, because a field of one is a leaf question and reads as one.
-                put(declaration.getName().getIdentifier(), false, List.of());
+                put(declaration, false, List.of());
                 return true;
             }
 
-            // A nested type is keyed by its own simple name, which is how a component inside the same file
-            // writes it; an outer class is not part of that spelling.
-            private void put(String simple, boolean isRecord, List<RawComponent> components) {
-                String qualified = packageName.isEmpty() ? simple : packageName + "." + simple;
-                out.putIfAbsent(qualified, new Raw(qualified, simple, isRecord, List.copyOf(components)));
+            // Keyed by canonical name — com.bot.Outer.Inner for a member type — which is what a binding says
+            // and what the type resolver asks for; the imports and the enclosing types decide a written name.
+            private void put(AbstractTypeDeclaration declaration, boolean isRecord, List<RawComponent> components) {
+                String qualified = SourceNames.canonicalOf(declaration);
+                out.putIfAbsent(qualified, new Raw(qualified, declaration.getName().getIdentifier(), isRecord,
+                        List.copyOf(components)));
             }
         });
     }
 
-    /** The created type's name with any type arguments dropped — {@code Box<>} and {@code Box} are one. */
-    private static String names(Type type) {
-        String written = type == null ? "" : type.toString().strip();
-        int angle = written.indexOf('<');
-        return angle < 0 ? written : written.substring(0, angle).strip();
+    /** Whether a {@code new} expression's type — {@code Box<>} or {@code Box} alike — names {@code canonical}. */
+    private static boolean names(Type type, String canonical) {
+        Type raw = type instanceof ParameterizedType parameterized ? parameterized.getType() : type;
+        return raw instanceof SimpleType simple && SourceNames.refersTo(simple.getName(), canonical);
     }
 
 }

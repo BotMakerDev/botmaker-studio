@@ -1,7 +1,6 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.plugin.grammar.ValueForm;
-
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 
 /**
@@ -24,7 +23,7 @@ import java.nio.file.Path;
  * @param editable   whether that expression may be rewritten
  * @param note       why it may not be, for the sentence a window shows — blank when it may
  */
-public record ManagedMethod(Path file, String className, String methodName, String id, ValueForm form,
+public record ManagedMethod(Path file, String className, String methodName, String id, Type form,
                             String expression, boolean editable, String note) {
 
     public ManagedMethod {

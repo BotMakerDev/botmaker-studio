@@ -95,31 +95,35 @@ public record Factory(Executable executable) {
         Expression receiver = call.getExpression();
         if (kind() == Kind.RECEIVER) return receiver != null;
         if (receiver == null) return bare;
-        return receiver instanceof Name written && names(written.getFullyQualifiedName(), owner());
+        return receiver instanceof Name written && names(written, owner());
     }
 
     /** Whether {@code creation} is {@code new Owner(…)} with a count this constructor takes. */
     public boolean matches(ClassInstanceCreation creation) {
         return kind() == Kind.CONSTRUCTOR && creation.getAnonymousClassDeclaration() == null
                 && creation.getExpression() == null
-                && names(typeName(creation.getType()), owner()) && fits(creation.arguments().size());
+                && names(creation.getType(), owner()) && fits(creation.arguments().size());
     }
 
-    /** Whether a written dotted name — {@code Map}, {@code java.util.Map}, {@code Flow.Limits} — names {@code type}. */
-    public static boolean names(String written, Class<?> type) {
-        if (written == null || written.isEmpty()) return false;
-        String canonical = JavaNames.canonical(type);
-        return canonical.equals(written) || canonical.endsWith("." + written);
+    /** Whether a written name — {@code Map}, {@code java.util.Map}, {@code Flow.Limits} — names {@code type}. */
+    public static boolean names(Name written, Class<?> type) {
+        return SourceNames.refersTo(written, JavaNames.canonical(type));
     }
 
-    private static String typeName(Type type) {
-        return switch (type) {
-            case SimpleType simple -> simple.getName().getFullyQualifiedName();
-            case QualifiedType qualified -> typeName(qualified.getQualifier()) + "." + qualified.getName().getIdentifier();
-            case NameQualifiedType qualified ->
-                    qualified.getQualifier().getFullyQualifiedName() + "." + qualified.getName().getIdentifier();
-            case ParameterizedType parameterized -> typeName(parameterized.getType());
-            default -> "";
+    /** Whether a written type — {@code Point}, {@code Box<>}, {@code geometry.Point} — names {@code type}. */
+    public static boolean names(Type written, Class<?> type) {
+        return switch (written) {
+            case SimpleType simple -> names(simple.getName(), type);
+            case ParameterizedType parameterized -> names(parameterized.getType(), type);
+            case NameQualifiedType qualified -> type.getEnclosingClass() == null
+                    ? JavaNames.canonical(type).equals(qualified.getQualifier().getFullyQualifiedName() + "."
+                            + qualified.getName().getIdentifier())
+                    : names(qualified.getQualifier(), type.getEnclosingClass())
+                            && qualified.getName().getIdentifier().equals(type.getSimpleName());
+            case QualifiedType qualified -> type.getEnclosingClass() != null
+                    && names(qualified.getQualifier(), type.getEnclosingClass())
+                    && qualified.getName().getIdentifier().equals(type.getSimpleName());
+            case null, default -> false;
         };
     }
 }

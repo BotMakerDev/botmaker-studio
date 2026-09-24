@@ -3,10 +3,10 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import javafx.scene.Node;
 
+import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.List;
 
@@ -86,11 +86,11 @@ public final class TestValues {
     public static final ValueGrammar GRAMMAR = ValueGrammar.of(
             List.of(TEXT_TYPE, WHOLE_NUMBER_TYPE, DURATION_TYPE, BODY_TYPE), List.of(SPAN));
 
-    public static final ValueForm TEXT = ValueForm.of(String.class);
-    public static final ValueForm WHOLE_NUMBER = ValueForm.of(int.class);
-    public static final ValueForm DURATION = ValueForm.of(Duration.class);
-    public static final ValueForm BODY = ValueForm.of(Body.class);
-    public static final ValueForm SPAN_FORM = ValueForm.of(Span.class);
+    public static final Type TEXT = String.class;
+    public static final Type WHOLE_NUMBER = int.class;
+    public static final Type DURATION = Duration.class;
+    public static final Type BODY = Body.class;
+    public static final Type SPAN_FORM = Span.class;
 
     /** A JDK literal type: nothing to take apart, and no editor either — these tests draw nothing. */
     private record Leaf<T>(Class<T> type, T fresh) implements PluginType<T> {

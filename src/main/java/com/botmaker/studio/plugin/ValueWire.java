@@ -2,11 +2,13 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.ResolvedType;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,22 +39,22 @@ public final class ValueWire {
      * <p><b>Empty and "no parts" are different answers</b>: an empty list is a value a user chose, and a
      * source this grammar did not write is a value that must be shown as it stands and never replaced.
      */
-    public static Optional<List<ValueGrammar.Part>> parts(ValueForm form, String source) {
+    public static Optional<List<ValueGrammar.Part>> parts(Type form, String source) {
         return grammar().partsOfInitializer(form, source);
     }
 
     /** The same, as the list a cell seeds its rows from — a source nothing can read seeds an empty one. */
-    public static List<ValueGrammar.Part> partsOrNone(ValueForm form, String source) {
+    public static List<ValueGrammar.Part> partsOrNone(Type form, String source) {
         return parts(form, source).orElse(List.of());
     }
 
-    /** {@link #partsOrNone(ValueForm, String)} one level further down: a part is taken apart as it was parsed. */
-    public static List<ValueGrammar.Part> partsOrNone(ValueForm form, SourceNode written) {
+    /** {@link #partsOrNone(Type, String)} one level further down: a part is taken apart as it was parsed. */
+    public static List<ValueGrammar.Part> partsOrNone(Type form, SourceNode written) {
         return grammar().partsOfInitializer(form, written).orElse(List.of());
     }
 
     /** Parts, already written as source, composed back into the call this form's container spells. */
-    public static String compose(ValueForm form, List<String> parts) {
+    public static String compose(Type form, List<String> parts) {
         return grammar().initializerOfParts(form, parts).orElse("");
     }
 
@@ -69,16 +71,14 @@ public final class ValueWire {
      * written spelling, which matches nothing and is the safe direction — an offer not made beats an offer
      * that will not compile.
      */
-    public static ResolvedType resolvedType(ValueForm form) {
-        if (form == null) return ResolvedType.named("");
+    public static ResolvedType resolvedType(Type form) {
         return switch (form) {
-            case ValueForm.Of of -> ResolvedType.named(of.container().type().getName());
-            case ValueForm.Declared declared -> ResolvedType.named(form.sourceName());
-            case ValueForm.Leaf leaf -> {
-                String qualified = grammar().qualify(leaf.typeName());
-                if ("java.lang.String".equals(qualified)) yield ResolvedType.of(JdkType.STRING);
-                yield ResolvedType.named(qualified != null ? qualified : leaf.typeName());
-            }
+            case ValueTypes.Parameterized parameterized -> ResolvedType.named(parameterized.raw().getName());
+            case ValueTypes.BotClass bot -> ResolvedType.named(ValueTypes.sourceName(bot));
+            case Class<?> cls when cls == String.class -> ResolvedType.of(JdkType.STRING);
+            case Class<?> cls -> ResolvedType.named(JavaNames.canonical(cls));
+            case null -> ResolvedType.named("");
+            default -> ResolvedType.named(ValueTypes.sourceName(form));
         };
     }
 }

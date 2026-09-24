@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashSet;
@@ -46,7 +46,8 @@ public class PickerGalleryWindowTest {
         PickerGalleryWindow.Shape map = PickerGalleryWindow.SHAPES.stream()
                 .filter(PickerGalleryWindow.Shape::map).findFirst().orElseThrow();
 
-        assertEquals(ValueForm.mapOf(ValueForm.of(String.class), ValueForm.of("java.time.Duration")),
+        assertEquals(ValueTypes.mapOf(String.class, PluginHost.grammar().named("java.time.Duration")
+                        .<java.lang.reflect.Type>map(cls -> cls).orElse(new ValueTypes.Unknown("java.time.Duration"))),
                 map.formOf("java.time.Duration"));
     }
 
@@ -62,7 +63,7 @@ public class PickerGalleryWindowTest {
             assertTrue(options.size() >= 2, type + " offers " + options + ", which is not a set to choose from");
             LinkedHashSet<Object> values = new LinkedHashSet<>();
             for (String option : options) {
-                Optional<Object> value = PluginHost.grammar().valueOf(ValueForm.of(type), option);
+                Optional<Object> value = PluginHost.grammar().valueOf(PluginHost.grammar().named(type).orElseThrow(), option);
                 values.add(value.orElse(option));
             }
             assertEquals(options.size(), values.size(), type + " has two samples that are one value");

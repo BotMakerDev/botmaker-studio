@@ -5,8 +5,8 @@ import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Name;
@@ -25,6 +25,7 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -119,7 +120,7 @@ public final class JavaParameterEdits {
      * chose — is written with <b>no initialiser at all</b>, which is legal Java for every type.
      */
     public static String retype(String source, ValueGrammar grammar, String className, String fieldName,
-                                ValueForm form) {
+                                Type form) {
         String typeName = typeName(grammar, form);
         if (typeName == null) return source;
         String initializer = grammar.freshInitializer(form).orElse(null);
@@ -211,7 +212,7 @@ public final class JavaParameterEdits {
      * class the bot declares has no fresh value Studio may invent.
      */
     public static String add(String source, ValueGrammar grammar, String className, String fieldName,
-                             ValueForm form, String initializer, String category, String description) {
+                             Type form, String initializer, String category, String description) {
         String typeName = typeName(grammar, form);
         if (typeName == null || fieldName == null || fieldName.isBlank()) return source;
         CompilationUnit unit = JavaParameterSource.parse(source);
@@ -409,16 +410,15 @@ public final class JavaParameterEdits {
      * The Java type a form is written as — {@code java.util.Map<String, java.util.List<Duration>>} for one
      * two levels deep.
      *
-     * <p><b>The form spells itself</b> ({@code ValueForm.sourceName}), which is what retired the branch on
-     * {@code isList()} that stood here: a shape with one boolean could write one container. A leaf is
-     * spelled by its simple name, and {@code ValueGrammar.imports} is what the caller adds beside it.
+     * <p><b>The type spells itself</b> ({@link ValueTypes#sourceName}). A class is spelled by its simple name,
+     * and {@code ValueGrammar.imports} is what the caller adds beside it.
      *
-     * <p>Null for a form with an unknown leaf anywhere, which is what makes every caller decline rather than
+     * <p>Null for a type with an unknown leaf anywhere, which is what makes every caller decline rather than
      * write a field naming a class that does not exist.
      */
-    private static String typeName(ValueGrammar grammar, ValueForm form) {
+    private static String typeName(ValueGrammar grammar, Type form) {
         if (form == null || grammar == null || !grammar.known(form)) return null;
-        String java = form.sourceName();
+        String java = ValueTypes.sourceName(form);
         return java == null || java.isBlank() ? null : java;
     }
 

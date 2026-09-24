@@ -3,6 +3,7 @@ package com.botmaker.studio.project.source;
 import com.botmaker.plugin.api.managed.Managed;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.studio.plugin.grammar.SourceNames;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.BodyDeclaration;

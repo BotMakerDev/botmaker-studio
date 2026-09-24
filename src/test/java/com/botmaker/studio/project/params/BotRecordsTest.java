@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
 
@@ -50,8 +50,8 @@ class BotRecordsTest {
         return found.getFirst();
     }
 
-    private static ValueForm.Declared point() {
-        return new ValueForm.Declared("com.example.bot.Point", List.of());
+    private static ValueTypes.BotClass point() {
+        return new ValueTypes.BotClass("com.example.bot.Point", List.of());
     }
 
     @Test
@@ -74,7 +74,7 @@ class BotRecordsTest {
                     public static Point origin = new Point(1, 2);
                 """);
 
-        assertEquals(ValueForm.of("Point"), origin.form());
+        assertEquals(new ValueTypes.Unknown("Point"), origin.form());
         assertFalse(origin.editable());
     }
 
@@ -157,7 +157,7 @@ class BotRecordsTest {
                 """;
 
         String why = records(shape)
-                .whyNotEditable(new ValueForm.Declared("com.example.bot.Shape", List.of()));
+                .whyNotEditable(new ValueTypes.BotClass("com.example.bot.Shape", List.of()));
 
         assertNotNull(why);
         assertTrue(why.contains("Shape.channel"), why);
@@ -173,7 +173,7 @@ class BotRecordsTest {
                 public record Line(Point from, Point to) {}
                 """;
         BotRecords records = records(POINT, line);
-        ValueForm.Declared declared = new ValueForm.Declared("com.example.bot.Line", List.of());
+        ValueTypes.BotClass declared = new ValueTypes.BotClass("com.example.bot.Line", List.of());
 
         assertNull(records.whyNotEditable(declared));
         assertEquals(List.of("new Point(0, 0)", "new Point(1, 1)"),
@@ -190,7 +190,7 @@ class BotRecordsTest {
                 public record Node(int value, Node next) {}
                 """;
 
-        String why = records(node).whyNotEditable(new ValueForm.Declared("com.example.bot.Node", List.of()));
+        String why = records(node).whyNotEditable(new ValueTypes.BotClass("com.example.bot.Node", List.of()));
 
         assertNotNull(why);
         assertTrue(why.contains("contains itself"), why);
@@ -205,7 +205,7 @@ class BotRecordsTest {
                 public record Holder<T>(T value) {}
                 """;
         BotRecords records = records(holder);
-        ValueForm.Declared declared = new ValueForm.Declared("com.example.bot.Holder",
+        ValueTypes.BotClass declared = new ValueTypes.BotClass("com.example.bot.Holder",
                 List.of(TestValues.WHOLE_NUMBER));
 
         assertNotNull(records.whyNotEditable(declared));

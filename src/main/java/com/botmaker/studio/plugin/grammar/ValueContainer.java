@@ -22,7 +22,7 @@ import java.util.List;
  * <h2>Arity counts types; parts count values</h2>
  *
  * <p>{@link #arity()} is how many type arguments a form supplies. {@link #parts} returns <em>values</em>, so
- * its length is the size of the composite. {@link #partForms} is what gives each part a static type, which is
+ * its length is the size of the composite. {@link #partTypes} is what gives each part a static type, which is
  * what keeps the recursion typed all the way down.
  *
  * @param <C> the composite's own type
@@ -75,7 +75,7 @@ public interface ValueContainer<C> {
      * <p>{@code List<E>} answers {@code parts} copies of {@code E}; {@code Map<K, V>} answers {@code parts}
      * copies of {@code Entry<K, V>}; an entry answers {@code [K, V]}.
      */
-    List<ValueForm> partForms(List<ValueForm> arguments, int parts);
+    List<java.lang.reflect.Type> partTypes(List<java.lang.reflect.Type> arguments, int parts);
 
     // ---- derived -----------------------------------------------------------------------------------------
 

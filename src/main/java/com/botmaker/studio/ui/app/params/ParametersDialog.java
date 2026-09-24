@@ -8,7 +8,7 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
@@ -49,6 +49,7 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.util.Duration;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -530,7 +531,7 @@ public final class ParametersDialog {
             });
             type = picker;
         } else {
-            type = new Label(entry.form().sourceName());
+            type = new Label(ValueTypes.sourceName(entry.form()));
         }
 
         CheckBox shared = new CheckBox("Show to user");
@@ -588,11 +589,11 @@ public final class ParametersDialog {
         // free until something is written in it. A closed-set type brings its own choices (every direction,
         // every mouse button), so there is nothing here for the author to write — offering an "add a choice"
         // row over them would invite a second, hand-typed copy of a list the plugin already owns.
-        ValueForm.Leaf leaf = entry.form().leaf();
+        Type leaf = ValueTypes.leaf(entry.form());
         ValueGrammar grammar = PluginHost.grammar();
         if (mine && leaf != null && grammar.known(leaf) && !isEnum(grammar, leaf)) {
             Label heading = new Label("Choices");
-            heading.setTooltip(new Tooltip(entry.form() instanceof ValueForm.Of
+            heading.setTooltip(new Tooltip(entry.form() instanceof ValueTypes.Parameterized
                     ? "The set this parameter's values are picked from. The user ticks any number of them."
                     : "The set this parameter's value is picked from. The user picks exactly one."));
             grid.add(heading, 0, row);
@@ -699,33 +700,25 @@ public final class ParametersDialog {
      * Whether {@code leaf} is an enum a plugin declares — a closed set that brings its own choices (every
      * direction, every mouse button), so a hand-typed copy of that list would be a second one to drift.
      */
-    private static boolean isEnum(ValueGrammar grammar, ValueForm.Leaf leaf) {
-        return grammar.type(leaf.typeName()).map(type -> {
-            try {
-                return type.type().isEnum();
-            } catch (RuntimeException | LinkageError e) {
-                return false;
-            }
-        }).orElse(false);
+    private static boolean isEnum(ValueGrammar grammar, Type leaf) {
+        return leaf instanceof Class<?> cls && cls.isEnum() && grammar.type(cls).isPresent();
     }
 
     /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
-    private static boolean isNumber(ValueGrammar grammar, ValueForm.Leaf leaf) {
-        String name = grammar.qualify(leaf.typeName());
-        return name != null && NUMBERS.contains(name);
+    private static boolean isNumber(ValueGrammar grammar, Type leaf) {
+        return leaf instanceof Class<?> cls && NUMBERS.contains(cls);
     }
 
-    private static final java.util.Set<String> NUMBERS = java.util.Set.of(
-            "byte", "short", "int", "long", "float", "double",
-            "java.lang.Byte", "java.lang.Short", "java.lang.Integer", "java.lang.Long",
-            "java.lang.Float", "java.lang.Double");
+    private static final java.util.Set<Class<?>> NUMBERS = java.util.Set.of(
+            byte.class, short.class, int.class, long.class, float.class, double.class,
+            Byte.class, Short.class, Integer.class, Long.class, Float.class, Double.class);
 
     /**
      * A choice as the author writes it into {@code @Param(options = …)}: the text itself for a string, the
      * constant's name for an enum, and the value's Java for everything else — which is what
      * {@code ParamValueWidgets.optionSource} reads back as the same value.
      */
-    private static String optionText(ValueGrammar grammar, ValueForm.Leaf leaf, String source) {
+    private static String optionText(ValueGrammar grammar, Type leaf, String source) {
         Optional<Object> value = grammar.valueOf(leaf, source);
         if (value.isEmpty()) return "";
         if (value.get() instanceof String text) return text;
@@ -754,7 +747,7 @@ public final class ParametersDialog {
      */
     private Node buildOptionsEditor(JavaParameter entry) {
         ParameterRow v = entry.row();
-        ValueForm.Leaf base = entry.form().leaf();
+        Type base = ValueTypes.leaf(entry.form());
         ValueGrammar grammar = PluginHost.grammar();
         ValueEditors.Context ctx = ValueEditors.Context.of(config);
         VBox box = new VBox(4);
@@ -804,12 +797,12 @@ public final class ParametersDialog {
      * and adding the right one: an in-place editor for those would need a commit gesture per row, and a
      * three-item choice list is not where that ceremony earns its keep.
      */
-    private Node optionRow(JavaParameter entry, ValueForm.Leaf base, ValueEditors.Context ctx,
+    private Node optionRow(JavaParameter entry, Type base, ValueEditors.Context ctx,
                            List<String> options, int at) {
         String option = options.get(at);
         ValueGrammar grammar = PluginHost.grammar();
         Node shown;
-        if ("java.lang.String".equals(grammar.qualify(base.typeName()))) {
+        if (base == String.class) {
             TextField field = new TextField(option);
             HBox.setHgrow(field, Priority.ALWAYS);
             Runnable commit = () -> {
@@ -951,7 +944,7 @@ public final class ParametersDialog {
                 String tag = VariableRailModel.ALL.equals(selectedTag)
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
-                ValueForm form = type.form();
+                Type form = type.form();
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
                         form, PluginHost.grammar().freshInitializer(form).orElse(""), tag, "");
                 if (stored.isEmpty()) {
@@ -1050,7 +1043,7 @@ public final class ParametersDialog {
 
     /** The same, optionally retyping to {@code newForm} as well. */
     private boolean edit(JavaParameter entry, String what, UnaryOperator<ParameterRow> change, String newName,
-                         ValueForm newForm) {
+                         Type newForm) {
         boolean[] stored = {false};
         change(what + " of " + entry.row().name(), () -> stored[0] = declare(entry, current -> {
             ParameterRow changed = change.apply(current);
@@ -1066,7 +1059,7 @@ public final class ParametersDialog {
      * it, and an undo replaying an old snapshot lands here too. {@code newForm} is null for an edit that
      * keeps the type.
      */
-    private boolean declare(JavaParameter entry, UnaryOperator<ParameterRow> change, ValueForm newForm) {
+    private boolean declare(JavaParameter entry, UnaryOperator<ParameterRow> change, Type newForm) {
         JavaParameter held = find(entry.className(), entry.row().name());
         if (held == null) return false;
         ParameterRow wanted = change.apply(held.row());

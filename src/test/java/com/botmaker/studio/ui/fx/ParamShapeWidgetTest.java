@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
@@ -12,6 +12,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.layout.Pane;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Which control a parameter gets, and on what the answer depends: its {@link ValueForm}, and whether the row
+ * Which control a parameter gets, and on what the answer depends: its {@link Type}, and whether the row
  * declares a set of choices.
  *
  * <p>It used to depend on the deleted {@code ValueShape}, which answered two unrelated questions at once — how many
@@ -35,29 +36,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ParamShapeWidgetTest extends FxHeadlessTest {
 
-    private static final ValueForm TEXT = ValueForm.of(String.class);
-    private static final ValueForm WHOLE_NUMBER = ValueForm.of(int.class);
-    private static final ValueForm POINT = ValueForm.of("com.botmaker.sdk.api.geometry.Point");
+    private static final Type TEXT = String.class;
+    private static final Type WHOLE_NUMBER = int.class;
+    private static final Type POINT = new ValueTypes.Unknown("com.botmaker.sdk.api.geometry.Point");
 
-    private Node widgetFor(ParameterRow row, ValueForm form) {
+    private Node widgetFor(ParameterRow row, Type form) {
         return widgetFor(row, form, new ArrayList<>());
     }
 
-    private Node widgetFor(ParameterRow row, ValueForm form, List<ParamValueWidgets.ValueEditor> sink) {
+    private Node widgetFor(ParameterRow row, Type form, List<ParamValueWidgets.ValueEditor> sink) {
         Node[] built = new Node[1];
         interact(() -> built[0] = ParamValueWidgets.build("", row, form, null, sink));
         return built[0];
     }
 
     /** One row seeded with the form's fresh initialiser and carrying the declared choices as written. */
-    private static ParameterRow row(String name, ValueForm form, List<String> options) {
-        return ParameterRow.named(name, form.sourceName())
+    private static ParameterRow row(String name, Type form, List<String> options) {
+        return ParameterRow.named(name, ValueTypes.sourceName(form))
                 .value(PluginHost.grammar().freshInitializer(form).orElse(""))
                 .options(options)
                 .build();
     }
 
-    private static ParameterRow row(String name, ValueForm form) {
+    private static ParameterRow row(String name, Type form) {
         return row(name, form, List.of());
     }
 
@@ -72,7 +73,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     @Test
     void aListIsTicksWithASetDeclaredAndTheUsersOwnWithout() {
         List<String> skills = List.of("mine", "fish", "cook");
-        ValueForm texts = ValueForm.listOf(TEXT);
+        Type texts = ValueTypes.listOf(TEXT);
 
         List<Node> ticks = childrenOf(widgetFor(row("many", texts, skills), texts));
         assertEquals(skills.size(), ticks.size());
@@ -86,7 +87,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     /** Every other type's list is a growable column of that type's own editor, empty to begin with. */
     @Test
     void aListOfSomethingOtherThanTextIsRowsOfItsOwnEditor() {
-        ValueForm spots = ValueForm.listOf(POINT);
+        Type spots = ValueTypes.listOf(POINT);
 
         List<Node> parts = childrenOf(widgetFor(row("spots", spots), spots));
 
@@ -130,7 +131,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
      */
     @Test
     void aMapIsTwoColumnsAndAnAddRow() {
-        ValueForm retries = ValueForm.mapOf(TEXT, WHOLE_NUMBER);
+        Type retries = ValueTypes.mapOf(TEXT, WHOLE_NUMBER);
 
         List<Node> parts = childrenOf(widgetFor(row("retries", retries), retries));
 

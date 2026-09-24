@@ -16,6 +16,15 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Changed
 
+- **A value's type is a `java.lang.reflect.Type`, and `ValueForm` is deleted.** A leaf is the plugin's own
+  `Class`, a list or map is a `ParameterizedType` (`ValueTypes.Parameterized`), a bot's record is
+  `ValueTypes.BotClass`, and anything else is `ValueTypes.Unknown`, shown and never written. A field's written
+  type is resolved once, by `project/source/ValueTypeResolver`: from the binding when the classpath resolves,
+  otherwise through the file's imports the way javac does. A `Duration` imported from another package is no
+  longer read as `java.time.Duration`, and a nested record the bot declares is found by its canonical name.
+  `ValueGrammar.qualify`, `type(String)` and `containerForJava` are gone; `JdkLiterals` is keyed by `Class`;
+  a plugin factory's receiver and a `new` expression's class are matched the same way (`Factory.names`).
+
 - **`@Param` and `@Managed` are identified by class, not by a name ending in `Param`.**
   `project/source/BotAnnotation` answers from the JDT binding when the unit was parsed against the project's
   classpath (`project/source/BotParser`), and otherwise resolves the written name through the unit's imports

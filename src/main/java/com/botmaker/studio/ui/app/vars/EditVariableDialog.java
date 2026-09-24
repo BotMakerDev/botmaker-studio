@@ -6,7 +6,6 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -343,17 +342,14 @@ public final class EditVariableDialog {
      * committing them would put a dozen entries in the undo history for one edit.
      */
     private Node literalEditor(Local local, ResolvedType type) {
-        ValueForm leaf = ValueForm.of(type.qualifiedName() == null || type.qualifiedName().isBlank()
-                ? type.simpleName() : type.qualifiedName());
-        if (!(leaf instanceof ValueForm.Leaf typed) || !PluginHost.grammar().known(leaf)
-                || local.initializer() == null) {
-            return sourceLabel(local);
-        }
+        // The binding's name, looked up exactly: a type the grammar does not name is shown as written.
+        Optional<Class<?>> typed = PluginHost.grammar().named(type.qualifiedName());
+        if (typed.isEmpty() || local.initializer() == null) return sourceLabel(local);
 
         // The value's own Java, handed to the type's editor as it stands: the editor reads the value through
         // the host's grammar, so there is no literal to strip first. readLiteral stood here until 2026-09-22,
         // one of three numeric-literal strippers the host and the toolkit kept between them.
-        ValueEditors.Editor editor = ValueEditors.editorFor(typed, local.initializer().toString(),
+        ValueEditors.Editor editor = ValueEditors.editorFor(typed.get(), local.initializer().toString(),
                 ValueEditors.Context.of(context.getConfig()));
         ValueEditors.stretch(editor.node());
         HBox.setHgrow(editor.node(), Priority.ALWAYS);

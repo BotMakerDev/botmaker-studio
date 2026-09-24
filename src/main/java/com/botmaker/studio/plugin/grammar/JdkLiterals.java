@@ -30,34 +30,39 @@ public final class JdkLiterals {
 
     private JdkLiterals() {}
 
-    /** Every name a literal type is written as, to its canonical name. */
-    private static final Map<String, String> CANONICAL = Map.ofEntries(
-            Map.entry("boolean", "boolean"), Map.entry("byte", "byte"), Map.entry("char", "char"),
-            Map.entry("short", "short"), Map.entry("int", "int"), Map.entry("long", "long"),
-            Map.entry("float", "float"), Map.entry("double", "double"),
-            Map.entry("Boolean", "java.lang.Boolean"), Map.entry("java.lang.Boolean", "java.lang.Boolean"),
-            Map.entry("Byte", "java.lang.Byte"), Map.entry("java.lang.Byte", "java.lang.Byte"),
-            Map.entry("Character", "java.lang.Character"), Map.entry("java.lang.Character", "java.lang.Character"),
-            Map.entry("Short", "java.lang.Short"), Map.entry("java.lang.Short", "java.lang.Short"),
-            Map.entry("Integer", "java.lang.Integer"), Map.entry("java.lang.Integer", "java.lang.Integer"),
-            Map.entry("Long", "java.lang.Long"), Map.entry("java.lang.Long", "java.lang.Long"),
-            Map.entry("Float", "java.lang.Float"), Map.entry("java.lang.Float", "java.lang.Float"),
-            Map.entry("Double", "java.lang.Double"), Map.entry("java.lang.Double", "java.lang.Double"),
-            Map.entry("String", "java.lang.String"), Map.entry("java.lang.String", "java.lang.String"));
+    /**
+     * The literal types, by canonical name — {@code int}, {@code java.lang.Integer}, {@code java.lang.String}.
+     * Only canonical names: which class a name <em>written</em> in a file means is the resolver's question
+     * ({@code project/source/ValueTypeResolver}), answered through a binding or the file's imports.
+     */
+    private static final Map<String, Class<?>> TYPES = Map.ofEntries(
+            entry(boolean.class), entry(byte.class), entry(char.class), entry(short.class), entry(int.class),
+            entry(long.class), entry(float.class), entry(double.class),
+            entry(Boolean.class), entry(Byte.class), entry(Character.class), entry(Short.class),
+            entry(Integer.class), entry(Long.class), entry(Float.class), entry(Double.class), entry(String.class));
 
-    /** The canonical name of a literal type written {@code name}, or {@code null} for anything else. */
-    public static String canonical(String name) {
-        return name == null ? null : CANONICAL.get(name.strip());
+    private static Map.Entry<String, Class<?>> entry(Class<?> type) {
+        return Map.entry(type.getName(), type);
     }
 
-    /** Whether {@code name} is a type this class reads and writes. */
-    public static boolean handles(String name) {
-        return canonical(name) != null;
+    /** The literal type whose canonical name is {@code canonical}, or empty. Exact: no simple names. */
+    public static Optional<Class<?>> named(String canonical) {
+        return canonical == null ? Optional.empty() : Optional.ofNullable(TYPES.get(canonical));
+    }
+
+    /** Every literal type's canonical name. */
+    public static java.util.Set<String> names() {
+        return TYPES.keySet();
     }
 
     /** Whether {@code type} is a type this class reads and writes. */
     public static boolean handles(Class<?> type) {
-        return type != null && handles(JavaNames.canonical(type));
+        return type != null && TYPES.get(type.getName()) == type;
+    }
+
+    /** {@code type} with a primitive boxed, so one comparison covers {@code int} and {@code Integer}. */
+    private static Class<?> boxed(Class<?> type) {
+        return java.lang.invoke.MethodType.methodType(type).wrap().returnType();
     }
 
     // ---- reading ---------------------------------------------------------------------------------------
@@ -70,34 +75,36 @@ public final class JdkLiterals {
      * An {@code int} literal <em>is</em> accepted for a {@code long}, a {@code float} and a {@code double},
      * because javac accepts it there and people write it that way.
      */
-    public static Optional<Object> read(String typeName, String source) {
-        return SourceNode.parse(source).flatMap(parsed -> read(typeName, parsed.node()));
+    public static Optional<Object> read(Class<?> type, String source) {
+        return SourceNode.parse(source).flatMap(parsed -> read(type, parsed.node()));
     }
 
-    /** {@link #read(String, String)} over an expression already parsed. */
-    public static Optional<Object> read(String typeName, Expression node) {
-        String type = canonical(typeName);
-        if (type == null) return Optional.empty();
+    /** {@link #read(Class, String)} over an expression already parsed. */
+    public static Optional<Object> read(Class<?> type, Expression node) {
+        if (!handles(type)) return Optional.empty();
         Optional<Object> any = readAny(node);
         if (any.isEmpty()) return Optional.empty();
         Object value = any.get();
-        return switch (type) {
-            case "java.lang.String" -> value instanceof String ? any : Optional.empty();
-            case "char", "java.lang.Character" -> value instanceof Character ? any : Optional.empty();
-            case "boolean", "java.lang.Boolean" -> value instanceof Boolean ? any : Optional.empty();
-            case "int", "java.lang.Integer" -> value instanceof Integer ? any : Optional.empty();
-            case "short", "java.lang.Short" -> value instanceof Integer i && i == i.shortValue()
-                    ? Optional.of(i.shortValue()) : Optional.empty();
-            case "byte", "java.lang.Byte" -> value instanceof Integer i && i == i.byteValue()
-                    ? Optional.of(i.byteValue()) : Optional.empty();
-            case "long", "java.lang.Long" -> value instanceof Long || value instanceof Integer
+        Class<?> box = boxed(type);
+        if (box == String.class) return value instanceof String ? any : Optional.empty();
+        if (box == Character.class) return value instanceof Character ? any : Optional.empty();
+        if (box == Boolean.class) return value instanceof Boolean ? any : Optional.empty();
+        if (box == Integer.class) return value instanceof Integer ? any : Optional.empty();
+        if (box == Short.class) {
+            return value instanceof Integer i && i == i.shortValue() ? Optional.of(i.shortValue()) : Optional.empty();
+        }
+        if (box == Byte.class) {
+            return value instanceof Integer i && i == i.byteValue() ? Optional.of(i.byteValue()) : Optional.empty();
+        }
+        if (box == Long.class) {
+            return value instanceof Long || value instanceof Integer
                     ? Optional.of(((Number) value).longValue()) : Optional.empty();
-            case "float", "java.lang.Float" -> value instanceof Float || value instanceof Integer
+        }
+        if (box == Float.class) {
+            return value instanceof Float || value instanceof Integer
                     ? Optional.of(((Number) value).floatValue()) : Optional.empty();
-            case "double", "java.lang.Double" -> value instanceof Number n
-                    ? Optional.of(n.doubleValue()) : Optional.empty();
-            default -> Optional.empty();
-        };
+        }
+        return value instanceof Number n ? Optional.of(n.doubleValue()) : Optional.empty();
     }
 
     /**
@@ -182,23 +189,18 @@ public final class JdkLiterals {
      * <p>A number is converted to the declared type only when nothing is lost: an {@code Integer} is
      * written into a {@code double} field as {@code 3.0}, a {@code 2.5} into an {@code int} field is refused.
      */
-    public static Optional<String> write(String typeName, Object value) {
-        String type = canonical(typeName);
-        if (type == null || value == null) return Optional.empty();
-        return switch (type) {
-            case "java.lang.String" -> value instanceof String s ? Optional.of(quote(s)) : Optional.empty();
-            case "char", "java.lang.Character" ->
-                    value instanceof Character c ? Optional.of(quote(c)) : Optional.empty();
-            case "boolean", "java.lang.Boolean" ->
-                    value instanceof Boolean b ? Optional.of(b.toString()) : Optional.empty();
-            case "int", "java.lang.Integer" -> whole(value).filter(v -> v == v.intValue()).map(String::valueOf);
-            case "short", "java.lang.Short" -> whole(value).filter(v -> v == v.shortValue()).map(String::valueOf);
-            case "byte", "java.lang.Byte" -> whole(value).filter(v -> v == v.byteValue()).map(String::valueOf);
-            case "long", "java.lang.Long" -> whole(value).map(v -> v + "L");
-            case "float", "java.lang.Float" -> decimal(value).map(v -> floatLiteral((float) (double) v));
-            case "double", "java.lang.Double" -> decimal(value).map(JdkLiterals::doubleLiteral);
-            default -> Optional.empty();
-        };
+    public static Optional<String> write(Class<?> type, Object value) {
+        if (!handles(type) || value == null) return Optional.empty();
+        Class<?> box = boxed(type);
+        if (box == String.class) return value instanceof String s ? Optional.of(quote(s)) : Optional.empty();
+        if (box == Character.class) return value instanceof Character c ? Optional.of(quote(c)) : Optional.empty();
+        if (box == Boolean.class) return value instanceof Boolean b ? Optional.of(b.toString()) : Optional.empty();
+        if (box == Integer.class) return whole(value).filter(v -> v == v.intValue()).map(String::valueOf);
+        if (box == Short.class) return whole(value).filter(v -> v == v.shortValue()).map(String::valueOf);
+        if (box == Byte.class) return whole(value).filter(v -> v == v.byteValue()).map(String::valueOf);
+        if (box == Long.class) return whole(value).map(v -> v + "L");
+        if (box == Float.class) return decimal(value).map(v -> floatLiteral((float) (double) v));
+        return decimal(value).map(JdkLiterals::doubleLiteral);
     }
 
     /** {@code value} written as the literal its own class spells, or empty for anything that is not one. */

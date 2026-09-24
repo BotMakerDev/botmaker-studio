@@ -2,7 +2,6 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,7 @@ class HostValueContextConstantsTest {
     };
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(), List.of(PICTURE));
-    private static final ValueForm FORM = ValueForm.of(Picture.class);
+    private static final java.lang.reflect.Type FORM = Picture.class;
 
     private static final List<ManagedConstants.Constant> CONSTANTS = List.of(
             new ManagedConstants.Constant("com.bot.Pictures", "ORE",

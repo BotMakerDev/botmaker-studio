@@ -1,7 +1,9 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
+
+import java.lang.reflect.Type;
 
 import java.nio.file.Path;
 
@@ -25,11 +27,11 @@ import java.nio.file.Path;
  *                    one whose initialiser the grammar does not read
  * @param note        why it is not editable, for the cell's tooltip — blank when it is
  */
-public record JavaParameter(Path file, String className, ParameterRow row, ValueForm form, String initializer,
+public record JavaParameter(Path file, String className, ParameterRow row, Type form, String initializer,
                             boolean editable, String note) {
 
     public JavaParameter {
-        form = form == null ? ValueForm.of("") : form;
+        form = form == null ? ValueTypes.NONE : form;
         initializer = initializer == null ? "" : initializer;
         note = note == null ? "" : note;
     }
@@ -65,7 +67,7 @@ public record JavaParameter(Path file, String className, ParameterRow row, Value
     }
 
     /** The same field, retyped to {@code newForm}. */
-    public JavaParameter withForm(ValueForm newForm) {
+    public JavaParameter withForm(Type newForm) {
         return new JavaParameter(file, className, row, newForm, initializer, editable, note);
     }
 }

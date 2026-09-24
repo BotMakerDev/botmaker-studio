@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectState;
@@ -408,7 +409,7 @@ public final class RunnerWindow implements ProjectWindow {
         // The type as the field declares it, which since 2026-09-20 is the only name a form has. It was
         // "One of Image template" while a shape carried the prose; a badge naming the Java is the same rule
         // the picker's button follows, and it is what the user reads in their own file.
-        Label badge = new Label(entry.form().sourceName());
+        Label badge = new Label(ValueTypes.sourceName(entry.form()));
         badge.getStyleClass().add("runner-type-badge");
         badge.setWrapText(true);
         // The badge keeps the width it asks for and the name wraps into what is left. The other way round —

@@ -1,8 +1,9 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,9 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JavaParameterEditsTest {
 
-    private static final ValueForm NUMBER = TestValues.WHOLE_NUMBER;
-    private static final ValueForm DURATION = TestValues.DURATION;
-    private static final ValueForm TEXT = TestValues.TEXT;
+    private static final Type NUMBER = TestValues.WHOLE_NUMBER;
+    private static final Type DURATION = TestValues.DURATION;
+    private static final Type TEXT = TestValues.TEXT;
 
     private static final String SOURCE = """
             package com.example.bot;
@@ -48,17 +49,17 @@ class JavaParameterEditsTest {
      * A value edit spelled the way a window spells one: the grammar writes the Java, and the rewrite takes
      * it already written — since 2026-09-20 the initialiser <em>is</em> the value.
      */
-    private static String setValue(String source, String field, ValueForm form, Object value) {
+    private static String setValue(String source, String field, Type form, Object value) {
         return JavaParameterEdits.setValue(source, "Parameters", field, initializer(form, value));
     }
 
-    private static String add(String source, String className, String field, ValueForm form,
+    private static String add(String source, String className, String field, Type form,
                               Object value, String category, String description) {
         return JavaParameterEdits.add(source, TestValues.GRAMMAR, className, field, form,
                 initializer(form, value), category, description);
     }
 
-    private static String initializer(ValueForm form, Object value) {
+    private static String initializer(Type form, Object value) {
         return TestValues.GRAMMAR.initializer(form, value).orElse("");
     }
 
@@ -96,7 +97,7 @@ class JavaParameterEditsTest {
     void aTypeWithNoSourceSpellingChangesNothing() {
         // An undeclared type has no initialiser the grammar can write, so the edit declines rather than
         // writing a field naming a class that does not exist.
-        assertSame(SOURCE, setValue(SOURCE, "maxAttempts", ValueForm.of("Channel"), "x"));
+        assertSame(SOURCE, setValue(SOURCE, "maxAttempts", new ValueTypes.Unknown("Channel"), "x"));
     }
 
     @Test
@@ -180,7 +181,7 @@ class JavaParameterEditsTest {
     @Test
     void retypingToATypeWithNoFreshValueLeavesNoInitialiser() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
-                new ValueForm.Declared("com.example.bot.Point", List.of()));
+                new ValueTypes.BotClass("com.example.bot.Point", List.of()));
 
         assertTrue(edited.contains("public static com.example.bot.Point maxAttempts;"), edited);
     }
@@ -193,7 +194,7 @@ class JavaParameterEditsTest {
     @Test
     void retypingToAListWritesTheListTypeAndAnEmptyList() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
-                ValueForm.listOf(TestValues.WHOLE_NUMBER));
+                ValueTypes.listOf(TestValues.WHOLE_NUMBER));
 
         // Boxed: List<int> does not compile.
         assertTrue(edited.contains("java.util.List<Integer> maxAttempts"), edited);
@@ -204,7 +205,7 @@ class JavaParameterEditsTest {
     @Test
     void retypingToAMapWritesBothArgumentsAndAnEmptyMap() {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
-                ValueForm.mapOf(TestValues.TEXT, TestValues.DURATION));
+                ValueTypes.mapOf(TestValues.TEXT, TestValues.DURATION));
 
         assertTrue(edited.contains("java.util.Map<String, Duration> maxAttempts"), edited);
         assertTrue(edited.contains("java.util.Map.ofEntries()"), edited);

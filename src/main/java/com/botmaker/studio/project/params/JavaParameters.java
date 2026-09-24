@@ -4,7 +4,6 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -12,6 +11,7 @@ import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -167,7 +167,7 @@ public final class JavaParameters {
      */
     public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
                                                  JavaParameter parameter, ParameterRow wanted,
-                                                 ValueForm wantedForm) {
+                                                 Type wantedForm) {
         return declare(config, state, parameter, wanted, wantedForm, PluginHost.grammar());
     }
 
@@ -177,7 +177,7 @@ public final class JavaParameters {
      */
     public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
                                                  JavaParameter parameter, ParameterRow wanted,
-                                                 ValueForm wantedForm, ValueGrammar grammar) {
+                                                 Type wantedForm, ValueGrammar grammar) {
         if (parameter == null || wanted == null) return Optional.empty();
         String className = parameter.className();
         ParameterRow before = parameter.row();
@@ -244,7 +244,7 @@ public final class JavaParameters {
      * whose default cannot be spelled as Java, or a class that could not be created.
      */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, ValueForm form, String value,
+                                             String name, Type form, String value,
                                              String category, String description) {
         return add(config, state, className, name, form, value, category, description,
                 PluginHost.grammar());
@@ -252,7 +252,7 @@ public final class JavaParameters {
 
     /** The same, against a given grammar. */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
-                                             String name, ValueForm form, String value,
+                                             String name, Type form, String value,
                                              String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
@@ -351,7 +351,7 @@ public final class JavaParameters {
 
     /** Changes a parameter's type, resetting its value to that type's default. */
     private static boolean retype(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                  ValueForm form, ValueGrammar grammar) {
+                                  Type form, ValueGrammar grammar) {
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.retype(
                 source, grammar, parameter.className(), parameter.name(), form));
     }

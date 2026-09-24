@@ -1,11 +1,11 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.params.TestValues;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Type;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -34,15 +34,13 @@ class JavaManagedRoundTripTest {
 
     private static final ValueGrammar CATALOG = TestValues.GRAMMAR;
 
-    private static final ValueForm TEXT = TestValues.TEXT;
-    private static final ValueForm DURATION = TestValues.DURATION;
-    private static final ValueForm BODY = TestValues.BODY;
-    private static final ValueForm TEXTS = new ValueForm.Of(ValueContainer.LIST, List.of(TEXT));
+    private static final Type TEXT = TestValues.TEXT;
+    private static final Type DURATION = TestValues.DURATION;
+    private static final Type BODY = TestValues.BODY;
+    private static final Type TEXTS = ValueTypes.listOf(TEXT);
     /** {@code Map<String, List<Map<String, List<Duration>>>>} — four containers deep. */
-    private static final ValueForm DEEP = new ValueForm.Of(ValueContainer.MAP, List.of(TEXT,
-            new ValueForm.Of(ValueContainer.LIST, List.of(
-                    new ValueForm.Of(ValueContainer.MAP, List.of(TEXT,
-                            new ValueForm.Of(ValueContainer.LIST, List.of(DURATION))))))));
+    private static final Type DEEP = ValueTypes.mapOf(TEXT,
+            ValueTypes.listOf(ValueTypes.mapOf(TEXT, ValueTypes.listOf(DURATION))));
 
     /** The file a plugin ships, with one {@code @Managed} method whose return type is spelled out. */
     private static String fileReturning(String returnType, String expression) {
@@ -70,7 +68,7 @@ class JavaManagedRoundTripTest {
     }
 
     /** Writes {@code value} into the file, reads the method back, and answers what came out. */
-    private static Object roundTrip(String returnType, ValueForm form, Object value) {
+    private static Object roundTrip(String returnType, Type form, Object value) {
         String expression = CATALOG.initializer(form, value).orElseThrow();
         String written = JavaManagedEdits.setValue(fileReturning(returnType, "null"), "Sdk", "value",
                 expression, CATALOG.imports(form));
@@ -126,7 +124,7 @@ class JavaManagedRoundTripTest {
         Object read = roundTrip("com.botmaker.studio.project.params.TestValues.Span", TestValues.SPAN_FORM, value);
 
         assertEquals(value, read);
-        assertEquals("TestValues.Span", TestValues.SPAN_FORM.sourceName());
+        assertEquals("TestValues.Span", ValueTypes.sourceName(TestValues.SPAN_FORM));
         assertEquals("com.botmaker.studio.project.params.TestValues.Span.of(\"phase one\", 12)",
                 CATALOG.initializer(TestValues.SPAN_FORM, value).orElseThrow());
     }

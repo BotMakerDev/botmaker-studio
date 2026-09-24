@@ -1,11 +1,11 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.QualifiedName;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -28,7 +28,7 @@ public final class ConstantValues {
 
     /** {@code node} as a {@code form}, with a constant reference read as the constant's value. */
     public static Optional<Object> read(ValueGrammar grammar, Supplier<List<ManagedConstants.Constant>> constants,
-                                        ValueForm form, SourceNode node) {
+                                        Type form, SourceNode node) {
         if (node == null || node.node() == null) return Optional.empty();
         Optional<Object> read = grammar.read(form, node);
         // A constant reference is only ever written Owner.FIELD, qualified or not.
@@ -36,16 +36,16 @@ public final class ConstantValues {
         return lookup(grammar, constants).read(name.getFullyQualifiedName());
     }
 
-    /** {@link #read(ValueGrammar, Supplier, ValueForm, SourceNode)} over stored text, parsed once. */
+    /** {@link #read(ValueGrammar, Supplier, Type, SourceNode)} over stored text, parsed once. */
     public static Optional<Object> read(ValueGrammar grammar, Supplier<List<ManagedConstants.Constant>> constants,
-                                        ValueForm form, String source) {
+                                        Type form, String source) {
         return SourceNode.parse(source).flatMap(node -> read(grammar, constants, form, node));
     }
 
     /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
     public static Optional<ValueGrammar.Written> write(ValueGrammar grammar,
                                                        Supplier<List<ManagedConstants.Constant>> constants,
-                                                       ValueForm form, Object value) {
+                                                       Type form, Object value) {
         return lookup(grammar, constants).spell(value).or(() -> grammar.write(form, value));
     }
 

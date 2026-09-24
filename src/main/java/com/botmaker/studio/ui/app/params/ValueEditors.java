@@ -6,8 +6,8 @@ import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostValueContext;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import javafx.scene.Node;
@@ -16,6 +16,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Region;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -85,7 +86,7 @@ public final class ValueEditors {
      * <p>Chosen by the type alone, which is what makes retyping a variable safe to handle by rebuilding the
      * row wholesale: the caller throws the old editor away rather than trying to reinterpret what was in it.
      */
-    public static Editor editorFor(ValueForm.Leaf leaf, String source, Context ctx) {
+    public static Editor editorFor(Type leaf, String source, Context ctx) {
         ValueGrammar grammar = PluginHost.grammar();
         String seed = source != null ? source : grammar.freshInitializer(leaf).orElse("");
         Editor contributed = fromPlugin(leaf, seed, ctx);
@@ -96,8 +97,8 @@ public final class ValueEditors {
         TextField field = new TextField(seed);
         field.setEditable(false);
         field.setTooltip(new Tooltip(grammar.known(leaf)
-                ? "No installed plugin draws an editor for " + leaf.sourceName() + ". It is kept as written."
-                : "No installed plugin declares " + leaf.sourceName() + ". It is kept as written."));
+                ? "No installed plugin draws an editor for " + ValueTypes.sourceName(leaf) + ". It is kept as written."
+                : "No installed plugin declares " + ValueTypes.sourceName(leaf) + ". It is kept as written."));
         return Editor.readOnly(field);
     }
 
@@ -114,7 +115,7 @@ public final class ValueEditors {
      * telling the host how to read it back. Nothing is written until an editor writes: a value opened and
      * closed with no edit reads back exactly as it was.
      */
-    private static Editor fromPlugin(ValueForm.Leaf leaf, String source, Context ctx) {
+    private static Editor fromPlugin(Type leaf, String source, Context ctx) {
         HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
                 ctx.constants());
         for (SlotEditor editor : claimants(leaf, context)) {
@@ -125,7 +126,7 @@ public final class ValueEditors {
                 // A plugin's editor is third-party code drawn inside our dialog: one that throws must cost the
                 // user that row's widget, never the window. The next editor is offered the value, and the
                 // read-only field is still behind them all.
-                System.err.println("Plugin slot editor failed for type " + leaf.typeName() + ": " + e);
+                System.err.println("Plugin slot editor failed for type " + ValueTypes.sourceName(leaf) + ": " + e);
             }
         }
         return null;
@@ -143,7 +144,7 @@ public final class ValueEditors {
      * an oversight: persisting a verdict needs a {@code ProjectSettingsService}, which {@link Context} does
      * not carry. So the canvas asks, and this window honours the answer.
      */
-    private static List<SlotEditor> claimants(ValueForm.Leaf leaf, HostValueContext context) {
+    private static List<SlotEditor> claimants(Type leaf, HostValueContext context) {
         List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
         if (editors.isEmpty()) return List.of();
 
@@ -152,7 +153,7 @@ public final class ValueEditors {
             try {
                 if (owned.editor().matches(context)) claiming.add(owned);
             } catch (RuntimeException | LinkageError e) {
-                System.err.println("Plugin slot editor failed for type " + leaf.typeName() + ": " + e);
+                System.err.println("Plugin slot editor failed for type " + ValueTypes.sourceName(leaf) + ": " + e);
             }
         }
         String typeName = context.type().qualifiedName();
@@ -175,7 +176,7 @@ public final class ValueEditors {
      * <p>The host drew a colour swatch and a direction arrow here itself until 2026-09-22. Both types are
      * plugins' now, and a preview a plugin's own editor can draw is the plugin's.
      */
-    static Node optionGraphic(ValueForm.Leaf leaf, String source, Context ctx) {
+    static Node optionGraphic(Type leaf, String source, Context ctx) {
         if (source == null || source.isBlank()) return null;
         HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
                 ctx.constants());
@@ -186,7 +187,7 @@ public final class ValueEditors {
             } catch (RuntimeException | LinkageError e) {
                 // Same rule as fromPlugin: a plugin's node is third-party code drawn inside our dialog, and
                 // one that throws costs this option its picture, never the window.
-                System.err.println("Plugin preview failed for type " + leaf.typeName() + ": " + e);
+                System.err.println("Plugin preview failed for type " + ValueTypes.sourceName(leaf) + ": " + e);
             }
         }
         return null;

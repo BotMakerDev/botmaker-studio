@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.value.PluginType;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -20,9 +21,12 @@ import java.util.Set;
  * one writer and one reader over the whole type tree, both total. A plugin declares a type once — a
  * {@link PluginType}, and a {@link ComponentType} beside it when its Java is a call — and never sees Java
  * source. The host writes {@code new Point(10, 20)} from {@code components(point)} and reads it back off the
- * JDT expression ({@link ExpressionReader}). It replaced {@code ValueCatalog}'s grammar half, which
- * did the same walk through a codec per leaf; its registry half (ids, codecs, clashes, the stored-text
- * bridges) was deleted rather than moved.
+ * JDT expression ({@link ExpressionReader}).
+ *
+ * <p><b>A value's type is a {@link java.lang.reflect.Type}</b> since 2026-09-24 ({@link ValueTypes}): the
+ * plugin's own {@link Class}, a {@link ValueTypes.Parameterized} host container, a bot's own class, or an
+ * unknown spelling. Nothing here turns a name back into a type; {@link #named} answers the one exact
+ * question a resolver asks — which declared class has this canonical name.
  *
  * <h2>What a leaf is, decided in one place</h2>
  *
@@ -34,27 +38,18 @@ import java.util.Set;
  *   <li>an <b>enum</b>: {@code Owner.CONSTANT};</li>
  *   <li>a <b>chain</b> a person writes by hand ({@code Precision.TIGHT.minArea(400)}), read through a
  *       component whose factory is an instance method, and a {@code public static final} constant of a
- *       declared class ({@code Precision.TIGHT}). Both are read and never written: an edited value is written
- *       through the component that owns its class;</li>
- *   <li>a type a plugin <b>declares with no component of its own</b> — the SDK's {@code CaptureSource},
- *       an interface: it is read as whichever declared call builds one of it
- *       ({@code CaptureSource.window("Game")}), and otherwise crosses as the source it is written as;</li>
+ *       declared class ({@code Precision.TIGHT}). Both are read and never written;</li>
+ *   <li>a type a plugin <b>declares with no component of its own</b> — the SDK's {@code CaptureSource}: read
+ *       as whichever declared call builds one, and otherwise crossing as the source it is written as;</li>
  *   <li>and anything else, which is <b>unknown</b>: shown as written, never rewritten.</li>
  * </ul>
  *
- * <p>Inside a component the fourth case widens. A component's type is a {@link Class} the plugin handed
- * over, and one nothing declares — an {@code ActivityBody}, written {@code Collect::body} — crosses as its
- * source too. The plugin said that is what it is; outside a component nobody did.
- *
- * <h2>Three rules, all older than this class</h2>
+ * <h2>Three rules</h2>
  *
  * <ul>
  *   <li><b>Empty means decline, and declining is not an error.</b> A guess compiles into a user's bot.</li>
- *   <li><b>A partial reading is not a reading.</b> One part that cannot be read empties the whole answer, so
- *       a map with one unreadable value is shown whole and untouched rather than silently losing an
- *       entry.</li>
- *   <li><b>Only what a declaration builds is read.</b> An expression no declared call, constant or literal
- *       accounts for is shown as written.</li>
+ *   <li><b>A partial reading is not a reading.</b> One part that cannot be read empties the whole answer.</li>
+ *   <li><b>Only what a declaration builds is read.</b></li>
  * </ul>
  *
  * <p><b>Plugin code is contained.</b> {@code components}, {@code build} and {@code fresh} are third-party
@@ -141,79 +136,64 @@ public final class ValueGrammar {
         return types;
     }
 
-    /** The host's containers — what a picker offers to wrap a form in. */
+    /** The host's containers — what a picker offers to wrap a type in. */
     public List<ValueContainer<?>> containers() {
         return ValueContainer.ALL;
     }
 
     /**
-     * The container a written type name means — {@code List}, {@code java.util.List}, {@code Map.Entry} —
-     * or empty. A simple name is matched against the canonical one's trailing segments, so a file that
-     * imports {@code Map} and one that spells it out both read.
+     * The class a value may be of whose canonical name is exactly {@code canonical} — a JDK literal, a
+     * declared type or a component's class — or empty. <b>Exact</b>: the name comes from a binding or an
+     * import, never from a spelling that merely ends the right way.
      */
-    public Optional<ValueContainer<?>> containerForJava(String written) {
-        String name = written == null ? "" : written.strip();
-        if (name.isEmpty()) return Optional.empty();
-        for (ValueContainer<?> candidate : ValueContainer.ALL) {
-            String source = candidate.sourceName();
-            if (source.equals(name) || source.endsWith("." + name)) return Optional.of(candidate);
-        }
-        return Optional.empty();
+    public Optional<Class<?>> named(String canonical) {
+        if (canonical == null || canonical.isEmpty()) return Optional.empty();
+        Optional<Class<?>> jdk = JdkLiterals.named(canonical);
+        if (jdk.isPresent()) return jdk;
+        PluginType<?> type = typeByName.get(canonical);
+        if (type != null) return Optional.ofNullable(classOf(type));
+        return Optional.ofNullable(componentClass(canonical));
+    }
+
+    /** Every canonical name {@link #named} answers — what a resolver without a binding tries a name against. */
+    public List<String> names() {
+        Set<String> out = new LinkedHashSet<>(typeByName.keySet());
+        out.addAll(componentByName.keySet());
+        out.addAll(JdkLiterals.names());
+        return List.copyOf(out);
+    }
+
+    /** The declaration of {@code type}, or empty when no plugin declares it. */
+    public Optional<PluginType<?>> type(Class<?> type) {
+        return type == null ? Optional.empty() : Optional.ofNullable(typeByName.get(JavaNames.canonical(type)));
     }
 
     /**
-     * The canonical name a written leaf means — {@code Duration} answers {@code java.time.Duration} when a
-     * plugin declares it, {@code String} answers {@code java.lang.String} — or {@code null} when nothing
-     * reads or declares it.
-     *
-     * <p>Matched on trailing segments as well as whole, because {@code Duration} and
-     * {@code java.time.Duration} are the same field written two ways and only the source says which. A name
-     * two plugins both end with resolves to the first in plugin order, as every other lookup here does.
-     */
-    public String qualify(String written) {
-        if (written == null || written.isBlank()) return null;
-        String name = written.strip();
-        String jdk = JdkLiterals.canonical(name);
-        if (jdk != null) return jdk;
-        if (typeByName.containsKey(name) || componentByName.containsKey(name)) return name;
-        for (String known : typeByName.keySet()) if (known.endsWith("." + name)) return known;
-        for (String known : componentByName.keySet()) if (known.endsWith("." + name)) return known;
-        return null;
-    }
-
-    /** The declaration of the type a written name means, or empty when no plugin declares it. */
-    public Optional<PluginType<?>> type(String written) {
-        String name = qualify(written);
-        return Optional.ofNullable(name == null ? null : typeByName.get(name));
-    }
-
-    /**
-     * Whether every leaf in {@code form} is one this grammar can read or a plugin declares. A form with an
+     * Whether every leaf in {@code type} is one this grammar can read or a plugin declares. A type with an
      * unknown leaf anywhere is displayed and never rewritten.
      */
-    public boolean known(ValueForm form) {
-        return firstUnknown(form) == null;
+    public boolean known(Type type) {
+        return firstUnknown(type) == null;
     }
 
     /**
-     * The first leaf in {@code form} nothing reads or declares, as it is written — or {@code null} when every
-     * one is known. Depth-first in written order, so the reason a cell gives names the argument a reader's
-     * eye reaches first.
+     * The first leaf in {@code type} nothing reads or declares, as it is written — or {@code null} when every
+     * one is known. Depth-first in written order.
      */
-    public String firstUnknown(ValueForm form) {
-        return switch (form) {
+    public String firstUnknown(Type type) {
+        return switch (type) {
             case null -> "";
-            case ValueForm.Leaf leaf -> kindOf(leaf.typeName()) == Kind.UNKNOWN ? leaf.typeName() : null;
-            case ValueForm.Of of -> firstUnknown(of.arguments());
-            // A declared class is not an unknown leaf: the bot does declare it, and whether a value of it
-            // can be written is BotRecords' answer. Its type arguments are still leaves.
-            case ValueForm.Declared declared -> firstUnknown(declared.arguments());
+            case Class<?> cls -> kindOf(cls) == Kind.UNKNOWN ? JavaNames.simple(cls) : null;
+            case ValueTypes.Unknown unknown -> unknown.written();
+            // A class the bot declares is not an unknown leaf: whether a value of it can be written is
+            // BotRecords' answer. Its type arguments are still leaves.
+            default -> firstUnknown(ValueTypes.arguments(type));
         };
     }
 
-    private String firstUnknown(List<ValueForm> forms) {
-        for (ValueForm form : forms) {
-            String found = firstUnknown(form);
+    private String firstUnknown(List<Type> types) {
+        for (Type type : types) {
+            String found = firstUnknown(type);
             if (found != null) return found;
         }
         return null;
@@ -222,25 +202,23 @@ public final class ValueGrammar {
     // ---- reading ---------------------------------------------------------------------------------------
 
     /**
-     * The value {@code initializer} writes, read as {@code form} — or empty.
+     * The value {@code initializer} writes, read as {@code type} — or empty.
      *
      * <p>Empty for an unknown type, a source this grammar did not write, and a class the bot declares, which
-     * is {@code BotRecords}' to read. The host then shows the initialiser as it stands, read-only — which is
-     * what makes an unbounded type tree safe rather than dangerous.
+     * is {@code BotRecords}' to read.
      */
-    public Optional<Object> valueOf(ValueForm form, String initializer) {
-        return SourceNode.parse(initializer).flatMap(node -> valueOf(form, node));
+    public Optional<Object> valueOf(Type type, String initializer) {
+        return SourceNode.parse(initializer).flatMap(node -> valueOf(type, node));
     }
 
-    /** {@link #valueOf(ValueForm, String)} over an expression already parsed, with the text it came from. */
-    public Optional<Object> valueOf(ValueForm form, SourceNode node) {
-        return reader.read(form, node);
+    /** {@link #valueOf(Type, String)} over an expression already parsed, with the text it came from. */
+    public Optional<Object> valueOf(Type type, SourceNode node) {
+        return reader.read(type, node);
     }
 
     /**
      * The value {@code source} writes, typed by its own spelling — a literal, a declared call, a list, a map
-     * — or empty. What a value with no declared type is read as: a slot whose type the host could not
-     * resolve, and the element of a list a component declares only as {@code List.class}.
+     * — or empty. What a value with no declared type is read as.
      */
     public Optional<Object> valueOfAny(String source) {
         return SourceNode.parse(source).flatMap(this::valueOfAny);
@@ -263,20 +241,19 @@ public final class ValueGrammar {
     }
 
     /**
-     * {@code value} written as the initialiser a field of {@code form} takes, fully qualified — or empty when
-     * any part of it cannot be written. Qualified so it compiles wherever it lands; {@link #spell} is the
-     * spelling for a file that will arrange its own imports.
+     * {@code value} written as the initialiser a field of {@code type} takes, fully qualified — or empty when
+     * any part of it cannot be written.
      */
-    public Optional<String> initializer(ValueForm form, Object value) {
-        return write(form, value, new Names(true)).map(Written::source);
+    public Optional<String> initializer(Type type, Object value) {
+        return write(type, value, new Names(true)).map(Written::source);
     }
 
     /**
      * {@code value} written with every type by its simple name, and the imports that makes necessary — what
      * a slot in a user's own file is given, since that file is one a person reads.
      */
-    public Optional<Written> spell(ValueForm form, Object value) {
-        return write(form, value, new Names(false));
+    public Optional<Written> spell(Type type, Object value) {
+        return write(type, value, new Names(false));
     }
 
     /** {@code value} written by its own runtime class, fully qualified — the untyped counterpart of {@link #valueOfAny}. */
@@ -290,67 +267,45 @@ public final class ValueGrammar {
         return writeAny(value, names).map(source -> new Written(source, names.imports()));
     }
 
-    private Optional<Written> write(ValueForm form, Object value, Names names) {
-        if (form == null) return Optional.empty();
-        return writeForm(form, value, names).map(source -> new Written(source, names.imports()));
-    }
-
-    private Optional<String> writeForm(ValueForm form, Object value, Names names) {
-        return switch (form) {
-            case ValueForm.Leaf leaf -> writeNamed(leaf.typeName(), value, names);
-            case ValueForm.Of of -> {
-                if (value == null || !of.container().type().isInstance(value)) yield Optional.empty();
-                List<Object> parts = of.container().partsOf(value);
-                List<ValueForm> forms = of.container().partForms(of.arguments(), parts.size());
-                if (forms.size() != parts.size()) yield Optional.empty();
-                List<String> written = new ArrayList<>(parts.size());
-                for (int i = 0; i < parts.size(); i++) {
-                    Optional<String> part = writeForm(forms.get(i), parts.get(i), names);
-                    if (part.isEmpty()) yield Optional.empty();
-                    written.add(part.get());
-                }
-                Factory factory = of.container().factory();
-                yield Optional.of(names.of(factory.owner()) + "." + factory.name()
-                        + "(" + String.join(", ", written) + ")");
-            }
-            // A class the bot declares is BotRecords' to write: only the host's view of the bot's own source
-            // knows its canonical constructor.
-            case ValueForm.Declared ignored -> Optional.empty();
-        };
-    }
-
-    private Optional<String> writeNamed(String typeName, Object value, Names names) {
-        String name = qualify(typeName);
-        if (name == null || value == null) return Optional.empty();
-        if (JdkLiterals.handles(name)) return JdkLiterals.write(name, value);
-        ComponentType<?> component = componentByName.get(name);
-        if (component != null) return writeCall(component, value, names);
-        PluginType<?> type = typeByName.get(name);
+    private Optional<Written> write(Type type, Object value, Names names) {
         if (type == null) return Optional.empty();
-        Class<?> cls = classOf(type);
-        if (cls != null && cls.isEnum()) return writeEnum(cls, value, names);
-        return writeInstance(cls, value, names);
+        return writeType(type, value, names).map(source -> new Written(source, names.imports()));
+    }
+
+    private Optional<String> writeType(Type type, Object value, Names names) {
+        if (type instanceof Class<?> cls) return writeClass(cls, value, names);
+        Optional<ValueContainer<?>> container = ValueTypes.container(type);
+        // A class the bot declares is BotRecords' to write; an unknown type is never written.
+        if (container.isEmpty()) return Optional.empty();
+        if (value == null || !container.get().type().isInstance(value)) return Optional.empty();
+        List<Object> parts = container.get().partsOf(value);
+        List<Type> partTypes = container.get().partTypes(ValueTypes.arguments(type), parts.size());
+        if (partTypes.size() != parts.size()) return Optional.empty();
+        List<String> written = new ArrayList<>(parts.size());
+        for (int i = 0; i < parts.size(); i++) {
+            Optional<String> part = writeType(partTypes.get(i), parts.get(i), names);
+            if (part.isEmpty()) return Optional.empty();
+            written.add(part.get());
+        }
+        Factory factory = container.get().factory();
+        return Optional.of(names.of(factory.owner()) + "." + factory.name() + "(" + String.join(", ", written) + ")");
     }
 
     /**
-     * {@link #readInstance} forwards: a value of a declared class is written through the component of its
-     * own runtime class, and a {@code String} is source handed over as written.
+     * A value of a declared class: a JDK literal, the component that writes it, an enum constant, or — for a
+     * type declared with no component — the value by its own runtime class, and a {@code String} as the
+     * source it is written as.
      */
-    private Optional<String> writeInstance(Class<?> type, Object value, Names names) {
-        if (value instanceof String source) return source.isBlank() ? Optional.empty() : Optional.of(source.strip());
-        return type != null && type.isInstance(value) ? writeAny(value, names) : Optional.empty();
-    }
-
     private Optional<String> writeClass(Class<?> type, Object value, Names names) {
         if (value == null) return Optional.empty();
         if (type == null) return writeAny(value, names);
-        String name = JavaNames.canonical(type);
-        if (JdkLiterals.handles(name)) return JdkLiterals.write(name, value);
-        ComponentType<?> component = componentByName.get(name);
+        if (JdkLiterals.handles(type)) return JdkLiterals.write(type, value);
+        ComponentType<?> component = componentByName.get(JavaNames.canonical(type));
         if (component != null) return writeCall(component, value, names);
         if (type.isEnum()) return writeEnum(type, value, names);
         if (isHostContainer(type)) return writeAny(value, names);
-        return writeInstance(type, value, names);
+        if (value instanceof String source) return source.isBlank() ? Optional.empty() : Optional.of(source.strip());
+        return type.isInstance(value) ? writeAny(value, names) : Optional.empty();
     }
 
     private Optional<String> writeAny(Object value, Names names) {
@@ -413,10 +368,10 @@ public final class ValueGrammar {
     // ---- a composite, one level at a time --------------------------------------------------------------
 
     /**
-     * One part of a composite: the expression it is written as, and the form that expression is of.
+     * One part of a composite: the expression it is written as, and the type that expression is of.
      * {@link #source()} is how it was written, for showing a part nothing reads.
      */
-    public record Part(ValueForm form, SourceNode written) {
+    public record Part(Type form, SourceNode written) {
 
         public String source() {
             return written.source();
@@ -425,90 +380,75 @@ public final class ValueGrammar {
 
     /**
      * A container's initialiser taken apart one level: the parts as they are <em>written</em>, each with its
-     * own form. Empty for anything that is not a call to the container's factory.
-     *
-     * <p>Expressions rather than values, because a cell edits one part at a time and a part it cannot read
-     * must be shown as written rather than dropped — a map with one unreadable value still draws as a map,
-     * with that one row read-only. Recursion is the caller's: a {@code Map}'s parts are entries, passed back
-     * in.
+     * own type. Empty for anything that is not a call to the container's factory.
      */
-    public Optional<List<Part>> partsOfInitializer(ValueForm form, String initializer) {
-        return SourceNode.parse(initializer).flatMap(node -> partsOfInitializer(form, node));
+    public Optional<List<Part>> partsOfInitializer(Type type, String initializer) {
+        return SourceNode.parse(initializer).flatMap(node -> partsOfInitializer(type, node));
     }
 
-    /** {@link #partsOfInitializer(ValueForm, String)} over an expression already parsed. */
-    public Optional<List<Part>> partsOfInitializer(ValueForm form, SourceNode node) {
-        return reader.parts(form, node);
+    /** {@link #partsOfInitializer(Type, String)} over an expression already parsed. */
+    public Optional<List<Part>> partsOfInitializer(Type type, SourceNode node) {
+        return reader.parts(type, node);
     }
 
     /**
      * {@link #partsOfInitializer} written forwards: the call a container spells over parts already written as
      * source. Empty when a part is blank or the container cannot hold that many parts — an entry of three.
      */
-    public Optional<String> initializerOfParts(ValueForm form, List<String> parts) {
-        if (!(form instanceof ValueForm.Of of) || parts == null) return Optional.empty();
+    public Optional<String> initializerOfParts(Type type, List<String> parts) {
+        Optional<ValueContainer<?>> container = ValueTypes.container(type);
+        if (container.isEmpty() || parts == null) return Optional.empty();
         if (parts.stream().anyMatch(part -> part == null || part.isBlank())) return Optional.empty();
-        if (of.container().partForms(of.arguments(), parts.size()).size() != parts.size()) return Optional.empty();
-        Factory factory = of.container().factory();
+        if (container.get().partTypes(ValueTypes.arguments(type), parts.size()).size() != parts.size()) {
+            return Optional.empty();
+        }
+        Factory factory = container.get().factory();
         return Optional.of(JavaNames.canonical(factory.owner()) + "." + factory.name() + "(" + String.join(", ", parts) + ")");
     }
 
     // ---- a fresh value ---------------------------------------------------------------------------------
 
     /**
-     * The Java a freshly declared field of {@code form} is initialised with, or empty when there is none.
+     * The Java a freshly declared field of {@code type} is initialised with, or empty when there is none.
      *
      * <p>A leaf starts as its declaration's {@code fresh()}, written through this grammar; a type whose
-     * starting value is a call the bot re-evaluates starts as a call to its {@code freshCall()}; a container starts
-     * empty — a blank entry in every new map is a value nobody chose. A type nothing declares, and a class
-     * the bot declares, get nothing: a placeholder written into a user's file is a value they did not
-     * choose, and a declaration with no initialiser is legal Java for every type.
+     * starting value is a call the bot re-evaluates starts as a call to its {@code freshCall()}; a container
+     * starts empty. A type nothing declares, and a class the bot declares, get nothing.
      */
-    public Optional<String> freshInitializer(ValueForm form) {
-        return fresh(form, new Names(true)).map(Written::source);
+    public Optional<String> freshInitializer(Type type) {
+        return fresh(type, new Names(true)).map(Written::source);
     }
 
-    /**
-     * {@link #freshInitializer} with every type by its simple name and the imports that needs — for a
-     * statement in a file a person reads. A {@code freshCall()} is spelled the same way:
-     * {@code Vision.lastMatch()} and its import.
-     */
-    public Optional<Written> freshSpelling(ValueForm form) {
-        return fresh(form, new Names(false));
+    /** {@link #freshInitializer} with every type by its simple name and the imports that needs. */
+    public Optional<Written> freshSpelling(Type type) {
+        return fresh(type, new Names(false));
     }
 
-    private Optional<Written> fresh(ValueForm form, Names names) {
-        return switch (form) {
-            case null -> Optional.empty();
-            case ValueForm.Leaf leaf -> {
-                Optional<PluginType<?>> type = type(leaf.typeName());
-                if (type.isEmpty()) yield Optional.empty();
-                Object fresh;
-                Method freshCall;
-                try {
-                    fresh = type.get().fresh();
-                    freshCall = type.get().freshCall();
-                } catch (RuntimeException | LinkageError e) {
-                    yield Optional.empty();
-                }
-                if (fresh != null) {
-                    Optional<Written> written = write(form, fresh, names);
-                    if (written.isPresent()) yield written;
-                }
-                yield call(freshCall, type.get(), names);
+    private Optional<Written> fresh(Type type, Names names) {
+        if (type instanceof Class<?> cls) {
+            Optional<PluginType<?>> declared = type(cls);
+            if (declared.isEmpty()) return Optional.empty();
+            Object fresh;
+            Method freshCall;
+            try {
+                fresh = declared.get().fresh();
+                freshCall = declared.get().freshCall();
+            } catch (RuntimeException | LinkageError e) {
+                return Optional.empty();
             }
-            case ValueForm.Of of -> write(form, of.container().build(List.of()), names);
-            case ValueForm.Declared ignored -> Optional.empty();
-        };
+            if (fresh != null) {
+                Optional<Written> written = write(type, fresh, names);
+                if (written.isPresent()) return written;
+            }
+            return call(freshCall, declared.get(), names);
+        }
+        Optional<ValueContainer<?>> container = ValueTypes.container(type);
+        return container.isPresent() ? write(type, container.get().build(List.of()), names) : Optional.empty();
     }
 
     /**
-     * {@code Owner.method()} for a type's {@code freshCall()}, or empty for none or one of the wrong shape.
-     *
-     * <p>The shape the contract states is checked again here rather than trusted: a call that takes
-     * arguments, is not static or returns another type would be written into somebody's file and not
-     * compile. {@code botmaker plugin validate} refuses the same plugin earlier; this is the host not
-     * depending on that having run.
+     * {@code Owner.method()} for a type's {@code freshCall()}, or empty for none or one of the wrong shape —
+     * checked again here rather than trusted, since a wrong one would be written into somebody's file.
      */
     private static Optional<Written> call(Method method, PluginType<?> type, Names names) {
         if (method == null || !Modifier.isStatic(method.getModifiers()) || !Modifier.isPublic(method.getModifiers())
@@ -521,28 +461,11 @@ public final class ValueGrammar {
     }
 
     /**
-     * The classes a file <em>declaring</em> a field of this form imports, in the order they are first
-     * reached — what {@link ValueForm#sourceName()} names by its simple name. A host container is not among
-     * them: the form writes it fully qualified.
+     * The classes a file <em>declaring</em> a field of this type imports, in the order they are first
+     * reached — what {@link ValueTypes#sourceName} names by its simple name.
      */
-    public List<String> imports(ValueForm form) {
-        Set<String> out = new LinkedHashSet<>();
-        collectImports(form, out);
-        out.remove("");
-        return List.copyOf(out);
-    }
-
-    private void collectImports(ValueForm form, Set<String> out) {
-        switch (form) {
-            case null -> {
-            }
-            case ValueForm.Leaf leaf -> {
-                String name = qualify(leaf.typeName());
-                out.add(JavaNames.importName(name == null ? leaf.typeName() : name));
-            }
-            case ValueForm.Of of -> of.arguments().forEach(argument -> collectImports(argument, out));
-            case ValueForm.Declared declared -> declared.arguments().forEach(argument -> collectImports(argument, out));
-        }
+    public List<String> imports(Type type) {
+        return ValueTypes.imports(type);
     }
 
     // ---- handing a value to a plugin -------------------------------------------------------------------
@@ -553,64 +476,47 @@ public final class ValueGrammar {
      */
     public static <T> Optional<T> as(Object value, Class<T> type) {
         if (value == null || type == null) return Optional.empty();
-        Class<?> boxed = type.isPrimitive() ? box(type) : type;
+        Class<?> boxed = java.lang.invoke.MethodType.methodType(type).wrap().returnType();
         if (!boxed.isInstance(value)) return Optional.empty();
         @SuppressWarnings("unchecked")
         T cast = (T) value;
         return Optional.of(cast);
     }
 
-    private static Class<?> box(Class<?> primitive) {
-        return switch (primitive.getName()) {
-            case "boolean" -> Boolean.class;
-            case "byte" -> Byte.class;
-            case "char" -> Character.class;
-            case "short" -> Short.class;
-            case "int" -> Integer.class;
-            case "long" -> Long.class;
-            case "float" -> Float.class;
-            case "double" -> Double.class;
-            default -> primitive;
-        };
+    /**
+     * Reads {@code source} as {@code type}, or by its own spelling when the type says nothing — the one
+     * reading a value context does, so the canvas and the Parameters window cannot disagree.
+     */
+    public Optional<Object> read(Type type, String source) {
+        return SourceNode.parse(source).flatMap(node -> read(type, node));
+    }
+
+    /** {@link #read(Type, String)} over an expression already parsed. */
+    public Optional<Object> read(Type type, SourceNode node) {
+        if (type instanceof ValueTypes.Unknown) return valueOfAny(node);
+        return valueOf(type, node);
     }
 
     /**
-     * Reads {@code source} as {@code form}, falling back to its own spelling when the form says nothing —
-     * the one reading a value context does, so the canvas and the Parameters window cannot disagree.
+     * {@link #spell}, or — when the type is one nothing here knows, as a slot the host could not resolve is —
+     * the value by its own runtime class. Never the second when the type <em>is</em> known: an
+     * {@code Integer} handed to a {@code String} field is refused, not written as {@code 3}.
      */
-    public Optional<Object> read(ValueForm form, String source) {
-        return SourceNode.parse(source).flatMap(node -> read(form, node));
-    }
-
-    /** {@link #read(ValueForm, String)} over an expression already parsed. */
-    public Optional<Object> read(ValueForm form, SourceNode node) {
-        if (form instanceof ValueForm.Leaf leaf && qualify(leaf.typeName()) == null) return valueOfAny(node);
-        return valueOf(form, node);
-    }
-
-    /**
-     * {@link #spell}, or — when the form names a type nothing here knows, as a slot the host could not
-     * resolve does — the value by its own runtime class. Never the second when the form <em>is</em> known:
-     * an {@code Integer} handed to a {@code String} field is refused, not written as {@code 3}.
-     */
-    public Optional<Written> write(ValueForm form, Object value) {
-        if (form instanceof ValueForm.Leaf leaf && qualify(leaf.typeName()) == null) return spellAny(value);
-        return spell(form, value);
+    public Optional<Written> write(Type type, Object value) {
+        if (type instanceof ValueTypes.Unknown) return spellAny(value);
+        return spell(type, value);
     }
 
     // ---- plumbing --------------------------------------------------------------------------------------
 
     private enum Kind { JDK, COMPONENT, ENUM, SOURCE, UNKNOWN }
 
-    private Kind kindOf(String typeName) {
-        String name = qualify(typeName);
-        if (name == null) return Kind.UNKNOWN;
-        if (JdkLiterals.handles(name)) return Kind.JDK;
+    private Kind kindOf(Class<?> type) {
+        if (JdkLiterals.handles(type)) return Kind.JDK;
+        String name = JavaNames.canonical(type);
         if (componentByName.containsKey(name)) return Kind.COMPONENT;
-        PluginType<?> type = typeByName.get(name);
-        if (type == null) return Kind.UNKNOWN;
-        Class<?> cls = classOf(type);
-        return cls != null && cls.isEnum() ? Kind.ENUM : Kind.SOURCE;
+        if (!typeByName.containsKey(name)) return Kind.UNKNOWN;
+        return type.isEnum() ? Kind.ENUM : Kind.SOURCE;
     }
 
     /**
@@ -628,9 +534,9 @@ public final class ValueGrammar {
         return false;
     }
 
-    /** The declaration registered under a canonical name, or {@code null}: for the reader. */
-    PluginType<?> declaration(String canonicalName) {
-        return typeByName.get(canonicalName);
+    /** The declaration of {@code type}, or {@code null}: for the reader. */
+    PluginType<?> declaration(Class<?> type) {
+        return typeByName.get(JavaNames.canonical(type));
     }
 
     /** The class a component registered under {@code canonicalName} builds, or {@code null}. */

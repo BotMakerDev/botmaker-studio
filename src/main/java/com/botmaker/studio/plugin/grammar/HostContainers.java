@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin.grammar;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -48,8 +49,8 @@ final class HostContainers {
         }
 
         @Override
-        public List<ValueForm> partForms(List<ValueForm> arguments, int parts) {
-            return Collections.nCopies(parts, arguments.getFirst());
+        public List<Type> partTypes(List<Type> arguments, int parts) {
+            return Collections.nCopies(parts, arguments.isEmpty() ? ValueTypes.NONE : arguments.getFirst());
         }
     }
 
@@ -102,8 +103,8 @@ final class HostContainers {
         }
 
         @Override
-        public List<ValueForm> partForms(List<ValueForm> arguments, int parts) {
-            return Collections.nCopies(parts, new ValueForm.Of(ValueContainer.ENTRY, arguments));
+        public List<Type> partTypes(List<Type> arguments, int parts) {
+            return Collections.nCopies(parts, ValueTypes.of(ValueContainer.ENTRY, arguments));
         }
     }
 
@@ -148,7 +149,7 @@ final class HostContainers {
         }
 
         @Override
-        public List<ValueForm> partForms(List<ValueForm> arguments, int parts) {
+        public List<Type> partTypes(List<Type> arguments, int parts) {
             return List.copyOf(arguments);
         }
     }

@@ -4,10 +4,11 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedConstants;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -33,7 +34,7 @@ import java.util.function.Supplier;
 public final class HostValueContext implements ValueContext {
 
     private final TypeRef type;
-    private final ValueForm form;
+    private final Type form;
     private final ValueGrammar grammar;
     private final StudioServices services;
     private final BiConsumer<String, List<String>> onChange;
@@ -41,7 +42,7 @@ public final class HostValueContext implements ValueContext {
     private String source;
     private List<String> imports = List.of();
 
-    public HostValueContext(TypeRef type, ValueForm form, ValueGrammar grammar, String source,
+    public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
                             StudioServices services, BiConsumer<String, List<String>> onChange) {
         this(type, form, grammar, source, services, onChange, ConstantValues.NONE);
     }
@@ -50,11 +51,11 @@ public final class HostValueContext implements ValueContext {
      * @param constants the bot's {@code @Managed} constants, asked for when a value is read or written:
      *                  {@code Pictures.ORE} reads as the picture, and a picture equal to one is written as it
      */
-    public HostValueContext(TypeRef type, ValueForm form, ValueGrammar grammar, String source,
+    public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
                             StudioServices services, BiConsumer<String, List<String>> onChange,
                             Supplier<List<ManagedConstants.Constant>> constants) {
         this.type = type;
-        this.form = form == null ? ValueForm.of("") : form;
+        this.form = form == null ? ValueTypes.NONE : form;
         this.grammar = grammar == null ? ValueGrammar.empty() : grammar;
         this.services = services;
         this.onChange = onChange;
@@ -63,29 +64,29 @@ public final class HostValueContext implements ValueContext {
     }
 
     /** The context for a value of {@code form}, read and written through the bound plugins' grammar. */
-    public static HostValueContext of(ValueForm form, String source, StudioServices services,
+    public static HostValueContext of(Type form, String source, StudioServices services,
                                       BiConsumer<String, List<String>> onChange) {
         return of(form, PluginHost.grammar(), source, services, onChange, ConstantValues.NONE);
     }
 
     /** The same, reading and writing the bot's {@code @Managed} constants as the values they hold. */
-    public static HostValueContext of(ValueForm form, String source, StudioServices services,
+    public static HostValueContext of(Type form, String source, StudioServices services,
                                       BiConsumer<String, List<String>> onChange,
                                       Supplier<List<ManagedConstants.Constant>> constants) {
         return of(form, PluginHost.grammar(), source, services, onChange, constants);
     }
 
     /** The same, through {@code grammar} — the seam a test drives with the types it declares. */
-    public static HostValueContext of(ValueForm form, ValueGrammar grammar, String source,
+    public static HostValueContext of(Type form, ValueGrammar grammar, String source,
                                       StudioServices services, BiConsumer<String, List<String>> onChange) {
         return of(form, grammar, source, services, onChange, ConstantValues.NONE);
     }
 
     /** The same, through {@code grammar} and with {@code constants}. */
-    public static HostValueContext of(ValueForm form, ValueGrammar grammar, String source,
+    public static HostValueContext of(Type form, ValueGrammar grammar, String source,
                                       StudioServices services, BiConsumer<String, List<String>> onChange,
                                       Supplier<List<ManagedConstants.Constant>> constants) {
-        ValueForm safe = form == null ? ValueForm.of("") : form;
+        Type safe = form == null ? ValueTypes.NONE : form;
         return new HostValueContext(typeRef(safe, grammar), safe, grammar, source, services, onChange,
                 constants);
     }
@@ -98,24 +99,27 @@ public final class HostValueContext implements ValueContext {
      * <p>A container answers the container's own name, so an editor claiming {@code java.util.List} is
      * offered the list and one claiming its element is not.
      */
-    public static TypeRef typeRef(ValueForm form, ValueGrammar grammar) {
+    public static TypeRef typeRef(Type form, ValueGrammar grammar) {
         String qualified;
         String simple;
         switch (form) {
-            case ValueForm.Leaf leaf -> {
-                String resolved = grammar == null ? null : grammar.qualify(leaf.typeName());
-                qualified = resolved != null ? resolved : leaf.typeName().indexOf('.') >= 0 ? leaf.typeName() : "";
-                simple = JavaNames.simple(resolved != null ? resolved : leaf.typeName());
+            case Class<?> cls -> {
+                qualified = cls.getName();
+                simple = JavaNames.simple(cls);
             }
-            case ValueForm.Of of -> {
-                qualified = of.container().sourceName();
-                simple = of.container().type().getSimpleName();
+            case ValueTypes.Parameterized parameterized -> {
+                qualified = parameterized.raw().getName();
+                simple = parameterized.raw().getSimpleName();
             }
-            case ValueForm.Declared declared -> {
-                qualified = declared.qualifiedName();
-                simple = JavaNames.simple(declared.qualifiedName());
+            case ValueTypes.BotClass bot -> {
+                qualified = bot.qualifiedName();
+                simple = bot.qualifiedName().substring(bot.qualifiedName().lastIndexOf('.') + 1);
             }
-            case null -> {
+            case ValueTypes.Unknown unknown -> {
+                qualified = "";
+                simple = unknown.written();
+            }
+            case null, default -> {
                 qualified = "";
                 simple = "";
             }
@@ -130,7 +134,7 @@ public final class HostValueContext implements ValueContext {
     }
 
     /** The form this value is read and written as — the host's, never handed to a plugin. */
-    public ValueForm form() {
+    public Type form() {
         return form;
     }
 

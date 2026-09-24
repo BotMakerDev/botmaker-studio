@@ -6,13 +6,14 @@ import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -84,18 +85,23 @@ public final class HostSlotContext implements SlotContext {
      *
      * <p>A slot is one argument of one call, so its type is whatever the resolved signature says the
      * parameter is — there is no declaration to read type arguments off, which is what
-     * {@code JavaParameterSource.formOf} does for a field. A slot whose type did not resolve reads its value
-     * by the expression's own spelling instead.
+     * {@code ValueTypeResolver} does for a field. A slot whose type did not resolve reads its value by the
+     * expression's own spelling instead.
      */
-    private ValueForm form() {
+    private Type form() {
         return formOf(paramType);
     }
 
-    /** A leaf of {@code type}, or the untyped leaf that reads a value by its own spelling. */
-    static ValueForm formOf(ResolvedType type) {
-        if (type == null) return ValueForm.of("");
+    /**
+     * The class {@code type} resolved to, looked up by its exact canonical name — or an unknown type that
+     * reads a value by its own spelling. The name is the binding's, so no spelling is guessed at.
+     */
+    static Type formOf(ResolvedType type) {
+        if (type == null) return ValueTypes.NONE;
         String qualified = nullToEmpty(type.qualifiedName());
-        return ValueForm.of(qualified.isEmpty() ? nullToEmpty(type.simpleName()) : qualified);
+        Optional<Class<?>> known = grammar().named(qualified);
+        if (known.isPresent()) return known.get();
+        return new ValueTypes.Unknown(qualified.isEmpty() ? nullToEmpty(type.simpleName()) : qualified);
     }
 
     /**
@@ -123,12 +129,12 @@ public final class HostSlotContext implements SlotContext {
      * {@code node} as a {@code form}, with a constant reference read as the constant's value. A node of the
      * editor's tree carries no text of its own, so a part nothing reads is shown as JDT prints it.
      */
-    static Optional<Object> read(CodeEditorService context, ValueForm form, SourceNode node) {
+    static Optional<Object> read(CodeEditorService context, Type form, SourceNode node) {
         return ConstantValues.read(grammar(), constants(context), form, node);
     }
 
     /** {@code value} as the constant holding it when the bot has one, and spelled out otherwise. */
-    static Optional<ValueGrammar.Written> write(CodeEditorService context, ValueForm form, Object value) {
+    static Optional<ValueGrammar.Written> write(CodeEditorService context, Type form, Object value) {
         return ConstantValues.write(grammar(), constants(context), form, value);
     }
 

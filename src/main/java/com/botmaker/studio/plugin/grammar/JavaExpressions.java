@@ -17,6 +17,17 @@ public final class JavaExpressions {
 
     private JavaExpressions() {}
 
+    /**
+     * The property set on the root of a tree this class parsed: an expression with no file around it. JDT
+     * wraps one in a synthetic unit, so the tree alone cannot say its imports are missing rather than empty.
+     */
+    static final String DETACHED = "botmaker.detached";
+
+    /** Whether {@code node} came from {@link #parse} — an expression with no file, so no imports to read. */
+    public static boolean detached(ASTNode node) {
+        return node != null && Boolean.TRUE.equals(node.getRoot().getProperty(DETACHED));
+    }
+
     /** {@code source} as an expression, or {@code null} when the text is not exactly one. */
     public static Expression parse(String source) {
         if (source == null || source.isBlank()) return null;
@@ -28,6 +39,8 @@ public final class JavaExpressions {
         options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
         parser.setCompilerOptions(options);
         ASTNode node = parser.createAST(null);
-        return node instanceof Expression parsed ? parsed : null;
+        if (!(node instanceof Expression parsed)) return null;
+        parsed.getRoot().setProperty(DETACHED, Boolean.TRUE);
+        return parsed;
     }
 }

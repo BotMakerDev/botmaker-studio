@@ -6,7 +6,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.control.Menu;
@@ -15,11 +15,12 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Picks the type of a <em>project variable</em>: a {@link ValueForm} — one type the loaded plugins declare,
+ * Picks the type of a <em>project variable</em>: a {@link Type} — one type the loaded plugins declare,
  * wrapped in as many host containers as the cap allows.
  *
  * <p><b>Why this is not {@link BotTypePicker}.</b> The two pickers answer questions that only looked alike.
@@ -46,9 +47,9 @@ public final class ValueTypePicker extends MenuButton {
     private static final int MAX_DEPTH = 2;
 
     /** What a fresh picker and a new map key start as. */
-    private static final ValueForm TEXT = ValueForm.of(String.class);
+    private static final Type TEXT = String.class;
 
-    private final ObjectProperty<ValueForm> form = new SimpleObjectProperty<>();
+    private final ObjectProperty<Type> form = new SimpleObjectProperty<>();
     private final List<MenuItem> wraps = new ArrayList<>();
     private final MenuItem unwrap = new MenuItem("Unwrap");
 
@@ -61,7 +62,7 @@ public final class ValueTypePicker extends MenuButton {
         getItems().addAll(typeItems());
 
         form.addListener((obs, old, now) -> {
-            setText(now == null ? "Choose a type…" : now.sourceName());
+            setText(now == null ? "Choose a type…" : ValueTypes.sourceName(now));
             refreshWraps(now);
         });
         form.set(TEXT);
@@ -71,14 +72,13 @@ public final class ValueTypePicker extends MenuButton {
     private List<MenuItem> typeItems() {
         List<MenuItem> items = new ArrayList<>();
         for (PluginType<?> type : PluginHost.grammar().types()) {
-            String qualified;
+            Class<?> cls;
             try {
-                qualified = JavaNames.canonical(type.type());
+                cls = type.type();
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
-            if (qualified.isBlank()) continue;
-            items.add(typeItem(qualified));
+            if (cls != null) items.add(typeItem(cls));
         }
         return items;
     }
@@ -87,8 +87,8 @@ public final class ValueTypePicker extends MenuButton {
      * The label a menu shows — "Whole number" for {@code int}, a class's own simple name for everything
      * {@link BotType} does not name.
      */
-    static String label(String qualified) {
-        String simple = JavaNames.simple(qualified);
+    static String label(Class<?> type) {
+        String simple = JavaNames.simple(type);
         for (BotType offered : BotType.values()) {
             if (JavaNames.simple(offered.typeName()).equals(simple)) return offered.label();
         }
@@ -101,14 +101,14 @@ public final class ValueTypePicker extends MenuButton {
         for (ValueContainer<?> container : ValueWire.containers()) {
             MenuItem item = new MenuItem(container.label());
             item.setOnAction(e -> {
-                ValueForm now = form.get();
+                Type now = form.get();
                 if (now != null) form.set(wrapped(container, now));
             });
             wraps.add(item);
             menu.getItems().add(item);
         }
         unwrap.setOnAction(e -> {
-            if (form.get() instanceof ValueForm.Of of) form.set(of.last());
+            if (form.get() instanceof ValueTypes.Parameterized parameterized) form.set(parameterized.last());
         });
         menu.getItems().add(new SeparatorMenuItem());
         menu.getItems().add(unwrap);
@@ -123,50 +123,50 @@ public final class ValueTypePicker extends MenuButton {
      * makes afterwards. Wrapping a {@code Duration} therefore offers {@code Map<String, Duration>}, which is
      * the map people write.
      */
-    private static ValueForm wrapped(ValueContainer<?> container, ValueForm inner) {
-        List<ValueForm> arguments = new ArrayList<>();
+    private static Type wrapped(ValueContainer<?> container, Type inner) {
+        List<Type> arguments = new ArrayList<>();
         for (int i = 0; i < container.arity() - 1; i++) arguments.add(TEXT);
         arguments.add(inner);
-        return new ValueForm.Of(container, arguments);
+        return ValueTypes.of(container, arguments);
     }
 
     /** Greys the wraps once the cap is reached, and {@code Unwrap} while there is nothing to take off. */
-    private void refreshWraps(ValueForm now) {
-        boolean capped = now == null || now.depth() >= MAX_DEPTH;
+    private void refreshWraps(Type now) {
+        boolean capped = now == null || ValueTypes.depth(now) >= MAX_DEPTH;
         for (MenuItem item : wraps) item.setDisable(capped);
-        unwrap.setDisable(!(now instanceof ValueForm.Of));
-        setTooltip(now == null ? null : new Tooltip(now.sourceName()));
+        unwrap.setDisable(!(now instanceof ValueTypes.Parameterized));
+        setTooltip(now == null ? null : new Tooltip(ValueTypes.sourceName(now)));
     }
 
     /**
      * Picking a type replaces the <em>leaf</em> and keeps the containers around it, so choosing a different
      * element type does not throw away a list the author has just asked for.
      */
-    private MenuItem typeItem(String qualified) {
-        MenuItem item = new MenuItem(label(qualified));
-        item.setOnAction(e -> form.set(withLeaf(form.get(), qualified)));
+    private MenuItem typeItem(Class<?> type) {
+        MenuItem item = new MenuItem(label(type));
+        item.setOnAction(e -> form.set(withLeaf(form.get(), type)));
         return item;
     }
 
-    /** {@code form} with its innermost leaf replaced — the form itself when it is one. */
-    private static ValueForm withLeaf(ValueForm current, String qualified) {
-        if (current instanceof ValueForm.Of of) {
-            List<ValueForm> arguments = new ArrayList<>(of.arguments());
-            arguments.set(arguments.size() - 1, withLeaf(of.last(), qualified));
-            return new ValueForm.Of(of.container(), arguments);
+    /** {@code current} with its innermost leaf replaced — {@code leaf} itself when it is one. */
+    private static Type withLeaf(Type current, Class<?> leaf) {
+        if (current instanceof ValueTypes.Parameterized parameterized) {
+            List<Type> arguments = new ArrayList<>(parameterized.arguments());
+            arguments.set(arguments.size() - 1, withLeaf(parameterized.last(), leaf));
+            return new ValueTypes.Parameterized(parameterized.raw(), arguments);
         }
-        return ValueForm.of(qualified);
+        return leaf;
     }
 
-    public ObjectProperty<ValueForm> formProperty() {
+    public ObjectProperty<Type> formProperty() {
         return form;
     }
 
-    public ValueForm form() {
+    public Type form() {
         return form.get();
     }
 
-    public void setForm(ValueForm value) {
+    public void setForm(Type value) {
         form.set(value);
     }
 }

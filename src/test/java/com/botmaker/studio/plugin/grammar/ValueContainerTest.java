@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin.grammar;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 
@@ -19,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ValueContainerTest {
 
-    private static final ValueForm TEXT = ValueForm.of(String.class);
-    private static final ValueForm COUNT = ValueForm.of(int.class);
+    private static final Type TEXT = String.class;
+    private static final Type COUNT = int.class;
 
     // ---- the law every container owes ---------------------------------------------------------------------
 
@@ -74,39 +75,39 @@ class ValueContainerTest {
         assertEquals("java.util.Map", ValueContainer.ENTRY.importName());
     }
 
-    // ---- part forms are what keep the recursion typed ------------------------------------------------------
+    // ---- part types are what keep the recursion typed ------------------------------------------------------
 
     @Test
     void aListsPartsAreAllItsElementType() {
-        assertEquals(List.of(TEXT, TEXT, TEXT), ValueContainer.LIST.partForms(List.of(TEXT), 3));
+        assertEquals(List.of(TEXT, TEXT, TEXT), ValueContainer.LIST.partTypes(List.of(TEXT), 3));
     }
 
     @Test
     void aMapsPartsAreEntriesOverItsOwnArguments() {
-        List<ValueForm> arguments = List.of(TEXT, COUNT);
-        List<ValueForm> parts = ValueContainer.MAP.partForms(arguments, 2);
+        List<Type> arguments = List.of(TEXT, COUNT);
+        List<Type> parts = ValueContainer.MAP.partTypes(arguments, 2);
         assertEquals(2, parts.size());
-        assertEquals(new ValueForm.Of(ValueContainer.ENTRY, arguments), parts.getFirst());
+        assertEquals(ValueTypes.of(ValueContainer.ENTRY, arguments), parts.getFirst());
         // And an entry's own parts are the key and the value, positionally — so a walk of a map's values
         // reaches String then Integer without ever asking a runtime class what it is.
-        assertEquals(arguments, ValueContainer.ENTRY.partForms(arguments, 2));
+        assertEquals(arguments, ValueContainer.ENTRY.partTypes(arguments, 2));
     }
 
-    // ---- what a written type name means ----------------------------------------------------------------------
+    // ---- which container a type is -------------------------------------------------------------------------
 
     @Test
-    void aContainerIsFoundByAnyTrailingSpelling() {
-        ValueGrammar grammar = ValueGrammar.empty();
-        assertEquals(ValueContainer.LIST, grammar.containerForJava("List").orElseThrow());
-        assertEquals(ValueContainer.LIST, grammar.containerForJava("java.util.List").orElseThrow());
-        assertEquals(ValueContainer.ENTRY, grammar.containerForJava("Map.Entry").orElseThrow());
+    void aContainerIsTheRawClassOfAParameterizedType() {
+        assertEquals(ValueContainer.LIST, ValueTypes.container(ValueTypes.listOf(TEXT)).orElseThrow());
+        assertEquals(ValueContainer.ENTRY,
+                ValueTypes.container(ValueTypes.of(ValueContainer.ENTRY, List.of(TEXT, COUNT))).orElseThrow());
     }
 
     @Test
     void somethingNoContainerIsIsAnOrdinaryAbsence() {
-        // A Set, an array, a class nobody declared. Empty rather than a throw: the host then shows the
-        // field's source read-only, which is what it already does for an unknown leaf.
-        assertFalse(ValueGrammar.empty().containerForJava("java.util.Set").isPresent());
-        assertFalse(ValueGrammar.empty().containerForJava("").isPresent());
+        // A Set, a leaf, an unknown spelling. Empty rather than a throw: the host then shows the field's
+        // source read-only, which is what it already does for an unknown leaf.
+        assertFalse(ValueTypes.container(new ValueTypes.Parameterized(java.util.Set.class, List.of(TEXT))).isPresent());
+        assertFalse(ValueTypes.container(TEXT).isPresent());
+        assertFalse(ValueTypes.container(ValueTypes.NONE).isPresent());
     }
 }

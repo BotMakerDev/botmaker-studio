@@ -1,7 +1,6 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameter;
@@ -9,6 +8,7 @@ import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,7 +36,7 @@ public final class HostParameters {
     private HostParameters() {}
 
     /** One parameter and the class a bot spells in front of its name — {@code Parameters.REST}. */
-    public record Parameter(String qualifier, ParameterRow row, ValueForm form) {
+    public record Parameter(String qualifier, ParameterRow row, Type form) {
 
         /** What a menu shows: the prose label when the author gave one, else the name and its type. */
         public String menuLabel() {

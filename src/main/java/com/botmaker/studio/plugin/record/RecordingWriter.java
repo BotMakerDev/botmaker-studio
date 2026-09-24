@@ -6,7 +6,6 @@ import com.botmaker.plugin.api.record.RecordedValue;
 import com.botmaker.plugin.host.Recordings;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 
@@ -175,7 +174,7 @@ public final class RecordingWriter {
                     next += names.size();
                     argument = names.isEmpty() ? Optional.empty() : keys(keys.enumType(), names, imports);
                 }
-                case Recordings.Slot.Fresh fresh -> argument = grammar.freshSpelling(ValueForm.of(fresh.typeName()))
+                case Recordings.Slot.Fresh fresh -> argument = grammar.freshSpelling(fresh.type())
                         .map(written -> {
                             imports.addAll(written.imports());
                             return written.source();

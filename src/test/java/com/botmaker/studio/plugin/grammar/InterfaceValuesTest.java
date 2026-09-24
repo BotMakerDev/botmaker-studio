@@ -62,7 +62,7 @@ class InterfaceValuesTest {
                     List.of(Place.class, int.class), i -> List.of(i.of(), i.margin()),
                     p -> new Inside((Place) p.get(0), (int) p.get(1)))));
 
-    private static final ValueForm PLACE = ValueForm.of(Place.class);
+    private static final java.lang.reflect.Type PLACE = Place.class;
 
     private static String owner() {
         return JavaNames.canonical(Place.class);

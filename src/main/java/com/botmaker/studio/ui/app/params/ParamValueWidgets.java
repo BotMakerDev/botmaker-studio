@@ -5,8 +5,8 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.params.BotRecords;
 import javafx.geometry.Pos;
@@ -23,6 +23,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -94,7 +95,7 @@ public final class ParamValueWidgets {
      * @param group  the section the row is filed under — half of the handle a reader is keyed by
      * @param config the project a plugin's editor builds its services for
      */
-    public static Node build(String group, ParameterRow row, ValueForm form, ProjectConfig config,
+    public static Node build(String group, ParameterRow row, Type form, ProjectConfig config,
                              List<ValueEditor> sink) {
         return build(group, row, form, config, BotRecords.none(), sink);
     }
@@ -103,59 +104,59 @@ public final class ParamValueWidgets {
      * The same, told what the bot declares itself — which is what lets a field typed with one of the bot's
      * own records be edited component by component rather than shown as written.
      */
-    public static Node build(String group, ParameterRow row, ValueForm form, ProjectConfig config,
+    public static Node build(String group, ParameterRow row, Type form, ProjectConfig config,
                              BotRecords records, List<ValueEditor> sink) {
         String owner = group == null ? "" : group;
         ValueEditors.Context ctx = ValueEditors.Context.of(config);
-        Node widget = cell(owner, row, form == null ? ValueForm.of("") : form,
+        Node widget = cell(owner, row, form == null ? ValueTypes.NONE : form,
                 records == null ? BotRecords.none() : records, ctx, sink);
         widget.setId("param-value-" + row.name());
         return widget;
     }
 
     /** The same widget, pinned to one width — what a list of rows wants, and a form does not. */
-    public static Node buildFixedWidth(String group, ParameterRow row, ValueForm form, ProjectConfig config,
+    public static Node buildFixedWidth(String group, ParameterRow row, Type form, ProjectConfig config,
                                        List<ValueEditor> sink) {
         Node widget = build(group, row, form, config, sink);
         if (widget instanceof javafx.scene.layout.Region region) region.setPrefWidth(VALUE_WIDTH);
         return widget;
     }
 
-    /** One case of {@link ValueForm} per widget, and a read-only fallback for the rest. */
-    private static Node cell(String group, ParameterRow row, ValueForm form, BotRecords records,
+    /** One case of {@link Type} per widget, and a read-only fallback for the rest. */
+    private static Node cell(String group, ParameterRow row, Type form, BotRecords records,
                              ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueGrammar grammar = PluginHost.grammar();
         List<String> options = row.options();
 
-        if (form instanceof ValueForm.Declared declared) {
+        if (form instanceof ValueTypes.BotClass declared) {
             return records.whyNotEditable(declared) == null
                     ? recordRows(group, row, declared, records, ctx, sink)
                     : unreadable(row, records.whyNotEditable(declared));
         }
         // A leaf nothing declares is not sent down the read-only path: its own editor already draws it as a
         // disabled field holding the Java as written, and reads back blank, so nothing is written over it.
-        if (form instanceof ValueForm.Leaf leaf) {
+        if (ValueTypes.isLeaf(form)) {
             return options.isEmpty()
-                    ? single(group, row, leaf, ctx, sink)
-                    : radioRow(grammar, group, row, leaf, options, ctx, sink);
+                    ? single(group, row, form, ctx, sink)
+                    : radioRow(grammar, group, row, form, options, ctx, sink);
         }
-        if (form instanceof ValueForm.Of of && of.container() == ValueContainer.LIST
-                && of.last() instanceof ValueForm.Leaf leaf) {
+        Optional<ValueContainer<?>> container = ValueTypes.container(form);
+        List<Type> arguments = ValueTypes.arguments(form);
+        if (container.orElse(null) == ValueContainer.LIST && ValueTypes.isLeaf(arguments.getLast())) {
             return options.isEmpty()
-                    ? listRows(grammar, group, row, form, leaf, ctx, sink)
-                    : checkList(grammar, group, row, form, leaf, options, ctx, sink);
+                    ? listRows(grammar, group, row, form, arguments.getLast(), ctx, sink)
+                    : checkList(grammar, group, row, form, arguments.getLast(), options, ctx, sink);
         }
-        if (form instanceof ValueForm.Of of && of.container() == ValueContainer.MAP
-                && of.arguments().get(0) instanceof ValueForm.Leaf key
-                && of.arguments().get(1) instanceof ValueForm.Leaf value) {
-            return mapGrid(group, row, form, key, value, ctx, sink);
+        if (container.orElse(null) == ValueContainer.MAP
+                && ValueTypes.isLeaf(arguments.get(0)) && ValueTypes.isLeaf(arguments.get(1))) {
+            return mapGrid(group, row, form, arguments.get(0), arguments.get(1), ctx, sink);
         }
-        return unreadable(row, "no editor here writes " + form.sourceName());
+        return unreadable(row, "no editor here writes " + ValueTypes.sourceName(form));
     }
 
     // --- the editable cells --------------------------------------------------------------------------------
 
-    private static Node single(String group, ParameterRow row, ValueForm.Leaf leaf,
+    private static Node single(String group, ParameterRow row, Type leaf,
                                ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueEditors.Editor editor = ValueEditors.editorFor(leaf, row.value(), ctx);
         Node widget = editor.node();
@@ -171,7 +172,7 @@ public final class ParamValueWidgets {
      * from the list shows as no selection rather than as the first choice, which would be this widget
      * choosing a setting on the user's behalf. It reads back blank, and a blank reading is written nowhere.
      */
-    private static Node radioRow(ValueGrammar grammar, String group, ParameterRow row, ValueForm.Leaf leaf,
+    private static Node radioRow(ValueGrammar grammar, String group, ParameterRow row, Type leaf,
                                  List<String> options, ValueEditors.Context ctx, List<ValueEditor> sink) {
         ToggleGroup toggles = new ToggleGroup();
         VBox column = new VBox(2);
@@ -202,8 +203,8 @@ public final class ParamValueWidgets {
     }
 
     /** Declared choices, ticked — the list shape of {@link #radioRow}. */
-    private static Node checkList(ValueGrammar grammar, String group, ParameterRow row, ValueForm form,
-                                  ValueForm.Leaf leaf, List<String> options, ValueEditors.Context ctx,
+    private static Node checkList(ValueGrammar grammar, String group, ParameterRow row, Type form,
+                                  Type leaf, List<String> options, ValueEditors.Context ctx,
                                   List<ValueEditor> sink) {
         List<String> held = ValueWire.partsOrNone(form, row.value()).stream()
                 .map(part -> canonical(grammar, leaf, part))
@@ -241,10 +242,10 @@ public final class ParamValueWidgets {
      * where a comma is, and twenty strings are faster typed than clicked. Every other type gets a growable
      * column of that type's own editor instead.
      */
-    private static Node listRows(ValueGrammar grammar, String group, ParameterRow row, ValueForm form,
-                                 ValueForm.Leaf leaf, ValueEditors.Context ctx, List<ValueEditor> sink) {
+    private static Node listRows(ValueGrammar grammar, String group, ParameterRow row, Type form,
+                                 Type leaf, ValueEditors.Context ctx, List<ValueEditor> sink) {
         List<ValueGrammar.Part> parts = ValueWire.partsOrNone(form, row.value());
-        if ("java.lang.String".equals(grammar.qualify(leaf.typeName()))) {
+        if (leaf == String.class) {
             List<String> items = parts.stream()
                     .map(part -> grammar.valueOf(leaf, part.written()).orElse(null))
                     .filter(value -> value instanceof String)
@@ -311,11 +312,11 @@ public final class ParamValueWidgets {
      * so a map that wrote one would be a bot that stops running; the marked row is the one not written, and
      * it stays on screen holding what was typed, so nothing the user entered disappears silently.
      */
-    private static Node mapGrid(String group, ParameterRow row, ValueForm form, ValueForm.Leaf keyType,
-                                ValueForm.Leaf valueType, ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ValueForm entryForm = form instanceof ValueForm.Of of
-                ? of.container().partForms(of.arguments(), 1).getFirst()
-                : ValueForm.of("");
+    private static Node mapGrid(String group, ParameterRow row, Type form, Type keyType,
+                                Type valueType, ValueEditors.Context ctx, List<ValueEditor> sink) {
+        Type entryForm = ValueTypes.container(form)
+                .map(container -> container.partTypes(ValueTypes.arguments(form), 1).getFirst())
+                .orElse(ValueTypes.NONE);
 
         List<Entry> entries = new ArrayList<>();
         for (ValueGrammar.Part part : ValueWire.partsOrNone(form, row.value())) {
@@ -393,7 +394,7 @@ public final class ParamValueWidgets {
      * <p>A component whose own form is not a leaf keeps the source it already had, shown beside its name and
      * written back untouched.
      */
-    private static Node recordRows(String group, ParameterRow row, ValueForm.Declared declared,
+    private static Node recordRows(String group, ParameterRow row, ValueTypes.BotClass declared,
                                    BotRecords records, ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueGrammar grammar = PluginHost.grammar();
         List<BotRecords.Component> components = records.componentsOf(declared);
@@ -409,12 +410,12 @@ public final class ParamValueWidgets {
             name.setMinWidth(72);
 
             ValueEditors.Editor editor;
-            if (component.form() instanceof ValueForm.Leaf leaf && grammar.known(leaf)) {
-                editor = ValueEditors.editorFor(leaf, written, ctx);
+            if (ValueTypes.isLeaf(component.form()) && grammar.known(component.form())) {
+                editor = ValueEditors.editorFor(component.form(), written, ctx);
             } else {
                 Label shown = new Label(written.isBlank() ? "—" : written);
                 shown.getStyleClass().add("dialog-hint-text");
-                shown.setTooltip(new Tooltip("Kept as written: " + component.form().sourceName()
+                shown.setTooltip(new Tooltip("Kept as written: " + ValueTypes.sourceName(component.form())
                                              + " is edited where the record is."));
                 editor = new ValueEditors.Editor(shown, () -> written, List::of);
             }
@@ -438,7 +439,7 @@ public final class ParamValueWidgets {
     private record Entry(String key, String value) {}
 
     /** One map row, with the key field watching for a key another row already has. */
-    private static Cell watched(List<Cell> cells, ValueForm.Leaf keyType, ValueForm.Leaf valueType, Entry entry,
+    private static Cell watched(List<Cell> cells, Type keyType, Type valueType, Entry entry,
                                 ValueEditors.Context ctx) {
         Cell cell = new Cell(ValueEditors.editorFor(keyType, entry.key(), ctx),
                 ValueEditors.editorFor(valueType, entry.value(), ctx));
@@ -498,24 +499,24 @@ public final class ParamValueWidgets {
      * a choice of text. Either way it is then written by the grammar, so a choice and a stored value that
      * mean the same thing are spelled the same and compare equal.
      */
-    static Optional<ValueGrammar.Written> optionSource(ValueGrammar grammar, ValueForm.Leaf leaf, String option) {
+    static Optional<ValueGrammar.Written> optionSource(ValueGrammar grammar, Type leaf, String option) {
         if (option == null || option.isBlank()) return Optional.empty();
         Optional<Object> value = grammar.valueOf(leaf, option);
-        if (value.isEmpty() && "java.lang.String".equals(grammar.qualify(leaf.typeName()))) {
+        if (value.isEmpty() && leaf == String.class) {
             value = Optional.of(option);
         }
         return value.flatMap(v -> grammar.spell(leaf, v));
     }
 
     /** {@code source} as the grammar would write the value it holds — itself, when it cannot be read. */
-    private static String canonical(ValueGrammar grammar, ValueForm.Leaf leaf, String source) {
+    private static String canonical(ValueGrammar grammar, Type leaf, String source) {
         return grammar.valueOf(leaf, source)
                 .flatMap(value -> grammar.spell(leaf, value))
                 .map(ValueGrammar.Written::source)
                 .orElse(source == null ? "" : source.strip());
     }
 
-    private static String canonical(ValueGrammar grammar, ValueForm.Leaf leaf, ValueGrammar.Part part) {
+    private static String canonical(ValueGrammar grammar, Type leaf, ValueGrammar.Part part) {
         return grammar.valueOf(leaf, part.written())
                 .flatMap(value -> grammar.spell(leaf, value))
                 .map(ValueGrammar.Written::source)

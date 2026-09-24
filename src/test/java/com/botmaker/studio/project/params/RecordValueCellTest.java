@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
@@ -30,7 +30,7 @@ class RecordValueCellTest extends FxHeadlessTest {
             public record Point(int x, int y) {}
             """;
 
-    private static final ValueForm.Declared FORM = new ValueForm.Declared("com.example.bot.Point", List.of());
+    private static final ValueTypes.BotClass FORM = new ValueTypes.BotClass("com.example.bot.Point", List.of());
 
     private static List<Node> childrenOf(Node node) {
         return node instanceof Pane pane ? List.copyOf(pane.getChildren()) : List.of();
@@ -39,7 +39,7 @@ class RecordValueCellTest extends FxHeadlessTest {
     @Test
     void aRecordIsOneLabelledRowPerComponentAndNoAddRow() {
         BotRecords records = BotRecords.of(TestValues.GRAMMAR, List.of(POINT));
-        ParameterRow row = ParameterRow.named("origin", FORM.sourceName()).value("new Point(1, 2)").build();
+        ParameterRow row = ParameterRow.named("origin", ValueTypes.sourceName(FORM)).value("new Point(1, 2)").build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];
@@ -65,7 +65,7 @@ class RecordValueCellTest extends FxHeadlessTest {
     void theComponentsReadBackOneFullyQualifiedConstructorCall() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         BotRecords records = BotRecords.of(com.botmaker.studio.plugin.PluginHost.grammar(), List.of(POINT));
-        ParameterRow row = ParameterRow.named("origin", FORM.sourceName()).value("new Point(1, 2)").build();
+        ParameterRow row = ParameterRow.named("origin", ValueTypes.sourceName(FORM)).value("new Point(1, 2)").build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         interact(() -> ParamValueWidgets.build("", row, FORM, null, records, sink));
@@ -77,7 +77,7 @@ class RecordValueCellTest extends FxHeadlessTest {
     /** With no records in hand the same row is the read-only cell, and nothing can write over it. */
     @Test
     void withoutTheProjectsSourcesTheCellIsReadOnly() {
-        ParameterRow row = ParameterRow.named("origin", FORM.sourceName()).value("new Point(1, 2)").build();
+        ParameterRow row = ParameterRow.named("origin", ValueTypes.sourceName(FORM)).value("new Point(1, 2)").build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         Node[] built = new Node[1];

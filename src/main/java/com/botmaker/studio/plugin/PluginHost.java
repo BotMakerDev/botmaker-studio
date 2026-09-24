@@ -13,7 +13,6 @@ import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
 import java.util.ArrayList;
@@ -450,7 +449,7 @@ public final class PluginHost {
     }
 
     /**
-     * The Java a fresh value of the type written {@code typeName} starts as — fully qualified — or
+     * The Java a fresh value of the class named exactly {@code canonicalName} starts as — fully qualified — or
      * {@code null} when no bound plugin declares it.
      *
      * <p>Asked on every seed and never memoised: {@code PluginType.fresh()} may read the plugin's live
@@ -458,8 +457,8 @@ public final class PluginHost {
      * {@code sourceSeeds()} until 2026-09-22 — the same answer as Java text a plugin typed, which javac
      * never looked at; now the plugin hands over a value and the grammar writes it.
      */
-    public static String freshInitializer(String typeName) {
-        return grammar.freshInitializer(ValueForm.of(typeName == null ? "" : typeName)).orElse(null);
+    public static String freshInitializer(String canonicalName) {
+        return grammar.named(canonicalName).flatMap(grammar::freshInitializer).orElse(null);
     }
 
     /**

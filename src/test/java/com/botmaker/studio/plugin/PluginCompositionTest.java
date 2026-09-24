@@ -76,10 +76,10 @@ class PluginCompositionTest {
                 "classpath order decides, and only the clashing plugin leaves");
         assertEquals(List.of("com.botmaker.basics"),
                 composed.rejected().stream().map(f -> f.provider()).toList());
-        assertTrue(composed.grammar().type(Channel.class.getCanonicalName()).isPresent(),
+        assertTrue(composed.grammar().type(Channel.class).isPresent(),
                 "a plugin beside the clash keeps its whole vocabulary");
-        assertTrue(composed.grammar().type(Image.class.getCanonicalName()).isPresent());
-        assertTrue(composed.grammar().type("java.lang.String").isEmpty(),
+        assertTrue(composed.grammar().type(Image.class).isPresent());
+        assertTrue(composed.grammar().type(String.class).isEmpty(),
                 "the rejected plugin declares nothing at all, not even its uncontested types");
     }
 
@@ -103,7 +103,7 @@ class PluginCompositionTest {
         assertEquals(List.of(good), composed.bound());
         assertEquals(List.of("com.example.broken"),
                 composed.rejected().stream().map(f -> f.provider()).toList());
-        assertTrue(composed.grammar().type(Channel.class.getCanonicalName()).isPresent());
+        assertTrue(composed.grammar().type(Channel.class).isPresent());
     }
 
     @Test

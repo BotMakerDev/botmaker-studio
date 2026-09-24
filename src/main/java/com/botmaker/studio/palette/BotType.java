@@ -11,7 +11,6 @@ import com.botmaker.studio.palette.Initializer.StaticCall;
 import com.botmaker.studio.palette.Initializer.StrLit;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
@@ -273,16 +272,17 @@ public final class BotType {
         List<BotType> all = new ArrayList<>(BUILT_IN);
         ValueGrammar grammar = PluginHost.grammar();
         for (PluginType<?> type : grammar.types()) {
-            String qualified;
+            Class<?> cls;
             try {
-                qualified = JavaNames.canonical(type.type());
+                cls = type.type();
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
-            if (qualified.isBlank()) continue;
+            if (cls == null) continue;
+            String qualified = JavaNames.canonical(cls);
             boolean known = all.stream().anyMatch(t -> simple(t.typeName).equals(simple(qualified)));
             if (known) continue;
-            grammar.freshInitializer(ValueForm.of(qualified)).ifPresent(fresh -> all.add(fromPlugin(qualified, fresh)));
+            grammar.freshInitializer(cls).ifPresent(fresh -> all.add(fromPlugin(qualified, fresh)));
         }
         return List.copyOf(all);
     }
@@ -312,7 +312,7 @@ public final class BotType {
      * <em>project variable</em> ideas and nothing else: fixing the set a value may come from is a question
      * about something somebody configures, and a method parameter has nobody to ask. They lived on in the
      * contract's {@code ValueShape} until 2026-09-20, when that axis was replaced by
-     * {@link com.botmaker.plugin.api.value.ValueForm} and the "out of what set" half moved to the row that
+     * a type tree ({@code ValueForm}, and since 2026-09-24 a {@link java.lang.reflect.Type}) and the "out of what set" half moved to the row that
      * declares it; what was left here after removing them was {@code ONE} and two spellings of
      * {@code List<T>} that generated identical source, so they are one.
      */
@@ -353,7 +353,7 @@ public final class BotType {
         public Choice {
             if (type == null) throw new IllegalArgumentException("a type choice needs a type");
             if (shape == null) shape = Shape.ONE;
-            // Throwing, where the contract's ValueForm corrects a wrong arity: this pair can only come from a
+            // Throwing, where ValueTypes.of corrects a wrong arity: this pair can only come from a
             // dialog or a parsed signature, never from a file, so an impossible one is a bug rather than a
             // project to rescue. `List<void>` is the only impossible one left.
             if (shape.isList() && !type.listable()) {

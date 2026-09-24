@@ -4,11 +4,11 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.grammar.JavaExpressions;
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.studio.project.source.ValueTypeResolver;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -43,29 +43,11 @@ import java.util.Optional;
  * constants are identified by class ({@link BotAnnotation#PARAM}), through the unit's imports when there is
  * no classpath, never by a name that ends in {@code Param}. A bot whose dependencies do not resolve still
  * shows its parameters: binding recovery keeps the tree, and the imports still say which annotation it is.
- * Field <em>types</em> are still read by spelling here; that moves to bindings next.
+ * A field's type is resolved the same way, once, by {@link ValueTypeResolver}.
  */
 public final class JavaParameterSource {
 
     private JavaParameterSource() {}
-
-    /**
-     * What the <em>bot itself</em> declares, asked by the name a type is written as.
-     *
-     * <p>This parser has no bindings, so it cannot tell a class the project declares from one nobody has
-     * heard of — both are simply names. {@link BotRecords} can, because it has read the bot's other sources,
-     * and it is handed in here as this one question rather than as a dependency: the reader stays pure and a
-     * test still drives it with source text alone.
-     */
-    @FunctionalInterface
-    public interface Declarations {
-
-        /** The qualified name of the bot's own class {@code written} means, or {@code null} for none. */
-        String qualify(String written);
-
-        /** What a caller with no project has: every name is somebody else's. */
-        Declarations NONE = written -> null;
-    }
 
     /** Parses {@code source} without bindings — the one parser configuration this package uses. */
     public static CompilationUnit parse(String source) {
@@ -144,11 +126,11 @@ public final class JavaParameterSource {
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
 
-        ValueForm form = formOf(grammar, field.getType(), fragment.getExtraDimensions(),
-                records::qualifyDeclared);
-        // The grammar declines a declared form by design — only the host's view of the bot's own source can
+        java.lang.reflect.Type form = ValueTypeResolver.of(grammar, field.getType(), fragment.getExtraDimensions(),
+                records.declaredNames());
+        // The grammar declines a bot's own class by design — only the host's view of the bot's own source can
         // read one — so the second reader is asked for exactly that case and for no other.
-        boolean readable = form instanceof ValueForm.Declared declared
+        boolean readable = form instanceof ValueTypes.BotClass declared
                 ? records.partsOf(declared, initializer).isPresent()
                 : fragment.getInitializer() != null
                         && grammar.valueOf(form, new SourceNode(fragment.getInitializer(), source)).isPresent();
@@ -157,7 +139,7 @@ public final class JavaParameterSource {
         // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
         // be edited still has to show what the field holds, and the reading above decides only whether it
         // may be replaced.
-        ParameterRow row = ParameterRow.named(name, form.sourceName())
+        ParameterRow row = ParameterRow.named(name, ValueTypes.sourceName(form))
                 .value(initializer)
                 .description(string(members, "description"))
                 .category(string(members, "category"))
@@ -176,7 +158,7 @@ public final class JavaParameterSource {
      * reason — is the failure this whole design exists to avoid. A field is never <em>rejected</em>: it is
      * still listed, still shows what it holds, and still tells the author what to change.
      */
-    private static String whyNotEditable(ValueGrammar grammar, FieldDeclaration field, ValueForm form,
+    private static String whyNotEditable(ValueGrammar grammar, FieldDeclaration field, java.lang.reflect.Type form,
                                          BotRecords records, boolean readable, String initializer) {
         int modifiers = field.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
@@ -188,7 +170,7 @@ public final class JavaParameterSource {
         if (Modifier.isFinal(modifiers)) {
             return "final: its value is fixed at compile time";
         }
-        if (form instanceof ValueForm.Declared declared) {
+        if (form instanceof ValueTypes.BotClass declared) {
             // 32-generic-values.md §A bot's own generic class. A record's canonical constructor is what makes
             // `new Point(1, 2)` writable without guessing; anything else keeps whatever its author wrote, and
             // no placeholder is ever invented for it.
@@ -196,11 +178,7 @@ public final class JavaParameterSource {
             if (why != null) return why;
         }
         String unknown = grammar.firstUnknown(form);
-        if (unknown != null) {
-            return form instanceof ValueForm.Leaf
-                    ? "no installed plugin declares " + unknown + " as a value type"
-                    : "type argument " + unknown + " is not a known value type";
-        }
+        if (unknown != null) return unknownReason(form, unknown);
         if (initializer.isBlank()) {
             return "no initialiser: there is no value to show or replace";
         }
@@ -210,59 +188,11 @@ public final class JavaParameterSource {
         return "";
     }
 
-    /**
-     * The {@link ValueForm} a written type means, all the way down: a leaf the grammar knows, a host
-     * container over forms, and a leaf keyed by what was written for anything else.
-     *
-     * <p><b>Recursive, and unbounded.</b> {@code Map<String, List<Duration>>} reads as what it is. Until
-     * 2026-09-20 this answered a {@code ValueChoice}, which could say a type and <em>one</em> list around
-     * it, so a field javac accepts perfectly well read as unknown and refused to be edited. Only the
-     * picker is capped, because a four-level value cell is not drawable in a table row; nothing caps what
-     * may be read out of a user's file, shown and left intact.
-     *
-     * <p>An array is <em>not</em> a container. {@code int[]} is a Java spelling the grammar never writes, so
-     * an array field is read as unknown and comes out read-only — visible, honest, and not silently rewritten
-     * into a {@code List}. A wildcard, a type variable and a container whose written arity disagrees with its
-     * own read the same way, and for the same reason.
-     */
-    public static ValueForm formOf(ValueGrammar grammar, Type type, int extraDimensions) {
-        return formOf(grammar, type, extraDimensions, Declarations.NONE);
-    }
-
-    /**
-     * The same, told what the bot declares itself — which is what turns an unknown leaf into a
-     * {@link ValueForm.Declared}.
-     *
-     * <p><b>A plugin's type wins a name clash</b>, so a bot declaring its own {@code Point} beside the SDK's
-     * still reads as the SDK's. That is the weaker answer and the safer one: it is the reading every previous
-     * release gave, and a field whose meaning changed because a file elsewhere in the project was renamed
-     * would be the surprise this parser exists not to spring.
-     */
-    public static ValueForm formOf(ValueGrammar grammar, Type type, int extraDimensions,
-                                   Declarations declarations) {
-        if (type == null) return ValueForm.of("");
-        String written = type.toString().strip();
-        if (extraDimensions > 0 || type.isArrayType()) return ValueForm.of(written);
-        if (type instanceof ParameterizedType parameterized) {
-            String raw = parameterized.getType().toString().strip();
-            Optional<ValueContainer<?>> container = grammar.containerForJava(raw);
-            List<?> arguments = parameterized.typeArguments();
-            List<ValueForm> forms = new ArrayList<>(arguments.size());
-            for (Object argument : arguments) forms.add(formOf(grammar, (Type) argument, 0, declarations));
-            if (container.isPresent() && container.get().arity() == arguments.size()) {
-                return new ValueForm.Of(container.get(), forms);
-            }
-            String declared = declarations.qualify(raw);
-            if (declared != null) return new ValueForm.Declared(declared, forms);
-            return ValueForm.of(written);
-        }
-        if (type.isWildcardType() || type.isIntersectionType() || type.isUnionType()) {
-            return ValueForm.of(written);
-        }
-        String known = grammar.qualify(written);
-        if (known != null) return ValueForm.of(known);
-        String declared = declarations.qualify(written);
-        return declared == null ? ValueForm.of(written) : new ValueForm.Declared(declared, List.of());
+    /** The sentence for a type with a leaf nothing declares: the type itself, or one of its arguments. */
+    public static String unknownReason(java.lang.reflect.Type type, String unknown) {
+        return ValueTypes.isLeaf(type)
+                ? "no installed plugin declares " + unknown + " as a value type"
+                : "type argument " + unknown + " is not a known value type";
     }
 
     /**

@@ -55,7 +55,7 @@ class ChainValuesTest {
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(), List.of(TONE,
             wither("louder", Tone::level, Tone::louder), wither("wider", Tone::reach, Tone::wider)));
 
-    private static final ValueForm FORM = ValueForm.of(Tone.class);
+    private static final java.lang.reflect.Type FORM = Tone.class;
 
     @Test
     void aPublicConstantOfADeclaredClassReadsAsItsValue() {
@@ -96,7 +96,7 @@ class ChainValuesTest {
 
     @Test
     void aPartIsShownAsItWasWritten() {
-        ValueForm list = ValueForm.listOf(FORM);
+        java.lang.reflect.Type list = ValueTypes.listOf(FORM);
         List<ValueGrammar.Part> parts = GRAMMAR.partsOfInitializer(list,
                 "java.util.List.of(Tone.SOFT.louder( 5 ),   somebody.other())").orElseThrow();
 

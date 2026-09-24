@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
 import java.lang.reflect.Executable;
+import java.lang.reflect.Type;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
@@ -121,10 +122,11 @@ class ValueGrammarTest {
             List.of(new ColorType(), new DurationType(), new UnitType(), new SourceType()),
             List.of(STEP, PLAN));
 
-    private static final ValueForm TEXT = ValueForm.of(String.class);
-    private static final ValueForm COUNT = ValueForm.of(int.class);
-    private static final ValueForm DURATION = ValueForm.of(Duration.class);
-    private static final ValueForm COLOR = ValueForm.of(Color.class);
+    private static final Type TEXT = String.class;
+    private static final Type COUNT = int.class;
+    private static final Type DURATION = Duration.class;
+    private static final Type COLOR = Color.class;
+    private static final Type UNKNOWN = new ValueTypes.Unknown("discord.Channel");
 
     // ---- the bug this design exists to fix --------------------------------------------------------------
 
@@ -153,9 +155,9 @@ class ValueGrammarTest {
     void aJdkLeafIsItsOwnLiteral() {
         assertEquals(Optional.of("\"hel\\\"lo\""), GRAMMAR.initializer(TEXT, "hel\"lo"));
         assertEquals(Optional.of("3"), GRAMMAR.initializer(COUNT, 3));
-        assertEquals(Optional.of("3L"), GRAMMAR.initializer(ValueForm.of(long.class), 3));
-        assertEquals(Optional.of("2.5"), GRAMMAR.initializer(ValueForm.of(double.class), 2.5));
-        assertEquals(Optional.of("'\\n'"), GRAMMAR.initializer(ValueForm.of(char.class), '\n'));
+        assertEquals(Optional.of("3L"), GRAMMAR.initializer(long.class, 3));
+        assertEquals(Optional.of("2.5"), GRAMMAR.initializer(double.class, 2.5));
+        assertEquals(Optional.of("'\\n'"), GRAMMAR.initializer(char.class, '\n'));
     }
 
     @Test
@@ -166,7 +168,7 @@ class ValueGrammarTest {
 
     @Test
     void anEnumIsItsConstant() {
-        ValueForm unit = ValueForm.of(ChronoUnit.class);
+        Type unit = ChronoUnit.class;
         assertEquals(Optional.of("java.time.temporal.ChronoUnit.MINUTES"), GRAMMAR.initializer(unit, ChronoUnit.MINUTES));
         assertEquals(Optional.of(ChronoUnit.MINUTES), GRAMMAR.valueOf(unit, "ChronoUnit.MINUTES"));
         // A static import writes the constant alone, and the type is known, so it reads.
@@ -177,8 +179,8 @@ class ValueGrammarTest {
     @Test
     void aListIsTheFactoryCall() {
         assertEquals(Optional.of("java.util.List.of(\"a\", \"b\")"),
-                GRAMMAR.initializer(ValueForm.listOf(TEXT), List.of("a", "b")));
-        assertEquals(Optional.of("java.util.List.of()"), GRAMMAR.initializer(ValueForm.listOf(TEXT), List.of()));
+                GRAMMAR.initializer(ValueTypes.listOf(TEXT), List.of("a", "b")));
+        assertEquals(Optional.of("java.util.List.of()"), GRAMMAR.initializer(ValueTypes.listOf(TEXT), List.of()));
     }
 
     @Test
@@ -189,25 +191,25 @@ class ValueGrammarTest {
         value.put("b", 2);
         assertEquals(Optional.of("java.util.Map.ofEntries("
                         + "java.util.Map.entry(\"a\", 1), java.util.Map.entry(\"b\", 2))"),
-                GRAMMAR.initializer(ValueForm.mapOf(TEXT, COUNT), value));
+                GRAMMAR.initializer(ValueTypes.mapOf(TEXT, COUNT), value));
     }
 
     @Test
     void anUnknownTypeDeclinesRatherThanGuesses() {
         // A guess compiles into a user's bot, which is worse than showing them source nobody can edit.
-        assertTrue(GRAMMAR.initializer(ValueForm.of("discord.Channel"), "x").isEmpty());
-        assertTrue(GRAMMAR.initializer(ValueForm.listOf(ValueForm.of("discord.Channel")), List.of("x")).isEmpty());
+        assertTrue(GRAMMAR.initializer(UNKNOWN, "x").isEmpty());
+        assertTrue(GRAMMAR.initializer(ValueTypes.listOf(UNKNOWN), List.of("x")).isEmpty());
     }
 
     @Test
     void aClassTheBotDeclaresIsNotTheGrammarsToWrite() {
-        assertTrue(GRAMMAR.initializer(new ValueForm.Declared("com.mybot.Box", List.of()), "x").isEmpty());
+        assertTrue(GRAMMAR.initializer(new ValueTypes.BotClass("com.mybot.Box", List.of()), "x").isEmpty());
     }
 
     /** What a slot in a user's own file is given: simple names, and the imports that makes necessary. */
     @Test
     void aSpellingForAPersonsFileUsesSimpleNamesAndSaysWhatToImport() {
-        ValueGrammar.Written written = GRAMMAR.spell(ValueForm.listOf(COLOR), List.of(Color.RED)).orElseThrow();
+        ValueGrammar.Written written = GRAMMAR.spell(ValueTypes.listOf(COLOR), List.of(Color.RED)).orElseThrow();
         assertEquals("List.of(new Color(255, 0, 0))", written.source());
         assertEquals(java.util.Set.of("java.util.List", "java.awt.Color"), java.util.Set.copyOf(written.imports()));
     }
@@ -216,7 +218,7 @@ class ValueGrammarTest {
 
     @Test
     void aDeclaredTypeWithNoReaderCrossesAsItsSource() {
-        ValueForm source = ValueForm.of(Source.class);
+        Type source = Source.class;
         assertEquals(Optional.of("CaptureSource.desktop()"), GRAMMAR.valueOf(source, "CaptureSource.desktop()"));
         assertEquals(Optional.of("CaptureSource.desktop()"), GRAMMAR.initializer(source, "CaptureSource.desktop()"));
         assertTrue(GRAMMAR.known(source));
@@ -239,20 +241,20 @@ class ValueGrammarTest {
         };
         ValueGrammar grammar = ValueGrammar.of(List.of(takesAnArgument), List.of());
 
-        assertTrue(grammar.freshInitializer(ValueForm.of(Source.class)).isEmpty());
+        assertTrue(grammar.freshInitializer(Source.class).isEmpty());
     }
 
     @Test
     void aFreshValueIsTheDeclarationsOwnWrittenOrItsStartingCall() {
         assertEquals(Optional.of("new java.awt.Color(255, 255, 255)"), GRAMMAR.freshInitializer(COLOR));
         assertEquals(Optional.of(Source.class.getCanonicalName() + ".current()"),
-                GRAMMAR.freshInitializer(ValueForm.of(Source.class)));
-        ValueGrammar.Written spelled = GRAMMAR.freshSpelling(ValueForm.of(Source.class)).orElseThrow();
+                GRAMMAR.freshInitializer(Source.class));
+        ValueGrammar.Written spelled = GRAMMAR.freshSpelling(Source.class).orElseThrow();
         assertEquals("ValueGrammarTest.Source.current()", spelled.source(), "a fresh call is written by the host");
         assertEquals(List.of(ValueGrammarTest.class.getName()), spelled.imports());
-        assertEquals(Optional.of("java.util.List.of()"), GRAMMAR.freshInitializer(ValueForm.listOf(COLOR)));
-        assertTrue(GRAMMAR.freshInitializer(ValueForm.of("discord.Channel")).isEmpty(), "nothing invented");
-        assertTrue(GRAMMAR.freshInitializer(new ValueForm.Declared("com.mybot.Box", List.of())).isEmpty());
+        assertEquals(Optional.of("java.util.List.of()"), GRAMMAR.freshInitializer(ValueTypes.listOf(COLOR)));
+        assertTrue(GRAMMAR.freshInitializer(UNKNOWN).isEmpty(), "nothing invented");
+        assertTrue(GRAMMAR.freshInitializer(new ValueTypes.BotClass("com.mybot.Box", List.of())).isEmpty());
     }
 
     // ---- composites a plugin declares --------------------------------------------------------------------
@@ -266,7 +268,7 @@ class ValueGrammarTest {
     void aPlanOfStepsRoundTripsThroughItsOwnComponents() {
         String written = "Plan.of(List.of(Plan.step(Collect::body, \"Collect\", List.of(\"DONE\")), "
                 + "Plan.step(Rest::body, \"Rest\", List.of())), \"Collect\")";
-        ValueForm plan = ValueForm.of(Plan.class);
+        Type plan = Plan.class;
 
         Plan read = (Plan) GRAMMAR.valueOf(plan, written).orElseThrow();
 
@@ -283,7 +285,7 @@ class ValueGrammarTest {
     void aNameThatWouldBeEmptyDeclinesTheWholeValue() {
         // A part kept as source has no Java when it is blank; writing `Plan.step(, …)` would not compile.
         Plan plan = new Plan(List.of(new Step("", "Collect", List.of())), "Collect");
-        assertTrue(GRAMMAR.initializer(ValueForm.of(Plan.class), plan).isEmpty());
+        assertTrue(GRAMMAR.initializer(Plan.class, plan).isEmpty());
     }
 
     @Test
@@ -305,11 +307,11 @@ class ValueGrammarTest {
         for (Object[] pair : new Object[][]{
                 {TEXT, "hello"},
                 {COLOR, Color.ORANGE},
-                {ValueForm.listOf(TEXT), List.of("a", "b")},
-                {ValueForm.listOf(ValueForm.listOf(COUNT)), List.of(List.of(1), List.of(2, 3))},
-                {ValueForm.mapOf(TEXT, ValueForm.listOf(COUNT)), nested},
-                {ValueForm.mapOf(TEXT, DURATION), Map.of("rest", Duration.ofSeconds(3))}}) {
-            ValueForm form = (ValueForm) pair[0];
+                {ValueTypes.listOf(TEXT), List.of("a", "b")},
+                {ValueTypes.listOf(ValueTypes.listOf(COUNT)), List.of(List.of(1), List.of(2, 3))},
+                {ValueTypes.mapOf(TEXT, ValueTypes.listOf(COUNT)), nested},
+                {ValueTypes.mapOf(TEXT, DURATION), Map.of("rest", Duration.ofSeconds(3))}}) {
+            Type form = (Type) pair[0];
             Object value = pair[1];
             String written = GRAMMAR.initializer(form, value).orElseThrow();
             assertEquals(Optional.of(value), GRAMMAR.valueOf(form, written), written);
@@ -319,9 +321,9 @@ class ValueGrammarTest {
     @Test
     void aShorterSpellingReadsToo() {
         // A user's own file, having imported List, writes it shorter than the grammar does.
-        assertEquals(Optional.of(List.of("a")), GRAMMAR.valueOf(ValueForm.listOf(TEXT), "List.of(\"a\")"));
+        assertEquals(Optional.of(List.of("a")), GRAMMAR.valueOf(ValueTypes.listOf(TEXT), "List.of(\"a\")"));
         assertEquals(Optional.of(Map.of("a", 1)),
-                GRAMMAR.valueOf(ValueForm.mapOf(TEXT, COUNT), "Map.ofEntries(Map.entry(\"a\", 1))"));
+                GRAMMAR.valueOf(ValueTypes.mapOf(TEXT, COUNT), "Map.ofEntries(Map.entry(\"a\", 1))"));
         assertEquals(Optional.of(Color.RED), GRAMMAR.valueOf(COLOR, "new Color(255, 0, 0)"));
         assertEquals(Optional.of(Duration.ofMillis(5)), GRAMMAR.valueOf(DURATION, "Duration.ofMillis(5)"));
     }
@@ -330,14 +332,14 @@ class ValueGrammarTest {
     void onePartNothingReadsEmptiesTheWholeAnswer() {
         // With nesting this matters more, not less: a map with one unreadable value is shown whole and
         // untouched rather than silently losing an entry.
-        ValueForm form = ValueForm.mapOf(TEXT, DURATION);
+        Type form = ValueTypes.mapOf(TEXT, DURATION);
         assertTrue(GRAMMAR.valueOf(form, "java.util.Map.ofEntries(java.util.Map.entry(\"a\", "
                 + "java.time.Duration.ofSeconds(3)))").isEmpty());
     }
 
     @Test
     void aSourceThisGrammarDidNotWriteAnswersEmpty() {
-        ValueForm list = ValueForm.listOf(TEXT);
+        Type list = ValueTypes.listOf(TEXT);
         assertTrue(GRAMMAR.valueOf(list, "new ArrayList<>()").isEmpty());
         assertTrue(GRAMMAR.valueOf(list, "java.util.List.of(\"a\"").isEmpty(), "unbalanced");
         assertTrue(GRAMMAR.valueOf(list, "java.util.Set.of(\"a\")").isEmpty());
@@ -351,7 +353,7 @@ class ValueGrammarTest {
     @Test
     void aCommaInsideALiteralIsNotASplit() {
         assertEquals(Optional.of(List.of("a, b", "c")),
-                GRAMMAR.valueOf(ValueForm.listOf(TEXT), "java.util.List.of(\"a, b\", \"c\")"));
+                GRAMMAR.valueOf(ValueTypes.listOf(TEXT), "java.util.List.of(\"a, b\", \"c\")"));
     }
 
     @Test
@@ -359,18 +361,18 @@ class ValueGrammarTest {
         assertEquals(Optional.of(31), GRAMMAR.valueOf(COUNT, "0x1F"));
         assertEquals(Optional.of(1000), GRAMMAR.valueOf(COUNT, "1_000"));
         assertEquals(Optional.of(-4), GRAMMAR.valueOf(COUNT, "-4"));
-        assertEquals(Optional.of(5L), GRAMMAR.valueOf(ValueForm.of(long.class), "5"));
+        assertEquals(Optional.of(5L), GRAMMAR.valueOf(long.class, "5"));
         assertTrue(GRAMMAR.valueOf(COUNT, "3000000000L").isEmpty(), "a wider literal is refused, never truncated");
         assertEquals(Optional.of("a\"b\n"), GRAMMAR.valueOf(TEXT, "\"a\\\"b\\n\""));
-        assertEquals(Optional.of('x'), GRAMMAR.valueOf(ValueForm.of(char.class), "'x'"));
-        assertEquals(Optional.of(true), GRAMMAR.valueOf(ValueForm.of(boolean.class), "true"));
+        assertEquals(Optional.of('x'), GRAMMAR.valueOf(char.class, "'x'"));
+        assertEquals(Optional.of(true), GRAMMAR.valueOf(boolean.class, "true"));
     }
 
     // ---- what an editor asks, which is one level at a time --------------------------------------------------
 
     @Test
     void aCompositeIsTakenApartOneLevelWithEachPartsFormBesideIt() {
-        ValueForm map = ValueForm.mapOf(TEXT, COUNT);
+        Type map = ValueTypes.mapOf(TEXT, COUNT);
 
         List<ValueGrammar.Part> entries = GRAMMAR
                 .partsOfInitializer(map, "java.util.Map.ofEntries("
@@ -392,17 +394,17 @@ class ValueGrammarTest {
     @Test
     void aPartNothingReadsIsStillAPart() {
         List<ValueGrammar.Part> parts = GRAMMAR
-                .partsOfInitializer(ValueForm.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))")
+                .partsOfInitializer(ValueTypes.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))")
                 .orElseThrow();
 
         assertEquals(List.of("Duration.parse(\"5s\")"), parts.stream().map(ValueGrammar.Part::source).toList());
         // The whole-value reader still declines, which is what keeps the file untouched.
-        assertTrue(GRAMMAR.valueOf(ValueForm.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))").isEmpty());
+        assertTrue(GRAMMAR.valueOf(ValueTypes.listOf(DURATION), "java.util.List.of(Duration.parse(\"5s\"))").isEmpty());
     }
 
     @Test
     void partsAlreadyWrittenAreComposedBackIntoTheFactoryCall() {
-        ValueForm list = ValueForm.listOf(TEXT);
+        Type list = ValueTypes.listOf(TEXT);
 
         assertEquals(Optional.of("java.util.List.of(\"a\", \"b\")"),
                 GRAMMAR.initializerOfParts(list, List.of("\"a\"", "\"b\"")));
@@ -410,7 +412,7 @@ class ValueGrammarTest {
         // A blank part declines rather than writing `of(, "b")`.
         assertTrue(GRAMMAR.initializerOfParts(list, List.of("", "\"b\"")).isEmpty());
         // And a container that cannot hold that many parts declines too.
-        assertTrue(GRAMMAR.initializerOfParts(new ValueForm.Of(ValueContainer.ENTRY, List.of(TEXT, COUNT)),
+        assertTrue(GRAMMAR.initializerOfParts(ValueTypes.of(ValueContainer.ENTRY,List.of(TEXT, COUNT)),
                 List.of("\"a\"", "1", "2")).isEmpty());
     }
 
@@ -429,8 +431,8 @@ class ValueGrammarTest {
     @Test
     void aDeclarationImportsItsLeavesAndNotItsContainers() {
         // A container is written fully qualified in a declaration; a leaf by its simple name.
-        assertEquals(List.of("java.time.Duration"), GRAMMAR.imports(ValueForm.mapOf(DURATION, TEXT)));
-        assertEquals(List.of(), GRAMMAR.imports(ValueForm.listOf(COUNT)));
+        assertEquals(List.of("java.time.Duration"), GRAMMAR.imports(ValueTypes.mapOf(DURATION, TEXT)));
+        assertEquals(List.of(), GRAMMAR.imports(ValueTypes.listOf(COUNT)));
         assertEquals(List.of(), GRAMMAR.imports(TEXT));
     }
 }

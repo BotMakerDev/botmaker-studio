@@ -126,7 +126,7 @@ public class ListBlock extends AbstractExpressionBlock {
         // ImageTemplate until 2026-09-01 — the host deciding, for one library, that "+" on its lists means
         // something else — and the question it was really asking is the one a plugin's declared type answers
         // for everybody: whether a fresh one exists.
-        if (PluginHost.freshInitializer(targetType == null ? null : targetType.simpleName()) != null) {
+        if (PluginHost.freshInitializer(targetType == null ? null : targetType.qualifiedName()) != null) {
             context.getCodeEditor().addSeededElementToList(this.astNode, insertIndex, targetType);
             return;
         }

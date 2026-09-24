@@ -1,8 +1,9 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.source.BotAnnotation;
@@ -15,6 +16,7 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,13 +77,13 @@ public final class JavaManagedSource {
 
     private static ManagedMethod read(Path file, String source, ValueGrammar grammar, BotRecords records,
                                       String className, String id, MethodDeclaration method) {
-        ValueForm form = JavaParameterSource.formOf(grammar, method.getReturnType2(),
-                method.getExtraDimensions(), records::qualifyDeclared);
+        Type form = ValueTypeResolver.of(grammar, method.getReturnType2(), method.getExtraDimensions(),
+                records.declaredNames());
         Expression returned = returnedExpression(method);
         String expression = returned == null ? "" : JavaParameterSource.text(source, returned);
         // The grammar declines a declared form by design — only the host's view of the bot's own source can
         // read one — so the second reader is asked for exactly that case and for no other.
-        boolean readable = !expression.isEmpty() && (form instanceof ValueForm.Declared declared
+        boolean readable = !expression.isEmpty() && (form instanceof ValueTypes.BotClass declared
                 ? records.partsOf(declared, expression).isPresent()
                 : grammar.valueOf(form, new SourceNode(returned, source)).isPresent());
         String note = whyNotEditable(grammar, method, form, records, readable, expression);
@@ -112,7 +114,7 @@ public final class JavaManagedSource {
      * <em>rejected</em> — it is still found by its id, still reports what it holds, and still says what to
      * change.
      */
-    private static String whyNotEditable(ValueGrammar grammar, MethodDeclaration method, ValueForm form,
+    private static String whyNotEditable(ValueGrammar grammar, MethodDeclaration method, Type form,
                                          BotRecords records, boolean readable, String expression) {
         int modifiers = method.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
@@ -124,16 +126,12 @@ public final class JavaManagedSource {
         if (!method.parameters().isEmpty()) {
             return "takes parameters: a value is not computed from arguments";
         }
-        if (form instanceof ValueForm.Declared declared) {
+        if (form instanceof ValueTypes.BotClass declared) {
             String why = records.whyNotEditable(declared);
             if (why != null) return why;
         }
         String unknown = grammar.firstUnknown(form);
-        if (unknown != null) {
-            return form instanceof ValueForm.Leaf
-                    ? "no installed plugin declares " + unknown + " as a value type"
-                    : "type argument " + unknown + " is not a known value type";
-        }
+        if (unknown != null) return JavaParameterSource.unknownReason(form, unknown);
         if (expression.isEmpty()) {
             return "written by hand: the body is not a single return, so there is no one expression in it "
                     + "to replace";

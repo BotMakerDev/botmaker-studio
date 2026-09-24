@@ -5,7 +5,7 @@ import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
@@ -31,6 +31,7 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.util.Duration;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -224,7 +225,7 @@ public final class PickerGalleryWindow {
     }
 
     /** One sample parameter: the row and the form it is of. */
-    record Sample(ParameterRow row, ValueForm form) {}
+    record Sample(ParameterRow row, Type form) {}
 
     /** One row: the row it was built from, its widget's readers, and the two lines they write to. */
     private record Row(Sample variable, List<ParamValueWidgets.ValueEditor> readers,
@@ -279,10 +280,11 @@ public final class PickerGalleryWindow {
      */
     record Shape(String label, String suffix, boolean list, boolean map, boolean options, boolean plain) {
 
-        ValueForm formOf(String type) {
-            ValueForm leaf = ValueForm.of(type);
-            if (list) return ValueForm.listOf(leaf);
-            if (map) return ValueForm.mapOf(ValueForm.of(String.class), leaf);
+        /** {@code type} — a canonical name, looked up exactly — wrapped the way this shape wraps it. */
+        Type formOf(String type) {
+            Type leaf = PluginHost.grammar().named(type).<Type>map(cls -> cls).orElse(new ValueTypes.Unknown(type));
+            if (list) return ValueTypes.listOf(leaf);
+            if (map) return ValueTypes.mapOf(String.class, leaf);
             return leaf;
         }
     }
@@ -307,9 +309,9 @@ public final class PickerGalleryWindow {
     static Sample sample(String type, Shape shape) {
         List<String> options = shape.options() ? options(type) : List.of();
         if (shape.options() && options.isEmpty()) return null;
-        ValueForm form = shape.formOf(type);
+        Type form = shape.formOf(type);
         ValueGrammar grammar = PluginHost.grammar();
-        ParameterRow row = ParameterRow.named(identifier(type, shape), form.sourceName())
+        ParameterRow row = ParameterRow.named(identifier(type, shape), ValueTypes.sourceName(form))
                 .value(grammar.freshInitializer(form).orElse(""))
                 .visibility(Visibility.PUBLIC)
                 .options(options)

@@ -2,7 +2,7 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
-import com.botmaker.studio.plugin.grammar.ValueForm;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -50,7 +50,7 @@ class JavaParameterSourceTest {
         assertEquals("Parameters", parameter.className());
         assertEquals("maxAttempts", parameter.name());
         assertEquals("Parameters.maxAttempts", parameter.qualified());
-        assertEquals(TestValues.WHOLE_NUMBER, parameter.form().leaf());
+        assertEquals(TestValues.WHOLE_NUMBER, ValueTypes.leaf(parameter.form()));
         assertEquals("int", parameter.row().typeName());
         assertEquals("10", parameter.row().value());
         assertTrue(parameter.editable(), parameter.note());
@@ -118,8 +118,8 @@ class JavaParameterSourceTest {
                     public static java.time.Duration qualified = java.time.Duration.ofMillis(1000L);
                 """));
 
-        assertEquals(TestValues.DURATION, found.get(0).form().leaf());
-        assertEquals(TestValues.DURATION, found.get(1).form().leaf());
+        assertEquals(TestValues.DURATION, ValueTypes.leaf(found.get(0).form()));
+        assertEquals(TestValues.DURATION, ValueTypes.leaf(found.get(1).form()));
         assertEquals("java.time.Duration.ofMillis(3000L)", found.get(0).row().value());
         assertEquals("java.time.Duration.ofMillis(1000L)", found.get(1).row().value());
     }
@@ -133,8 +133,8 @@ class JavaParameterSourceTest {
                                     java.time.Duration.ofMillis(60000L));
                 """)).getFirst();
 
-        assertEquals(ValueForm.listOf(TestValues.DURATION), parameter.form());
-        assertEquals(TestValues.DURATION, parameter.form().leaf());
+        assertEquals(ValueTypes.listOf(TestValues.DURATION), parameter.form());
+        assertEquals(TestValues.DURATION, ValueTypes.leaf(parameter.form()));
         assertEquals(List.of(Duration.ofMillis(3000), Duration.ofMillis(60000)), TestValues.GRAMMAR
                 .valueOf(parameter.form(), parameter.row().value()).orElseThrow());
         assertTrue(parameter.editable(), parameter.note());
@@ -156,7 +156,7 @@ class JavaParameterSourceTest {
                                     java.time.Duration.ofMillis(3000L)));
                 """)).getFirst();
 
-        assertEquals(ValueForm.mapOf(TestValues.TEXT, TestValues.DURATION), parameter.form());
+        assertEquals(ValueTypes.mapOf(TestValues.TEXT, TestValues.DURATION), parameter.form());
         assertTrue(TestValues.GRAMMAR.known(parameter.form()));
         assertTrue(parameter.editable(), parameter.note());
     }
@@ -170,9 +170,9 @@ class JavaParameterSourceTest {
                             java.util.Map.ofEntries();
                 """)).getFirst();
 
-        assertEquals(ValueForm.mapOf(TestValues.TEXT, ValueForm.listOf(TestValues.DURATION)), parameter.form());
+        assertEquals(ValueTypes.mapOf(TestValues.TEXT, ValueTypes.listOf(TestValues.DURATION)), parameter.form());
         // A leaf by its simple name; the import is what a declaration adds beside it.
-        assertEquals("java.util.Map<String, java.util.List<Duration>>", parameter.form().sourceName());
+        assertEquals("java.util.Map<String, java.util.List<Duration>>", ValueTypes.sourceName(parameter.form()));
         assertEquals(List.of("java.time.Duration"), TestValues.GRAMMAR.imports(parameter.form()));
     }
 
@@ -201,7 +201,7 @@ class JavaParameterSourceTest {
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertEquals("java.util.Set<String>", parameter.form().sourceName());
+        assertEquals("java.util.Set<String>", ValueTypes.sourceName(parameter.form()));
     }
 
     /** A hand-written spelling of a container this grammar did not write is kept, not replaced. */
@@ -296,7 +296,7 @@ class JavaParameterSourceTest {
         assertEquals("java.time.Duration.ofSeconds(3)", parameter.initializer());
         assertTrue(parameter.note().contains("kept rather than replaced"), parameter.note());
         // Still listed, still typed: the bot reads it and the window has to show it.
-        assertEquals(TestValues.DURATION, parameter.form().leaf());
+        assertEquals(TestValues.DURATION, ValueTypes.leaf(parameter.form()));
     }
 
     @Test

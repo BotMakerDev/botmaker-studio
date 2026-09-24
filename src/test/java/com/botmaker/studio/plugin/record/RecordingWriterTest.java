@@ -124,7 +124,7 @@ class RecordingWriterTest {
     private static List<Recordings.Writer> ownWriters() throws ReflectiveOperationException {
         return List.of(
                 writer("clickThing", Gesture.CLICK, 10, new Recordings.Slot.Recorded(THING_AT)),
-                writer("click", Gesture.CLICK, 0, new Recordings.Slot.Fresh(Where.class.getName()),
+                writer("click", Gesture.CLICK, 0, new Recordings.Slot.Fresh(Where.class),
                         new Recordings.Slot.Number(int.class), new Recordings.Slot.Number(int.class)),
                 writer("type", Gesture.TYPE, 0, new Recordings.Slot.Text()),
                 writer("combo", Gesture.COMBO, 0, new Recordings.Slot.Keys(Key.class, true)),

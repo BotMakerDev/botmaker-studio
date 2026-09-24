@@ -2,13 +2,13 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueForm;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -36,10 +36,10 @@ public final class HostSlotRun implements SlotRun {
     private final CodeEditorService context;
     private final Supplier<MethodInvocation> call;
     private final int fromIndex;
-    private final ValueForm element;
+    private final Type element;
 
     private HostSlotRun(CodeEditorService context, Supplier<MethodInvocation> call, int fromIndex,
-                        ValueForm element) {
+                        Type element) {
         this.context = context;
         this.call = call;
         this.fromIndex = Math.max(0, fromIndex);
