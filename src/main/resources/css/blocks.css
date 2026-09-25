@@ -293,6 +293,16 @@
 .dialog-status--ok    { -fx-text-fill: -bm-severity-ok-text; }
 .dialog-status--error { -fx-text-fill: -bm-severity-error-text; }
 
+/* The Versions tab's timeline (docs/refactor/39-versions.md §4). A milestone is bold; a version nobody chose,
+ * and the fold that hides a run of them, are quieter by opacity — the same theme-proof dimming as the hint. */
+.versions-title             { -fx-font-size: 12px; }
+.versions-title--milestone  { -fx-font-weight: bold; }
+.versions-meta              { -fx-font-size: 10px; -fx-opacity: 0.7; }
+.versions-quiet             { -fx-opacity: 0.7; }
+.versions-fold              { -fx-font-size: 11px; -fx-font-style: italic; -fx-opacity: 0.7; }
+.versions-unsaved           { -fx-font-weight: bold; -fx-text-fill: -bm-severity-warning-text; }
+.versions-glyph             { -fx-min-width: 16px; -fx-alignment: center; }
+
 /* ---------------------------------------------------------------------------
  * The runtime diagram (Help ▸ Getting Started) — boxes and the arrows between
  * them. Drawn from tokens for the usual reason: a hard-coded box fill is a

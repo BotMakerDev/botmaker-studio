@@ -6,7 +6,24 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4a: every Studio commit says who wrote it; checkpoints around runs and AI.**
+- **2026-09-25 (latest) — Versions 4b: the Versions tab, Simple view.** `ui/app/versions/`:
+  - `VersionsPane` replaces `VcsPanel` + `VcsDialog` (deleted). *Save version* with an optional name; a
+    timeline with the unsaved changes pinned first; a version's files and their Java diff; right-click
+    *Restore project to here…* and *Name this version…*; per-file *Discard* on unsaved changes.
+    `BottomTab.VCS` → `VERSIONS("Versions")`; *Project ▸ Versions* (was *Project History…*) selects the tab.
+  - `Timeline` (pure): runs of two or more versions nobody chose (`AUTO`, `SAFETY`, no trailer, not named)
+    fold to "·· N automatic versions"; a single one is drawn quiet, not folded.
+  - **A refresh writes the editor's sources first** (`Checkpoints.flush`), so an edit never run is unsaved
+    rather than invisible — and *Save version* keeps it (`Checkpoints.save`). This closes 4a's known gap.
+  - `ProjectVcs`: `changes(sha)` and `diff(sha, path)` against the first parent (renames detected);
+    `name(sha, name)` writes a **git note** under `refs/notes/botmaker-names` — the spec said amend-or-empty-
+    commit, which would have named the wrong content for a version below the tip; a note names any version and
+    rewrites nothing. `CommitInfo.name`, `title()`, `milestone()`.
+  - Push / Publish… / Propose… / Get latest moved verbatim into `ShareActions` until 4d–4f replace them.
+  - User-facing "Project History" sentences now say the Versions tab.
+  - `TimelineTest`, `VersionsPaneTest` (TestFX: an unrun edit shows unsaved, Save version keeps it), `ProjectVcsTest`
+    (changes/diff of a version, naming rewrites nothing).
+- **2026-09-25 — Versions 4a: every Studio commit says who wrote it; checkpoints around runs and AI.**
   Designed in umbrella `docs/refactor/39-versions.md` (4a–4g).
   - `project/vcs/VersionOrigin` (`save`, `auto`, `ai`, `safety`, `update`, `publish`, `install`, `create`,
     `restore`, `UNKNOWN`): the `BotMaker-Origin` trailer, read from the last paragraph only. `CREATE` is new

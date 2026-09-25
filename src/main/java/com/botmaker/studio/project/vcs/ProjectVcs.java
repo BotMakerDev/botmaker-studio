@@ -11,6 +11,7 @@ import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.RefSpec;
@@ -21,6 +22,7 @@ import org.eclipse.jgit.treewalk.FileTreeIterator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,10 +49,25 @@ public final class ProjectVcs {
 
     /**
      * One entry in the project history: {@code message} is the first line, {@code origin} who wrote it (from
-     * the trailer), {@code tags} the (possibly empty) list of tags pointing here.
+     * the trailer), {@code name} what the user called it afterwards (null if nothing), {@code tags} the
+     * (possibly empty) list of tags pointing here.
      */
-    public record CommitInfo(String sha, String shortSha, String message, VersionOrigin origin, String author,
-                             Instant when, List<String> tags) {}
+    public record CommitInfo(String sha, String shortSha, String message, VersionOrigin origin, String name,
+                             String author, Instant when, List<String> tags) {
+
+        /** What the timeline calls it: the user's name for it, else its first line. */
+        public String title() {
+            return name != null ? name : message;
+        }
+
+        /** A milestone somebody chose: a saved version, or any version given a name since. */
+        public boolean milestone() {
+            return name != null || origin == VersionOrigin.SAVE;
+        }
+    }
+
+    /** Where version names live: notes, so naming a version never rewrites it (39-versions.md §4). */
+    public static final String NAMES = "refs/notes/botmaker-names";
 
     /**
      * The working tree's changes relative to {@code HEAD}, bucketed by kind, as POSIX-style relative paths.
@@ -160,22 +177,104 @@ public final class ProjectVcs {
         }
     }
 
-    /** Newest-first commit history, each annotated with any tags pointing at it. */
+    /** Newest-first commit history, each annotated with its name (if given one) and any tags pointing at it. */
     public List<CommitInfo> history() throws IOException {
         if (!isRepo()) return List.of();
         try (Git git = open()) {
             Map<String, List<String>> tagsByCommit = tagsByCommit(git);
+            Map<String, String> names = names(git);
             List<CommitInfo> out = new ArrayList<>();
             for (RevCommit c : git.log().call()) {
                 String sha = c.name();
                 out.add(new CommitInfo(sha, c.abbreviate(7).name(), c.getShortMessage(),
-                        VersionOrigin.of(c.getFullMessage()), c.getAuthorIdent().getName(), Instant.ofEpochSecond(c.getCommitTime()),
-                        tagsByCommit.getOrDefault(sha, List.of())));
+                        VersionOrigin.of(c.getFullMessage()), names.get(sha), c.getAuthorIdent().getName(),
+                        Instant.ofEpochSecond(c.getCommitTime()), tagsByCommit.getOrDefault(sha, List.of())));
             }
             return out;
         } catch (Exception e) {
             throw new IOException("Could not read project history: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Names the version {@code sha} without rewriting it: the name is a git note under {@link #NAMES}, so an
+     * automatic version becomes a milestone wherever it sits in the history, pushed or not. A blank name
+     * removes it.
+     */
+    public void name(String sha, String name) throws IOException {
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            RevCommit c = walk.parseCommit(git.getRepository().resolve(sha));
+            if (name == null || name.isBlank()) {
+                git.notesRemove().setNotesRef(NAMES).setObjectId(c).call();
+            } else {
+                git.notesAdd().setNotesRef(NAMES).setObjectId(c).setMessage(name.strip()).call();
+            }
+        } catch (Exception e) {
+            throw new IOException("Could not name that version: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * The paths version {@code sha} changed against its first parent — every file, for the first commit — with
+     * how each changed. A rename reads as the new path, modified.
+     */
+    public java.util.SortedMap<String, VcsFileStatus> changes(String sha) throws IOException {
+        java.util.SortedMap<String, VcsFileStatus> out = new java.util.TreeMap<>();
+        try (Git git = open(); DiffFormatter fmt = new DiffFormatter(OutputStream.nullOutputStream())) {
+            for (DiffEntry e : entries(git.getRepository(), fmt, sha, null)) {
+                switch (e.getChangeType()) {
+                    case ADD, COPY -> out.put(e.getNewPath(), VcsFileStatus.ADDED);
+                    case DELETE -> out.put(e.getOldPath(), VcsFileStatus.DELETED);
+                    default -> out.put(e.getNewPath(), VcsFileStatus.MODIFIED);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            throw new IOException("Could not read what " + sha + " changed: " + e.getMessage(), e);
+        }
+    }
+
+    /** A unified text diff of one path as version {@code sha} changed it, against its first parent. */
+    public String diff(String sha, String relativePath) throws IOException {
+        try (Git git = open(); ByteArrayOutputStream out = new ByteArrayOutputStream();
+             DiffFormatter fmt = new DiffFormatter(out)) {
+            for (DiffEntry e : entries(git.getRepository(), fmt, sha, relativePath)) fmt.format(e);
+            fmt.flush();
+            return out.toString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IOException("Could not diff " + relativePath + " in " + sha + ": " + e.getMessage(), e);
+        }
+    }
+
+    private static List<DiffEntry> entries(Repository repo, DiffFormatter fmt, String sha, String path)
+            throws IOException {
+        fmt.setRepository(repo);
+        fmt.setDetectRenames(true);
+        if (path != null) fmt.setPathFilter(org.eclipse.jgit.treewalk.filter.PathFilter.create(path));
+        try (RevWalk walk = new RevWalk(repo); ObjectReader reader = repo.newObjectReader()) {
+            ObjectId id = repo.resolve(sha);
+            if (id == null) throw new IOException("Unknown version: " + sha);
+            RevCommit c = walk.parseCommit(id);
+            CanonicalTreeParser after = new CanonicalTreeParser();
+            after.reset(reader, c.getTree());
+            if (c.getParentCount() == 0) {
+                return fmt.scan(new org.eclipse.jgit.treewalk.EmptyTreeIterator(), after);
+            }
+            CanonicalTreeParser before = new CanonicalTreeParser();
+            before.reset(reader, walk.parseCommit(c.getParent(0)).getTree());
+            return fmt.scan(before, after);
+        }
+    }
+
+    /** Version names by commit id, read off {@link #NAMES}. */
+    private static Map<String, String> names(Git git) throws Exception {
+        Map<String, String> out = new java.util.HashMap<>();
+        if (git.getRepository().exactRef(NAMES) == null) return out;
+        for (org.eclipse.jgit.notes.Note note : git.notesList().setNotesRef(NAMES).call()) {
+            String text = new String(git.getRepository().open(note.getData()).getBytes(), StandardCharsets.UTF_8);
+            if (!text.isBlank()) out.put(note.name(), text.strip());
+        }
+        return out;
     }
 
     /**

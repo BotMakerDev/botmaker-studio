@@ -16,6 +16,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A Versions tab** (was VCS; *Project ▸ Versions*). *Save version*, optionally named; a list of every
+  version with your saves in bold and Studio's automatic ones folded out of the way; click one to see which
+  files it changed and how; right-click to restore the whole project to it or to give it a name. Edits you
+  have not run yet now count as unsaved changes, and saving a version includes them.
 - **Studio keeps versions for you.** Each time the bot compiles and runs (or debugs), and when an AI tool
   session opens and ends, Studio saves a version of the project — only when something changed. Every version
   in the history now says who made it: *Saved*, *Automatic*, *AI session*, *Safety snapshot*, *Restored*…

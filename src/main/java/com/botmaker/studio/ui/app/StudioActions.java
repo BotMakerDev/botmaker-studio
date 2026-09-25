@@ -151,7 +151,7 @@ final class StudioActions {
         // --- Sharing / VCS ---
         menuBar.setOnBrowseGallery(this::openGallery);
         menuBar.setOnPublishGallery(this::openPublishDialog);
-        menuBar.setOnShowHistory(this::openVcsDialog);
+        // Project History selects the Versions tab; UIManager wires it, since the tab is the window's.
         menuBar.setProjectRepoUrl(BotSource.read(config.projectPath())
                 .map(s -> "https://github.com/" + s.slug()).orElse(null));
 
@@ -166,14 +166,9 @@ final class StudioActions {
 
     BotPublisher botPublisher() { return botPublisher; }
 
-    /** Opens the Publish-to-gallery dialog. Shared with the VCS panel's "publish" button. */
+    /** Opens the Publish-to-gallery dialog. Shared with the Versions tab's "Publish…" button. */
     void openPublishDialog() {
         new PublishDialog(primaryStage, gitHubAuth, gitHubClient, gallery, botPublisher, config).show();
-    }
-
-    private void openVcsDialog() {
-        new VcsDialog(primaryStage, config.projectName(), config.projectPath(), botPublisher,
-                gitHubAuth, gitHubClient, eventBus, this::openPublishDialog).show();
     }
 
     private void openGallery() {

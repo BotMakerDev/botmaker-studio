@@ -138,7 +138,7 @@ class ProjectUpgradeTest {
         assertTrue(summary.contains("BotMaker SDK 1.1.6 → 1.1.12"), summary);
         assertTrue(summary.contains("3 calls repaired in 2 files"), summary);
         assertTrue(summary.contains("marked for review"), summary);
-        assertTrue(summary.contains("Project History"), "it says where the way back is: " + summary);
+        assertTrue(summary.contains("Versions tab"), "it says where the way back is: " + summary);
     }
 
     /** An upgrade that rewrote nothing says so, and offers no review to walk. */

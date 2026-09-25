@@ -264,14 +264,14 @@ public class MenuBarManager {
             if (onRecoverProjectFiles != null) onRecoverProjectFiles.run();
         });
 
-        // Beside Project History on purpose: the two answer the same question from opposite ends — what did
+        // Beside Versions on purpose: the two answer the same question from opposite ends — what did
         // BotMaker change, and what of it still needs looking at.
         MenuItem reviewItem = new MenuItem("Review Changes");
         reviewItem.setOnAction(e -> {
             if (onReviewChanges != null) onReviewChanges.run();
         });
 
-        MenuItem historyItem = new MenuItem("Project History...");
+        MenuItem historyItem = new MenuItem("Versions");
         historyItem.setOnAction(e -> {
             if (onShowHistory != null) onShowHistory.run();
         });
@@ -847,7 +847,7 @@ public class MenuBarManager {
     }
 
     /**
-     * Sets the callback for when "Project History..." is clicked
+     * Sets the callback for when "Versions" is clicked (it selects the Versions tab)
      */
     public void setOnShowHistory(Runnable callback) {
         this.onShowHistory = callback;

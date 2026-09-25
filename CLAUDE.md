@@ -516,7 +516,7 @@ point of it.**
     sequence *with each write landing* because every pass re-reads the project's current content, so plugin B
     is migrated against the files plugin A already rewrote. **What it deliberately does not promise** is a
     rollback of a failure *after* the snapshot: that is what the snapshot is for, and a second implementation
-    of the revert the VCS panel already offers would be the worse one. The version control is a `ComboBox` of
+    of the restore the Versions tab already offers would be the worse one. The version control is a `ComboBox` of
     every version JitPack can build, seeded with what is already known — so a **downgrade is the same
     operation and the same control**, and a row stays usable when JitPack never answers.
   - **Four operations, one report, and the fourth is the one worth knowing (2026-09-16).** Upgrade and
@@ -1077,7 +1077,11 @@ The `ui/` package is split by concern:
   xterm.js vendored under `resources/terminal/` in a `WebView`, over `services/terminal/PtySession` on
   pty4j; no JavaFX in the session, and the window's `dispose()` ends every shell), `AssistantPane` (the
   Assistant tab: an AI CLI from `assist/AiTool` in a `TerminalView`, over the MCP endpoint, denied direct
-  edits — umbrella `docs/refactor/38-llm-edits.md` §5), `ProjectSelectionScreen`, `VcsPanel` / `GitHubAccountBar` / `GoogleAccountBar`, and ~15 dialogs
+  edits — umbrella `docs/refactor/38-llm-edits.md` §5), `versions/VersionsPane` (the Versions tab: the
+  timeline `versions/Timeline` folds, *Save version*, restore, naming by git note; a refresh first writes the
+  editor's sources through `project/vcs/Checkpoints.flush` — umbrella `docs/refactor/39-versions.md`; it
+  replaced `VcsPanel`/`VcsDialog` on 2026-09-25), `ProjectSelectionScreen`, `GitHubAccountBar` /
+  `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
   `ResourceManagerDialog`, `PublishDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before

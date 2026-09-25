@@ -475,7 +475,7 @@ public final class ProjectUpgradeDialog {
                     + "functions they are in will be marked for review.";
             Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
                     "Remove " + plugin.displayName() + " from this project?\n\n" + what
-                            + "\n\nA snapshot is committed to Project History first.");
+                            + "\n\nA version of the project is saved first.");
             if (ask.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
             runRemoval(r);
         }
@@ -544,11 +544,11 @@ public final class ProjectUpgradeDialog {
     static String removalSummary(String plugin, int filesRewritten, int calls) {
         String head = "Removed " + plugin + " from this project.";
         if (filesRewritten == 0) return head + " This bot called nothing in it, so only the pom changed."
-                + " The previous state is one revert away in Project History.";
+                + " The previous state is one restore away in the Versions tab.";
         return head + " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in "
                 + filesRewritten + " file" + (filesRewritten == 1 ? "" : "s")
                 + " — the functions they are in are marked for review."
-                + " The previous state is one revert away in Project History.";
+                + " The previous state is one restore away in the Versions tab.";
     }
 
     /** The same three states as a style class, so the colour is the stylesheet's and not this file's. */

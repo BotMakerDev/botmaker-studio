@@ -50,11 +50,27 @@ public final class Checkpoints {
                                          String label) {
         if (projectDir == null) return;
         try {
-            if (snapshot != null) snapshot.writeSources();
+            save(projectDir, snapshot, origin, label);
         } catch (Exception e) {
-            System.err.println("Couldn't write the sources before a version (" + label + "): " + e.getMessage());
-            return;
+            System.err.println("Couldn't take a version (" + label + "): " + e.getMessage());
         }
-        take(projectDir, origin, label);
+    }
+
+    /**
+     * The same, for a version somebody asked for and is waiting on: it answers the new short SHA (null when
+     * nothing changed) and throws what went wrong instead of logging it.
+     */
+    public static synchronized String save(Path projectDir, ProjectState.Snapshot snapshot, VersionOrigin origin,
+                                           String label) throws java.io.IOException {
+        flush(snapshot);
+        return new ProjectVcs(projectDir).checkpoint(origin, label);
+    }
+
+    /**
+     * Puts the editor's sources on disk and nothing else, so that what git reports as unsaved includes the
+     * edits not yet run. Under the same lock as a version, which reads what this writes.
+     */
+    public static synchronized void flush(ProjectState.Snapshot snapshot) throws java.io.IOException {
+        if (snapshot != null) snapshot.writeSources();
     }
 }

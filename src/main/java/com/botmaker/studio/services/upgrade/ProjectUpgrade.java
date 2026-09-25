@@ -120,7 +120,7 @@ public final class ProjectUpgrade {
                         .append(filesRewritten).append(" file").append(filesRewritten == 1 ? "" : "s")
                         .append(" — the functions they are in are marked for review.");
             }
-            return text + " The previous state is one revert away in Project History.";
+            return text + " The previous state is one restore away in the Versions tab.";
         }
     }
 

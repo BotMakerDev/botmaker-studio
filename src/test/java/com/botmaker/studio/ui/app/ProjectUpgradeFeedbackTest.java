@@ -62,7 +62,7 @@ class ProjectUpgradeFeedbackTest {
 
         assertTrue(summary.startsWith("Removed Basics from this project."), summary);
         assertTrue(summary.contains("5 calls replaced or deleted in 2 files"), summary);
-        assertTrue(summary.contains("Project History"), summary);
+        assertTrue(summary.contains("Versions tab"), summary);
     }
 
     @Test

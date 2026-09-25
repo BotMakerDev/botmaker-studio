@@ -20,6 +20,7 @@ import com.botmaker.studio.services.ReviewService;
 import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.ui.app.terminal.TerminalPane;
+import com.botmaker.studio.ui.app.versions.VersionsPane;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.validation.DiagnosticsManager;
@@ -52,7 +53,7 @@ import java.util.function.Consumer;
  *
  * <p>It is a coordinator, not a container of features. Each area of the window is a collaborator built here and
  * handed callbacks — {@link EditorCanvas}, {@link DiagnosticsPanel}, {@link IdentityCluster},
- * {@link VcsPanel} — and none of them holds a reference back. The actions behind the menus and the toolbar
+ * {@link VersionsPane} — and none of them holds a reference back. The actions behind the menus and the toolbar
  * live in {@link StudioActions}.
  */
 public class UIManager implements ProjectWindow {
@@ -101,7 +102,7 @@ public class UIManager implements ProjectWindow {
     /** Built with the scene; holds the second of this window's two theme listeners. */
     private IdentityCluster identityCluster;
 
-    private VcsPanel vcsPanel;
+    private final VersionsPane versionsPane;
 
     /**
      * The toolbar, kept so its centre group can be rebuilt when the project's plugins change.
@@ -191,6 +192,9 @@ public class UIManager implements ProjectWindow {
                 menuBarManager, toolbarManager,
                 () -> ProjectRecoveryAction.recover(ctx, fileExplorerManager::refreshTree));
         this.actions.wire();
+        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.botPublisher(), actions.gitHubAuth(),
+                actions.gitHubClient(), actions::openPublishDialog);
+        menuBarManager.setOnShowHistory(() -> selectBottomTab(BottomTab.VERSIONS));
 
         // Initialize theme system and set up theme change listener
         BlockTheme.initialize();
@@ -329,7 +333,7 @@ public class UIManager implements ProjectWindow {
 
         OverflowBar executionControls = toolbarManager.createExecutionGroup();
         this.identityCluster = new IdentityCluster(primaryStage, actions.gitHubAuth(), actions.gitHubClient(),
-                () -> selectBottomTab(BottomTab.VCS));
+                () -> selectBottomTab(BottomTab.VERSIONS));
         HBox rightContainer = new HBox(10, executionControls, identityCluster.node());
         rightContainer.setAlignment(Pos.CENTER_RIGHT);
         rightContainer.setMinWidth(0);
@@ -417,10 +421,6 @@ public class UIManager implements ProjectWindow {
         diagnosticsPanel = new DiagnosticsPanel(diagnosticsManager, editorCanvas::scrollToBlock,
                 () -> selectBottomTab(BottomTab.ERRORS));
 
-        // VCS tool window — IntelliJ's Commit view docked beside Terminal (VcsPanel, shared with the dialog).
-        vcsPanel = new VcsPanel(primaryStage, config.projectName(), config.projectPath(), actions.botPublisher(),
-                actions.gitHubAuth(), actions.gitHubClient(), eventBus, actions::openPublishDialog);
-
         // What the last refactor changed and could not finish. Scanned from the sources, never cached.
         reviewPanel = new ReviewPanel(config, state, this::revealMarkedFunction);
 
@@ -429,20 +429,20 @@ public class UIManager implements ProjectWindow {
         bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
-        bottomTabs.put(BottomTab.VCS, bottomTab(BottomTab.VCS, vcsPanel.getView()));
+        bottomTabs.put(BottomTab.VERSIONS, bottomTab(BottomTab.VERSIONS, versionsPane.node()));
         bottomTabs.put(BottomTab.ASSISTANT, bottomTab(BottomTab.ASSISTANT, assistantPane.node()));
 
         bottomTabPane = new TabPane();
         bottomTabPane.getTabs().addAll(bottomTabs.values());
-        // Keep the changed-files tree and the review list fresh whenever the user opens their tab. Both read
-        // the project rather than holding a copy of it, which is why opening is the right moment to re-read.
-        Tab vcsTab = bottomTabs.get(BottomTab.VCS);
+        // Keep the versions and the review list fresh whenever the user opens their tab. Both read the project
+        // rather than holding a copy of it, which is why opening is the right moment to re-read.
+        Tab versionsTab = bottomTabs.get(BottomTab.VERSIONS);
         Tab reviewTab = bottomTabs.get(BottomTab.REVIEW);
         // The first shell starts when the Terminal tab is first shown, never at open.
         Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
         Tab assistantTab = bottomTabs.get(BottomTab.ASSISTANT);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
-            if (now == vcsTab && vcsPanel != null) vcsPanel.refresh();
+            if (now == versionsTab) versionsPane.refresh();
             if (now == reviewTab && reviewPanel != null) reviewPanel.refresh();
             if (now == terminalTab) terminalPane.activate();
             if (now == assistantTab) assistantPane.activate();

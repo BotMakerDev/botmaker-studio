@@ -313,7 +313,7 @@ public final class ReportView {
                 ? "The plugin stays until every use above is gone from your source. Nothing has been changed."
                 : r.isIncomplete()
                 ? "Some of this project could not be read, so nothing will be rewritten."
-                : "Removing commits your project to Project History first, so all of this is one revert "
+                : "Removing saves a version of your project first, so all of this is one restore "
                 + "away. Every call above is replaced by a default value or deleted, the import lines that "
                 + "name this plugin go with them, and each function that changed is marked for you to "
                 + "review.");
@@ -347,8 +347,8 @@ public final class ReportView {
         }
 
         Label note = new Label(r.canModernise()
-                ? "\"Snapshot & modernise\" commits your project to Project History first, so all of this is "
-                + "one revert away. The version this bot pins does not change, and nothing that could not "
+                ? "\"Snapshot & modernise\" saves a version of your project first, so all of this is "
+                + "one restore away. The version this bot pins does not change, and nothing that could not "
                 + "be moved cleanly is touched — a deprecated call still compiles, so it is left as it is "
                 + "rather than replaced by a default. Any function whose calls did not come through "
                 + "unchanged is marked for you to review."

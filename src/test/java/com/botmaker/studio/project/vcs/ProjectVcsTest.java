@@ -69,6 +69,55 @@ class ProjectVcsTest {
     }
 
     @Test
+    void aVersionSaysWhichFilesItChangedAndHow(@TempDir Path dir) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "one\n");
+        Files.writeString(dir.resolve("Old.java"), "old\n");
+        vcs.init();
+        assertEquals(VcsFileStatus.ADDED, vcs.changes(vcs.history().getFirst().sha()).get("Bot.java"),
+                "the first version adds everything");
+
+        Files.writeString(dir.resolve("Bot.java"), "two\n");
+        Files.delete(dir.resolve("Old.java"));
+        Files.writeString(dir.resolve("New.java"), "new\n");
+        String sha = vcs.checkpoint(VersionOrigin.SAVE, "second");
+
+        var changes = vcs.changes(sha);
+        assertEquals(VcsFileStatus.MODIFIED, changes.get("Bot.java"));
+        assertEquals(VcsFileStatus.DELETED, changes.get("Old.java"));
+        assertEquals(VcsFileStatus.ADDED, changes.get("New.java"));
+        String diff = vcs.diff(sha, "Bot.java");
+        assertTrue(diff.contains("-one") && diff.contains("+two"), diff);
+        assertFalse(diff.contains("New.java"), "only the path asked for");
+    }
+
+    @Test
+    void namingAVersionNeverRewritesIt(@TempDir Path dir) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "v1");
+        vcs.init();
+        Files.writeString(dir.resolve("Bot.java"), "v2");
+        vcs.checkpoint(VersionOrigin.AUTO, "Run");
+        Files.writeString(dir.resolve("Bot.java"), "v3");
+        vcs.checkpoint(VersionOrigin.AUTO, "Run");
+        List<ProjectVcs.CommitInfo> before = vcs.history();
+        String middle = before.get(1).sha();
+
+        vcs.name(middle, "It worked here");
+
+        List<ProjectVcs.CommitInfo> after = vcs.history();
+        assertEquals(before.stream().map(ProjectVcs.CommitInfo::sha).toList(),
+                after.stream().map(ProjectVcs.CommitInfo::sha).toList(), "same commits, same ids");
+        assertEquals("It worked here", after.get(1).title());
+        assertTrue(after.get(1).milestone());
+        assertEquals("Run", after.get(0).title());
+        assertTrue(vcs.status().isClean(), "a name is not a change to the project");
+
+        vcs.name(middle, " ");
+        assertEquals("Run", vcs.history().get(1).title(), "a blank name removes it");
+    }
+
+    @Test
     void ensureInitializedMigratesExistingProject(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
         ProjectVcs vcs = new ProjectVcs(dir);
