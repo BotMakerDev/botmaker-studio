@@ -89,25 +89,10 @@ public final class BlockCatalog {
     // FIND_IMAGE_ACTIONS, the body-carrying find. All four named an SDK facade and all four are gone; the
     // LambdaCallBlock that rendered the last one is untouched, because round-tripping an existing lambda is
     // read from the source, not from a palette entry.
-    /**
-     * The "Declare Bot Variable" submenu — generated from {@link BotType}, the same list the Add Function
-     * dialog picks a return type and parameter types from. It was five hand-written entries while the dialog
-     * knew a different set again, so a type you could take as a parameter was not necessarily one you could
-     * declare. Each entry's seed value is the type's own default, which is why every one of them compiles the
-     * moment it is dropped.
-     *
-     * <p><b>It is computed per call since 2026-09-01, and the {@code static final} field it replaces was a
-     * latent bug the moment the list stopped being closed.</b> Most of these types now come from the loaded
-     * plugins' source seeds, so the list depends on which project is open — and a field initialised when this
-     * class is first touched would have frozen whatever was loaded then, which for a class the palette reaches
-     * during start-up is often nothing at all.
-     */
-    private static List<BlockType> botVariables() {
-        return BotType.declarableTypes().stream()
-                .filter(t -> t.group() != BotType.Group.BASICS)
-                .<BlockType>map(BlockCatalog::declareBlock)
-                .toList();
-    }
+    // botVariables() stood here until 2026-09-25: the "Declare Bot Variable" submenu, one declare-block per
+    // BotType outside BASICS (Color, the date/time types, every type a plugin seeds). It went because a
+    // variable's type picker already offers each of those types, so the submenu was a second way in that grew
+    // with every plugin. declareBlockFor below still builds the same entry for the Variables screen's Add.
 
     // DECLARE_POINT, DECLARE_RECT, DECLARE_SIZE, DECLARE_MATCH and DECLARE_TEMPLATE stood here, each a named
     // handle onto one generated entry, and each named an SDK type. They went with the SDK half of BotType on
@@ -138,9 +123,8 @@ public final class BlockCatalog {
      * anybody's API. The three console reads went the same day for the same reason: they emitted
      * {@code BotMaker.readLine()}.
      *
-     * <p><b>The bot-variable entries are the exception, and they are not the editor's.</b> They are one
-     * declare-block per type the loaded plugins seed, so this list is <em>not</em> constant and is rebuilt on
-     * every call. That is why there is no {@code ALL} field any more.
+     * <p>The per-plugin bot-variable entries that made this list vary by project went on 2026-09-25, so it is
+     * constant again.
      */
     private static final List<BlockType> LANGUAGE = List.of(
             PRINT,
@@ -153,7 +137,7 @@ public final class BlockCatalog {
 
     /** All insertable blocks in palette/menu display order. */
     public static List<BlockType> all() {
-        return Stream.of(LANGUAGE, botVariables(), List.of(COMMENT))
+        return Stream.of(LANGUAGE, List.of(COMMENT))
                 .flatMap(List::stream)
                 .toList();
     }

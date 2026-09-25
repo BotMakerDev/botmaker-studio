@@ -2518,6 +2518,12 @@
     -fx-font-size: 10.5px;
 }
 
+/* The mark on a statement-menu row the user pinned (right-click); pins are listed under PINNED. */
+.menu-entry-pin {
+    -fx-font-size: 10px;
+    -fx-opacity: 0.8;
+}
+
 .menu-item:focused .menu-entry-name,
 .menu-item:focused .menu-entry-description {
     -fx-text-fill: -bm-on-popup-hover;

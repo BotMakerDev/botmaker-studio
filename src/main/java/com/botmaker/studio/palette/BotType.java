@@ -20,7 +20,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The types a bot author can <b>write into source</b>: what "Declare Bot Variable" offers, and what the Add
+ * The types a bot author can <b>write into source</b>: what the Variables screen's Add offers (the statement
+ * menu's "Declare Bot Variable" submenu offered them too, until 2026-09-25), and what the Add
  * Function dialog offers as a return type or a parameter type. One list, in one place, because the two
  * features are the same question asked twice — "which types does this editor let you write down?" — and they
  * answered it differently: the declare menu knew five and Add Function knew one ({@code void}, hard-coded).

@@ -21,7 +21,10 @@ public enum BlockCategory {
     // (BlockCatalog.BOT_ACTIONS).
     GAME("Game", "🎮"),
     FUNCTIONS("Functions", "ƒ"),
-    /** Vision/geometry variable declarations (Point, Rect, Size, MatchResult, …) — their own insert submenu. */
+    /**
+     * A declaration of a {@link BotType} outside the basics, added from the Variables screen. It is no longer
+     * a statement-menu submenu (2026-09-25); it stays for the colour such a block is drawn in.
+     */
     BOT_VARIABLE("Declare Bot Variable", "◎"),
     UTILITY("Utility", "🔧");
 

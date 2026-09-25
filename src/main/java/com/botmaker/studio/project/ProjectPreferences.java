@@ -68,6 +68,11 @@ public class ProjectPreferences {
     private String projectSortMode;
     /** Which model the assistant pane talks to. Never a key: those come from the environment only. */
     private AssistantSettings assistant;
+    /**
+     * Statement-menu entries the user pinned to the top, by palette id, in pin order. Global rather than
+     * per-project, like {@link #recentLaunchTargets}: a block reached for in one bot is reached for in the next.
+     */
+    private List<String> pinnedStatements = new ArrayList<>();
 
     public ProjectPreferences() {}
 
@@ -96,6 +101,10 @@ public class ProjectPreferences {
     public void setProjectSortMode(String mode) { this.projectSortMode = mode; }
     public AssistantSettings getAssistant() { return assistant; }
     public void setAssistant(AssistantSettings assistant) { this.assistant = assistant; }
+    public List<String> getPinnedStatements() { return pinnedStatements; }
+    public void setPinnedStatements(List<String> ids) {
+        this.pinnedStatements = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
+    }
 
     /**
      * Records {@code projectDir} as the project last opened and moves it to the front of the MRU. Two entries

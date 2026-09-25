@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.fx;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.ui.render.menu.PinnedStatements;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.CustomMenuItem;
@@ -48,7 +49,6 @@ class StatementMenuTest extends FxHeadlessTest {
 
         List<MenuItem> items = menu.getItems();
         assertTrue(items.get(0) instanceof CustomMenuItem, "first item is the search box");
-        assertTrue(leafItems(menu).isEmpty(), "no flat leaf blocks promoted to the top level");
 
         List<Menu> submenus = items.stream().filter(i -> i instanceof Menu).map(i -> (Menu) i).toList();
         assertFalse(submenus.isEmpty(), "language category submenus are shown");
@@ -127,6 +127,64 @@ class StatementMenuTest extends FxHeadlessTest {
         assertEquals(BlockCatalog.IF.displayName(), items.get(2).getText());
     }
 
+    @Test
+    void aCategoryWithOneEntryIsThatEntryNotASubmenu() {
+        ContextMenu menu = build(type -> {});
+
+        List<String> leaves = leafTexts(menu);
+        assertTrue(leaves.contains(BlockCatalog.PRINT.displayName()), leaves.toString());
+        assertTrue(leaves.contains(BlockCatalog.COMMENT.displayName()), leaves.toString());
+        List<String> submenus = menu.getItems().stream().filter(i -> i instanceof Menu).map(MenuItem::getText).toList();
+        assertFalse(submenus.contains(BlockCategory.OUTPUT.getLabel()), submenus.toString());
+        assertFalse(submenus.contains(BlockCategory.UTILITY.getLabel()), submenus.toString());
+    }
+
+    @Test
+    void thereIsNoDeclareBotVariableSubmenu() {
+        ContextMenu menu = build(type -> {});
+        List<String> submenus = menu.getItems().stream().filter(i -> i instanceof Menu).map(MenuItem::getText).toList();
+        assertFalse(submenus.contains(BlockCategory.BOT_VARIABLE.getLabel()), submenus.toString());
+    }
+
+    @Test
+    void aRightClickPinsAnEntryAndThePinLeadsTheMenu() {
+        ContextMenu first = build(type -> {});
+        MenuItem print = leafItems(first).stream().filter(i -> BlockCatalog.PRINT.displayName().equals(i.getText()))
+                .findFirst().orElseThrow();
+        javafx.scene.Node row = ((CustomMenuItem) print).getContent();
+        interact(() -> row.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_RELEASED,
+                0, 0, 0, 0, javafx.scene.input.MouseButton.SECONDARY, 1,
+                false, false, false, false, false, false, true, false, false, false, null)));
+
+        assertEquals(List.of(BlockCatalog.PRINT.id()), pins);
+        ContextMenu next = build(type -> {});
+        assertEquals("PINNED", next.getItems().get(1).getText());
+        assertEquals(BlockCatalog.PRINT.displayName(), next.getItems().get(2).getText());
+    }
+
+    @Test
+    void aRightClickNeverInsertsTheBlock() {
+        AtomicReference<BlockType> selected = new AtomicReference<>();
+        ContextMenu menu = build(selected::set);
+        MenuItem print = leafItems(menu).stream().filter(i -> BlockCatalog.PRINT.displayName().equals(i.getText()))
+                .findFirst().orElseThrow();
+        javafx.scene.Node row = ((CustomMenuItem) print).getContent();
+        interact(() -> row.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_RELEASED,
+                0, 0, 0, 0, javafx.scene.input.MouseButton.SECONDARY, 1,
+                false, false, false, false, false, false, true, false, false, false, null)));
+
+        assertEquals(null, selected.get());
+    }
+
+    @Test
+    void aPinNothingOffersHereIsHiddenAndKept() {
+        pins.add("SDK_NoSuchFacade_nothing");
+        ContextMenu menu = build(type -> {});
+
+        assertFalse(menu.getItems().stream().anyMatch(i -> "PINNED".equals(i.getText())));
+        assertEquals(List.of("SDK_NoSuchFacade_nothing"), pins);
+    }
+
     private static void collectLabels(javafx.scene.Node node, List<String> out) {
         if (node instanceof javafx.scene.control.Label label) out.add(label.getText());
         if (node instanceof javafx.scene.Parent parent) {
@@ -153,9 +211,25 @@ class StatementMenuTest extends FxHeadlessTest {
 
     // --- helpers ---
 
+    /** The pins, held in memory so no test writes the user's preferences file. */
+    private final List<String> pins = new ArrayList<>();
+
     @org.junit.jupiter.api.BeforeEach
     void forgetRecentPicks() {
         StatementMenu.forgetRecent();
+        pins.clear();
+        PinnedStatements.useStore(new PinnedStatements.Store() {
+            @Override public List<String> read() { return pins; }
+            @Override public void write(List<String> ids) {
+                pins.clear();
+                pins.addAll(ids);
+            }
+        });
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restorePinStore() {
+        PinnedStatements.useStore(null);
     }
 
     private ContextMenu build(java.util.function.Consumer<BlockType> onSelection) {

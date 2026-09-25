@@ -122,6 +122,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **The insert menu is organised by plugin, and you can pin entries.**
+  - Each plugin now gets one submenu, named after the plugin, with its classes inside. A plugin with a
+    single class lists its calls directly, as `Class.method`.
+  - Right-click any entry to pin it. Pinned entries show first, under PINNED, in every project, and
+    survive a restart. Right-click again to unpin.
+  - The *Declare Bot Variable* submenu is gone. A variable's type picker already offers those types.
+  - A category with a single entry (Print, Comment) is now that entry itself, not a submenu.
 - **A nested type no longer breaks the build through its import.** Picking a type such as `LaunchTarget.Epic`
   wrote `import com.botmaker.sdk.api.launch.LaunchTarget$Epic;`, which javac refuses. Imports are now
   written with the canonical name (`LaunchTarget.Epic`), whichever path adds them.

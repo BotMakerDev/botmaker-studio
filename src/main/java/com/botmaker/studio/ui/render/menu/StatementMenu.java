@@ -38,10 +38,10 @@ public final class StatementMenu {
 
     /**
      * Creates the statement insert menu. A search box filters a flat list across every insertable block — the
-     * language/structure blocks <em>and</em> every SDK facade method; with no query the menu leads with a submenu
-     * per catalogued facade, in the served catalog's order (methods discovered at runtime via
-     * {@code ProjectAnalyzer}),
-     * followed by the language-block category submenus, with the bot-{@code Control} group last.
+     * language/structure blocks <em>and</em> every SDK facade method; with no query the menu leads with the
+     * user's pins, then the recent picks, then a submenu per plugin (its classes inside, methods discovered at
+     * runtime via {@code ProjectAnalyzer}), followed by the language-block categories — a one-entry category as
+     * its entry — with the {@code Control} group last.
      *
      * @param analyzer resolves each facade's static methods; may be {@code null} (headless / no project resolved),
      *                 in which case only the language blocks are shown.
@@ -65,8 +65,16 @@ public final class StatementMenu {
                 targetBody == null ? b -> true : b -> StatementPlacement.allows(b, targetBody);
         ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search blocks…",
-                (m, query) -> rebuildItems(m, query, analyzer, surface, allowed, onSelection));
+                (m, query) -> new Build(m, query, analyzer, surface, allowed, onSelection).rebuild());
         return menu;
+    }
+
+    /** One build of the menu body, kept so a pin can rebuild it in place for the same query. */
+    private record Build(ContextMenu menu, String query, ProjectAnalyzer analyzer, SdkSurfaceService surface,
+                         Predicate<BlockType> allowed, Consumer<BlockType> onSelection) {
+        void rebuild() {
+            rebuildItems(this);
+        }
     }
 
     /**
@@ -76,27 +84,27 @@ public final class StatementMenu {
      * return) is placed last as a clearly-separated group.
      */
     private static final List<BlockCategory> LANGUAGE_CATEGORY_ORDER = List.of(
-            BlockCategory.FLOW, BlockCategory.LOOPS, BlockCategory.VARIABLES, BlockCategory.BOT_VARIABLE,
+            BlockCategory.FLOW, BlockCategory.LOOPS, BlockCategory.VARIABLES,
             BlockCategory.FUNCTIONS, BlockCategory.OUTPUT, BlockCategory.INPUT, BlockCategory.GAME,
             BlockCategory.UTILITY, BlockCategory.CONTROL);
 
-    /** Rebuilds the menu body (everything below the search box at index 0) for the current search {@code query}. */
-    private static void rebuildItems(ContextMenu menu, String query, ProjectAnalyzer analyzer,
-                                     SdkSurfaceService surface,
-                                     Predicate<BlockType> allowed, Consumer<BlockType> onSelection) {
+    /** Rebuilds the menu body (everything below the search box at index 0) for the current search query. */
+    private static void rebuildItems(Build b) {
+        ContextMenu menu = b.menu();
+        Predicate<BlockType> allowed = b.allowed();
         MenuBuilders.clearBody(menu);
 
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String q = b.query() == null ? "" : b.query().trim().toLowerCase();
 
         // Active search: flat, filtered list across every block — the language/structure blocks and every SDK
         // facade method — no submenus to dig through.
         if (!q.isEmpty()) {
             List<MenuItem> matches = new ArrayList<>();
-            for (BlockType b : languageBlocks(allowed)) {
-                if (matches(b, q)) matches.add(statementItem(b, onSelection, true));
+            for (BlockType block : languageBlocks(allowed)) {
+                if (matches(block, q)) matches.add(statementItem(block, b, true));
             }
-            for (SdkCall call : sdkCalls(analyzer, surface)) {
-                if (matches(call.block(), q)) matches.add(callItem(call, onSelection, true));
+            for (SdkCall call : sdkCalls(b.analyzer(), b.surface())) {
+                if (matches(call.block(), q)) matches.add(callItem(call, b, true));
             }
             menu.getItems().add(MenuRows.resultCount(matches.size()));
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matching blocks"));
@@ -104,17 +112,30 @@ public final class StatementMenu {
             return;
         }
 
+        // What the user pinned, in pin order — offered only where the menu would offer it anyway.
+        List<MenuItem> pinned = new ArrayList<>();
+        for (String id : PinnedStatements.ids()) {
+            MenuBuilders.addIfNonNull(pinned, pinnedItem(id, b));
+        }
+        if (!pinned.isEmpty()) {
+            menu.getItems().add(MenuBuilders.sectionHeader("PINNED"));
+            menu.getItems().addAll(pinned);
+            menu.getItems().add(new SeparatorMenuItem());
+        }
+        ProjectAnalyzer analyzer = b.analyzer();
+        SdkSurfaceService surface = b.surface();
+
         // What was inserted last, this session — the block a user reaches for again is usually one they just
         // used. Only entries legal here are shown, and only while the menu is not being searched.
         // A call on a facade this project's plugins do not serve (a block used in another project) is dropped.
         List<BlockType> recent = RECENT.stream()
                 .filter(allowed)
-                .filter(b -> !(b instanceof BlockType.LibraryCall call)
+                .filter(block -> !(block instanceof BlockType.LibraryCall call)
                         || PluginHost.isFacadeClass(call.facade().getSimpleName()))
                 .toList();
         if (!recent.isEmpty()) {
             menu.getItems().add(MenuBuilders.sectionHeader("RECENT"));
-            for (BlockType block : recent) menu.getItems().add(statementItem(block, onSelection, false));
+            for (BlockType block : recent) menu.getItems().add(statementItem(block, b, false));
             menu.getItems().add(new SeparatorMenuItem());
         }
 
@@ -131,23 +152,31 @@ public final class StatementMenu {
         // nothing enumerable answers the second — a method the analyzer resolves perfectly well may still not
         // be one we propose. The rule that keeps the two apart: filter what is OFFERED, never what is
         // RESOLVED. Blocks already in the file resolve through the analyzer, untouched.
-        List<Menu> facades = new ArrayList<>();
+        //
+        // One submenu per plugin, named as the plugin names itself, so the menu grows by one row per plugin
+        // rather than one per class it serves.
+        Map<String, List<FacadeEntry>> byPlugin = new LinkedHashMap<>();
         for (FacadeEntry facade : menuFacades(surface)) {
-            MenuBuilders.addIfNonNull(facades, sdkFacadeSubmenu(facade, analyzer, surface, onSelection));
+            byPlugin.computeIfAbsent(pluginName(facade), k -> new ArrayList<>()).add(facade);
         }
-        if (!facades.isEmpty()) {
+        List<Menu> plugins = new ArrayList<>();
+        for (Map.Entry<String, List<FacadeEntry>> plugin : byPlugin.entrySet()) {
+            MenuBuilders.addIfNonNull(plugins, pluginSubmenu(plugin.getKey(), plugin.getValue(), b));
+        }
+        if (!plugins.isEmpty()) {
             menu.getItems().add(MenuBuilders.sectionHeader("FROM PLUGINS"));
-            menu.getItems().addAll(facades);
+            menu.getItems().addAll(plugins);
             menu.getItems().add(new SeparatorMenuItem());
         }
 
         // Then the language/structure block categories (SDK-facade calls excluded — reached via the submenus
-        // above). A category with nothing legal here is left out rather than shown empty.
+        // above). A category with nothing legal here is left out rather than shown empty, and one with a single
+        // entry is that entry, since a submenu holding one row is a click that shows nothing new.
         Map<BlockCategory, List<BlockType>> grouped = languageBlocks(allowed).stream()
                 .collect(Collectors.groupingBy(BlockType::category, LinkedHashMap::new, Collectors.toList()));
         menu.getItems().add(MenuBuilders.sectionHeader("JAVA"));
         for (BlockCategory category : LANGUAGE_CATEGORY_ORDER) {
-            addCategoryMenu(menu, category, grouped, onSelection);
+            addCategoryMenu(menu, category, grouped, b);
         }
 
         if (menu.getItems().size() == 1) menu.getItems().add(MenuBuilders.disabledItem("(No blocks available)"));
@@ -201,23 +230,92 @@ public final class StatementMenu {
      * the default overload is chosen at insert time by {@code StatementFactory}). Returns {@code null} when the
      * analyzer is absent or the facade resolves no static methods (e.g. the SDK jar isn't on the classpath yet).
      */
-    private static Menu sdkFacadeSubmenu(FacadeEntry facade, ProjectAnalyzer analyzer, SdkSurfaceService surface,
-                                         Consumer<BlockType> onSelection) {
-        if (analyzer == null) return null;
+    private static Menu sdkFacadeSubmenu(FacadeEntry facade, Build b) {
+        if (b.analyzer() == null) return null;
         Menu sub = new Menu(facade.simpleName());
-        for (String method : facadeMethodNames(facade, analyzer, surface)) {
-            sub.getItems().add(callItem(new SdkCall(facade, sdkCall(facade, method, method)), onSelection, false));
+        for (String method : facadeMethodNames(facade, b.analyzer(), b.surface())) {
+            sub.getItems().add(callItem(new SdkCall(facade, sdkCall(facade, method, method)), b, false));
         }
         return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, MenuIcons.iconFor(facade));
     }
 
+    /**
+     * One plugin's submenu: a submenu per class it serves, or — when it serves one — that class's methods
+     * directly, each named {@code Class.method} so the class is not lost. Null when nothing resolves.
+     */
+    private static Menu pluginSubmenu(String name, List<FacadeEntry> facades, Build b) {
+        Menu plugin = new Menu(name);
+        if (facades.size() == 1) {
+            FacadeEntry facade = facades.getFirst();
+            if (b.analyzer() == null) return null;
+            for (String method : facadeMethodNames(facade, b.analyzer(), b.surface())) {
+                plugin.getItems().add(callItem(
+                        new SdkCall(facade, sdkCall(facade, method, facade.simpleName() + "." + method)), b, false));
+            }
+        } else {
+            for (FacadeEntry facade : facades) {
+                MenuBuilders.addIfNonNull(plugin.getItems(), sdkFacadeSubmenu(facade, b));
+            }
+        }
+        return plugin.getItems().isEmpty() ? null : MenuIcons.decorate(plugin, MenuIcons.iconFor(facades.getFirst()));
+    }
+
+    /** The name a user reads for the plugin serving {@code facade}, or a shared fallback when none says. */
+    private static String pluginName(FacadeEntry facade) {
+        return PluginHost.pluginNameFor(facade.simpleName()).orElse("Other plugins");
+    }
+
     /** A plugin call's row: the facade's glyph, and the plugin that offers it when the list is a search. */
-    private static MenuItem callItem(SdkCall call, Consumer<BlockType> onSelection, boolean inline) {
+    private static MenuItem callItem(SdkCall call, Build b, boolean inline) {
         String from = PluginHost.pluginNameFor(call.facade().simpleName()).map(name -> " From " + name + ".")
                 .orElse("");
-        return MenuRows.entry(MenuIcons.iconFor(call.facade()), MenuRows.categoryClass(call.block().category()),
-                call.block().displayName(), PaletteDescriptions.of(call.block()) + from, inline,
-                () -> pick(call.block(), onSelection));
+        String id = call.block().id();
+        return pinnable(MenuRows.entry(MenuIcons.iconFor(call.facade()),
+                MenuRows.categoryClass(call.block().category()), call.block().displayName(),
+                PaletteDescriptions.of(call.block()) + from + pinHint(id, inline), inline,
+                () -> pick(call.block(), b.onSelection())), id, b);
+    }
+
+    /** The tooltip's last line, saying what a right-click does; none on a search result's inline description. */
+    private static String pinHint(String id, boolean inline) {
+        if (inline) return "";
+        return PinnedStatements.isPinned(id) ? "\nRight-click to unpin." : "\nRight-click to pin to the top.";
+    }
+
+    /**
+     * {@code item}, pinnable by right-click: a right-click pins or unpins it and rebuilds the menu for the
+     * same query, so the row appears under PINNED at once. A pinned row carries a pin mark.
+     */
+    private static MenuItem pinnable(javafx.scene.control.CustomMenuItem item, String id, Build b) {
+        javafx.scene.Node row = item.getContent();
+        if (PinnedStatements.isPinned(id) && row instanceof javafx.scene.layout.HBox box) {
+            javafx.scene.control.Label mark = new javafx.scene.control.Label("📌");
+            mark.getStyleClass().add("menu-entry-pin");
+            box.getChildren().add(mark);
+        }
+        // Consumed on press and release both: the menu fires an item on release whatever the button, and a
+        // right-click must never insert the block.
+        row.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.SECONDARY) e.consume();
+        });
+        row.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_RELEASED, e -> {
+            if (e.getButton() != javafx.scene.input.MouseButton.SECONDARY) return;
+            e.consume();
+            PinnedStatements.toggle(id);
+            b.rebuild();
+        });
+        return item;
+    }
+
+    /** The row for pin {@code id}, or null when this menu would not offer that entry here. */
+    private static MenuItem pinnedItem(String id, Build b) {
+        for (BlockType block : languageBlocks(b.allowed())) {
+            if (block.id().equals(id)) return statementItem(block, b, false);
+        }
+        for (SdkCall call : sdkCalls(b.analyzer(), b.surface())) {
+            if (call.block().id().equals(id)) return callItem(call, b, false);
+        }
+        return null;
     }
 
     /** An SDK facade method as a statement block, paired with its facade so the search view can icon it. */
@@ -268,21 +366,25 @@ public final class StatementMenu {
     }
 
     private static void addCategoryMenu(ContextMenu menu, BlockCategory category,
-                                        Map<BlockCategory, List<BlockType>> grouped, Consumer<BlockType> onSelection) {
+                                        Map<BlockCategory, List<BlockType>> grouped, Build b) {
         List<BlockType> blocks = grouped.get(category);
         if (blocks == null || blocks.isEmpty()) return;
+        if (blocks.size() == 1) {
+            menu.getItems().add(statementItem(blocks.getFirst(), b, false));
+            return;
+        }
         Menu categoryMenu = MenuIcons.decorate(new Menu(category.getLabel()), MenuIcons.iconFor(category));
-        for (BlockType block : blocks) categoryMenu.getItems().add(statementItem(block, onSelection, false));
+        for (BlockType block : blocks) categoryMenu.getItems().add(statementItem(block, b, false));
         menu.getItems().add(categoryMenu);
     }
 
-    private static MenuItem statementItem(BlockType block, Consumer<BlockType> onSelection, boolean inline) {
+    private static MenuItem statementItem(BlockType block, Build b, boolean inline) {
         if (block instanceof BlockType.LibraryCall call && PluginHost.ownerOf(call.facade().getSimpleName()).isPresent()) {
-            return callItem(new SdkCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block),
-                    onSelection, inline);
+            return callItem(new SdkCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block), b, inline);
         }
-        return MenuRows.entry(MenuIcons.iconFor(block.category()), MenuRows.categoryClass(block.category()),
-                block.displayName(), PaletteDescriptions.of(block), inline, () -> pick(block, onSelection));
+        return pinnable(MenuRows.entry(MenuIcons.iconFor(block.category()), MenuRows.categoryClass(block.category()),
+                block.displayName(), PaletteDescriptions.of(block) + pinHint(block.id(), inline), inline,
+                () -> pick(block, b.onSelection())), block.id(), b);
     }
 
     private static void pick(BlockType block, Consumer<BlockType> onSelection) {

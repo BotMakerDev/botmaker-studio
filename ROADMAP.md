@@ -6,7 +6,17 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 3, phase 1: nested-type imports, unused imports removed, second menu opens.**
+- **2026-09-25 (latest) — Blocks round 3, phase 2: statement menu per plugin, pins, fewer categories.**
+  - `StatementMenu`:
+    - FROM PLUGINS groups facades by `PluginHost.pluginNameFor`. A single-facade plugin lists `Class.method` directly.
+    - PINNED leads the menu.
+    - `addCategoryMenu` puts a one-entry category at the top level.
+    - A build is a `Build` record, so a right-click pin rebuilds the menu for the same query.
+  - `ui/render/menu/PinnedStatements` stores ids in `ProjectPreferences.pinnedStatements` (`botmaker-config.json`), behind a swappable `Store`. A pin nothing offers here is hidden and kept.
+  - `BlockCatalog.botVariables()` is deleted. `BOT_VARIABLE` stays as a colour for the Variables screen's `declareBlockFor`.
+  - Tests: `StatementMenuTest` +5.
+  - Still not covered by a test: per-plugin grouping, because there is no plugin on the test classpath. The right-click's "never inserts" check fires the event on an unshown row.
+- **2026-09-25 — Blocks round 3, phase 1: nested-type imports, unused imports removed, second menu opens.**
   - `ImportManager.importable` maps a binary name (`a.B$C`, from ClassGraph's `ClassInfo.getName()` or `Class.getName()`) to the canonical `a.B.C` on every `addImport` path, and returns null for a local or anonymous class.
   - `parser/guard/UnusedImports` removes the single-type, non-static imports JDT reports as `UnusedImport`. It runs from `CodeEditor.triggerUpdate` after formatting, only with a resolved classpath. `ProjectAnalyzer.createCompilationUnit` states `COMPILER_PB_UNUSED_IMPORT=warning`.
   - `MenuTracker.track` sets `consumeAutoHidingEvents(false)`: the press that auto-hides a menu now reaches the "+" under it. `MenuTrackerTest` clicks through the robot and failed before the fix.
