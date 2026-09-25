@@ -64,6 +64,14 @@ public final class Timeline {
         return rows;
     }
 
+    /** The Dev view's rows: every version, none folded, the ones nobody chose still drawn quiet (§9). */
+    public static List<Row> all(List<CommitInfo> history, int unsavedFiles) {
+        List<Row> rows = new ArrayList<>();
+        if (unsavedFiles > 0) rows.add(new Unsaved(unsavedFiles));
+        history.forEach(c -> rows.add(new Version(c, folds(c))));
+        return rows;
+    }
+
     /** A version nobody chose: Studio's own, or one without a trailer, and not named since. */
     static boolean folds(CommitInfo c) {
         return !c.milestone() && (c.origin().automatic() || c.origin() == VersionOrigin.UNKNOWN);

@@ -6,7 +6,31 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4f: publishing is the tab's side sheet, and a publish pushes versions.**
+- **2026-09-26 (latest) — Versions 4g: the Dev view.** Phase 4 of the bottom-panels plan is complete.
+  - `ui/app/versions/VersionsView` (`SIMPLE`/`DEV`, `fromId` total → `SIMPLE`, `remembered`/`remember` in
+    Studio's user preferences, not the project). The strip ends in a *Simple | Dev* switch.
+  - Dev in `VersionsPane`: `Timeline.all` (every version, none folded, unchosen ones still quiet); rows carry
+    short SHA and author, *Copy SHA* in the menu; `read` skips `BlockDiff` so the cards show the unified text;
+    *Discard…* on an unsaved file; the name field becomes a `TextArea` commit box (*Commit*, a `SAVE` whose
+    first line is the title). Second row: branch combo (switch = `AUTO` version, `switchTo`, reload), *New
+    branch…* (create + switch), *Merge…* (`SAFETY`, `mergeRef`, the §7 conflict sheet through a generalised
+    `decide`, committed as `SAVE` "Merged X into Y"), *Delete…* (merged only); remote combo (↑ahead ↓behind by
+    the last fetch, URL tooltip), *Fetch*, *Pull* (fetch + the same merge of `<remote>/<branch>`), *Push*
+    (`mine` as the strip pushes it, others under the branch's name, never forced), *Add remote…*; *Open in
+    terminal* selects the Terminal tab (`setOnOpenTerminal`). Simple shows *On <branch>* off `main`.
+  - `ProjectVcs`: `mergeRef` (shares `merge` with `mergeTag`), `finishMerge(origin, label)`, `branches`,
+    `createBranch`, `switchTo` (refuses dirty or mid-merge), `deleteBranch` (refuses current and unmerged —
+    nothing loses versions), `remotes` → `RemoteInfo`, `addRemote` + `remoteProblem` (HTTPS, no user info,
+    so no token lands in `.git/config`), `remoteUrl(String)`, `fetch(String, token)`, `push(String, …)`.
+    **`tokenFor`**: the GitHub token is handed to JGit only for a `https://github.com/` URL — a remote added
+    by hand may be any host.
+  - `DevGitTest` (branch round trip, per-file conflict, unmerged/current delete refused, dirty switch
+    refused, ahead/behind, remote validation, `tokenFor`, merge parents), `TimelineTest.devListsEveryVersion…`,
+    `VersionsPaneTest.devCommitsAFreeMessageAndFoldsNothing` (the view is set with `display`, which never
+    writes the user's preference).
+  - Not covered: the branch/remote dialogs themselves; a half-done *branch* merge resumed after a restart is
+    finished by the strip's *Finish the update…*, labelled as an update.
+- **2026-09-25 — Versions 4f: publishing is the tab's side sheet, and a publish pushes versions.**
   - `ui/app/versions/PublishSheet`: `PublishDialog`'s form, card preview, step checklist with Retry and
     listing with Unpublish, one column on the Versions tab's right (`VersionsPane.openPublish`; *Project ▸
     Publish…* and the Getting Started step select the tab and open it, through `StudioActions.setOnPublish`).

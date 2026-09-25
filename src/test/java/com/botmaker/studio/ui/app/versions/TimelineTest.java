@@ -98,6 +98,21 @@ class TimelineTest {
     }
 
     @Test
+    void devListsEveryVersionUnfolded() {
+        List<CommitInfo> history = List.of(commit(VersionOrigin.UNKNOWN), commit(VersionOrigin.AUTO),
+                commit(VersionOrigin.AUTO), commit(VersionOrigin.SAVE));
+        List<Timeline.Row> rows = Timeline.all(history, 1);
+
+        assertEquals(new Timeline.Unsaved(1), rows.getFirst());
+        assertEquals(5, rows.size());
+        assertTrue(rows.stream().noneMatch(r -> r instanceof Timeline.Fold));
+        assertTrue(((Timeline.Version) rows.get(2)).quiet());
+        assertFalse(((Timeline.Version) rows.get(4)).quiet());
+        assertEquals(VersionsView.SIMPLE, VersionsView.fromId("nonsense"));
+        assertEquals(VersionsView.DEV, VersionsView.fromId("dev"));
+    }
+
+    @Test
     void unsavedChangesArePinnedFirstOnlyWhenThereAreSome() {
         List<CommitInfo> history = List.of(commit(VersionOrigin.CREATE));
         assertEquals(new Timeline.Unsaved(2), Timeline.rows(history, 2, Set.of()).getFirst());

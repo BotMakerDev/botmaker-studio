@@ -13,6 +13,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.TextArea;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.testfx.util.WaitForAsyncUtils;
@@ -57,6 +58,8 @@ class VersionsPaneTest extends FxHeadlessTest {
             StudioContext ctx = new StudioContext(config, state, new EventBus(false), null, null, null, null,
                     null, null, null, null);
             pane = new VersionsPane(stage, ctx, null, null);
+            // Whatever this user last chose, the tests start from the default — and never write the choice.
+            pane.display(VersionsView.SIMPLE);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -86,6 +89,23 @@ class VersionsPaneTest extends FxHeadlessTest {
         assertEquals("Faster mining", saved.commit().title());
         assertEquals(VersionOrigin.SAVE, saved.commit().origin());
         assertEquals("class MyBot { int edited; }", Files.readString(file));
+    }
+
+    /** Dev: nothing folded, and the box is a commit message whose first line is the version's title. */
+    @Test
+    void devCommitsAFreeMessageAndFoldsNothing() throws Exception {
+        interact(() -> pane.display(VersionsView.DEV));
+        assertTrue(lookup("Commit").tryQuery().isPresent());
+        interact(() -> state.getFile(file).orElseThrow().setContent("class MyBot { int dev; }"));
+        interact(() -> {
+            TextArea box = lookup(".text-area").queryAs(TextArea.class);
+            box.setText("Try the dev view\n\nA body line.");
+            lookup("Commit").queryButton().fire();
+        });
+        List<Timeline.Row> rows = await(r -> !r.isEmpty() && r.getFirst() instanceof Timeline.Version v
+                && "Try the dev view".equals(v.commit().title()));
+        assertTrue(rows.stream().noneMatch(r -> r instanceof Timeline.Fold));
+        interact(() -> pane.display(VersionsView.SIMPLE));
     }
 
     /** Publish… is the tab's side sheet, not a window: it opens beside the timeline and closes back to it. */

@@ -30,8 +30,19 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.geometry.Orientation;
+import javafx.scene.control.ChoiceDialog;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.GridPane;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
@@ -124,6 +135,27 @@ public final class VersionsPane {
     private final ProgressIndicator progress = new ProgressIndicator();
     private final Label status = new Label();
 
+    // Simple | Dev (39 §9)
+    private VersionsView view = VersionsView.remembered();
+    private final ToggleButton simpleToggle = new ToggleButton(VersionsView.SIMPLE.displayName());
+    private final ToggleButton devToggle = new ToggleButton(VersionsView.DEV.displayName());
+    private final Button saveButton = new Button("Save version");
+    /** Dev's commit box: a free message, first line the title. */
+    private final TextArea message = new TextArea();
+    /** Simple says which branch only when it is not main — Simple never switches. */
+    private final Label onBranch = new Label();
+    private final HBox devBar = new HBox(6);
+    private final ComboBox<String> branchBox = new ComboBox<>();
+    private final ComboBox<ProjectVcs.RemoteInfo> remoteBox = new ComboBox<>();
+    private final Button discardFile = new Button("Discard…");
+    /** The Terminal tab, which is the window's: set by the shell. */
+    private Runnable openTerminal = () -> { };
+    private String branch;
+    /** The changed file whose diff is shown, for Dev's Discard. */
+    private ChangedFile shownChanged;
+    /** Set while the branch list is redrawn, so the redraw is not taken for a switch. */
+    private boolean drawingBranches;
+
     private final Set<String> expanded = new HashSet<>();
     private List<CommitInfo> history = List.of();
     private int unsaved;
@@ -174,8 +206,32 @@ public final class VersionsPane {
         nameField.setPromptText("Name this version (optional)");
         nameField.setPrefColumnCount(22);
         nameField.setOnAction(e -> save());
-        Button save = new Button("Save version");
+        Button save = saveButton;
         save.setOnAction(e -> save());
+        message.setPromptText("Commit message — the first line is the title");
+        message.setPrefRowCount(2);
+        message.setPrefColumnCount(40);
+        message.setWrapText(true);
+        onBranch.getStyleClass().add("versions-meta");
+
+        ToggleGroup views = new ToggleGroup();
+        simpleToggle.setToggleGroup(views);
+        devToggle.setToggleGroup(views);
+        (view == VersionsView.DEV ? devToggle : simpleToggle).setSelected(true);
+        views.selectedToggleProperty().addListener((o, was, now) -> {
+            if (now == null) {
+                // A toggle group lets its selection be clicked off; one view is always shown.
+                was.setSelected(true);
+                return;
+            }
+            showView(now == devToggle ? VersionsView.DEV : VersionsView.SIMPLE);
+        });
+        HBox viewSwitch = new HBox(0, simpleToggle, devToggle);
+        viewSwitch.getStyleClass().add("versions-view-switch");
+        simpleToggle.getStyleClass().add("versions-view-first");
+        devToggle.getStyleClass().add("versions-view-last");
+        simpleToggle.setTooltip(new Tooltip("Versions as saves, with Studio's own folded away"));
+        devToggle.setTooltip(new Tooltip("Every commit, text diffs, a commit box, branches and remotes"));
 
         Button refresh = new Button("⟳");
         refresh.setTooltip(new Tooltip("Read the history again, and ask the original for a newer release"));
@@ -196,15 +252,16 @@ public final class VersionsPane {
         Region stripSpacer = new Region();
         HBox.setHgrow(stripSpacer, Priority.ALWAYS);
         HBox strip = new HBox(14, segment("💻", "This computer", here), myCopySegment, originalSegment,
-                stripSpacer, mainAction, alsoActions);
+                stripSpacer, mainAction, alsoActions, viewSwitch);
         strip.getStyleClass().add("versions-strip");
         strip.setAlignment(Pos.CENTER_LEFT);
         strip.setPadding(new Insets(6, 6, 0, 6));
         alsoActions.setAlignment(Pos.CENTER_LEFT);
 
-        HBox bar = new HBox(6, nameField, save, spacer, progress, status, refresh);
+        HBox bar = new HBox(6, nameField, message, save, onBranch, spacer, progress, status, refresh);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(6));
+        buildDevBar();
         share.provenance().ifPresent(p -> original.setTooltip(new Tooltip(p)));
         showModel();
 
@@ -230,13 +287,20 @@ public final class VersionsPane {
         files.setCellFactory(tv -> new FileCell());
         files.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             ChangedFile f = now == null ? null : now.getValue();
-            if (f != null && f.isFile()) showDiff(f.path());
+            if (f != null && f.isFile()) {
+                shownChanged = f;
+                show(discardFile, view == VersionsView.DEV && f.discardable());
+                showDiff(f.path());
+            }
         });
         cards.setFitToWidth(true);
         restoreFile.setOnAction(e -> restoreFile());
         Region fileSpacer = new Region();
         HBox.setHgrow(fileSpacer, Priority.ALWAYS);
-        HBox fileBar = new HBox(6, fileSpacer, restoreFile);
+        discardFile.setOnAction(e -> {
+            if (shownChanged != null) discard(shownChanged);
+        });
+        HBox fileBar = new HBox(6, fileSpacer, discardFile, restoreFile);
         fileBar.setPadding(new Insets(4, 6, 0, 6));
         VBox fileView = new VBox(fileBar, cards);
         VBox.setVgrow(cards, Priority.ALWAYS);
@@ -249,9 +313,98 @@ public final class VersionsPane {
         SplitPane split = new SplitPane(timeline, detail);
         split.setDividerPositions(0.32);
 
-        root.setTop(new VBox(strip, bar));
+        root.setTop(new VBox(strip, bar, devBar));
         root.setCenter(split);
         showNothing();
+        applyView();
+    }
+
+    /**
+     * Dev's second row: the branch and its verbs, a remote with how the branch stands there and its verbs, and
+     * a shell in the project ({@code 39} §9).
+     */
+    private void buildDevBar() {
+        branchBox.setTooltip(new Tooltip("The branch you are on — pick another to switch to it"));
+        branchBox.setOnAction(e -> {
+            String picked = branchBox.getValue();
+            if (!drawingBranches && picked != null && !picked.equals(branch)) switchBranch(picked);
+        });
+        Button newBranch = new Button("New branch…");
+        newBranch.setOnAction(e -> newBranch());
+        Button merge = new Button("Merge…");
+        merge.setTooltip(new Tooltip("Merge another branch into this one"));
+        merge.setOnAction(e -> mergeBranch());
+        Button delete = new Button("Delete…");
+        delete.setOnAction(e -> deleteBranch());
+
+        remoteBox.setPromptText("No remote");
+        remoteBox.setCellFactory(list -> new RemoteCell());
+        remoteBox.setButtonCell(new RemoteCell());
+        Button fetch = new Button("Fetch");
+        fetch.setOnAction(e -> withRemote(this::fetch));
+        Button pull = new Button("Pull");
+        pull.setTooltip(new Tooltip("Fetch, then merge the remote's branch of the same name into this one"));
+        pull.setOnAction(e -> withRemote(this::pull));
+        Button push = new Button("Push");
+        push.setOnAction(e -> withRemote(this::push));
+        Button addRemote = new Button("Add remote…");
+        addRemote.setOnAction(e -> addRemote());
+        Button terminal = new Button("Open in terminal");
+        terminal.setTooltip(new Tooltip("A shell in " + projectDir));
+        terminal.setOnAction(e -> openTerminal.run());
+
+        Label branchLabel = new Label("Branch");
+        branchLabel.getStyleClass().add("versions-meta");
+        Label remoteLabel = new Label("Remote");
+        remoteLabel.getStyleClass().add("versions-meta");
+        Region gap = new Region();
+        HBox.setHgrow(gap, Priority.ALWAYS);
+        devBar.getChildren().setAll(branchLabel, branchBox, newBranch, merge, delete, new Separator(Orientation.VERTICAL),
+                remoteLabel, remoteBox, fetch, pull, push, addRemote, gap, terminal);
+        devBar.setAlignment(Pos.CENTER_LEFT);
+        devBar.setPadding(new Insets(0, 6, 6, 6));
+    }
+
+    /** Where <i>Open in terminal</i> goes: the Terminal tab, which the shell owns. */
+    public void setOnOpenTerminal(Runnable openTerminal) {
+        this.openTerminal = openTerminal == null ? () -> { } : openTerminal;
+    }
+
+    /** The view shown, for a test. */
+    VersionsView view() {
+        return view;
+    }
+
+    /** Switches to {@code chosen}, remembers it for this user, and redraws. */
+    private void showView(VersionsView chosen) {
+        if (chosen == view) return;
+        VersionsView.remember(chosen);
+        display(chosen);
+    }
+
+    /** Draws {@code chosen} without remembering it — {@link #showView}'s half a test may call. */
+    void display(VersionsView chosen) {
+        view = chosen;
+        (chosen == VersionsView.DEV ? devToggle : simpleToggle).setSelected(true);
+        applyView();
+        shown = null;
+        rebuild();
+    }
+
+    private void applyView() {
+        boolean dev = view == VersionsView.DEV;
+        show(nameField, !dev);
+        show(message, dev);
+        show(devBar, dev);
+        saveButton.setText(dev ? "Commit" : "Save version");
+        boolean offMain = branch != null && !"main".equals(branch);
+        onBranch.setText(branch == null ? "" : "On " + branch);
+        show(onBranch, !dev && offMain);
+    }
+
+    private static void show(Node node, boolean visible) {
+        node.setVisible(visible);
+        node.setManaged(visible);
     }
 
     private static HBox segment(String glyph, String place, Label value) {
@@ -404,12 +557,17 @@ public final class VersionsPane {
     }
 
     private void decide(List<String> conflicts, String release) {
-        ConflictSheet.show(owner, diffCards, projectDir, conflicts, "MERGE_HEAD", release).ifPresentOrElse(
-                decided -> finishUpdate(release, decided),
+        decide(conflicts, release, decided -> finishUpdate(release, decided));
+    }
+
+    /** The conflict sheet over {@code conflicts}; {@code finish} gets the decisions, a cancel aborts the merge. */
+    private void decide(List<String> conflicts, String theirs, Consumer<Map<String, ProjectVcs.Side>> finish) {
+        ConflictSheet.show(owner, diffCards, projectDir, conflicts, "MERGE_HEAD", theirs).ifPresentOrElse(
+                finish,
                 () -> run(() -> {
                     vcs().abortMerge();
                     return null;
-                }, done -> status("Update cancelled — nothing changed.")));
+                }, done -> status("Merge cancelled — nothing changed.")));
     }
 
     /** Applies the decisions, records the release in the provenance file and commits the {@code UPDATE}. */
@@ -483,9 +641,10 @@ public final class VersionsPane {
                         // Mid-update the disk holds the merge; the editor's older sources must not land on it.
                         if (!vcs.merging()) Checkpoints.flush(editor);
                         SyncModel read = sync(vcs);
-                        return new Snapshot(read, vcs.history());
+                        return new Snapshot(read, vcs.history(), vcs.isRepo() ? vcs.branch() : null,
+                                vcs.branches(), vcs.remotes());
                     } catch (Exception ex) {
-                        return new Snapshot(SyncModel.of(SyncModel.Facts.none()),
+                        return new Snapshot(SyncModel.of(SyncModel.Facts.none()), List.of(), null, List.of(),
                                 List.of());
                     }
                 })
@@ -493,13 +652,33 @@ public final class VersionsPane {
                     model = read.model();
                     unsaved = model.facts().unsaved();
                     history = read.history();
+                    branch = read.branch();
                     showModel();
+                    showBranches(read.branches(), read.remotes());
+                    applyView();
                     rebuild();
                 }));
     }
 
-    /** What one refresh read: the strip and the history. */
-    private record Snapshot(SyncModel model, List<CommitInfo> history) {}
+    /** What one refresh read: the strip, the history, and Dev's branches and remotes. */
+    private record Snapshot(SyncModel model, List<CommitInfo> history, String branch, List<String> branches,
+                            List<ProjectVcs.RemoteInfo> remotes) {}
+
+    private void showBranches(List<String> branches, List<ProjectVcs.RemoteInfo> remotes) {
+        drawingBranches = true;
+        try {
+            branchBox.getItems().setAll(branches);
+            branchBox.setValue(branch);
+        } finally {
+            drawingBranches = false;
+        }
+        String picked = remoteBox.getValue() == null ? null : remoteBox.getValue().name();
+        remoteBox.getItems().setAll(remotes);
+        remotes.stream().filter(r -> r.name().equals(picked)).findFirst()
+                .or(() -> remotes.stream().filter(r -> r.name().equals(Remote.MINE.id())).findFirst())
+                .or(() -> remotes.stream().findFirst())
+                .ifPresent(remoteBox::setValue);
+    }
 
     /**
      * Reads the three places off git (and, once per pane, the original's releases off the network). A project
@@ -546,7 +725,9 @@ public final class VersionsPane {
 
     private void rebuild() {
         Timeline.Row keep = shown;
-        List<Timeline.Row> rows = Timeline.rows(history, unsaved, expanded);
+        List<Timeline.Row> rows = view == VersionsView.DEV
+                ? Timeline.all(history, unsaved)
+                : Timeline.rows(history, unsaved, expanded);
         timeline.getItems().setAll(rows);
         Timeline.Row again = keep == null ? null : rows.stream().filter(r -> same(r, keep)).findFirst().orElse(null);
         if (again == null && !rows.isEmpty() && !(rows.getFirst() instanceof Timeline.Fold)) again = rows.getFirst();
@@ -601,8 +782,10 @@ public final class VersionsPane {
 
     private void clearFile() {
         shownFile = null;
+        shownChanged = null;
         cards.setContent(null);
         restoreFile.setVisible(false);
+        show(discardFile, false);
     }
 
     @FunctionalInterface
@@ -674,7 +857,9 @@ public final class VersionsPane {
             sides = reader.unsaved(path);
             text = vcs().diff(path);
         }
-        BlockDiff.FileDiff blocks = DiffCards.isJava(path) ? BlockDiff.of(sides.beforeText(), sides.afterText()) : null;
+        // Dev reads the unified Java diff; Simple reads blocks (39 §9).
+        boolean asBlocks = view != VersionsView.DEV && DiffCards.isJava(path);
+        BlockDiff.FileDiff blocks = asBlocks ? BlockDiff.of(sides.beforeText(), sides.afterText()) : null;
         return new DiffCards.Input(path, sides, blocks, text);
     }
 
@@ -762,15 +947,208 @@ public final class VersionsPane {
     // -------------------------------------------------------------------------
 
     private void save() {
-        String label = nameField.getText() == null ? "" : nameField.getText().strip();
+        boolean dev = view == VersionsView.DEV;
+        // Dev's box is a whole commit message; its first line is the title the timeline shows.
+        String typed = dev ? message.getText() : nameField.getText();
+        String label = typed == null ? "" : typed.strip();
         ProjectState.Snapshot editor = ctx.state().snapshot();
         run(() -> Checkpoints.save(projectDir, editor, VersionOrigin.SAVE, label), sha -> {
             nameField.clear();
+            message.clear();
             if (sha != null) shown = null; // the refresh then shows the version just saved
 
             status(sha == null ? "Nothing to save — no change since the last version."
+                    : dev ? "Committed " + sha + "."
                     : "Saved" + (label.isEmpty() ? "." : " “" + label + "”."));
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // Dev: branches and remotes (39 §9)
+    // -------------------------------------------------------------------------
+
+    private String token() {
+        return auth != null && auth.isAuthenticated() ? auth.token() : null;
+    }
+
+    /** Switches branch: an {@code AUTO} version of what is unsaved first, then the checkout, then a reload. */
+    private void switchBranch(String name) {
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.AUTO, "Before switching to " + name);
+            vcs().switchTo(name);
+            return null;
+        }, done -> {
+            shown = null;
+            status("On " + name + ".");
+            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+        });
+    }
+
+    private void newBranch() {
+        ask("New branch", "A branch starts here, at the current version, and you switch to it.", "Name:", "")
+                .ifPresent(name -> {
+                    ProjectState.Snapshot editor = ctx.state().snapshot();
+                    run(() -> {
+                        Checkpoints.save(projectDir, editor, VersionOrigin.AUTO, "Before branching " + name);
+                        ProjectVcs vcs = vcs();
+                        vcs.createBranch(name);
+                        vcs.switchTo(name);
+                        return null;
+                    }, done -> status("On the new branch " + name + "."));
+                });
+    }
+
+    private Optional<String> pickOtherBranch(String title, String header) {
+        List<String> others = branchBox.getItems().stream().filter(b -> !b.equals(branch)).toList();
+        if (others.isEmpty()) {
+            status("There is no other branch.");
+            return Optional.empty();
+        }
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(others.getFirst(), others);
+        ThemedWindows.apply(dialog);
+        dialog.initOwner(owner);
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
+        dialog.setContentText("Branch:");
+        return dialog.showAndWait();
+    }
+
+    /** Merges another branch into this one — the §7 merge and conflict sheet, committed as a {@code SAVE}. */
+    private void mergeBranch() {
+        pickOtherBranch("Merge a branch", "Merge a branch's versions into " + branch + ".")
+                .ifPresent(other -> mergeFrom("refs/heads/" + other, other, "Merged " + other + " into " + branch));
+    }
+
+    /**
+     * A {@code SAFETY} version, then {@code ref} merged uncommitted; a clean merge is committed with
+     * {@code label}, a conflicted one opens the sheet with {@code theirs} naming the other side.
+     */
+    private void mergeFrom(String ref, String theirs, String label) {
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.SAFETY, "Before merging " + theirs);
+            return vcs().mergeRef(ref);
+        }, merge -> {
+            if (merge.upToDate()) {
+                status("Already up to date with " + theirs + ".");
+            } else if (merge.conflicted()) {
+                Platform.runLater(() -> decide(merge.conflicts(), theirs, decided -> finishMerge(decided, label)));
+            } else {
+                finishMerge(Map.of(), label);
+            }
+        });
+    }
+
+    private void finishMerge(Map<String, ProjectVcs.Side> decided, String label) {
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            for (var e : decided.entrySet()) vcs.resolve(e.getKey(), e.getValue());
+            return vcs.finishMerge(VersionOrigin.SAVE, label);
+        }, sha -> {
+            shown = null;
+            status(label + ".");
+            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+        });
+    }
+
+    private void deleteBranch() {
+        pickOtherBranch("Delete a branch", "Only a branch whose versions another branch has can be deleted.")
+                .ifPresent(name -> run(() -> {
+                    vcs().deleteBranch(name);
+                    return null;
+                }, done -> status("Deleted " + name + ".")));
+    }
+
+    private void withRemote(Consumer<ProjectVcs.RemoteInfo> action) {
+        ProjectVcs.RemoteInfo remote = remoteBox.getValue();
+        if (remote == null) {
+            status("Add a remote first.");
+            return;
+        }
+        action.accept(remote);
+    }
+
+    private void fetch(ProjectVcs.RemoteInfo remote) {
+        String token = token();
+        run(() -> {
+            vcs().fetch(remote.name(), token);
+            return null;
+        }, done -> status("Fetched " + remote.name() + "."));
+    }
+
+    /** Fetch, then the remote's branch of this branch's name merged in, as {@link #mergeBranch} merges. */
+    private void pull(ProjectVcs.RemoteInfo remote) {
+        String token = token();
+        String from = remote.name() + "/" + branch;
+        run(() -> {
+            vcs().fetch(remote.name(), token);
+            return null;
+        }, done -> mergeFrom("refs/remotes/" + from, from, "Pulled " + from));
+    }
+
+    /**
+     * Pushes this branch — to {@code mine} as the strip would ({@code studio/<branch>} on someone else's bot),
+     * to any other remote under its own name. Never forced.
+     */
+    private void push(ProjectVcs.RemoteInfo remote) {
+        String token = token();
+        String there = remote.name().equals(Remote.MINE.id()) ? model.remoteBranch(branch) : branch;
+        run(() -> vcs().push(remote.name(), there, token, false), pushed -> status("Pushed " + pushed
+                + " to " + remote.name() + "/" + there + "."));
+    }
+
+    private void addRemote() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        ThemedWindows.apply(dialog);
+        dialog.initOwner(owner);
+        dialog.setTitle("Add remote");
+        dialog.setHeaderText("An HTTPS address, with no user name or token in it.");
+        TextField name = new TextField();
+        name.setPromptText("backup");
+        TextField url = new TextField();
+        url.setPromptText("https://github.com/you/bot.git");
+        url.setPrefColumnCount(32);
+        GridPane form = new GridPane();
+        form.setHgap(8);
+        form.setVgap(8);
+        form.addRow(0, new Label("Name:"), name);
+        form.addRow(1, new Label("Address:"), url);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        if (dialog.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) return;
+        String n = name.getText() == null ? "" : name.getText().strip();
+        String u = url.getText() == null ? "" : url.getText().strip();
+        run(() -> {
+            vcs().addRemote(n, u);
+            return null;
+        }, done -> status("Added " + n + "."));
+    }
+
+    private Optional<String> ask(String title, String header, String prompt, String initial) {
+        TextInputDialog dialog = new TextInputDialog(initial);
+        ThemedWindows.apply(dialog);
+        dialog.initOwner(owner);
+        dialog.setTitle(title);
+        dialog.setHeaderText(header);
+        dialog.setContentText(prompt);
+        return dialog.showAndWait().map(String::strip).filter(s -> !s.isEmpty());
+    }
+
+    /** A remote in Dev's list: its name and how this branch stands there; the address as a tooltip. */
+    private static final class RemoteCell extends ListCell<ProjectVcs.RemoteInfo> {
+        @Override
+        protected void updateItem(ProjectVcs.RemoteInfo remote, boolean empty) {
+            super.updateItem(remote, empty);
+            if (empty || remote == null) {
+                setText(null);
+                setTooltip(null);
+                return;
+            }
+            setText(remote.name() + (remote.ahead() < 0 ? " · not fetched"
+                    : " · ↑" + remote.ahead() + " ↓" + remote.behind()));
+            setTooltip(new Tooltip(remote.url()));
+        }
     }
 
     private void restoreTo(CommitInfo target) {
@@ -964,7 +1342,9 @@ public final class VersionsPane {
                     title.getStyleClass().add("versions-title");
                     if (c.milestone()) title.getStyleClass().add("versions-title--milestone");
                     String tags = c.tags().isEmpty() ? "" : " · " + String.join(", ", c.tags());
-                    Label meta = new Label(c.origin().displayName() + " · " + ago(c.when(), Instant.now()) + tags);
+                    // Dev reads every commit as git has it: the short SHA and the author before the rest.
+                    String who = view == VersionsView.DEV ? c.shortSha() + " · " + c.author() + " · " : "";
+                    Label meta = new Label(who + c.origin().displayName() + " · " + ago(c.when(), Instant.now()) + tags);
                     meta.getStyleClass().add("versions-meta");
                     HBox line = line(glyph, title, meta);
                     if (v.quiet()) line.getStyleClass().add("versions-quiet");
@@ -987,7 +1367,18 @@ public final class VersionsPane {
             restoreItem.setOnAction(e -> restoreTo(c));
             MenuItem nameItem = new MenuItem(c.name() == null ? "Name this version…" : "Rename this version…");
             nameItem.setOnAction(e -> name(c));
-            return new ContextMenu(restoreItem, nameItem);
+            ContextMenu menu = new ContextMenu(restoreItem, nameItem);
+            if (view == VersionsView.DEV) {
+                MenuItem copy = new MenuItem("Copy SHA");
+                copy.setOnAction(e -> {
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(c.sha());
+                    Clipboard.getSystemClipboard().setContent(content);
+                    status("Copied " + c.shortSha() + ".");
+                });
+                menu.getItems().add(copy);
+            }
+            return menu;
         }
     }
 

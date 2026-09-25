@@ -308,6 +308,10 @@
     -fx-border-color: -bm-divider;
     -fx-border-width: 0 0 1 0;
 }
+/* Simple | Dev: two toggles drawn as one control (JavaFX CSS has no :first-child, hence the classes). */
+.versions-view-switch .toggle-button   { -fx-background-radius: 0; }
+.versions-view-switch .versions-view-first { -fx-background-radius: 4 0 0 4; }
+.versions-view-switch .versions-view-last  { -fx-background-radius: 0 4 4 0; }
 .versions-sheet {
     -fx-background-color: -bm-band;
     -fx-border-color: -bm-divider;

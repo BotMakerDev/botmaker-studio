@@ -194,6 +194,8 @@ public class UIManager implements ProjectWindow {
         this.actions.wire();
         this.versionsPane = new VersionsPane(primaryStage, ctx, actions.gitHubAuth(), actions.gitHubClient());
         menuBarManager.setOnShowHistory(() -> selectBottomTab(BottomTab.VERSIONS));
+        // Dev's Open in terminal is the Terminal tab, whose first shell starts in the project directory.
+        versionsPane.setOnOpenTerminal(() -> selectBottomTab(BottomTab.TERMINAL));
         // Project ▸ Publish… is the tab's publish sheet (39 §8), not a window of its own.
         actions.setOnPublish(() -> {
             selectBottomTab(BottomTab.VERSIONS);

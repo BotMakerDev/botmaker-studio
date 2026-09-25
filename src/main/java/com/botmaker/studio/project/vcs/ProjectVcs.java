@@ -456,23 +456,47 @@ public final class ProjectVcs {
             }
             ObjectId at = git.getRepository().resolve("refs/tags/" + tag + "^{commit}");
             if (at == null) throw new IOException("The release " + tag + " is not on this computer.");
-            org.eclipse.jgit.api.MergeResult result = git.merge().include(at)
-                    .setCommit(false)
-                    .setFastForward(org.eclipse.jgit.api.MergeCommand.FastForwardMode.NO_FF)
-                    .setStrategy(org.eclipse.jgit.merge.MergeStrategy.RECURSIVE)
-                    .call();
-            return switch (result.getMergeStatus()) {
-                case ALREADY_UP_TO_DATE -> new Merge(true, List.of());
-                case CONFLICTING -> new Merge(false, List.copyOf(new TreeSet<>(result.getConflicts().keySet())));
-                case MERGED_NOT_COMMITTED, MERGED, FAST_FORWARD, MERGED_SQUASHED, MERGED_SQUASHED_NOT_COMMITTED,
-                     FAST_FORWARD_SQUASHED -> new Merge(false, List.of());
-                default -> throw new IOException("The update could not start (" + result.getMergeStatus() + ").");
-            };
+            return merge(git, at);
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
             throw new IOException("Could not update: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * {@link #mergeTag}'s merge, of a branch — {@code refs/heads/…}, or {@code refs/remotes/<remote>/…} for a
+     * pull — into the current one: uncommitted, conflicts left for {@link #resolve}, a saved tree required.
+     */
+    public Merge mergeRef(String ref) throws IOException {
+        try (Git git = open()) {
+            if (!git.status().call().isClean()) {
+                throw new IOException("Save your changes as a version before merging.");
+            }
+            ObjectId at = git.getRepository().resolve(ref + "^{commit}");
+            if (at == null) throw new IOException(Repository.shortenRefName(ref) + " is not on this computer.");
+            return merge(git, at);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not merge: " + e.getMessage(), e);
+        }
+    }
+
+    /** No fast-forward, never committed: the caller finishes it ({@link #finishMerge}) or cancels it. */
+    private static Merge merge(Git git, ObjectId at) throws Exception {
+        org.eclipse.jgit.api.MergeResult result = git.merge().include(at)
+                .setCommit(false)
+                .setFastForward(org.eclipse.jgit.api.MergeCommand.FastForwardMode.NO_FF)
+                .setStrategy(org.eclipse.jgit.merge.MergeStrategy.RECURSIVE)
+                .call();
+        return switch (result.getMergeStatus()) {
+            case ALREADY_UP_TO_DATE -> new Merge(true, List.of());
+            case CONFLICTING -> new Merge(false, List.copyOf(new TreeSet<>(result.getConflicts().keySet())));
+            case MERGED_NOT_COMMITTED, MERGED, FAST_FORWARD, MERGED_SQUASHED, MERGED_SQUASHED_NOT_COMMITTED,
+                 FAST_FORWARD_SQUASHED -> new Merge(false, List.of());
+            default -> throw new IOException("The merge could not start (" + result.getMergeStatus() + ").");
+        };
     }
 
     /** Whether an update is half done — merged, not yet committed or cancelled. */
@@ -535,12 +559,17 @@ public final class ProjectVcs {
 
     /** Commits the update as an {@code UPDATE} version once every file is decided; returns its short SHA. */
     public String finishMerge(String label) throws IOException {
+        return finishMerge(VersionOrigin.UPDATE, label);
+    }
+
+    /** {@link #finishMerge(String)} as a version of {@code origin} — a branch merged in the Dev view is a {@code SAVE}. */
+    public String finishMerge(VersionOrigin origin, String label) throws IOException {
         if (!unresolved().isEmpty()) throw new IOException("Some files are still to decide.");
         try (Git git = open()) {
             git.add().addFilepattern(".").call();
             git.add().addFilepattern(".").setUpdate(true).call();
             RevCommit c = git.commit().setAuthor(author).setCommitter(author)
-                    .setMessage(VersionOrigin.UPDATE.stamp(label)).call();
+                    .setMessage(origin.stamp(label)).call();
             return c.abbreviate(7).name();
         } catch (Exception e) {
             throw new IOException("Could not finish the update: " + e.getMessage(), e);
@@ -571,13 +600,158 @@ public final class ProjectVcs {
 
     /** {@code remote}'s URL, or null when the project has none. */
     public String remoteUrl(Remote remote) {
-        if (!isRepo()) return null;
+        return remoteUrl(remote.id());
+    }
+
+    /** The URL of the remote named {@code name}, or null. */
+    public String remoteUrl(String name) {
+        if (!isRepo() || name == null) return null;
         try (Git git = open()) {
-            String url = git.getRepository().getConfig().getString("remote", remote.id(), "url");
+            String url = git.getRepository().getConfig().getString("remote", name, "url");
             return url == null || url.isBlank() ? null : url;
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Dev view: branches and remotes (39 §9)
+    // -------------------------------------------------------------------------
+
+    /** One remote as the Dev view lists it: {@code ahead}/{@code behind} by the last fetch, -1 when never read. */
+    public record RemoteInfo(String name, String url, int ahead, int behind) {
+    }
+
+    /** The local branches, sorted; the current one among them. */
+    public List<String> branches() throws IOException {
+        if (!isRepo()) return List.of();
+        try (Git git = open()) {
+            List<String> out = new ArrayList<>();
+            for (Ref ref : git.branchList().call()) out.add(Repository.shortenRefName(ref.getName()));
+            return out.stream().sorted().toList();
+        } catch (Exception e) {
+            throw new IOException("Could not list the branches: " + e.getMessage(), e);
+        }
+    }
+
+    /** A new branch at {@code HEAD}, not switched to. */
+    public void createBranch(String name) throws IOException {
+        ensureInitialized();
+        try (Git git = open()) {
+            if (!org.eclipse.jgit.lib.Repository.isValidRefName("refs/heads/" + name)) {
+                throw new IOException("“" + name + "” cannot be a branch name.");
+            }
+            git.branchCreate().setName(name).call();
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not create " + name + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Switches to {@code name}. The tree must be saved — the caller takes an {@code AUTO} version first — and
+     * no update or merge may be half done.
+     */
+    public void switchTo(String name) throws IOException {
+        if (merging()) throw new IOException("A merge is in progress — finish or cancel it first.");
+        try (Git git = open()) {
+            if (!git.status().call().isClean()) throw new IOException("Save your changes before switching.");
+            git.checkout().setName(name).call();
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not switch to " + name + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Deletes {@code name}, which must not be the current branch and must be merged: a branch whose versions
+     * are nowhere else is refused, since deleting it would lose them ({@code 39} §10, nothing rewrites history).
+     */
+    public void deleteBranch(String name) throws IOException {
+        try (Git git = open()) {
+            if (name.equals(git.getRepository().getBranch())) {
+                throw new IOException("Switch to another branch before deleting " + name + ".");
+            }
+            git.branchDelete().setBranchNames(name).setForce(false).call();
+        } catch (org.eclipse.jgit.api.errors.NotMergedException e) {
+            throw new IOException(name + " has versions no other branch has; merge it first.", e);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not delete " + name + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** Every remote, with how the current branch stands against its branch of the same name there. */
+    public List<RemoteInfo> remotes() throws IOException {
+        if (!isRepo()) return List.of();
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            String branch = repo.getBranch();
+            ObjectId head = repo.resolve("HEAD");
+            List<RemoteInfo> out = new ArrayList<>();
+            for (String name : new java.util.TreeSet<>(repo.getRemoteNames())) {
+                Ref there = repo.exactRef("refs/remotes/" + name + "/" + branch);
+                int ahead = -1;
+                int behind = -1;
+                if (there != null && head != null) {
+                    ahead = count(walk, head, there.getObjectId());
+                    behind = count(walk, there.getObjectId(), head);
+                }
+                out.add(new RemoteInfo(name, remoteUrl(name), ahead, behind));
+            }
+            return out;
+        } catch (Exception e) {
+            throw new IOException("Could not list the remotes: " + e.getMessage(), e);
+        }
+    }
+
+    /** How many commits reachable from {@code from} are not reachable from {@code not}. */
+    private static int count(RevWalk walk, ObjectId from, ObjectId not) throws IOException {
+        walk.reset();
+        walk.markStart(walk.parseCommit(from));
+        walk.markUninteresting(walk.parseCommit(not));
+        int n = 0;
+        for (RevCommit ignored : walk) n++;
+        return n;
+    }
+
+    /**
+     * Adds a remote. HTTPS only, and never an address carrying a user or a token: what goes in
+     * {@code .git/config} is readable by every tool on the machine ({@code 39} §10).
+     */
+    public void addRemote(String name, String url) throws IOException {
+        String problem = remoteProblem(name, url);
+        if (problem != null) throw new IOException(problem);
+        if (remoteUrl(name) != null) throw new IOException("A remote named " + name + " exists already.");
+        ensureInitialized();
+        try (Git git = open()) {
+            StoredConfig config = git.getRepository().getConfig();
+            config.setString("remote", name, "url", url.trim());
+            config.setString("remote", name, "fetch", "+refs/heads/*:refs/remotes/" + name + "/*");
+            config.save();
+        } catch (Exception e) {
+            throw new IOException("Could not add the remote: " + e.getMessage(), e);
+        }
+    }
+
+    /** Why {@code name}/{@code url} cannot be added as a remote, or null when they can. */
+    static String remoteProblem(String name, String url) {
+        if (name == null || !name.matches("[A-Za-z0-9._-]+")) return "A remote name is letters, digits, . _ or -.";
+        if (url == null) return "The address is empty.";
+        java.net.URI uri;
+        try {
+            uri = java.net.URI.create(url.trim());
+        } catch (IllegalArgumentException e) {
+            return "That is not an address.";
+        }
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+            return "Only https:// addresses can be added.";
+        }
+        if (uri.getRawUserInfo() != null) return "An address must not carry a user name or a token.";
+        return null;
     }
 
     /** Points {@code remote} at {@code url} — add or set-url in one call. The URL is plain HTTPS, no token. */
@@ -649,21 +823,31 @@ public final class ProjectVcs {
      */
     public String push(Remote remote, String remoteBranch, String token, boolean force) throws IOException {
         if (token == null || token.isBlank()) throw new IOException("Not signed in to GitHub.");
+        return push(remote.id(), remoteBranch, token, force);
+    }
+
+    /**
+     * The push itself, to any remote by name — the Dev view's <i>Push</i> names one of its own. The token goes
+     * only to GitHub ({@link #tokenFor}); another host is pushed to without one.
+     */
+    public String push(String remoteName, String remoteBranch, String token, boolean force) throws IOException {
         if (!isRepo()) throw new IOException("Nothing to push — this project has no history yet.");
-        if (remoteUrl(remote) == null) throw new IOException("This project has no '" + remote.id() + "' remote yet.");
+        String url = remoteUrl(remoteName);
+        if (url == null) throw new IOException("This project has no '" + remoteName + "' remote yet.");
+        String sent = tokenFor(url, token);
         try (Git git = open()) {
             String branch = git.getRepository().getBranch();
             List<RefSpec> specs = new ArrayList<>();
             specs.add(new RefSpec((force ? "+" : "") + "refs/heads/" + branch + ":refs/heads/" + remoteBranch));
             boolean notes = git.getRepository().exactRef(NAMES) != null;
             if (notes) specs.add(new RefSpec(NAMES + ":" + NAMES));
-            Iterable<PushResult> results = git.push()
-                    .setRemote(remote.id())
+            var push = git.push()
+                    .setRemote(remoteName)
                     .setRefSpecs(specs)
                     .setPushTags()
-                    .setForce(false)
-                    .setCredentialsProvider(credentials(token))
-                    .call();
+                    .setForce(false);
+            if (sent != null) push.setCredentialsProvider(credentials(sent));
+            Iterable<PushResult> results = push.call();
             for (PushResult result : results) {
                 for (RemoteRefUpdate update : result.getRemoteUpdates()) {
                     // Names are a courtesy: a notes ref that moved on the other side must not fail the push.
@@ -680,13 +864,28 @@ public final class ProjectVcs {
 
     /** Fetches {@code remote}'s branches and tags. {@code token} may be null for a public repository. */
     public void fetch(Remote remote, String token) throws IOException {
+        fetch(remote.id(), token);
+    }
+
+    /** Fetches the remote named {@code remoteName}; the token goes only to GitHub ({@link #tokenFor}). */
+    public void fetch(String remoteName, String token) throws IOException {
+        String sent = tokenFor(remoteUrl(remoteName), token);
         try (Git git = open()) {
-            var fetch = git.fetch().setRemote(remote.id()).setTagOpt(org.eclipse.jgit.transport.TagOpt.FETCH_TAGS);
-            if (token != null && !token.isBlank()) fetch.setCredentialsProvider(credentials(token));
+            var fetch = git.fetch().setRemote(remoteName).setTagOpt(org.eclipse.jgit.transport.TagOpt.FETCH_TAGS);
+            if (sent != null) fetch.setCredentialsProvider(credentials(sent));
             fetch.call();
         } catch (Exception e) {
-            throw new IOException("Could not read " + remote.displayName().toLowerCase() + ": " + e.getMessage(), e);
+            throw new IOException("Could not read " + remoteName + ": " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * {@code token} when {@code url} is a GitHub HTTPS address, else null: the user's GitHub token is theirs to
+     * give GitHub, and a remote added by hand may be any host ({@code 39} §10 — a token goes nowhere else).
+     */
+    static String tokenFor(String url, String token) {
+        if (url == null || token == null || token.isBlank()) return null;
+        return url.trim().toLowerCase(java.util.Locale.ROOT).startsWith("https://github.com/") ? token : null;
     }
 
     /**

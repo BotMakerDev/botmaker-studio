@@ -42,6 +42,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   saves the project as a version, tags it and uploads your versions to your copy on GitHub, which becomes
   public with its history; a repository published by an older Studio keeps its history and gains yours.
   Someone else's bot is suggested to its author rather than published.
+- **A Dev view in the Versions tab.** *Simple | Dev* at the top right, remembered for you. Dev lists every
+  commit with its short SHA and author (right-click to *Copy SHA*), shows changes as Java text with
+  *Discard…* for an unsaved file, and has a commit box for a full message. It also has branches — create,
+  switch (unsaved work is kept as a version first), merge another in, delete a merged one — remotes with how
+  far ahead or behind you are, *Fetch*, *Pull*, *Push* and *Add remote…* (HTTPS only), and *Open in
+  terminal*. Your GitHub sign-in is only ever sent to GitHub. Simple now says *On <branch>* when you are not
+  on `main`.
 - **Put one function back.** *Restore this function* returns it as that version had it — or *Add this
   function back* if you deleted it — as an ordinary edit you can undo. *Restore this file* does the same for
   a whole file.
