@@ -12,6 +12,8 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.BotJvm;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.sun.jdi.*;
 import com.sun.jdi.connect.AttachingConnector;
 import com.sun.jdi.connect.Connector;
@@ -143,6 +145,7 @@ public class DebuggingService {
                     eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Debug aborted due to compilation failure."));
                     return;
                 }
+                Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, trace ? "Trace" : "Debug");
 
                 // 2. Map Breakpoints (AST -> Line Numbers)
                 CompilationUnit cu = snapshot.compilationUnit();

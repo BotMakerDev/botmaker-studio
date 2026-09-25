@@ -16,6 +16,9 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **Studio keeps versions for you.** Each time the bot compiles and runs (or debugs), and when an AI tool
+  session opens and ends, Studio saves a version of the project — only when something changed. Every version
+  in the history now says who made it: *Saved*, *Automatic*, *AI session*, *Safety snapshot*, *Restored*…
 - **A real Terminal tab.** Open shells in the project folder (*+ New shell*, one tab each). Full-screen
   programs such as `vim` or `htop` work, the size follows the panel, and Ctrl+Shift+C / Ctrl+Shift+V copy and
   paste. Closing a tab or the project ends its shell.

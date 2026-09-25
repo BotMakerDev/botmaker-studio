@@ -13,7 +13,8 @@ import com.botmaker.studio.project.managed.JavaManagedValues;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedMethod;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +26,7 @@ import java.util.Optional;
  *
  * <p><b>Nothing here is new capability.</b> The reading and the rewrite are
  * {@link JavaManagedValues}, the walk under them is {@code BotSources} with the open buffer preferred over
- * the disk, and the snapshot is {@link ProjectVcs}. What this class adds is the shape: a plugin edits its
+ * the disk, and the snapshot is {@link Checkpoints}. What this class adds is the shape: a plugin edits its
  * own value through {@link ValueContext}, the same interface a slot on the canvas and a row in the
  * Parameters window are edited through, so no second way to edit a value exists.
  *
@@ -151,12 +152,6 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private void snapshot() {
-        try {
-            ProjectVcs vcs = new ProjectVcs(config.projectPath());
-            vcs.ensureInitialized();
-            vcs.commit(HISTORY_LABEL);
-        } catch (Exception e) {
-            System.err.println("Warning: could not snapshot before a plugin value was written: " + e);
-        }
+        Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, HISTORY_LABEL);
     }
 }

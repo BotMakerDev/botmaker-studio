@@ -11,6 +11,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
@@ -912,7 +913,7 @@ public final class PluginUpgradeService {
      */
     public void snapshot(String message) {
         try {
-            new ProjectVcs(config.projectPath()).commit(message);
+            new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, message);
         } catch (IOException e) {
             throw new RuntimeException("Could not snapshot the project first: " + e.getMessage(), e);
         }

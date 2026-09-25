@@ -45,9 +45,12 @@ import java.util.TreeSet;
  */
 public final class ProjectVcs {
 
-    /** One entry in the project history; {@code tags} is the (possibly empty) list of tags pointing here. */
-    public record CommitInfo(String sha, String shortSha, String message, String author, Instant when,
-                             List<String> tags) {}
+    /**
+     * One entry in the project history: {@code message} is the first line, {@code origin} who wrote it (from
+     * the trailer), {@code tags} the (possibly empty) list of tags pointing here.
+     */
+    public record CommitInfo(String sha, String shortSha, String message, VersionOrigin origin, String author,
+                             Instant when, List<String> tags) {}
 
     /**
      * The working tree's changes relative to {@code HEAD}, bucketed by kind, as POSIX-style relative paths.
@@ -122,7 +125,8 @@ public final class ProjectVcs {
         try (Git git = Git.init().setDirectory(projectDir.toFile()).call()) {
             writeGitignore();
             git.add().addFilepattern(".").call();
-            git.commit().setAuthor(author).setCommitter(author).setMessage("Initial commit").call();
+            git.commit().setAuthor(author).setCommitter(author)
+                    .setMessage(VersionOrigin.CREATE.stamp("Initial commit")).call();
         } catch (Exception e) {
             throw new IOException("Failed to initialize project history: " + e.getMessage(), e);
         }
@@ -134,17 +138,22 @@ public final class ProjectVcs {
     }
 
     /**
-     * Stages every change (additions, modifications, deletions of tracked files) and commits it. Returns the
-     * new commit's short SHA, or {@code null} when there was nothing to commit.
+     * Stages every change (additions, modifications, deletions of tracked files) and commits it as a version
+     * of {@code origin}, the label its first line. Returns the new commit's short SHA, or {@code null} when
+     * there was nothing to commit — a checkpoint of an unchanged tree is noise in the one list a user reads.
+     *
+     * <p>The only way Studio writes a version: the trailer is what lets the timeline tell a user's milestone
+     * from the snapshots taken on their behalf ({@code docs/refactor/39-versions.md} §3).
      */
-    public String commit(String message) throws IOException {
+    public String checkpoint(VersionOrigin origin, String label) throws IOException {
         ensureInitialized();
         try (Git git = open()) {
             git.add().addFilepattern(".").call();           // new + modified files
             git.add().addFilepattern(".").setUpdate(true).call(); // deletions of tracked files
             if (git.status().call().isClean()) return null;
+            String first = label == null || label.isBlank() ? origin.displayName() : label;
             RevCommit c = git.commit().setAuthor(author).setCommitter(author)
-                    .setMessage(message == null || message.isBlank() ? "Update" : message).call();
+                    .setMessage(origin.stamp(first)).call();
             return c.abbreviate(7).name();
         } catch (Exception e) {
             throw new IOException("Commit failed: " + e.getMessage(), e);
@@ -160,7 +169,7 @@ public final class ProjectVcs {
             for (RevCommit c : git.log().call()) {
                 String sha = c.name();
                 out.add(new CommitInfo(sha, c.abbreviate(7).name(), c.getShortMessage(),
-                        c.getAuthorIdent().getName(), Instant.ofEpochSecond(c.getCommitTime()),
+                        VersionOrigin.of(c.getFullMessage()), c.getAuthorIdent().getName(), Instant.ofEpochSecond(c.getCommitTime()),
                         tagsByCommit.getOrDefault(sha, List.of())));
             }
             return out;
@@ -265,7 +274,7 @@ public final class ProjectVcs {
                 git.add().addFilepattern(".").call();
                 git.add().addFilepattern(".").setUpdate(true).call();
                 git.commit().setAuthor(author).setCommitter(author)
-                        .setMessage("Snapshot before rollback").call();
+                        .setMessage(VersionOrigin.SAFETY.stamp("Snapshot before rollback")).call();
             }
             ObjectId tip = repo.resolve("HEAD");
             String shortTarget = target.abbreviate(7).name();
@@ -276,7 +285,7 @@ public final class ProjectVcs {
             git.reset().setMode(ResetType.SOFT).setRef(tip.name()).call();
             if (!git.status().call().isClean()) {
                 git.commit().setAuthor(author).setCommitter(author)
-                        .setMessage("Roll back to " + shortTarget).call();
+                        .setMessage(VersionOrigin.RESTORE.stamp("Roll back to " + shortTarget)).call();
             }
         } catch (IOException e) {
             throw e;

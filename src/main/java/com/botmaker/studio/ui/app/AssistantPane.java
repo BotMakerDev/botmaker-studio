@@ -4,6 +4,8 @@ import com.botmaker.studio.assist.AiTool;
 import com.botmaker.studio.assist.McpConfig;
 import com.botmaker.studio.assist.McpEndpoint;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.app.terminal.TerminalView;
 import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
@@ -224,17 +226,38 @@ final class AssistantPane {
         long same = sessions.getTabs().stream().filter(t -> t.getText().startsWith(chosen.displayName())).count();
         String title = chosen.displayName() + (same == 0 ? "" : " " + (same + 1));
         Tab tab = new Tab(title);
+        // A session is bracketed by two versions, so what it changed can be read or undone as one span
+        // (39-versions.md §3). The second is taken once, whichever comes first: the tool exits, or its tab goes.
+        checkpoint(VersionOrigin.AUTO, "Before " + title);
+        boolean[] ended = {false};
+        Runnable end = () -> {
+            if (ended[0]) return;
+            ended[0] = true;
+            checkpoint(VersionOrigin.AI, "AI: " + title);
+        };
         TerminalView view = new TerminalView(new TerminalView.Launch(
                 AiTool.viaLoginShell(SHELL, launch.command()), projectDir, launch.env()),
-                code -> tab.setText(title + " (exited)"));
+                code -> {
+                    tab.setText(title + " (exited)");
+                    end.run();
+                });
         tab.setContent(view.node());
         tab.setUserData(view);
         tab.setTooltip(new Tooltip("Connected to Studio via MCP · " + chosen.guard(shell)));
-        tab.setOnClosed(e -> view.dispose());
+        tab.setOnClosed(e -> {
+            view.dispose();
+            end.run();
+        });
         sessions.getTabs().add(tab);
         sessions.getSelectionModel().select(tab);
         status.setText("Connected via MCP · " + chosen.guard(shell));
         view.focus();
+    }
+
+    /** A version of the project as the editor holds it; the snapshot is read here, on the FX thread. */
+    private void checkpoint(VersionOrigin origin, String label) {
+        if (disposed) return;
+        Checkpoints.takeLater(ctx.config().projectPath(), ctx.state().snapshot(), origin, label);
     }
 
     /**

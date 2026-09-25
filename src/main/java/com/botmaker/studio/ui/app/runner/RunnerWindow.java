@@ -13,7 +13,8 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
@@ -233,11 +234,8 @@ public final class RunnerWindow implements ProjectWindow {
         }
         // Daemon: a git commit that hangs must not keep the JVM alive after the user closes the window.
         Thread commit = new Thread(() -> {
-            try {
-                new ProjectVcs(config.projectPath()).commit("Start editing (switched from Reader mode)");
-            } catch (Exception ignored) {
-                // A missing/again-committed repo is fine; the reload below is what matters.
-            }
+            Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY,
+                    "Start editing (switched from Reader mode)");
             Platform.runLater(() ->
                     eventBus.publish(new CoreApplicationEvents.ProjectReloadRequestedEvent()));
         }, "reader-to-editor");

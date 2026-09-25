@@ -36,11 +36,36 @@ class ProjectVcsTest {
         vcs.init();
 
         Files.writeString(dir.resolve("Bot.java"), "class Bot { int a; }");
-        assertTrue(vcs.commit("add field") != null, "a real change should produce a commit");
+        assertTrue(vcs.checkpoint(VersionOrigin.SAVE, "add field") != null, "a real change should produce a commit");
         assertEquals(2, vcs.history().size());
 
-        assertNull(vcs.commit("nothing changed"), "a clean tree should not create a commit");
+        assertNull(vcs.checkpoint(VersionOrigin.AUTO, "nothing changed"), "a clean tree should not create a commit");
         assertEquals(2, vcs.history().size());
+    }
+
+    @Test
+    void everyVersionStudioWritesSaysWhoWroteIt(@TempDir Path dir) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "v1");
+        vcs.init();
+        String first = vcs.history().get(0).sha();
+        Files.writeString(dir.resolve("Bot.java"), "v2");
+        vcs.checkpoint(VersionOrigin.SAVE, "Faster mining");
+        Files.writeString(dir.resolve("Bot.java"), "v3");
+        vcs.checkpoint(VersionOrigin.AUTO, "");
+
+        List<ProjectVcs.CommitInfo> history = vcs.history();
+        assertEquals(VersionOrigin.AUTO, history.get(0).origin());
+        assertEquals("Automatic", history.get(0).message(), "a blank label reads as the origin's name");
+        assertEquals(VersionOrigin.SAVE, history.get(1).origin());
+        assertEquals("Faster mining", history.get(1).message(), "the trailer is not part of the first line");
+        assertEquals(VersionOrigin.CREATE, history.get(2).origin());
+
+        Files.writeString(dir.resolve("Bot.java"), "v4, unsaved");
+        vcs.restoreTo(first);
+        history = vcs.history();
+        assertEquals(VersionOrigin.RESTORE, history.get(0).origin());
+        assertEquals(VersionOrigin.SAFETY, history.get(1).origin(), "the unsaved v4 is kept before the restore");
     }
 
     @Test
@@ -107,7 +132,7 @@ class ProjectVcsTest {
 
         Files.writeString(dir.resolve("Bot.java"), "v2");
         Files.writeString(dir.resolve("New.java"), "added later");
-        vcs.commit("v2 + new file");
+        vcs.checkpoint(VersionOrigin.SAVE, "v2 + new file");
         assertEquals(2, vcs.history().size());
 
         vcs.restoreTo(firstSha);

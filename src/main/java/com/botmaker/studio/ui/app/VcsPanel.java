@@ -6,6 +6,7 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -326,7 +327,7 @@ public final class VcsPanel {
 
     private void doCommit() {
         String message = messageField.getText() == null ? "" : messageField.getText().trim();
-        run(() -> vcs().commit(message.isBlank() ? "Update" : message), sha -> {
+        run(() -> vcs().checkpoint(VersionOrigin.SAVE, message), sha -> {
             messageField.clear();
             status(sha == null ? "Nothing to commit — the project is unchanged." : "Committed " + sha + ".");
         });
@@ -615,7 +616,7 @@ public final class VcsPanel {
         T call() throws Exception;
     }
 
-    /** A history row: message + tags on top, short SHA · author · date underneath. */
+    /** A history row: message + tags on top, who wrote it · short SHA · author · date underneath. */
     private final class CommitCell extends ListCell<ProjectVcs.CommitInfo> {
         @Override
         protected void updateItem(ProjectVcs.CommitInfo c, boolean empty) {
@@ -627,7 +628,8 @@ public final class VcsPanel {
             String tagSuffix = c.tags().isEmpty() ? "" : "   [" + String.join(", ", c.tags()) + "]";
             Label message = new Label(c.message() + tagSuffix);
             message.setStyle("-fx-font-weight: bold;");
-            Label meta = new Label(c.shortSha() + " · " + c.author() + " · " + WHEN.format(c.when()));
+            String origin = c.origin() == VersionOrigin.UNKNOWN ? "" : c.origin().displayName() + " · ";
+            Label meta = new Label(origin + c.shortSha() + " · " + c.author() + " · " + WHEN.format(c.when()));
             meta.setStyle("-fx-text-fill: gray; -fx-font-size: 11px;");
             setGraphic(new VBox(2, message, meta));
         }

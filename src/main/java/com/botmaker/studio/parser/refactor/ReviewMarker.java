@@ -5,7 +5,8 @@ import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
@@ -70,12 +71,8 @@ public final class ReviewMarker {
      * at can be rolled back from Project History. Silent when there is no history to commit into.
      */
     public static void snapshot(ProjectConfig config, String label) {
-        if (config == null || config.projectPath() == null) return;
-        try {
-            new ProjectVcs(config.projectPath()).commit(label);
-        } catch (IOException e) {
-            System.err.println("Couldn't snapshot the project before " + label + ": " + e.getMessage());
-        }
+        if (config == null) return;
+        Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, label);
     }
 
     /**

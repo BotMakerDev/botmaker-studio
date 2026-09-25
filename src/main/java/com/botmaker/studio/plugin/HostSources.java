@@ -7,7 +7,8 @@ import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
@@ -23,7 +24,7 @@ import java.util.regex.Pattern;
  *
  * <p><b>Nothing here is new capability.</b> The walk is {@link BotSources}, which already visits every file
  * the bot owns with the open buffer preferred over the disk; the review mark is {@link ReviewMarker}; the
- * snapshot is {@link ProjectVcs}. What this class adds is the shape — the same job Studio's own template
+ * snapshot is {@link Checkpoints}. What this class adds is the shape — the same job Studio's own template
  * reference rewriter did until 2026-09-01, with every mention of what a picture is called taken out of it, so
  * the half that is genuinely the editor's can be reached by a plugin that owns the other half.
  *
@@ -160,13 +161,7 @@ public final class HostSources implements Sources {
      */
     private void snapshot(String label) {
         if (label == null || label.isBlank()) return;
-        try {
-            ProjectVcs vcs = new ProjectVcs(config.projectPath());
-            vcs.ensureInitialized();
-            vcs.commit(label);
-        } catch (Exception e) {
-            System.err.println("Warning: could not snapshot before a source rewrite: " + e);
-        }
+        Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, label);
     }
 
     // ── needles ─────────────────────────────────────────────────────────────────────────────────────────

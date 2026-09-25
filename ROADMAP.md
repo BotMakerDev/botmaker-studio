@@ -6,7 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Bottom panels phase 3: the Assistant tab runs AI CLIs over MCP, edits denied.**
+- **2026-09-25 (latest) — Versions 4a: every Studio commit says who wrote it; checkpoints around runs and AI.**
+  Designed in umbrella `docs/refactor/39-versions.md` (4a–4g).
+  - `project/vcs/VersionOrigin` (`save`, `auto`, `ai`, `safety`, `update`, `publish`, `install`, `create`,
+    `restore`, `UNKNOWN`): the `BotMaker-Origin` trailer, read from the last paragraph only. `CREATE` is new
+    beside the spec's list — a project's first commit is none of the others.
+  - `ProjectVcs.checkpoint(origin, label)` replaces `commit(String)`; `CommitInfo.origin`; `init` and
+    `restoreTo` stamp `CREATE`/`SAFETY`/`RESTORE`.
+  - `Checkpoints.take` (best-effort, one writer at a time) and `takeLater` (Studio's checkpoint thread).
+    `ProjectState.Snapshot.writeSources()` is the write loop lifted out of `compileAndWait`, so a version of the
+    editor includes what has not been run yet.
+  - Moved onto it: `ReviewMarker.snapshot`, `HostSources`, `HostPluginValues`, `PluginUpgradeService.snapshot`,
+    both Reader→Edit switches (all `SAFETY`); the VCS panel's commit (`SAVE`). New: `AUTO` after a Run/Debug
+    compiles; `AUTO` when an AI session opens and `AI` when it exits or its tab closes (`AssistantPane`).
+  - The VCS panel's commit still versions the disk only — its replacement in 4b takes the editor's snapshot.
+  - `VersionOriginTest`, `CheckpointsTest`, `ProjectVcsTest` (origins through init, save, auto, restore).
+- **2026-09-25 — Bottom panels phase 3: the Assistant tab runs AI CLIs over MCP, edits denied.**
   - `assist/AiTool` (Claude Code, Codex, Gemini CLI, opencode, `UNKNOWN`): `locate` (PATH, then `~/.local/bin`
     and friends, then the login shell's `command -v`), `launch` (the endpoint + that tool's deny list, token in
     a 0600 file or the environment, never argv), `viaLoginShell` (so `nvm`/`mise` installs find `node`).

@@ -78,7 +78,26 @@ public class ProjectState {
                            Map<ASTNode, CodeBlock> nodeToBlockMap,
                            List<String> resolvedClasspath,
                            List<SourceFile> files,
-                           ProjectTemplate template) {}
+                           ProjectTemplate template) {
+
+        /**
+         * Puts every file the editor holds on disk, as it stood in this snapshot. The editor keeps each change
+         * in memory ({@link ProjectFile#setContent}) and never writes as the user types, so this is the one
+         * way edited source reaches disk: before a compile, and before a version is taken of it — a version of
+         * the disk alone would miss everything since the last run.
+         *
+         * <p>A library file is never ours to write. Blocking; off the FX thread.
+         */
+        public void writeSources() throws java.io.IOException {
+            for (SourceFile file : files) {
+                Path path = file.path();
+                if (path == null) continue;
+                if (FileRole.of(path) == FileRole.LIBRARY) continue;
+                java.nio.file.Files.createDirectories(path.getParent());
+                java.nio.file.Files.writeString(path, file.content());
+            }
+        }
+    }
 
     /**
      * Takes a {@link Snapshot}. <b>Call this on the FX thread</b>, before handing work to a background thread —

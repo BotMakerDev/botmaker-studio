@@ -12,7 +12,8 @@ import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectOpenMigrations;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ReviewService;
@@ -546,11 +547,8 @@ public class UIManager implements ProjectWindow {
         // Commit the as-installed state locally (best-effort) so "Editor mode" has a clean starting point.
         // Daemon: a git commit that hangs must not keep the JVM alive after the user closes the window.
         Thread commit = new Thread(() -> {
-            try {
-                new ProjectVcs(config.projectPath()).commit("Start editing (switched from Reader mode)");
-            } catch (Exception ignored) {
-                // A missing/again-committed repo is fine; the reload below is what matters.
-            }
+            Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY,
+                    "Start editing (switched from Reader mode)");
             Platform.runLater(() ->
                     eventBus.publish(new CoreApplicationEvents.ProjectReloadRequestedEvent()));
         }, "reader-to-editor");

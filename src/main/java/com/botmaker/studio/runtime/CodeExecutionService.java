@@ -6,7 +6,8 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.palette.InputKind;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.FileRole;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.session.launch.BackgroundLauncher;
@@ -136,6 +137,8 @@ public class CodeExecutionService {
                     status("Run aborted due to build failure.");
                     return;
                 }
+                // The version that ran, so "go back to when it worked" has somewhere to go.
+                Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
 
                 status("Running... (Press Stop to terminate)");
                 isRunning.set(true);
@@ -238,20 +241,13 @@ public class CodeExecutionService {
 
     public boolean compileAndWait(ProjectState.Snapshot snapshot, Path compiledOutputPath)
             throws IOException, InterruptedException {
-        // This loop is the ONLY place edited source reaches disk — the editor keeps every change in memory
-        // (ProjectFile.setContent) and never writes as you type.
+        // Edited source reaches disk here and when a version is taken (Checkpoints) — the editor keeps every
+        // change in memory (ProjectFile.setContent) and never writes as you type.
         //
         // It used to compare each file's locked parts against what was on disk and refuse a write that
         // changed one. Nothing generates a project's Java any more, so a project file has no locked parts:
         // every one of them is the user's, and what they typed is what gets written.
-        for (ProjectState.SourceFile file : snapshot.files()) {
-            Path path = file.path();
-            if (path == null) continue;
-            if (FileRole.of(path) == FileRole.LIBRARY) continue;   // never ours to write
-
-            Files.createDirectories(path.getParent());
-            Files.writeString(path, file.content());
-        }
+        snapshot.writeSources();
 
         Files.createDirectories(compiledOutputPath);
         return compileSources(snapshot, compiledOutputPath);
