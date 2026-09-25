@@ -11,9 +11,11 @@ package com.botmaker.studio.ui.app;
 enum BottomTab {
     /**
      * What the running bot prints — see {@link RunConsole}. It was titled "Terminal" and keyed {@code TERMINAL}
-     * until 2026-09-25, which it never was; a layout saved under that key opens on the default tab.
+     * until 2026-09-25, which it never was.
      */
     RUN("Run"),
+    /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */
+    TERMINAL("Terminal"),
     ERRORS("Errors"),
     /** What a refactor changed and could not finish — see {@link ReviewPanel}. */
     REVIEW("Review"),

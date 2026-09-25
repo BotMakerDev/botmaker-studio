@@ -16,6 +16,9 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A real Terminal tab.** Open shells in the project folder (*+ New shell*, one tab each). Full-screen
+  programs such as `vim` or `htop` work, the size follows the panel, and Ctrl+Shift+C / Ctrl+Shift+V copy and
+  paste. Closing a tab or the project ends its shell.
 - **A plugin can ask Studio for its missing file.** When a project has no `Sdk.java`, the Activity Flow
   window's *Create Sdk.java* has Studio write `plugins/sdk/Sdk.java` once, with an empty flow and the whole
   desktop as the capture source. An existing file is never overwritten, and `main` is left for you to edit.

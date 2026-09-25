@@ -1073,7 +1073,9 @@ The `ui/` package is split by concern:
   panel/screen managers `FileExplorerManager` (project file tree), `MenuBarManager` / `ToolbarManager` (menus
   and toolbar; the **Project → Manage Libraries…** entry lives here), `RunConsole` (the Run tab: the
   bot's output, Stop, Clear — the bot runs on pipes, so it is lines, not a terminal; the Event Log that stood
-  beside it was deleted on 2026-09-25), `ProjectSelectionScreen`, `VcsPanel` / `GitHubAccountBar` / `GoogleAccountBar`, and ~15 dialogs
+  beside it was deleted on 2026-09-25), `terminal/TerminalPane` + `TerminalView` (the Terminal tab:
+  xterm.js vendored under `resources/terminal/` in a `WebView`, over `services/terminal/PtySession` on
+  pty4j; no JavaFX in the session, and the window's `dispose()` ends every shell), `ProjectSelectionScreen`, `VcsPanel` / `GitHubAccountBar` / `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
   `ResourceManagerDialog`, `PublishDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before

@@ -81,6 +81,23 @@
 
     </repositories>
 
+    <!-- pty4j brings kotlin-stdlib 2.1, which has held the jdk7/jdk8 classes since 1.8; shared's dadb still
+         pulls the 1.5 split jars, which would put a second, older copy of those classes on the classpath. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib-jdk7</artifactId>
+                <version>2.1.21</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib-jdk8</artifactId>
+                <version>2.1.21</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- Shared cross-platform native window plumbing (enumerate / capture / focus).
              Editor-time window capture only.
@@ -189,6 +206,19 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
+        </dependency>
+        <!-- The Terminal tab: xterm.js (vendored under resources/terminal/) drawn in a WebView. -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <!-- A real pseudo-terminal behind it, the same library botmaker-remote-server serves tmux with.
+             Natives bundled, loaded through JNA; the other platforms' are filtered out of the shaded jar. -->
+        <dependency>
+            <groupId>org.jetbrains.pty4j</groupId>
+            <artifactId>pty4j</artifactId>
+            <version>0.13.10</version>
         </dependency>
 
         <!-- Wayland live preview: xdg-desktop-portal ScreenCast handshake over D-Bus (persistent restore
@@ -504,6 +534,18 @@
                                         <exclude>com/sun/jna/linux-x86/**</exclude>
                                         <exclude>com/sun/jna/win32-aarch64/**</exclude>
                                         <exclude>com/sun/jna/win32-x86/**</exclude>
+
+                                        <!-- pty4j's natives for the same never-built targets. -->
+                                        <exclude>resources/com/pty4j/native/darwin/**</exclude>
+                                        <exclude>resources/com/pty4j/native/freebsd/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/aarch64/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/riscv64/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/mips64el/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/ppc64le/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/arm/**</exclude>
+                                        <exclude>resources/com/pty4j/native/linux/x86/**</exclude>
+                                        <exclude>resources/com/pty4j/native/win/aarch64/**</exclude>
+                                        <exclude>resources/com/pty4j/native/win/x86/**</exclude>
                                     </excludes>
                                 </filter>
                             </filters>
@@ -995,6 +1037,7 @@
                                                 <exclude>nu/pattern/opencv/windows/**</exclude>
                                                 <exclude>win32-x86-64/**</exclude>
                                                 <exclude>com/sun/jna/win32-x86-64/**</exclude>
+                                                <exclude>resources/com/pty4j/native/win/**</exclude>
                                             </excludes>
                                         </filter>
                                     </filters>
@@ -1033,6 +1076,7 @@
                                                      the win32-x86-64/ one Tess4J ships, NOT the
                                                      com/sun/jna/linux-x86-64/ excluded just above. -->
                                                 <exclude>linux-x86-64/**</exclude>
+                                                <exclude>resources/com/pty4j/native/linux/**</exclude>
                                             </excludes>
                                         </filter>
                                     </filters>

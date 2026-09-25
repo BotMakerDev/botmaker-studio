@@ -6,7 +6,18 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Bottom panels phase 1: a Run tab; the Event Log is gone.**
+- **2026-09-25 (latest) — Bottom panels phase 2: a real Terminal tab.**
+  - `services/terminal/PtySession` (pty4j 0.13.10, the remote server's library): a program on a PTY, bytes
+    in and out, a size, `close()` = hang-up then kill after 1 s. `ui/app/terminal/TerminalView`: xterm.js 5.5.0
+    + addon-fit 0.10.0, vendored under `resources/terminal/` (MIT), in a `WebView` (`javafx-web` added);
+    the program starts on the page's first size report, output is batched to one `bm.write(base64)` per pulse,
+    Ctrl+Shift+C/V go through the system clipboard. `TerminalPane`: `+ New shell` sub-tabs in the project
+    directory, first shell on first show, all ended from `UIManager.dispose()`. Reused by phase 3's AI tools.
+  - `dependencyManagement` lifts dadb's kotlin-stdlib-jdk7/jdk8 to pty4j's 2.1.21 (split jars since folded
+    into the stdlib); the shade filter drops pty4j's never-built natives. `PtySessionTest`, `TerminalViewTest`
+    (xterm.js parses in this WebKit; a program's output reaches the xterm buffer and a keystroke reaches it).
+
+- **2026-09-25 — Bottom panels phase 1: a Run tab; the Event Log is gone.**
   - `ui/app/RunConsole` owns what `UIManager` built inline as the "Terminal" tab: the bot's output (trimmed
     past 10k characters, CSI/OSC escapes stripped), Stop (`StopRunRequestedEvent` or `DebugStopRequestedEvent`,
     whichever is running) and Clear. It closes its subscriptions in `dispose()`. `BottomTab.TERMINAL` became

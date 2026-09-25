@@ -18,6 +18,7 @@ import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ReviewService;
 import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.services.ScreenCaptureService;
+import com.botmaker.studio.ui.app.terminal.TerminalPane;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.validation.DiagnosticsManager;
@@ -83,6 +84,8 @@ public class UIManager implements ProjectWindow {
     private final ToolbarManager toolbarManager;
     /** The Run tab: the bot's output and its Stop button. Subscribes in its constructor, closed in {@link #dispose()}. */
     private final RunConsole runConsole;
+    /** The Terminal tab's shells; {@link #dispose()} ends them. */
+    private final TerminalPane terminalPane;
     private final MenuBarManager menuBarManager;
     private final FileExplorerManager fileExplorerManager;
     /** Every menu/toolbar action, and the GitHub services that back the sharing ones. */
@@ -170,6 +173,7 @@ public class UIManager implements ProjectWindow {
 
         this.toolbarManager = new ToolbarManager(eventBus, projectSettingsService);
         this.runConsole = new RunConsole(eventBus, () -> selectBottomTab(BottomTab.RUN));
+        this.terminalPane = new TerminalPane(config.projectPath());
         this.menuBarManager = new MenuBarManager(primaryStage);
 
         // Startup banner: which local builds are actually running (distinct from the GitHub update check).
@@ -224,6 +228,8 @@ public class UIManager implements ProjectWindow {
             identityCluster = null;
         }
         runConsole.dispose();
+        // Each shell is a child process of Studio; left running, every reload would add a few.
+        terminalPane.dispose();
     }
 
     /**
@@ -418,6 +424,7 @@ public class UIManager implements ProjectWindow {
 
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
+        bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
         bottomTabs.put(BottomTab.VCS, bottomTab(BottomTab.VCS, vcsPanel.getView()));
@@ -429,9 +436,12 @@ public class UIManager implements ProjectWindow {
         // the project rather than holding a copy of it, which is why opening is the right moment to re-read.
         Tab vcsTab = bottomTabs.get(BottomTab.VCS);
         Tab reviewTab = bottomTabs.get(BottomTab.REVIEW);
+        // The first shell starts when the Terminal tab is first shown, never at open.
+        Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now == vcsTab && vcsPanel != null) vcsPanel.refresh();
             if (now == reviewTab && reviewPanel != null) reviewPanel.refresh();
+            if (now == terminalTab) terminalPane.activate();
         });
 
         // --- 5. Layout Assembly ---
