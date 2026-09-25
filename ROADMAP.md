@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — The last seam of a body ending in a jump inserts above it.**
+- **2026-09-25 (latest) — Parameters: Enter in a Choices add field declares the choice.**
+  - `ParametersDialog.buildOptionsEditor` replaced the plugin editor's `setOnAction`, which is the toolkit's
+    commit (`Fields.committing`); it now chains it before `addOption`. Clicking Add worked only because the
+    focus loss committed first.
+  - `ParameterChoicesTest` binds a fixture plugin compiled at test time (a `String` `SlotEditor` that commits
+    like the toolkit's), so the real window is driven with no `~/.m2` jar.
+
+- **2026-09-25 — The last seam of a body ending in a jump inserts above it.**
   - `BodyBlock.landingIndex`: the seam after a trailing `return`/`throw`/`break`/`continue`/`yield` passes
     `size - 1` to both the "+" and the drop handlers; its tooltip says so (`BlockDragAndDropManager.setSeparatorHint`).
   - Cause: the insert was refused as unreachable code (`That would not compile here…`), shown only in the status

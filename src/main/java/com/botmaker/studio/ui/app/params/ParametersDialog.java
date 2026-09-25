@@ -787,7 +787,12 @@ public final class ParametersDialog {
         add.setOnAction(e -> addOption.run());
         if (fresh.node() instanceof TextField field) {
             field.setPromptText("new choice");
+            // Chained, never replaced: the editor's own Enter is what hands the typed text to its value, and
+            // without it Enter added the empty value read before that commit — nothing was declared, and the
+            // text stayed in the field to be glued onto the next choice.
+            javafx.event.EventHandler<javafx.event.ActionEvent> commit = field.getOnAction();
             field.setOnAction(e -> {
+                if (commit != null) commit.handle(e);
                 addOption.run();
                 e.consume();
             });

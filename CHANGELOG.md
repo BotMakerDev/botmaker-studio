@@ -122,6 +122,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **A text parameter's Choices take what you type.** In the Parameters window, typing a choice and pressing
+  Enter added nothing, and the text stayed in the field to be joined onto the next choice (`slow` then
+  `turbo` became one choice, `slowturbo`). Enter now adds the choice and clears the field, for a text
+  parameter and for a list of text.
 - **The "+" at the bottom of a function that ends in `return` works.** Every activity body and every function
   that gives back a value ends with a `return`, and a block added after it is code that can never run, so
   Studio refused it and said so only in the status bar. That "+" (and a block dropped there) now lands just
