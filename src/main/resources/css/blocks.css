@@ -302,6 +302,17 @@
 .versions-fold              { -fx-font-size: 11px; -fx-font-style: italic; -fx-opacity: 0.7; }
 .versions-unsaved           { -fx-font-weight: bold; -fx-text-fill: -bm-severity-warning-text; }
 .versions-glyph             { -fx-min-width: 16px; -fx-alignment: center; }
+.versions-card {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+.versions-card-title        { -fx-font-weight: bold; }
+.versions-card-kind         { -fx-font-size: 10px; }
+.versions-card-kind--added   { -fx-text-fill: -bm-severity-ok-text; }
+.versions-card-kind--removed { -fx-text-fill: -bm-severity-error-text; }
+.versions-card-kind--changed { -fx-text-fill: -bm-severity-warning-text; }
 
 /* ---------------------------------------------------------------------------
  * The runtime diagram (Help ▸ Getting Started) — boxes and the arrows between
@@ -1055,6 +1066,22 @@
 .blocks-canvas .shape-hat:error {
     -fx-border-radius: 19 19 11 11;
 }
+
+/*
+ * The Versions tab's block diff (ui/app/versions/DiffCards, docs/refactor/39-versions.md §5): a ring outside
+ * the block like :error, plus a thick bar on its left so the mark reads without colour. The colours are the
+ * severity -text tokens, which every theme already sets to read on its canvas.
+ */
+.blocks-canvas .block:diff-added,
+.blocks-canvas .block:diff-removed,
+.blocks-canvas .block:diff-changed {
+    -fx-border-color: -bm-severity-ok-text;
+    -fx-border-width: 2 2 2 5;
+    -fx-border-insets: -3;
+    -fx-border-radius: 10;
+}
+.blocks-canvas .block:diff-removed { -fx-border-color: -bm-severity-error-text; -fx-border-style: segments(6, 3); }
+.blocks-canvas .block:diff-changed { -fx-border-color: -bm-severity-warning-text; }
 
 /* ---------------------------------------------------------------------------
  * The Runner window (ui/app/runner/RunnerWindow) — the whole window someone who

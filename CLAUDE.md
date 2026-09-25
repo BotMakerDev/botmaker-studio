@@ -1079,7 +1079,10 @@ The `ui/` package is split by concern:
   Assistant tab: an AI CLI from `assist/AiTool` in a `TerminalView`, over the MCP endpoint, denied direct
   edits — umbrella `docs/refactor/38-llm-edits.md` §5), `versions/VersionsPane` (the Versions tab: the
   timeline `versions/Timeline` folds, *Save version*, restore, naming by git note; a refresh first writes the
-  editor's sources through `project/vcs/Checkpoints.flush` — umbrella `docs/refactor/39-versions.md`; it
+  editor's sources through `project/vcs/Checkpoints.flush`; a file's change is `versions/DiffCards` — the
+  pure `project/vcs/BlockDiff` over `VersionReader`'s two sides, each drawn by `versions/BlockPreview`
+  against a staged `ProjectState`, never the live one; *Restore this function* is `CodeEditor.replaceMethod`
+  (`parser/handlers/RestoreHandler`), an ordinary edit — umbrella `docs/refactor/39-versions.md`; it
   replaced `VcsPanel`/`VcsDialog` on 2026-09-25), `ProjectSelectionScreen`, `GitHubAccountBar` /
   `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,

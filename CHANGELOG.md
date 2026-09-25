@@ -20,6 +20,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   version with your saves in bold and Studio's automatic ones folded out of the way; click one to see which
   files it changed and how; right-click to restore the whole project to it or to give it a name. Edits you
   have not run yet now count as unsaved changes, and saving a version includes them.
+- **See a version's change as blocks.** Each changed function shows before and after side by side, with the
+  blocks that were added, removed or changed outlined; a change inside a loop marks that one block. Changed
+  parameters show as *was → now*, pictures as thumbnails. Switch any card to *Java* to read the code.
+- **Put one function back.** *Restore this function* returns it as that version had it — or *Add this
+  function back* if you deleted it — as an ordinary edit you can undo. *Restore this file* does the same for
+  a whole file.
 - **Studio keeps versions for you.** Each time the bot compiles and runs (or debugs), and when an AI tool
   session opens and ends, Studio saves a version of the project — only when something changed. Every version
   in the history now says who made it: *Saved*, *Automatic*, *AI session*, *Safety snapshot*, *Restored*…

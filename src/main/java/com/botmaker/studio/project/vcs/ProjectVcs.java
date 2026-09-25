@@ -246,7 +246,7 @@ public final class ProjectVcs {
         }
     }
 
-    private static List<DiffEntry> entries(Repository repo, DiffFormatter fmt, String sha, String path)
+    static List<DiffEntry> entries(Repository repo, DiffFormatter fmt, String sha, String path)
             throws IOException {
         fmt.setRepository(repo);
         fmt.setDetectRenames(true);
@@ -499,7 +499,8 @@ public final class ProjectVcs {
         return map;
     }
 
-    private Git open() throws IOException {
+    /** The repository, for this package's readers ({@link VersionReader}); the caller closes it. */
+    Git open() throws IOException {
         Repository repo = new FileRepositoryBuilder()
                 .setGitDir(projectDir.resolve(".git").toFile())
                 .readEnvironment()

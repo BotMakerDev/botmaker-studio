@@ -20,6 +20,7 @@ import com.botmaker.studio.parser.handlers.ListHandler;
 import com.botmaker.studio.parser.handlers.MethodHandler;
 import com.botmaker.studio.parser.handlers.OperatorReplacementHandler;
 import com.botmaker.studio.parser.handlers.RawExpressionHandler;
+import com.botmaker.studio.parser.handlers.RestoreHandler;
 import com.botmaker.studio.parser.handlers.StatementSourceHandler;
 import com.botmaker.studio.parser.handlers.SwitchNormalizer;
 import com.botmaker.studio.parser.handlers.TryHandler;
@@ -737,6 +738,30 @@ public class CodeEditor {
      */
     public void deleteMethod(MethodDeclaration method) {
         edit(method, EditKind.SIGNATURE, false, (cu, code) -> MethodHandler.deleteMethodFromClass(cu, code, method));
+    }
+
+    /**
+     * Puts the function {@code signature} ({@link com.botmaker.studio.project.vcs.BlockDiff#signature}) back as
+     * {@code versionSource} has it — over the live one, or where it used to sit when the file no longer has it
+     * ({@code docs/refactor/39-versions.md} §6). One ↶ like any edit, and an {@link #edit}, not an
+     * {@link #insert}: a user's own code coming back lands even when it no longer compiles, with its errors in
+     * the Errors tab, as the same code typed by hand would.
+     */
+    public void replaceMethod(String versionSource, String signature) {
+        CompilationUnit cu = getCompilationUnit();
+        if (cu == null) return;
+        MethodDeclaration live = com.botmaker.studio.project.vcs.BlockDiff.methods(cu).get(signature);
+        ASTNode target = live != null ? live : cu.types().isEmpty() ? cu : (ASTNode) cu.types().getFirst();
+        edit(target, EditKind.SIGNATURE, false,
+                (unit, code) -> RestoreHandler.replaceMethod(unit, code, versionSource, signature));
+    }
+
+    /** The open file replaced whole by {@code source} — <i>Restore this file</i>, one ↶. */
+    public void replaceFile(String source) {
+        CompilationUnit cu = getCompilationUnit();
+        ASTNode target = cu == null || cu.types().isEmpty() ? cu : (ASTNode) cu.types().getFirst();
+        if (target == null || !canModify(target, EditKind.SIGNATURE)) return;
+        triggerUpdate(source, false, target, EditKind.SIGNATURE);
     }
 
     /**

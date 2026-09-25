@@ -6,7 +6,31 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4b: the Versions tab, Simple view.** `ui/app/versions/`:
+- **2026-09-25 (latest) — Versions 4c: a version's change as blocks; restore one function or one file.**
+  - `project/vcs/BlockDiff` (pure, JDT only): functions matched by signature (type path, name, parameter
+    types as written — so an overload is its own function and a rename is one removed plus one added);
+    statements aligned by LCS with `ASTMatcher` equality; an unmatched pair that is the same compound
+    statement with the same header is compared inside it, so a changed `wait` in a loop marks that block and
+    not the loop; fields as rows (`@Param` flagged). Marks are source ranges, found on the canvas by position.
+    A side that does not parse falls back to the text diff, with the reason.
+  - `project/vcs/VersionReader`: both sides of a file for a version (first parent, rename followed back) or
+    for the unsaved edits (`HEAD` against the disk).
+  - `ui/app/versions/DiffCards` + `BlockPreview`: a card per changed function, Before | After drawn read-only
+    in the user's style and font against a **staged** `ProjectState` (the live editor untouched),
+    `:diff-added`/`:diff-removed`/`:diff-changed` on the blocks (`blocks.css`, severity `-text` tokens, a
+    thick left bar and dashes so the mark reads without colour); a `Blocks | Java` switch per card; unchanged
+    functions fold to one line; pictures as thumbnails; other files keep the text diff (Dev view is 4g).
+  - `CodeEditor.replaceMethod(versionSource, signature)` via `parser/handlers/RestoreHandler`: the old text
+    replaces the live function, or lands where it used to sit, with the imports its body names. An `edit`,
+    not an `insert` — it lands even when it no longer compiles. `CodeEditor.replaceFile` for *Restore this
+    file* on the open file; any other file is written after a `SAFETY` version and the project reloads.
+    Restoring one function is offered in the open file only.
+  - After *Save version* the new version is shown.
+  - `BlockDiffTest`, `VersionReaderTest`, `RestoreHandlerTest`, `CodeEditorRestoreTest`, and `VersionsPaneTest`
+    (a version marks the one changed statement on each side).
+  - Not done: the colours are not in `BlockStyleContrastTest` yet (they are the tokens the Errors tab already
+    reads on the same background).
+- **2026-09-25 — Versions 4b: the Versions tab, Simple view.** `ui/app/versions/`:
   - `VersionsPane` replaces `VcsPanel` + `VcsDialog` (deleted). *Save version* with an optional name; a
     timeline with the unsaved changes pinned first; a version's files and their Java diff; right-click
     *Restore project to here…* and *Name this version…*; per-file *Discard* on unsaved changes.

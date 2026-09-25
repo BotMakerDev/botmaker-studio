@@ -8,6 +8,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -78,5 +80,32 @@ class VersionsPaneTest extends FxHeadlessTest {
         assertEquals("Faster mining", saved.commit().title());
         assertEquals(VersionOrigin.SAVE, saved.commit().origin());
         assertEquals("class MyBot { int edited; }", Files.readString(file));
+    }
+
+    /** A version's change reads as blocks: the one statement it changed carries {@code :diff-changed}. */
+    @Test
+    void aVersionShowsTheBlockItChanged() throws Exception {
+        String v1 = "class MyBot {\n    void mine() {\n        int a = 1;\n        int b = 2;\n    }\n}\n";
+        String v2 = v1.replace("int b = 2;", "int b = 3;");
+        interact(() -> state.getFile(file).orElseThrow().setContent(v1));
+        interact(() -> pane.saveAs("one"));
+        await(r -> !r.isEmpty() && r.getFirst() instanceof Timeline.Version ver && "one".equals(ver.commit().title()));
+        interact(() -> state.getFile(file).orElseThrow().setContent(v2));
+        interact(() -> pane.saveAs("two"));
+        await(r -> !r.isEmpty() && r.getFirst() instanceof Timeline.Version ver && "two".equals(ver.commit().title()));
+
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> !marked(pane.cardsNode(), "diff-changed").isEmpty());
+        List<Node> changed = marked(pane.cardsNode(), "diff-changed");
+        assertEquals(2, changed.size(), "one block on each side");
+    }
+
+    private static List<Node> marked(Node root, String pseudoClass) {
+        List<Node> out = new ArrayList<>();
+        if (root == null) return out;
+        if (root.getPseudoClassStates().stream().anyMatch(p -> p.getPseudoClassName().equals(pseudoClass))) out.add(root);
+        if (root instanceof Parent p) {
+            for (Node child : p.getChildrenUnmodifiable()) out.addAll(marked(child, pseudoClass));
+        }
+        return out;
     }
 }

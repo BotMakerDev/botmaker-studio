@@ -5,11 +5,13 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.project.vcs.BlockDiff;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.ProjectVcs.CommitInfo;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.project.vcs.VersionReader;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -26,9 +28,9 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.SplitPane;
-import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
@@ -42,6 +44,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -59,8 +62,9 @@ import java.util.function.Consumer;
 /**
  * The Versions tab, Simple view ({@code docs/refactor/39-versions.md} §4): <i>Save version</i> over a timeline
  * of the project's versions — the unsaved changes pinned first, milestones bold, the versions Studio took on
- * the user's behalf folded — and, for the selected row, the files it changed and their Java diff (4c draws
- * them as blocks). Right-click a version to restore the project to it or to name it.
+ * the user's behalf folded — and, for the selected row, the files it changed, each drawn as {@link DiffCards}:
+ * its changed functions as blocks, Before | After, with <i>Restore this function</i> and <i>Restore this
+ * file</i> (§5–§6). Right-click a version to restore the project to it or to name it.
  *
  * <p>It replaced {@code VcsPanel} and {@code VcsDialog} (2026-09-25): a commit box nobody used over a list of
  * SHAs. <b>What the tab reads is what the editor holds</b>: a refresh first puts the editor's sources on disk
@@ -83,8 +87,12 @@ public final class VersionsPane {
     private final Label detailTitle = new Label();
     private final Button restore = new Button("Restore project to here…");
     private final Button rename = new Button("Name…");
+    private final Button restoreFile = new Button("Restore this file");
     private final TreeView<ChangedFile> files = new TreeView<>();
-    private final TextArea diff = new TextArea();
+    private final ScrollPane cards = new ScrollPane();
+    private final DiffCards diffCards;
+    /** The file whose cards are shown, as read; null while none is. */
+    private DiffCards.Input shownFile;
     private final ProgressIndicator progress = new ProgressIndicator();
     private final Label status = new Label();
 
@@ -103,6 +111,7 @@ public final class VersionsPane {
         this.owner = owner;
         this.ctx = ctx;
         this.projectDir = ctx.config().projectPath();
+        this.diffCards = new DiffCards(ctx.config(), ctx.state());
         this.share = new ShareActions(owner, ctx.config().projectName(), projectDir, publisher, auth, client,
                 openPublish, this::vcs, nameField::getText,
                 new ShareActions.Host(this::status, this::setBusy, this::refresh));
@@ -178,11 +187,16 @@ public final class VersionsPane {
             ChangedFile f = now == null ? null : now.getValue();
             if (f != null && f.isFile()) showDiff(f.path());
         });
-        diff.setEditable(false);
-        diff.getStyleClass().add("console-area");
-        diff.setStyle("-fx-font-family: monospace;");
+        cards.setFitToWidth(true);
+        restoreFile.setOnAction(e -> restoreFile());
+        Region fileSpacer = new Region();
+        HBox.setHgrow(fileSpacer, Priority.ALWAYS);
+        HBox fileBar = new HBox(6, fileSpacer, restoreFile);
+        fileBar.setPadding(new Insets(4, 6, 0, 6));
+        VBox fileView = new VBox(fileBar, cards);
+        VBox.setVgrow(cards, Priority.ALWAYS);
 
-        SplitPane detailSplit = new SplitPane(files, diff);
+        SplitPane detailSplit = new SplitPane(files, fileView);
         detailSplit.setDividerPositions(0.3);
         VBox.setVgrow(detailSplit, Priority.ALWAYS);
         VBox detail = new VBox(header, detailSplit);
@@ -274,7 +288,13 @@ public final class VersionsPane {
         restore.setDisable(true);
         rename.setDisable(true);
         files.setRoot(null);
-        diff.clear();
+        clearFile();
+    }
+
+    private void clearFile() {
+        shownFile = null;
+        cards.setContent(null);
+        restoreFile.setVisible(false);
     }
 
     @FunctionalInterface
@@ -283,7 +303,7 @@ public final class VersionsPane {
     }
 
     private void loadFiles(Read<SortedMap<String, VcsFileStatus>> read, boolean discardable) {
-        diff.clear();
+        clearFile();
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
@@ -304,21 +324,129 @@ public final class VersionsPane {
                 ? item : firstFile(item.getChildren().getFirst());
     }
 
+    /**
+     * Reads both sides of {@code path} for the shown row and compares them off the FX thread, then draws the
+     * cards on it. A file that cannot be read shows why.
+     */
     private void showDiff(String path) {
         Timeline.Row row = shown;
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        return row instanceof Timeline.Version v ? vcs().diff(v.commit().sha(), path) : vcs().diff(path);
+                        return read(row, path);
                     } catch (Exception ex) {
-                        return "Could not diff " + path + ": " + ShareActions.rootMessage(ex);
+                        return new DiffCards.Input(path, new VersionReader.Sides(path, path, null, null), null,
+                                "Could not read " + path + ": " + ShareActions.rootMessage(ex));
                     }
                 })
-                .thenAccept(text -> Platform.runLater(() -> {
+                .thenAccept(in -> Platform.runLater(() -> {
                     if (row != shown) return;
-                    diff.setText(text == null || text.isBlank()
-                            ? "(no text to compare — a new, binary or unchanged file)" : text);
+                    shownFile = in;
+                    restoreFile.setVisible(row instanceof Timeline.Version
+                            && (in.sides().after() != null || in.sides().before() != null));
+                    restoreFile.setText(in.sides().after() == null ? "Bring this file back" : "Restore this file");
+                    try {
+                        cards.setContent(diffCards.build(in, new CardActions(row, in)));
+                    } catch (RuntimeException ex) {
+                        // A drawing bug costs the cards, never the diff: the text is always there to show.
+                        cards.setContent(diffCards.build(new DiffCards.Input(path, in.sides(), null, in.textDiff()),
+                                new CardActions(row, in)));
+                    }
                 }));
+    }
+
+    private DiffCards.Input read(Timeline.Row row, String path) throws Exception {
+        VersionReader reader = new VersionReader(projectDir);
+        VersionReader.Sides sides;
+        String text;
+        if (row instanceof Timeline.Version v) {
+            sides = reader.version(v.commit().sha(), path);
+            text = vcs().diff(v.commit().sha(), path);
+        } else {
+            sides = reader.unsaved(path);
+            text = vcs().diff(path);
+        }
+        BlockDiff.FileDiff blocks = DiffCards.isJava(path) ? BlockDiff.of(sides.beforeText(), sides.afterText()) : null;
+        return new DiffCards.Input(path, sides, blocks, text);
+    }
+
+    /** The cards shown, for a test; null while none are. */
+    Node cardsNode() {
+        return cards.getContent();
+    }
+
+    /**
+     * What a function card may put back, for the row it is drawn for: a version gives back the function as it
+     * left that version (or as it was before, when that version deleted it); the unsaved row gives back the
+     * last saved one. Only in the file the editor has open — a function is restored as an edit, and an edit is
+     * made to the open file.
+     */
+    private final class CardActions implements DiffCards.Actions {
+
+        private final Timeline.Row row;
+        private final DiffCards.Input in;
+
+        CardActions(Timeline.Row row, DiffCards.Input in) {
+            this.row = row;
+            this.in = in;
+        }
+
+        private String source(BlockDiff.MethodChange change) {
+            boolean takeBefore = row instanceof Timeline.Unsaved || change.kind() == BlockDiff.Mark.REMOVED;
+            if (row instanceof Timeline.Unsaved && change.kind() == BlockDiff.Mark.ADDED) return null;
+            return takeBefore ? in.sides().beforeText() : in.sides().afterText();
+        }
+
+        @Override
+        public String restoreLabel(BlockDiff.MethodChange change) {
+            if (source(change) == null || !isOpen(in.path()) || ctx.codeEditorService() == null) return null;
+            boolean present = ctx.state().getCompilationUnit()
+                    .map(cu -> BlockDiff.methods(cu).containsKey(change.signature())).orElse(false);
+            return present ? "Restore this function" : "Add this function back";
+        }
+
+        @Override
+        public void restoreFunction(BlockDiff.MethodChange change) {
+            String source = source(change);
+            if (source == null || ctx.codeEditorService() == null) return;
+            ctx.codeEditorService().getCodeEditor().replaceMethod(source, change.signature());
+            status("Put " + change.name() + "() back — ↶ undoes it.");
+            Platform.runLater(VersionsPane.this::refresh);
+        }
+    }
+
+    private boolean isOpen(String path) {
+        var active = ctx.state().getActiveFile();
+        return active != null && active.getPath() != null
+                && active.getPath().toAbsolutePath().normalize().equals(projectDir.resolve(path).normalize());
+    }
+
+    /**
+     * <i>Restore this file</i>: the open file is replaced as one edit; any other is written after a safety
+     * version of everything, and the project reloads ({@code 39} §6).
+     */
+    private void restoreFile() {
+        DiffCards.Input in = shownFile;
+        if (in == null || !(shown instanceof Timeline.Version)) return;
+        byte[] bytes = in.sides().after() != null ? in.sides().after() : in.sides().before();
+        if (bytes == null) return;
+        if (isOpen(in.path()) && DiffCards.isJava(in.path()) && ctx.codeEditorService() != null) {
+            ctx.codeEditorService().getCodeEditor().replaceFile(new String(bytes, StandardCharsets.UTF_8));
+            status("Restored " + in.path() + " — ↶ undoes it.");
+            Platform.runLater(this::refresh);
+            return;
+        }
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.SAFETY, "Before restoring " + in.path());
+            Path target = projectDir.resolve(in.path());
+            Files.createDirectories(target.getParent());
+            Files.write(target, bytes);
+            return null;
+        }, ignored -> {
+            status("Restored " + in.path() + ".");
+            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -330,6 +458,8 @@ public final class VersionsPane {
         ProjectState.Snapshot editor = ctx.state().snapshot();
         run(() -> Checkpoints.save(projectDir, editor, VersionOrigin.SAVE, label), sha -> {
             nameField.clear();
+            if (sha != null) shown = null; // the refresh then shows the version just saved
+
             status(sha == null ? "Nothing to save — no change since the last version."
                     : "Saved" + (label.isEmpty() ? "." : " “" + label + "”."));
         });
