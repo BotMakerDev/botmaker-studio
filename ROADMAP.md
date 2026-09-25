@@ -6,7 +6,23 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Versions 4g: the Dev view.** Phase 4 of the bottom-panels plan is complete.
+- **2026-09-26 (latest) — Bundled block fonts (bottom-panels plan phase 5, the last).**
+  - `ui/render/theme/BlockFont.Bundled`: Nunito, Lexend, Atkinson Hyperlegible Next, Fredoka, Space Grotesk —
+    static OFL cuts (JavaFX draws a variable file at its default instance only) under `resources/fonts/`, one
+    `OFL-<Family>.txt` each. A face's middle cut is its own JavaFX family, named per face in `blocks.css`
+    (`.font-<id> .bc-label`); keywords stay bold in the face's family. Ids `lexend`, `atkinson`, … beside
+    `nunito`/`system`/`family:`; an installed family of the same name is the same font.
+  - `ImportedFonts`: *Import font…* copies to `UserDirs.config()/fonts/`, refuses (and removes) a file JavaFX
+    will not read; `loadBundled` registers imports at startup, now also called from `BotMakerStudio.start`.
+  - `BlockFontDialog`: *BotMaker fonts* rows (keyword + label cut sample) above the installed list, which
+    hides the bundled families. View menu lists every bundled face; *Other Installed Font…* → *More Fonts…*.
+  - JetBrains Mono (`BlockFont.MONO_FAMILY`) for `.console-area` and the terminal page (`@font-face` from
+    `../fonts/`; `bm.start` waits for `document.fonts` so xterm measures the real cell).
+  - Tests: `BundledFontsTest` (registration, CSS cuts per face, import). `BlockGalleryTest.FONT` =
+    `-Dbm.blockFont=<id>` for the gallery and `BlockStyleContrastTest`; contrast green for all five. The
+    gallery's main loop now sets the font preference (it drew in the developer's saved font before).
+    Surefire points `botmaker.config.dir` into `target/`.
+- **2026-09-26 — Versions 4g: the Dev view.** Phase 4 of the bottom-panels plan is complete.
   - `ui/app/versions/VersionsView` (`SIMPLE`/`DEV`, `fromId` total → `SIMPLE`, `remembered`/`remember` in
     Studio's user preferences, not the project). The strip ends in a *Simple | Dev* switch.
   - Dev in `VersionsPane`: `Timeline.all` (every version, none folded, unchosen ones still quiet); rows carry

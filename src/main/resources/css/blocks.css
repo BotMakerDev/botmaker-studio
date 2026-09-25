@@ -1743,9 +1743,11 @@
 }
 
 /*
- * BLOCK FONT (ui/render/theme/BlockFont). The canvas carries the family and a 13px base inline; Nunito's two
- * heavier cuts are families of their own to JavaFX, so its keywords and connecting words name them here. A
- * weight left bold on such a family would ask for a bold cut it has not got, so each rule resets it.
+ * BLOCK FONT (ui/render/theme/BlockFont). The canvas carries the family and a 13px base inline; a bundled face's
+ * middle cut is a family of its own to JavaFX, so its connecting words name it here (BlockFont.Bundled
+ * .labelFamily, which BundledFontsTest checks against this file). A weight left bold on such a family would ask
+ * for a bold cut it has not got, so each rule resets it. Keywords stay bold in the face's own family — its Bold
+ * cut is filed there — except Nunito's, which has an ExtraBold family.
  */
 .font-nunito .bc-label {
     -fx-font-family: "Nunito SemiBold";
@@ -1755,6 +1757,40 @@
 .font-nunito .header-keyword-label {
     -fx-font-family: "Nunito ExtraBold";
     -fx-font-weight: normal;
+}
+.font-lexend .bc-label {
+    -fx-font-family: "Lexend SemiBold";
+    -fx-font-weight: normal;
+}
+.font-atkinson .bc-label {
+    -fx-font-family: "Atkinson Hyperlegible Next SemiBold";
+    -fx-font-weight: normal;
+}
+.font-fredoka .bc-label {
+    -fx-font-family: "Fredoka Medium";
+    -fx-font-weight: normal;
+}
+.font-space-grotesk .bc-label {
+    -fx-font-family: "Space Grotesk Medium";
+    -fx-font-weight: normal;
+}
+
+/* View ▸ Block Font ▸ More Fonts… (ui/app/BlockFontDialog). */
+.block-font-section {
+    -fx-font-weight: bold;
+    -fx-text-fill: -bm-muted;
+}
+.block-font-bundled {
+    -fx-padding: 6 10 6 10;
+}
+.block-font-problem {
+    -fx-text-fill: -bm-danger;
+}
+
+/* The Run console: bot output in the monospaced face Studio ships (BlockFont.MONO_FAMILY). */
+.console-area {
+    -fx-font-family: "JetBrains Mono";
+    -fx-font-size: 12px;
 }
 
 /* An empty body is one "+ Add a block" pill, the persistent form of the seam's "+". */

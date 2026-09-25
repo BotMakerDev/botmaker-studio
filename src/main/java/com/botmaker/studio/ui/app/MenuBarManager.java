@@ -423,8 +423,9 @@ public class MenuBarManager {
     }
 
     /**
-     * View ▸ Block Font: Nunito (bundled), System, and any installed family through a searchable list. The
-     * chosen installed family shows as a third checked item, so the menu always says what the canvas uses.
+     * View ▸ Block Font: the faces Studio ships, System, and any installed or imported family through a
+     * searchable list. A chosen installed family shows as one more checked item, so the menu always says what
+     * the canvas uses.
      */
     private static Menu blockFontMenu() {
         Menu menu = new Menu("Block Font");
@@ -432,7 +433,8 @@ public class MenuBarManager {
             menu.getItems().clear();
             ToggleGroup group = new ToggleGroup();
             BlockFont current = BlockFontPreference.font();
-            java.util.List<BlockFont> fixed = new java.util.ArrayList<>(java.util.List.of(BlockFont.NUNITO, BlockFont.SYSTEM));
+            java.util.List<BlockFont> fixed = new java.util.ArrayList<>(BlockFont.bundled());
+            fixed.add(BlockFont.SYSTEM);
             if (!fixed.contains(current)) fixed.add(current);
             for (BlockFont font : fixed) {
                 RadioMenuItem item = new RadioMenuItem(font.displayName());
@@ -441,7 +443,7 @@ public class MenuBarManager {
                 item.setOnAction(e -> BlockFontPreference.set(font));
                 menu.getItems().add(item);
             }
-            MenuItem other = new MenuItem("Other Installed Font…");
+            MenuItem other = new MenuItem("More Fonts…");
             other.setOnAction(e -> BlockFontDialog.ask(null, BlockFontPreference.font())
                     .ifPresent(BlockFontPreference::set));
             menu.getItems().addAll(new SeparatorMenuItem(), other);

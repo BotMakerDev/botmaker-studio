@@ -53,6 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class BlockGalleryTest extends FxHeadlessTest {
 
     /**
+     * The face drawn and measured, here and in {@code BlockStyleContrastTest}: Nunito, or the one
+     * {@code -Dbm.blockFont=<id>} names ({@code lexend}, {@code atkinson}, …), so each bundled face is checked.
+     */
+    public static final com.botmaker.studio.ui.render.theme.BlockFont FONT =
+            com.botmaker.studio.ui.render.theme.BlockFont.fromId(System.getProperty("bm.blockFont"));
+
+    /**
      * Every shape the canvas draws: stack, C-block, else-chain, reporter, boolean, list, header. Public because
      * the tests that hold the style to account (contrast, zoom fit) measure the same program the gallery shows.
      */
@@ -205,8 +212,13 @@ public class BlockGalleryTest extends FxHeadlessTest {
         BlockTheme.ThemeType themeBefore = BlockTheme.getCurrentThemeType();
         double zoomBefore = CanvasZoom.factor();
         BlockStyle styleBefore = BlockStylePreference.style();
+        var fontBefore = com.botmaker.studio.ui.render.theme.BlockFontPreference.font();
         try {
-            onFx(() -> CanvasZoom.set(CanvasZoom.DEFAULT));
+            // The canvas follows the saved font, so the face under test is set the way the View menu sets it.
+            onFx(() -> {
+                CanvasZoom.set(CanvasZoom.DEFAULT);
+                com.botmaker.studio.ui.render.theme.BlockFontPreference.set(FONT);
+            });
             for (BlockStyle style : BlockStyle.values()) {
                 onFx(() -> BlockStylePreference.set(style));
                 for (BlockTheme.ThemeType theme : BlockTheme.ThemeType.values()) {
@@ -255,7 +267,7 @@ public class BlockGalleryTest extends FxHeadlessTest {
                     locked.root().setReadOnly(true);
                     VBox canvas = new VBox(locked.root().getUINode(fixture.context()));
                     canvas.getStyleClass().addAll("blocks-canvas", BlockStyle.DEFAULT.styleClass());
-                    com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
+                    FONT.applyTo(canvas);
                     if (reader) canvas.getStyleClass().add("reader-mode");
                     canvas.setPadding(new javafx.geometry.Insets(20));
                     ScrollPane pane = new ScrollPane(canvas);
@@ -277,7 +289,7 @@ public class BlockGalleryTest extends FxHeadlessTest {
                         var drawn = fixture.reparse(program.getValue(), com.botmaker.studio.parser.BlockReuse.NONE);
                         VBox canvas = new VBox(drawn.root().getUINode(fixture.context()));
                         canvas.getStyleClass().addAll("blocks-canvas", style.styleClass());
-                        com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
+                        FONT.applyTo(canvas);
                         canvas.setPadding(new javafx.geometry.Insets(20));
                         ScrollPane pane = new ScrollPane(canvas);
                         pane.setFitToWidth(true);
@@ -294,6 +306,7 @@ public class BlockGalleryTest extends FxHeadlessTest {
                 CanvasZoom.set(zoomBefore);
                 BlockTheme.setTheme(themeBefore);
                 BlockStylePreference.set(styleBefore);
+                com.botmaker.studio.ui.render.theme.BlockFontPreference.set(fontBefore);
             });
         }
     }

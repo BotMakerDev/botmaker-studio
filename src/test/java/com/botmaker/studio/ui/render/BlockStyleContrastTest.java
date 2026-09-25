@@ -46,6 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class BlockStyleContrastTest extends FxHeadlessTest {
 
+    private static final com.botmaker.studio.ui.render.theme.BlockFont FONT =
+            com.botmaker.studio.ui.app.BlockGalleryTest.FONT;
+
     private static final double AA = 4.5;
     private static final double SECONDARY = 3.0;
 
@@ -102,7 +105,7 @@ class BlockStyleContrastTest extends FxHeadlessTest {
             Parent canvas = new StackPane(block.getUINode(fixture.context()));
             canvas.getStyleClass().add("blocks-canvas");
             // Measured in the font the canvas is written in: a heavier cut is more ink, a lighter one less.
-            com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
+            FONT.applyTo(canvas);
             root.getChildren().setAll(canvas);
         }));
         onFx(fixture::rerender);
@@ -135,7 +138,7 @@ class BlockStyleContrastTest extends FxHeadlessTest {
                 locked.root().setReadOnly(true);
                 Parent canvas = new StackPane(locked.root().getUINode(fixture.context()));
                 canvas.getStyleClass().addAll("blocks-canvas", BlockStyle.DEFAULT.styleClass());
-                com.botmaker.studio.ui.render.theme.BlockFont.DEFAULT.applyTo(canvas);
+                FONT.applyTo(canvas);
                 root.getChildren().setAll(canvas);
             });
             for (BlockTheme.ThemeType theme : BlockTheme.ThemeType.values()) {

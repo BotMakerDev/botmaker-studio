@@ -591,6 +591,8 @@
                         <prism.order>sw</prism.order>
                         <prism.text>t2k</prism.text>
                         <java.awt.headless>true</java.awt.headless>
+                        <!-- UserDirs.config(): imported fonts and anything else a test might save there. -->
+                        <botmaker.config.dir>${project.build.directory}/test-config</botmaker.config.dir>
                     </systemPropertyVariables>
                     <!-- Redirect the BotMaker cache dir into target/ for the whole suite. BotMakerDirs
                          resolves it from the environment (XDG_CACHE_HOME / LOCALAPPDATA / user.home), and

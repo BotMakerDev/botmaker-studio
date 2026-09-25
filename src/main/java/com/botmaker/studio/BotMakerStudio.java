@@ -16,6 +16,7 @@ import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.UIManager;
 import com.botmaker.studio.ui.app.runner.RunnerWindow;
+import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -73,6 +74,9 @@ public class BotMakerStudio extends Application {
         // Before any window is shown: from here on every window gets the stylesheet and the theme class as it
         // appears, including the popups (context menus, tooltips, dropdowns) that no call site can reach.
         ThemedWindows.install();
+        // The fonts Studio ships and the ones the user imported, before a stylesheet names one: the Run
+        // console asks for JetBrains Mono before any canvas would have loaded it.
+        BlockFont.loadBundled();
         // Collect what a previous run (or a killed bot JVM) left behind, before anything asks the process table
         // whether a launcher is open: a leftover session reads as one, and a launch is then refused on its account.
         // Off the FX thread — it shells out to systemctl.

@@ -99,7 +99,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   a field's and a function's types are drawn the same way.
 - **A catch offers only exceptions**, and *+ or* adds another one (`catch (A | B e)`).
 - **View ▸ Block Font.** Blocks are written in Nunito, which Studio now ships, or in your system font, or in
-  any font installed on your computer (*Other Installed Font…*, a searchable list showing each font).
+  any font installed on your computer (*More Fonts…*, a searchable list showing each font).
+- **Four more block fonts ship with Studio**: Lexend, Atkinson Hyperlegible Next, Fredoka and Space Grotesk,
+  each with its own heavier cuts for keywords and connecting words. *More Fonts…* shows them at the top, each
+  as a line of block text, and **Import font…** adds a `.ttf` or `.otf` file you have not installed: Studio
+  keeps a copy in its settings folder and loads it every time it starts.
+- **The Run console and the terminals use JetBrains Mono**, which Studio now ships, so their columns line up
+  on every computer.
 
 ### Changed
 
