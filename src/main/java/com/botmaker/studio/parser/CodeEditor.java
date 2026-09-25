@@ -27,6 +27,7 @@ import com.botmaker.studio.parser.handlers.TypeHandler;
 import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
+import com.botmaker.studio.parser.guard.UnusedImports;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.helpers.Precedence;
 import com.botmaker.studio.parser.helpers.SourceFormatter;
@@ -39,7 +40,9 @@ import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.compiler.IProblem;
@@ -231,7 +234,7 @@ public class CodeEditor {
                                   ASTNode target, EditKind kind,
                                   List<CoreApplicationEvents.FileEdit> alsoChanged) {
         String previousCode = getCurrentCode();
-        newCode = formatted(previousCode, newCode);
+        newCode = withoutUnusedImports(formatted(previousCode, newCode), previousCode);
         if (wouldBreak(newCode, previousCode, target, kind)) return false;
         eventBus.publish(new CoreApplicationEvents.CodeUpdatedEvent(
                 newCode, previousCode, markNewIdentifiersAsUnedited,
@@ -251,6 +254,18 @@ public class CodeEditor {
                 ? "the change to " + method.getName().getIdentifier()
                 : "the last change";
         return otherFiles == 0 ? what : what + ", in " + (otherFiles + 1) + " files";
+    }
+
+    /**
+     * The same edit without an import it left unused ({@link UnusedImports}): one parse per edit, with a
+     * resolved classpath only — the rule {@link #wouldNotCompile} follows, since without bindings every
+     * import reads as unused.
+     */
+    private String withoutUnusedImports(String newCode, String previousCode) {
+        if (newCode == null || newCode.equals(previousCode) || state.getResolvedClasspath().isEmpty()) return newCode;
+        if (LockResolver.forActiveFile(config, state).suppressesInteraction()) return newCode;
+        ProjectFile active = state.getActiveFile();
+        return new UnusedImports(BotParser.of(state), active == null ? null : active.getPath()).removeFrom(newCode);
     }
 
     /**

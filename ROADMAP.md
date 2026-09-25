@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 2, phase 6: the host creates a missing `@Managed` holder.**
+- **2026-09-25 (latest) — Blocks round 3, phase 1: nested-type imports, unused imports removed, second menu opens.**
+  - `ImportManager.importable` maps a binary name (`a.B$C`, from ClassGraph's `ClassInfo.getName()` or `Class.getName()`) to the canonical `a.B.C` on every `addImport` path, and returns null for a local or anonymous class.
+  - `parser/guard/UnusedImports` removes the single-type, non-static imports JDT reports as `UnusedImport`. It runs from `CodeEditor.triggerUpdate` after formatting, only with a resolved classpath. `ProjectAnalyzer.createCompilationUnit` states `COMPILER_PB_UNUSED_IMPORT=warning`.
+  - `MenuTracker.track` sets `consumeAutoHidingEvents(false)`: the press that auto-hides a menu now reaches the "+" under it. `MenuTrackerTest` clicks through the robot and failed before the fix.
+  - Tests: `UnusedImportsTest` (6). `ArgumentImportsTest` now accepts a qualified `java.awt.Color` in place of an import, since an import the qualified seed does not use is removed.
+- **2026-09-25 — Blocks round 2, phase 6: the host creates a missing `@Managed` holder.**
   - Changes:
     - `HostPluginValues.create(id)` (contract `PluginValues.create`, studio-api 0.3.0): nothing when the id is already in the bot; else finds the bound plugin declaring it and writes its holder through `ProjectWrites.create` (never overwrites, snapshots first).
     - `project/managed/ManagedHolders.plan` builds the file: package `<bot package>.plugins.<last id segment>`, one `@Managed` method per method-shaped sibling with the same holder (name from the id), each returning `grammar.spell(type, initial)` or `grammar.freshSpelling(type)`; a type-level value is an empty annotated class. A value with no holder, or one no plugin can write a start for, is refused with a sentence.

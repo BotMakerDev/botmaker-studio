@@ -66,11 +66,11 @@ public class ImportManager {
     public static void addImport(CompilationUnit cu, ASTRewrite rewriter, ResolvedType type, ProjectState state) {
         if (cu == null || type == null || type.isPrimitive() || type.isVoid()) return;
 
-        String qualifiedName = switch (type) {
+        String qualifiedName = importable(switch (type) {
             case ResolvedType.Bound b     -> b.qualifiedName();
             case ResolvedType.FromIndex f -> f.qualifiedName();
             default                       -> resolveQualifiedName(type.simpleName(), state);
-        };
+        });
 
         if (qualifiedName == null || shouldSkipImport(cu, qualifiedName)) {
             return;
@@ -139,7 +139,22 @@ public class ImportManager {
      */
     public static void addImport(CompilationUnit cu, ASTRewrite rewriter, Class<?> type) {
         if (type == null) return;
-        addImport(cu, rewriter, type.getName());
+        addImport(cu, rewriter, type.getCanonicalName());
+    }
+
+    /**
+     * {@code qualifiedName} as an import declaration spells it: {@code a.B.C} for the binary name
+     * {@code a.B$C}, which is what the library index ({@code ClassInfo.getName()}) and {@link Class#getName()}
+     * answer for a nested type. {@code import a.B$C;} does not compile. Null for a local or anonymous class
+     * ({@code a.B$1}), which no import can name.
+     */
+    public static String importable(String qualifiedName) {
+        if (qualifiedName == null || qualifiedName.indexOf('$') < 0) return qualifiedName;
+        String[] nested = qualifiedName.split("\\$", -1);
+        for (int i = 1; i < nested.length; i++) {
+            if (nested[i].isEmpty() || Character.isDigit(nested[i].charAt(0))) return null;
+        }
+        return String.join(".", nested);
     }
 
     // addTemplatesImport stood here until 2026-09-01. It imported the project's generated `Templates` class,
@@ -153,7 +168,8 @@ public class ImportManager {
     /**
      * Raw add import (expects FQN).
      */
-    public static void addImport(CompilationUnit cu, ASTRewrite rewriter, String qualifiedClassName) {
+    public static void addImport(CompilationUnit cu, ASTRewrite rewriter, String binaryOrCanonicalName) {
+        String qualifiedClassName = importable(binaryOrCanonicalName);
         if (cu == null || qualifiedClassName == null || !qualifiedClassName.contains(".")) {
             return;
         }

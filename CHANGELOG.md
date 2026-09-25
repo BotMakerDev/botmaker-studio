@@ -122,6 +122,14 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **A nested type no longer breaks the build through its import.** Picking a type such as `LaunchTarget.Epic`
+  wrote `import com.botmaker.sdk.api.launch.LaunchTarget$Epic;`, which javac refuses. Imports are now
+  written with the canonical name (`LaunchTarget.Epic`), whichever path adds them.
+- **Imports the file no longer uses are removed.** Every edit on the canvas, deletes included, takes out
+  the single-type imports nothing in the file uses any more. Static and `*` imports are left alone. This
+  runs only once the project's classpath is resolved, because until then every import looks unused.
+- **A second insert menu opens.** With a menu open, clicking another "+" used to close the first menu and
+  open nothing. Now the second menu opens.
 - **Menu entries that led nowhere are gone.** *Declare Function* is no longer offered inside a body (it
   inserted nothing). *Parameters*, *Enums*, *Variables* and *Call Function* are left out when they would
   open empty, and *Sub-List* is offered only inside another list. In `main`, a call block's method list no

@@ -50,6 +50,15 @@ class ArgumentImportsTest {
         return found[0];
     }
 
+    /**
+     * {@code Color} reaches the source resolvable: imported, or written qualified. Since 2026-09-25 an import
+     * the file does not use is removed on every edit, and the default argument writes
+     * {@code new java.awt.Color(…)}, so the import the insert adds is dropped again — which is right.
+     */
+    private static boolean resolvesColor(String code) {
+        return code.contains("import java.awt.Color;") || code.contains("java.awt.Color(");
+    }
+
     @Test
     void switchingOntoAnOverloadImportsTheNewArgumentTypes() {
         EditorFixture f = new EditorFixture(SOURCE);
@@ -59,7 +68,7 @@ class ArgumentImportsTest {
                 List.of(ResolvedType.named("Color")));
 
         assertNotNull(f.lastCode, "the overload switch should rewrite the source");
-        assertTrue(f.lastCode.contains("import java.awt.Color;"),
+        assertTrue(resolvesColor(f.lastCode),
                 "the new argument type must be imported, got:\n" + f.lastCode);
     }
 
@@ -72,7 +81,7 @@ class ArgumentImportsTest {
                 0);
 
         assertNotNull(f.lastCode, "inserting a call should rewrite the source");
-        assertTrue(f.lastCode.contains("import java.awt.Color;"),
+        assertTrue(resolvesColor(f.lastCode),
                 "an inserted call's argument types must be imported, got:\n" + f.lastCode);
     }
 }

@@ -162,6 +162,8 @@ public class ProjectAnalyzer {
         options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
         options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.latestSupportedJavaVersion());
         options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
+        // Read by UnusedImports on every canvas edit; stated rather than left to JDT's default.
+        options.put(JavaCore.COMPILER_PB_UNUSED_IMPORT, JavaCore.WARNING);
         parser.setCompilerOptions(options);
 
         return (CompilationUnit) parser.createAST(null);

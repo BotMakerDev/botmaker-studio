@@ -20,6 +20,10 @@ public final class MenuTracker {
 
     /** Registers {@code menu}: from now on, showing it closes whichever tracked menu is open. */
     public static ContextMenu track(ContextMenu menu) {
+        // The press that closes this menu by clicking outside it also reaches what was clicked. JavaFX's
+        // default swallows it, so a second "+" clicked while a menu was up closed the first menu and never
+        // opened its own.
+        menu.setConsumeAutoHidingEvents(false);
         menu.showingProperty().addListener((obs, was, showing) -> {
             if (!showing) return;
             ContextMenu previous = current.get();

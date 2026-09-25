@@ -46,6 +46,20 @@ class MenuTrackerTest extends FxHeadlessTest {
     }
 
     @Test
+    void clickingASecondOpenerWhileAMenuIsUpOpensItsMenu() {
+        ContextMenu a = MenuTracker.track(new ContextMenu(new MenuItem("a")));
+        ContextMenu b = MenuTracker.track(new ContextMenu(new MenuItem("b")));
+        interact(() -> second.setOnAction(e -> b.show(second, Side.BOTTOM, 0, 0)));
+
+        interact(() -> a.show(first, Side.BOTTOM, 0, 0));
+        clickOn(second);
+
+        assertTrue(b.isShowing(), "the click that closed the first menu must still reach the second opener");
+        assertFalse(a.isShowing());
+        interact(b::hide);
+    }
+
+    @Test
     void anUntrackedMenuIsLeftAlone() {
         ContextMenu tracked = MenuTracker.track(new ContextMenu(new MenuItem("t")));
         ContextMenu other = new ContextMenu(new MenuItem("o"));
