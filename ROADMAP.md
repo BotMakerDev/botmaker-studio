@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 3, phase 4: call blocks split in two.**
+- **2026-09-25 (latest) — The last seam of a body ending in a jump inserts above it.**
+  - `BodyBlock.landingIndex`: the seam after a trailing `return`/`throw`/`break`/`continue`/`yield` passes
+    `size - 1` to both the "+" and the drop handlers; its tooltip says so (`BlockDragAndDropManager.setSeparatorHint`).
+  - Cause: the insert was refused as unreachable code (`That would not compile here…`), shown only in the status
+    line, so the bottom of every activity body looked broken. `InsertBelowReturnTest`.
+
+- **2026-09-25 — Blocks round 3, phase 4: call blocks split in two.**
   - `MethodInvocationBlock` is abstract, FUNCTIONS, with `external()`/`verb()`. `ProjectCallBlock` ("call") and `ExternalCallBlock` ("use" + `.call-owner-badge`) replace it and `LibraryCallBlock`.
   - `BlockConverter.callBlock` decides the kind: a facade scope or a non-source binding (`CallOwner.of`, which now answers PLUGIN for a facade) gives external. The kind is re-decided on every parse.
   - One scope dropdown: variables, then the bot's classes (project) or per-plugin facades plus JDK/library classes (external). An external class pick calls `switchClass` at once.

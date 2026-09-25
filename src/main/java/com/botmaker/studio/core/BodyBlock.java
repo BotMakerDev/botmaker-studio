@@ -140,17 +140,38 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
         separator.getStyleClass().add("body-block-separator");
         if (isReadOnly()) return separator;
 
+        int landing = landingIndex(statements, insertionIndex);
+        if (landing != insertionIndex) dragAndDropManager.setSeparatorHint(separator, "Insert a block before the return");
+
         // 2. Setup Drag-and-Drop Handlers
-        dragAndDropManager.addSeparatorDragHandlers(separator, targetBody, insertionIndex);
+        dragAndDropManager.addSeparatorDragHandlers(separator, targetBody, landing);
 
         // 3. Setup Click Insert Handler
         // This wires the hidden "+" button to the CodeEditor
         dragAndDropManager.enableSeparatorClick(separator, context.getProjectAnalyzer(), context.getSdkSurface(),
                 targetBody.getAstNode(), type -> {
-            insertAndOpenIfVariable(context, separator, targetBody, type, insertionIndex);
+            insertAndOpenIfVariable(context, separator, targetBody, type, landing);
         });
 
         return separator;
+    }
+
+    /**
+     * Where a block put at the seam before {@code statements[index]} lands. The same place, except under a body
+     * that ends in a {@code return}, {@code throw}, {@code break}, {@code continue} or {@code yield}: anything
+     * written after one is unreachable code javac refuses, and every activity body and every non-void function
+     * ends that way — so the bottom "+" of those bodies could never insert. It lands just above the jump
+     * instead, which stays last.
+     */
+    static int landingIndex(List<StatementBlock> statements, int index) {
+        if (index == 0 || index != statements.size()) return index;
+        ASTNode last = statements.getLast().getAstNode();
+        return last instanceof org.eclipse.jdt.core.dom.ReturnStatement
+                || last instanceof org.eclipse.jdt.core.dom.ThrowStatement
+                || last instanceof org.eclipse.jdt.core.dom.BreakStatement
+                || last instanceof org.eclipse.jdt.core.dom.ContinueStatement
+                || last instanceof org.eclipse.jdt.core.dom.YieldStatement
+                ? index - 1 : index;
     }
 
     /**

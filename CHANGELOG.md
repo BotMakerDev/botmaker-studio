@@ -122,6 +122,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **The "+" at the bottom of a function that ends in `return` works.** Every activity body and every function
+  that gives back a value ends with a `return`, and a block added after it is code that can never run, so
+  Studio refused it and said so only in the status bar. That "+" (and a block dropped there) now lands just
+  above the `return`, which stays last. The same applies after `throw`, `break`, `continue` and `yield`.
 - **A call is either "call" (your own function) or "use" (someone else's), and both look like blocks.**
   - A call to one of your bot's own methods reads *call ‹method›*. It is now painted in the Functions colour;
     before, it had no fill and its white text was hard to read on the canvas.

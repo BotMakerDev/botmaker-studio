@@ -324,6 +324,12 @@ public class BlockDragAndDropManager {
         return InsertionSeam.create(withInsertButton);
     }
 
+    /** Replaces what the seam's "+" says on hover, for a seam that inserts somewhere other than under the pointer. */
+    public void setSeparatorHint(Pane separator, String hint) {
+        Button plus = InsertionSeam.plusOf(separator);
+        if (plus != null) javafx.scene.control.Tooltip.install(plus, new javafx.scene.control.Tooltip(hint));
+    }
+
     /** @param targetBody the body the "+" inserts into — blocks illegal there are left out of the menu */
     public void enableSeparatorClick(Pane separator, com.botmaker.studio.suggestions.ProjectAnalyzer analyzer,
                                    com.botmaker.studio.services.SdkSurfaceService surface,
