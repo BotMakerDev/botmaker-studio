@@ -81,7 +81,8 @@ public class UIManager implements ProjectWindow {
     // 2026-08-25; the canvas took it for three weeks without reading it. The banner above the canvas now is
     // about a missing plugin rather than an old version, and it asks PluginOwners.
     private final ToolbarManager toolbarManager;
-    private final EventLogManager eventLogManager;
+    /** The Run tab: the bot's output and its Stop button. Subscribes in its constructor, closed in {@link #dispose()}. */
+    private final RunConsole runConsole;
     private final MenuBarManager menuBarManager;
     private final FileExplorerManager fileExplorerManager;
     /** Every menu/toolbar action, and the GitHub services that back the sharing ones. */
@@ -139,7 +140,6 @@ public class UIManager implements ProjectWindow {
      * {@code setupEventHandlers()}, later in this same constructor. So the report is carried, not sent.
      */
     private final List<String> openReport;
-    private TextArea outputArea;
     private TabPane bottomTabPane;
     private Consumer<Void> onSelectProject;
     /** View ▸ Preview as user — hands the project to the Runner window for this session only. */
@@ -169,7 +169,7 @@ public class UIManager implements ProjectWindow {
         ScreenCaptureService screenCaptureService = new ScreenCaptureService();
 
         this.toolbarManager = new ToolbarManager(eventBus, projectSettingsService);
-        this.eventLogManager = new EventLogManager(eventBus);
+        this.runConsole = new RunConsole(eventBus, () -> selectBottomTab(BottomTab.RUN));
         this.menuBarManager = new MenuBarManager(primaryStage);
 
         // Startup banner: which local builds are actually running (distinct from the GitHub update check).
@@ -223,7 +223,7 @@ public class UIManager implements ProjectWindow {
             identityCluster.dispose();
             identityCluster = null;
         }
-        eventLogManager.shutdown();
+        runConsole.dispose();
     }
 
     /**
@@ -280,28 +280,12 @@ public class UIManager implements ProjectWindow {
         eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, event -> {
             if (editorCanvas != null) editorCanvas.handleBlocksUpdate(event);
         }, true);
-        eventBus.subscribe(CoreApplicationEvents.OutputAppendedEvent.class, event -> {
-            // getLength(), not getText().length(): the latter copies the whole console buffer to measure it,
-            // once per line of bot output.
-            if (outputArea.getLength() > 10_000) {
-                String current = outputArea.getText();
-                outputArea.setText("[...Trimmed...]\n" + current.substring(current.length() - 5000) + event.text());
-                outputArea.positionCaret(outputArea.getLength());
-            } else {
-                outputArea.appendText(event.text());
-            }
-        }, true);
-        eventBus.subscribe(CoreApplicationEvents.OutputClearedEvent.class, event -> outputArea.clear(), true);
         eventBus.subscribe(CoreApplicationEvents.StatusMessageEvent.class, event -> statusLabel.setText(event.message()), true);
         eventBus.subscribe(CoreApplicationEvents.DiagnosticsUpdatedEvent.class, event -> {
             diagnosticsManager.processDiagnostics(event.diagnostics());
             if (diagnosticsPanel != null) diagnosticsPanel.update(diagnosticsManager.getDiagnostics());
             statusLabel.setText(diagnosticsManager.getErrorSummary());
         }, true);
-        eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class,
-                e -> selectBottomTab(BottomTab.TERMINAL), true);
-        eventBus.subscribe(CoreApplicationEvents.DebugSessionStartedEvent.class,
-                e -> selectBottomTab(BottomTab.TERMINAL), true);
         eventBus.subscribe(CoreApplicationEvents.InputRequestedEvent.class, this::promptForInput, true);
     }
 
@@ -421,12 +405,7 @@ public class UIManager implements ProjectWindow {
                 config.projectName(), this::switchToEditorMode,
                 () -> PluginOwners.absent(config), actions::openManagePlugins);
 
-        // --- 4. Bottom Panel: Terminal/Errors ---
-        outputArea = new TextArea();
-        outputArea.setEditable(false);
-        outputArea.getStyleClass().add("console-area");
-        outputArea.setContextMenu(consoleContextMenu(outputArea));
-
+        // --- 4. Bottom Panel: Run/Errors ---
         diagnosticsPanel = new DiagnosticsPanel(diagnosticsManager, editorCanvas::scrollToBlock,
                 () -> selectBottomTab(BottomTab.ERRORS));
 
@@ -438,10 +417,9 @@ public class UIManager implements ProjectWindow {
         reviewPanel = new ReviewPanel(config, state, this::revealMarkedFunction);
 
         bottomTabs.clear();
-        bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, outputArea));
+        bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
-        bottomTabs.put(BottomTab.EVENT_LOG, bottomTab(BottomTab.EVENT_LOG, eventLogManager.getView()));
         bottomTabs.put(BottomTab.VCS, bottomTab(BottomTab.VCS, vcsPanel.getView()));
         bottomTabs.put(BottomTab.ASSISTANT, bottomTab(BottomTab.ASSISTANT, assistantPane.node()));
 
@@ -577,15 +555,6 @@ public class UIManager implements ProjectWindow {
         Tab tab = new Tab(which.title(), content);
         tab.setClosable(false);
         return tab;
-    }
-
-    /** Copy / Clear for the console. The Errors list has its own, built by {@link DiagnosticsPanel}. */
-    private static ContextMenu consoleContextMenu(TextArea console) {
-        MenuItem copy = new MenuItem("Copy");
-        copy.setOnAction(e -> console.copy());
-        MenuItem clear = new MenuItem("Clear");
-        clear.setOnAction(e -> console.clear());
-        return new ContextMenu(copy, new SeparatorMenuItem(), clear);
     }
 
     /**

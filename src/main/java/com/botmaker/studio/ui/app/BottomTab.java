@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 /**
- * The six tabs of the bottom tool window, in the order they are added.
+ * The tabs of the bottom tool window, in the order they are added.
  *
  * <p>A closed set rather than an {@code int}: the shell used to say {@code selectBottomTab(0)} for Terminal,
  * {@code selectBottomTab(1)} for Errors and carry a computed {@code vcsTabIndex} field for the third — three
@@ -9,11 +9,14 @@ package com.botmaker.studio.ui.app;
  * and the thing that raises it can't drift apart.
  */
 enum BottomTab {
-    TERMINAL("Terminal"),
+    /**
+     * What the running bot prints — see {@link RunConsole}. It was titled "Terminal" and keyed {@code TERMINAL}
+     * until 2026-09-25, which it never was; a layout saved under that key opens on the default tab.
+     */
+    RUN("Run"),
     ERRORS("Errors"),
     /** What a refactor changed and could not finish — see {@link ReviewPanel}. */
     REVIEW("Review"),
-    EVENT_LOG("Event Log"),
     VCS("VCS"),
     /** A model changing the open file's blocks through the host's own edit checks — see {@link AssistantPane}. */
     ASSISTANT("Assistant");

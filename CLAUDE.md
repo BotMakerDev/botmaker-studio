@@ -1055,7 +1055,7 @@ the serialize/deserialize step is outsourced.
 
 ### Event Bus
 
-`EventBus` is instantiated per project (not a singleton). Events are defined in `CoreApplicationEvents` as nested classes. Subscribe with `eventBus.subscribe(EventClass.class, handler)`. The optional `runOnFxThread` flag wraps delivery in `Platform.runLater()`. A handler that throws is logged at `SEVERE` with the event name and cause and the publish continues — on **both** branches; the guard lives in the delivery, not around the call, because on the `runLater` branch `publish` has already returned by the time the handler runs. `subscribeAll()` receives every event (used by the event log panel).
+`EventBus` is instantiated per project (not a singleton). Events are defined in `CoreApplicationEvents` as nested classes. Subscribe with `eventBus.subscribe(EventClass.class, handler)`. The optional `runOnFxThread` flag wraps delivery in `Platform.runLater()`. A handler that throws is logged at `SEVERE` with the event name and cause and the publish continues — on **both** branches; the guard lives in the delivery, not around the call, because on the `runLater` branch `publish` has already returned by the time the handler runs. A subscriber shorter-lived than the project keeps the returned `Subscription` and closes it (`RunConsole`).
 
 ### UI Structure
 
@@ -1071,8 +1071,9 @@ The `ui/` package is split by concern:
   (**Project ▸ Recover Project Files**) and `WorkspaceLayoutStore` (the persisted dividers + open bottom tab);
   none of them holds a reference back. `BottomTab` is the closed set of bottom tabs. Alongside those: the
   panel/screen managers `FileExplorerManager` (project file tree), `MenuBarManager` / `ToolbarManager` (menus
-  and toolbar; the **Project → Manage Libraries…** entry lives here), `EventLogManager` (runtime event/output
-  log), `ProjectSelectionScreen`, `VcsPanel` / `GitHubAccountBar` / `GoogleAccountBar`, and ~15 dialogs
+  and toolbar; the **Project → Manage Libraries…** entry lives here), `RunConsole` (the Run tab: the
+  bot's output, Stop, Clear — the bot runs on pipes, so it is lines, not a terminal; the Event Log that stood
+  beside it was deleted on 2026-09-25), `ProjectSelectionScreen`, `VcsPanel` / `GitHubAccountBar` / `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
   `ResourceManagerDialog`, `PublishDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before

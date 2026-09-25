@@ -63,6 +63,9 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Changed
 
+- **The bot's output is the Run tab.** It was called Terminal and was not one. It now has Stop and Clear
+  buttons, says whether a run or a debug session is going, and hides the colour codes a logger prints.
+- **The Event Log tab is gone.** It listed Studio's internal events, which told a bot author nothing.
 - **A type change is compiled first.** A cast, check or catch that would not compile — a checked exception
   the body never throws, `o instanceof List<String>` — is refused with javac's reason, as an inserted block
   is.

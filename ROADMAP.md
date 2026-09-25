@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Parameters: Enter in a Choices add field declares the choice.**
+- **2026-09-25 (latest) — Bottom panels phase 1: a Run tab; the Event Log is gone.**
+  - `ui/app/RunConsole` owns what `UIManager` built inline as the "Terminal" tab: the bot's output (trimmed
+    past 10k characters, CSI/OSC escapes stripped), Stop (`StopRunRequestedEvent` or `DebugStopRequestedEvent`,
+    whichever is running) and Clear. It closes its subscriptions in `dispose()`. `BottomTab.TERMINAL` became
+    `RUN`; a layout saved under `TERMINAL` or `EVENT_LOG` opens on the default tab (`named` is total).
+  - `EventLogManager` deleted: it listed every event's class name, 4 times a second, on a daemon thread.
+    The bot stays on pipes: `BM-INPUT` reads stdin line by line. The shell is phase 2. `RunConsoleTest`.
+
+- **2026-09-25 — Parameters: Enter in a Choices add field declares the choice.**
   - `ParametersDialog.buildOptionsEditor` replaced the plugin editor's `setOnAction`, which is the toolkit's
     commit (`Fields.committing`); it now chains it before `addOption`. Clicking Add worked only because the
     focus loss committed first.
