@@ -49,7 +49,7 @@ public class LabeledBlock extends AbstractStatementBlock implements BlockWithChi
     public ComponentSpec componentSpec(CodeEditorService context) {
         return ComponentSpec.builder()
                 .label("kw", () -> SentenceLayoutBuilder.keywordNode("label"))
-                .label("name", () -> SentenceLayoutBuilder.labelNode(label() + ":"))
+                .label("name", () -> SentenceLayoutBuilder.labelNode(label()))
                 .body("inner", () -> inner == null ? null : inner.getUINode(context))
                 .build();
     }

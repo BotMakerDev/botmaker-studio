@@ -112,7 +112,7 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
             row.addKeyword("case");
             for (int i = 0; i < c.labels.size(); i++) {
                 ExpressionBlock label = c.labels.get(i);
-                if (i > 0) row.addLabel(",");
+                if (i > 0) row.addKeyword("or");
                 row.addExpressionSlot(label, context, subjectType);
                 row.addNode(changeButton(label, subjectType, context));
             }

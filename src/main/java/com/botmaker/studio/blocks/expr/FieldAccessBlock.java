@@ -44,7 +44,7 @@ public class FieldAccessBlock extends AbstractExpressionBlock {
         container.setAlignment(Pos.CENTER_LEFT);
         container.getStyleClass().add("field-access-block");
 
-        Text qualifierText = new Text(qualifier + ".");
+        Text qualifierText = new Text(qualifier);
         qualifierText.getStyleClass().add("block-chip");
 
         Text fieldText = new Text(fieldName);

@@ -41,7 +41,7 @@ public class PrintBlock extends AbstractStatementBlock {
      */
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
-        ComponentSpec.Builder spec = ComponentSpec.builder().label("kw", () -> SentenceLayoutBuilder.labelNode("Print:"));
+        ComponentSpec.Builder spec = ComponentSpec.builder().label("kw", () -> SentenceLayoutBuilder.labelNode("Print"));
 
         if (arguments.isEmpty()) {
             // UNKNOWN for the same reason the filled slot below uses it: println is overloaded for every type.

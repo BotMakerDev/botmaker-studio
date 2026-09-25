@@ -42,23 +42,22 @@ public class SuperAccessBlock extends AbstractExpressionBlock implements BlockWi
 
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
-        // One label for `super.name`: two would be spaced apart like words, and it reads as one name.
-        ComponentSpec.Builder spec = ComponentSpec.builder();
+        // `super`, then the name as a word of its own: no "." between them and no brackets round the arguments.
+        ComponentSpec.Builder spec = ComponentSpec.builder()
+                .label("super", () -> SentenceLayoutBuilder.keywordNode("super"));
         if (astNode instanceof SuperFieldAccess field) {
-            return spec.label("name", () -> SentenceLayoutBuilder.keywordNode(
-                    "super." + field.getName().getIdentifier())).build();
+            return spec.label("name", () -> SentenceLayoutBuilder.labelNode(field.getName().getIdentifier())).build();
         }
         SuperMethodInvocation call = (SuperMethodInvocation) astNode;
-        spec.label("name", () -> SentenceLayoutBuilder.keywordNode("super." + call.getName().getIdentifier() + "("));
+        spec.label("name", () -> SentenceLayoutBuilder.labelNode(call.getName().getIdentifier()));
         IMethodBinding method = call.resolveMethodBinding();
         ITypeBinding[] params = method == null ? null : method.getParameterTypes();
         for (int i = 0; i < arguments.size(); i++) {
             ResolvedType expected = params != null && i < params.length
                     ? ResolvedType.of(params[i]) : ResolvedType.UNKNOWN;
-            if (i > 0) spec.label("comma" + i, () -> SentenceLayoutBuilder.labelNode(","));
             addOperand(spec, "arg" + i, arguments.get(i), context, expected);
         }
-        return spec.label("close", () -> SentenceLayoutBuilder.labelNode(")")).build();
+        return spec.build();
     }
 
     @Override

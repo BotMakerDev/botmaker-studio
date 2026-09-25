@@ -108,10 +108,8 @@ public class HeaderLayoutBuilder {
             container.getChildren().addAll(rightContent);
 
             if (onDelete != null) {
-                Button deleteBtn = new Button("X");
-                deleteBtn.getStyleClass().add("icon-button");
-                deleteBtn.setOnAction(e -> onDelete.run());
-                container.getChildren().add(deleteBtn);
+                container.getChildren().add(
+                        com.botmaker.studio.ui.render.components.BlockUIComponents.createDeleteButton(onDelete));
             }
         } else if (growingNode != null) {
             HBox.setHgrow(growingNode, Priority.ALWAYS);

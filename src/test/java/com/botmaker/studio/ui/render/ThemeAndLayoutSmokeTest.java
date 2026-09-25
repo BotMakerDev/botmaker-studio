@@ -71,8 +71,8 @@ class ThemeAndLayoutSmokeTest extends FxHeadlessTest {
                 "the middle child must be the growing spacer");
 
         Button delete = (Button) header.getChildren().get(2);
-        assertEquals("X", delete.getText());
-        assertTrue(delete.getStyleClass().contains("icon-button"), "the delete button is styled by CSS class");
+        assertEquals("✕", delete.getText());
+        assertTrue(delete.getStyleClass().contains("block-delete-button"), "the delete button is styled by CSS class");
         delete.fire();
         assertTrue(deleted[0], "the delete callback must be wired to the button it built");
     }

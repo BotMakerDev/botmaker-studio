@@ -55,17 +55,15 @@ public class ConstructorCallBlock extends AbstractStatementBlock implements Bloc
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
         ComponentSpec.Builder spec = ComponentSpec.builder()
-                .label("kw", () -> SentenceLayoutBuilder.keywordNode(isSuper() ? "super" : "this"))
-                .label("open", () -> SentenceLayoutBuilder.labelNode("("));
+                .label("kw", () -> SentenceLayoutBuilder.keywordNode(isSuper() ? "super" : "this"));
         ITypeBinding[] params = parameterTypes();
         for (int i = 0; i < arguments.size(); i++) {
             ExpressionBlock arg = arguments.get(i);
             ResolvedType expected = params != null && i < params.length
                     ? ResolvedType.of(params[i]) : ResolvedType.UNKNOWN;
-            if (i > 0) spec.label("comma" + i, () -> SentenceLayoutBuilder.labelNode(","));
             spec.slot("arg" + i, () -> SentenceLayoutBuilder.expressionSlotNode(arg, context, expected));
         }
-        return spec.label("close", () -> SentenceLayoutBuilder.labelNode(")")).build();
+        return spec.build();
     }
 
     private ITypeBinding[] parameterTypes() {

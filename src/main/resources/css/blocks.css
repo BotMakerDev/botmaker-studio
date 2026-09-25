@@ -755,6 +755,16 @@
 }
 
 /*
+ * GLUED CORNERS. A statement in a body is as wide as the body, so every one of its corners touches something
+ * coloured: the arm on its left, the header or the block above, the block below or the arm that closes the C.
+ * A rounded corner at any of them let a wedge of canvas show between two coloured shapes, so a statement in a
+ * body is square. What stays round is what sits on the canvas itself: a function, a field, a lone block.
+ */
+.body-block > .block-category {
+    -fx-background-radius: 0;
+}
+
+/*
  * A hat — a method, a constructor, a static block — is a C-block with a heavier header: a rounded top, its
  * body a hole the program's lines sit in, a thick arm below it where the definition closes.
  */
@@ -844,6 +854,10 @@
 .blocks-outlined .block-category.shape-c {
     -fx-padding: 5 6 5 12;
 }
+.blocks-outlined .body-block > .block-category {
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}
 .blocks-outlined .block-category.shape-hat {
     -fx-padding: 0 0 6 0;
     -fx-border-width: 1 1 1 4;
@@ -914,6 +928,20 @@
     -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.40) 49%, rgba(0, 0, 0, 0.30) 50%);
     -fx-opacity: 1.0;
 }
+/* Delete is the one glyph that is not a ghost: a round 24px target at full strength, on a wash of its own so
+   it reads as a button before the pointer finds it (BlockUIComponents). The hover rule above deepens it. */
+.block .block-delete-button {
+    -fx-min-width: 24px;
+    -fx-pref-width: 24px;
+    -fx-max-width: 24px;
+    -fx-min-height: 24px;
+    -fx-pref-height: 24px;
+    -fx-max-height: 24px;
+    -fx-font-size: 13px;
+    -fx-opacity: 1.0;
+    -fx-background-color: ladder(-bm-text-on-color, rgba(255, 255, 255, 0.22) 49%, rgba(0, 0, 0, 0.14) 50%);
+    -fx-background-radius: 999;
+}
 
 /*
  * TRUE / FALSE (BooleanLiteralBlock): the two answers as the two signal colours every theme already defines —
@@ -947,6 +975,9 @@
 }
 .high-contrast-theme .block-category.shape-reporter {
     -fx-border-radius: 12;
+}
+.high-contrast-theme .body-block > .block-category {
+    -fx-border-radius: 0;
 }
 /* And no ghosts: a half-strength glyph is exactly what this theme exists to refuse. */
 .high-contrast-theme .block .icon-button {

@@ -25,10 +25,18 @@ public final class BlockUIComponents {
 
     private BlockUIComponents() {}
 
+    /**
+     * The one delete button on a block, whichever part of it deletes: a line, a case, a catch. A 24px round
+     * target at full strength with a gap from the block's edge — it was an 18×16 ghost pressed against the
+     * right edge, which is also where the seam's "+" used to land (see {@code InsertionSeam}).
+     */
     public static Button createDeleteButton(Runnable onDelete) {
-        Button btn = new Button("X");
-        btn.getStyleClass().add("icon-button");
+        Button btn = new Button("✕");
+        btn.getStyleClass().addAll("icon-button", "block-delete-button");
+        btn.setFocusTraversable(false);
         btn.setOnAction(e -> onDelete.run());
+        HBox.setMargin(btn, new javafx.geometry.Insets(0, 6, 0, 4));
+        Tooltip.install(btn, new Tooltip("Delete"));
         return btn;
     }
 

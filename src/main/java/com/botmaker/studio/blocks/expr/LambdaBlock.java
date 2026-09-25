@@ -53,21 +53,18 @@ public class LambdaBlock extends AbstractExpressionBlock implements BlockWithChi
     @Override
     public ComponentSpec componentSpec(CodeEditorService context) {
         LambdaExpression lambda = (LambdaExpression) astNode;
-        ComponentSpec.Builder spec = ComponentSpec.builder()
-                .label("open", () -> SentenceLayoutBuilder.labelNode("("));
+        ComponentSpec.Builder spec = ComponentSpec.builder();
         List<?> parameters = lambda.parameters();
         for (int i = 0; i < parameters.size(); i++) {
             Object parameter = parameters.get(i);
             SimpleName name = LambdaCallHandler.declaredName(parameter);
-            if (i > 0) spec.label("comma" + i, () -> SentenceLayoutBuilder.labelNode(","));
             if (parameter instanceof SingleVariableDeclaration typed) {
                 spec.label("type" + i, () -> SentenceLayoutBuilder.labelNode(typed.getType().toString()));
             }
             spec.custom("param" + i, () -> TextFieldComponents.createVariableName(name.getIdentifier(),
                     !isReadOnly(), newName -> context.getCodeEditor().renameLambdaParameter(name, newName)));
         }
-        spec.label("close", () -> SentenceLayoutBuilder.labelNode(")"))
-                .label("arrow", () -> SentenceLayoutBuilder.keywordNode("→"));
+        spec.label("arrow", () -> SentenceLayoutBuilder.keywordNode("→"));
         if (blockBody != null) {
             spec.body("body", () -> LayoutComponents.createIndentedBody(blockBody.getUINode(context), "if-body"));
         } else {

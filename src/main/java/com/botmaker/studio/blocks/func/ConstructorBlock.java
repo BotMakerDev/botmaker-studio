@@ -54,7 +54,7 @@ public class ConstructorBlock extends MethodDeclarationBlock {
         headerBox.getChildren().add(topRowBuilder.build());
 
         // 2. Parameters Row (Reusing parent logic for creating parameter pills)
-        Label paramsLabel = new Label("Inputs:");
+        Label paramsLabel = new Label("Inputs");
         paramsLabel.getStyleClass().add("header-params-label");
 
         var paramRowBuilder = BlockLayout.sentence().addNode(paramsLabel);

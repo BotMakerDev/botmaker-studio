@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 3, phase 2: statement menu per plugin, pins, fewer categories.**
+- **2026-09-25 (latest) — Blocks round 3, phase 3: glued corners, delete button, no punctuation.**
+  - `blocks.css`: `.body-block > .block-category` has radius 0 in filled, outlined and high contrast. A block in a body is as wide as the body, so every corner touches something coloured.
+  - `BlockUIComponents.createDeleteButton` is the one delete button, now used by `HeaderLayoutBuilder` too. It is a round 24px `✕` (`.block-delete-button`) on a resting wash, with a 6px right margin.
+  - `InsertionSeam` puts the "+" at `PLUS_X` (notch + 8) instead of under the pointer.
+  - Punctuation labels are removed from `MethodInvocationBlock`, `BodyCallBlock`, `ConstructorCallBlock`, `SuperAccessBlock`, `LambdaBlock`, `InstantiationBlock`, `FieldAccessBlock`, `EnumConstantBlock`, `MethodReferenceBlock`, `SwitchBlock`, `LabeledBlock`, `PrintBlock` and `TypeLiteralBlock`. `!` became *not*; the `,` in `DeclarationExpressionBlock` became *and* and in `SwitchExpressionBlock` became *or*.
+  - Gallery screenshots regenerated.
+- **2026-09-25 — Blocks round 3, phase 2: statement menu per plugin, pins, fewer categories.**
   - `StatementMenu`:
     - FROM PLUGINS groups facades by `PluginHost.pluginNameFor`. A single-facade plugin lists `Class.method` directly.
     - PINNED leads the menu.

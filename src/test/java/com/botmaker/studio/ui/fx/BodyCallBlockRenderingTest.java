@@ -166,8 +166,8 @@ class BodyCallBlockRenderingTest extends FxHeadlessTest {
 
         assertNotNull(ui, "the block produced no UI node");
         List<String> labels = labelTexts(ui);
-        assertTrue(labels.contains("(") && labels.contains(")"),
-                "the argument slot must read as a call: " + labels);
+        assertTrue(labels.stream().noneMatch(l -> l.equals("(") || l.equals(")") || l.equals(".")),
+                "a call is words and pills, not punctuation: " + labels);
         assertTrue(labels.contains("ImageFinder"), "the receiver is drawn as written: " + labels);
         assertTrue(labels.contains("whileFind"), "and so is the method: " + labels);
     }

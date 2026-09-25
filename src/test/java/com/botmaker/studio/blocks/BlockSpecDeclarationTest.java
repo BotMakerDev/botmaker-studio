@@ -333,9 +333,9 @@ class BlockSpecDeclarationTest {
                 + "finder.each(1, 2, found -> { int a = 1; });";
         ComponentSpec spec = blockOf(inRun(call), "BodyCallBlock").componentSpec(null);
 
-        assertEquals(List.of("scope", "dot", "method", "open",
-                        "arg0", "arg0-change", "sep1", "arg1", "arg1-change",
-                        "close", "body"),
+        assertEquals(List.of("scope", "method",
+                        "arg0", "arg0-change", "arg1", "arg1-change",
+                        "body"),
                 ids(spec));
     }
 
@@ -411,9 +411,9 @@ class BlockSpecDeclarationTest {
         ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
                 .componentSpec(null);
 
-        assertEquals(List.of("kind", "scope", "dot", "method", "signature", "open",
+        assertEquals(List.of("kind", "scope", "method", "signature",
                         "arg0", "arg0-remove", "arg1", "arg1-remove",
-                        "images", "varargs-add", "close", "returns", "info"),
+                        "images", "varargs-add", "returns", "info"),
                 ids(spec));
     }
 
@@ -449,7 +449,7 @@ class BlockSpecDeclarationTest {
         ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
                 .componentSpec(null);
 
-        assertEquals(15, spec.components().size());
+        assertEquals(12, spec.components().size());
         for (BlockComponent component : spec.components()) assertNotNull(component.node());
     }
 

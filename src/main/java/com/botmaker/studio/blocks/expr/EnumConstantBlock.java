@@ -61,9 +61,6 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
         }
         // --- INTERACTIVITY END ---
 
-        Label dot = new Label(".");
-        dot.getStyleClass().add("block-chip");
-
         ComboBox<String> constantSelector = new ComboBox<>();
         constantSelector.getStyleClass().add("block-selector");
 
@@ -89,7 +86,6 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
 
         HBox container = BlockLayout.sentence()
                 .addNode(typeLabel)
-                .addNode(dot)
                 .addNode(constantNode)
                 .build();
 

@@ -122,6 +122,16 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **Stacked blocks join cleanly, delete is easy to hit, and blocks read without punctuation.**
+  - A block inside a function, loop or branch has square corners. Its rounded corners let small white
+    wedges show where it met the block above, the block below or the frame around it.
+  - The delete button is a round 24px button that is always visible, with a gap from the block's edge. It
+    was a faint 18px "X" pressed against the edge.
+  - The "+" that inserts between two blocks now appears at the left, beside the joint. It used to follow
+    the pointer, and at the right end it covered the delete button.
+  - Calls and other blocks no longer show `(`, `,`, `)`, `.`, `::` or `:`. Each argument is its own pill.
+    Some symbols became words: `!` reads *not*, `super.name` reads *super name*, and case labels are joined
+    with *or*.
 - **The insert menu is organised by plugin, and you can pin entries.**
   - Each plugin now gets one submenu, named after the plugin, with its classes inside. A plugin with a
     single class lists its calls directly, as `Class.method`.

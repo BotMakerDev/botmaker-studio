@@ -238,7 +238,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         HBox topRow = topRowBuilder.build();
 
         // 4. Parameters Row
-        Label paramsLabel = new Label("Inputs:");
+        Label paramsLabel = new Label("Inputs");
         paramsLabel.getStyleClass().add("header-params-label");
 
         var paramRowBuilder = BlockLayout.sentence()

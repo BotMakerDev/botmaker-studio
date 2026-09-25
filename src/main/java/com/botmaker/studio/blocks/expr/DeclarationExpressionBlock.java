@@ -60,7 +60,7 @@ public class DeclarationExpressionBlock extends AbstractExpressionBlock implemen
         List<VariableDeclarationFragment> fragments = fragments();
         for (int i = 0; i < fragments.size(); i++) {
             VariableDeclarationFragment fragment = fragments.get(i);
-            if (i > 0) spec.label("comma" + i, () -> SentenceLayoutBuilder.labelNode(","));
+            if (i > 0) spec.label("and" + i, () -> SentenceLayoutBuilder.keywordNode("and"));
             spec.custom("name" + i, () -> TextFieldComponents.createVariableName(
                     fragment.getName().getIdentifier(), !isReadOnly(),
                     name -> context.getCodeEditor().renameScopedVariable(fragment.getName(), name)));

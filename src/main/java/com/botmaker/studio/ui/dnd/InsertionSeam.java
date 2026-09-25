@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.dnd;
 
+import com.botmaker.studio.core.render.StackJoints;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Tooltip;
@@ -9,7 +10,7 @@ import javafx.scene.layout.Region;
 /**
  * Where a block can go between two others, now that blocks stack touching. It takes no room: a zero-height
  * pane on the seam, with an 8px hit strip centred on it that reaches 4px into the block above and 4px into
- * the one below. Hovering the strip draws a line along the seam and a round "+" under the pointer; a drag over
+ * the one below. Hovering the strip draws a line along the seam and a round "+" beside the joint; a drag over
  * it lights the same line in the drop colour.
  *
  * <p>It replaced a 12px gap between every pair of statements, which was the reason blocks never looked glued:
@@ -28,6 +29,8 @@ public final class InsertionSeam {
     public static final double RESTING_VIEW_ORDER = -1.0;
     /** A hovered seam goes further forward, so the "+" is drawn over whatever it overhangs. */
     public static final double HOVERED_VIEW_ORDER = -100.0;
+    /** Where the "+" sits: just right of the notch and tab that join two blocks. */
+    public static final double PLUS_X = StackJoints.LEFT + StackJoints.WIDTH + 8;
 
     private InsertionSeam() {}
 
@@ -70,10 +73,7 @@ public final class InsertionSeam {
 
         seam.setOnMouseEntered(e -> {
             if (e.isPrimaryButtonDown()) return; // a drag paints the line itself
-            show(seam, plus, e.getX());
-        });
-        seam.setOnMouseMoved(e -> {
-            if (plus.isVisible() && !plus.isHover()) place(plus, seam.getWidth(), e.getX());
+            show(seam, plus);
         });
         seam.setOnMouseExited(e -> {
             // Its menu open, the "+" stays: the pointer is in the menu, and the "+" is what it hangs from.
@@ -85,11 +85,11 @@ public final class InsertionSeam {
         return seam;
     }
 
-    static void show(Pane seam, Button plus, double x) {
+    static void show(Pane seam, Button plus) {
         plus.setVisible(true);
         seam.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("seam-hover"), true);
         seam.setViewOrder(HOVERED_VIEW_ORDER);
-        place(plus, seam.getWidth(), x);
+        place(plus, seam.getWidth());
     }
 
     static void hide(Pane seam, Button plus) {
@@ -98,10 +98,14 @@ public final class InsertionSeam {
         seam.setViewOrder(RESTING_VIEW_ORDER);
     }
 
-    /** Under the pointer, kept inside the seam's width. */
-    private static void place(Button plus, double width, double x) {
-        double left = Math.max(0, Math.min(x - BUTTON_SIZE / 2, width - BUTTON_SIZE));
-        plus.setLayoutX(left);
+    /**
+     * Beside the joint, kept inside the seam's width. It followed the pointer until 2026-09-25, and at the right
+     * end of a seam it landed on the delete button of the block below, which is where a pointer heading for
+     * that button crosses the seam first. At the joint it is where a new block would slot in, and nothing else
+     * on a block lives there.
+     */
+    private static void place(Button plus, double width) {
+        plus.setLayoutX(Math.max(0, Math.min(PLUS_X, width - BUTTON_SIZE)));
     }
 
     /** The seam's "+", or null for a read-only seam. */

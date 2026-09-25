@@ -21,8 +21,8 @@ public final class StackJoints {
     public static final String TAB = "block-tab";
 
     /** Distance of the joint from the block's left edge, past the breakpoint gutter. */
-    static final double LEFT = 22;
-    static final double WIDTH = 18;
+    public static final double LEFT = 22;
+    public static final double WIDTH = 18;
     static final double DEPTH = 4;
 
     private StackJoints() {}

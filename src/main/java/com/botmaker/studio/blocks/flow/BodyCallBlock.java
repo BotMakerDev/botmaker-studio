@@ -97,16 +97,13 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
 
         ComponentSpec.Builder spec = ComponentSpec.builder();
         if (!receiver.isEmpty()) {
-            spec.custom("scope", this::receiverChip)
-                    .label("dot", () -> SentenceLayoutBuilder.labelNode("."));
+            spec.custom("scope", this::receiverChip);
         }
-        spec.label("method", () -> SentenceLayoutBuilder.labelNode(method))
-                .label("open", () -> SentenceLayoutBuilder.labelNode("("));
+        spec.label("method", () -> SentenceLayoutBuilder.labelNode(method));
 
         for (int i = 0; i < arguments.size(); i++) {
             ExpressionBlock argument = arguments.get(i);
             int index = i;
-            if (i > 0) spec.label("sep" + i, () -> SentenceLayoutBuilder.labelNode(","));
             spec.slot("arg" + i, () ->
                             SentenceLayoutBuilder.expressionSlotNode(argument, context, slotType.apply(index)))
                     .picker("arg" + i + "-change", () -> createAddButton(e -> showExpressionMenuAndReplace(
@@ -116,8 +113,7 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
                             argument != null ? (Expression) argument.getAstNode() : null)));
         }
 
-        return spec.label("close", () -> SentenceLayoutBuilder.labelNode(")"))
-                .body("body", () -> createIndentedBody(body, context, "sdk-lambda-body"))
+        return spec.body("body", () -> createIndentedBody(body, context, "sdk-lambda-body"))
                 .build();
     }
 

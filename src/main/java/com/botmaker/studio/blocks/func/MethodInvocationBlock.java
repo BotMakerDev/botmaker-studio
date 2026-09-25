@@ -168,7 +168,6 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         ComponentSpec.Builder spec = ComponentSpec.builder()
                 .label("kind", this::ownerBadge)
                 .custom("scope", () -> controls.get().scopeNode())
-                .label("dot", () -> SentenceLayoutBuilder.labelNode("."))
                 .custom("method", () -> methodNode(context, controls.get()));
 
         if (!isReadOnly()) {
@@ -178,7 +177,7 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
             spec.picker("signature", () -> signatureButton(context, controls.get()));
         }
 
-        spec.label("open", () -> SentenceLayoutBuilder.labelNode("("));
+        // No "(", "," or ")": each argument is a pill of its own, and the gap between two pills is the comma.
         for (int i = 0; i < arguments.size(); i++) {
             int index = i;
             spec.slot("arg" + index, () -> argumentNode(context, plan.get(), index));
@@ -190,7 +189,6 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // case the row exists for most.
         spec.picker("images", () -> plan.get().imageVarargsFrom() < 0 ? null : plan.get().imageRow());
         spec.picker("varargs-add", () -> varargsButton(context, plan.get()));
-        spec.label("close", () -> SentenceLayoutBuilder.labelNode(")"));
 
         // After the arguments, per the block layout: what the call yields, then the help.
         spec.label("returns", () -> returnTypeBadge(context, controls.get()));

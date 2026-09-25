@@ -61,12 +61,11 @@ public class MethodReferenceBlock extends AbstractExpressionBlock {
         Label target = new Label(targetName);
         target.getStyleClass().add("method-ref-target");
 
-        Label sep = createOperatorLabel("::");
-
         Label method = new Label(methodName);
         method.getStyleClass().add("method-ref-name");
 
-        HBox box = new HBox(2, target, sep, method);
+        // Two chips and no "::" between them: the gap is the boundary, as it is between any two words.
+        HBox box = new HBox(4, target, method);
         box.getStyleClass().add("method-ref-block");
 
         // Only offer navigation when the qualifier actually resolves to a file in this project — a reference

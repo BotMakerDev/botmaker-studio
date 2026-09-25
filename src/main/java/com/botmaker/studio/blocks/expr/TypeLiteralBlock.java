@@ -18,7 +18,7 @@ public class TypeLiteralBlock extends AbstractExpressionBlock {
     public ComponentSpec componentSpec(CodeEditorService context) {
         return ComponentSpec.builder()
                 .custom("type", () -> typeField(astNode, context))
-                .label("class", () -> SentenceLayoutBuilder.keywordNode(".class"))
+                .label("class", () -> SentenceLayoutBuilder.keywordNode("class"))
                 .build();
     }
 

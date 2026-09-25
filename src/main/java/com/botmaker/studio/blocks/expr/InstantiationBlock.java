@@ -103,19 +103,16 @@ public class InstantiationBlock extends AbstractExpressionBlock {
                 .alignment(Pos.CENTER_LEFT)
                 .addLabel("Create")
                 .addNode(classSelector)
-                .addNode(constructorBtn)
-                .addLabel("(");
+                .addNode(constructorBtn);
 
         MethodSignature currentSig = determineCurrentSignature(context);
 
         for (int i = 0; i < arguments.size(); i++) {
             ExpressionBlock arg = arguments.get(i);
 
-            if (i > 0) sentenceBuilder.addLabel(",");
-
             Label paramLabel = null;
             if (currentSig != null && i < currentSig.paramNames().size()) {
-                paramLabel = new Label(currentSig.paramNames().get(i) + ":");
+                paramLabel = new Label(currentSig.paramNames().get(i));
                 paramLabel.getStyleClass().add("param-name-label");
             }
 
@@ -125,8 +122,6 @@ public class InstantiationBlock extends AbstractExpressionBlock {
 
             sentenceBuilder.addNode(createArgumentPill(context, arg, paramType, paramLabel));
         }
-
-        sentenceBuilder.addLabel(")");
 
         HBox container = sentenceBuilder.build();
         container.getStyleClass().add("instantiation-block");

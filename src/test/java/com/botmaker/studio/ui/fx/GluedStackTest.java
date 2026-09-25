@@ -111,6 +111,37 @@ class GluedStackTest extends FxHeadlessTest {
                 .getViewOrder(), "a block is drawn ahead of the one below, so its tab lies over their join");
     }
 
+    @Test
+    void aStatementInABodyIsSquareSoNoCanvasShowsAtAJoin() {
+        VBox body = rendered(nested());
+        for (Node statement : statementsOf(body)) {
+            assertEquals(javafx.scene.layout.CornerRadii.EMPTY, radii(statement),
+                    statement.getClass().getSimpleName() + " touches something coloured at every corner");
+        }
+        Parent loop = (Parent) statementsOf(body).get(1);
+        Node inMouth = statementsOf((VBox) loop.lookup(".bc-body").lookup(".body-block")).getFirst();
+        assertEquals(javafx.scene.layout.CornerRadii.EMPTY, radii(inMouth), "the header and the arm touch it");
+    }
+
+    @Test
+    void theSeamsPlusSitsBesideTheJointWhereverThePointerEnters() {
+        VBox body = rendered(threeStatements());
+        Pane seam = (Pane) body.getChildren().stream()
+                .filter(n -> n.getStyleClass().contains("block-seam")).skip(1).findFirst().orElseThrow();
+        Button plus = (Button) seam.getChildren().stream().filter(n -> n instanceof Button).findFirst().orElseThrow();
+        interact(() -> seam.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_ENTERED,
+                seam.getWidth() - 5, 0, 0, 0, javafx.scene.input.MouseButton.NONE, 0,
+                false, false, false, false, false, false, false, false, false, false, null)));
+
+        assertTrue(plus.isVisible());
+        assertEquals(InsertionSeam.PLUS_X, plus.getLayoutX(), 0.01,
+                "entering at the right end must not put the \"+\" over the delete button");
+    }
+
+    private static javafx.scene.layout.CornerRadii radii(Node block) {
+        return ((Region) block).getBackground().getFills().getFirst().getRadii();
+    }
+
     private static EditorFixture nested() {
         return new EditorFixture("""
                 package com.mybot;

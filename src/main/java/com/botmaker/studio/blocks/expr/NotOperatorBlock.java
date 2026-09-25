@@ -25,9 +25,9 @@ public class NotOperatorBlock extends AbstractExpressionBlock {
 
     @Override
     protected Node createUINode(CodeEditorService context) {
-        // "!" [Expression] [Change]
+        // not [Expression] [Change]
         var sentence = BlockLayout.sentence()
-                .addLabel("!")
+                .addKeyword("not")
                 .addExpressionSlot(operand, context, ResolvedType.BOOLEAN)
                 .addNode(createChangeButton(e ->
                         showExpressionMenuAndReplace((Button)e.getSource(), context, ResolvedType.BOOLEAN,

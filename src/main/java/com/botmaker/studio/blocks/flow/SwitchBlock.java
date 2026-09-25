@@ -200,7 +200,7 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
             var caseHeaderBuilder = BlockLayout.sentence();
 
             if (isDefault()) {
-                caseHeaderBuilder.addKeyword("default:");
+                caseHeaderBuilder.addKeyword("default");
             } else {
                 // strict filtering for case values
                 Button changeBtn = createChangeButton(e -> {
@@ -220,8 +220,7 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
                 caseHeaderBuilder
                         .addKeyword("case")
                         .addExpressionSlot(caseExpression, context, switchType)
-                        .addNode(changeBtn)
-                        .addKeyword(":");
+                        .addNode(changeBtn);
             }
 
             if (index >= 0 && !isReadOnly()) {
