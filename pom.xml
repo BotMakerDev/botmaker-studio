@@ -39,7 +39,6 @@
         <botmaker.pluginhost.version>0.0.0-SNAPSHOT</botmaker.pluginhost.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
-        <langchain4j.version>1.20.0</langchain4j.version>
         <mcp.version>2.0.1</mcp.version>
         <jetty.version>12.1.13</jetty.version>
         <!-- Numeric-only version for jpackage (rejects -SNAPSHOT / non-numeric versions). -->
@@ -341,35 +340,8 @@
             <version>6.10.0.202406032230-r</version>
         </dependency>
 
-        <!-- LangChain4j: the assistant pane's model client (assist/AssistantService). The core carries the
-             tool loop (AiServices, @Tool); one module per provider, so the model is the user's choice and
-             none is BotMaker's. Every provider module talks through langchain4j-http-client-jdk, the JDK's
-             own HttpClient, so no second HTTP stack arrives with them. -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-ollama</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-open-ai</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-anthropic</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-google-ai-gemini</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
+        <!-- LangChain4j stood here (2026-09-24 to 2026-09-25): the Assistant tab's own model client. A Claude
+             subscription cannot feed an API client, so the tab runs the AI CLIs themselves over MCP instead. -->
 
         <!-- MCP: the same assistant tools served to any MCP client (assist/McpEndpoint), off by default.
              mcp-core plus the Jackson 2 mapper rather than the `mcp` bundle, which brings Jackson 3 beside

@@ -22,18 +22,16 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 - **A plugin can ask Studio for its missing file.** When a project has no `Sdk.java`, the Activity Flow
   window's *Create Sdk.java* has Studio write `plugins/sdk/Sdk.java` once, with an empty flow and the whole
   desktop as the capture source. An existing file is never overwritten, and `main` is left for you to edit.
-- **An Assistant tab.** Ask a model in plain words to change the open file's blocks. Choose Ollama (local,
-  no key), OpenAI, any OpenAI-compatible server, Anthropic or Gemini; a key is read from the environment
-  (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and never saved. The tab shows each tool call
-  the model made, and its edits land together when it answers, as one step Undo takes back.
-  The model is picked from the provider's own list: the Ollama models installed on this machine, or what
-  OpenAI, Anthropic, Gemini or the OpenAI-compatible server offers (chat models only, newest first). ↻ asks
-  again, a model the list lacks can still be typed, and a missing key or a server that is down is said on the
-  same line.
-- **Studio as an MCP server.** *Serve to MCP clients* in the Assistant tab lets Claude Code, Cursor or any
-  other MCP client edit the open file with the same tools and checks. It listens on `127.0.0.1:7431` only and
-  needs a token; *Copy Claude Code setup* copies the `claude mcp add` command with both. Each accepted edit
-  is applied at once, as its own undo step. Off by default.
+- **An Assistant tab that runs your AI tool inside Studio.** Pick Claude Code, Codex, Gemini CLI or opencode
+  and press *Open*: it runs in a terminal in the tab, logged in as you (a Claude subscription works), and
+  changes the open file's blocks through Studio's tools. It cannot edit your files directly — each tool is
+  started with its file-writing tools turned off, and Codex in its read-only sandbox — so every change is
+  compiled first and is one step Undo takes back. Shell commands are off too unless you tick *Allow shell
+  commands*. A tool that is not installed is greyed, with the command that installs it.
+- **Studio as an MCP server.** Opening a tool in the Assistant tab starts it; *Serve to other MCP clients*
+  keeps it on for Cursor or a terminal outside Studio. It listens on `127.0.0.1:7431` only and needs a token;
+  *Copy Claude Code setup* copies the `claude mcp add` command with both. Each accepted edit is applied at
+  once, as its own undo step.
 - **The tool layer an assistant edits blocks through** (`assist/AssistTurn`). A model reads the palette and the file's statements and slots by id, and inserts, sets or deletes
   through the same `CodeEditor` calls the canvas makes. It cannot write Java: an insert names a palette entry,
   and a slot value is read by the value grammar as the slot's type and written back in the host's spelling.

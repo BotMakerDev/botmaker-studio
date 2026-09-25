@@ -6,7 +6,19 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Bottom panels phase 2: a real Terminal tab.**
+- **2026-09-25 (latest) — Bottom panels phase 3: the Assistant tab runs AI CLIs over MCP, edits denied.**
+  - `assist/AiTool` (Claude Code, Codex, Gemini CLI, opencode, `UNKNOWN`): `locate` (PATH, then `~/.local/bin`
+    and friends, then the login shell's `command -v`), `launch` (the endpoint + that tool's deny list, token in
+    a 0600 file or the environment, never argv), `viaLoginShell` (so `nvm`/`mise` installs find `node`).
+    Codex's `-c mcp_servers…` and opencode's `OPENCODE_CONFIG` checked against the installed CLIs; Gemini's
+    settings keys are not (no CLI here). `AiToolTest`.
+  - `AssistantPane` rewritten: tool picker, *Open* → a `TerminalView` sub-tab; the endpoint starts with the
+    first tool and stops with the last unless *Serve to other MCP clients*. Config dir 0700, deleted on dispose.
+  - Deleted: `AssistantService`, `ModelFactory`, `Provider`, `AssistantSettings`, their tests,
+    `ProjectPreferences.assistant`, the five LangChain4j modules. `AssistTools` lost its `@Tool` annotations;
+    the server instructions are `McpTools.INSTRUCTIONS`. Umbrella `38-llm-edits.md` §5 rewritten.
+
+- **2026-09-25 — Bottom panels phase 2: a real Terminal tab.**
   - `services/terminal/PtySession` (pty4j 0.13.10, the remote server's library): a program on a PTY, bytes
     in and out, a size, `close()` = hang-up then kill after 1 s. `ui/app/terminal/TerminalView`: xterm.js 5.5.0
     + addon-fit 0.10.0, vendored under `resources/terminal/` (MIT), in a `WebView` (`javafx-web` added);

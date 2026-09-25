@@ -1,6 +1,5 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.studio.assist.AssistantSettings;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,8 +65,8 @@ public class ProjectPreferences {
     private boolean hideWaylandNotice;
     /** How the project list is sorted, by {@code ProjectSelectionScreen.SortMode} name. Null = the default. */
     private String projectSortMode;
-    /** Which model the assistant pane talks to. Never a key: those come from the environment only. */
-    private AssistantSettings assistant;
+    // The Assistant tab's model choice (`assistant`) lived here for a day, until 2026-09-25: the tab runs AI
+    // CLIs now, each with its own login. An older file still carrying the key reads fine (unknown properties).
     /**
      * Statement-menu entries the user pinned to the top, by palette id, in pin order. Global rather than
      * per-project, like {@link #recentLaunchTargets}: a block reached for in one bot is reached for in the next.
@@ -99,8 +98,6 @@ public class ProjectPreferences {
     public void setHideWaylandNotice(boolean hide) { this.hideWaylandNotice = hide; }
     public String getProjectSortMode() { return projectSortMode; }
     public void setProjectSortMode(String mode) { this.projectSortMode = mode; }
-    public AssistantSettings getAssistant() { return assistant; }
-    public void setAssistant(AssistantSettings assistant) { this.assistant = assistant; }
     public List<String> getPinnedStatements() { return pinnedStatements; }
     public void setPinnedStatements(List<String> ids) {
         this.pinnedStatements = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
@@ -280,18 +277,6 @@ public class ProjectPreferences {
     public static void saveDialogState(String key, WindowState state) {
         ProjectPreferences prefs = load();
         prefs.getDialogWindows().put(key, state);
-        prefs.save();
-    }
-
-    /** The assistant pane's model, or its defaults when never chosen. */
-    public static AssistantSettings loadAssistant() {
-        AssistantSettings saved = load().getAssistant();
-        return saved == null ? AssistantSettings.defaults() : saved;
-    }
-
-    public static void saveAssistant(AssistantSettings settings) {
-        ProjectPreferences prefs = load();
-        prefs.setAssistant(settings);
         prefs.save();
     }
 

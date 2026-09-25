@@ -20,7 +20,7 @@ enum BottomTab {
     /** What a refactor changed and could not finish — see {@link ReviewPanel}. */
     REVIEW("Review"),
     VCS("VCS"),
-    /** A model changing the open file's blocks through the host's own edit checks — see {@link AssistantPane}. */
+    /** AI command-line tools changing the bot over MCP, direct edits denied — see {@link AssistantPane}. */
     ASSISTANT("Assistant");
 
     private final String title;

@@ -25,7 +25,8 @@ import java.util.Objects;
 
 /**
  * Serves {@link McpTools} over MCP's streamable HTTP transport, so any MCP client — Claude Code, Cursor, Codex,
- * Gemini CLI, a local runner — can edit the file open in Studio through the same checks the Assistant tab uses.
+ * Gemini CLI, opencode, a local runner — can edit the file open in Studio through the host's own edit checks.
+ * The Assistant tab starts it when it opens an AI tool ({@link AiTool}), and points that tool here.
  *
  * <p><b>Local and authenticated.</b> Bound to {@code 127.0.0.1} only, and every request must carry
  * {@code Authorization: Bearer <token>}: a loopback port is reachable by every process on the machine and, via
@@ -58,7 +59,7 @@ public final class McpEndpoint implements AutoCloseable {
                 .jsonMapper(json).mcpEndpoint(PATH).build();
         McpSyncServer mcp = McpServer.sync(transport)
                 .serverInfo("botmaker-studio", "1")
-                .instructions(AssistantService.SYSTEM_PROMPT)
+                .instructions(McpTools.INSTRUCTIONS)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
                 .tools(McpTools.all(json, file))
                 .build();

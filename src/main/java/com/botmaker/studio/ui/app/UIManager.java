@@ -221,7 +221,8 @@ public class UIManager implements ProjectWindow {
             workspaceLayout = null;
         }
         BlockTheme.removeThemeChangeListener(themeListener);
-        // The MCP endpoint holds a port and serves this window's project; the next window starts its own.
+        // The AI tools are child processes, and the MCP endpoint holds a port and serves this window's project;
+        // the next window starts its own.
         assistantPane.dispose();
         if (identityCluster != null) {
             identityCluster.dispose();
@@ -438,10 +439,12 @@ public class UIManager implements ProjectWindow {
         Tab reviewTab = bottomTabs.get(BottomTab.REVIEW);
         // The first shell starts when the Terminal tab is first shown, never at open.
         Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
+        Tab assistantTab = bottomTabs.get(BottomTab.ASSISTANT);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now == vcsTab && vcsPanel != null) vcsPanel.refresh();
             if (now == reviewTab && reviewPanel != null) reviewPanel.refresh();
             if (now == terminalTab) terminalPane.activate();
+            if (now == assistantTab) assistantPane.activate();
         });
 
         // --- 5. Layout Assembly ---

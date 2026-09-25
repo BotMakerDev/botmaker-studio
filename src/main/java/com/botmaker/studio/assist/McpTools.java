@@ -12,14 +12,25 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 /**
- * The assistant's tools as MCP serves them. Same operations and same checks as the Assistant tab — each call
- * goes through {@link AssistTools} over a fresh {@link AssistTurn} — with one difference: an MCP client has no
- * "end of reply" Studio can see, so <b>every edit is its own turn</b>, committed when it is accepted, and
- * therefore its own undo step.
+ * The assistant's tools as MCP serves them: each call goes through {@link AssistTools} over a fresh
+ * {@link AssistTurn}. An MCP client has no "end of reply" Studio can see, so <b>every edit is its own
+ * turn</b>, committed when it is accepted, and therefore its own undo step.
  */
 public final class McpTools {
 
     private McpTools() {}
+
+    /** What the server tells every client at connect: how to work through these tools. */
+    public static final String INSTRUCTIONS = """
+            You edit a bot in BotMaker Studio, a block editor over Java. You work only through the tools.
+
+            - Read the file with read_tree before editing, and again after edits: ids below an insertion shift.
+            - Insert only what list_palette offers, by its id. You cannot write Java directly.
+            - A slot takes a value of its type: a literal, a constant, or a factory call of that type.
+            - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
+            - Each accepted edit lands in the user's file at once, as one step they can undo.
+            - Keep replies short: say what you changed, or what you could not do and why.
+            """;
 
     private static final String NO_FILE = "No file is open in BotMaker Studio. Open one and try again.";
 
