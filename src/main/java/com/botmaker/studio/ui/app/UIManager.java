@@ -192,8 +192,8 @@ public class UIManager implements ProjectWindow {
                 menuBarManager, toolbarManager,
                 () -> ProjectRecoveryAction.recover(ctx, fileExplorerManager::refreshTree));
         this.actions.wire();
-        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.botPublisher(), actions.gitHubAuth(),
-                actions.gitHubClient(), actions::openPublishDialog);
+        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.gitHubAuth(), actions.gitHubClient(),
+                actions::openPublishDialog);
         menuBarManager.setOnShowHistory(() -> selectBottomTab(BottomTab.VERSIONS));
 
         // Initialize theme system and set up theme change listener

@@ -58,7 +58,18 @@ final class DiffCards {
      * @param diff     the block comparison, or null for a file that is not Java
      * @param textDiff the unified diff, for a card that falls back to text
      */
-    record Input(String path, VersionReader.Sides sides, BlockDiff.FileDiff diff, String textDiff) {}
+    record Input(String path, VersionReader.Sides sides, BlockDiff.FileDiff diff, String textDiff,
+                 String beforeHeading, String afterHeading) {
+
+        /** A version's change: Before | After. */
+        Input(String path, VersionReader.Sides sides, BlockDiff.FileDiff diff, String textDiff) {
+            this(path, sides, diff, textDiff, "Before", "After");
+        }
+    }
+
+    /** The column headings of the file being built — Before | After, or Yours | Theirs in an update. */
+    private String beforeHeading = "Before";
+    private String afterHeading = "After";
 
     private final ProjectConfig config;
     private final ProjectState live;
@@ -78,6 +89,8 @@ final class DiffCards {
     }
 
     Node build(Input in, Actions actions) {
+        beforeHeading = in.beforeHeading();
+        afterHeading = in.afterHeading();
         VBox out = new VBox(10);
         out.getStyleClass().add("versions-diff");
         out.setPadding(new Insets(8));
@@ -174,9 +187,9 @@ final class DiffCards {
         return card;
     }
 
-    private static Node sideBySide(Node before, Node after) {
-        VBox left = column("Before", before);
-        VBox right = column("After", after);
+    private Node sideBySide(Node before, Node after) {
+        VBox left = column(beforeHeading, before);
+        VBox right = column(afterHeading, after);
         HBox.setHgrow(left, Priority.ALWAYS);
         HBox.setHgrow(right, Priority.ALWAYS);
         left.setMaxWidth(Double.MAX_VALUE);
@@ -259,7 +272,7 @@ final class DiffCards {
         return l;
     }
 
-    private static Node pictures(VersionReader.Sides sides) {
+    private Node pictures(VersionReader.Sides sides) {
         return sideBySide(picture(sides.before()), picture(sides.after()));
     }
 

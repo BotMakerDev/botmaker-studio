@@ -20,7 +20,7 @@ class SyncModelTest {
 
     private static SyncModel model(String login, String mine, String original, int unsaved, int notIn,
                                    String installed, String available) {
-        return SyncModel.of(new Facts(login, mine, original, unsaved, notIn, installed, available));
+        return SyncModel.of(new Facts(login, mine, original, unsaved, notIn, installed, available, false));
     }
 
     @Test
@@ -70,6 +70,24 @@ class SyncModelTest {
         SyncModel m = model("Alice", null, ALICE_BOT, 0, -1, "v1.0.0", null);
         assertEquals(Ownership.OWN_PUBLISHED, m.ownership(), "logins compare without case");
         assertEquals("alice/miner", m.mineSlug().orElseThrow().toString());
+    }
+
+    @Test
+    void aNewerReleaseIsOfferedByNameEvenSignedOut() {
+        SyncModel signedOut = model(null, null, ALICE_BOT, 0, -1, "v1.0.0", "v1.2.0");
+        assertEquals(List.of(Action.GET_UPDATE, Action.SIGN_IN), signedOut.also());
+        assertEquals("Get v1.2.0", signedOut.label(Action.GET_UPDATE));
+        SyncModel others = model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.0.0", "v1.2.0");
+        assertEquals(List.of(Action.GET_UPDATE, Action.SUGGEST), others.also());
+        assertEquals(List.of(Action.SUGGEST), model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.2.0", null).also());
+    }
+
+    @Test
+    void aHalfDoneUpdateComesFirst() {
+        SyncModel m = SyncModel.of(new Facts("bob", BOB_FORK, ALICE_BOT, 1, 0, "v1.0.0", "v1.2.0", true));
+        assertEquals(Action.FINISH_UPDATE, m.main());
+        assertTrue(m.also().isEmpty());
+        assertEquals("Updating — files to decide", m.thisComputer());
     }
 
     @Test

@@ -53,7 +53,7 @@ class VersionsPaneTest extends FxHeadlessTest {
             state.setActiveFile(file);
             StudioContext ctx = new StudioContext(config, state, new EventBus(false), null, null, null, null,
                     null, null, null, null);
-            pane = new VersionsPane(stage, ctx, null, null, null, null);
+            pane = new VersionsPane(stage, ctx, null, null, null);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

@@ -38,7 +38,6 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -396,46 +395,21 @@ public class GalleryDialog {
                             status.setText("update available: " + latest.get());
                             status.setStyle("-fx-font-size: 11px; -fx-text-fill: #1a7f37;");
                             updateBtn.setDisable(false);
-                            updateBtn.setOnAction(e -> updateBot(bot, updateBtn, status));
+                            updateBtn.setOnAction(e -> updateBot(bot, latest.get()));
                         }
                     }));
         }
     }
 
-    private void updateBot(InstalledBot bot, Button updateBtn, Label status) {
-        Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                "Updating replaces the files of “" + bot.info().name() + "” with the new release. Your changes "
-                        + "are kept as a version first — one restore away in the Versions tab.\n\nContinue?",
-                ButtonType.OK, ButtonType.CANCEL);
-        confirm.initOwner(stage);
-        confirm.setHeaderText("Update this bot?");
-        Optional<ButtonType> choice = confirm.showAndWait();
-        if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
-
-        updateBtn.setDisable(true);
-        updateBtn.setText("Updating…");
-        Path dir = bot.info().projectPath();
-        CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        return installer.update(dir, catalog.join());
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex.getMessage(), ex);
-                    }
-                })
-                .whenComplete((updatedTo, err) -> Platform.runLater(() -> {
-                    updateBtn.setText("Update");
-                    if (err != null) {
-                        updateBtn.setDisable(false);
-                        error("Update failed", rootMessage(err));
-                    } else if (updatedTo != null && updatedTo.isPresent()) {
-                        status.setText("updated to " + updatedTo.get());
-                        info("Updated", "“" + bot.info().name() + "” is now at " + updatedTo.get() + ".");
-                        refreshInstalled();
-                    } else {
-                        status.setText("up to date");
-                    }
-                }));
+    /**
+     * An update is a merge of the new release with the user's changes, made in the bot's own Versions tab
+     * ({@code docs/refactor/39-versions.md} §7) — this only says where. It used to replace the project in place.
+     */
+    private void updateBot(InstalledBot bot, String release) {
+        info("Update " + bot.info().name(),
+                "Open “" + bot.info().name() + "” and click Get " + release + " at the top of its Versions tab.\n\n"
+                        + "Your changes are kept: the new release is merged with them, and any file you both "
+                        + "changed is shown side by side for you to choose.");
     }
 
     // -------------------------------------------------------------------------

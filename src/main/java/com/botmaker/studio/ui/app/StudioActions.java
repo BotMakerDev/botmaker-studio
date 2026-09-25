@@ -164,8 +164,6 @@ final class StudioActions {
 
     GitHubClient gitHubClient() { return gitHubClient; }
 
-    BotPublisher botPublisher() { return botPublisher; }
-
     /** Opens the Publish-to-gallery dialog. Shared with the Versions tab's "Publish…" button. */
     void openPublishDialog() {
         new PublishDialog(primaryStage, gitHubAuth, gitHubClient, gallery, botPublisher, config).show();

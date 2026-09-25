@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -438,137 +437,10 @@ public final class BotPublisher {
         return GitHubConfig.API_BASE + "/repos/" + GitHubConfig.INDEX_OWNER + "/" + GitHubConfig.INDEX_REPO;
     }
 
-    // -------------------------------------------------------------------------
-    // Community patching (fork the origin bot repo, push a snapshot branch, open a PR upstream)
-    // -------------------------------------------------------------------------
-
-    /** Outcome of a patch submission: the opened PR's URL (may be blank if GitHub didn't return one). */
-    public record PatchResult(String pullRequestUrl) {}
-
-    /**
-     * Proposes the user's local changes back to the bot they installed: forks {@code origin.slug()}, pushes the
-     * current project snapshot onto a fresh branch in the fork, and opens a pull request against the origin's
-     * default branch. Reuses the same Git Data API tree-push as a publish. Blocking; run off the FX thread.
-     *
-     * @param origin the installed bot's provenance (from {@link BotSource}) — the PR target
-     */
-    public PatchResult submitPatch(Path projectDir, BotSource origin, String title, String body)
-            throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        if (origin == null) {
-            throw new IOException("This project has no upstream bot to patch.");
-        }
-        String token = auth.token();
-        String api = GitHubConfig.API_BASE;
-        String login = auth.login(client).join();
-        if (login.isBlank()) {
-            throw new IOException("Could not read your GitHub account.");
-        }
-        String originApi = api + "/repos/" + origin.owner() + "/" + origin.repo();
-
-        // Origin's default branch is the PR base.
-        JsonNode originRepo = client.get(originApi, token).join();
-        if (originRepo == null) {
-            throw new IOException("Upstream repo " + origin.slug() + " is unavailable.");
-        }
-        String baseBranch = originRepo.path("default_branch").asText("main");
-
-        // Fork it under the signed-in account (idempotent) and wait for the fork's tree to be readable.
-        client.post(originApi + "/forks", Map.of(), token).join();
-        String forkApi = api + "/repos/" + login + "/" + origin.repo();
-        if (!awaitForkRepo(forkApi, baseBranch, token)) {
-            throw new IOException("Couldn't reach your fork of " + origin.slug() + " — try again shortly.");
-        }
-
-        // Base the patch branch on the fork's current tip of the default branch.
-        String forkRefUrl = forkApi + "/git/refs/heads/" + baseBranch;
-        JsonNode forkRef = client.get(forkRefUrl, token).join();
-        String baseSha = (forkRef == null) ? null : forkRef.path("object").path("sha").asText(null);
-
-        Map<String, byte[]> files = ProjectArchive.collect(projectDir);
-        if (files.isEmpty()) {
-            throw new IOException("Nothing to submit — the project has no files.");
-        }
-        String message = (title == null || title.isBlank()) ? "Patch from BotMaker Studio" : title;
-        String commitSha = buildTreeCommit(forkApi, files, baseSha, message, token);
-
-        // One branch per user (per the two-branch cap: main + editor-<login>). Reusing it means a second
-        // proposal force-updates the same branch, which GitHub reflects on the user's existing open PR
-        // instead of opening a second one.
-        String branch = "editor-" + login;
-        String branchRefUrl = forkApi + "/git/refs/heads/" + branch;
-        JsonNode existingBranch = client.get(branchRefUrl, token).join();
-        if (existingBranch != null && existingBranch.path("object").hasNonNull("sha")) {
-            client.patch(branchRefUrl, mapOf("sha", commitSha, "force", true), token).join();
-        } else {
-            client.post(forkApi + "/git/refs",
-                    mapOf("ref", "refs/heads/" + branch, "sha", commitSha), token).join();
-        }
-
-        // If a PR from this branch is already open, updating the branch updated it — return that PR's URL.
-        String existingPr = openPullRequestUrl(originApi, login, branch, token);
-        if (existingPr != null) {
-            return new PatchResult(existingPr);
-        }
-
-        JsonNode pr = client.post(originApi + "/pulls", mapOf(
-                "title", message,
-                "head", login + ":" + branch,
-                "base", baseBranch,
-                "body", body == null ? "Submitted from BotMaker Studio." : body), token).join();
-
-        return new PatchResult(pr.path("html_url").asText(""));
-    }
-
-    /** The html_url of the open PR from {@code login:branch} into {@code originApi}, or null if none is open. */
-    private String openPullRequestUrl(String originApi, String login, String branch, String token) {
-        JsonNode prs = client.get(originApi + "/pulls?state=open&head=" + login + ":" + branch, token).join();
-        if (prs != null && prs.isArray() && !prs.isEmpty()) {
-            return prs.get(0).path("html_url").asText(null);
-        }
-        return null;
-    }
-
-    /**
-     * "Get the latest from the original" — GitHub's native Sync-fork on the user's fork of an installed bot.
-     * Calls {@code POST /repos/{login}/{repo}/merge-upstream} with the fork's default branch, fast-forwarding it
-     * to the upstream tip. Returns a short human-readable outcome. Throws with a divergence message when GitHub
-     * reports a merge conflict (HTTP 409), so the caller can offer "open on GitHub". Blocking; off the FX thread.
-     */
-    public String syncFork(BotSource origin) throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        if (origin == null) {
-            throw new IOException("This project has no upstream bot to sync from.");
-        }
-        String token = auth.token();
-        String api = GitHubConfig.API_BASE;
-        String login = auth.login(client).join();
-        if (login.isBlank()) {
-            throw new IOException("Could not read your GitHub account.");
-        }
-        String forkApi = api + "/repos/" + login + "/" + origin.repo();
-        JsonNode forkRepo = client.get(forkApi, token).join();
-        if (forkRepo == null) {
-            throw new IOException("You don't have a fork of " + origin.slug() + " yet — propose a change first.");
-        }
-        String branch = forkRepo.path("default_branch").asText("main");
-        try {
-            JsonNode result = client.post(forkApi + "/merge-upstream", mapOf("branch", branch), token).join();
-            String msg = result.path("message").asText("");
-            return msg.isBlank() ? "Your fork is up to date with " + origin.slug() + "." : msg;
-        } catch (Exception e) {
-            String m = rootMessage(e);
-            if (m != null && m.contains("HTTP 409")) {
-                throw new IOException("Your fork of " + origin.slug() + " has diverged from the original and "
-                        + "can't be synced automatically. Open it on GitHub to resolve the conflict.");
-            }
-            throw new IOException("Sync failed: " + m, e);
-        }
-    }
+    // Community patching (submitPatch: a snapshot tree force-pushed to the fork's editor-<login> branch) and
+    // syncFork (GitHub's merge-upstream on the fork, never the local project) were deleted on 2026-09-25: an
+    // installed bot is a clone now, so Suggestion pushes real versions and Get vX.Y is a local merge
+    // (docs/refactor/39-versions.md §7).
 
     /** Blobs → tree (full snapshot, no {@code base_tree}) → commit; returns the new commit's SHA. */
     private String buildTreeCommit(String repoApi, Map<String, byte[]> files, String baseSha,
@@ -589,17 +461,6 @@ public final class BotPublisher {
         commitBody.put("tree", treeSha);
         if (baseSha != null) commitBody.put("parents", List.of(baseSha));
         return client.post(repoApi + "/git/commits", commitBody, token).join().get("sha").asText();
-    }
-
-    /** Polls until a fork repo's default-branch tree is readable (fork creation is asynchronous). */
-    private boolean awaitForkRepo(String forkApi, String branch, String token) {
-        String url = forkApi + "/git/refs/heads/" + branch;
-        for (int attempt = 0; attempt < 10; attempt++) {
-            JsonNode n = client.get(url, token).join();
-            if (n != null && n.path("object").hasNonNull("sha")) return true;
-            if (!sleep(1500)) break;
-        }
-        return false;
     }
 
     /**

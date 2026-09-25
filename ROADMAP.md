@@ -6,7 +6,31 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4d: three places, one strip; an install is a clone; Save to my copy.**
+- **2026-09-25 (latest) — Versions 4e: Get vX.Y is a real merge; Suggest to author.**
+  - `ProjectVcs`: `fetchTag` (a tag this computer has that the author moved is refused, a missing one says
+    so), `mergeTag` (no-fast-forward, **not committed**, a clean tree required — the caller saved a `SAFETY`
+    version), `merging`, `unresolved`, `mergeRelease`, `resolve(path, Side.MINE|THEIRS)` (a file, whole, from
+    `HEAD` or `MERGE_HEAD`; a side without the file deletes it), `finishMerge` (the `UPDATE` version, a
+    merge with the release as a parent), `abortMerge` (hard reset, merge state cleared).
+    **`checkpoint` refuses mid-update** — "add everything" would record conflict markers — and the tab does
+    not flush the editor over a merge in progress. `push(…, force)` for the `suggest/` branch only.
+  - `ui/app/versions/ConflictSheet`: the files both sides changed, each with the §5 cards headed *Yours |
+    Theirs (vX)* and *Keep mine* / *Take theirs*; *Finish update* once all are decided, *Cancel update*
+    aborts. `DiffCards.Input` carries its column headings; `VersionReader.unified` diffs two blobs.
+  - Versions tab: *Get vX.Y* (beside the main action, signed out too — a public original needs no account),
+    *Finish the update…* as the main action while one is half done (after a restart), *Suggest to author…*
+    for someone else's bot. A finished update records the release in `botmaker-source.json`, asks the
+    original again and reloads the project.
+  - `sharing/Suggestion`: saves (the title as a `SAVE`), makes sure of `mine` (`MyCopy.ensure`), force-pushes
+    `suggest/<slug>` and opens the pull request to the original's default branch, or returns the open one.
+  - **Deleted**: `BotPublisher.submitPatch`/`PatchResult`/`syncFork`/`awaitForkRepo`, `BotInstaller.update`,
+    `ShareActions`' *Propose…* and *Get latest from original*, `StudioActions.botPublisher()`, the
+    `BotPublisher` parameter of `VersionsPane`. Browse Bots' *Update* now says where the update is made.
+  - `UpdateMergeTest` (clean merge, a conflict kept mine / taken theirs, cancel, unsaved refused, a moved and
+    a missing release — against a local repository), `SyncModelTest` (Get/Suggest/Finish), `SuggestionTest`.
+  - Not covered by a test: the sheet itself (a modal `Dialog`), and the strip's releases still come from the
+    original's tags, where Browse Bots respects the gallery's vetted pin.
+- **2026-09-25 — Versions 4d: three places, one strip; an install is a clone; Save to my copy.**
   - `project/vcs/Remote` (`MINE` "mine", `ORIGINAL` "original"); `ProjectVcs`: `remoteUrl`/`setRemote` per
     remote, `push(remote, remoteBranch, token)` (branch + tags + the `refs/notes/botmaker-names` names, never
     forced; a names ref that moved is not a failure), `fetch`, `notIn` (versions the remote lacks, by the

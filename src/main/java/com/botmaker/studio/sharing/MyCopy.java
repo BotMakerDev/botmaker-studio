@@ -31,15 +31,23 @@ public final class MyCopy {
     public String save(ProjectVcs vcs, SyncModel model, String projectName, String token) throws IOException {
         String login = model.facts().login();
         if (login == null || token == null) throw new IOException("Sign in to GitHub to save to your copy.");
-        String created = null;
-        if (vcs.remoteUrl(Remote.MINE) == null) created = ensureMine(vcs, model, projectName, login, token);
+        String created = ensure(vcs, model, projectName, token);
         String remoteBranch = model.remoteBranch(vcs.branch());
         vcs.push(Remote.MINE, remoteBranch, token);
         String where = SyncModel.slug(vcs.remoteUrl(Remote.MINE)).map(SyncModel.Slug::toString).orElse("your copy");
         return created != null ? created : "Saved to your copy (" + where + ").";
     }
 
-    /** Points {@code mine} somewhere, creating it if need be; returns the sentence that says what was made. */
+    /**
+     * Makes sure {@code mine} exists — creating the repository or the fork if need be — without pushing.
+     * Returns the sentence that says what was made, or null when it was there already.
+     */
+    public String ensure(ProjectVcs vcs, SyncModel model, String projectName, String token) throws IOException {
+        String login = model.facts().login();
+        if (login == null || token == null) throw new IOException("Sign in to GitHub to save to your copy.");
+        return vcs.remoteUrl(Remote.MINE) == null ? ensureMine(vcs, model, projectName, login, token) : null;
+    }
+
     private String ensureMine(ProjectVcs vcs, SyncModel model, String projectName, String login, String token)
             throws IOException {
         switch (model.ownership()) {

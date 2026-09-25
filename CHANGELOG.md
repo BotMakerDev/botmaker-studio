@@ -31,7 +31,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 - **Installing a bot keeps its author's history.** An installed bot is now a copy of its author's
   repository at that release, so later updates can be merged with your changes. Bots installed before are
   linked to their author's release the first time you open the Versions tab; your files do not change.
-  *Update* from Browse Bots now saves your changes as a version before replacing the files.
+- **Updating a bot keeps your changes.** When its author releases a new version, the Versions tab offers
+  *Get v1.4*: the release is merged with your changes instead of replacing them. A file you both changed is
+  shown side by side — yours and theirs — and you choose which to keep; *Cancel update* leaves everything as
+  it was. Browse Bots' *Update* now points you there.
+- **Suggest to author…** sends your versions to your copy and asks the author to take them, as a pull
+  request — or shows the one already open. It replaces *Propose…* and *Get latest from original*.
 - **Put one function back.** *Restore this function* returns it as that version had it — or *Add this
   function back* if you deleted it — as an ordinary edit you can undo. *Restore this file* does the same for
   a whole file.

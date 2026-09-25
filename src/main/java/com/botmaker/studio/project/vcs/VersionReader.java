@@ -93,6 +93,24 @@ public final class VersionReader {
         }
     }
 
+    /** A unified text diff of two contents of {@code path}; either may be null (absent). */
+    public static String unified(String path, byte[] before, byte[] after) {
+        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+             DiffFormatter fmt = new DiffFormatter(out)) {
+            org.eclipse.jgit.diff.RawText a = new org.eclipse.jgit.diff.RawText(before == null ? new byte[0] : before);
+            org.eclipse.jgit.diff.RawText b = new org.eclipse.jgit.diff.RawText(after == null ? new byte[0] : after);
+            var edits = org.eclipse.jgit.diff.DiffAlgorithm
+                    .getAlgorithm(org.eclipse.jgit.diff.DiffAlgorithm.SupportedAlgorithm.HISTOGRAM)
+                    .diff(org.eclipse.jgit.diff.RawTextComparator.DEFAULT, a, b);
+            out.write(("--- " + path + "\n+++ " + path + "\n").getBytes(StandardCharsets.UTF_8));
+            fmt.format(edits, a, b);
+            fmt.flush();
+            return out.toString(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "Could not compare " + path + ": " + e.getMessage();
+        }
+    }
+
     private static byte[] read(Repository repo, RevCommit commit, String path) throws IOException {
         try (TreeWalk tw = TreeWalk.forPath(repo, path, commit.getTree())) {
             return tw == null ? null : repo.open(tw.getObjectId(0)).getBytes();

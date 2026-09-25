@@ -163,6 +163,8 @@ public final class ProjectVcs {
      */
     public String checkpoint(VersionOrigin origin, String label) throws IOException {
         ensureInitialized();
+        // Mid-update, "add everything" would record conflict markers as the user's decision.
+        if (merging()) throw new IOException("An update is in progress — finish or cancel it in the Versions tab.");
         try (Git git = open()) {
             git.add().addFilepattern(".").call();           // new + modified files
             git.add().addFilepattern(".").setUpdate(true).call(); // deletions of tracked files
@@ -393,6 +395,171 @@ public final class ProjectVcs {
     }
 
     // -------------------------------------------------------------------------
+    // Updates: a real merge of the author's tag (39 §7)
+    // -------------------------------------------------------------------------
+
+    /** Whose side of a conflicting file wins. */
+    public enum Side { MINE, THEIRS }
+
+    /**
+     * How {@link #mergeTag} left the project.
+     *
+     * @param conflicts the files both sides changed, to be decided one by one; empty unless {@link #conflicted}
+     */
+    public record Merge(boolean upToDate, List<String> conflicts) {
+
+        public boolean conflicted() {
+            return !conflicts.isEmpty();
+        }
+    }
+
+    /**
+     * Fetches the tag {@code tag} from {@code remote} without moving one this computer already has: a release
+     * its author moved after the user took it is refused, with a sentence, and nothing changes.
+     */
+    public void fetchTag(Remote remote, String tag, String token) throws IOException {
+        try (Git git = open()) {
+            Repository repo = git.getRepository();
+            ObjectId had = repo.resolve("refs/tags/" + tag + "^{commit}");
+            var fetch = git.fetch().setRemote(remote.id())
+                    .setRefSpecs(new RefSpec("refs/tags/" + tag + ":refs/tags/" + tag))
+                    .setTagOpt(org.eclipse.jgit.transport.TagOpt.NO_TAGS);
+            if (token != null && !token.isBlank()) fetch.setCredentialsProvider(credentials(token));
+            var result = fetch.call();
+            var update = result.getTrackingRefUpdate("refs/tags/" + tag);
+            if (update != null && update.getResult() == org.eclipse.jgit.lib.RefUpdate.Result.REJECTED) {
+                throw new IOException("The release " + tag + " was changed by its author after you took it, "
+                        + "so nothing was updated.");
+            }
+            ObjectId now = repo.resolve("refs/tags/" + tag + "^{commit}");
+            if (now == null) throw new IOException("The release " + tag + " is gone from the original.");
+            if (had != null && !had.equals(now)) {
+                throw new IOException("The release " + tag + " was changed by its author after you took it, "
+                        + "so nothing was updated.");
+            }
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not fetch " + tag + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Merges the tag {@code tag} into the current branch, <b>without committing</b>: files only one side changed
+     * are merged, and a file both changed is left conflicted for {@link #resolve}. The tree must be saved first —
+     * the caller takes a version — so {@link #abortMerge} can always put it back. {@link #finishMerge} commits.
+     */
+    public Merge mergeTag(String tag) throws IOException {
+        try (Git git = open()) {
+            if (!git.status().call().isClean()) {
+                throw new IOException("Save your changes as a version before updating.");
+            }
+            ObjectId at = git.getRepository().resolve("refs/tags/" + tag + "^{commit}");
+            if (at == null) throw new IOException("The release " + tag + " is not on this computer.");
+            org.eclipse.jgit.api.MergeResult result = git.merge().include(at)
+                    .setCommit(false)
+                    .setFastForward(org.eclipse.jgit.api.MergeCommand.FastForwardMode.NO_FF)
+                    .setStrategy(org.eclipse.jgit.merge.MergeStrategy.RECURSIVE)
+                    .call();
+            return switch (result.getMergeStatus()) {
+                case ALREADY_UP_TO_DATE -> new Merge(true, List.of());
+                case CONFLICTING -> new Merge(false, List.copyOf(new TreeSet<>(result.getConflicts().keySet())));
+                case MERGED_NOT_COMMITTED, MERGED, FAST_FORWARD, MERGED_SQUASHED, MERGED_SQUASHED_NOT_COMMITTED,
+                     FAST_FORWARD_SQUASHED -> new Merge(false, List.of());
+                default -> throw new IOException("The update could not start (" + result.getMergeStatus() + ").");
+            };
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not update: " + e.getMessage(), e);
+        }
+    }
+
+    /** Whether an update is half done — merged, not yet committed or cancelled. */
+    public boolean merging() {
+        if (!isRepo()) return false;
+        try (Git git = open()) {
+            return git.getRepository().getRepositoryState() != org.eclipse.jgit.lib.RepositoryState.SAFE;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** The release a half-done update is merging — its tag, else its short SHA; null when none is. */
+    public String mergeRelease() throws IOException {
+        try (Git git = open()) {
+            List<ObjectId> heads = git.getRepository().readMergeHeads();
+            if (heads == null || heads.isEmpty()) return null;
+            ObjectId head = heads.getFirst();
+            return tagsByCommit(git).getOrDefault(head.name(), List.of(head.abbreviate(7).name())).getFirst();
+        } catch (Exception e) {
+            throw new IOException("Could not read the update: " + e.getMessage(), e);
+        }
+    }
+
+    /** The files of an update still to decide. */
+    public List<String> unresolved() throws IOException {
+        try (Git git = open()) {
+            return List.copyOf(new TreeSet<>(git.status().call().getConflicting()));
+        } catch (Exception e) {
+            throw new IOException("Could not read the update: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Decides one conflicting file: this computer's side or the author's, whole — a file one side deleted is
+     * deleted when that side wins.
+     */
+    public void resolve(String path, Side side) throws IOException {
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            ObjectId from = side == Side.MINE ? repo.resolve("HEAD") : repo.readMergeHeads().getFirst();
+            byte[] content = null;
+            try (org.eclipse.jgit.treewalk.TreeWalk tw = org.eclipse.jgit.treewalk.TreeWalk.forPath(
+                    repo, path, walk.parseCommit(from).getTree())) {
+                if (tw != null) content = repo.open(tw.getObjectId(0)).getBytes();
+            }
+            Path file = projectDir.resolve(path);
+            if (content == null) {
+                Files.deleteIfExists(file);
+                git.rm().addFilepattern(path).call();
+            } else {
+                Files.createDirectories(file.getParent());
+                Files.write(file, content);
+                git.add().addFilepattern(path).call();
+            }
+        } catch (Exception e) {
+            throw new IOException("Could not decide " + path + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** Commits the update as an {@code UPDATE} version once every file is decided; returns its short SHA. */
+    public String finishMerge(String label) throws IOException {
+        if (!unresolved().isEmpty()) throw new IOException("Some files are still to decide.");
+        try (Git git = open()) {
+            git.add().addFilepattern(".").call();
+            git.add().addFilepattern(".").setUpdate(true).call();
+            RevCommit c = git.commit().setAuthor(author).setCommitter(author)
+                    .setMessage(VersionOrigin.UPDATE.stamp(label)).call();
+            return c.abbreviate(7).name();
+        } catch (Exception e) {
+            throw new IOException("Could not finish the update: " + e.getMessage(), e);
+        }
+    }
+
+    /** Cancels a half-done update: the tree is the saved version it started from, and nothing was committed. */
+    public void abortMerge() throws IOException {
+        try (Git git = open()) {
+            git.reset().setMode(ResetType.HARD).setRef("HEAD").call();
+            Repository repo = git.getRepository();
+            repo.writeMergeHeads(null);
+            repo.writeMergeCommitMsg(null);
+        } catch (Exception e) {
+            throw new IOException("Could not cancel the update: " + e.getMessage(), e);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Remotes: My copy and Original (39 §2, §7)
     // -------------------------------------------------------------------------
 
@@ -473,13 +640,21 @@ public final class ProjectVcs {
      * @param token a GitHub token, handed to JGit for this call only
      */
     public String push(Remote remote, String remoteBranch, String token) throws IOException {
+        return push(remote, remoteBranch, token, false);
+    }
+
+    /**
+     * {@link #push(Remote, String, String)}, forced when {@code force} — for a {@code suggest/…} branch only,
+     * the one branch Studio moves ({@code 39} §10): a suggestion made again replaces the last one.
+     */
+    public String push(Remote remote, String remoteBranch, String token, boolean force) throws IOException {
         if (token == null || token.isBlank()) throw new IOException("Not signed in to GitHub.");
         if (!isRepo()) throw new IOException("Nothing to push — this project has no history yet.");
         if (remoteUrl(remote) == null) throw new IOException("This project has no '" + remote.id() + "' remote yet.");
         try (Git git = open()) {
             String branch = git.getRepository().getBranch();
             List<RefSpec> specs = new ArrayList<>();
-            specs.add(new RefSpec("refs/heads/" + branch + ":refs/heads/" + remoteBranch));
+            specs.add(new RefSpec((force ? "+" : "") + "refs/heads/" + branch + ":refs/heads/" + remoteBranch));
             boolean notes = git.getRepository().exactRef(NAMES) != null;
             if (notes) specs.add(new RefSpec(NAMES + ":" + NAMES));
             Iterable<PushResult> results = git.push()

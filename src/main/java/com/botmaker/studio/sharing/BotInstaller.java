@@ -18,7 +18,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Installs and updates bots from their GitHub repos (no account needed). Installing clones the author's
+ * Installs bots from their GitHub repos and says when a newer release is out (no account needed). Installing clones the author's
  * repository at the release tag into {@code ~/BotMakerProjects/} and records provenance ({@link BotSource});
  * a template is still unpacked from the release zip, since a project started from one is the user's own.
  *
@@ -79,11 +79,10 @@ public final class BotInstaller {
      * project</b>, and deliberately writes <b>no</b> {@link BotSource}.
      *
      * <p>That absence is the whole difference from {@link #install}, and it is load-bearing. Provenance is
-     * what makes a project an <em>installed bot</em>: it is what {@link #checkForUpdate} reads, and an
-     * update re-downloads the release and replaces the project in place, overwriting local edits. A project
-     * created from a template is the user's from the second it lands — a later release of the template is a
-     * different starting point, not a newer version of their bot — so there must be nothing here for an
-     * update to find.
+     * what makes a project an <em>installed bot</em>: it is what {@link #checkForUpdate} reads and what an
+     * update merges from. A project created from a template is the user's from the second it lands — a later
+     * release of the template is a different starting point, not a newer version of their bot — so there must
+     * be nothing here for an update to find.
      *
      * @return the project directory
      */
@@ -112,32 +111,8 @@ public final class BotInstaller {
         return GalleryEntry.updateTarget(listing, src.get().tag(), latest);
     }
 
-    /**
-     * Re-downloads the release {@link #checkForUpdate} offers and replaces the project's files in place, after
-     * a {@code SAFETY} version of what it replaces; the history stays. Deleted by 4e, where an update is a
-     * real merge ({@code docs/refactor/39-versions.md} §7).
-     *
-     * @return the tag updated to, or empty if there was nothing to move to / no provenance
-     */
-    public Optional<String> update(Path projectDir, List<GalleryEntry> catalog) throws IOException {
-        Optional<BotSource> src = BotSource.read(projectDir);
-        if (src.isEmpty()) return Optional.empty();
-        Optional<String> target = checkForUpdate(projectDir, catalog);
-        if (target.isEmpty()) return Optional.empty();
-
-        Path tmp = projectDir.resolveSibling(projectDir.getFileName() + ".update-tmp");
-        deleteRecursively(tmp);
-        downloadInto(src.get().owner(), src.get().repo(), target.get(), tmp);
-        new BotSource(src.get().owner(), src.get().repo(), target.get()).write(tmp);
-        // The history goes with the project until 4e makes an update a merge: what this replaces is then a
-        // restorable version, and the replaced files read as unsaved changes rather than vanishing.
-        new ProjectVcs(projectDir).checkpoint(VersionOrigin.SAFETY, "Before updating to " + target.get());
-        Files.move(projectDir.resolve(".git"), tmp.resolve(".git"));
-
-        deleteRecursively(projectDir);
-        Files.move(tmp, projectDir);
-        return target;
-    }
+    // update() — re-download the release and replace the project in place — was deleted on 2026-09-25: an
+    // update is a real merge of the author's tag now, from the bot's Versions tab (39 §7).
 
     // -------------------------------------------------------------------------
     // Download + unzip

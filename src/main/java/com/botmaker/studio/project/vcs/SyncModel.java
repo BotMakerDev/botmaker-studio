@@ -33,7 +33,12 @@ public record SyncModel(Ownership ownership, Facts facts) {
         SAVE_VERSION("Save version"),
         PUBLISH("Publish…"),
         SAVE_TO_MY_COPY("Save to my copy"),
-        SIGN_IN("Sign in to share…");
+        SIGN_IN("Sign in to share…"),
+        /** Merge the original's newer release; the label names it — {@link #label}. */
+        GET_UPDATE("Get update"),
+        SUGGEST("Suggest to author…"),
+        /** An update was left half done (conflicts to decide): reopen its sheet. */
+        FINISH_UPDATE("Finish the update…");
 
         private final String label;
 
@@ -57,9 +62,15 @@ public record SyncModel(Ownership ownership, Facts facts) {
      * @param notInMyCopy  versions this computer has that {@code mine} lacks; -1 when nothing was pushed there
      * @param installedTag the release this bot was installed from, or null
      * @param availableTag a newer release of the original, or null
+     * @param updating     whether an update is half done, its conflicts not all decided
      */
     public record Facts(String login, String mineUrl, String originalUrl, int unsaved, int notInMyCopy,
-                        String installedTag, String availableTag) {
+                        String installedTag, String availableTag, boolean updating) {
+
+        /** Nothing known yet: signed out, no remote, no change. */
+        public static Facts none() {
+            return new Facts(null, null, null, 0, -1, null, null, false);
+        }
 
         public boolean signedIn() {
             return login != null && !login.isBlank();
@@ -99,8 +110,9 @@ public record SyncModel(Ownership ownership, Facts facts) {
         return f.mineUrl() != null || original.isPresent() ? Ownership.OWN_PUBLISHED : Ownership.OWN_NEW;
     }
 
-    /** The strip's one button. */
+    /** The strip's one button — finishing a half-done update before anything else. */
     public Action main() {
+        if (facts.updating()) return Action.FINISH_UPDATE;
         return switch (ownership) {
             case LOCAL_ONLY -> Action.SAVE_VERSION;
             case OWN_NEW -> Action.PUBLISH;
@@ -108,18 +120,32 @@ public record SyncModel(Ownership ownership, Facts facts) {
         };
     }
 
-    /** What sits beside it ({@code Get vX.Y} and {@code Suggest to author…} arrive with 4e). */
+    /**
+     * What sits beside it. <i>Get vX.Y</i> needs no account — a public original's releases are anyone's — so it
+     * is offered signed out too; nothing else is while an update is half done.
+     */
     public List<Action> also() {
-        return switch (ownership) {
-            case LOCAL_ONLY -> List.of(Action.SIGN_IN);
-            case OWN_NEW -> List.of(Action.SAVE_TO_MY_COPY);
-            case OWN_PUBLISHED -> List.of(Action.PUBLISH);
-            case OTHERS -> List.of();
-        };
+        if (facts.updating()) return List.of();
+        List<Action> out = new java.util.ArrayList<>();
+        if (facts.availableTag() != null) out.add(Action.GET_UPDATE);
+        switch (ownership) {
+            case LOCAL_ONLY -> out.add(Action.SIGN_IN);
+            case OWN_NEW -> out.add(Action.SAVE_TO_MY_COPY);
+            case OWN_PUBLISHED -> out.add(Action.PUBLISH);
+            case OTHERS -> out.add(Action.SUGGEST);
+        }
+        return List.copyOf(out);
     }
 
-    /** "3 unsaved changes" / "Saved". */
+    /** {@code action}'s button text: {@code Get v1.4} names the release. */
+    public String label(Action action) {
+        return action == Action.GET_UPDATE && facts.availableTag() != null
+                ? "Get " + facts.availableTag() : action.label();
+    }
+
+    /** "3 unsaved changes" / "Saved" / "Updating — files to decide". */
     public String thisComputer() {
+        if (facts.updating()) return "Updating — files to decide";
         int n = facts.unsaved();
         return n == 0 ? "Saved" : n + (n == 1 ? " unsaved change" : " unsaved changes");
     }

@@ -17,11 +17,11 @@ import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.MyCopy;
-import com.botmaker.studio.sharing.BotPublisher;
+import com.botmaker.studio.sharing.Suggestion;
+import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
-import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
@@ -34,7 +34,6 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Separator;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
@@ -59,6 +58,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
@@ -100,7 +100,7 @@ public final class VersionsPane {
     private final Button mainAction = new Button();
     private final HBox alsoActions = new HBox(6);
     /** The strip as last read; LOCAL_ONLY with nothing known until the first refresh. */
-    private SyncModel model = SyncModel.of(new SyncModel.Facts(null, null, null, 0, -1, null, null));
+    private SyncModel model = SyncModel.of(SyncModel.Facts.none());
     /** A newer release of the original, asked of the network once per pane and again on ⟳. */
     private volatile String available;
     private volatile boolean askOriginal = true;
@@ -129,8 +129,8 @@ public final class VersionsPane {
     private volatile String authorName;
     private volatile String authorEmail;
 
-    public VersionsPane(Window owner, StudioContext ctx, BotPublisher publisher, GitHubAuth auth,
-                        GitHubClient client, Runnable openPublish) {
+    public VersionsPane(Window owner, StudioContext ctx, GitHubAuth auth, GitHubClient client,
+                        Runnable openPublish) {
         this.owner = owner;
         this.ctx = ctx;
         this.projectDir = ctx.config().projectPath();
@@ -138,8 +138,7 @@ public final class VersionsPane {
         this.auth = auth;
         this.client = client;
         this.openPublish = openPublish;
-        this.share = new ShareActions(owner, projectDir, publisher, auth, client, nameField::getText,
-                new ShareActions.Host(this::status, this::setBusy, this::refresh));
+        this.share = new ShareActions(owner, projectDir, auth, client, this::status);
         build();
         resolveIdentity();
     }
@@ -200,9 +199,7 @@ public final class VersionsPane {
         strip.setPadding(new Insets(6, 6, 0, 6));
         alsoActions.setAlignment(Pos.CENTER_LEFT);
 
-        HBox bar = new HBox(6, nameField, save, new Separator(Orientation.VERTICAL));
-        bar.getChildren().addAll(share.buttons());
-        bar.getChildren().addAll(spacer, progress, status, refresh);
+        HBox bar = new HBox(6, nameField, save, spacer, progress, status, refresh);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(6));
         share.provenance().ifPresent(p -> original.setTooltip(new Tooltip(p)));
@@ -279,14 +276,14 @@ public final class VersionsPane {
         original.setText(orig == null ? "" : orig);
 
         SyncModel.Action main = model.main();
-        mainAction.setText(main.label());
+        mainAction.setText(model.label(main));
         mainAction.setOnAction(e -> act(main));
         // Save version has its own button beside the name field; the strip does not repeat it.
         mainAction.setVisible(main != SyncModel.Action.SAVE_VERSION);
         mainAction.setManaged(main != SyncModel.Action.SAVE_VERSION);
         alsoActions.getChildren().clear();
         for (SyncModel.Action a : model.also()) {
-            Button b = new Button(a.label());
+            Button b = new Button(model.label(a));
             b.setOnAction(e -> act(a));
             alsoActions.getChildren().add(b);
         }
@@ -303,7 +300,116 @@ public final class VersionsPane {
                 resolveIdentity();
                 refresh();
             });
+            case GET_UPDATE -> getUpdate(model.facts().availableTag());
+            case FINISH_UPDATE -> resumeUpdate();
+            case SUGGEST -> suggest();
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Updates and suggestions (39 §7)
+    // -------------------------------------------------------------------------
+
+    /**
+     * <i>Get vX.Y</i>: a {@code SAFETY} version of what the user has, the tag fetched (a moved or missing one
+     * refuses), then a real merge — committed as {@code UPDATE} when git could merge every file, else the
+     * conflict sheet.
+     */
+    private void getUpdate(String tag) {
+        if (tag == null) return;
+        String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.SAFETY, "Before updating to " + tag);
+            ProjectVcs vcs = vcs();
+            vcs.fetchTag(Remote.ORIGINAL, tag, token);
+            return vcs.mergeTag(tag);
+        }, merge -> {
+            if (merge.upToDate()) {
+                status("This project already has " + tag + ".");
+            } else if (merge.conflicted()) {
+                Platform.runLater(() -> decide(merge.conflicts(), tag));
+            } else {
+                finishUpdate(tag, Map.of());
+            }
+        });
+    }
+
+    /** Reopens the sheet of an update Studio was closed in the middle of. */
+    private void resumeUpdate() {
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            return Map.entry(vcs.unresolved(), Optional.ofNullable(vcs.mergeRelease()).orElse("the new release"));
+        }, read -> Platform.runLater(() -> {
+            if (read.getKey().isEmpty()) {
+                finishUpdate(read.getValue(), Map.of());
+            } else {
+                decide(read.getKey(), read.getValue());
+            }
+        }));
+    }
+
+    private void decide(List<String> conflicts, String release) {
+        ConflictSheet.show(owner, diffCards, projectDir, conflicts, "MERGE_HEAD", release).ifPresentOrElse(
+                decided -> finishUpdate(release, decided),
+                () -> run(() -> {
+                    vcs().abortMerge();
+                    return null;
+                }, done -> status("Update cancelled — nothing changed.")));
+    }
+
+    /** Applies the decisions, records the release in the provenance file and commits the {@code UPDATE}. */
+    private void finishUpdate(String release, Map<String, ProjectVcs.Side> decided) {
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            for (var e : decided.entrySet()) vcs.resolve(e.getKey(), e.getValue());
+            Optional<BotSource> source = BotSource.read(projectDir);
+            // A release is a tag; a resumed update whose commit no tag names leaves the record as it was.
+            if (source.isPresent() && !release.matches("[0-9a-f]{7}|the new release")) {
+                new BotSource(source.get().owner(), source.get().repo(), release).write(projectDir);
+            }
+            String by = source.map(s -> " (" + s.owner() + ")").orElse("");
+            vcs.finishMerge("Updated to " + release + by);
+            return null;
+        }, done -> {
+            askOriginal = true;
+            shown = null;
+            status("Updated to " + release + ".");
+            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+        });
+    }
+
+    /**
+     * <i>Suggest to author…</i>: asks what the change does, saves, and opens (or finds) the pull request from
+     * {@code suggest/<title>} on the user's copy ({@link Suggestion}).
+     */
+    private void suggest() {
+        if (client == null || authorName == null) {
+            status("Sign in to GitHub to suggest a change.");
+            return;
+        }
+        TextInputDialog ask = new TextInputDialog(nameField.getText() == null ? "" : nameField.getText().strip());
+        ThemedWindows.apply(ask);
+        ask.initOwner(owner);
+        ask.setTitle("Suggest to author");
+        ask.setHeaderText("Your versions go to your copy, and the author is asked to take them.");
+        ask.setContentText("What does your change do?");
+        Optional<String> title = ask.showAndWait().map(String::strip).filter(t -> !t.isEmpty());
+        if (title.isEmpty()) return;
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        SyncModel now = model;
+        String token = auth.token();
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.SAVE, title.get());
+            String url = new Suggestion(client).suggest(vcs(), now, ctx.config().projectName(), title.get(),
+                    "Suggested from BotMaker Studio.", token);
+            if (!url.isBlank()) Platform.runLater(() -> BrowserLauncher.open(url));
+            return url;
+        }, url -> {
+            nameField.clear();
+            shown = null;
+            status(url.isBlank() ? "Suggestion sent." : "Suggestion ready: " + url);
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -319,12 +425,13 @@ public final class VersionsPane {
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        Checkpoints.flush(editor);
                         ProjectVcs vcs = vcs();
+                        // Mid-update the disk holds the merge; the editor's older sources must not land on it.
+                        if (!vcs.merging()) Checkpoints.flush(editor);
                         SyncModel read = sync(vcs);
                         return new Snapshot(read, vcs.history());
                     } catch (Exception ex) {
-                        return new Snapshot(SyncModel.of(new SyncModel.Facts(null, null, null, 0, -1, null, null)),
+                        return new Snapshot(SyncModel.of(SyncModel.Facts.none()),
                                 List.of());
                     }
                 })
@@ -347,12 +454,13 @@ public final class VersionsPane {
      */
     private SyncModel sync(ProjectVcs vcs) throws Exception {
         vcs.adoptLegacyBackup();
+        boolean updating = vcs.merging();
         Optional<BotSource> source = BotSource.read(projectDir);
         String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
         String originalUrl = vcs.remoteUrl(Remote.ORIGINAL);
         if (originalUrl == null && source.isPresent()) {
             originalUrl = BotInstaller.cloneUrl(source.get().owner(), source.get().repo());
-            if (!attachTried) {
+            if (!attachTried && !updating) {
                 attachTried = true;
                 try {
                     vcs.attach(originalUrl, source.get().tag(),
@@ -374,12 +482,12 @@ public final class VersionsPane {
         }
         int unsavedNow = vcs.status().labelled().size();
         SyncModel.Facts facts = new SyncModel.Facts(authorName, vcs.remoteUrl(Remote.MINE), originalUrl,
-                unsavedNow, -1, installed, available);
+                unsavedNow, -1, installed, available, updating);
         SyncModel first = SyncModel.of(facts);
         if (facts.mineUrl() == null) return first;
         int notIn = vcs.notIn(Remote.MINE, first.remoteBranch(vcs.branch()));
         return SyncModel.of(new SyncModel.Facts(facts.login(), facts.mineUrl(), originalUrl, unsavedNow, notIn,
-                installed, available));
+                installed, available, updating));
     }
 
     private void rebuild() {

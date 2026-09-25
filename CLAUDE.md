@@ -1084,7 +1084,9 @@ The `ui/` package is split by concern:
   against a staged `ProjectState`, never the live one; *Restore this function* is `CodeEditor.replaceMethod`
   (`parser/handlers/RestoreHandler`), an ordinary edit; the strip on top is `project/vcs/SyncModel` over the
   remotes `mine`/`original` (`project/vcs/Remote`), *Save to my copy* is `sharing/MyCopy`, an install is
-  `ProjectVcs.cloneAt` and a zip install is `ProjectVcs.attach`ed once — umbrella `docs/refactor/39-versions.md`; it
+  `ProjectVcs.cloneAt` and a zip install is `ProjectVcs.attach`ed once; *Get vX.Y* is `ProjectVcs.mergeTag` +
+  `versions/ConflictSheet` (per file, `resolve`/`finishMerge`/`abortMerge`; `checkpoint` refuses mid-merge)
+  and *Suggest to author…* is `sharing/Suggestion` — umbrella `docs/refactor/39-versions.md`; it
   replaced `VcsPanel`/`VcsDialog` on 2026-09-25), `ProjectSelectionScreen`, `GitHubAccountBar` /
   `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
