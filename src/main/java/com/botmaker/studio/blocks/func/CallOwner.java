@@ -27,15 +27,17 @@ public enum CallOwner {
     }
 
     /**
-     * Who declares {@code call}'s method, from its binding: source is the bot's, {@code java.*}, {@code javax.*}
-     * and {@code jdk.*} are the JDK's, anything else a library's. No binding reads as the bot's — the block
-     * then says "Call", which is what it always said.
+     * Who declares {@code call}'s method, from its binding: source is the bot's, a class a loaded plugin
+     * recognises is that plugin's, {@code java.*}, {@code javax.*} and {@code jdk.*} are the JDK's, anything
+     * else a library's. No binding reads as the bot's — the block then says "call", which is what it always
+     * said.
      */
     public static CallOwner of(IMethodBinding call) {
         ITypeBinding declaring = call == null ? null : call.getDeclaringClass();
         if (declaring == null) return PROJECT;
         declaring = declaring.getErasure();
         if (declaring.isFromSource()) return PROJECT;
+        if (com.botmaker.studio.plugin.PluginHost.isFacadeClass(declaring.getName())) return PLUGIN;
         String pkg = declaring.getPackage() == null ? "" : declaring.getPackage().getName();
         if (pkg.equals("java") || pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("jdk.")) {
             return JAVA;

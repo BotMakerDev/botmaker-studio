@@ -408,13 +408,30 @@ class BlockSpecDeclarationTest {
 
     @Test
     void a_call_declares_its_sentence_with_one_component_per_argument() {
-        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "ExternalCallBlock")
                 .componentSpec(null);
 
-        assertEquals(List.of("kind", "scope", "method", "signature",
+        assertEquals(List.of("kind", "owner", "scope", "method", "signature",
                         "arg0", "arg0-remove", "arg1", "arg1-remove",
                         "images", "varargs-add", "returns", "info"),
                 ids(spec));
+    }
+
+    @Test
+    void a_call_to_the_bots_own_method_is_a_project_call_and_a_jdk_call_an_external_one() {
+        String source = "package com.mybot;\n"
+                + "public class Subject {\n"
+                + "    static int helper() { return 1; }\n"
+                + "    public void run() {\n"
+                + "        helper();\n"
+                + "        Math.max(1, 2);\n"
+                + "    }\n"
+                + "}\n";
+        List<CodeBlock> blocks = flatten(new EditorFixture(source).root);
+        assertTrue(blocks.stream().anyMatch(b -> b instanceof com.botmaker.studio.blocks.func.ProjectCallBlock p
+                && p.getMethodName().equals("helper")), "helper() is the bot's own");
+        assertTrue(blocks.stream().anyMatch(b -> b instanceof com.botmaker.studio.blocks.func.ExternalCallBlock e
+                && e.getMethodName().equals("max")), "Math.max is Java's");
     }
 
     @Test
@@ -424,13 +441,13 @@ class BlockSpecDeclarationTest {
         // from position is stable in a way an object identity is not.
         String source = inRun("String s = \"a\";\ns.substring(1, 2);");
 
-        assertEquals(ids(blockOf(source, "MethodInvocationBlock").componentSpec(null)),
-                ids(blockOf(source, "MethodInvocationBlock").componentSpec(null)));
+        assertEquals(ids(blockOf(source, "ExternalCallBlock").componentSpec(null)),
+                ids(blockOf(source, "ExternalCallBlock").componentSpec(null)));
     }
 
     @Test
     void a_call_with_no_arguments_declares_no_argument_components() {
-        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.trim();"), "MethodInvocationBlock")
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.trim();"), "ExternalCallBlock")
                 .componentSpec(null);
 
         assertTrue(ids(spec).stream().noneMatch(id -> id.startsWith("arg")), ids(spec).toString());
@@ -446,10 +463,10 @@ class BlockSpecDeclarationTest {
         // lookup are a knot that has to be untied before a single argument can be typed, and none of it may
         // happen until something actually draws. A null context proves it — every supplier here would throw
         // on one.
-        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "MethodInvocationBlock")
+        ComponentSpec spec = blockOf(inRun("String s = \"a\";\ns.substring(1, 2);"), "ExternalCallBlock")
                 .componentSpec(null);
 
-        assertEquals(12, spec.components().size());
+        assertEquals(13, spec.components().size());
         for (BlockComponent component : spec.components()) assertNotNull(component.node());
     }
 

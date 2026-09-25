@@ -118,7 +118,7 @@ class BlockConstructionTest {
     }
 
     /**
-     * A facade call renders through the generic {@code LibraryCallBlock}, whatever library it is on.
+     * A facade call renders through the generic {@code ExternalCallBlock}, whatever library it is on.
      *
      * <p>This used to assert the reverse of a deletion: {@code blocks.misc.ClickBlock} existed, had no
      * construction site anywhere in the module, and the test held it dead so that a future change wanting a
@@ -130,6 +130,6 @@ class BlockConstructionTest {
     @Test
     void aMouseClickUsesTheGenericLibraryCallBlock() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        assertTrue(blockKinds("Mouse.click(1, 2);").contains("LibraryCallBlock"));
+        assertTrue(blockKinds("Mouse.click(1, 2);").contains("ExternalCallBlock"));
     }
 }

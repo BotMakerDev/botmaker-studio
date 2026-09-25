@@ -122,6 +122,16 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **A call is either "call" (your own function) or "use" (someone else's), and both look like blocks.**
+  - A call to one of your bot's own methods reads *call ‹method›*. It is now painted in the Functions colour;
+    before, it had no fill and its white text was hard to read on the canvas.
+  - A call into a plugin, Java or a library reads *use*, then a small pill naming the owner (the plugin's
+    name, *Java* or *Library*), then the class and method. A plugin's call is no longer a pale framed box of
+    its own.
+  - The class dropdown on a *use* block lists each plugin's classes under the plugin's name, then Java's and
+    the libraries' classes. Picking a class rewrites the call onto it right away, so moving a call from a Java
+    class to a plugin's class makes it that plugin's call. A *call* block lists your own classes only.
+  - A call with a body (such as a *while found* call) is a Functions block with a mouth, like a loop.
 - **Stacked blocks join cleanly, delete is easy to hit, and blocks read without punctuation.**
   - A block inside a function, loop or branch has square corners. Its rounded corners let small white
     wedges show where it met the block above, the block below or the frame around it.

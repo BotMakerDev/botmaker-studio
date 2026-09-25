@@ -110,7 +110,7 @@ public class BlockDragDropEditTest {
     void activityDisable_roundTripsToAStandardizedLibraryCallBlock() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         // Activity.disable/enable("X") are ordinary SDK facade calls now — no bespoke toggle block. They must
-        // round-trip to the standardized LibraryCallBlock (same SDK chrome as every other facade call).
+        // round-trip to the standardized ExternalCallBlock (same chrome as every other facade call).
         String code = """
             import com.botmaker.sdk.api.bot.Activity;
             public class Subject {
@@ -136,7 +136,7 @@ public class BlockDragDropEditTest {
         assertRoundTripsToLibraryCall(code, "Bot.stop(); must round-trip to a LibraryCallBlock");
     }
 
-    /** Parses {@code code} and asserts a standardized {@link com.botmaker.studio.blocks.func.LibraryCallBlock} is present. */
+    /** Parses {@code code} and asserts a standardized {@link com.botmaker.studio.blocks.func.ExternalCallBlock} is present. */
     private void assertRoundTripsToLibraryCall(String code, String message) {
         ProjectState s = new ProjectState();
         Path path = Paths.get("Subject.java").toAbsolutePath();
@@ -150,7 +150,7 @@ public class BlockDragDropEditTest {
 
         boolean hasLibraryCall = collect(reparsed.root(), BodyBlock.class).stream()
                 .flatMap(b -> b.getStatements().stream())
-                .anyMatch(st -> st instanceof com.botmaker.studio.blocks.func.LibraryCallBlock);
+                .anyMatch(st -> st instanceof com.botmaker.studio.blocks.func.ExternalCallBlock);
         assertTrue(hasLibraryCall, message);
     }
 

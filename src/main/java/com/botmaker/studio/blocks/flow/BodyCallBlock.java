@@ -113,15 +113,19 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
                             argument != null ? (Expression) argument.getAstNode() : null)));
         }
 
-        return spec.body("body", () -> createIndentedBody(body, context, "sdk-lambda-body"))
+        return spec.body("body", () -> createIndentedBody(body, context, "call-body"))
                 .build();
+    }
+
+    /** A call like any other, with a mouth: FUNCTIONS, drawn as a C round its body (no frame of its own). */
+    @Override
+    protected com.botmaker.studio.palette.BlockCategory category() {
+        return com.botmaker.studio.palette.BlockCategory.FUNCTIONS;
     }
 
     @Override
     protected Node createUINode(CodeEditorService context) {
-        // The frame wraps header AND body, so the body reads as enclosed by the call rather than detached.
         return renderSpecStacked(context)
-                .withStyleClass("sdk-call-block")
                 .withDeleteButton(deleteAction(context))
                 .build();
     }
@@ -129,7 +133,7 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
     /** {@code Receiver} — the text the user's code holds, never a type this editor claims to know. */
     private Label receiverChip() {
         Label scope = new Label(receiver);
-        scope.getStyleClass().addAll("sdk-class-selector", "block-chip");
+        scope.getStyleClass().add("block-chip");
         return scope;
     }
 

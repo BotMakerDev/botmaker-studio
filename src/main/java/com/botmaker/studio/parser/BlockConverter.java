@@ -4,7 +4,9 @@ import com.botmaker.studio.blocks.ClassBlock;
 import com.botmaker.studio.blocks.expr.*;
 import com.botmaker.studio.blocks.flow.*;
 import com.botmaker.studio.blocks.func.ConstructorBlock;
-import com.botmaker.studio.blocks.func.LibraryCallBlock;
+import com.botmaker.studio.blocks.func.CallOwner;
+import com.botmaker.studio.blocks.func.ExternalCallBlock;
+import com.botmaker.studio.blocks.func.ProjectCallBlock;
 import com.botmaker.studio.blocks.func.MainBlock;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
@@ -573,19 +575,8 @@ public class BlockConverter {
 
             String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";
 
-            // Activity.disable/enable("X") and Bot.stop() are ordinary SDK facade calls — they fall through to
-            // the standardized LibraryCallBlock path below (same chrome as every other SDK block), rather than
-            // being special-cased into a bespoke fixed-label block.
-            if (isLibraryClass(scope)) {
-                LibraryCallBlock block = new LibraryCallBlock(BlockId.of(stmt), stmt, scope);
-                ctx.nodeToBlockMap().put(stmt, block);
-                for (Object arg : mi.arguments()) {
-                    parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
-                }
-                return Optional.of(block);
-            }
-
-            MethodInvocationBlock block = new MethodInvocationBlock(BlockId.of(stmt), stmt);
+            // Activity.disable/enable("X") and Bot.stop() are ordinary facade calls — one block for every call.
+            MethodInvocationBlock block = callBlock(BlockId.of(stmt), stmt, mi, scope);
             ctx.nodeToBlockMap().put(stmt, block);
             for (Object arg : mi.arguments()) {
                 parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
@@ -897,9 +888,7 @@ public class BlockConverter {
         }
         if (expr instanceof MethodInvocation mi) {
             String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";
-            MethodInvocationBlock block = isLibraryClass(scope)
-                    ? new LibraryCallBlock(BlockId.of(expr), expr, scope)
-                    : new MethodInvocationBlock(BlockId.of(expr), expr);
+            MethodInvocationBlock block = callBlock(BlockId.of(expr), expr, mi, scope);
             map.put(expr, block);
             for (Object arg : mi.arguments()) {
                 parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
@@ -1129,6 +1118,19 @@ public class BlockConverter {
 
     private static boolean isLibraryClass(String name) {
         return com.botmaker.studio.plugin.PluginHost.isFacadeClass(name);
+    }
+
+    /**
+     * The block for a call, by whose code it runs: a call written on a plugin's facade class, or one whose
+     * binding lands outside the bot's source, is an {@link ExternalCallBlock}; the bot's own (or an unresolved
+     * call) a {@link ProjectCallBlock}. Deciding from the source every time is what makes switching a call's
+     * class rebuild the right block.
+     */
+    private static MethodInvocationBlock callBlock(String id, ASTNode node, MethodInvocation mi, String scope) {
+        if (isLibraryClass(scope)) return new ExternalCallBlock(id, node, scope);
+        return CallOwner.of(mi.resolveMethodBinding()) == CallOwner.PROJECT
+                ? new ProjectCallBlock(id, node)
+                : new ExternalCallBlock(id, node, null);
     }
 
     private static boolean isComparisonOperator(InfixExpression.Operator op) {

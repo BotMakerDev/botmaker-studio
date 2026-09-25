@@ -36,17 +36,24 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 
-public class MethodInvocationBlock extends AbstractExpressionBlock implements StatementBlock {
+/**
+ * A method call, in one of two kinds that differ in whose code they run and so in what they offer: a
+ * {@link ProjectCallBlock} calls the bot's own methods ("call"), an {@link ExternalCallBlock} a plugin's, the
+ * JDK's or a library's ("use", with the owner's name). The parser picks the kind from the call's binding
+ * ({@link CallOwner}); picking a class of the other kind rewrites the call, and the re-parse builds the other
+ * block. Both are FUNCTIONS blocks, filled and outlined like every other block.
+ */
+public abstract class MethodInvocationBlock extends AbstractExpressionBlock implements StatementBlock {
 
     protected String scopeName;
     protected String methodName;
     protected final List<ExpressionBlock> arguments = new ArrayList<>();
     protected boolean isStatementContext = false;
 
-    // NEW: Allow subclasses to lock the scope
+    /** A plugin facade this call is on ({@code Mouse.click()}), which is what the plugin's docs are keyed by. */
     protected String fixedScopeName = null;
 
-    public MethodInvocationBlock(String id, ASTNode astNode) {
+    protected MethodInvocationBlock(String id, ASTNode astNode) {
         super(id, resolveExpressionNode(astNode));
 
         if (astNode instanceof ExpressionStatement) {
@@ -68,10 +75,20 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         return isStatementContext ? com.botmaker.studio.core.render.BlockShape.STACK : super.shape();
     }
 
-    // NEW: Setter for LibraryCallBlock to use
-    public void setFixedScope(String className) {
+    @Override
+    protected com.botmaker.studio.palette.BlockCategory category() {
+        return com.botmaker.studio.palette.BlockCategory.FUNCTIONS;
+    }
+
+    /** True for a call into code the bot does not own: a plugin's, the JDK's or a library's. */
+    protected abstract boolean external();
+
+    /** What the block says first: "call" for the bot's own method, "use" before another owner's. */
+    protected abstract String verb();
+
+    protected void setFixedScope(String className) {
         this.fixedScopeName = className;
-        this.scopeName = className; // Sync internal scope
+        this.scopeName = className;
     }
 
     private static MethodInvocation resolveExpressionNode(ASTNode node) {
@@ -166,7 +183,8 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         java.util.function.Supplier<ArgPlan> plan = once(() -> argPlan(context, controls.get()));
 
         ComponentSpec.Builder spec = ComponentSpec.builder()
-                .label("kind", this::ownerBadge)
+                .label("kind", () -> SentenceLayoutBuilder.keywordNode(verb()))
+                .label("owner", this::ownerBadge)
                 .custom("scope", () -> controls.get().scopeNode())
                 .custom("method", () -> methodNode(context, controls.get()));
 
@@ -199,7 +217,6 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     @Override
     protected Node createUINode(CodeEditorService context) {
         HBox container = renderSpecRow(context).build();
-        styleContainer(container);
 
         // Add delete button if statement
         if (isStatementContext && !isReadOnly()) {
@@ -243,27 +260,28 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
                            int imageVarargsFrom, int varargsFrom, Node imageRow) {}
 
     /**
-     * What the call is before its method: the plugin's name on a plugin's facade call, "Java" or "Library"
-     * on a call into a jar, and "Call" on the bot's own — see {@link CallOwner}.
+     * Whose code an external call runs, as a small pill after "use": the plugin's name, "Java" or "Library" —
+     * see {@link CallOwner}. A call to the bot's own code has none; "call" already says it.
      */
     private Node ownerBadge() {
-        if (fixedScopeName != null) {
-            String plugin = PluginHost.pluginNameFor(fixedScopeName).orElse(CallOwner.PLUGIN.label());
-            Label badge = new Label(plugin);
-            badge.getStyleClass().add("sdk-badge");
-            badge.setTooltip(new javafx.scene.control.Tooltip(fixedScopeName + " comes from the " + plugin + " plugin."));
-            return badge;
-        }
-        CallOwner owner = CallOwner.of(callBinding());
-        if (owner == CallOwner.PROJECT) return SentenceLayoutBuilder.labelNode(owner.label());
-        Label badge = new Label(owner.label());
-        badge.getStyleClass().add("call-owner-badge");
+        if (!external()) return null;
         IMethodBinding call = callBinding();
-        if (call != null && call.getDeclaringClass() != null) {
-            badge.setTooltip(new javafx.scene.control.Tooltip(
-                    call.getDeclaringClass().getErasure().getQualifiedName() + " — " + (owner == CallOwner.JAVA
-                            ? "part of Java itself." : "from a library on the project's classpath.")));
-        }
+        String declaring = call == null || call.getDeclaringClass() == null
+                ? null : call.getDeclaringClass().getErasure().getName();
+        String facade = fixedScopeName != null ? fixedScopeName : declaring;
+        Optional<String> plugin = facade == null ? Optional.empty() : PluginHost.pluginNameFor(facade);
+        CallOwner owner = fixedScopeName != null || plugin.isPresent() ? CallOwner.PLUGIN : CallOwner.of(call);
+        if (owner == CallOwner.PROJECT) owner = CallOwner.LIBRARY; // unresolved, but the parser saw a jar's
+        Label badge = new Label(owner == CallOwner.PLUGIN ? plugin.orElse(owner.label()) : owner.label());
+        badge.getStyleClass().add("call-owner-badge");
+        String where = switch (owner) {
+            case PLUGIN -> facade + " comes from the " + badge.getText() + " plugin.";
+            case JAVA -> (call == null ? "" : call.getDeclaringClass().getErasure().getQualifiedName() + " — ")
+                    + "part of Java itself.";
+            default -> (call == null ? "" : call.getDeclaringClass().getErasure().getQualifiedName() + " — ")
+                    + "from a library on the project's classpath.";
+        };
+        badge.setTooltip(new javafx.scene.control.Tooltip(where));
         return badge;
     }
 
@@ -289,50 +307,26 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         // We need a way to get the current scope text dynamically
         final java.util.function.Supplier<String> currentScopeGetter;
 
-        if (fixedScopeName != null) {
-            // --- SDK CALL MODE (LibraryCallBlock) ---
-            // The class is switchable inline: a dropdown of the SDK facade classes. Picking a different
-            // class rewrites the call to that class (keeping the method name when it still exists, else the
-            // class's first method) — the AST rewrite then re-renders the block.
-            ComboBox<String> classSelector = new ComboBox<>();
-            classSelector.getStyleClass().add("sdk-class-selector");
-            // This bot's SDK, not Studio's — see CodeEditorService.sdkFacadeNames(). The call's own class is
-            // re-added just below when it isn't in the list, so switching away from a facade the jar no longer
-            // has is possible while switching *to* one it never had is not.
-            classSelector.getItems().addAll(context.sdkFacadeNames());
-            if (!classSelector.getItems().contains(fixedScopeName)) {
-                classSelector.getItems().add(0, fixedScopeName);
+        // Read-only: the selector still backs the value lookups below, but never reaches the scene — the user
+        // sees what the call says, with no control to change it.
+        ComboBox<String> scopeSelector = createScopeSelector(context, currentFileClass);
+        scopeNode = isReadOnly() ? staticValueLabel(scopeSelector.getValue()) : scopeSelector;
+        currentScopeGetter = scopeSelector::getValue;
+        refreshMethodsAction = () -> populateMethodList(context, scopeSelector.getValue(), methodSelector);
+
+        scopeSelector.setOnAction(e -> {
+            String picked = scopeSelector.getValue();
+            if (picked == null || picked.startsWith("---")) return;
+            // An external call on a class is rewritten at once — a plugin's class, a JDK class, a library's —
+            // so moving between them changes the block's owner (and a facade's docs) on the re-parse. A variable
+            // still waits for the method, as a call on the bot's own classes does.
+            if (external() && !picked.equals(getScope()) && !isVariableScope(context, picked)) {
+                switchClass(context, picked);
+                return;
             }
-            classSelector.setValue(fixedScopeName);
-            classSelector.getStyleClass().add("block-selector");
-            // Read-only: the selector still backs the value lookups below, but never reaches the scene — the
-            // user sees what the call says, with no control to change it.
-            scopeNode = isReadOnly() ? staticValueLabel(fixedScopeName) : classSelector;
-
-            currentScopeGetter = classSelector::getValue;
-
-            refreshMethodsAction = () -> populateMethodList(context, classSelector.getValue(), methodSelector);
-
-            classSelector.setOnAction(e -> {
-                String newClass = classSelector.getValue();
-                if (newClass == null || newClass.equals(fixedScopeName)) return;
-                switchSdkClass(context, newClass);
-            });
-        } else {
-            // --- DYNAMIC SCOPE MODE (Standard) ---
-            ComboBox<String> fileSelector = createScopeSelector(context, currentFileClass);
-            scopeNode = isReadOnly() ? staticValueLabel(fileSelector.getValue()) : fileSelector;
-
-            currentScopeGetter = fileSelector::getValue;
-
-            // Logic to populate based on selection
-            refreshMethodsAction = () -> populateMethodList(context, fileSelector.getValue(), methodSelector);
-
-            fileSelector.setOnAction(e -> {
-                refreshMethodsAction.run();
-                methodSelector.show();
-            });
-        }
+            refreshMethodsAction.run();
+            methodSelector.show();
+        });
 
         // --- 2. Configure Method Selector ---
         methodSelector.setValue(methodName);
@@ -361,13 +355,8 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
             }
 
             // Update AST
-            String scopeForAST = "";
-            if (fixedScopeName != null) {
-                scopeForAST = fixedScopeName;
-            } else {
-                boolean isVariable = isVariableScope(context, currentScopeVal);
-                scopeForAST = currentScopeVal.equals(finalCurrentFileClass) && !isVariable ? "" : currentScopeVal;
-            }
+            boolean isVariable = isVariableScope(context, currentScopeVal);
+            String scopeForAST = currentScopeVal.equals(finalCurrentFileClass) && !isVariable ? "" : currentScopeVal;
 
             // Auto-select the overload that matches the current argument count (else the first); the AST
             // rewrite then smart-merges arguments (keeps compatible ones, fills/drops the rest).
@@ -398,10 +387,14 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
 
     // --- REFACTORED HELPER METHODS ---
 
+    /**
+     * The scope dropdown. Both kinds list the variables in reach; then a project call lists the bot's own
+     * classes, and an external call each plugin's classes under the plugin's name and the JDK's and libraries'
+     * static classes after them. Neither lists the other's classes: a call's kind is what it is for.
+     */
     private ComboBox<String> createScopeSelector(CodeEditorService context, String initialValue) {
         ComboBox<String> fileSelector = new ComboBox<>();
 
-        // Data gathering logic moved here
         List<String> instanceItems = new ArrayList<>();
         List<ProjectAnalyzer.VariableOption> vars = context.getProjectAnalyzer().getVisibleVariables(this.astNode, ResolvedType.UNKNOWN);
         for (ProjectAnalyzer.VariableOption var : vars) {
@@ -412,30 +405,39 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         }
         Collections.sort(instanceItems);
 
-        List<String> staticClassItems = new ArrayList<>();
-        if (context.getState() != null) {
-            for (ProjectFile file : context.getState().getAllFiles()) {
-                if (file.getPath().toString().replace("\\", "/").contains("com/botmaker/sdk")) continue;
-                if (hasPublicStaticMethods(context, file)) staticClassItems.add(file.getClassName());
-            }
-        }
-        Collections.sort(staticClassItems);
-
-        // External-library static-utility classes (same source as ExpressionMenu's "Library (static)").
-        // SDK facades are excluded here: they're reached only via the curated Vision palette blocks (+ this
-        // block's own SDK class/method/⚙ selectors once placed), so there's a single way in.
-        List<String> libraryClassItems = new ArrayList<>();
-        if (context.getProjectAnalyzer().getLibraryIndex() != null) {
-            context.getProjectAnalyzer().getLibraryIndex().getStaticUtilityTypes().stream()
-                    .filter(ci -> !PluginHost.isFacadeClass(ci.getSimpleName()))
-                    .forEach(ci -> libraryClassItems.add(ci.getSimpleName()));
-        }
-        Collections.sort(libraryClassItems);
-
         List<String> selectorItems = new ArrayList<>();
         if (!instanceItems.isEmpty()) { selectorItems.add("--- INSTANCES ---"); selectorItems.addAll(instanceItems); }
-        if (!staticClassItems.isEmpty()) { selectorItems.add("--- CLASSES ---"); selectorItems.addAll(staticClassItems); }
-        if (!libraryClassItems.isEmpty()) { selectorItems.add("--- LIBRARIES ---"); selectorItems.addAll(libraryClassItems); }
+
+        if (!external()) {
+            List<String> staticClassItems = new ArrayList<>();
+            if (context.getState() != null) {
+                for (ProjectFile file : context.getState().getAllFiles()) {
+                    if (hasPublicStaticMethods(context, file)) staticClassItems.add(file.getClassName());
+                }
+            }
+            Collections.sort(staticClassItems);
+            if (!staticClassItems.isEmpty()) { selectorItems.add("--- CLASSES ---"); selectorItems.addAll(staticClassItems); }
+        } else {
+            // This bot's plugins, not Studio's — see CodeEditorService.sdkFacadeNames() — one section per plugin.
+            java.util.Map<String, List<String>> byPlugin = new java.util.TreeMap<>();
+            for (String facade : context.sdkFacadeNames()) {
+                byPlugin.computeIfAbsent(PluginHost.pluginNameFor(facade).orElse("Plugins"), k -> new ArrayList<>())
+                        .add(facade);
+            }
+            byPlugin.forEach((plugin, facades) -> {
+                selectorItems.add("--- " + plugin.toUpperCase(java.util.Locale.ROOT) + " ---");
+                facades.stream().sorted().forEach(selectorItems::add);
+            });
+            // Static-utility classes from the JDK and the classpath (same source as ExpressionMenu's "Library").
+            List<String> libraryClassItems = new ArrayList<>();
+            if (context.getProjectAnalyzer().getLibraryIndex() != null) {
+                context.getProjectAnalyzer().getLibraryIndex().getStaticUtilityTypes().stream()
+                        .filter(ci -> !PluginHost.isFacadeClass(ci.getSimpleName()))
+                        .forEach(ci -> libraryClassItems.add(ci.getSimpleName()));
+            }
+            Collections.sort(libraryClassItems);
+            if (!libraryClassItems.isEmpty()) { selectorItems.add("--- JAVA & LIBRARIES ---"); selectorItems.addAll(libraryClassItems); }
+        }
 
         fileSelector.getItems().addAll(selectorItems);
 
@@ -537,14 +539,6 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
         return scope;
     }
 
-    private void styleContainer(HBox container) {
-        container.getStyleClass().add(isStatementContext ? "block-call--statement" : "block-call--expression");
-        // Distinct look for SDK calls — colour/border live in blocks.css (sdk-call-block).
-        if (fixedScopeName != null) {
-            container.getStyleClass().add("sdk-call-block");
-        }
-    }
-
     private boolean hasPublicStaticMethods(CodeEditorService context, ProjectFile file) {
         if (file == null) return false;
         return !context.getProjectAnalyzer()
@@ -611,19 +605,19 @@ public class MethodInvocationBlock extends AbstractExpressionBlock implements St
     }
 
     /**
-     * Rewrites this SDK call to {@code newClass}: keeps the current method name when the new class still
-     * declares it, otherwise falls back to that class's first static method. The AST rewrite re-renders the
-     * block (so the dropdowns and typed argument editors rebuild against the new class).
+     * Rewrites this call onto the class {@code newClass}: keeps the current method name when the new class
+     * still declares it as a static, otherwise takes that class's first static method. The re-parse builds the
+     * block again from the new source, so a move between a plugin's class and a library's changes its badge,
+     * its docs and its dropdowns — the block is never patched in place.
      */
-    private void switchSdkClass(CodeEditorService context, String newClass) {
+    private void switchClass(CodeEditorService context, String newClass) {
         List<MethodSignature> methods = context.getProjectAnalyzer().getMethods(newClass, true);
+        if (methods.isEmpty()) return; // nothing callable on it from here: leave the call as it is
         String targetMethod = methods.stream().map(MethodSignature::name).anyMatch(n -> n.equals(methodName))
                 ? methodName
-                : methods.stream().map(MethodSignature::name).sorted().findFirst().orElse(methodName);
+                : methods.stream().map(MethodSignature::name).sorted().findFirst().orElseThrow();
 
         List<ResolvedType> paramTypes = bestOverloadParams(context, newClass, targetMethod, arguments.size());
-        this.fixedScopeName = newClass;
-        this.scopeName = newClass;
         context.getCodeEditor().updateMethodInvocation((MethodInvocation) this.astNode, newClass, targetMethod, paramTypes);
     }
 

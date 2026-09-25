@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Blocks round 3, phase 3: glued corners, delete button, no punctuation.**
+- **2026-09-25 (latest) — Blocks round 3, phase 4: call blocks split in two.**
+  - `MethodInvocationBlock` is abstract, FUNCTIONS, with `external()`/`verb()`. `ProjectCallBlock` ("call") and `ExternalCallBlock` ("use" + `.call-owner-badge`) replace it and `LibraryCallBlock`.
+  - `BlockConverter.callBlock` decides the kind: a facade scope or a non-source binding (`CallOwner.of`, which now answers PLUGIN for a facade) gives external. The kind is re-decided on every parse.
+  - One scope dropdown: variables, then the bot's classes (project) or per-plugin facades plus JDK/library classes (external). An external class pick calls `switchClass` at once.
+  - `BodyCallBlock` is FUNCTIONS. `.sdk-call-block`, `.block-call--*`, `-bm-fill-sdk` and `SdkBlockContrastTest` are deleted.
+  - `.block .block-action-button > .label` takes the on-colour: the ⚙ on a High Contrast call scored 4.14.
+  - New `CallBlockKindsTest`.
+- **2026-09-25 — Blocks round 3, phase 3: glued corners, delete button, no punctuation.**
   - `blocks.css`: `.body-block > .block-category` has radius 0 in filled, outlined and high contrast. A block in a body is as wide as the body, so every corner touches something coloured.
   - `BlockUIComponents.createDeleteButton` is the one delete button, now used by `HeaderLayoutBuilder` too. It is a round 24px `✕` (`.block-delete-button`) on a resting wash, with a 6px right margin.
   - `InsertionSeam` puts the "+" at `PLUS_X` (notch + 8) instead of under the pointer.

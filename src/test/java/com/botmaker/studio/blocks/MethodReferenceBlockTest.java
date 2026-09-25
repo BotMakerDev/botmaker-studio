@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Regression cover for the "{@code supervise()} renders with empty parentheses" bug.
  *
  * <p>The generated game-bot entry point is {@code Bot.start(FlowDriver::run, GoHome.INSTANCE::execute)}.
- * {@code Bot} is an SDK facade, so the call becomes a {@code LibraryCallBlock} whose arguments are populated
+ * {@code Bot} is an SDK facade, so the call becomes an {@code ExternalCallBlock} whose arguments are populated
  * via {@code parseExpression(...).ifPresent(block::addArgument)}. Method references matched no branch of
  * {@code dispatchExpression}, so every argument resolved to {@code Optional.empty()} and was silently
  * dropped — the block rendered as {@code supervise()} while the source kept the real arguments.
