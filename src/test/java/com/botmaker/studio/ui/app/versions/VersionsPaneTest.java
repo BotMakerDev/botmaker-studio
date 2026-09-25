@@ -6,6 +6,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
@@ -72,6 +73,8 @@ class VersionsPaneTest extends FxHeadlessTest {
 
         List<Timeline.Row> rows = await(r -> !r.isEmpty() && r.getFirst() instanceof Timeline.Unsaved);
         assertEquals(new Timeline.Unsaved(1), rows.getFirst());
+        assertEquals(SyncModel.Ownership.LOCAL_ONLY, pane.model().ownership(), "signed out");
+        assertEquals("1 unsaved change", pane.model().thisComputer());
 
         interact(() -> pane.saveAs("Faster mining"));
 

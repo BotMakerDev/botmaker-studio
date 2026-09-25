@@ -6,7 +6,40 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4c: a version's change as blocks; restore one function or one file.**
+- **2026-09-25 (latest) — Versions 4d: three places, one strip; an install is a clone; Save to my copy.**
+  - `project/vcs/Remote` (`MINE` "mine", `ORIGINAL` "original"); `ProjectVcs`: `remoteUrl`/`setRemote` per
+    remote, `push(remote, remoteBranch, token)` (branch + tags + the `refs/notes/botmaker-names` names, never
+    forced; a names ref that moved is not a failure), `fetch`, `notIn` (versions the remote lacks, by the
+    last push — no network; -1 when never pushed), `remoteTags` (ls-remote), `branch()`. The token goes to
+    JGit per call as `x-access-token` and is never written. The one-remote `remoteUrl()`/`setRemote`/`push`
+    are gone.
+  - **Install is a clone** (`ProjectVcs.cloneAt`, `BotInstaller.install`): remote `original`, local `main`
+    forced to the tag (the clone's own default branch is the author's tip), `.gitignore` written if the
+    author's has none, `BotSource` kept, one `INSTALL` version. Templates are still unpacked from the zip —
+    a project started from one is the user's.
+  - **A zip install is attached once** (`ProjectVcs.attach`), when the tab first reads it: the tag is fetched
+    and a merge commit with parents `HEAD` + the tag's commit and **`HEAD`'s tree** is written (`INSTALL`,
+    "Linked to owner/repo tag"). A failure (offline) is retried on the next refresh.
+  - **The old backup remote `origin` becomes `mine`** (`adoptLegacyBackup`, with its tracking refs): it was
+    always the user's own repository.
+  - `project/vcs/SyncModel` (pure): ownership from the login and the remotes' GitHub owners — `LOCAL_ONLY`
+    signed out; `OTHERS` when `original` is another account's; `OWN_PUBLISHED` with a `mine` or an original
+    of one's own; else `OWN_NEW` — the main action and the others, the three strip sentences, and
+    `remoteBranch`: **a fork carries the user's line as `studio/<branch>`**, beside a `main` that keeps
+    tracking the author (pushing over the fork's `main` would be refused the day the author moved on).
+    `newest(tags, installed)` by `SemVer`.
+  - `sharing/MyCopy` — *Save to my copy*: saves first (`SAVE`, the name field or "Saved to my copy"), then a
+    fork (`OTHERS`), the user's own original (`OWN_PUBLISHED` installed by its author) or a new private
+    repository (`OWN_NEW`) becomes `mine`, and the branch is pushed.
+  - Versions tab: the strip (💻 This computer · ☁ My copy · ★ Original) with the main action and the rest;
+    *Sign in to share…* opens the GitHub bar; the original's releases are asked once per pane and on ⟳.
+    The backup *Push* is deleted from `ShareActions` (*Propose…*/*Get latest* stay until 4e).
+  - `BotInstaller.update` (still the gallery's *Update*, deleted by 4e) keeps the history now: a `SAFETY`
+    version first and `.git` carried across the swap; its warning says so.
+  - `SyncModelTest`, `RemotesTest` (clone at a tag, attach keeps the tree, push + `notIn` + names, a fork's
+    `studio/` line, the old `origin` adopted — local repositories over `file://`), `VersionsPaneTest` (signed
+    out reads `LOCAL_ONLY`).
+- **2026-09-25 — Versions 4c: a version's change as blocks; restore one function or one file.**
   - `project/vcs/BlockDiff` (pure, JDT only): functions matched by signature (type path, name, parameter
     types as written — so an overload is its own function and a rename is one removed plus one added);
     statements aligned by LCS with `ASTMatcher` equality; an unmatched pair that is the same compound

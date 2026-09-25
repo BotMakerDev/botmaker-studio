@@ -404,7 +404,8 @@ public class GalleryDialog {
 
     private void updateBot(InstalledBot bot, Button updateBtn, Label status) {
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                "Updating will overwrite any local changes to “" + bot.info().name() + "”.\n\nContinue?",
+                "Updating replaces the files of “" + bot.info().name() + "” with the new release. Your changes "
+                        + "are kept as a version first — one restore away in the Versions tab.\n\nContinue?",
                 ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(stage);
         confirm.setHeaderText("Update this bot?");

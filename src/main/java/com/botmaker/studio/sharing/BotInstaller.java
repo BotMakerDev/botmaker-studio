@@ -3,6 +3,8 @@ package com.botmaker.studio.sharing;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.config.Constants;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -16,9 +18,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Installs and updates bots from their GitHub repos (no account needed). A bot is a standard Maven project,
- * so installing = download the repo's release zip → unzip into {@code ~/BotMakerProjects/} → record
- * provenance ({@link BotSource}) for later update checks.
+ * Installs and updates bots from their GitHub repos (no account needed). Installing clones the author's
+ * repository at the release tag into {@code ~/BotMakerProjects/} and records provenance ({@link BotSource});
+ * a template is still unpacked from the release zip, since a project started from one is the user's own.
  *
  * <p>The blocking methods here are intended to run off the FX thread (the dialog wraps them in a
  * background task).
@@ -43,19 +45,33 @@ public final class BotInstaller {
     }
 
     /**
-     * Downloads {@code entry} at release {@code tag} and unpacks it into a new project directory.
+     * Installs {@code entry} at release {@code tag} as a <b>clone</b> of its author's repository
+     * ({@code docs/refactor/39-versions.md} §7): the remote is {@code original}, branch {@code main} starts at
+     * the tag, and {@link BotSource} is written as the gallery's provenance record — one {@code INSTALL}
+     * version, only when that (or the ignore file) changed anything. An update is then a real merge.
      *
      * @return the installed project directory
-     * @throws IOException if the project already exists or download/unpack fails
+     * @throws IOException if the project already exists or the clone fails
      */
     public Path install(GalleryEntry entry, String tag) throws IOException {
         Path dest = installDir(entry.name());
         if (Files.exists(dest)) {
             throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
-        downloadInto(entry.owner(), entry.repo(), tag, dest);
-        new BotSource(entry.owner(), entry.repo(), tag).write(dest);
+        try {
+            ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, dest, gallery.token());
+            new BotSource(entry.owner(), entry.repo(), tag).write(dest);
+            new ProjectVcs(dest).checkpoint(VersionOrigin.INSTALL, "Installed " + tag);
+        } catch (IOException e) {
+            deleteRecursively(dest);
+            throw e;
+        }
         return dest;
+    }
+
+    /** The HTTPS address a bot is cloned from: plain, with no token in it. */
+    public static String cloneUrl(String owner, String repo) {
+        return "https://github.com/" + owner + "/" + repo + ".git";
     }
 
     /**
@@ -97,8 +113,9 @@ public final class BotInstaller {
     }
 
     /**
-     * Re-downloads the release {@link #checkForUpdate} offers and replaces the project in place. Overwrites
-     * local edits (the caller warns the user first).
+     * Re-downloads the release {@link #checkForUpdate} offers and replaces the project's files in place, after
+     * a {@code SAFETY} version of what it replaces; the history stays. Deleted by 4e, where an update is a
+     * real merge ({@code docs/refactor/39-versions.md} §7).
      *
      * @return the tag updated to, or empty if there was nothing to move to / no provenance
      */
@@ -112,6 +129,10 @@ public final class BotInstaller {
         deleteRecursively(tmp);
         downloadInto(src.get().owner(), src.get().repo(), target.get(), tmp);
         new BotSource(src.get().owner(), src.get().repo(), target.get()).write(tmp);
+        // The history goes with the project until 4e makes an update a merge: what this replaces is then a
+        // restorable version, and the replaced files read as unsaved changes rather than vanishing.
+        new ProjectVcs(projectDir).checkpoint(VersionOrigin.SAFETY, "Before updating to " + target.get());
+        Files.move(projectDir.resolve(".git"), tmp.resolve(".git"));
 
         deleteRecursively(projectDir);
         Files.move(tmp, projectDir);

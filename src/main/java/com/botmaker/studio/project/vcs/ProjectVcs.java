@@ -34,13 +34,12 @@ import java.util.Map;
 import java.util.TreeSet;
 
 /**
- * Local, single-branch git history for one user project, backed by JGit (no system git binary). Provides
- * commit / tag / rollback over a plain {@code .git} inside the project directory, plus an optional
- * {@code origin} remote for a plain backup push ({@link #remoteUrl()} / {@link #setRemote} / {@link #push}) —
- * pushing is <em>not</em> publishing: it copies the history to a (private) GitHub repo and touches neither the
- * gallery nor a release. <strong>Linear only</strong>
- * — there are no branches; rollback rewinds the working tree to an earlier commit's content as a new commit on
- * top of the current tip, so nothing is ever lost.
+ * Git history for one user project, backed by JGit (no system git binary): versions ({@link #checkpoint}),
+ * names, restores, and the two remotes of {@code docs/refactor/39-versions.md} §2 — {@link Remote#MINE} and
+ * {@link Remote#ORIGINAL} — with a clone ({@link #cloneAt}), a fetch, a push and the attach of a zip install
+ * ({@link #attach}). Restore rewinds the working tree to an earlier commit's content as a new commit on top of
+ * the current tip, so nothing is ever lost. <b>A token is passed per call and never written</b> — not to
+ * {@code .git/config}, not into a remote URL.
  *
  * <p>Blocking / does file + git I/O — intended to run off the FX thread (the VCS panel wraps calls in a
  * background task).
@@ -394,31 +393,34 @@ public final class ProjectVcs {
     }
 
     // -------------------------------------------------------------------------
-    // Remote (backup push — not publishing)
+    // Remotes: My copy and Original (39 §2, §7)
     // -------------------------------------------------------------------------
 
-    /** The remote this project pushes to. Only one is ever configured, so it needs no name in the API. */
-    private static final String ORIGIN = "origin";
+    /**
+     * The one remote Studio wrote before the Versions tab: the private backup repo of the old <i>Push</i>. It
+     * was always the user's own, so {@link #adoptLegacyBackup} makes it {@link Remote#MINE}.
+     */
+    private static final String LEGACY_BACKUP = "origin";
 
-    /** The configured {@code origin} URL, or {@code null} when the project has no remote (the default). */
-    public String remoteUrl() {
+    /** {@code remote}'s URL, or null when the project has none. */
+    public String remoteUrl(Remote remote) {
         if (!isRepo()) return null;
         try (Git git = open()) {
-            String url = git.getRepository().getConfig().getString("remote", ORIGIN, "url");
+            String url = git.getRepository().getConfig().getString("remote", remote.id(), "url");
             return url == null || url.isBlank() ? null : url;
         } catch (Exception e) {
             return null;
         }
     }
 
-    /** Points {@code origin} at {@code url} ({@code git remote add}/{@code set-url} in one call). */
-    public void setRemote(String url) throws IOException {
+    /** Points {@code remote} at {@code url} — add or set-url in one call. The URL is plain HTTPS, no token. */
+    public void setRemote(Remote remote, String url) throws IOException {
         if (url == null || url.isBlank()) throw new IOException("Remote URL must not be empty.");
         ensureInitialized();
         try (Git git = open()) {
             StoredConfig config = git.getRepository().getConfig();
-            config.setString("remote", ORIGIN, "url", url.trim());
-            config.setString("remote", ORIGIN, "fetch", "+refs/heads/*:refs/remotes/" + ORIGIN + "/*");
+            config.setString("remote", remote.id(), "url", url.trim());
+            config.setString("remote", remote.id(), "fetch", "+refs/heads/*:refs/remotes/" + remote.id() + "/*");
             config.save();
         } catch (Exception e) {
             throw new IOException("Could not set the remote: " + e.getMessage(), e);
@@ -426,29 +428,71 @@ public final class ProjectVcs {
     }
 
     /**
-     * Pushes the current branch and its tags to {@code origin}, authenticating with a GitHub token (used as
-     * the HTTPS username, which is how GitHub accepts a PAT/OAuth token). Returns the branch that was pushed.
-     *
-     * <p>This is a <em>backup</em> push, deliberately non-forcing: a remote that has commits the project
-     * doesn't is reported as such rather than being overwritten — that state means someone published or edited
-     * on GitHub, and silently clobbering it is exactly what a backup must not do.
+     * Renames the old backup remote {@code origin} to {@link Remote#MINE}, with its remote-tracking refs, when
+     * the project has the one and not the other. Returns whether it did. Idempotent.
      */
-    public String push(String token) throws IOException {
+    public boolean adoptLegacyBackup() throws IOException {
+        if (!isRepo()) return false;
+        try (Git git = open()) {
+            Repository repo = git.getRepository();
+            StoredConfig config = repo.getConfig();
+            String url = config.getString("remote", LEGACY_BACKUP, "url");
+            if (url == null || url.isBlank() || remoteUrl(Remote.MINE) != null) return false;
+            config.unsetSection("remote", LEGACY_BACKUP);
+            config.setString("remote", Remote.MINE.id(), "url", url);
+            config.setString("remote", Remote.MINE.id(), "fetch", "+refs/heads/*:refs/remotes/" + Remote.MINE.id() + "/*");
+            config.save();
+            String from = "refs/remotes/" + LEGACY_BACKUP + "/";
+            for (Ref ref : repo.getRefDatabase().getRefsByPrefix(from)) {
+                org.eclipse.jgit.lib.RefUpdate moved = repo.updateRef(
+                        "refs/remotes/" + Remote.MINE.id() + "/" + ref.getName().substring(from.length()));
+                moved.setNewObjectId(ref.getObjectId());
+                moved.forceUpdate();
+                org.eclipse.jgit.lib.RefUpdate gone = repo.updateRef(ref.getName());
+                gone.setForceUpdate(true);
+                gone.delete();
+            }
+            return true;
+        } catch (Exception e) {
+            throw new IOException("Could not adopt the old backup remote: " + e.getMessage(), e);
+        }
+    }
+
+    /** The current branch's name ({@code main}, for a project Studio cloned). */
+    public String branch() throws IOException {
+        try (Git git = open()) {
+            return git.getRepository().getBranch();
+        }
+    }
+
+    /**
+     * Pushes the current branch to {@code remoteBranch} on {@code remote}, with the tags and the version names
+     * ({@link #NAMES}). Returns the local branch. Never forced: a remote that has versions this computer lacks
+     * is reported, not overwritten.
+     *
+     * @param token a GitHub token, handed to JGit for this call only
+     */
+    public String push(Remote remote, String remoteBranch, String token) throws IOException {
         if (token == null || token.isBlank()) throw new IOException("Not signed in to GitHub.");
         if (!isRepo()) throw new IOException("Nothing to push — this project has no history yet.");
-        if (remoteUrl() == null) throw new IOException("This project has no 'origin' remote yet.");
+        if (remoteUrl(remote) == null) throw new IOException("This project has no '" + remote.id() + "' remote yet.");
         try (Git git = open()) {
             String branch = git.getRepository().getBranch();
+            List<RefSpec> specs = new ArrayList<>();
+            specs.add(new RefSpec("refs/heads/" + branch + ":refs/heads/" + remoteBranch));
+            boolean notes = git.getRepository().exactRef(NAMES) != null;
+            if (notes) specs.add(new RefSpec(NAMES + ":" + NAMES));
             Iterable<PushResult> results = git.push()
-                    .setRemote(ORIGIN)
-                    .setRefSpecs(new RefSpec("refs/heads/" + branch + ":refs/heads/" + branch))
+                    .setRemote(remote.id())
+                    .setRefSpecs(specs)
                     .setPushTags()
                     .setForce(false)
-                    .setCredentialsProvider(new UsernamePasswordCredentialsProvider(token, ""))
+                    .setCredentialsProvider(credentials(token))
                     .call();
             for (PushResult result : results) {
                 for (RemoteRefUpdate update : result.getRemoteUpdates()) {
-                    checkUpdate(update);
+                    // Names are a courtesy: a notes ref that moved on the other side must not fail the push.
+                    if (!update.getRemoteName().equals(NAMES)) checkUpdate(update);
                 }
             }
             return branch;
@@ -459,12 +503,147 @@ public final class ProjectVcs {
         }
     }
 
+    /** Fetches {@code remote}'s branches and tags. {@code token} may be null for a public repository. */
+    public void fetch(Remote remote, String token) throws IOException {
+        try (Git git = open()) {
+            var fetch = git.fetch().setRemote(remote.id()).setTagOpt(org.eclipse.jgit.transport.TagOpt.FETCH_TAGS);
+            if (token != null && !token.isBlank()) fetch.setCredentialsProvider(credentials(token));
+            fetch.call();
+        } catch (Exception e) {
+            throw new IOException("Could not read " + remote.displayName().toLowerCase() + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * How many versions of this computer's branch {@code remote}'s {@code remoteBranch} lacks, by the last
+     * fetch or push — no network. -1 when nothing was ever pushed there.
+     */
+    public int notIn(Remote remote, String remoteBranch) throws IOException {
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            ObjectId head = repo.resolve("HEAD");
+            Ref there = repo.exactRef("refs/remotes/" + remote.id() + "/" + remoteBranch);
+            if (head == null) return 0;
+            if (there == null) return -1;
+            walk.markStart(walk.parseCommit(head));
+            walk.markUninteresting(walk.parseCommit(there.getObjectId()));
+            int n = 0;
+            for (RevCommit ignored : walk) n++;
+            return n;
+        }
+    }
+
+    /** The tag names {@code remote} has, asked over the network; {@code token} may be null. */
+    public List<String> remoteTags(Remote remote, String token) throws IOException {
+        String url = remoteUrl(remote);
+        if (url == null) return List.of();
+        try {
+            var ls = Git.lsRemoteRepository().setRemote(url).setTags(true).setHeads(false).setTimeout(15);
+            if (token != null && !token.isBlank()) ls.setCredentialsProvider(credentials(token));
+            List<String> out = new ArrayList<>();
+            for (Ref ref : ls.call()) {
+                String name = Repository.shortenRefName(ref.getName());
+                if (!name.endsWith("^{}")) out.add(name);
+            }
+            return out;
+        } catch (Exception e) {
+            throw new IOException("Could not list the original's releases: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Clones {@code url} into {@code dest} at {@code tag}: the remote is {@link Remote#ORIGINAL}, and a branch
+     * {@code main} starts at the tag and is checked out — an installed bot is a real clone of its author's
+     * repository ({@code 39} §7).
+     */
+    public static void cloneAt(String url, String tag, Path dest, String token) throws IOException {
+        var clone = Git.cloneRepository().setURI(url).setDirectory(dest.toFile())
+                .setRemote(Remote.ORIGINAL.id()).setNoCheckout(true);
+        if (token != null && !token.isBlank()) clone.setCredentialsProvider(credentials(token));
+        try (Git git = clone.call()) {
+            ObjectId at = git.getRepository().resolve("refs/tags/" + tag + "^{commit}");
+            if (at == null) throw new IOException("The release " + tag + " is not in " + url + ".");
+            // The clone made a local branch at the author's default tip (named whatever theirs is): the user's
+            // line is main, at the tag, whatever the author did after it.
+            Repository repo = git.getRepository();
+            org.eclipse.jgit.lib.RefUpdate main = repo.updateRef("refs/heads/main");
+            main.setNewObjectId(at);
+            main.setForceUpdate(true);
+            main.update();
+            repo.updateRef("HEAD").link("refs/heads/main");
+            git.reset().setMode(ResetType.HARD).setRef(at.name()).call();
+            if (!"main".equals(repo.getBranch())) {
+                throw new IOException("Could not start a branch at " + tag + ".");
+            }
+            // Build output must never become a version, whatever the author's repository ignores.
+            new ProjectVcs(dest).writeGitignore();
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not install from " + url + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Joins a project installed from a zip to its author's history, once ({@code 39} §7): {@link Remote#ORIGINAL}
+     * is set to {@code url}, the tag is fetched, and a merge commit whose parents are {@code HEAD} and the tag's
+     * commit is written <b>with the user's tree unchanged</b> — the tag becomes the merge base an update needs,
+     * and no edit moves. Returns false when {@code HEAD} already contains the tag (a clone, or attached before).
+     */
+    public boolean attach(String url, String tag, String label, String token) throws IOException {
+        ensureInitialized();
+        if (remoteUrl(Remote.ORIGINAL) == null) setRemote(Remote.ORIGINAL, url);
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            var fetch = git.fetch().setRemote(Remote.ORIGINAL.id())
+                    .setRefSpecs(new RefSpec("+refs/tags/" + tag + ":refs/tags/" + tag))
+                    .setTagOpt(org.eclipse.jgit.transport.TagOpt.NO_TAGS);
+            if (token != null && !token.isBlank()) fetch.setCredentialsProvider(credentials(token));
+            fetch.call();
+            ObjectId tagged = repo.resolve("refs/tags/" + tag + "^{commit}");
+            if (tagged == null) throw new IOException("The release " + tag + " is not in " + url + ".");
+            RevCommit head = walk.parseCommit(repo.resolve("HEAD"));
+            RevCommit base = walk.parseCommit(tagged);
+            if (walk.isMergedInto(base, head)) return false;
+
+            org.eclipse.jgit.lib.CommitBuilder merge = new org.eclipse.jgit.lib.CommitBuilder();
+            merge.setTreeId(head.getTree());
+            merge.setParentIds(head, base);
+            merge.setAuthor(author);
+            merge.setCommitter(author);
+            merge.setMessage(VersionOrigin.INSTALL.stamp(label));
+            ObjectId id;
+            try (org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter()) {
+                id = inserter.insert(merge);
+                inserter.flush();
+            }
+            org.eclipse.jgit.lib.RefUpdate update = repo.updateRef("HEAD");
+            update.setNewObjectId(id);
+            update.setExpectedOldObjectId(head);
+            update.setRefLogMessage("attach to " + tag, false);
+            switch (update.update()) {
+                case FAST_FORWARD, NEW, FORCED -> { }
+                default -> throw new IOException("Could not record the link to " + tag + ".");
+            }
+            return true;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not link to the original: " + e.getMessage(), e);
+        }
+    }
+
+    /** How GitHub takes an OAuth token over HTTPS — per call, never stored. */
+    private static UsernamePasswordCredentialsProvider credentials(String token) {
+        return new UsernamePasswordCredentialsProvider("x-access-token", token);
+    }
+
     /** Turns one ref's push outcome into a readable failure; a successful/no-op update passes silently. */
     private static void checkUpdate(RemoteRefUpdate update) throws IOException {
         switch (update.getStatus()) {
             case OK, UP_TO_DATE -> { /* pushed, or already there */ }
             case REJECTED_NONFASTFORWARD -> throw new IOException(
-                    "The remote has commits this project doesn't — pull or publish instead of pushing.");
+                    "Your copy on GitHub has versions this computer doesn't, so nothing was overwritten.");
             case REJECTED_OTHER_REASON -> throw new IOException("Push rejected: "
                     + (update.getMessage() == null ? "the remote refused the update." : update.getMessage()));
             default -> throw new IOException("Push failed (" + update.getStatus() + ")"

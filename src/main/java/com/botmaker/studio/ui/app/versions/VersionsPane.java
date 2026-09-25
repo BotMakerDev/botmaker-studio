@@ -12,6 +12,11 @@ import com.botmaker.studio.project.vcs.ProjectVcs.CommitInfo;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.vcs.VersionReader;
+import com.botmaker.studio.project.vcs.Remote;
+import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.studio.sharing.BotInstaller;
+import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.MyCopy;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -44,6 +49,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,7 +59,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
@@ -80,9 +86,26 @@ public final class VersionsPane {
     private final StudioContext ctx;
     private final Path projectDir;
     private final ShareActions share;
+    private final GitHubAuth auth;
+    private final GitHubClient client;
+    private final Runnable openPublish;
 
     private final BorderPane root = new BorderPane();
     private final TextField nameField = new TextField();
+    private final Label here = new Label();
+    private final Label myCopy = new Label();
+    private final Label original = new Label();
+    private final HBox myCopySegment = segment("☁", "My copy", myCopy);
+    private final HBox originalSegment = segment("★", "Original", original);
+    private final Button mainAction = new Button();
+    private final HBox alsoActions = new HBox(6);
+    /** The strip as last read; LOCAL_ONLY with nothing known until the first refresh. */
+    private SyncModel model = SyncModel.of(new SyncModel.Facts(null, null, null, 0, -1, null, null));
+    /** A newer release of the original, asked of the network once per pane and again on ⟳. */
+    private volatile String available;
+    private volatile boolean askOriginal = true;
+    /** A zip install is linked to its original once per pane at most; a failure is retried next time. */
+    private volatile boolean attachTried;
     private final ListView<Timeline.Row> timeline = new ListView<>();
     private final Label detailTitle = new Label();
     private final Button restore = new Button("Restore project to here…");
@@ -112,11 +135,18 @@ public final class VersionsPane {
         this.ctx = ctx;
         this.projectDir = ctx.config().projectPath();
         this.diffCards = new DiffCards(ctx.config(), ctx.state());
-        this.share = new ShareActions(owner, ctx.config().projectName(), projectDir, publisher, auth, client,
-                openPublish, this::vcs, nameField::getText,
+        this.auth = auth;
+        this.client = client;
+        this.openPublish = openPublish;
+        this.share = new ShareActions(owner, projectDir, publisher, auth, client, nameField::getText,
                 new ShareActions.Host(this::status, this::setBusy, this::refresh));
         build();
-        resolveIdentity(auth, client);
+        resolveIdentity();
+    }
+
+    /** The strip's model as last read, for a test. */
+    SyncModel model() {
+        return model;
     }
 
     public Node node() {
@@ -146,8 +176,11 @@ public final class VersionsPane {
         save.setOnAction(e -> save());
 
         Button refresh = new Button("⟳");
-        refresh.setTooltip(new Tooltip("Read the history again"));
-        refresh.setOnAction(e -> refresh());
+        refresh.setTooltip(new Tooltip("Read the history again, and ask the original for a newer release"));
+        refresh.setOnAction(e -> {
+            askOriginal = true;
+            refresh();
+        });
 
         progress.setPrefSize(16, 16);
         progress.setVisible(false);
@@ -156,12 +189,24 @@ public final class VersionsPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        // The strip (39 §2): where the bot lives, left to right, and the one button that names where it goes.
+        mainAction.getStyleClass().add("primary-button");
+        Region stripSpacer = new Region();
+        HBox.setHgrow(stripSpacer, Priority.ALWAYS);
+        HBox strip = new HBox(14, segment("💻", "This computer", here), myCopySegment, originalSegment,
+                stripSpacer, mainAction, alsoActions);
+        strip.getStyleClass().add("versions-strip");
+        strip.setAlignment(Pos.CENTER_LEFT);
+        strip.setPadding(new Insets(6, 6, 0, 6));
+        alsoActions.setAlignment(Pos.CENTER_LEFT);
+
         HBox bar = new HBox(6, nameField, save, new Separator(Orientation.VERTICAL));
         bar.getChildren().addAll(share.buttons());
         bar.getChildren().addAll(spacer, progress, status, refresh);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(6));
-        share.provenance().ifPresent(p -> nameField.setTooltip(new Tooltip(p)));
+        share.provenance().ifPresent(p -> original.setTooltip(new Tooltip(p)));
+        showModel();
 
         timeline.setCellFactory(list -> new RowCell());
         timeline.setPlaceholder(new Label("No versions yet."));
@@ -204,9 +249,61 @@ public final class VersionsPane {
         SplitPane split = new SplitPane(timeline, detail);
         split.setDividerPositions(0.32);
 
-        root.setTop(bar);
+        root.setTop(new VBox(strip, bar));
         root.setCenter(split);
         showNothing();
+    }
+
+    private static HBox segment(String glyph, String place, Label value) {
+        Label mark = new Label(glyph);
+        mark.getStyleClass().add("versions-glyph");
+        Label name = new Label(place);
+        name.getStyleClass().add("versions-meta");
+        value.getStyleClass().add("versions-title");
+        HBox box = new HBox(6, mark, new VBox(0, name, value));
+        box.setAlignment(Pos.CENTER_LEFT);
+        return box;
+    }
+
+    /** Draws {@link #model}: the three places and the buttons ownership decides. */
+    private void showModel() {
+        here.setText(model.thisComputer());
+        String copy = model.myCopy();
+        myCopySegment.setVisible(copy != null);
+        myCopySegment.setManaged(copy != null);
+        myCopy.setText(copy == null ? "" : copy);
+        model.mineSlug().ifPresent(s -> myCopy.setTooltip(new Tooltip("github.com/" + s)));
+        String orig = model.original();
+        originalSegment.setVisible(orig != null);
+        originalSegment.setManaged(orig != null);
+        original.setText(orig == null ? "" : orig);
+
+        SyncModel.Action main = model.main();
+        mainAction.setText(main.label());
+        mainAction.setOnAction(e -> act(main));
+        // Save version has its own button beside the name field; the strip does not repeat it.
+        mainAction.setVisible(main != SyncModel.Action.SAVE_VERSION);
+        mainAction.setManaged(main != SyncModel.Action.SAVE_VERSION);
+        alsoActions.getChildren().clear();
+        for (SyncModel.Action a : model.also()) {
+            Button b = new Button(a.label());
+            b.setOnAction(e -> act(a));
+            alsoActions.getChildren().add(b);
+        }
+    }
+
+    private void act(SyncModel.Action action) {
+        switch (action) {
+            case SAVE_VERSION -> save();
+            case PUBLISH -> {
+                if (openPublish != null) openPublish.run();
+            }
+            case SAVE_TO_MY_COPY -> saveToMyCopy();
+            case SIGN_IN -> share.signIn(() -> {
+                resolveIdentity();
+                refresh();
+            });
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -224,16 +321,65 @@ public final class VersionsPane {
                     try {
                         Checkpoints.flush(editor);
                         ProjectVcs vcs = vcs();
-                        return Map.entry(vcs.status().labelled().size(), vcs.history());
+                        SyncModel read = sync(vcs);
+                        return new Snapshot(read, vcs.history());
                     } catch (Exception ex) {
-                        return Map.entry(0, List.<CommitInfo>of());
+                        return new Snapshot(SyncModel.of(new SyncModel.Facts(null, null, null, 0, -1, null, null)),
+                                List.of());
                     }
                 })
                 .thenAccept(read -> Platform.runLater(() -> {
-                    unsaved = read.getKey();
-                    history = read.getValue();
+                    model = read.model();
+                    unsaved = model.facts().unsaved();
+                    history = read.history();
+                    showModel();
                     rebuild();
                 }));
+    }
+
+    /** What one refresh read: the strip and the history. */
+    private record Snapshot(SyncModel model, List<CommitInfo> history) {}
+
+    /**
+     * Reads the three places off git (and, once per pane, the original's releases off the network). A project
+     * installed from a zip is linked to its original here, the first time the strip needs it ({@code 39} §7).
+     * Off the FX thread.
+     */
+    private SyncModel sync(ProjectVcs vcs) throws Exception {
+        vcs.adoptLegacyBackup();
+        Optional<BotSource> source = BotSource.read(projectDir);
+        String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
+        String originalUrl = vcs.remoteUrl(Remote.ORIGINAL);
+        if (originalUrl == null && source.isPresent()) {
+            originalUrl = BotInstaller.cloneUrl(source.get().owner(), source.get().repo());
+            if (!attachTried) {
+                attachTried = true;
+                try {
+                    vcs.attach(originalUrl, source.get().tag(),
+                            "Linked to " + source.get().slug() + " " + source.get().tag(), token);
+                } catch (IOException e) {
+                    attachTried = false;
+                    System.err.println("Versions: could not link to the original yet: " + e.getMessage());
+                }
+            }
+        }
+        String installed = source.map(BotSource::tag).orElse(null);
+        if (askOriginal && vcs.remoteUrl(Remote.ORIGINAL) != null) {
+            askOriginal = false;
+            try {
+                available = SyncModel.newest(vcs.remoteTags(Remote.ORIGINAL, token), installed);
+            } catch (IOException e) {
+                System.err.println("Versions: " + e.getMessage());
+            }
+        }
+        int unsavedNow = vcs.status().labelled().size();
+        SyncModel.Facts facts = new SyncModel.Facts(authorName, vcs.remoteUrl(Remote.MINE), originalUrl,
+                unsavedNow, -1, installed, available);
+        SyncModel first = SyncModel.of(facts);
+        if (facts.mineUrl() == null) return first;
+        int notIn = vcs.notIn(Remote.MINE, first.remoteBranch(vcs.branch()));
+        return SyncModel.of(new SyncModel.Facts(facts.login(), facts.mineUrl(), originalUrl, unsavedNow, notIn,
+                installed, available));
     }
 
     private void rebuild() {
@@ -530,13 +676,41 @@ public final class VersionsPane {
         return new ProjectVcs(projectDir, authorName, authorEmail);
     }
 
-    private void resolveIdentity(GitHubAuth auth, GitHubClient client) {
-        if (auth == null || client == null || !auth.isAuthenticated()) return;
+    /** Reads the signed-in login, which is both the commit author and who {@link SyncModel} decides for. */
+    private void resolveIdentity() {
+        if (auth == null || client == null || !auth.isAuthenticated()) {
+            authorName = null;
+            authorEmail = null;
+            return;
+        }
         auth.login(client).thenAccept(login -> {
             if (login != null && !login.isBlank()) {
                 authorName = login;
                 authorEmail = login + "@users.noreply.github.com";
+                Platform.runLater(this::refresh);
             }
+        });
+    }
+
+    /**
+     * <i>Save to my copy</i>: saves first — a push carries a real version, never an unsaved tree — then makes
+     * sure {@code mine} exists and pushes to it ({@link MyCopy}).
+     */
+    private void saveToMyCopy() {
+        if (auth == null || client == null || !auth.isAuthenticated() || authorName == null) {
+            status("Sign in to GitHub to save to your copy.");
+            return;
+        }
+        String label = nameField.getText() == null ? "" : nameField.getText().strip();
+        ProjectState.Snapshot editor = ctx.state().snapshot();
+        SyncModel now = model;
+        run(() -> {
+            Checkpoints.save(projectDir, editor, VersionOrigin.SAVE, label.isEmpty() ? "Saved to my copy" : label);
+            return new MyCopy(client).save(vcs(), now, ctx.config().projectName(), auth.token());
+        }, message -> {
+            nameField.clear();
+            shown = null;
+            status(message);
         });
     }
 

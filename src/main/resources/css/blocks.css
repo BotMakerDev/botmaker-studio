@@ -302,6 +302,12 @@
 .versions-fold              { -fx-font-size: 11px; -fx-font-style: italic; -fx-opacity: 0.7; }
 .versions-unsaved           { -fx-font-weight: bold; -fx-text-fill: -bm-severity-warning-text; }
 .versions-glyph             { -fx-min-width: 16px; -fx-alignment: center; }
+.versions-strip {
+    -fx-padding: 6 6 6 6;
+    -fx-background-color: -bm-band;
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 0 0 1 0;
+}
 .versions-card {
     -fx-background-color: -fx-control-inner-background;
     -fx-border-color: -bm-divider;
