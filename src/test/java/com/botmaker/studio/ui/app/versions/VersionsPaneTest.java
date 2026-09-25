@@ -12,6 +12,7 @@ import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.testfx.util.WaitForAsyncUtils;
@@ -26,7 +27,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The Versions tab reads what the editor holds, not only the disk: an edit never run shows as unsaved, and
@@ -53,7 +56,7 @@ class VersionsPaneTest extends FxHeadlessTest {
             state.setActiveFile(file);
             StudioContext ctx = new StudioContext(config, state, new EventBus(false), null, null, null, null,
                     null, null, null, null);
-            pane = new VersionsPane(stage, ctx, null, null, null);
+            pane = new VersionsPane(stage, ctx, null, null);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -83,6 +86,16 @@ class VersionsPaneTest extends FxHeadlessTest {
         assertEquals("Faster mining", saved.commit().title());
         assertEquals(VersionOrigin.SAVE, saved.commit().origin());
         assertEquals("class MyBot { int edited; }", Files.readString(file));
+    }
+
+    /** Publish… is the tab's side sheet, not a window: it opens beside the timeline and closes back to it. */
+    @Test
+    void publishOpensAsTheTabsSideSheet() {
+        interact(pane::openPublish);
+        assertTrue(pane.publishing());
+        Button close = lookup("✕").queryButton();
+        interact(close::fire);
+        assertFalse(pane.publishing());
     }
 
     /** A version's change reads as blocks: the one statement it changed carries {@code :diff-changed}. */

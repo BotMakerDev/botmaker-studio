@@ -15,8 +15,11 @@ import com.botmaker.studio.project.vcs.VersionReader;
 import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotInstaller;
+import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.MyCopy;
+import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.sharing.Suggestion;
 import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -70,7 +73,8 @@ import java.util.function.Consumer;
  * of the project's versions — the unsaved changes pinned first, milestones bold, the versions Studio took on
  * the user's behalf folded — and, for the selected row, the files it changed, each drawn as {@link DiffCards}:
  * its changed functions as blocks, Before | After, with <i>Restore this function</i> and <i>Restore this
- * file</i> (§5–§6). Right-click a version to restore the project to it or to name it.
+ * file</i> (§5–§6). Right-click a version to restore the project to it or to name it. <i>Publish…</i> opens
+ * {@link PublishSheet} on the tab's right (§8).
  *
  * <p>It replaced {@code VcsPanel} and {@code VcsDialog} (2026-09-25): a commit box nobody used over a list of
  * SHAs. <b>What the tab reads is what the editor holds</b>: a refresh first puts the editor's sources on disk
@@ -88,7 +92,8 @@ public final class VersionsPane {
     private final ShareActions share;
     private final GitHubAuth auth;
     private final GitHubClient client;
-    private final Runnable openPublish;
+    /** The publish sheet, made the first time it is opened; shown on the tab's right while open. */
+    private PublishSheet publishSheet;
 
     private final BorderPane root = new BorderPane();
     private final TextField nameField = new TextField();
@@ -129,15 +134,13 @@ public final class VersionsPane {
     private volatile String authorName;
     private volatile String authorEmail;
 
-    public VersionsPane(Window owner, StudioContext ctx, GitHubAuth auth, GitHubClient client,
-                        Runnable openPublish) {
+    public VersionsPane(Window owner, StudioContext ctx, GitHubAuth auth, GitHubClient client) {
         this.owner = owner;
         this.ctx = ctx;
         this.projectDir = ctx.config().projectPath();
         this.diffCards = new DiffCards(ctx.config(), ctx.state());
         this.auth = auth;
         this.client = client;
-        this.openPublish = openPublish;
         this.share = new ShareActions(owner, projectDir, auth, client, this::status);
         build();
         resolveIdentity();
@@ -292,9 +295,7 @@ public final class VersionsPane {
     private void act(SyncModel.Action action) {
         switch (action) {
             case SAVE_VERSION -> save();
-            case PUBLISH -> {
-                if (openPublish != null) openPublish.run();
-            }
+            case PUBLISH -> openPublish();
             case SAVE_TO_MY_COPY -> saveToMyCopy();
             case SIGN_IN -> share.signIn(() -> {
                 resolveIdentity();
@@ -303,6 +304,59 @@ public final class VersionsPane {
             case GET_UPDATE -> getUpdate(model.facts().availableTag());
             case FINISH_UPDATE -> resumeUpdate();
             case SUGGEST -> suggest();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Publishing (39 §8)
+    // -------------------------------------------------------------------------
+
+    /** Opens the publish sheet on the tab's right — <i>Publish…</i> here, and <i>Project ▸ Publish…</i>. */
+    public void openPublish() {
+        if (publishSheet == null) {
+            publishSheet = new PublishSheet(owner, ctx.config(), auth, client,
+                    new GitHubGallery(client, auth), new BotPublisher(client, auth), new Publishing());
+        }
+        root.setRight(publishSheet.node());
+        publishSheet.shown();
+    }
+
+    /** Whether the publish sheet is showing, for a test. */
+    boolean publishing() {
+        return publishSheet != null && root.getRight() == publishSheet.node();
+    }
+
+    /** The tab's side of a publish: the version it publishes is saved here, like every other. */
+    private final class Publishing implements PublishSheet.Host {
+
+        /**
+         * Writes the provenance file first, so the version published names its own release, then saves the
+         * project as a {@code PUBLISH} version. An unchanged project publishes the version it is at.
+         */
+        @Override
+        public java.util.concurrent.Callable<ProjectVcs> prepare(PublishRequest request, String login) {
+            ProjectState.Snapshot editor = ctx.state().snapshot();
+            return () -> {
+                new BotSource(login, request.repoName(), request.version()).write(projectDir);
+                Checkpoints.save(projectDir, editor, VersionOrigin.PUBLISH, request.version() + " published");
+                return vcs();
+            };
+        }
+
+        @Override
+        public SyncModel model() {
+            return model;
+        }
+
+        @Override
+        public void changed() {
+            shown = null;
+            refresh();
+        }
+
+        @Override
+        public void close() {
+            root.setRight(null);
         }
     }
 

@@ -308,6 +308,11 @@
     -fx-border-color: -bm-divider;
     -fx-border-width: 0 0 1 0;
 }
+.versions-sheet {
+    -fx-background-color: -bm-band;
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 0 0 0 1;
+}
 .versions-card {
     -fx-background-color: -fx-control-inner-background;
     -fx-border-color: -bm-divider;

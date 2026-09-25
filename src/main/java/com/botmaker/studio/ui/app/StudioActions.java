@@ -17,7 +17,6 @@ import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.sharing.BotInstaller;
-import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -67,7 +66,7 @@ final class StudioActions {
     private final GitHubAuth gitHubAuth = new GitHubAuth();
     private final GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
     private final BotInstaller botInstaller = new BotInstaller(gitHubClient, gallery);
-    private final BotPublisher botPublisher = new BotPublisher(gitHubClient, gitHubAuth);
+    private Runnable onPublish = () -> { };
     // Reads the plugin index off the same raw CDN the gallery uses, with the same client and no account.
     private final PluginRegistry pluginRegistry = new PluginRegistry(gitHubClient);
 
@@ -150,7 +149,7 @@ final class StudioActions {
 
         // --- Sharing / VCS ---
         menuBar.setOnBrowseGallery(this::openGallery);
-        menuBar.setOnPublishGallery(this::openPublishDialog);
+        menuBar.setOnPublishGallery(this::openPublish);
         // Project History selects the Versions tab; UIManager wires it, since the tab is the window's.
         menuBar.setProjectRepoUrl(BotSource.read(config.projectPath())
                 .map(s -> "https://github.com/" + s.slug()).orElse(null));
@@ -164,9 +163,16 @@ final class StudioActions {
 
     GitHubClient gitHubClient() { return gitHubClient; }
 
-    /** Opens the Publish-to-gallery dialog. Shared with the Versions tab's "Publish…" button. */
-    void openPublishDialog() {
-        new PublishDialog(primaryStage, gitHubAuth, gitHubClient, gallery, botPublisher, config).show();
+    /**
+     * Where <i>Project ▸ Publish…</i> goes: the Versions tab's publish sheet, which is the window's, so
+     * {@link UIManager} sets it once the tab exists.
+     */
+    void setOnPublish(Runnable onPublish) {
+        this.onPublish = onPublish;
+    }
+
+    void openPublish() {
+        onPublish.run();
     }
 
     private void openGallery() {
@@ -318,7 +324,7 @@ final class StudioActions {
                 // still reads, without an Open button.
                 .on(StudioAction.PARAMETERS, this::openParameters)
                 .on(StudioAction.OVERLAY_EDITOR, this::openOverlayEditor)
-                .on(StudioAction.PUBLISH, this::openPublishDialog)
+                .on(StudioAction.PUBLISH, this::openPublish)
                 .on(StudioAction.GALLERY, this::openGallery)
                 .build();
         new GettingStartedDialog(primaryStage, actions).show();

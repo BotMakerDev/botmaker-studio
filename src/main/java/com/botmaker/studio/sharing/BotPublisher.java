@@ -3,12 +3,14 @@ package com.botmaker.studio.sharing;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Remote;
+import com.botmaker.studio.project.vcs.SyncModel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,9 +21,10 @@ import java.util.function.Consumer;
  * Publish side of the federated gallery (requires authentication via {@link GitHubAuth}).
  *
  * <p>Publishing a bot is {@link PublishPlan.Step}'s five steps: ensure the author's GitHub repo exists and is
- * public, push the project tree via the Git Data API (no git binary), cut a release, check that the release
- * downloads without signing in, and — when listed — submit the bot's entry to the gallery. The repo and release
- * are the source of truth for installs and updates; the listing only adds the bot to discovery.
+ * public and is the project's {@code mine}, tag the saved version and push it there (JGit, the token per call),
+ * cut a release, check that the release downloads without signing in, and — when listed — submit the bot's
+ * entry to the gallery. The repo and release are the source of truth for installs and updates; the listing only
+ * adds the bot to discovery.
  *
  * <p><b>A publish is a {@link Run}, resumed rather than restarted.</b> Each step is written so that running
  * it again after a partial failure is safe — the repository is found rather than recreated, a release whose
@@ -32,7 +35,8 @@ import java.util.function.Consumer;
  * {@code botmaker bot publish} runs, and merges a passing pull request unless the author is over the
  * new-listings limit or the change needs a maintainer. {@link ListingStatus} reads which of those happened.
  *
- * <p>Blocking — intended to run off the FX thread (the dialog wraps it in a background task).
+ * <p>Blocking — intended to run off the FX thread (the Versions tab's publish sheet wraps it in a background
+ * task).
  */
 public final class BotPublisher {
 
@@ -44,9 +48,12 @@ public final class BotPublisher {
         this.auth = auth;
     }
 
-    /** A publish of {@code request}, nothing run yet. Call {@link Run#resume} off the FX thread. */
-    public Run start(PublishRequest request) {
-        return new Run(request);
+    /**
+     * A publish of {@code request}, nothing run yet, pushing with {@code vcs} — whose {@code HEAD} is the version
+     * being published, saved by the caller. Call {@link Run#resume} off the FX thread.
+     */
+    public Run start(PublishRequest request, ProjectVcs vcs) {
+        return new Run(request, vcs);
     }
 
     /**
@@ -58,6 +65,7 @@ public final class BotPublisher {
     public final class Run {
 
         private final PublishRequest request;
+        private final ProjectVcs vcs;
         private PublishPlan plan;
         private ListingStatus listing = ListingStatus.of(ListingStatus.State.NOT_LISTED);
 
@@ -68,8 +76,9 @@ public final class BotPublisher {
         private String branch;
         private String commitSha;
 
-        private Run(PublishRequest request) {
+        private Run(PublishRequest request, ProjectVcs vcs) {
             this.request = request;
+            this.vcs = vcs;
             this.plan = PublishPlan.start(request.listed());
         }
 
@@ -136,12 +145,24 @@ public final class BotPublisher {
             repoApi = GitHubConfig.API_BASE + "/repos/" + login + "/" + request.repoName();
         }
 
-        /** Step 1: the repository exists, and is public — a published bot is meant to be installable. */
+        /**
+         * Step 1: the repository exists, and is public — a published bot is meant to be installable — and it is
+         * the project's {@code mine}: a publish pushes the user's own versions, so it goes where
+         * <i>Save to my copy</i> does ({@code docs/refactor/39-versions.md} §8).
+         */
         private String ensureRepository() throws IOException {
             account();
-            JsonNode repo = client.ensureRepo(login, request.repoName(), request.description(), false, true, token);
+            String url = BotInstaller.cloneUrl(login, request.repoName());
+            String mine = vcs.remoteUrl(Remote.MINE);
+            if (mine != null && !sameRepo(mine, url)) {
+                throw new IOException("This project's copy is " + mine + ", not " + url + ". A publish goes to "
+                        + "your own copy; publish under that repository's name, or use Save to my copy.");
+            }
+            // No auto-init: an empty repository takes the first push as it is, with no README commit to join.
+            JsonNode repo = client.ensureRepo(login, request.repoName(), request.description(), false, false, token);
+            if (mine == null) vcs.setRemote(Remote.MINE, url);
 
-            // ensureRepo returns an existing repo as-is, and the VCS Push button creates that repo private.
+            // ensureRepo returns an existing repo as-is, and Save to my copy creates that repo private.
             // Publishing into it would cut a release nobody but the author can see — the gallery reads it back
             // as "no release yet" and the install fails. So widen it here, and never the reverse.
             boolean madePublic = false;
@@ -160,26 +181,18 @@ public final class BotPublisher {
             return madePublic ? repoUrl + " (made public)" : repoUrl;
         }
 
-        /** Step 2: the whole project snapshot, as one commit replacing the branch's tree. */
+        /**
+         * Step 2: the version is tagged and pushed to {@code mine} — the branch, the tags, the version names —
+         * never forced. A repository Studio once published by snapshot has a history of its own, and is joined
+         * first ({@link ProjectVcs#joinUnrelated}); one that is merely ahead refuses, and says so.
+         */
         private String push() throws IOException {
             if (branch == null) ensureRepository();
-            String refUrl = repoApi + "/git/refs/heads/" + branch;
-            JsonNode ref = client.get(refUrl, token).join();
-            String baseSha = ref == null ? null : ref.path("object").path("sha").asText(null);
-
-            Map<String, byte[]> files = ProjectArchive.collect(request.projectDir());
-            if (files.isEmpty()) {
-                throw new IOException("Nothing to publish — the project has no files.");
-            }
-            commitSha = buildTreeCommit(repoApi, files, baseSha,
-                    "Publish " + request.botName() + " " + request.version() + " from BotMaker Studio", token);
-            if (baseSha != null) {
-                client.patch(refUrl, mapOf("sha", commitSha, "force", true), token).join();
-            } else {
-                client.post(repoApi + "/git/refs", mapOf("ref", "refs/heads/" + branch, "sha", commitSha), token)
-                        .join();
-            }
-            return files.size() + (files.size() == 1 ? " file" : " files");
+            boolean joined = vcs.joinUnrelated(Remote.MINE, branch,
+                    "Joined the versions already on github.com/" + login + "/" + request.repoName(), token);
+            commitSha = vcs.tagHead(request.version(), "Published " + request.botName() + " " + request.version());
+            vcs.push(Remote.MINE, branch, token);
+            return commitSha.substring(0, 7) + (joined ? ", joined to the history on GitHub" : "");
         }
 
         /**
@@ -196,8 +209,8 @@ public final class BotPublisher {
                         "target_commitish", commitSha != null ? commitSha : branch,
                         "body", "Published from BotMaker Studio"), token).join();
             }
-            // Provenance, so the author also sees update prompts.
-            new BotSource(login, request.repoName(), version).write(request.projectDir());
+            // The provenance file is written by the caller, into the version this publishes — written here, it
+            // would be an unsaved change the moment the publish ended.
             return existing == null ? version : version + " (already existed)";
         }
 
@@ -440,27 +453,14 @@ public final class BotPublisher {
     // Community patching (submitPatch: a snapshot tree force-pushed to the fork's editor-<login> branch) and
     // syncFork (GitHub's merge-upstream on the fork, never the local project) were deleted on 2026-09-25: an
     // installed bot is a clone now, so Suggestion pushes real versions and Get vX.Y is a local merge
-    // (docs/refactor/39-versions.md §7).
+    // (docs/refactor/39-versions.md §7). The publish's own snapshot push (blobs, tree, a commit built on GitHub
+    // and the branch forced to it) went the same day: a publish pushes the project's versions to `mine`.
 
-    /** Blobs → tree (full snapshot, no {@code base_tree}) → commit; returns the new commit's SHA. */
-    private String buildTreeCommit(String repoApi, Map<String, byte[]> files, String baseSha,
-                                   String message, String token) {
-        List<Map<String, Object>> tree = new ArrayList<>();
-        for (Map.Entry<String, byte[]> e : files.entrySet()) {
-            JsonNode blob = client.post(repoApi + "/git/blobs", mapOf(
-                    "content", Base64.getEncoder().encodeToString(e.getValue()),
-                    "encoding", "base64"), token).join();
-            tree.add(mapOf("path", e.getKey(), "mode", "100644", "type", "blob",
-                    "sha", blob.get("sha").asText()));
-        }
-        String treeSha = client.post(repoApi + "/git/trees", mapOf("tree", tree), token).join()
-                .get("sha").asText();
-
-        Map<String, Object> commitBody = new LinkedHashMap<>();
-        commitBody.put("message", message);
-        commitBody.put("tree", treeSha);
-        if (baseSha != null) commitBody.put("parents", List.of(baseSha));
-        return client.post(repoApi + "/git/commits", commitBody, token).join().get("sha").asText();
+    /** True when two GitHub URLs name one repository, whatever their case or {@code .git} suffix. */
+    static boolean sameRepo(String a, String b) {
+        var x = SyncModel.slug(a);
+        var y = SyncModel.slug(b);
+        return x.isPresent() && y.isPresent() && x.get().toString().equalsIgnoreCase(y.get().toString());
     }
 
     /**

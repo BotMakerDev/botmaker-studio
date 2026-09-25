@@ -192,9 +192,13 @@ public class UIManager implements ProjectWindow {
                 menuBarManager, toolbarManager,
                 () -> ProjectRecoveryAction.recover(ctx, fileExplorerManager::refreshTree));
         this.actions.wire();
-        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.gitHubAuth(), actions.gitHubClient(),
-                actions::openPublishDialog);
+        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.gitHubAuth(), actions.gitHubClient());
         menuBarManager.setOnShowHistory(() -> selectBottomTab(BottomTab.VERSIONS));
+        // Project ▸ Publish… is the tab's publish sheet (39 §8), not a window of its own.
+        actions.setOnPublish(() -> {
+            selectBottomTab(BottomTab.VERSIONS);
+            versionsPane.openPublish();
+        });
 
         // Initialize theme system and set up theme change listener
         BlockTheme.initialize();

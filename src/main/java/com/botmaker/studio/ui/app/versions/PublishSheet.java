@@ -1,4 +1,4 @@
-package com.botmaker.studio.ui.app;
+package com.botmaker.studio.ui.app.versions;
 
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
@@ -7,6 +7,8 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.TemplateProject;
 import com.botmaker.studio.project.launch.SupportedTargets;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
@@ -17,12 +19,14 @@ import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.PublishPlan;
 import com.botmaker.studio.sharing.PublishRequest;
+import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -39,10 +43,9 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import java.nio.file.Files;
@@ -51,50 +54,62 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Publishes the current project, and shows what the gallery made of it.
+ * Publishing, as the Versions tab's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
+ * — <i>Kind</i>, <i>Listing</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
+ * Browse Bots card built from the form as it stands, the publish's steps with a Retry for the one that failed,
+ * and the listing as the gallery has it, with Unpublish.
  *
- * <p>One window, in two columns. The left says <b>what</b> is published, in the order an author decides it:
- * <i>Kind</i> (a bot, or a starting template), <i>Listing</i> (in the gallery, or on GitHub only),
- * <i>Details</i> and <i>Release</i>. The right says <b>how it will look and how it went</b>: the Browse Bots card
- * built from the form as it stands, a checklist of the publish's steps with a Retry for the one that failed, and
- * the listing as the gallery currently has it, with Unpublish beside it.
- *
- * <p>It replaced a flat form whose whole outcome was one alert. A publish is five network operations, and the
- * old window could say only that "it" failed — after which pressing Publish again started from the repository
- * and was refused at the release, whose tag already existed. {@link BotPublisher.Run} resumes instead.
- *
- * <p>Authentication (and sign-out / switch-account) is the shared {@link GitHubAccountBar}. Degrades to a
- * sentence when this build has no OAuth client id.
+ * <p>It replaced {@code PublishDialog} (2026-09-25), a window of its own beside the tab that also pushed. A
+ * publish is now a version like any other: the {@link Host} saves it ({@code PUBLISH}), and the run pushes that
+ * version to {@code mine} and tags it before the release and listing steps, which {@link BotPublisher.Run}
+ * resumes rather than restarts.
  */
-public class PublishDialog {
+public final class PublishSheet {
+
+    /** What the sheet needs from the tab it sits in. */
+    public interface Host {
+        /**
+         * Called on the FX thread when Publish is pressed; the returned task runs off it and saves the project
+         * as the version {@code request} publishes, returning the repository the run pushes from.
+         */
+        Callable<ProjectVcs> prepare(PublishRequest request, String login);
+
+        /** The strip's model as last read — whose bot this is, and where its copy lives. */
+        SyncModel model();
+
+        /** A step changed the history (a version saved, a tag): the timeline reads it again. */
+        void changed();
+
+        void close();
+    }
 
     private final Window owner;
     private final GitHubAuth auth;
     private final GitHubClient client;
     private final GitHubGallery gallery;
     private final BotPublisher publisher;
-    private final ProjectConfig config;
+    private final Host host;
     private final String projectName;
     private final Path projectDir;
+    private final SupportedTargets launchTargets;
 
-    private Stage stage;
+    private final VBox root = new VBox(8);
     private GitHubAccountBar accountBar;
 
-    // Kind
     private final RadioButton kindBot = new RadioButton("A bot people install");
     private final RadioButton kindTemplate = new RadioButton("A starting template for New Project");
     private final Label templateProblem = new Label();
 
-    // Listing
     private final RadioButton listed = new RadioButton("List it in the gallery");
     private final RadioButton unlisted = new RadioButton("Release it on GitHub only");
 
-    // Details
     private final TextField repoField = new TextField();
     private final TextField descriptionField = new TextField();
     private final TextField tagsField = new TextField();
@@ -102,11 +117,9 @@ public class PublishDialog {
     private final Label targetsLabel = new Label();
     private final Label requiresLabel = new Label("Reading the plugin registry…");
 
-    // Release
     private final ComboBox<String> versionCombo = new ComboBox<>();
     private final Label lastPublished = new Label();
 
-    // Preview, progress, listing
     private final StackPane previewHolder = new StackPane();
     private final Label previewNote = new Label();
     private final VBox checklist = new VBox(4);
@@ -124,11 +137,9 @@ public class PublishDialog {
     private final Label hintLabel = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
 
-    private final SupportedTargets launchTargets;
-
     /** The repo's latest published release tag (""=none); each new version must be strictly greater. */
     private volatile String latestTag = "";
-    /** The signed-in login, once known, for the preview's "by" line. */
+    /** The signed-in login, once known: the preview's "by" line, and whose repository a publish makes. */
     private volatile String login = "";
     private volatile List<GalleryEntry.Requirement> requires = List.of();
     /** The gallery's listing of this repo, when it has one: its tier is what the preview shows. */
@@ -138,60 +149,71 @@ public class PublishDialog {
     private BotPublisher.Run run;
     private boolean busy;
 
-    /**
-     * @param config the open project. The "tested on" declaration is persisted into the project's own
-     *               properties, so the dialog needs the resources dir as well as the name and directory.
-     */
-    public PublishDialog(Window owner, GitHubAuth auth, GitHubClient client, GitHubGallery gallery,
-                         BotPublisher publisher, ProjectConfig config) {
+    public PublishSheet(Window owner, ProjectConfig config, GitHubAuth auth, GitHubClient client,
+                        GitHubGallery gallery, BotPublisher publisher, Host host) {
         this.owner = owner;
         this.auth = auth;
         this.client = client;
         this.gallery = gallery;
         this.publisher = publisher;
-        this.config = config;
+        this.host = host;
         this.projectName = config.projectName();
         this.projectDir = config.projectPath();
         this.launchTargets = ProjectCreator.readSupportedTargets(config.resourcesRoot());
+        build();
     }
 
-    public void show() {
-        stage = new Stage();
-        stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Publish " + projectName);
+    public Node node() {
+        return root;
+    }
 
-        if (!auth.isConfigured()) {
-            VBox root = new VBox(14, section("Publishing is not configured"),
-                    wrapped("This build has no GitHub OAuth client id, so publishing is disabled. "
-                            + "Browsing and installing bots still works."),
-                    closeBar());
-            root.setPadding(new Insets(16));
-            stage.setScene(ThemedWindows.scene(root, 460, 200));
-            stage.show();
-            return;
-        }
-
-        accountBar = new GitHubAccountBar(stage, auth, client, this::onAuthChanged);
-
-        HBox columns = new HBox(18, scrolled(buildForm()), buildSide());
-        HBox.setHgrow(columns.getChildren().get(0), Priority.ALWAYS);
-        VBox.setVgrow(columns, Priority.ALWAYS);
-
-        VBox root = new VBox(12, accountBar, columns, buildButtonBar());
-        root.setPadding(new Insets(16));
-        stage.setScene(ThemedWindows.scene(root, 900, 640));
-        stage.show();
-
-        renderChecklist(PublishPlan.start(true));
+    /** Re-reads what the sheet shows from outside it — the account, the listing, the last release. */
+    public void shown() {
+        if (accountBar == null) return;
         refreshAll();
-        loadRequirements();
         onAuthChanged();
     }
 
     // -------------------------------------------------------------------------
     // Layout
     // -------------------------------------------------------------------------
+
+    private void build() {
+        root.getStyleClass().add("versions-sheet");
+        root.setPadding(new Insets(8, 10, 8, 10));
+        root.setPrefWidth(420);
+        root.setMinWidth(340);
+
+        Label title = new Label("Publish " + projectName);
+        title.getStyleClass().add("dialog-subheading");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Button close = new Button("✕");
+        close.setTooltip(new Tooltip("Close the publish sheet"));
+        close.setOnAction(e -> host.close());
+        HBox header = new HBox(6, title, spacer, close);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        if (auth == null || !auth.isConfigured()) {
+            root.getChildren().setAll(header, wrapped("This build has no GitHub OAuth client id, so publishing is "
+                    + "disabled. Browsing and installing bots still works."));
+            return;
+        }
+        accountBar = new GitHubAccountBar(owner, auth, client, this::onAuthChanged);
+
+        VBox content = new VBox(8);
+        content.getChildren().addAll(buildForm().getChildren());
+        content.getChildren().addAll(buildSide().getChildren());
+        content.setPadding(new Insets(0, 8, 0, 0));
+        ScrollPane scroll = new ScrollPane(content);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        root.getChildren().setAll(header, accountBar, scroll, buildButtonBar());
+        renderChecklist(PublishPlan.start(true));
+        loadRequirements();
+    }
 
     private VBox buildForm() {
         ToggleGroup kind = new ToggleGroup();
@@ -259,14 +281,15 @@ public class PublishDialog {
         release.addRow(0, new Label("Version (tag):"), versionCombo);
         release.add(lastPublished, 1, 1);
         GridPane.setHgrow(versionCombo, Priority.ALWAYS);
+        // A publish pushes versions, not a snapshot: what was saved before is on GitHub with it.
+        Label releaseHelp = note("Publishing saves the project as a version, tags it and pushes your versions to "
+                + "your copy on GitHub, which becomes public — earlier versions included.");
 
-        VBox form = new VBox(8,
+        return new VBox(8,
                 section("Kind"), kindBot, kindTemplate, kindHelp, templateProblem,
                 section("Listing"), listed, unlisted, listingHelp,
                 section("Details"), details,
-                section("Release"), release);
-        form.setPadding(new Insets(0, 8, 0, 0));
-        return form;
+                section("Release"), release, releaseHelp);
     }
 
     private VBox buildSide() {
@@ -288,30 +311,25 @@ public class PublishDialog {
         unpublishButton.setOnAction(e -> doUnpublish());
         HBox listingButtons = new HBox(8, refreshListingButton, unpublishButton);
 
-        VBox side = new VBox(8,
+        return new VBox(8,
                 section("Preview"), previewHolder, previewNote,
                 section("Progress"), checklist, retryButton,
                 section("Your listing"), listingLabel, tierLabel, pullRequestLink, listingButtons);
-        side.setPrefWidth(360);
-        side.setMinWidth(320);
-        return side;
     }
 
-    private HBox buildButtonBar() {
+    private VBox buildButtonBar() {
         statusLabel.setWrapText(true);
         hintLabel.setWrapText(true);
         hintLabel.getStyleClass().add("gallery-card-note");
         progress.setVisible(false);
         progress.setPrefSize(18, 18);
-        publishButton.setDefaultButton(true);
+        publishButton.getStyleClass().add("primary-button");
         publishButton.setOnAction(e -> doPublish());
-        Button close = new Button("Close");
-        close.setOnAction(e -> stage.close());
-        VBox messages = new VBox(2, statusLabel, hintLabel);
-        HBox.setHgrow(messages, Priority.ALWAYS);
-        HBox bar = new HBox(10, progress, messages, close, publishButton);
-        bar.setAlignment(Pos.CENTER_LEFT);
-        return bar;
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox buttons = new HBox(10, progress, spacer, publishButton);
+        buttons.setAlignment(Pos.CENTER_LEFT);
+        return new VBox(4, statusLabel, hintLabel, buttons);
     }
 
     // -------------------------------------------------------------------------
@@ -323,16 +341,29 @@ public class PublishDialog {
         if (auth.isAuthenticated()) {
             auth.login(client).thenAccept(name -> Platform.runLater(() -> {
                 login = name == null ? "" : name;
+                lockToMyCopy();
                 refreshAll();
+                proposeVersion();
+                refreshListing();
             }));
         }
         refreshAll();
-        proposeVersion();
-        refreshListing();
+    }
+
+    /**
+     * When the project's {@code mine} is the user's own repository, that is the one a publish goes to, so the
+     * name is not the user's to type.
+     */
+    private void lockToMyCopy() {
+        Optional<SyncModel.Slug> mine = host.model().mineSlug();
+        boolean own = mine.isPresent() && mine.get().owner().equalsIgnoreCase(login);
+        if (own) repoField.setText(mine.get().repo());
+        repoField.setDisable(own || busy);
     }
 
     /** Everything derived from the form: the preview, the tag chips, the template check and Publish's state. */
     private void refreshAll() {
+        if (accountBar == null) return;
         List<String> tags = effectiveTags();
         tagChips.getChildren().setAll(tags.stream().map(t -> {
             Label chip = new Label(t);
@@ -364,13 +395,15 @@ public class PublishDialog {
         refreshPublishEnabled(problem);
     }
 
-    /** Publish is enabled only when signed in, idle, the template (if any) is sound and the version is valid. */
+    /** Publish is enabled only when signed in, idle, the bot is the user's, the template sound, the version valid. */
     private void refreshPublishEnabled(String templateProblem) {
         boolean signedIn = auth.isAuthenticated();
         unpublishButton.setDisable(busy || !signedIn);
         refreshListingButton.setDisable(busy || !signedIn);
         String version = currentVersion();
         String reason = !signedIn ? "Sign in to GitHub to publish."
+                : login.isBlank() ? "Reading your GitHub account…"
+                : whoseProblem() != null ? whoseProblem()
                 : repoName().isBlank() ? "A repository name is required."
                 : templateProblem != null ? "Fix the template first, or publish it as a bot."
                 : !SemVer.isValid(version) ? "Version must look like MAJOR.MINOR.PATCH (e.g. 1.0.0)."
@@ -381,13 +414,31 @@ public class PublishDialog {
         hintLabel.setText(busy || reason == null ? "" : reason);
     }
 
+    /**
+     * Why this user cannot publish this project, or null: someone else's bot is suggested to its author, and a
+     * copy on another account is not the user's to release from.
+     */
+    private String whoseProblem() {
+        SyncModel model = host.model();
+        if (model.ownership() == SyncModel.Ownership.OTHERS) {
+            return "This bot is " + model.originalSlug().map(s -> s.owner() + "'s").orElse("someone else's")
+                    + ". Use Suggest to author… to offer them your change.";
+        }
+        Optional<SyncModel.Slug> mine = model.mineSlug();
+        if (mine.isPresent() && !mine.get().owner().toLowerCase(Locale.ROOT).equals(login.toLowerCase(Locale.ROOT))) {
+            return "This project's copy is github.com/" + mine.get() + ", not on your account, and a publish goes "
+                    + "to your own.";
+        }
+        return null;
+    }
+
     private void renderChecklist(PublishPlan plan) {
-        checklist.getChildren().setAll(plan.steps().stream().map(PublishDialog::stepRow).toList());
+        checklist.getChildren().setAll(plan.steps().stream().map(PublishSheet::stepRow).toList());
         boolean failed = plan.failure().isPresent();
         retryButton.setVisible(failed && !busy);
         retryButton.setManaged(failed && !busy);
         if (failed) {
-            retryButton.setText("Retry from " + plan.failure().get().step().label().toLowerCase());
+            retryButton.setText("Retry from " + plan.failure().get().step().label().toLowerCase(Locale.ROOT));
         }
     }
 
@@ -409,7 +460,7 @@ public class PublishDialog {
         VBox text = new VBox(1, name);
         if (!state.detail().isBlank()) text.getChildren().add(detail);
         HBox row = new HBox(6, markLabel, text);
-        row.getStyleClass().add("publish-step-" + state.status().name().toLowerCase());
+        row.getStyleClass().add("publish-step-" + state.status().name().toLowerCase(Locale.ROOT));
         return row;
     }
 
@@ -438,7 +489,7 @@ public class PublishDialog {
      * bumps after it, and selects the next patch. Best-effort, off the FX thread.
      */
     private void proposeVersion() {
-        if (!auth.isAuthenticated()) return;
+        if (!auth.isAuthenticated() || busy) return;
         String repo = repoName();
         if (repo.isBlank()) return;
         CompletableFuture
@@ -506,7 +557,7 @@ public class PublishDialog {
                 })
                 .whenComplete((status, err) -> Platform.runLater(() -> {
                     if (err != null) {
-                        listingLabel.setText("Couldn't read the listing: " + rootMessage(err));
+                        listingLabel.setText("Couldn't read the listing: " + ShareActions.rootMessage(err));
                     } else {
                         renderListing(status);
                     }
@@ -532,14 +583,36 @@ public class PublishDialog {
     // Actions
     // -------------------------------------------------------------------------
 
+    /** Saves the version being published (the {@link Host}'s part), then runs the steps from the first. */
     private void doPublish() {
         String problem = kindTemplate.isSelected() ? templateProblem() : null;
-        if (problem != null || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
+        if (problem != null || whoseProblem() != null || login.isBlank()
+                || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
             refreshAll();
             return;
         }
-        run = publisher.start(request(effectiveTags()));
-        resume();
+        PublishRequest request = request(effectiveTags());
+        Callable<ProjectVcs> save = host.prepare(request, login);
+        setBusy(true);
+        statusLabel.setText("Saving " + request.version() + "…");
+        CompletableFuture
+                .supplyAsync(() -> {
+                    try {
+                        return save.call();
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex.getMessage(), ex);
+                    }
+                })
+                .whenComplete((vcs, err) -> Platform.runLater(() -> {
+                    setBusy(false);
+                    host.changed();
+                    if (err != null) {
+                        statusLabel.setText("Could not save the version to publish: " + ShareActions.rootMessage(err));
+                        return;
+                    }
+                    run = publisher.start(request, vcs);
+                    resume();
+                }));
     }
 
     /** Runs {@link #run} from its first unfinished step, off the FX thread, mirroring each step as it goes. */
@@ -552,8 +625,9 @@ public class PublishDialog {
                 .supplyAsync(() -> current.resume(plan -> Platform.runLater(() -> renderChecklist(plan))))
                 .whenComplete((plan, err) -> Platform.runLater(() -> {
                     setBusy(false);
+                    host.changed();
                     if (err != null) {
-                        statusLabel.setText("Publish stopped: " + rootMessage(err));
+                        statusLabel.setText("Publish stopped: " + ShareActions.rootMessage(err));
                         return;
                     }
                     renderChecklist(plan);
@@ -582,7 +656,7 @@ public class PublishDialog {
                 "Remove “" + repo + "” from the gallery? Your GitHub repo and releases stay intact — "
                         + "this only delists it from discovery, through the same kind of pull request a listing is.",
                 ButtonType.OK, ButtonType.CANCEL);
-        confirm.initOwner(stage);
+        confirm.initOwner(owner);
         confirm.setHeaderText("Unpublish from the gallery?");
         Optional<ButtonType> choice = confirm.showAndWait();
         if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
@@ -600,7 +674,7 @@ public class PublishDialog {
                 .whenComplete((status, err) -> Platform.runLater(() -> {
                     setBusy(false);
                     if (err != null) {
-                        statusLabel.setText("Unpublish failed: " + rootMessage(err));
+                        statusLabel.setText("Unpublish failed: " + ShareActions.rootMessage(err));
                     } else {
                         statusLabel.setText("Removal submitted.");
                         renderListing(status);
@@ -611,10 +685,10 @@ public class PublishDialog {
     private void setBusy(boolean value) {
         busy = value;
         progress.setVisible(value);
-        for (javafx.scene.Node n : List.of(kindBot, kindTemplate, listed, unlisted, repoField, descriptionField,
-                tagsField, versionCombo)) {
+        for (Node n : List.of(kindBot, kindTemplate, listed, unlisted, descriptionField, tagsField, versionCombo)) {
             n.setDisable(value);
         }
+        lockToMyCopy();
         if (run != null) renderChecklist(run.plan());
         refreshAll();
     }
@@ -681,23 +755,6 @@ public class PublishDialog {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private static ScrollPane scrolled(VBox content) {
-        ScrollPane scroll = new ScrollPane(content);
-        scroll.setFitToWidth(true);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        return scroll;
-    }
-
-    private HBox closeBar() {
-        Button close = new Button("Close");
-        close.setOnAction(e -> stage.close());
-        HBox spacer = new HBox();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(spacer, close);
-        bar.setAlignment(Pos.CENTER_RIGHT);
-        return bar;
-    }
-
     private static Label section(String text) {
         Label l = new Label(text);
         l.getStyleClass().add("form-section-title");
@@ -715,11 +772,5 @@ public class PublishDialog {
         Label l = new Label(text);
         l.setWrapText(true);
         return l;
-    }
-
-    private static String rootMessage(Throwable t) {
-        if (t == null) return "unknown error";
-        while (t.getCause() != null) t = t.getCause();
-        return t.getMessage() != null ? t.getMessage() : t.toString();
     }
 }

@@ -6,7 +6,26 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-25 (latest) — Versions 4e: Get vX.Y is a real merge; Suggest to author.**
+- **2026-09-25 (latest) — Versions 4f: publishing is the tab's side sheet, and a publish pushes versions.**
+  - `ui/app/versions/PublishSheet`: `PublishDialog`'s form, card preview, step checklist with Retry and
+    listing with Unpublish, one column on the Versions tab's right (`VersionsPane.openPublish`; *Project ▸
+    Publish…* and the Getting Started step select the tab and open it, through `StudioActions.setOnPublish`).
+    Its `Host` saves the version: `botmaker-source.json` first, so the version names its own release, then a
+    `PUBLISH` checkpoint "vX.Y published". Publish is refused, with the reason, for someone else's bot and
+    for a `mine` on another account; a `mine` on the user's account fixes the repository name.
+  - `BotPublisher.Run` takes the `ProjectVcs`: *Repository* makes the repo public and sets `mine` (no
+    auto-init any more); *Push* (was *Upload*) joins, tags and pushes — `ProjectVcs.joinUnrelated` records a
+    merge with this computer's tree when the repository has a history the project shares nothing with (one
+    the Git Data API publish built), `tagHead` keeps a tag an earlier try made, and `push` is never forced,
+    so a copy that is ahead refuses. *Release* no longer writes the provenance file.
+  - **Deleted**: `PublishDialog`, `StudioActions.openPublishDialog`/`botPublisher`, the Git Data API tree
+    push (`buildTreeCommit`) and `ProjectArchive` with its test. `attach` shares `keepMine` with the join.
+  - `PublishPushTest` (first publish, a kept tag, a snapshot-published repository joined, a copy ahead
+    refused — local repositories), `VersionsPaneTest.publishOpensAsTheTabsSideSheet`, `PublishSheetTagsTest`.
+  - **Known gap**: `ProjectArchive` stripped `launch.target` and `capture.source` (the publisher's own
+    machine) from the published `botmaker-project.properties`; a git push publishes the file as committed.
+    Moving the two keys out of the tracked file is its own change (the bot reads them at runtime).
+- **2026-09-25 — Versions 4e: Get vX.Y is a real merge; Suggest to author.**
   - `ProjectVcs`: `fetchTag` (a tag this computer has that the author moved is refused, a missing one says
     so), `mergeTag` (no-fast-forward, **not committed**, a clean tree required — the caller saved a `SAFETY`
     version), `merging`, `unresolved`, `mergeRelease`, `resolve(path, Side.MINE|THEIRS)` (a file, whole, from

@@ -1090,7 +1090,7 @@ The `ui/` package is split by concern:
   replaced `VcsPanel`/`VcsDialog` on 2026-09-25), `ProjectSelectionScreen`, `GitHubAccountBar` /
   `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
-  `ResourceManagerDialog`, `PublishDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
+  `ResourceManagerDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before
   `FileExplorerManager` exists, since a migration can delete a file the tree would otherwise go on listing.
   There is **no `PaletteManager`** — this entry named one for a long time and no such file has ever existed;
@@ -1522,7 +1522,7 @@ rule is the CLI's; Studio reads the outcome.
   updated in place. The gallery's owner still commits straight to `main`.
 - **`ListingStatus` is the workflows' words, not Studio's**: the `validate` check run, the two labels and the
   comment starting `<!-- botmaker-listing -->`, whose sentence is shown verbatim.
-- **`ui/app/gallery/GalleryCard` is the one card**, drawn by Browse Bots and by `PublishDialog`'s preview, so
+- **`ui/app/gallery/GalleryCard` is the one card**, drawn by Browse Bots and by `PublishSheet`'s preview, so
   the preview cannot promise a row the gallery does not show.
 
 ### Templates — a starting point is a published bot (2026-08-30)

@@ -21,7 +21,7 @@ public record PublishPlan(List<StepState> steps) {
     /** The steps of a publish, in the order they run. */
     public enum Step {
         REPO("Repository", "Create the GitHub repository, or make an existing one public"),
-        PUSH("Upload", "Upload the project's files"),
+        PUSH("Push", "Tag the saved version and push it to your copy on GitHub"),
         RELEASE("Release", "Cut the release other people install"),
         ARCHIVE("Download check", "Check that the release downloads without signing in"),
         LISTING("Gallery listing", "Submit the gallery entry");

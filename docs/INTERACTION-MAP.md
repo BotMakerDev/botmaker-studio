@@ -111,7 +111,7 @@ injection seam — assert only on the static controls (as `ProjectSelectionScree
 the **"Create"** button; an editable **"BotMaker SDK version"** `ComboBox`. Good **network-free**
 validation test target.
 
-**GitHubAccountBar** (`ui/app/GitHubAccountBar.java`, shared with `PublishDialog`): "Sign in with
+**GitHubAccountBar** (`ui/app/GitHubAccountBar.java`, shared with the Versions tab's `PublishSheet`): "Sign in with
 GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles auth states. **Network.**
 
 ## E. Main editor window: menus, toolbar, panels, shortcuts
@@ -193,7 +193,6 @@ Two more searchable popup menus mirror the statement menu — the **expression "
 | `SetActivityValuesDialog` | "Set Activity Values" (per-type widgets) | network-free |
 | `ManageCaptureTargetsDialog` | "Capture Targets" | **native** window enumeration |
 | `ResourceManagerDialog` | "Resource Manager — Image Templates" | **native** capture |
-| `PublishDialog` | "Publish to Gallery" (form + `GitHubAccountBar`) | **GitHub network** |
 | `GameLibraryPickerDialog` | "Choose a … game" | **Steam / Epic library scan** |
 
 ---

@@ -37,6 +37,11 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   it was. Browse Bots' *Update* now points you there.
 - **Suggest to author…** sends your versions to your copy and asks the author to take them, as a pull
   request — or shows the one already open. It replaces *Propose…* and *Get latest from original*.
+- **Publishing is part of the Versions tab.** *Publish…* (and *Project ▸ Publish…*) opens beside your
+  versions instead of in its own window, with the same form, card preview, steps and listing. A publish now
+  saves the project as a version, tags it and uploads your versions to your copy on GitHub, which becomes
+  public with its history; a repository published by an older Studio keeps its history and gains yours.
+  Someone else's bot is suggested to its author rather than published.
 - **Put one function back.** *Restore this function* returns it as that version had it — or *Add this
   function back* if you deleted it — as an ordinary edit you can undo. *Restore this file* does the same for
   a whole file.

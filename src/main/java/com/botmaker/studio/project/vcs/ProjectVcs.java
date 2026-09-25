@@ -780,31 +780,99 @@ public final class ProjectVcs {
             RevCommit head = walk.parseCommit(repo.resolve("HEAD"));
             RevCommit base = walk.parseCommit(tagged);
             if (walk.isMergedInto(base, head)) return false;
-
-            org.eclipse.jgit.lib.CommitBuilder merge = new org.eclipse.jgit.lib.CommitBuilder();
-            merge.setTreeId(head.getTree());
-            merge.setParentIds(head, base);
-            merge.setAuthor(author);
-            merge.setCommitter(author);
-            merge.setMessage(VersionOrigin.INSTALL.stamp(label));
-            ObjectId id;
-            try (org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter()) {
-                id = inserter.insert(merge);
-                inserter.flush();
-            }
-            org.eclipse.jgit.lib.RefUpdate update = repo.updateRef("HEAD");
-            update.setNewObjectId(id);
-            update.setExpectedOldObjectId(head);
-            update.setRefLogMessage("attach to " + tag, false);
-            switch (update.update()) {
-                case FAST_FORWARD, NEW, FORCED -> { }
-                default -> throw new IOException("Could not record the link to " + tag + ".");
-            }
+            keepMine(repo, head, base, VersionOrigin.INSTALL, label);
             return true;
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
             throw new IOException("Could not link to the original: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Before the first git publish into a repository that already has a history this project does not share
+     * — one Studio published through the Git Data API before 2026-09-25, whose commits were built on GitHub
+     * from a snapshot — fetches {@code remoteBranch} of {@code remote} and records a merge of it with this
+     * computer's tree unchanged, so the push that follows is a fast-forward and nothing on GitHub is
+     * overwritten. Returns false, changing nothing, when the branch does not exist there yet or already shares
+     * history with {@code HEAD}: a remote that is merely ahead is refused by the push, as it should be.
+     */
+    public boolean joinUnrelated(Remote remote, String remoteBranch, String label, String token) throws IOException {
+        if (!isRepo() || remoteUrl(remote) == null) return false;
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            String tracking = "refs/remotes/" + remote.id() + "/" + remoteBranch;
+            var fetch = git.fetch().setRemote(remote.id())
+                    .setRefSpecs(new RefSpec("+refs/heads/" + remoteBranch + ":" + tracking))
+                    .setTagOpt(org.eclipse.jgit.transport.TagOpt.NO_TAGS);
+            if (token != null && !token.isBlank()) fetch.setCredentialsProvider(credentials(token));
+            try {
+                fetch.call();
+            } catch (org.eclipse.jgit.api.errors.TransportException missing) {
+                // An empty repository has no such branch; there is nothing to join.
+                return false;
+            }
+            Ref there = repo.exactRef(tracking);
+            ObjectId headId = repo.resolve("HEAD");
+            if (there == null || headId == null) return false;
+            RevCommit head = walk.parseCommit(headId);
+            RevCommit theirs = walk.parseCommit(there.getObjectId());
+            walk.setRevFilter(org.eclipse.jgit.revwalk.filter.RevFilter.MERGE_BASE);
+            walk.markStart(head);
+            walk.markStart(theirs);
+            if (walk.next() != null) return false;
+            keepMine(repo, head, theirs, VersionOrigin.PUBLISH, label);
+            return true;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Could not read your copy on GitHub: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * An annotated tag {@code name} at {@code HEAD}, unless the tag exists already — a publish resumed after
+     * its tag was made keeps the commit it named then. Returns the commit the tag names.
+     */
+    public String tagHead(String name, String message) throws IOException {
+        if (name == null || name.isBlank()) throw new IOException("Tag name must not be empty.");
+        ensureInitialized();
+        try (Git git = open()) {
+            ObjectId had = git.getRepository().resolve("refs/tags/" + name.trim() + "^{commit}");
+            if (had != null) return had.name();
+            git.tag().setName(name.trim()).setMessage(message).setTagger(author).call();
+            return git.getRepository().resolve("refs/tags/" + name.trim() + "^{commit}").name();
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Tag failed: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Moves {@code HEAD} to a new merge commit of {@code head} and {@code other} whose tree is {@code head}'s:
+     * the histories are joined, and no file moves.
+     */
+    private void keepMine(Repository repo, RevCommit head, RevCommit other, VersionOrigin origin, String label)
+            throws IOException {
+        org.eclipse.jgit.lib.CommitBuilder merge = new org.eclipse.jgit.lib.CommitBuilder();
+        merge.setTreeId(head.getTree());
+        merge.setParentIds(head, other);
+        merge.setAuthor(author);
+        merge.setCommitter(author);
+        merge.setMessage(origin.stamp(label));
+        ObjectId id;
+        try (org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter()) {
+            id = inserter.insert(merge);
+            inserter.flush();
+        }
+        org.eclipse.jgit.lib.RefUpdate update = repo.updateRef("HEAD");
+        update.setNewObjectId(id);
+        update.setExpectedOldObjectId(head);
+        update.setRefLogMessage(label, false);
+        switch (update.update()) {
+            case FAST_FORWARD, NEW, FORCED -> { }
+            default -> throw new IOException("Could not record " + label + ".");
         }
     }
 
