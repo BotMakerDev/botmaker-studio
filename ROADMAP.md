@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Managed holders on bind (feedback-batch plan phase 4).**
+- **2026-09-26 (latest) — Publish sheet (feedback-batch plan phase 5).**
+  - `VersionsPane.body`: history and `PublishSheet` in a `SplitPane`; the divider is
+    `WorkspaceLayout.publishDivider` (new component, 3-arg constructor kept), saved 400 ms after a drag.
+  - `TemplateProject.read`: the properties file wins when present, else `derivePackage` (the package of the
+    `main` class; several mains must share a root). `ProjectConfig.forDirectory` gets it for free.
+  - Listed/Unlisted radios deleted; the request is always `listed = true` (the model keeps the unlisted plan,
+    unreachable from the UI). *Your listing* is a footer row.
+- **2026-09-26 — Managed holders on bind (feedback-batch plan phase 4).**
   - `ManagedHolders.missing` plans every holder a project lacks (skipped when a value it holds is declared,
     a source of its file name exists, or the file is on disk); `HostPluginValues.createMissing` writes them,
     never in reader mode. Called at the end of `BotProject.initializeServices` and in `LibraryService.rebind`.

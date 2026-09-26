@@ -44,8 +44,9 @@ public record ProjectConfig(
      *
      * <p>The name is still the folder's name. The package is not always derivable from it: a folder called
      * {@code botmaker-gamebot} holds {@code com.botmaker.gamebot}, and no rule gets from one to the other. A
-     * template says which package it is in ({@link TemplateProject#FILE_NAME}), so that declaration wins when
-     * it is there and names a {@code com.} package; otherwise the package is derived exactly as
+     * template says which package it is in ({@link TemplateProject#FILE_NAME}), or since 2026-09-26 its
+     * {@code main} does ({@link TemplateProject#read}), so that answer wins when there is one and it names a
+     * {@code com.} package; otherwise the package is derived exactly as
      * {@link #forProject} derives it, which keeps a project under the default root reading the same through
      * either door.
      */

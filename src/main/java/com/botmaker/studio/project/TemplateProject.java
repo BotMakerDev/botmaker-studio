@@ -37,9 +37,9 @@ import java.util.Properties;
  * package cannot sit on one classpath, and a package named after somebody else's bot is the first thing a
  * user reads in their own file.
  *
- * <p>It is declared rather than guessed because a package prefix cannot be read off a directory tree without
- * deciding which of {@code com}, {@code com.botmaker} and {@code com.botmaker.gamebot} was meant. The author
- * knows, and says so in one line.
+ * <p>A directory tree alone cannot say which of {@code com}, {@code com.botmaker} and
+ * {@code com.botmaker.gamebot} was meant, but the Java can: since 2026-09-26 the package is the one holding
+ * {@code main}, and the file is optional — an author who wants another answer still writes it in one line.
  *
  * <p>Since the entry class keeps the author's name, nothing may assume it is named after the project — see
  * {@link ProjectConfig#entrySourceFile()}, which finds it rather than deriving it.
@@ -66,18 +66,20 @@ public final class TemplateProject {
     }
 
     /**
-     * Reads {@value #FILE_NAME} from {@code projectDir}.
+     * The template's package: {@value #FILE_NAME}'s when the file is there, else the package of the class
+     * holding {@code main} (2026-09-26 — an author should not have to write down what their Java already
+     * says, and a missing file was the one error every first publish hit).
      *
-     * @throws IOException if the file is missing or the key is blank — a template that does not say what its
-     *                     package is cannot have it replaced, and a replacement that silently matches nothing
-     *                     produces a project sitting in somebody else's package that still compiles, which is
-     *                     the one failure worth refusing outright
+     * @throws IOException if neither answers — no file and no {@code main}, {@code main} in packages that share
+     *                     no root, or a file whose key is blank. A template whose package is unknown cannot
+     *                     have it replaced, and a replacement that silently matches nothing produces a project
+     *                     sitting in somebody else's package that still compiles, which is the one failure
+     *                     worth refusing outright
      */
     public static TemplateProject read(Path projectDir) throws IOException {
         Path file = projectDir.resolve(FILE_NAME);
         if (!Files.exists(file)) {
-            throw new IOException("This template has no " + FILE_NAME + ", so BotMaker can't tell which "
-                    + "package to rename. Ask its author to add one.");
+            return new TemplateProject(derivePackage(projectDir));
         }
         Properties properties = new Properties();
         try (var in = Files.newInputStream(file)) {
@@ -88,6 +90,44 @@ public final class TemplateProject {
             throw new IOException(FILE_NAME + " must set " + KEY_PACKAGE + ".");
         }
         return new TemplateProject(pkg);
+    }
+
+    private static final java.util.regex.Pattern PACKAGE =
+            java.util.regex.Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
+    private static final java.util.regex.Pattern MAIN =
+            java.util.regex.Pattern.compile("public\\s+static\\s+void\\s+main\\s*\\(");
+
+    /**
+     * The package of the class holding {@code public static void main}. When several classes do, the one
+     * whose package every other lies under — a template's entry sits at its root, helpers below it.
+     */
+    static String derivePackage(Path projectDir) throws IOException {
+        Path sources = projectDir.resolve("src/main/java");
+        java.util.TreeSet<String> packages = new java.util.TreeSet<>(Comparator.comparingInt(String::length)
+                .thenComparing(Comparator.naturalOrder()));
+        if (Files.isDirectory(sources)) {
+            try (var walk = Files.walk(sources)) {
+                for (Path java : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                    String text = Files.readString(java);
+                    if (!MAIN.matcher(text).find()) continue;
+                    var pkg = PACKAGE.matcher(text);
+                    if (pkg.find()) packages.add(pkg.group(1));
+                }
+            }
+        }
+        if (packages.isEmpty()) {
+            throw new IOException("BotMaker can't tell this template's package: no class in a package has a "
+                    + "main method. Add one, or a " + FILE_NAME + " with package=<your package>.");
+        }
+        String root = packages.first();
+        for (String other : packages) {
+            if (!other.equals(root) && !other.startsWith(root + ".")) {
+                throw new IOException("Classes with a main method sit in " + root + " and " + other
+                        + ", so BotMaker can't tell which package is the template's. Add a " + FILE_NAME
+                        + " with package=<your package>.");
+            }
+        }
+        return root;
     }
 
     /**

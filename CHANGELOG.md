@@ -16,6 +16,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **The Publish sheet can be widened.** It sits beside the version history in a split; drag the divider,
+  and the project remembers where. Publishing no longer asks *Listed* or *Unlisted* — publishing lists the
+  bot, and *Save to my copy* is how to keep a release off the gallery. *Your listing* is a short status line
+  at the bottom of the sheet.
+- **A template needs no `botmaker-template.properties`.** Its package is the one holding `main`; the file is
+  still read when present, for an author who wants another answer.
 - **A plugin's own Java file appears when the plugin does.** Opening a project, or adding a plugin to it,
   writes each file the plugin keeps its values in (the SDK's `plugins/sdk/Sdk.java` and `Pictures.java`)
   when the project has none — never over a file, never when you already have a class of that name

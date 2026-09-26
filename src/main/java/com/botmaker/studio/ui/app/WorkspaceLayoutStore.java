@@ -65,7 +65,10 @@ final class WorkspaceLayoutStore {
                 .filter(e -> e.getValue() == selected)
                 .map(e -> e.getKey().key())
                 .findFirst().orElse(null);
-        return new WorkspaceLayout(dividerOf(explorerSplit), dividerOf(bottomSplit), tabKey);
+        // The Versions tab saves its own divider as it moves; keep whatever it last wrote.
+        WorkspaceLayout saved = settings.current().workspaceLayout();
+        return new WorkspaceLayout(dividerOf(explorerSplit), dividerOf(bottomSplit), tabKey,
+                saved == null ? null : saved.publishDivider());
     }
 
     /** A split's first divider, or {@code null} if it has none (nothing was ever laid out). */

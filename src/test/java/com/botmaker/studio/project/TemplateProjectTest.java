@@ -100,12 +100,43 @@ class TemplateProjectTest {
                 "and the unpack refuses rather than renaming nothing");
     }
 
+    /** Since 2026-09-26 the file is optional: the package holding main is the template's. */
     @Test
-    void aTemplateWithNoDeclarationIsRefusedWithASentenceForItsAuthor(@TempDir Path root) throws IOException {
+    void withNoDeclarationThePackageOfMainIsTheTemplates(@TempDir Path root) throws IOException {
         Path dir = template(root, "com.botmaker.gamebot");
         Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+        Path sub = dir.resolve("src/main/java/com/botmaker/gamebot/tools");
+        Files.createDirectories(sub);
+        Files.writeString(sub.resolve("Probe.java"), """
+                package com.botmaker.gamebot.tools;
+                public class Probe { public static void main(String[] a) {} }
+                """);
+
+        assertEquals("com.botmaker.gamebot", TemplateProject.read(dir).packageName());
+        TemplateProject.read(dir).renameInto(dir, "com.myfarmer");
+        assertTrue(Files.exists(dir.resolve("src/main/java/com/myfarmer/GameBot.java")));
+    }
+
+    @Test
+    void withNoDeclarationAndNoMainItIsRefusedWithASentenceForItsAuthor(@TempDir Path root) throws IOException {
+        Path dir = template(root, "com.botmaker.gamebot");
+        Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+        Files.delete(dir.resolve("src/main/java/com/botmaker/gamebot/GameBot.java"));
 
         IOException thrown = assertThrows(IOException.class, () -> TemplateProject.read(dir));
         assertTrue(thrown.getMessage().contains(TemplateProject.FILE_NAME), thrown.getMessage());
+    }
+
+    @Test
+    void mainInUnrelatedPackagesIsRefused(@TempDir Path root) throws IOException {
+        Path dir = template(root, "com.botmaker.gamebot");
+        Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+        Path other = dir.resolve("src/main/java/org/other");
+        Files.createDirectories(other);
+        Files.writeString(other.resolve("Other.java"), """
+                package org.other;
+                public class Other { public static void main(String[] a) {} }
+                """);
+        assertThrows(IOException.class, () -> TemplateProject.read(dir));
     }
 }

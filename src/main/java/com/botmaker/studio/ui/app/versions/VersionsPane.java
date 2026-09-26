@@ -107,6 +107,14 @@ public final class VersionsPane {
     private PublishSheet publishSheet;
 
     private final BorderPane root = new BorderPane();
+    /**
+     * The history, and the publish sheet beside it while open — a split rather than the border's right
+     * (2026-09-26), so the sheet can be widened; where its divider sat is remembered per project.
+     */
+    private final SplitPane body = new SplitPane();
+    /** Saves the publish divider once a drag settles, not on every pixel of it. */
+    private final javafx.animation.PauseTransition dividerSave =
+            new javafx.animation.PauseTransition(javafx.util.Duration.millis(400));
     private final TextField nameField = new TextField();
     private final Label here = new Label();
     private final Label myCopy = new Label();
@@ -174,6 +182,7 @@ public final class VersionsPane {
         this.auth = auth;
         this.client = client;
         this.share = new ShareActions(owner, projectDir, auth, client, this::status);
+        dividerSave.setOnFinished(e -> savePublishDivider());
         build();
         resolveIdentity();
     }
@@ -314,7 +323,8 @@ public final class VersionsPane {
         split.setDividerPositions(0.32);
 
         root.setTop(new VBox(strip, bar, devBar));
-        root.setCenter(split);
+        body.getItems().setAll(split);
+        root.setCenter(body);
         showNothing();
         applyView();
     }
@@ -470,13 +480,36 @@ public final class VersionsPane {
             publishSheet = new PublishSheet(owner, ctx.config(), auth, client,
                     new GitHubGallery(client, auth), new BotPublisher(client, auth), new Publishing());
         }
-        root.setRight(publishSheet.node());
+        javafx.scene.Node sheet = publishSheet.node();
+        if (!body.getItems().contains(sheet)) {
+            SplitPane.setResizableWithParent(sheet, false);
+            body.getItems().add(sheet);
+            body.setDividerPositions(publishDivider());
+            body.getDividers().getFirst().positionProperty().addListener((o, was, now) -> dividerSave.playFromStart());
+        }
         publishSheet.shown();
     }
 
     /** Whether the publish sheet is showing, for a test. */
     boolean publishing() {
-        return publishSheet != null && root.getRight() == publishSheet.node();
+        return publishSheet != null && body.getItems().contains(publishSheet.node());
+    }
+
+    /** Where the history/publish divider was left in this project, or two thirds across. */
+    private double publishDivider() {
+        if (ctx.projectSettingsService() == null) return 0.62;
+        var layout = ctx.projectSettingsService().current().workspaceLayout();
+        return layout == null ? 0.62 : layout.publishDividerOr(0.62);
+    }
+
+    private void savePublishDivider() {
+        var settings = ctx.projectSettingsService();
+        if (settings == null || body.getDividers().isEmpty()) return;
+        var layout = settings.current().workspaceLayout();
+        var base = layout == null
+                ? new com.botmaker.studio.project.StudioProjectSettings.WorkspaceLayout(null, null, null) : layout;
+        settings.update(settings.current().withWorkspaceLayout(
+                base.withPublishDivider(body.getDividers().getFirst().getPosition())));
     }
 
     /** The tab's side of a publish: the version it publishes is saved here, like every other. */
@@ -509,7 +542,11 @@ public final class VersionsPane {
 
         @Override
         public void close() {
-            root.setRight(null);
+            if (dividerSave.getStatus() == javafx.animation.Animation.Status.RUNNING) {
+                dividerSave.stop();
+                savePublishDivider();
+            }
+            body.getItems().remove(publishSheet.node());
         }
     }
 

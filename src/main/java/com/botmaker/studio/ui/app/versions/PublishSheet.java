@@ -62,7 +62,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Publishing, as the Versions tab's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
- * — <i>Kind</i>, <i>Listing</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
+ * — <i>Kind</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
  * Browse Bots card built from the form as it stands, the publish's steps with a Retry for the one that failed,
  * and the listing as the gallery has it, with Unpublish.
  *
@@ -107,8 +107,6 @@ public final class PublishSheet {
     private final RadioButton kindTemplate = new RadioButton("A starting template for New Project");
     private final Label templateProblem = new Label();
 
-    private final RadioButton listed = new RadioButton("List it in the gallery");
-    private final RadioButton unlisted = new RadioButton("Release it on GitHub only");
 
     private final TextField repoField = new TextField();
     private final TextField descriptionField = new TextField();
@@ -227,16 +225,14 @@ public final class PublishSheet {
         templateProblem.getStyleClass().add("form-problem");
         templateProblem.setWrapText(true);
         Label kindHelp = note("A template is listed in New Project, where people start their own project from it "
-                + "under their own package. It needs a " + TemplateProject.FILE_NAME + " naming yours.");
+                + "under their own package — the package of your class with main, renamed to theirs.");
 
-        ToggleGroup listing = new ToggleGroup();
-        listed.setToggleGroup(listing);
-        unlisted.setToggleGroup(listing);
-        listed.setSelected(true);
-        listing.selectedToggleProperty().addListener((o, was, now) -> refreshAll());
-        Label listingHelp = note("Listed bots join the gallery as Community once its checks pass, with no one to "
-                + "wait for: the entry is well formed, you own the repository, and the release downloads. Up to "
-                + "3 new listings a day; updating yours never counts. A maintainer may later vet a release.");
+        // Listed/Unlisted stood here until 2026-09-26. Publishing is listing: a release on GitHub alone is
+        // what "Save to my copy" already gives, so the choice only asked a question with one useful answer.
+        Label listingHelp = note("Publishing lists the bot in the gallery as Community once its checks pass, with "
+                + "no one to wait for: the entry is well formed, you own the repository, and the release downloads. "
+                + "Up to 3 new listings a day; updating yours never counts. A maintainer may later vet a release. "
+                + "To keep it off the gallery, use Save to my copy instead.");
 
         repoField.setText(projectName);
         repoField.textProperty().addListener((o, was, now) -> refreshAll());
@@ -286,8 +282,7 @@ public final class PublishSheet {
                 + "your copy on GitHub, which becomes public — earlier versions included.");
 
         return new VBox(8,
-                section("Kind"), kindBot, kindTemplate, kindHelp, templateProblem,
-                section("Listing"), listed, unlisted, listingHelp,
+                section("Kind"), kindBot, kindTemplate, kindHelp, templateProblem, listingHelp,
                 section("Details"), details,
                 section("Release"), release, releaseHelp);
     }
@@ -309,12 +304,21 @@ public final class PublishSheet {
         refreshListingButton.setOnAction(e -> refreshListing());
         // Delist-only: leaves the author's repo and releases intact, removes the bot from discovery.
         unpublishButton.setOnAction(e -> doUnpublish());
-        HBox listingButtons = new HBox(8, refreshListingButton, unpublishButton);
+        // A footer rather than a section (2026-09-26): what the gallery has is a status line, not a form.
+        Region listingSpacer = new Region();
+        HBox.setHgrow(listingSpacer, Priority.ALWAYS);
+        HBox.setHgrow(listingLabel, Priority.ALWAYS);
+        listingLabel.getStyleClass().add("gallery-card-note");
+        HBox listingRow = new HBox(8, listingLabel, listingSpacer, refreshListingButton, unpublishButton);
+        listingRow.setAlignment(Pos.CENTER_LEFT);
+        VBox listingFooter = new VBox(2, listingRow, tierLabel, pullRequestLink);
+        listingFooter.setPadding(new Insets(8, 0, 0, 0));
+        listingFooter.getStyleClass().add("publish-listing-footer");
 
         return new VBox(8,
                 section("Preview"), previewHolder, previewNote,
                 section("Progress"), checklist, retryButton,
-                section("Your listing"), listingLabel, tierLabel, pullRequestLink, listingButtons);
+                listingFooter);
     }
 
     private VBox buildButtonBar() {
@@ -381,10 +385,7 @@ public final class PublishSheet {
         String vetted = listing != null ? listing.vettedVersion() : "";
         GalleryEntry preview = request(tags).preview(login, tier, vetted);
         previewHolder.getChildren().setAll(GalleryCard.of(preview));
-        previewHolder.setOpacity(listed.isSelected() ? 1.0 : 0.5);
-        previewNote.setText(!listed.isSelected()
-                ? "Not listed: nobody browsing the gallery sees this card."
-                : listing != null && listing.isVetted()
+        previewNote.setText(listing != null && listing.isVetted()
                         ? "Vetted at " + vetted + ". People keep installing that release; this one is not vetted "
                                 + "until a maintainer looks at it."
                         : kindTemplate.isSelected()
@@ -685,7 +686,7 @@ public final class PublishSheet {
     private void setBusy(boolean value) {
         busy = value;
         progress.setVisible(value);
-        for (Node n : List.of(kindBot, kindTemplate, listed, unlisted, descriptionField, tagsField, versionCombo)) {
+        for (Node n : List.of(kindBot, kindTemplate, descriptionField, tagsField, versionCombo)) {
             n.setDisable(value);
         }
         lockToMyCopy();
@@ -699,7 +700,7 @@ public final class PublishSheet {
 
     private PublishRequest request(List<String> tags) {
         return new PublishRequest(projectDir, projectName, repoName(), descriptionField.getText(), currentVersion(),
-                tags, launchTargets, requires, listed.isSelected());
+                tags, launchTargets, requires, true);
     }
 
     /** The typed tags, with {@code template} added for a template and taken out for a bot. */

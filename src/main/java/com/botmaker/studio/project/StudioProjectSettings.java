@@ -107,8 +107,10 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
      * @param explorerDivider the horizontal split's position, {@code 0..1}, or {@code null} if unusable
      * @param bottomDivider   the vertical split's position, {@code 0..1}, or {@code null} if unusable
      * @param bottomTab       the open bottom tab's key, or {@code null}; an unknown key is ignored on restore
+     * @param publishDivider  the Versions tab's history/Publish split, {@code 0..1}, or {@code null}
      */
-    public record WorkspaceLayout(Double explorerDivider, Double bottomDivider, String bottomTab) {
+    public record WorkspaceLayout(Double explorerDivider, Double bottomDivider, String bottomTab,
+                                  Double publishDivider) {
 
         /** Dividers this close to an edge have hidden a pane, so they are treated as never saved. */
         private static final double EDGE = 0.02;
@@ -116,6 +118,24 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         public WorkspaceLayout {
             explorerDivider = usable(explorerDivider);
             bottomDivider = usable(bottomDivider);
+            publishDivider = usable(publishDivider);
+        }
+
+        /** The main window's three, with the Versions tab's publish divider never moved. */
+        public WorkspaceLayout(Double explorerDivider, Double bottomDivider, String bottomTab) {
+            this(explorerDivider, bottomDivider, bottomTab, null);
+        }
+
+        /**
+         * The same layout with the Versions tab's history/publish divider at {@code position} (2026-09-26:
+         * the Publish sheet is the right pane of a split, so it can be widened).
+         */
+        public WorkspaceLayout withPublishDivider(Double position) {
+            return new WorkspaceLayout(explorerDivider, bottomDivider, bottomTab, position);
+        }
+
+        public double publishDividerOr(double fallback) {
+            return publishDivider == null ? fallback : publishDivider;
         }
 
         private static Double usable(Double position) {

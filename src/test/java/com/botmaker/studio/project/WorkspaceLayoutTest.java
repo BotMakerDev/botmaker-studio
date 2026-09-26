@@ -75,5 +75,17 @@ class WorkspaceLayoutTest {
         assertEquals(0.28, read.explorerDivider());
         assertEquals(0.75, read.bottomDivider());
         assertEquals("ERRORS", read.bottomTab());
+        assertNull(read.publishDivider());
+    }
+
+    @Test
+    void thePublishDividerSurvivesARoundTripThroughDisk(@TempDir Path dir) throws Exception {
+        StudioProjectSettings.empty()
+                .withWorkspaceLayout(new WorkspaceLayout(0.28, 0.75, "ERRORS").withPublishDivider(0.55))
+                .write(dir);
+        WorkspaceLayout read = StudioProjectSettings.read(dir).workspaceLayout();
+        assertEquals(0.55, read.publishDivider());
+        assertEquals(0.28, read.explorerDivider());
+        assertEquals(0.6, new WorkspaceLayout(null, null, null, 0.99).publishDividerOr(0.6), "an edge is unusable");
     }
 }
