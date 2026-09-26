@@ -57,6 +57,12 @@ public interface CodeBlock {
     void clearError();
 
     // Breakpoint Logic
+    /**
+     * Whether the bot can stop here. False for a declaration — a method, an enum, an initializer's header, a
+     * comment — which has no line of its own in the compiled class: a breakpoint there was accepted, drawn, and
+     * never hit.
+     */
+    default boolean canHoldBreakpoint() { return true; }
     void setBreakpoint(boolean enabled);
     boolean isBreakpoint();
     void toggleBreakpoint();

@@ -25,6 +25,10 @@ import org.eclipse.jdt.core.dom.Comment;
  */
 public class CommentBlock extends AbstractStatementBlock {
 
+    /** Nothing executes at a comment. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     private static final String PROMPT = "Write your note here…";
 
     private String commentText;

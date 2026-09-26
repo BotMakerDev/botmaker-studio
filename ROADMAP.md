@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Run/Follow stability (feedback-batch plan phase 1).**
+- **2026-09-26 (latest) — Breakpoint & current-block visuals (feedback-batch plan phase 2).**
+  - `blocks.css`: `:highlighted` = canvas gap + 3px accent ring + steady glow; `:breakpoint` 5px bar;
+    `:breakpoint:highlighted` layers both; `.breakpoint-dot` replaces `GutterDecorator`'s hardcoded red `Circle`.
+  - `CodeBlock.canHoldBreakpoint()` (false: method, enum, initializer, comment) gates gutter, double-click, menu
+    and `setBreakpoint`. `BlockGalleryTest` adds `states-paused{,-dark}.png`; doc 37's state table updated.
+- **2026-09-26 — Run/Follow stability (feedback-batch plan phase 1).**
   - `runtime/ConsoleBatcher`: the one pipe→Run-tab path (100 ms flushes, 4 KB cap keeping the tail, BM-INPUT
     markers stripped first) for run, compile and debug; debug's one-`runLater`-per-line reader was the freeze.
   - `services/debug/DebugTargets` maps every source file's statement lines and breakpoints (by `BlockId`) and

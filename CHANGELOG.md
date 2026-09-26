@@ -178,6 +178,10 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   faster than that, it rests on the loop instead of flickering through its body. The canvas scrolls to the
   running block, gently, only once it leaves the middle of the view — and opens the file the bot is in.
 - **Breakpoints work in every file**, not only in the bot's main class, and a stop in another file opens it.
+- **The running block and breakpoints are easier to see.** The block the bot is on has a thicker ring and a
+  soft glow; a breakpoint is a wider red bar with a dot on the block's first line, drawn in the theme's colours.
+  Paused on a breakpoint shows both. A method header, enum, initializer or comment no longer takes a
+  breakpoint — it could never be hit — and the old red circle is gone.
 - **A text parameter's Choices take what you type.** In the Parameters window, typing a choice and pressing
   Enter added nothing, and the text stayed in the field to be joined onto the next choice (`slow` then
   `turbo` became one choice, `slowturbo`). Enter now adds the choice and clears the field, for a text

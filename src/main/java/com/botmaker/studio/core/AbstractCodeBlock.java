@@ -250,11 +250,12 @@ public abstract class AbstractCodeBlock implements CodeBlock {
 
     @Override
     public void setBreakpoint(boolean enabled) {
-        breakpointActive.set(enabled);
+        breakpointActive.set(enabled && canHoldBreakpoint());
     }
 
     @Override
     public void toggleBreakpoint() {
+        if (!canHoldBreakpoint()) return;
         setBreakpoint(!isBreakpoint());
         if (uiNode != null) {
             uiNode.fireEvent(new BlockEvent.BreakpointToggleEvent(this, isBreakpoint()));

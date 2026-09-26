@@ -245,6 +245,22 @@ public class BlockGalleryTest extends FxHeadlessTest {
                 });
             });
             snapProgram(out.resolve("states.png"));
+            // Paused on a breakpoint: the ring and the bar on one block, in a light and a dark theme.
+            onFx(() -> fixture.state.getNodeToBlockMap().forEach((node, block) -> {
+                if (node instanceof org.eclipse.jdt.core.dom.WhileStatement) block.unhighlight();
+                if (node instanceof org.eclipse.jdt.core.dom.EnhancedForStatement) block.highlight();
+            }));
+            snapProgram(out.resolve("states-paused.png"));
+            BlockTheme.ThemeType statesTheme = BlockTheme.getCurrentThemeType();
+            onFx(() -> {
+                BlockTheme.setTheme(BlockTheme.ThemeType.DARK);
+                ThemedWindows.applyThemeClass(root);
+            });
+            snapProgram(out.resolve("states-paused-dark.png"));
+            onFx(() -> {
+                BlockTheme.setTheme(statesTheme);
+                ThemedWindows.applyThemeClass(root);
+            });
             onFx(() -> fixture.state.getNodeToBlockMap().values().forEach(block -> {
                 block.unhighlight();
                 block.clearError();

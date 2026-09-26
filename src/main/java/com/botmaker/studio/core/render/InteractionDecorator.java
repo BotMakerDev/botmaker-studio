@@ -37,14 +37,16 @@ public final class InteractionDecorator implements BlockDecorator {
             context.getEventBus().publish(new CoreApplicationEvents.PasteRequestedEvent());
         });
 
-        MenuItem breakpoint = new MenuItem();
-        breakpoint.textProperty().bind(
-                javafx.beans.binding.Bindings.when(block.breakpointActiveProperty())
-                        .then("Remove Breakpoint")
-                        .otherwise("Add Breakpoint"));
-        breakpoint.setOnAction(ev -> block.toggleBreakpoint());
-
-        menu.getItems().addAll(copy, paste, new javafx.scene.control.SeparatorMenuItem(), breakpoint);
+        menu.getItems().addAll(copy, paste);
+        if (block.canHoldBreakpoint()) {
+            MenuItem breakpoint = new MenuItem();
+            breakpoint.textProperty().bind(
+                    javafx.beans.binding.Bindings.when(block.breakpointActiveProperty())
+                            .then("Remove Breakpoint")
+                            .otherwise("Add Breakpoint"));
+            breakpoint.setOnAction(ev -> block.toggleBreakpoint());
+            menu.getItems().addAll(new javafx.scene.control.SeparatorMenuItem(), breakpoint);
+        }
 
         node.setOnContextMenuRequested(e -> {
             menu.show(node, e.getScreenX(), e.getScreenY());

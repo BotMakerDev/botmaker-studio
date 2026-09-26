@@ -35,6 +35,10 @@ import java.util.List;
  */
 public class InitializerBlock extends AbstractStatementBlock implements BlockWithChildren {
 
+    /** The {@code static} header is not a line the bot stops on; the statements inside are. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     private final boolean isStatic;
     private BodyBlock body;
 

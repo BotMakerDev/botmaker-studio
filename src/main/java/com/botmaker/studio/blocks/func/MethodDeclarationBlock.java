@@ -36,6 +36,10 @@ import java.util.function.UnaryOperator;
 
 public class MethodDeclarationBlock extends AbstractStatementBlock implements BlockWithChildren {
 
+    /** A signature is not a line the bot stops on; its first statement is. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     /** Drives the collapsed-header corner radius via blocks.css (`.block-header:collapsed`). */
     protected static final PseudoClass COLLAPSED = PseudoClass.getPseudoClass("collapsed");
 

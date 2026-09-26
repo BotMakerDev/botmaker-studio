@@ -20,6 +20,10 @@ import java.util.List;
 
 public class DeclareEnumBlock extends AbstractStatementBlock {
 
+    /** A type declaration runs nothing on its own line. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     private final String enumName;
     private final List<String> constants;
     private final EnumDeclaration enumDeclaration;
