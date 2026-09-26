@@ -73,6 +73,15 @@ final class BlockPreview {
      * blocks they fall on; null when the canvas did not draw it.
      */
     Node method(int start, List<BlockDiff.Span> spans) {
+        return method(start, spans, false);
+    }
+
+    /**
+     * The same, and with {@code onlyChanged} every statement that neither is nor holds a marked one hidden —
+     * the <i>Only differences</i> view. With no spans (a whole function added or removed) nothing is hidden:
+     * every statement is the difference.
+     */
+    Node method(int start, List<BlockDiff.Span> spans, boolean onlyChanged) {
         CodeBlock block = find(MethodDeclaration.class, start, -1);
         if (block == null) return null;
         Node node = block.getUINode(context);
@@ -82,7 +91,30 @@ final class BlockPreview {
                 marked.getUINode().pseudoClassStateChanged(pseudoClass(span.mark()), true);
             }
         }
+        if (onlyChanged && !spans.isEmpty()) {
+            ASTNode method = block.getAstNode();
+            for (var e : registry.entrySet()) {
+                ASTNode n = e.getKey();
+                Node shown = e.getValue().getUINode();
+                if (!(n instanceof Statement) || shown == null || !within(n, method)) continue;
+                boolean keep = spans.stream().anyMatch(s -> overlaps(n, s));
+                shown.setVisible(keep);
+                shown.setManaged(keep);
+            }
+        }
         return node;
+    }
+
+    private static boolean within(ASTNode n, ASTNode outer) {
+        return n.getStartPosition() >= outer.getStartPosition()
+                && n.getStartPosition() + n.getLength() <= outer.getStartPosition() + outer.getLength();
+    }
+
+    /** Whether {@code n} and the span share a character: the span's statement, its ancestors, its children. */
+    static boolean overlaps(ASTNode n, BlockDiff.Span s) {
+        int a = n.getStartPosition();
+        int b = a + n.getLength();
+        return a < s.start() + s.length() && s.start() < b;
     }
 
     /** The field declaration that starts at {@code start}, drawn; null when the canvas did not draw it. */

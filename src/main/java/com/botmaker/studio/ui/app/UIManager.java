@@ -341,8 +341,7 @@ public class UIManager implements ProjectWindow {
         editControls.setAlignment(Pos.CENTER_LEFT);
 
         OverflowBar executionControls = toolbarManager.createExecutionGroup();
-        this.identityCluster = new IdentityCluster(primaryStage, actions.gitHubAuth(), actions.gitHubClient(),
-                () -> selectBottomTab(BottomTab.VERSIONS));
+        this.identityCluster = new IdentityCluster();
         HBox rightContainer = new HBox(10, executionControls, identityCluster.node());
         rightContainer.setAlignment(Pos.CENTER_RIGHT);
         rightContainer.setMinWidth(0);

@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **The toolbar is grouped by owner.** Studio's own buttons come first under a *Studio* caption, then each
+  plugin's buttons under that plugin's name.
+- **The GitHub account lives in the Versions tab.** Its button is at the end of the tab's top strip; the ⑂ VCS
+  and GitHub buttons are gone from the toolbar.
+
+### Added
+
+- **Only differences** in the Versions tab: a changed function shows just the statements that changed, as
+  blocks or as Java. Remembered between sessions.
+
 ### Fixed
 
 - **"New int variable…" no longer crashes.** It proposed `int` as the variable's name; a primitive now gets

@@ -179,4 +179,17 @@ class ToolbarMergeTest {
         assertEquals(List.of("cut"), ids(PluginHost.itemsIn(merged, ToolbarGroup.TOOLS)));
         assertTrue(PluginHost.itemsIn(merged, ToolbarGroup.RUN).isEmpty());
     }
+
+    /** The bar draws one section per plugin, so every item has to arrive knowing whose it is. */
+    @Test
+    void each_item_keeps_the_plugin_that_offered_it() {
+        List<PluginHost.OwnedItem> owned = PluginHost.mergeOwnedToolbarItems(List.of(
+                new Fake("zebra", List.of(item("z", ToolbarGroup.TOOLS, 10))),
+                new Fake("alpha", List.of(item("a", ToolbarGroup.PROJECT, 10)))));
+
+        assertEquals(List.of("a", "z"), owned.stream().map(o -> o.item().id()).toList());
+        assertEquals(List.of("alpha", "zebra"), owned.stream().map(PluginHost.OwnedItem::pluginId).toList());
+        // A plugin that names no display name is shown by its id.
+        assertEquals("alpha", owned.getFirst().pluginName());
+    }
 }

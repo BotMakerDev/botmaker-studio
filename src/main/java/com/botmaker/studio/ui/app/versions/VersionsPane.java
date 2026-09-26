@@ -31,6 +31,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.geometry.Orientation;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
@@ -122,6 +123,8 @@ public final class VersionsPane {
     private final HBox myCopySegment = segment("☁", "My copy", myCopy);
     private final HBox originalSegment = segment("★", "Original", original);
     private final Button mainAction = new Button();
+    /** Who is signed in to GitHub, or the way to sign in; see {@link #showAccount()}. */
+    private final Button account = new Button();
     private final HBox alsoActions = new HBox(6);
     /** The strip as last read; LOCAL_ONLY with nothing known until the first refresh. */
     private SyncModel model = SyncModel.of(SyncModel.Facts.none());
@@ -156,6 +159,8 @@ public final class VersionsPane {
     private final ComboBox<String> branchBox = new ComboBox<>();
     private final ComboBox<ProjectVcs.RemoteInfo> remoteBox = new ComboBox<>();
     private final Button discardFile = new Button("Discard…");
+    /** A file's cards show only the changed statements; remembered per user ({@link OnlyDifferences}). */
+    private final CheckBox onlyDifferences = new CheckBox("Only differences");
     /** The Terminal tab, which is the window's: set by the shell. */
     private Runnable openTerminal = () -> { };
     private String branch;
@@ -260,8 +265,13 @@ public final class VersionsPane {
         mainAction.getStyleClass().add("primary-button");
         Region stripSpacer = new Region();
         HBox.setHgrow(stripSpacer, Priority.ALWAYS);
+        account.getStyleClass().add("versions-account");
+        account.setOnAction(e -> share.signIn(() -> {
+            resolveIdentity();
+            refresh();
+        }));
         HBox strip = new HBox(14, segment("💻", "This computer", here), myCopySegment, originalSegment,
-                stripSpacer, mainAction, alsoActions, viewSwitch);
+                stripSpacer, mainAction, alsoActions, viewSwitch, account);
         strip.getStyleClass().add("versions-strip");
         strip.setAlignment(Pos.CENTER_LEFT);
         strip.setPadding(new Insets(6, 6, 0, 6));
@@ -309,7 +319,15 @@ public final class VersionsPane {
         discardFile.setOnAction(e -> {
             if (shownChanged != null) discard(shownChanged);
         });
-        HBox fileBar = new HBox(6, fileSpacer, discardFile, restoreFile);
+        onlyDifferences.setSelected(OnlyDifferences.remembered());
+        onlyDifferences.setTooltip(new Tooltip("Show only the statements that changed in each function, "
+                + "not the whole function around them"));
+        onlyDifferences.setOnAction(e -> {
+            OnlyDifferences.remember(onlyDifferences.isSelected());
+            if (shownFile != null && shown != null) drawCards(shown, shownFile);
+        });
+        HBox fileBar = new HBox(6, onlyDifferences, fileSpacer, discardFile, restoreFile);
+        fileBar.setAlignment(Pos.CENTER_LEFT);
         fileBar.setPadding(new Insets(4, 6, 0, 6));
         VBox fileView = new VBox(fileBar, cards);
         VBox.setVgrow(cards, Priority.ALWAYS);
@@ -873,14 +891,20 @@ public final class VersionsPane {
                     restoreFile.setVisible(row instanceof Timeline.Version
                             && (in.sides().after() != null || in.sides().before() != null));
                     restoreFile.setText(in.sides().after() == null ? "Bring this file back" : "Restore this file");
-                    try {
-                        cards.setContent(diffCards.build(in, new CardActions(row, in)));
-                    } catch (RuntimeException ex) {
-                        // A drawing bug costs the cards, never the diff: the text is always there to show.
-                        cards.setContent(diffCards.build(new DiffCards.Input(path, in.sides(), null, in.textDiff()),
-                                new CardActions(row, in)));
-                    }
+                    drawCards(row, in);
                 }));
+    }
+
+    /** Draws {@code in}'s cards for {@code row}, as {@link #onlyDifferences} says. */
+    private void drawCards(Timeline.Row row, DiffCards.Input in) {
+        diffCards.setOnlyDifferences(onlyDifferences.isSelected());
+        try {
+            cards.setContent(diffCards.build(in, new CardActions(row, in)));
+        } catch (RuntimeException ex) {
+            // A drawing bug costs the cards, never the diff: the text is always there to show.
+            cards.setContent(diffCards.build(new DiffCards.Input(in.path(), in.sides(), null, in.textDiff()),
+                    new CardActions(row, in)));
+        }
     }
 
     private DiffCards.Input read(Timeline.Row row, String path) throws Exception {
@@ -1258,15 +1282,36 @@ public final class VersionsPane {
         if (auth == null || client == null || !auth.isAuthenticated()) {
             authorName = null;
             authorEmail = null;
+            showAccount();
             return;
         }
         auth.login(client).thenAccept(login -> {
             if (login != null && !login.isBlank()) {
                 authorName = login;
                 authorEmail = login + "@users.noreply.github.com";
-                Platform.runLater(this::refresh);
+                Platform.runLater(() -> {
+                    showAccount();
+                    refresh();
+                });
             }
         });
+    }
+
+    /**
+     * The GitHub account button: who is signed in, or the way to sign in. It was a round button on the main
+     * toolbar until 2026-09-26; this tab is the only thing the account serves, so it lives here.
+     */
+    private void showAccount() {
+        if (auth == null || client == null) {
+            show(account, false);
+            return;
+        }
+        boolean signedIn = auth.isAuthenticated() && authorName != null;
+        account.setText(signedIn ? "GitHub: " + authorName
+                : auth.isAuthenticated() ? "GitHub account" : "Sign in to GitHub");
+        account.setTooltip(new Tooltip(signedIn
+                ? "Signed in to GitHub as " + authorName + " — your saves are authored as you. Click to switch or sign out."
+                : "Sign in to save to your own copy on GitHub, publish, and suggest changes to an author."));
     }
 
     /**

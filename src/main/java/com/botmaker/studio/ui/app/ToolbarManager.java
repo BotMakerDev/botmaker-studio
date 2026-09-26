@@ -332,9 +332,12 @@ public class ToolbarManager {
         // it belongs to ProgramShapeOverlay's own row and this bar has no section for it; placing one here
         // would put a button on a bar that is drawn with no overlay open, where its context answers empty.
         // The filter is PluginHost.itemsIn's complement, and the two are the only readers of that split.
-        for (ToolbarItem item : PluginHost.toolbarItems()) {
+        for (PluginHost.OwnedItem owned : PluginHost.ownedToolbarItems()) {
+            ToolbarItem item = owned.item();
             if (item.group() == ToolbarGroup.OVERLAY) continue;
-            place(placed, ctx, item);
+            Button button = ToolbarItems.button(item, ctx);
+            placed.add(new Placed(item.group(), item.order(), item.id(), button, item,
+                    owned.pluginId(), owned.pluginName()));
         }
 
         // The reading order the bar was hand-arranged into, now stated as four groups rather than as an
@@ -350,7 +353,14 @@ public class ToolbarManager {
         //
         // The order is also the order things drop into the » menu: what is furthest right goes first, so the
         // readout and the least-reached-for tools are what a narrow window costs you, not Project Setup.
-        placed.sort(Comparator.comparing(Placed::group)
+        //
+        // Since 2026-09-26 the bar is one section per owner — Studio's own first, then each plugin by name —
+        // and the groups above order the buttons inside a section. Mixed, a plugin's button sat between two
+        // of Studio's and nothing said whose it was; a section says it once, in its caption.
+        placed.sort(Comparator.comparing((Placed p) -> p.ownerId() != null)
+                .thenComparing(p -> p.ownerName() == null ? "" : p.ownerName().toLowerCase(java.util.Locale.ROOT))
+                .thenComparing(p -> p.ownerId() == null ? "" : p.ownerId())
+                .thenComparing(Placed::group)
                 .thenComparingInt(Placed::order)
                 .thenComparing(Placed::id));
         // A group the user switched off leaves the node list rather than being made invisible inside it:
@@ -359,9 +369,19 @@ public class ToolbarManager {
         Set<ToolbarGroup> hidden = hiddenGroups();
         placed.removeIf(p -> hidden.contains(p.group()));
         this.items = List.copyOf(placed);
-        Node[] nodes = new Node[placed.size()];
-        for (int i = 0; i < placed.size(); i++) nodes[i] = placed.get(i).node();
-        OverflowBar bar = new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.CENTER, nodes);
+        List<Node> nodes = new ArrayList<>();
+        String section = null;
+        boolean first = true;
+        for (Placed p : placed) {
+            String owner = p.ownerId() == null ? "" : p.ownerId();
+            if (first || !owner.equals(section)) {
+                nodes.add(sectionCaption(p.ownerId() == null ? "Studio" : p.ownerName(), !first));
+                section = owner;
+                first = false;
+            }
+            nodes.add(p.node());
+        }
+        OverflowBar bar = new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.CENTER, nodes.toArray(Node[]::new));
         // The way back in, and the only one: hiding every group leaves an empty bar, which is still a node
         // with this handler on it. That is why the menu's "Show all" cannot be unticked.
         bar.setOnContextMenuRequested(e -> {
@@ -399,7 +419,30 @@ public class ToolbarManager {
      * and a read-out — so the placement model has to hold a bare {@link Node} beside a described one. Every
      * attempt to make the record cover all three would have added a member with exactly one implementor.
      */
-    private record Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item) {}
+    private record Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item,
+                          String ownerId, String ownerName) {
+
+        /** Studio's own: no owning plugin. */
+        Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item) {
+            this(group, order, id, node, item, null, null);
+        }
+    }
+
+    /**
+     * The caption that opens one owner's section — "Studio", or a plugin's own name — led by a divider when a
+     * section comes before it. A label, not a button: it names whose buttons follow and does nothing.
+     */
+    private static Node sectionCaption(String owner, boolean divided) {
+        Label caption = new Label(owner);
+        caption.getStyleClass().add("toolbar-section-caption");
+        caption.setMinWidth(Region.USE_PREF_SIZE);
+        if (!divided) return caption;
+        javafx.scene.control.Separator divider = new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL);
+        divider.getStyleClass().add("toolbar-section-divider");
+        HBox box = new HBox(6, divider, caption);
+        box.setAlignment(Pos.CENTER_LEFT);
+        return box;
+    }
 
     /** What is currently on the bar, in draw order, so {@link #refreshItems()} can re-read the suppliers. */
     private List<Placed> items = List.of();

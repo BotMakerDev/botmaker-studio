@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 1: three bugs.** `ExpressionMenu.freshVariableName` falls back
+- **2026-09-26 (latest) — Feedback batch 2, phase 2: toolbar sections, Versions account, only differences.**
+  `PluginHost.ownedToolbarItems()` (`OwnedItem`: plugin id + name); `ToolbarManager` sorts owner first (Studio,
+  then plugins by name) and opens each with `sectionCaption`. `IdentityCluster` lost ⑂ VCS and GitHub;
+  `VersionsPane.account` signs in through `ShareActions.signIn`. *Only differences* (`OnlyDifferences` pref):
+  `BlockPreview.method(…, onlyChanged)` hides statements no span overlaps; `DiffCards.onlyText` for Java.
+- **2026-09-26 — Feedback batch 2, phase 1: three bugs.** `ExpressionMenu.freshVariableName` falls back
   to `DefaultNames.forType` when the lower-cased name is not an identifier (`int` → `number`; was
   `Invalid identifier : >int<`). Choices draw through `ValueEditors.optionDisplay` (preview, else the inert
   editor) and edit in place (`ParametersDialog.optionEditor`, `editorFor(…, onChange)`), never as Java.

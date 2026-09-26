@@ -73,6 +73,12 @@ final class DiffCards {
 
     private final ProjectConfig config;
     private final ProjectState live;
+    /** <i>Only differences</i>: a function card shows its changed statements and not the rest. */
+    private boolean onlyDifferences;
+
+    void setOnlyDifferences(boolean only) {
+        this.onlyDifferences = only;
+    }
 
     DiffCards(ProjectConfig config, ProjectState live) {
         this.config = config;
@@ -150,12 +156,12 @@ final class DiffCards {
 
         Node blocks = sideBySide(
                 side(before, change.beforeStart(), change.before(),
-                        change.kind() == BlockDiff.Mark.REMOVED ? BlockDiff.Mark.REMOVED : null),
+                        change.kind() == BlockDiff.Mark.REMOVED ? BlockDiff.Mark.REMOVED : null, onlyDifferences),
                 side(after, change.afterStart(), change.after(),
-                        change.kind() == BlockDiff.Mark.ADDED ? BlockDiff.Mark.ADDED : null));
+                        change.kind() == BlockDiff.Mark.ADDED ? BlockDiff.Mark.ADDED : null, onlyDifferences));
         Node java = sideBySide(
-                code(sides.beforeText(), change.beforeStart()),
-                code(sides.afterText(), change.afterStart()));
+                code(sides.beforeText(), change.beforeStart(), onlyDifferences ? change.before() : List.of()),
+                code(sides.afterText(), change.afterStart(), onlyDifferences ? change.after() : List.of()));
         boolean drawn = blocks.getProperties().containsKey(DRAWN);
 
         ToggleGroup mode = new ToggleGroup();
@@ -216,9 +222,10 @@ final class DiffCards {
      * One side as blocks, or a line saying why not. {@code whole} is the mark the whole function takes — added
      * on the after side of a new one, removed on the before side of a deleted one — or null.
      */
-    private static Node side(BlockPreview preview, int start, List<BlockDiff.Span> spans, BlockDiff.Mark whole) {
+    private static Node side(BlockPreview preview, int start, List<BlockDiff.Span> spans, BlockDiff.Mark whole,
+                             boolean onlyChanged) {
         if (preview == null || start < 0) return note("—");
-        Node method = preview.method(start, spans);
+        Node method = preview.method(start, spans, onlyChanged);
         if (method == null) {
             List<String> why = preview.problems();
             return note(why.isEmpty() ? "This function could not be drawn; see Java." : why.getFirst());
@@ -233,19 +240,49 @@ final class DiffCards {
         return canvas;
     }
 
-    private static Node code(String source, int start) {
+    /**
+     * One side's function as Java; with {@code only} spans, just their statements, one per paragraph with a
+     * {@code ⋯} between — the <i>Only differences</i> view of the same card.
+     */
+    private static Node code(String source, int start, List<BlockDiff.Span> only) {
         if (source == null || start < 0) return note("—");
-        int end = start;
-        var cu = com.botmaker.studio.parser.helpers.SourceParser.parse(source);
-        for (var m : BlockDiff.methods(cu).values()) {
-            if (m.getStartPosition() == start) end = start + m.getLength();
+        String text;
+        if (!only.isEmpty()) {
+            text = onlyText(source, only);
+        } else {
+            int end = start;
+            var cu = com.botmaker.studio.parser.helpers.SourceParser.parse(source);
+            for (var m : BlockDiff.methods(cu).values()) {
+                if (m.getStartPosition() == start) end = start + m.getLength();
+            }
+            text = source.substring(start, end);
         }
-        TextArea area = new TextArea(source.substring(start, end));
+        TextArea area = new TextArea(text);
         area.setEditable(false);
         area.getStyleClass().add("console-area");
         area.setStyle("-fx-font-family: monospace;");
         area.setPrefRowCount(Math.min(24, (int) area.getText().lines().count() + 1));
         return area;
+    }
+
+    /**
+     * The marked statements' own text, in source order, a nested one dropped when its container is also
+     * listed — each span's text already holds it.
+     */
+    static String onlyText(String source, List<BlockDiff.Span> spans) {
+        List<BlockDiff.Span> sorted = spans.stream()
+                .sorted(java.util.Comparator.comparingInt(BlockDiff.Span::start)).toList();
+        StringBuilder out = new StringBuilder();
+        int reached = -1;
+        for (BlockDiff.Span s : sorted) {
+            if (s.start() < reached) continue;
+            int end = Math.min(source.length(), s.start() + s.length());
+            if (s.start() < 0 || s.start() >= end) continue;
+            if (!out.isEmpty()) out.append("\n⋯\n");
+            out.append(source, s.start(), end);
+            reached = end;
+        }
+        return out.toString();
     }
 
     // -------------------------------------------------------------------------

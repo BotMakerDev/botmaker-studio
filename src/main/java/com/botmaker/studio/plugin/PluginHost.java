@@ -128,7 +128,8 @@ public final class PluginHost {
     private static volatile Map<String, String> preferredEditors = Map.of();
 
     /** Memoised beside the slot editors, rebuilt on the same bind. See {@link #toolbarItems()}. */
-    private static volatile List<ToolbarItem> toolbarItems = mergeToolbarItems(BUNDLED);
+    private static volatile List<OwnedItem> ownedToolbarItems = mergeOwnedToolbarItems(BUNDLED);
+    private static volatile List<ToolbarItem> toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
 
     /** Memoised the same way. See {@link #managedValues()}. */
     private static volatile List<ManagedValue> managedValues = mergeManagedValues(BUNDLED);
@@ -272,7 +273,8 @@ public final class PluginHost {
         grammar = merged;
         ownedSlotEditors = mergeOwnedSlotEditors(bound);
         slotEditors = strip(ownedSlotEditors);
-        toolbarItems = mergeToolbarItems(bound);
+        ownedToolbarItems = mergeOwnedToolbarItems(bound);
+        toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
         catalog = null;
         if (previous != null) previous.close();
@@ -439,6 +441,10 @@ public final class PluginHost {
         }
     }
 
+    private static <O, T> List<T> strip(List<O> owned, java.util.function.Function<O, T> part) {
+        return owned.stream().map(part).toList();
+    }
+
     private static List<SlotEditor> strip(List<OwnedEditor> owned) {
         List<SlotEditor> editors = new ArrayList<>();
         for (OwnedEditor each : owned) editors.add(each.editor());
@@ -540,8 +546,23 @@ public final class PluginHost {
     // on the plugin id, and a throwing plugin costing only itself — have no visible symptom when they are
     // wrong. A bar in a slightly different order looks like somebody's preference, not like a bug.
     static List<ToolbarItem> mergeToolbarItems(List<StudioPlugin> set) {
-        record Owned(String pluginId, ToolbarItem item) {}
-        List<Owned> merged = new ArrayList<>();
+        return mergeOwnedToolbarItems(set).stream().map(OwnedItem::item).toList();
+    }
+
+    /**
+     * A toolbar item with the plugin that offered it — what lets the bar draw one section per plugin
+     * (2026-09-26) rather than mixing every plugin's buttons into the host's four groups.
+     */
+    public record OwnedItem(String pluginId, String pluginName, ToolbarItem item) {}
+
+    /** Every loaded plugin's toolbar items with their owner, in {@link #toolbarItems()}' order. */
+    public static List<OwnedItem> ownedToolbarItems() {
+        return ownedToolbarItems;
+    }
+
+    /** {@link #mergeToolbarItems}, keeping the owner. */
+    static List<OwnedItem> mergeOwnedToolbarItems(List<StudioPlugin> set) {
+        List<OwnedItem> merged = new ArrayList<>();
         for (StudioPlugin plugin : set) {
             List<ToolbarItem> offered;
             try {
@@ -559,15 +580,13 @@ public final class PluginHost {
                             + item.id() + "'; that group is the host's own and the item is dropped.");
                     continue;
                 }
-                merged.add(new Owned(plugin.id(), item));
+                merged.add(new OwnedItem(plugin.id(), displayNameOf(plugin), item));
             }
         }
-        merged.sort(Comparator.comparing((Owned o) -> o.item().group())
+        merged.sort(Comparator.comparing((OwnedItem o) -> o.item().group())
                 .thenComparingInt(o -> o.item().order())
-                .thenComparing(Owned::pluginId));
-        List<ToolbarItem> out = new ArrayList<>(merged.size());
-        for (Owned owned : merged) out.add(owned.item());
-        return List.copyOf(out);
+                .thenComparing(OwnedItem::pluginId));
+        return List.copyOf(merged);
     }
 
     // parameterGroups(String), parameterGroup(String, String), parameterRows(String) and
