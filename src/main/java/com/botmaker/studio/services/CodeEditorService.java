@@ -205,6 +205,7 @@ public class CodeEditorService {
             if (event.block() != null) state.setHighlightedBlock(event.block());
             else state.clearHighlight();
         }, true);
+        eventBus.subscribe(CoreApplicationEvents.FileOpenRequestedEvent.class, e -> switchToFile(e.path()), true);
     }
 
     /** Resolves a palette drop into the matching CodeEditor "add" call. */

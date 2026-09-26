@@ -11,6 +11,10 @@ import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.BlockFontPreference;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
@@ -31,6 +35,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -120,6 +125,53 @@ final class EditorCanvas {
         showMissingPlugins(missingPlugins.get(), onManagePlugins);
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class,
                 e -> showMissingPlugins(missingPlugins.get(), onManagePlugins), true);
+        followSubscription = eventBus.subscribe(CoreApplicationEvents.ExecutionFollowedEvent.class,
+                e -> follow(e.block()), true);
+    }
+
+    /** Drops what this canvas subscribed to on the project's bus: the next window builds its own. */
+    void dispose() {
+        followSubscription.close();
+        if (followScroll != null) followScroll.stop();
+    }
+
+    // --- following a run --------------------------------------------------------------------------------------
+
+    /** Scrolls no more often than this while following, whatever the bot does. */
+    private static final long FOLLOW_SCROLL_GAP_MS = 400;
+    private static final Duration FOLLOW_SCROLL_TIME = Duration.millis(200);
+    /** The band, as a fraction of the viewport from each edge, a followed block may sit in without a scroll. */
+    private static final double FOLLOW_MARGIN = 0.2;
+
+    private final EventBus.Subscription followSubscription;
+    private Timeline followScroll;
+    private long lastFollowScroll;
+
+    /**
+     * Keeps the block a session is on in view, without making the canvas jump: nothing moves while the block
+     * sits in the middle 60 % of the viewport; otherwise one eased 200 ms scroll centres it, and never more
+     * than one per {@link #FOLLOW_SCROLL_GAP_MS}. A block that has moved off-screen by then is caught by the
+     * next follow.
+     */
+    private void follow(CodeBlock block) {
+        Node node = block == null ? null : block.getUINode();
+        if (node == null || node.getScene() == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastFollowScroll < FOLLOW_SCROLL_GAP_MS) return;
+        Bounds bounds = zoomPane.sceneToLocal(node.localToScene(node.getBoundsInLocal()));
+        double contentH = zoomPane.getHeight();
+        double viewportH = scrollPane.getViewportBounds().getHeight();
+        if (bounds == null || contentH <= viewportH) return;
+        double top = scrollPane.getVvalue() * (contentH - viewportH);
+        double centre = (bounds.getMinY() + bounds.getMaxY()) / 2;
+        double margin = viewportH * FOLLOW_MARGIN;
+        if (centre >= top + margin && centre <= top + viewportH - margin) return;
+        double target = Math.max(0, Math.min(1, (centre - viewportH / 2) / (contentH - viewportH)));
+        lastFollowScroll = now;
+        if (followScroll != null) followScroll.stop();
+        followScroll = new Timeline(new KeyFrame(FOLLOW_SCROLL_TIME,
+                new KeyValue(scrollPane.vvalueProperty(), target, Interpolator.EASE_BOTH)));
+        followScroll.play();
     }
 
     /**

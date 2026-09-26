@@ -55,6 +55,10 @@ public class CoreApplicationEvents {
 
     public record UIRefreshRequestedEvent(String code) implements ApplicationEvent {}
     public record BlockHighlightEvent(CodeBlock block) implements ApplicationEvent {}
+    /** The block a debug or Follow session is on: the canvas brings it into view, gently. */
+    public record ExecutionFollowedEvent(CodeBlock block) implements ApplicationEvent {}
+    /** Asks the editor to show another source file, as a click in the explorer would. */
+    public record FileOpenRequestedEvent(java.nio.file.Path path) implements ApplicationEvent {}
     public record UIBlocksUpdatedEvent(AbstractCodeBlock rootBlock) implements ApplicationEvent {}
     public record BlockAddedEvent(BlockType blockType) implements ApplicationEvent {}
 

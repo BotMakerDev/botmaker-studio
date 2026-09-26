@@ -171,6 +171,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Fixed
 
+- **Follow no longer freezes the window.** A bot printing in a tight loop under Follow or Debug sent the
+  Run tab one update per line, which froze Studio until long after Stop. Its output now reaches the tab in
+  batches, like a run's, and a flood keeps the newest lines and says how many it skipped.
+- **Follow is calmer and keeps up.** The highlight moves at most four times a second; when the bot loops
+  faster than that, it rests on the loop instead of flickering through its body. The canvas scrolls to the
+  running block, gently, only once it leaves the middle of the view — and opens the file the bot is in.
+- **Breakpoints work in every file**, not only in the bot's main class, and a stop in another file opens it.
 - **A text parameter's Choices take what you type.** In the Parameters window, typing a choice and pressing
   Enter added nothing, and the text stayed in the field to be joined onto the next choice (`slow` then
   `turbo` became one choice, `slowturbo`). Enter now adds the choice and clears the field, for a text

@@ -7,13 +7,16 @@ import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.palette.InputKind;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.BotJvm;
 import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.studio.runtime.ConsoleBatcher;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.debug.DebugTargets;
+import com.botmaker.studio.services.debug.FollowPacer;
 import com.sun.jdi.*;
 import com.sun.jdi.connect.AttachingConnector;
 import com.sun.jdi.connect.Connector;
@@ -23,28 +26,42 @@ import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.EventRequestManager;
 import com.sun.jdi.request.StepRequest;
 import javafx.application.Platform;
+import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.ServerSocket;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Handles the entire debugging lifecycle:
- * 1. Mapping AST nodes to line numbers.
+ * 1. Mapping every source file's statements to line numbers ({@link DebugTargets}).
  * 2. Launching the JVM in debug mode.
  * 3. Attaching via JDI (Java Debug Interface).
  * 4. Managing Breakpoints, Stepping, and Resuming.
+ *
+ * <p>A stop reaches the editor as a <em>file and a line</em>, never as a block: the block is looked up on the FX
+ * thread, in whatever the canvas shows at that moment. Blocks resolved once at the start went stale the first
+ * time the file was re-drawn, and a highlight on a detached block is a highlight nobody sees.
  */
 public class DebuggingService {
 
     // Console Coloring for internal logs
     private static final String ANSI_RESET = "\u001B[0m";
     private static final String ANSI_BLUE = "\u001B[34m";
-    private static final String ANSI_GREEN = "\u001B[32m";
-    private static final String ANSI_RED = "\u001B[31m";
+
+    /**
+     * Follow switches the canvas to another file only once the bot has spent a whole window there, and not
+     * more often than this: a bot bouncing between two files must not make the whole canvas flash.
+     */
+    private static final long FILE_SWITCH_GAP_MS = 1_500;
 
     private final ProjectState state;
     private final EventBus eventBus;
@@ -53,22 +70,29 @@ public class DebuggingService {
 
     // Debug Session State
     private volatile Process currentProcess;
-    private VirtualMachine vm;
-    private ThreadReference currentDebugThread;
-    private Map<Integer, CodeBlock> lineToBlockMap;
+    private volatile VirtualMachine vm;
+    private volatile ThreadReference currentDebugThread;
+    private volatile DebugTargets targets;
     private volatile TelemetryServer telemetryServer;
+    private volatile ConsoleBatcher console;
 
     // "Follow" (trace) mode: attach like debug but auto-resume past every block, highlighting each live.
     private volatile boolean traceMode;
+    private final FollowPacer pacer = new FollowPacer();
+    private ScheduledExecutorService followTicker;
 
-    // Highlight throttle (trace mode only). The JDI side resumes immediately; highlight repaints are
-    // coalesced to at most one every HIGHLIGHT_THROTTLE_MS (trailing edge), so a tight loop pulses softly
-    // instead of strobing. Mirrors the coalescing pattern in CodeExecutionService's activeUiUpdater.
-    private static final long HIGHLIGHT_THROTTLE_MS = 130;
-    private volatile CodeBlock pendingHighlight;
-    private final java.util.concurrent.atomic.AtomicBoolean flushScheduled =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
-    private java.util.concurrent.ScheduledExecutorService highlightScheduler;
+    /**
+     * Which session is live. Anything queued for the FX thread carries the number it was queued under and is
+     * dropped when that session has ended, so a highlight posted a moment before Stop cannot land after it.
+     */
+    private final AtomicInteger session = new AtomicInteger();
+    private final AtomicBoolean finished = new AtomicBoolean(true);
+
+    // FX-confined: the last file Follow switched to, and when.
+    private long lastFileSwitch;
+    // FX-confined: the line index of the map last looked up, rebuilt when the canvas is re-drawn.
+    private Map<ASTNode, CodeBlock> indexedMap;
+    private Map<Integer, CodeBlock> lineIndex = Map.of();
 
     public DebuggingService(
             ProjectState state,
@@ -96,10 +120,6 @@ public class DebuggingService {
         eventBus.subscribe(CoreApplicationEvents.SendInputEvent.class, e -> sendInput(e.text()), false);
     }
 
-    private static final java.util.regex.Pattern INPUT_MARKER = java.util.regex.Pattern.compile(
-            InputKind.MARKER_DELIMITER + java.util.regex.Pattern.quote(InputKind.MARKER_PREFIX)
-                    + "([a-zA-Z]+)" + InputKind.MARKER_DELIMITER);
-
     /** Writes a line to the debuggee's stdin (used by the input popup) and echoes it to the console. */
     public void sendInput(String line) {
         Process process = currentProcess;
@@ -112,76 +132,46 @@ public class DebuggingService {
         } catch (IOException ignored) {}
     }
 
-    /** Removes BM-INPUT markers from a line, publishing an input request for each; returns null if nothing remains. */
-    private String stripInputMarkers(String line) {
-        java.util.regex.Matcher m = INPUT_MARKER.matcher(line);
-        StringBuffer sb = new StringBuffer();
-        boolean found = false;
-        while (m.find()) {
-            found = true;
-            InputKind kind = InputKind.fromMarkerToken(m.group(1)).orElse(null);
-            Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(kind)));
-            m.appendReplacement(sb, "");
-        }
-        m.appendTail(sb);
-        return found && sb.length() == 0 ? null : sb.toString();
-    }
-
     /**
      * Kicks off a debug ({@code trace=false}) or follow/trace ({@code trace=true}) session on a
-     * separate thread. In trace mode user breakpoints are ignored and every mapped block is observed
+     * separate thread. In trace mode user breakpoints are ignored and every statement line is observed
      * and immediately resumed, so execution is followed live without ever pausing.
      */
     public void startDebugging(boolean trace) {
+        if (!finished.get()) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("A debug session is already running. Stop it first."));
+            return;
+        }
         this.traceMode = trace;
+        finished.set(false);
+        int id = session.incrementAndGet();
         // Read the project as one value, here, on the FX thread — the debug thread must not touch ProjectState
-        // (see its javadoc, and bugs.md B10). Everything below maps breakpoints from this revision's AST onto
-        // the classes this revision compiled to, which is only true if they are the same revision.
+        // (see its javadoc, and bugs.md B10). Everything below maps breakpoints from this revision's sources
+        // onto the classes this revision compiled to, which is only true if they are the same revision.
         ProjectState.Snapshot snapshot = state.snapshot();
+        Map<Path, Set<String>> breakpoints = state.breakpoints();
         new Thread(() -> {
             try {
                 // 1. Compile
                 if (!codeExecutionService.compileAndWait(snapshot, config.compiledOutputPath())) {
                     eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Debug aborted due to compilation failure."));
+                    finished.set(true);
                     return;
                 }
                 Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, trace ? "Trace" : "Debug");
 
-                // 2. Map Breakpoints (AST -> Line Numbers)
-                CompilationUnit cu = snapshot.compilationUnit();
-                // Note: the block registry only refers to the ACTIVE file.
-                // Multi-file debugging requires mapping logic expansion, but this works for the active file.
-                if (cu == null || snapshot.nodeToBlockMap().isEmpty()) {
-                    eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Error: Could not parse code to get breakpoints."));
-                    return;
-                }
-
-                this.lineToBlockMap = new HashMap<>();
-                List<Integer> activeBreakpointLines = new ArrayList<>();
-
-                for (CodeBlock block : snapshot.nodeToBlockMap().values()) {
-                    int line = block.getBreakpointLine(cu);
-                    if (line > 0) {
-                        // Only map StatementBlocks (executable lines)
-                        if (!lineToBlockMap.containsKey(line) || block instanceof StatementBlock) {
-                            lineToBlockMap.put(line, block);
-                        }
-                        // Trace mode ignores user breakpoints (following never stops); collect them only for debug.
-                        if (!trace && block.isBreakpoint()) {
-                            activeBreakpointLines.add(line);
-                        }
+                // 2. Where the session can stop, file by file.
+                DebugTargets found = DebugTargets.of(config.sourceRoot(), snapshot.files(), breakpoints);
+                this.targets = found;
+                Path entry = config.entrySourceFile();
+                Integer pauseAtStart = null;
+                if (!trace && !found.anyBreakpoint()) {
+                    // No breakpoints: pause at the start, so the session does not just run to the end.
+                    pauseAtStart = found.firstLine(entry).orElse(null);
+                    if (pauseAtStart != null) {
+                        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                                "No breakpoints set. Pausing at start (Line " + pauseAtStart + ")."));
                     }
-                }
-
-                if (trace) {
-                    // Follow mode: observe EVERY mapped line so each executed block is highlighted, then resumed.
-                    activeBreakpointLines.addAll(lineToBlockMap.keySet());
-                } else if (activeBreakpointLines.isEmpty() && !lineToBlockMap.isEmpty()) {
-                    // If no breakpoints, add one at start so it doesn't just run to finish immediately
-                    lineToBlockMap.keySet().stream().min(Integer::compareTo).ifPresent(firstLine -> {
-                        activeBreakpointLines.add(firstLine);
-                        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("No breakpoints set. Pausing at start (Line " + firstLine + ")."));
-                    });
                 }
 
                 // 3. Find Free Port
@@ -195,7 +185,6 @@ public class DebuggingService {
                 eventBus.publish(new CoreApplicationEvents.DebugSessionStartedEvent());
                 Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
 
-                String classPath = config.compiledOutputPath().toString();
                 // The bot's entry class — found rather than derived, so a renamed one or a template's own is
                 // debugged rather than a name that no longer exists. See ProjectConfig.entrySourceFile().
                 String className = config.entryClassName();
@@ -210,7 +199,7 @@ public class DebuggingService {
                 // a bot reads its own resources — a plugin's data, its image templates — from there.
                 fullClassPath.append(java.io.File.pathSeparator).append(config.resourcesRoot().toString());
 
-                // 2. Add all resolved dependency JARs — from the same snapshot the code was compiled from
+                // Add all resolved dependency JARs — from the same snapshot the code was compiled from
                 for (String jarPath : snapshot.resolvedClasspath()) {
                     fullClassPath.append(java.io.File.pathSeparator).append(jarPath);
                 }
@@ -225,25 +214,31 @@ public class DebuggingService {
                 startTelemetry(pb);
                 this.currentProcess = pb.start();
 
-                // Redirect output to UI
-                redirectStream(currentProcess.getInputStream(), true);
-                redirectStream(currentProcess.getErrorStream(), false);
+                // Output reaches the Run tab through the same batcher a run uses: one flush per 100 ms however
+                // fast the bot prints. One runLater per line is what froze the window under Follow.
+                ConsoleBatcher batcher = codeExecutionService.console();
+                this.console = batcher;
+                batcher.pump(currentProcess.getInputStream(), true, "debuggee-stdout");
+                batcher.pump(currentProcess.getErrorStream(), false, "debuggee-stderr");
+
+                if (trace) startFollowTicker(id);
 
                 // 5. Attach JDI
-                attachJdi(className, freePort, activeBreakpointLines);
+                attachJdi(freePort, found, entry, pauseAtStart);
 
             } catch (Exception e) {
                 eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Debugger Error: " + e.getMessage()));
                 e.printStackTrace();
                 stopDebugging(); // Cleanup if fail
             }
-        }).start();
+        }, "debug-launch").start();
     }
 
     /**
-     * Connects the JDI VirtualMachine to the running process.
+     * Connects the JDI VirtualMachine to the running process and asks for a stop on every line wanted in every
+     * class of the bot: the ones already loaded now, and the rest as each is prepared.
      */
-    private void attachJdi(String mainClassName, int port, List<Integer> breakpointLines) throws Exception {
+    private void attachJdi(int port, DebugTargets found, Path entry, Integer pauseAtStart) throws Exception {
         VirtualMachineManager vmMgr = Bootstrap.virtualMachineManager();
         AttachingConnector connector = vmMgr.attachingConnectors().stream()
                 .filter(c -> c.transport().name().equals("dt_socket"))
@@ -254,40 +249,40 @@ public class DebuggingService {
         arguments.get("port").setValue(String.valueOf(port));
         arguments.get("hostname").setValue("localhost");
 
-        // Retry logic for connection
+        VirtualMachine attached = null;
         int maxRetries = Constants.DEBUGGER_MAX_CONNECT_RETRIES;
         for (int i = 0; i < maxRetries; i++) {
             try {
-                vm = connector.attach(arguments);
-                System.out.println(ANSI_BLUE + "Attached to VM: " + vm.name() + ANSI_RESET);
+                attached = connector.attach(arguments);
+                System.out.println(ANSI_BLUE + "Attached to VM: " + attached.name() + ANSI_RESET);
                 break;
             } catch (IOException e) {
                 if (i == maxRetries - 1) throw e;
                 Thread.sleep(Constants.DEBUGGER_RETRY_DELAY_MS);
             }
         }
+        vm = attached;
 
-        EventRequestManager erm = vm.eventRequestManager();
-
-        // Handle Breakpoints
-        List<ReferenceType> classes = vm.classesByName(mainClassName);
-        if (!classes.isEmpty()) {
-            applyBreakpointsToClass(classes.getFirst(), breakpointLines);
-        } else {
-            ClassPrepareRequest classPrepareRequest = erm.createClassPrepareRequest();
-            classPrepareRequest.addClassFilter(mainClassName);
-            classPrepareRequest.enable();
+        EventRequestManager erm = attached.eventRequestManager();
+        for (String name : found.classNames()) {
+            for (String filter : List.of(name, name + "$*")) {
+                ClassPrepareRequest prepare = erm.createClassPrepareRequest();
+                prepare.addClassFilter(filter);
+                prepare.enable();
+            }
+        }
+        for (ReferenceType loaded : attached.allClasses()) {
+            requestStops(loaded, found, entry, pauseAtStart);
         }
 
-        // Start Event Loop
         CountDownLatch listenerReadyLatch = new CountDownLatch(1);
-        new Thread(() -> jdiEventLoop(listenerReadyLatch, mainClassName, breakpointLines)).start();
+        new Thread(() -> jdiEventLoop(listenerReadyLatch, found, entry, pauseAtStart), "jdi-events").start();
 
         listenerReadyLatch.await();
-        vm.resume();
+        attached.resume();
     }
 
-    private void jdiEventLoop(CountDownLatch listenerReadyLatch, String mainClassName, List<Integer> breakpointLines) {
+    private void jdiEventLoop(CountDownLatch listenerReadyLatch, DebugTargets found, Path entry, Integer pauseAtStart) {
         EventQueue eventQueue = vm.eventQueue();
         listenerReadyLatch.countDown();
 
@@ -301,15 +296,10 @@ public class DebuggingService {
                         handleDisconnect();
                         return;
                     }
-
-                    if (event instanceof ClassPrepareEvent) {
-                        ClassPrepareEvent cpe = (ClassPrepareEvent) event;
-                        if (cpe.referenceType().name().equals(mainClassName)) {
-                            applyBreakpointsToClass(cpe.referenceType(), breakpointLines);
-                        }
-                    }
-                    else if (event instanceof LocatableEvent) {
-                        handleLocatableEvent((LocatableEvent) event);
+                    if (event instanceof ClassPrepareEvent cpe) {
+                        requestStops(cpe.referenceType(), found, entry, pauseAtStart);
+                    } else if (event instanceof LocatableEvent locatable) {
+                        handleLocatableEvent(locatable);
                         // Trace mode never pauses: fall through to eventSet.resume() and keep following.
                         if (!traceMode) shouldResume = false;
                     }
@@ -327,19 +317,32 @@ public class DebuggingService {
         }
     }
 
-    private void applyBreakpointsToClass(ReferenceType refType, List<Integer> lines) {
-        if (lines == null || lines.isEmpty()) return;
-        try {
-            EventRequestManager erm = vm.eventRequestManager();
-            for (int lineNumber : lines) {
-                List<Location> locations = refType.locationsOfLine(lineNumber);
-                if (!locations.isEmpty()) {
-                    BreakpointRequest bpReq = erm.createBreakpointRequest(locations.getFirst());
-                    bpReq.enable();
+    /** Asks for a stop on each line this class's source file wants: every statement under Follow, else the breakpoints. */
+    private void requestStops(ReferenceType type, DebugTargets found, Path entry, Integer pauseAtStart) {
+        Optional<DebugTargets.FileTargets> file = found.forClass(type.name());
+        if (file.isEmpty()) return;
+        Set<Integer> lines;
+        if (traceMode) {
+            lines = file.get().lines();
+        } else if (pauseAtStart != null && file.get().file().equals(entry)) {
+            lines = Set.of(pauseAtStart);
+        } else {
+            lines = file.get().breakpointLines();
+        }
+        EventRequestManager erm = vm.eventRequestManager();
+        for (int line : lines) {
+            try {
+                for (Location location : type.locationsOfLine(line)) {
+                    // A line can hold code of several methods (a lambda on it); ask only in the type that owns it.
+                    if (!location.declaringType().equals(type)) continue;
+                    BreakpointRequest request = erm.createBreakpointRequest(location);
+                    request.enable();
+                    break;
                 }
+            } catch (AbsentInformationException e) {
+                System.err.println("No debug info for " + type.name() + " (compiled without -g?).");
+                return;
             }
-        } catch (AbsentInformationException e) {
-            System.err.println("No debug info available (compiled without -g?).");
         }
     }
 
@@ -350,36 +353,128 @@ public class DebuggingService {
             vm.eventRequestManager().deleteEventRequest(event.request());
         }
 
-        int lineNumber = event.location().lineNumber();
-        CodeBlock block = lineToBlockMap.get(lineNumber);
-        CodeBlock target = (block != null) ? block.getHighlightTarget() : null;
+        Location location = event.location();
+        Optional<DebugTargets.FileTargets> file = targets == null ? Optional.empty()
+                : targets.forClass(location.declaringType().name());
+        FollowPacer.Hit hit = file.map(f -> new FollowPacer.Hit(f.file(), location.lineNumber())).orElse(null);
 
         if (traceMode) {
-            // Follow mode: highlight the block (throttled), never pause the UI. The event loop resumes.
-            scheduleHighlight(target);
+            // Follow mode: note where the bot is; the ticker decides what is shown. The event loop resumes.
+            if (hit != null) pacer.hit(hit);
             return;
         }
+        int id = session.get();
+        Platform.runLater(() -> showPaused(id, hit, location.lineNumber()));
+    }
 
-        eventBus.publish(new CoreApplicationEvents.DebugSessionPausedEvent(lineNumber, target));
-        eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(target));
-        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Paused at line: " + lineNumber));
+    // --- what the canvas shows (FX thread) -----------------------------------------------------------------
+
+    private void showPaused(int id, FollowPacer.Hit hit, int line) {
+        if (id != session.get() || finished.get()) return;
+        if (hit == null) {
+            // A step landed outside the bot's own code (a library frame): say where, highlight nothing.
+            eventBus.publish(new CoreApplicationEvents.DebugSessionPausedEvent(line, null));
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Paused at line: " + line));
+            return;
+        }
+        onFile(hit.file(), true, () -> {
+            if (id != session.get() || finished.get()) return;
+            CodeBlock target = blockAt(hit.line());
+            eventBus.publish(new CoreApplicationEvents.DebugSessionPausedEvent(hit.line(), target));
+            eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(target));
+            eventBus.publish(new CoreApplicationEvents.ExecutionFollowedEvent(target));
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                    "Paused at " + hit.file().getFileName() + ", line " + hit.line()));
+        });
+    }
+
+    private void startFollowTicker(int id) {
+        synchronized (this) {
+            if (followTicker != null) followTicker.shutdownNow();
+            followTicker = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "follow-ticker");
+                t.setDaemon(true);
+                return t;
+            });
+            pacer.take(); // start from an empty window
+            followTicker.scheduleAtFixedRate(() -> {
+                FollowPacer.Frame frame = pacer.take();
+                if (frame != null) Platform.runLater(() -> showFollowed(id, frame));
+            }, FollowPacer.DWELL_MS, FollowPacer.DWELL_MS, TimeUnit.MILLISECONDS);
+        }
     }
 
     /**
-     * Coalesces highlight repaints in trace mode: keeps only the latest target and publishes a single
-     * {@link CoreApplicationEvents.BlockHighlightEvent} per {@link #HIGHLIGHT_THROTTLE_MS} (trailing edge),
-     * so a hot loop pulses softly instead of strobing. The JDI side has already resumed by the time this fires.
+     * One window of Follow. A frame in the open file highlights its latest block, or the loop enclosing all of
+     * them when the bot came round within the window. A frame spent wholly in another file switches to it, at
+     * most once per {@link #FILE_SWITCH_GAP_MS}; a frame that crossed files leaves the highlight where it is.
      */
-    private void scheduleHighlight(CodeBlock target) {
-        this.pendingHighlight = target;
-        if (flushScheduled.compareAndSet(false, true)) {
-            highlightScheduler().schedule(() -> {
-                CodeBlock latest = this.pendingHighlight;
-                flushScheduled.set(false);
-                Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(latest)));
-            }, HIGHLIGHT_THROTTLE_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+    private void showFollowed(int id, FollowPacer.Frame frame) {
+        if (id != session.get() || finished.get()) return;
+        Optional<Path> single = frame.singleFile();
+        Path file = frame.latest().file();
+        boolean onScreen = file.equals(activeFile());
+        if (!onScreen) {
+            long now = System.currentTimeMillis();
+            if (single.isEmpty() || now - lastFileSwitch < FILE_SWITCH_GAP_MS) return;
+            lastFileSwitch = now;
+        }
+        onFile(file, true, () -> {
+            if (id != session.get() || finished.get()) return;
+            CodeBlock target = null;
+            if (frame.looping() && single.isPresent()) {
+                List<ASTNode> nodes = frame.hits().stream()
+                        .map(h -> blockAt(h.line()))
+                        .filter(Objects::nonNull)
+                        .map(CodeBlock::getAstNode)
+                        .toList();
+                target = FollowPacer.enclosingLoop(nodes)
+                        .flatMap(state::getBlockForNode)
+                        .map(CodeBlock::getHighlightTarget)
+                        .orElse(null);
+            }
+            if (target == null) target = blockAt(frame.latest().line());
+            if (target == null) return;
+            eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(target));
+            eventBus.publish(new CoreApplicationEvents.ExecutionFollowedEvent(target));
+        });
+    }
+
+    /** Runs {@code then} once {@code file} is the one on screen, asking the editor to switch to it first if needed. */
+    private void onFile(Path file, boolean mayOpen, Runnable then) {
+        if (file.equals(activeFile())) {
+            then.run();
+        } else if (mayOpen) {
+            eventBus.publish(new CoreApplicationEvents.FileOpenRequestedEvent(file));
+            // The switch is delivered through runLater; this is queued behind it, so it runs on the new file.
+            Platform.runLater(then);
         }
     }
+
+    private Path activeFile() {
+        ProjectFile active = state.getActiveFile();
+        return active == null ? null : active.getPath();
+    }
+
+    /** The block the canvas shows for {@code line} of the open file, preferring a statement to what shares its line. */
+    private CodeBlock blockAt(int line) {
+        Map<ASTNode, CodeBlock> map = state.getNodeToBlockMap();
+        if (map != indexedMap) {
+            CompilationUnit cu = state.getCompilationUnit().orElse(null);
+            Map<Integer, CodeBlock> index = new HashMap<>();
+            for (CodeBlock block : map.values()) {
+                if (block == null) continue;
+                int at = block.getBreakpointLine(cu);
+                if (at > 0 && (!index.containsKey(at) || block instanceof StatementBlock)) index.put(at, block);
+            }
+            indexedMap = map;
+            lineIndex = index;
+        }
+        CodeBlock block = lineIndex.get(line);
+        return block == null ? null : block.getHighlightTarget();
+    }
+
+    // --- process plumbing ------------------------------------------------------------------------------------
 
     /** Starts the loopback telemetry server for the preview panel and passes port+token to the debuggee. */
     private void startTelemetry(ProcessBuilder pb) {
@@ -408,31 +503,38 @@ public class DebuggingService {
         }
     }
 
-    private synchronized java.util.concurrent.ScheduledExecutorService highlightScheduler() {
-        if (highlightScheduler == null || highlightScheduler.isShutdown()) {
-            highlightScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "follow-highlight-throttle");
-                t.setDaemon(true);
-                return t;
-            });
-        }
-        return highlightScheduler;
-    }
-
+    /**
+     * The one way a session ends, however many paths reach it: the VM disconnecting, the event loop failing,
+     * and Stop all call this, and only the first does anything.
+     */
     private void handleDisconnect() {
+        if (!finished.compareAndSet(false, true)) return;
+        session.incrementAndGet();
         this.currentDebugThread = null;
         this.vm = null;
         this.currentProcess = null;
+        this.targets = null;
 
         synchronized (this) {
-            if (highlightScheduler != null) {
-                highlightScheduler.shutdownNow();
-                highlightScheduler = null;
+            if (followTicker != null) {
+                followTicker.shutdownNow();
+                followTicker = null;
             }
         }
-        flushScheduled.set(false);
-        pendingHighlight = null;
+        pacer.take();
         stopTelemetry();
+        ConsoleBatcher batcher = console;
+        if (batcher != null) {
+            // Hand over what the bot printed last, then stop the timer. The pumps end with the process.
+            new Thread(() -> {
+                try {
+                    batcher.finish();
+                } catch (InterruptedException ignored) {
+                    batcher.close();
+                }
+            }, "debuggee-output-drain").start();
+            console = null;
+        }
 
         eventBus.publish(new CoreApplicationEvents.DebugSessionFinishedEvent());
         eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Debug session finished."));
@@ -440,68 +542,56 @@ public class DebuggingService {
     }
 
     public void stepOver() {
-        if (vm == null || currentDebugThread == null) return;
+        VirtualMachine machine = vm;
+        ThreadReference thread = currentDebugThread;
+        if (machine == null || thread == null) return;
         try {
             eventBus.publish(new CoreApplicationEvents.DebugSessionResumedEvent());
-            EventRequestManager erm = vm.eventRequestManager();
+            EventRequestManager erm = machine.eventRequestManager();
 
             erm.stepRequests().stream()
-                    .filter(r -> r.thread().equals(currentDebugThread))
+                    .filter(r -> r.thread().equals(thread))
                     .forEach(erm::deleteEventRequest);
 
-            StepRequest request = erm.createStepRequest(currentDebugThread, StepRequest.STEP_LINE, StepRequest.STEP_OVER);
+            StepRequest request = erm.createStepRequest(thread, StepRequest.STEP_LINE, StepRequest.STEP_OVER);
             request.addCountFilter(1);
             request.enable();
 
-            vm.resume();
+            machine.resume();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void continueExecution() {
-        if (vm != null) {
+        VirtualMachine machine = vm;
+        if (machine != null) {
             eventBus.publish(new CoreApplicationEvents.DebugSessionResumedEvent());
-            vm.resume();
+            machine.resume();
         }
     }
 
     public void stopDebugging() {
-        if (vm != null) {
+        VirtualMachine machine = vm;
+        if (machine != null) {
             try {
-                vm.dispose();
+                machine.dispose();
             } catch (VMDisconnectedException ignored) {
             } catch (Exception e) { e.printStackTrace(); }
         }
 
-        if (currentProcess != null && currentProcess.isAlive()) {
+        Process process = currentProcess;
+        if (process != null && process.isAlive()) {
             try {
                 // Collect the debuggee's children before killing it: afterwards they are reparented to init
                 // and no longer reachable here, which is how a bot-launched game outlived a stopped session.
-                var descendants = currentProcess.descendants().toList();
-                currentProcess.destroyForcibly();
+                var descendants = process.descendants().toList();
+                process.destroyForcibly();
                 descendants.forEach(ProcessHandle::destroyForcibly);
                 eventBus.publish(new CoreApplicationEvents.StatusMessageEvent("Debug process terminated."));
             } catch (Exception e) { e.printStackTrace(); }
         }
 
         handleDisconnect();
-    }
-
-    private void redirectStream(InputStream stream, boolean detectMarkers) {
-        new Thread(() -> {
-            try (Scanner s = new Scanner(stream)) {
-                while (s.hasNextLine()) {
-                    String line = s.nextLine();
-                    if (detectMarkers) {
-                        String cleaned = stripInputMarkers(line);
-                        if (cleaned == null) continue; // pure marker line — nothing to show
-                        line = cleaned;
-                    }
-                    String out = line + "\n";
-                    Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(out)));
-                }
-            }
-        }).start();
     }
 }

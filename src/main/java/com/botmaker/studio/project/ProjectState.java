@@ -327,6 +327,15 @@ public class ProjectState {
         return inFile != null && inFile.contains(blockId);
     }
 
+    /** Every breakpoint, as a copy a debug session can carry off the FX thread. Files with no key are left out. */
+    public Map<Path, Set<String>> breakpoints() {
+        Map<Path, Set<String>> copy = new HashMap<>();
+        breakpointsByFile.forEach((file, ids) -> {
+            if (file != null) copy.put(file, Set.copyOf(ids));
+        });
+        return Map.copyOf(copy);
+    }
+
     // =========================================================================
     // VERSIONING
     // =========================================================================

@@ -4,7 +4,6 @@ import com.botmaker.shared.ipc.IpcEnv;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.palette.InputKind;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -15,19 +14,13 @@ import com.botmaker.studio.util.ClassPathManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CodeExecutionService {
@@ -38,12 +31,9 @@ public class CodeExecutionService {
     private final EventBus eventBus;
 
     private volatile Process currentRunningProcess;
-    private volatile ScheduledExecutorService activeUiUpdater;
+    private volatile ConsoleBatcher activeConsole;
     private volatile TelemetryServer telemetryServer;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
-
-    private static final int MAX_UI_BUFFER_SIZE = 4096;
-    private static final int UI_UPDATE_RATE_MS = 100;
 
     /**
      * Kills the bot when this JVM exits. The bot runs as its own OS process, so it outlives the Studio unless
@@ -161,14 +151,17 @@ public class CodeExecutionService {
                 startTelemetry(pb);
                 currentRunningProcess = pb.start();
 
-                OutputPump pump = startProcessOutputReaders(currentRunningProcess);
+                ConsoleBatcher console = console();
+                activeConsole = console;
+                // Only stdout carries the BM-INPUT marker the SDK emits before blocking on a read.
+                console.pump(currentRunningProcess.getInputStream(), true, "bot-stdout");
+                console.pump(currentRunningProcess.getErrorStream(), false, "bot-stderr");
 
                 int exitCode = currentRunningProcess.waitFor();
 
-                // Drain the readers and flush anything still buffered before the updater is torn down,
-                // otherwise short-lived programs lose all output that arrived in the last <100ms.
-                for (Thread reader : pump.readers()) reader.join();
-                pump.flushRemaining().run();
+                // Drain the readers and flush anything still buffered, otherwise short-lived programs lose all
+                // output that arrived in the last <100ms.
+                console.finish();
 
                 if (exitCode == 0) status("Program completed successfully.");
                 else if (exitCode == 143 || exitCode == 130 || exitCode == 1 || exitCode == -1)
@@ -183,7 +176,7 @@ public class CodeExecutionService {
             } finally {
                 isRunning.set(false);
                 currentRunningProcess = null;
-                stopUiUpdater();
+                closeConsole();
                 stopTelemetry();
                 // Tell UI the program has finished so the Stop button disables.
                 eventBus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
@@ -274,21 +267,27 @@ public class CodeExecutionService {
 
         Process process = pb.start();
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String finalLine = line + "\n";
-                Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(finalLine)));
-            }
+        try (ConsoleBatcher console = console()) {
+            console.pump(process.getInputStream(), false, "javac-output");
+            int exitCode = process.waitFor();
+            console.finish();
+            return exitCode == 0;
         }
+    }
 
-        int exitCode = process.waitFor();
-        return exitCode == 0;
+    /**
+     * A batcher that hands its text to the Run tab — shared by a run, a compile and a debug session, so all
+     * three reach the console the same way.
+     */
+    public ConsoleBatcher console() {
+        return new ConsoleBatcher(
+                text -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text)),
+                kind -> eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(kind)));
     }
 
     public void stopRunningProgram() {
         killRunningProcess();
-        stopUiUpdater();
+        closeConsole();
         stopTelemetry();
         // Force state update immediately on hard kill
         isRunning.set(false);
@@ -358,10 +357,11 @@ public class CodeExecutionService {
         }
     }
 
-    private void stopUiUpdater() {
-        if (activeUiUpdater != null) {
-            activeUiUpdater.shutdownNow();
-            activeUiUpdater = null;
+    private void closeConsole() {
+        ConsoleBatcher console = activeConsole;
+        if (console != null) {
+            console.close();
+            activeConsole = null;
         }
     }
 
@@ -375,95 +375,5 @@ public class CodeExecutionService {
     public java.util.OptionalLong runningBotPid() {
         Process p = currentRunningProcess;
         return (p != null && p.isAlive()) ? java.util.OptionalLong.of(p.pid()) : java.util.OptionalLong.empty();
-    }
-
-    /** Handle over the live output readers and a final synchronous flush of whatever they buffered. */
-    private record OutputPump(List<Thread> readers, Runnable flushRemaining) {}
-
-    private OutputPump startProcessOutputReaders(Process process) {
-        final StringBuilder buffer = new StringBuilder();
-
-        stopUiUpdater();
-        activeUiUpdater = Executors.newSingleThreadScheduledExecutor();
-
-        activeUiUpdater.scheduleAtFixedRate(() -> {
-            flushBuffer(buffer);
-            if (!isRunning.get()) activeUiUpdater.shutdown();
-        }, UI_UPDATE_RATE_MS, UI_UPDATE_RATE_MS, TimeUnit.MILLISECONDS);
-
-        // Only stdout carries the BM-INPUT marker the SDK emits before blocking on a read.
-        Thread out = new Thread(() -> readStream(process.getInputStream(), buffer, true), "Leaky-Reader-Out");
-        Thread err = new Thread(() -> readStream(process.getErrorStream(), buffer, false), "Leaky-Reader-Err");
-        out.start();
-        err.start();
-
-        return new OutputPump(List.of(out, err), () -> flushBuffer(buffer));
-    }
-
-    private void readStream(InputStream stream, StringBuilder buffer, boolean detectMarkers) {
-        byte[] readBuf = new byte[1024];
-        int len;
-        StringBuilder carry = new StringBuilder();
-        try {
-            while ((len = stream.read(readBuf)) != -1) {
-                String text = new String(readBuf, 0, len, StandardCharsets.UTF_8);
-                if (detectMarkers) text = extractInputMarkers(text, carry);
-                appendToBuffer(buffer, text);
-            }
-        } catch (IOException ignored) {}
-    }
-
-    private void appendToBuffer(StringBuilder buffer, String text) {
-        if (text.isEmpty()) return;
-        synchronized (buffer) {
-            if (buffer.length() < MAX_UI_BUFFER_SIZE) {
-                buffer.append(text);
-            } else {
-                String warning = "\n[output truncated...]\n";
-                if (buffer.length() < MAX_UI_BUFFER_SIZE + warning.length()) {
-                    buffer.append(warning);
-                }
-            }
-        }
-    }
-
-    /**
-     * Strips {@code \u0001BM-INPUT:<type>\u0001} markers the SDK prints right before a blocking read, publishing an
-     * {@link CoreApplicationEvents.InputRequestedEvent} for each. {@code carry} holds a trailing partial marker that
-     * was split across reads so it can be completed by the next chunk; everything else is returned for the console.
-     */
-    private String extractInputMarkers(String text, StringBuilder carry) {
-        String s = carry.toString() + text;
-        carry.setLength(0);
-        StringBuilder out = new StringBuilder();
-        int i = 0;
-        while (i < s.length()) {
-            int start = s.indexOf(InputKind.MARKER_DELIMITER, i);
-            if (start < 0) { out.append(s, i, s.length()); break; }
-            out.append(s, i, start);
-            int end = s.indexOf(InputKind.MARKER_DELIMITER, start + 1);
-            if (end < 0) { carry.append(s, start, s.length()); break; } // incomplete marker — hold for next chunk
-            String token = s.substring(start + 1, end);
-            i = end + 1;
-            if (token.startsWith(InputKind.MARKER_PREFIX)) {
-                InputKind kind = InputKind.fromMarkerToken(token.substring(InputKind.MARKER_PREFIX.length()))
-                        .orElse(null);
-                Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(kind)));
-                if (i < s.length() && s.charAt(i) == '\n') i++; // swallow the marker's own newline
-            } else {
-                out.append(InputKind.MARKER_DELIMITER).append(token).append(InputKind.MARKER_DELIMITER); // not ours — leave untouched
-            }
-        }
-        return out.toString();
-    }
-
-    private void flushBuffer(StringBuilder buffer) {
-        String textToSend;
-        synchronized (buffer) {
-            if (buffer.isEmpty()) return;
-            textToSend = buffer.toString();
-            buffer.setLength(0);
-        }
-        Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(textToSend)));
     }
 }

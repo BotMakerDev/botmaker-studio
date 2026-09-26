@@ -240,6 +240,7 @@ public class UIManager implements ProjectWindow {
             identityCluster = null;
         }
         runConsole.dispose();
+        if (editorCanvas != null) editorCanvas.dispose();
         // Each shell is a child process of Studio; left running, every reload would add a few.
         terminalPane.dispose();
     }

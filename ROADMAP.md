@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Bundled block fonts (bottom-panels plan phase 5, the last).**
+- **2026-09-26 (latest) — Run/Follow stability (feedback-batch plan phase 1).**
+  - `runtime/ConsoleBatcher`: the one pipe→Run-tab path (100 ms flushes, 4 KB cap keeping the tail, BM-INPUT
+    markers stripped first) for run, compile and debug; debug's one-`runLater`-per-line reader was the freeze.
+  - `services/debug/DebugTargets` maps every source file's statement lines and breakpoints (by `BlockId`) and
+    requests stops on every bot class, nested ones included; `FollowPacer` paces Follow to one frame per
+    250 ms and rests on the enclosing loop when a line repeats in a window. Blocks are resolved on the FX
+    thread against the current canvas; a session number drops highlights queued before Stop;
+    `handleDisconnect` runs once. `ExecutionFollowedEvent` → `EditorCanvas.follow` (eased 200 ms, only outside
+    the middle 60 %, ≤ 1 per 400 ms); `FileOpenRequestedEvent` opens another file (Follow: ≤ 1 per 1.5 s).
+- **2026-09-26 — Bundled block fonts (bottom-panels plan phase 5, the last).**
   - `ui/render/theme/BlockFont.Bundled`: Nunito, Lexend, Atkinson Hyperlegible Next, Fredoka, Space Grotesk —
     static OFL cuts (JavaFX draws a variable file at its default instance only) under `resources/fonts/`, one
     `OFL-<Family>.txt` each. A face's middle cut is its own JavaFX family, named per face in `blocks.css`
