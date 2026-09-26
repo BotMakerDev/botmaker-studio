@@ -122,6 +122,8 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
                         statementNodes.get(i), statements.get(i), this, i,
                         separators.get(i), separators.get(i + 1));
             }
+            // One "+" that glides over the whole stack to the seam nearest the pointer.
+            if (!isReadOnly()) com.botmaker.studio.ui.dnd.InsertGlide.install(container);
         }
         return container;
     }
@@ -186,6 +188,12 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
     private static void insertAndOpenIfVariable(CodeEditorService context, Node anchor, BodyBlock body,
                                                 com.botmaker.studio.palette.BlockType type, int index) {
         javafx.stage.Window owner = anchor.getScene() == null ? null : anchor.getScene().getWindow();
+        // Declare Variable asks for its type and name first, whatever the naming preference: the type is the
+        // choice the entry exists to offer.
+        if (type == com.botmaker.studio.palette.BlockCatalog.DECLARE_VARIABLE) {
+            com.botmaker.studio.ui.app.vars.DeclareVariableDialog.declareInto(context, owner, body, index);
+            return;
+        }
         Runnable insert = () -> context.getCodeEditor().addStatement(body, type, index);
         if (!com.botmaker.studio.ui.app.vars.NamingPreference.ask()) {
             insert.run();

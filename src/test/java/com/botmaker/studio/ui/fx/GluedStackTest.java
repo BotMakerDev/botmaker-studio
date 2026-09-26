@@ -125,8 +125,9 @@ class GluedStackTest extends FxHeadlessTest {
     }
 
     /**
-     * The "+" follows the pointer (2026-09-26) and steps aside for the controls of the blocks the seam joins:
-     * entering at the right end puts it near there, and on none of them — the delete button least of all.
+     * The body's one "+" glides to the seam nearest the pointer (2026-09-26) and steps aside for the controls
+     * of the blocks that seam joins: a pointer just below the second seam, at the right end, puts it on that
+     * seam near there, and on none of them — the delete button least of all. The seam's own "+" stays hidden.
      */
     @Test
     void theSeamsPlusFollowsThePointerButNeverCoversABlocksControl() {
@@ -134,12 +135,15 @@ class GluedStackTest extends FxHeadlessTest {
         List<Node> children = body.getChildren();
         Pane seam = (Pane) children.stream()
                 .filter(n -> n.getStyleClass().contains("block-seam")).skip(1).findFirst().orElseThrow();
-        Button plus = (Button) seam.getChildren().stream().filter(n -> n instanceof Button).findFirst().orElseThrow();
-        interact(() -> seam.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_ENTERED,
-                seam.getWidth() - 5, 0, 0, 0, javafx.scene.input.MouseButton.NONE, 0,
+        Button own = (Button) seam.getChildren().stream().filter(n -> n instanceof Button).findFirst().orElseThrow();
+        Button plus = (Button) body.lookup(".insert-glide");
+        interact(() -> body.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_MOVED,
+                seam.getWidth() - 5, seam.getLayoutY() + 3, 0, 0, javafx.scene.input.MouseButton.NONE, 0,
                 false, false, false, false, false, false, false, false, false, false, null)));
 
         assertTrue(plus.isVisible());
+        assertFalse(own.isVisible(), "one \"+\" on screen: the body's");
+        assertEquals(seam.getLayoutY() - InsertionSeam.BUTTON_SIZE / 2, plus.getLayoutY(), 0.5, "on the nearest seam");
         assertTrue(plus.getLayoutX() > seam.getWidth() / 2, "it went towards the pointer: " + plus.getLayoutX());
         // Layout bounds: a drop shadow reaching over a neighbour is not the "+" covering it.
         javafx.geometry.Bounds plusBounds = plus.localToScene(plus.getLayoutBounds());
@@ -180,6 +184,27 @@ class GluedStackTest extends FxHeadlessTest {
 
     private static List<Node> statementsOf(VBox body) {
         return body.getChildren().stream().filter(n -> n.getStyleClass().contains("block")).toList();
+    }
+
+    /**
+     * A double-click anywhere on a statement sets its breakpoint (2026-09-26) — the innermost one: inside a
+     * loop's body it is the statement, never the loop around it.
+     */
+    @Test
+    void aDoubleClickSetsTheBreakpointOfTheInnermostStatement() {
+        VBox body = rendered(nested());
+        Parent loop = (Parent) statementsOf(body).get(1);
+        Node inner = statementsOf((VBox) loop.lookup(".bc-body").lookup(".body-block")).getFirst();
+        Node label = inner.lookup(".label");
+        assertNotNull(label, "the statement draws some text to click on");
+        interact(() -> label.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,
+                1, 1, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 2,
+                false, false, false, false, true, false, false, false, false, false, null)));
+
+        var innerBlock = (com.botmaker.studio.core.CodeBlock) inner.getProperties().get("botmaker.breakpoint-root");
+        var loopBlock = (com.botmaker.studio.core.CodeBlock) loop.getProperties().get("botmaker.breakpoint-root");
+        assertTrue(innerBlock.isBreakpoint(), "the statement double-clicked");
+        assertFalse(loopBlock.isBreakpoint(), "not the loop around it");
     }
 
     @Test

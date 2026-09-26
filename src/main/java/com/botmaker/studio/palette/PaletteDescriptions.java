@@ -35,6 +35,7 @@ public final class PaletteDescriptions {
             Map.entry("DECLARE_BOOLEAN", "A true/false variable."),
             Map.entry("DECLARE_STRING", "A text variable."),
             Map.entry("DECLARE_ARRAY", "A variable holding a fixed-size list of values."),
+            Map.entry("DECLARE_VARIABLE", "A new variable of any type — whole number, text, a list, a point…"),
             Map.entry("ASSIGNMENT", "Give a variable a new value."),
             Map.entry("FUNCTION_CALL", "Run one of this class's functions."),
             Map.entry("METHOD_DECLARATION", "Add a new function to the class."),

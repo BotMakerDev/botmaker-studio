@@ -835,6 +835,13 @@ public class CodeEditor {
         insert(typeDecl, EditKind.SIGNATURE, true, (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, enumName, index));
     }
 
+    /** Adds the enum the Define Enum dialog described as a member of {@code typeDecl} — the class's Add enum. */
+    public void addEnumToClass(TypeDeclaration typeDecl, EnumDraft draft, int index) {
+        if (draft == null) return;
+        insert(typeDecl, EditKind.SIGNATURE, false,
+                (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, draft, index));
+    }
+
     public void deleteEnumFromClass(EnumDeclaration enumDecl) {
         edit(enumDecl, EditKind.SIGNATURE, false, (cu, code) -> EnumManipulationHandler.deleteEnumFromClass(cu, code, enumDecl));
     }
@@ -1222,6 +1229,30 @@ public class CodeEditor {
         insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             Statement statement = StatementFactory.createEnumDeclaration(cu.getAST(), draft);
+            ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody);
+            PendingInsert deferred = insertIntoList(listRewrite, targetBody, statement, index, statement.toString());
+            if (deferred != null) {
+                return AstRewriteHelper.applyRewriteAndInsertAt(ctx.rewriter(), code, deferred.offset(), deferred.text());
+            }
+            return AstRewriteHelper.applyRewrite(ctx.rewriter(), code);
+        });
+    }
+
+    /**
+     * Inserts {@code <type> <name> = <fresh value>;} — what Declare Variable writes once its type is chosen
+     * from the type chooser (2026-09-26). Any type: the type is written as a tree with its imports, and the
+     * value is the grammar's fresh one for it, else the language default.
+     */
+    public void declareLocal(BodyBlock targetBody, int index, String name, java.lang.reflect.Type type) {
+        if (name == null || type == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+            EditContext ctx = ctx(cu);
+            AST ast = cu.getAST();
+            VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
+            fragment.setName(ast.newSimpleName(name));
+            fragment.setInitializer(com.botmaker.studio.parser.handlers.MethodHandler.defaultValueFor(ctx, type));
+            VariableDeclarationStatement statement = ast.newVariableDeclarationStatement(fragment);
+            statement.setType(com.botmaker.studio.parser.handlers.MethodHandler.typeNodeFor(ctx, type));
             ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody);
             PendingInsert deferred = insertIntoList(listRewrite, targetBody, statement, index, statement.toString());
             if (deferred != null) {

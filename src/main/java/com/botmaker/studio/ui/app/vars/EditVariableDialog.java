@@ -166,7 +166,7 @@ public final class EditVariableDialog {
     }
 
     /** Every variable name the open file declares, at any depth — the two halves of {@link #insertAndOpen}. */
-    private static Set<String> declaredNames(CodeEditorService context) {
+    static Set<String> declaredNames(CodeEditorService context) {
         Set<String> names = new java.util.LinkedHashSet<>();
         context.getState().getCompilationUnit().ifPresent(cu -> cu.accept(new ASTVisitor() {
             @Override

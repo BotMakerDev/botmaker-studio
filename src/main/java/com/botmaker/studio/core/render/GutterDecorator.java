@@ -48,6 +48,23 @@ public final class GutterDecorator implements BlockDecorator {
         // A declaration is not a line the bot stops on: no strip, no dot, no double-click.
         if (!block.canHoldBreakpoint()) return;
 
+        // Double-click anywhere on the block toggles its breakpoint — on every block that can hold one, whatever
+        // its root node is (2026-09-26). It was a handler, added only on a Pane root, so it never reached a
+        // block drawn another way, and it lost every double-click a control inside the block consumed first.
+        // As a filter it sees each one; the block it belongs to is the innermost breakpoint block around the
+        // click, so a double-click inside a loop's body toggles that statement and not the loop. A double-click
+        // in a text field is left to the field: that is how a word is selected.
+        node.getProperties().put(BREAKPOINT_ROOT, block);
+        if (!block.isReadOnly()) {
+            node.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
+                if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 2) return;
+                if (!(e.getTarget() instanceof Node target) || typingIn(target, node)) return;
+                if (owner(target) != node) return;
+                block.toggleBreakpoint();
+                e.consume();
+            });
+        }
+
         if (node instanceof Pane pane) {
             // Transparent click target spanning the reserved gutter strip: single left-click toggles the
             // breakpoint IDE-style (works even when no circle is showing yet, so it can *add* one).
@@ -80,18 +97,25 @@ public final class GutterDecorator implements BlockDecorator {
                     .subtract(DOT_SIZE).divide(2));
             dot.visibleProperty().bind(block.breakpointActiveProperty());
             pane.getChildren().add(dot);
-
-            // Double-click anywhere on the block also toggles (per user request). Added as an event handler (not
-            // setOnMouseClicked) so it layers on top of any click handler the block itself installed in
-            // createUINode (e.g. BooleanLiteralBlock's single-click value toggle) instead of clobbering it.
-            if (!block.isReadOnly()) {
-                node.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
-                    if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
-                        block.toggleBreakpoint();
-                        e.consume();
-                    }
-                });
-            }
         }
+    }
+
+    /** Marks a block's root as one a breakpoint can be set on — what {@link #owner} walks up to. */
+    private static final String BREAKPOINT_ROOT = "botmaker.breakpoint-root";
+
+    /** The innermost breakpoint block's root around {@code target}, or null. */
+    static Node owner(Node target) {
+        for (Node at = target; at != null; at = at.getParent()) {
+            if (at.getProperties().containsKey(BREAKPOINT_ROOT)) return at;
+        }
+        return null;
+    }
+
+    /** Whether {@code target} is inside a text control within {@code root}, where a double-click selects. */
+    private static boolean typingIn(Node target, Node root) {
+        for (Node at = target; at != null && at != root; at = at.getParent()) {
+            if (at instanceof javafx.scene.control.TextInputControl input && input.isEditable()) return true;
+        }
+        return false;
     }
 }

@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 4: parameters model.** `project/params/ChoiceMode` (pure:
+- **2026-09-26 (latest) — Feedback batch 2, phase 5a: canvas.** `BlockCatalog.DECLARE_VARIABLE` (menu's one
+  declaration; `BodyBlock` → `ui/app/vars/DeclareVariableDialog` → `CodeEditor.declareLocal(body, i, name, Type)`);
+  fixed-type declares, Create List and Define Enum left `LANGUAGE`. `ClassBlock` *+ Add Enum* →
+  `CodeEditor.addEnumToClass(type, EnumDraft, i)`. `ui/dnd/InsertGlide`: one easing "+" per body on the nearest
+  seam (seam's `ACTION`/`HINT` properties). `GutterDecorator`: double-click is a filter, innermost block wins.
+  Phase 5b (Go to Definition, sources jar else bytecode stub) next.
+- **2026-09-26 — Feedback batch 2, phase 4: parameters model.** `project/params/ChoiceMode` (pure:
   NONE/ONE/MANY read off form + options, `base`, `formFor`, `offered` — no ONE for a flag, none for an enum);
   the card's Choices row is a mode bar, `ParametersDialog.switchMode` retypes/seeds choices/carries the value in
   one step. `ParamValueWidgets.editor` is recursive (list/map/record parts at any depth, untouched parts kept);

@@ -158,8 +158,24 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
         addMethodBtn.getStyleClass().addAll("block-action-button", "block-action-button--primary");
         addMethodBtn.setOnAction(e -> addFunction(context, addMethodBtn));
 
-        toolbar.getChildren().add(addMethodBtn);
+        // Beside Add Function since 2026-09-26: an enum is a type the class declares, so it is added where the
+        // class's members are, not from a body's statement menu.
+        Button addEnumBtn = new Button("+ Add Enum");
+        addEnumBtn.getStyleClass().add("block-action-button");
+        addEnumBtn.setOnAction(e -> addEnum(context, addEnumBtn));
+
+        toolbar.getChildren().addAll(addMethodBtn, addEnumBtn);
         return toolbar;
+    }
+
+    /** Asks for the enum's name and values, then declares it as a member of this class. */
+    private void addEnum(CodeEditorService context, Node source) {
+        TypeDeclaration typeDecl = (TypeDeclaration) this.astNode;
+        Window owner = source.getScene() == null ? null : source.getScene().getWindow();
+        com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
+                        com.botmaker.studio.parser.factories.StatementFactory.uniqueTypeName(typeDecl, "MyEnum"),
+                        com.botmaker.studio.parser.factories.StatementFactory.declaredTypeNames(typeDecl))
+                .ifPresent(draft -> context.getCodeEditor().addEnumToClass(typeDecl, draft, bodyDeclarations.size()));
     }
 
     /**

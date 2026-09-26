@@ -29,6 +29,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   has; *Any of* makes the field a `List` of its type with that value ticked, and is the only mode that changes
   the type. A true/false parameter offers no *One of*.
 - **New parameters are shown to the user by default.** The add bar has a *Show to user* tick, on to begin with.
+- **Declare Variable picks any type.** The statement menu's Variables are *Declare Variable* and *Set Variable*.
+  Declare Variable asks for a type from the type chooser (wrap in List or Map included) and a name that follows
+  the type until you type one. Int/Double/Bool/String Variable and Create List left the menu.
+- **Enums are added from the class.** *+ Add Enum* sits beside *+ Add Function*; Define Enum left the statement
+  menu.
+- **The "+" follows the pointer.** Anywhere over a stack of blocks, one "+" glides to the gap nearest the pointer
+  and along it, instead of appearing only on the thin strip between two blocks.
+- **Double-click sets a breakpoint on every block that can hold one**, including a click on the block's own
+  text or controls; inside a loop it is the statement clicked, not the loop.
 - **Pickers look clickable.** A value picker that draws no outline of its own (a point, a picture) is framed
   like a field and lights up on hover.
 

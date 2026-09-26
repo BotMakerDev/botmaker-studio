@@ -326,6 +326,7 @@ public class BlockDragAndDropManager {
 
     /** Replaces what the seam's "+" says on hover, for a seam that inserts somewhere other than under the pointer. */
     public void setSeparatorHint(Pane separator, String hint) {
+        separator.getProperties().put(InsertGlide.HINT, hint);
         Button plus = InsertionSeam.plusOf(separator);
         if (plus != null) javafx.scene.control.Tooltip.install(plus, new javafx.scene.control.Tooltip(hint));
     }
@@ -336,15 +337,24 @@ public class BlockDragAndDropManager {
                                    ASTNode targetBody, Consumer<BlockType> onInsert) {
         Button plus = InsertionSeam.plusOf(separator);
         if (plus == null) return;
-        plus.setOnAction(e -> {
+        // One menu for the seam's own "+" and for a body's gliding one: either is the anchor it hangs from.
+        Consumer<Button> open = anchor -> {
             ContextMenu menu = StatementMenu.create(analyzer, surface, targetBody, onInsert);
-            // Stashed so the seam's mouse-exit leaves the "+" up while its menu is open.
-            plus.setUserData(menu);
+            // Stashed so a mouse-exit leaves the "+" up while its menu is open.
+            anchor.setUserData(menu);
             menu.setOnHidden(ev -> {
-                plus.setUserData(null);
-                if (!separator.isHover()) InsertionSeam.hide(separator, plus);
+                anchor.setUserData(null);
+                if (anchor == plus) {
+                    if (!separator.isHover()) InsertionSeam.hide(separator, plus);
+                } else {
+                    InsertGlide.menuClosed(anchor);
+                }
             });
-            menu.show(plus, javafx.geometry.Side.BOTTOM, 0, 0);
+            menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+        };
+        separator.getProperties().put(InsertGlide.ACTION, open);
+        plus.setOnAction(e -> {
+            open.accept(plus);
             e.consume();
         });
     }

@@ -48,6 +48,23 @@ public class EnumManipulationHandler {
         listRewrite.insertAt(newEnum, index, null);
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
     }
+    /** {@code public enum <name> { <constants> }} as a member of {@code typeDecl}, at {@code index}. */
+    public static String addEnumToClass(CompilationUnit cu, String originalCode, TypeDeclaration typeDecl,
+                                        com.botmaker.studio.palette.EnumDraft draft, int index) {
+        AST ast = cu.getAST();
+        ASTRewrite rewriter = ASTRewrite.create(ast);
+        EnumDeclaration newEnum = ast.newEnumDeclaration();
+        newEnum.setName(ast.newSimpleName(draft.name()));
+        newEnum.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        for (String constant : draft.constants()) {
+            EnumConstantDeclaration declaration = ast.newEnumConstantDeclaration();
+            declaration.setName(ast.newSimpleName(constant));
+            newEnum.enumConstants().add(declaration);
+        }
+        ListRewrite listRewrite = rewriter.getListRewrite(typeDecl, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        listRewrite.insertAt(newEnum, Math.min(index, typeDecl.bodyDeclarations().size()), null);
+        return AstRewriteHelper.applyRewrite(rewriter, originalCode);
+    }
     public static String deleteEnumFromClass(CompilationUnit cu, String originalCode, EnumDeclaration enumDecl) {
         return AstRewriteHelper.removeNode(cu, originalCode, enumDecl);
     }

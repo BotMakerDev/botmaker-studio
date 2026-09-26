@@ -69,6 +69,15 @@ public final class BlockCatalog {
     public static final BlockType DECLARE_STRING =
             new VarDecl("DECLARE_STRING", "String Variable", VARIABLES, "String", false, "text", new StrLit(""));
     public static final BlockType DECLARE_ARRAY = cf("DECLARE_ARRAY", "Create List", VARIABLES, Kind.ARRAY);
+    /**
+     * The one declaration the menu offers (2026-09-26): picking it asks for a type in the type chooser and a
+     * name before anything is written (BodyBlock → {@code DeclareVariableDialog}). It is an {@code int}
+     * declaration underneath only so that a path which does not ask — a drag from a palette — still writes
+     * something that compiles. The four fixed-type entries above and Create List stay for those paths and the
+     * factory's tests, and left the menu.
+     */
+    public static final BlockType DECLARE_VARIABLE =
+            new VarDecl("DECLARE_VARIABLE", "Declare Variable", VARIABLES, "int", true, "number", new IntLit("0"));
     public static final BlockType ASSIGNMENT = cf("ASSIGNMENT", "Set Variable", VARIABLES, Kind.ASSIGNMENT);
 
     // --- Input & interaction ---
@@ -131,9 +140,8 @@ public final class BlockCatalog {
             IF, SWITCH, TRY, SYNCHRONIZED,
             WHILE, FOR, FOR_CLASSIC, DO_WHILE,
             BREAK, CONTINUE, YIELD, RETURN, THROW, ASSERT,
-            DECLARE_INT, DECLARE_DOUBLE, DECLARE_BOOLEAN, DECLARE_STRING, DECLARE_ARRAY,
-            ASSIGNMENT,
-            FUNCTION_CALL, METHOD_DECLARATION, DECLARE_ENUM);
+            DECLARE_VARIABLE, ASSIGNMENT,
+            FUNCTION_CALL, METHOD_DECLARATION);
 
     /** All insertable blocks in palette/menu display order. */
     public static List<BlockType> all() {

@@ -83,6 +83,7 @@ public final class InsertionSeam {
 
         seam.setOnMouseEntered(e -> {
             if (e.isPrimaryButtonDown()) return; // a drag paints the line itself
+            if (InsertGlide.glides(seam)) return; // the body's gliding "+" draws it
             show(seam, plus);
             follow(seam, plus, e.getX());
         });
@@ -92,6 +93,7 @@ public final class InsertionSeam {
             follow(seam, plus, e.getX());
         });
         seam.setOnMouseExited(e -> {
+            if (InsertGlide.glides(seam)) return;
             // Its menu open, the "+" stays: the pointer is in the menu, and the "+" is what it hangs from.
             if (plus.getUserData() instanceof ContextMenu menu && menu.isShowing()) return;
             hide(seam, plus);
@@ -127,6 +129,11 @@ public final class InsertionSeam {
      * free spot nearest the pointer.
      */
     static void follow(Pane seam, Button plus, double pointerX) {
+        plus.setLayoutX(xFor(seam, pointerX));
+    }
+
+    /** Where a "+" under {@code pointerX} goes on {@code seam}, in the seam's coordinates — see {@link #follow}. */
+    static double xFor(Pane seam, double pointerX) {
         double width = seam.getWidth();
         List<double[]> blocked = new ArrayList<>();
         if (seam.getParent() != null) {
@@ -137,8 +144,8 @@ public final class InsertionSeam {
                 if (i >= 0 && i < siblings.size()) collectControls(siblings.get(i), band, seam, blocked);
             }
         }
-        plus.setLayoutX(freeX(pointerX - BUTTON_SIZE / 2, Math.min(PLUS_X, width - BUTTON_SIZE),
-                width - BUTTON_SIZE, BUTTON_SIZE, blocked));
+        return freeX(pointerX - BUTTON_SIZE / 2, Math.min(PLUS_X, width - BUTTON_SIZE),
+                width - BUTTON_SIZE, BUTTON_SIZE, blocked);
     }
 
     /** The controls under {@code node} that cross {@code band}, as [minX, maxX] in the seam's coordinates. */
