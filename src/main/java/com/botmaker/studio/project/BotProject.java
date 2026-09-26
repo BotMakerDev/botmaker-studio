@@ -151,6 +151,9 @@ public class BotProject {
         // project on every bind. Deleted 2026-09-21: a project's plugins/<id>/ file comes from the template
         // it was created from, and a plugin that wants to add one to an existing project writes it from its
         // own window. The host is not in the business of putting files in somebody's source tree.
+        // Revised 2026-09-26: the host does write a plugin's @Managed *holder* when the project has none —
+        // generated from what the plugin declares, not copied, never over a file — once services are up
+        // (HostPluginValues.createMissing, end of initializeServices).
 
         // 6. Build or load the type index for external libraries
         progress.message("Indexing libraries…");
@@ -286,6 +289,11 @@ public class BotProject {
         // for the same reason, and the services handed over are this project's: a value written through a
         // window left open over the project the user just left would land in the wrong file.
         HostPluginValues.install(config, state, HostServices.forProject(config));
+
+        // Every bound plugin's @Managed holder the project lacks (Sdk.java, Pictures.java), written now so the
+        // file is there before the explorer is first drawn. Never over a file; LibraryService does the same
+        // after each rebind.
+        HostPluginValues.createMissing();
     }
 
     // =========================================================================

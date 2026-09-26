@@ -3,6 +3,7 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
@@ -120,9 +121,9 @@ public final class LibraryService {
         List<String> classpath = MavenService.resolveClasspath(config.projectPath());
         state.setResolvedClasspath(classpath);
         PluginHost.bind(classpath, HostServices.forProject(config));
-        // PluginSourceFiles.install(config) stood here until 2026-09-21, writing a newly installed plugin's
-        // shipped Java into the project. Nothing writes into a user's source tree on a pom edit any more —
-        // see BotProject's step 5b for why, and for what a project gets instead.
+        // A plugin just added brings its @Managed holders with it (2026-09-26): written from what the plugin
+        // declares, never over a file, never into main. The explorer redraws on the event below.
+        HostPluginValues.createMissing();
         typeIndex.refresh(classpath);
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));
     }

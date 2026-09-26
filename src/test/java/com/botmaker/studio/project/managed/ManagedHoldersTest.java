@@ -81,6 +81,38 @@ class ManagedHoldersTest {
         assertEquals("// the user's now", Files.readString(write.file()));
     }
 
+    /** On bind (2026-09-26): every holder the project lacks, one per holder, and none it already has. */
+    @Test
+    void onBindEveryMissingHolderIsPlannedOnce() {
+        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of("com.botmaker.sdk", DECLARED),
+                java.util.Set.of(), java.util.Set.of("Main.java"), TestValues.GRAMMAR);
+        assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), plans.stream()
+                .map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList());
+    }
+
+    @Test
+    void onBindAHolderTheBotAlreadyHasIsLeftAlone() throws Exception {
+        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        java.util.Map<String, List<ManagedValue>> sdk = java.util.Map.of("com.botmaker.sdk", DECLARED);
+        // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
+        assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
+                java.util.Set.of("rest-between"), java.util.Set.of(), TestValues.GRAMMAR)));
+        // A source of that name exists elsewhere in the bot.
+        assertEquals(List.of("plugins/sdk/Sdk.java"), relatives(ManagedHolders.missing(config, sdk,
+                java.util.Set.of(), java.util.Set.of("Pictures.java"), TestValues.GRAMMAR)));
+        // Its file is on disk, whatever it holds.
+        ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan("greeting");
+        Files.createDirectories(write.file().getParent());
+        Files.writeString(write.file(), "// the user's");
+        assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
+                java.util.Set.of(), java.util.Set.of(), TestValues.GRAMMAR)));
+    }
+
+    private static List<String> relatives(List<ManagedHolders.Plan> plans) {
+        return plans.stream().map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList();
+    }
+
     @Test
     void anIdBecomesAMethodName() {
         assertEquals("flow", ManagedHolders.methodName("flow"));

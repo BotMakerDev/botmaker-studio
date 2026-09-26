@@ -140,6 +140,55 @@ public final class HostPluginValues implements PluginValues {
     }
 
     /**
+     * Writes every holder a bound plugin declares and the open project lacks, and answers the files written
+     * (project-relative). Called on every bind (2026-09-26): a plugin's {@code @Managed} file exists the
+     * moment the plugin is in the project, rather than when the user finds the button that asks for it.
+     *
+     * <p>The rules {@link #create} keeps, plus two. A holder is <b>left alone</b> when any value it holds is
+     * already declared anywhere in the bot, or when any source file already carries its class name — a user
+     * who moved {@code Sdk.java} to another package has one, and a second would not compile. And a project
+     * open read-only (an installed bot) is never written. Never over a file, never into {@code main}.
+     */
+    public static List<String> createMissing() {
+        HostPluginValues live = current;
+        if (live == null || live.state.isReaderMode()) return List.of();
+        return live.writeMissing();
+    }
+
+    private List<String> writeMissing() {
+        java.util.Map<String, List<ManagedValue>> byPlugin = new java.util.LinkedHashMap<>();
+        for (StudioPlugin plugin : PluginHost.plugins()) {
+            try {
+                List<ManagedValue> declared = plugin.managedValues();
+                if (declared != null && !declared.isEmpty()) byPlugin.put(plugin.id(), declared);
+            } catch (RuntimeException | LinkageError e) {
+                // A plugin that cannot say what it manages gets no file; every other plugin still does.
+            }
+        }
+        if (byPlugin.isEmpty()) return List.of();
+        java.util.Set<String> fileNames = new java.util.HashSet<>();
+        com.botmaker.studio.services.BotSources.scan(config, state,
+                (file, source) -> fileNames.add(file.getFileName().toString()));
+        List<String> written = new ArrayList<>();
+        for (ManagedHolders.Plan plan : ManagedHolders.missing(config, byPlugin, java.util.Set.copyOf(ids()),
+                fileNames, PluginHost.grammar())) {
+            if (plan instanceof ManagedHolders.Plan.Refused refused) {
+                System.err.println("Warning: " + refused.reason());
+                continue;
+            }
+            ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan;
+            try {
+                ProjectWrites.create(config, write.file(), write.source(), "Create " + write.relative());
+                written.add(write.relative());
+            } catch (java.io.UncheckedIOException e) {
+                System.err.println("Warning: could not write " + write.relative() + ": "
+                        + e.getCause().getMessage());
+            }
+        }
+        return List.copyOf(written);
+    }
+
+    /**
      * One write: a snapshot, then the rewrite of one expression.
      *
      * <p>The snapshot is taken before the file is touched and per {@code set} call, so an editor that writes

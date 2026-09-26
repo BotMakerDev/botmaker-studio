@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Editing papercuts (feedback-batch plan phase 3).**
+- **2026-09-26 (latest) — Managed holders on bind (feedback-batch plan phase 4).**
+  - `ManagedHolders.missing` plans every holder a project lacks (skipped when a value it holds is declared,
+    a source of its file name exists, or the file is on disk); `HostPluginValues.createMissing` writes them,
+    never in reader mode. Called at the end of `BotProject.initializeServices` and in `LibraryService.rebind`.
+  - `FileExplorerManager` refreshes on `LibrariesChangedEvent`. SDK's *Create Sdk.java* button deleted.
+- **2026-09-26 — Editing papercuts (feedback-batch plan phase 3).**
   - `BlockReuse.sameSlot`: an expression is reused only when its parent's text is unchanged — an argument kept
     across a method switch kept the slot editor of the old call (`MethodSwitchTest`); doc 30 §5.
   - `MethodInvocationBlock.switchToOverload` writes `sig.name()`. `BlockType.OwnCall` + `StatementMenu`'s Call

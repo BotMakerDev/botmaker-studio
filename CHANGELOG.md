@@ -16,6 +16,11 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A plugin's own Java file appears when the plugin does.** Opening a project, or adding a plugin to it,
+  writes each file the plugin keeps its values in (the SDK's `plugins/sdk/Sdk.java` and `Pictures.java`)
+  when the project has none — never over a file, never when you already have a class of that name
+  elsewhere, never in an installed bot, and never touching `main`. The file list refreshes when a plugin is
+  added.
 - **A Versions tab** (was VCS; *Project ▸ Versions*). *Save version*, optionally named; a list of every
   version with your saves in bold and Studio's automatic ones folded out of the way; click one to see which
   files it changed and how; right-click to restore the whole project to it or to give it a name. Edits you

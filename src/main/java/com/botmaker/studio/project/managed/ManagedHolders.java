@@ -92,6 +92,42 @@ public final class ManagedHolders {
                 relative, source.toString());
     }
 
+    /**
+     * Every holder the project lacks, one plan per holder, in plugin then declaration order.
+     *
+     * <p>A holder is lacking only when none of its values is declared anywhere in the bot
+     * ({@code declaredIds}), no source file already carries its class name ({@code fileNames}, so a
+     * {@code Sdk.java} the user moved to another package still counts), and its file is not on disk. What
+     * comes back is written by the caller; nothing here touches the filesystem but to look.
+     *
+     * @param byPlugin    each plugin's id and every value it declares
+     * @param declaredIds the ids the bot's sources already declare
+     * @param fileNames   the file names of every bot source, {@code Sdk.java} and the like
+     */
+    public static List<Plan> missing(ProjectConfig config, java.util.Map<String, List<ManagedValue>> byPlugin,
+                                     java.util.Set<String> declaredIds, java.util.Set<String> fileNames,
+                                     ValueGrammar grammar) {
+        List<Plan> out = new ArrayList<>();
+        java.util.Set<String> planned = new java.util.HashSet<>(fileNames);
+        byPlugin.forEach((pluginId, declared) -> {
+            java.util.Set<String> holders = new java.util.LinkedHashSet<>();
+            for (ManagedValue value : declared) {
+                if (value != null && value.holder() != null) holders.add(value.holder());
+            }
+            for (String holder : holders) {
+                List<ManagedValue> held = declared.stream()
+                        .filter(v -> v != null && holder.equals(v.holder())).toList();
+                if (planned.contains(holder + ".java")) continue;
+                if (held.stream().anyMatch(v -> declaredIds.contains(v.id()))) continue;
+                Plan plan = plan(config, pluginId, held.getFirst(), declared, grammar);
+                if (plan instanceof Plan.Write write && java.nio.file.Files.exists(write.file())) continue;
+                planned.add(holder + ".java");
+                out.add(plan);
+            }
+        });
+        return List.copyOf(out);
+    }
+
     /** One {@code @Managed} method, its imports added to {@code imports}; null when no fresh value exists. */
     private static String method(ManagedValue value, ValueGrammar grammar, TreeSet<String> imports) {
         Type type = value.valueType();

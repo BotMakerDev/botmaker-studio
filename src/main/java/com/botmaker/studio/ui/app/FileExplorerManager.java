@@ -94,6 +94,9 @@ public class FileExplorerManager {
         // activity wrote a stub file. It is gone with the event (2026-09-11): a plugin writing its own JSON
         // adds nothing to the source tree, and nothing else in the editor creates a file behind this one's
         // back. The tree is still refreshed by every path that does write one.
+        // One does since 2026-09-26: a rebind writes a newly added plugin's @Managed holder
+        // (HostPluginValues.createMissing), and announces the rebind with this event.
+        ctx.eventBus().subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> refreshTree(), true);
     }
 
     public VBox createView() {
