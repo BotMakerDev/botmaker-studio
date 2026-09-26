@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Recording Ctrl+S writes `Keyboard.combo(Combo.of(Key.CTRL, Key.S))`** when the project's SDK has the
+  `Combo` shape, and the old `combo(Key.CTRL, Key.S)` otherwise. Keypad keys record as `NUMPAD_*` (they were
+  `NUM*`, the top row's names), Home/End/Page Up/Page Down/Insert and the keypad operators record as keys, and
+  punctuation inside a chord (Ctrl+[) is recorded rather than dropped.
+
 - **One type chooser everywhere.** Parameters, local variables, and a function's inputs and result all pick
   their type from the same searchable list: *Java* first, then *This project* (your own records and classes),
   then one group per plugin, each alphabetical. Types are named as Java names them — `int`, not "Whole

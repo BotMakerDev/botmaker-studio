@@ -256,7 +256,7 @@ public final class Gestures {
     private static Map<Long, String> named() {
         Map<Long, String> m = new java.util.HashMap<>();
         m.put(0xFF0DL, "ENTER");
-        m.put(0xFF8DL, "ENTER");
+        m.put(0xFF8DL, "NUMPAD_ENTER");
         m.put(0xFF1BL, "ESCAPE");
         m.put(0xFF09L, "TAB");
         m.put(BACKSPACE, "BACKSPACE");
@@ -266,11 +266,28 @@ public final class Gestures {
         m.put(0xFF53L, "RIGHT");
         m.put(0xFF54L, "DOWN");
         for (int i = 0; i < 12; i++) m.put(0xFFBEL + i, "F" + (i + 1));
-        for (int i = 0; i < 10; i++) m.put(0xFFB0L + i, "NUM" + i);
+        for (int i = 0; i < 10; i++) m.put(0xFFB0L + i, "NUMPAD_" + i);
+        m.put(0xFFAAL, "NUMPAD_MULTIPLY");
+        m.put(0xFFABL, "NUMPAD_ADD");
+        m.put(0xFFADL, "NUMPAD_SUBTRACT");
+        m.put(0xFFAEL, "NUMPAD_DECIMAL");
+        m.put(0xFFAFL, "NUMPAD_DIVIDE");
+        m.put(0xFF50L, "HOME");
+        m.put(0xFF57L, "END");
+        m.put(0xFF55L, "PAGE_UP");
+        m.put(0xFF56L, "PAGE_DOWN");
+        m.put(0xFF63L, "INSERT");
         return Map.copyOf(m);
     }
 
-    /** The neutral name of a key pressed inside a chord: a named key, a letter, a digit or the space bar. */
+    /** US-layout punctuation keysyms (== ASCII) by the SDK's names; only a chord names them, typing types them. */
+    private static final Map<Long, String> PUNCTUATION = Map.ofEntries(
+            Map.entry((long) '`', "BACKQUOTE"), Map.entry((long) '-', "MINUS"), Map.entry((long) '=', "EQUALS"),
+            Map.entry((long) '[', "LEFT_BRACKET"), Map.entry((long) ']', "RIGHT_BRACKET"),
+            Map.entry((long) '\\', "BACKSLASH"), Map.entry((long) ';', "SEMICOLON"), Map.entry((long) '\'', "QUOTE"),
+            Map.entry((long) ',', "COMMA"), Map.entry((long) '.', "PERIOD"), Map.entry((long) '/', "SLASH"));
+
+    /** The neutral name of a key pressed inside a chord: a named key, a letter, a digit, punctuation or the space bar. */
     private static String keyName(long sym) {
         String named = NAMED.get(sym);
         if (named != null) return named;
@@ -278,6 +295,6 @@ public final class Gestures {
         if (sym >= 'A' && sym <= 'Z') return String.valueOf((char) sym);
         if (sym >= '0' && sym <= '9') return "NUM" + (char) sym;
         if (sym == ' ') return "SPACE";
-        return null;
+        return PUNCTUATION.get(sym);
     }
 }

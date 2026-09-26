@@ -52,6 +52,18 @@ class RecordingWriterTest {
         @Override public Duration build(List<Object> parts) { return Duration.ofMillis(((Number) parts.getFirst()).longValue()); }
     };
 
+    private static final ComponentType<Chord> CHORD_TYPE = new ComponentType<>() {
+        @Override public Class<Chord> type() { return Chord.class; }
+        @Override public java.lang.reflect.Executable factory() {
+            return com.botmaker.studio.project.params.TestValues.method(Chord.class, "of", Key[].class);
+        }
+        @Override public List<Class<?>> componentTypes() { return List.of(Key.class); }
+        @Override public List<Object> components(Chord c) { return List.copyOf(c.keys()); }
+        @Override public Chord build(List<Object> parts) {
+            return new Chord(parts.stream().map(Key.class::cast).toList());
+        }
+    };
+
     private static final PluginType<Where> WHERE_TYPE = new PluginType<>() {
         @Override public Class<Where> type() { return Where.class; }
         @Override public Where fresh() { return null; }
@@ -65,7 +77,7 @@ class RecordingWriterTest {
         @Override public Node editor(ValueContext ctx) { return null; }
     };
 
-    private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(WHERE_TYPE), List.of(THING_TYPE, DURATION_TYPE));
+    private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(WHERE_TYPE), List.of(THING_TYPE, DURATION_TYPE, CHORD_TYPE));
 
     private static final StudioPlugin PLUGIN = () -> "test.record";
 
@@ -87,6 +99,7 @@ class RecordingWriterTest {
             case "clickThing" -> new Class<?>[]{Thing.class};
             case "type" -> new Class<?>[]{String.class};
             case "combo" -> new Class<?>[]{Key[].class};
+            case "chord" -> new Class<?>[]{Chord.class};
             case "pause" -> new Class<?>[]{Duration.class};
             case "awaitThing" -> new Class<?>[]{Thing.class, int.class};
             default -> throw new IllegalArgumentException(method);
@@ -241,6 +254,26 @@ class RecordingWriterTest {
         assertEquals("Click", contests.getFirst().label());
     }
 
+    private static RecordingWriter withChord() throws ReflectiveOperationException {
+        List<Recordings.Writer> writers = new java.util.ArrayList<>(ownWriters());
+        writers.addFirst(writer("chord", Gesture.COMBO, 1, new Recordings.Slot.KeyParts(CHORD_TYPE, Key.class)));
+        return new RecordingWriter(writers, GRAMMAR, null, List.of());
+    }
+
+    @Test
+    void a_combo_value_is_written_through_its_varargs_factory() throws Exception {
+        List<RecordingWriter.Statement> out = withChord().write(List.of(
+                new Gestures.Recognized(Gesture.COMBO, List.of("CTRL", "S"), null, 0)));
+
+        assertEquals(List.of("Pad.chord(Chord.of(Key.CTRL, Key.S));"), sources(out));
+    }
+
+    @Test
+    void a_combo_value_with_an_unknown_key_writes_nothing() throws Exception {
+        assertEquals(List.of(), sources(withChord().write(List.of(
+                new Gestures.Recognized(Gesture.COMBO, List.of("CTRL", "F13"), null, 0)))));
+    }
+
     @Test
     void a_key_the_plugins_enum_does_not_have_writes_nothing() throws Exception {
         List<RecordingWriter.Statement> out = recorder(List.of()).write(List.of(
@@ -258,12 +291,18 @@ final class Pad {
     public static void clickThing(Thing thing) {}
     public static void type(String text) {}
     public static void combo(Key... keys) {}
+    public static void chord(Chord chord) {}
     public static void pause(Duration duration) {}
     public static void awaitThing(Thing thing, int seconds) {}
 }
 
 /** A picture: a value the host cannot read off the screen. */
 record Thing(String path) {}
+
+/** Keys pressed together, written {@code Chord.of(Key...)}: the shape of the SDK's {@code Combo}. */
+record Chord(List<Key> keys) {
+    public static Chord of(Key... keys) { return new Chord(List.of(keys)); }
+}
 
 /** A capture source: a type written only through its fresh call. */
 final class Where {

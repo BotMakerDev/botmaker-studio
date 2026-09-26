@@ -203,6 +203,11 @@ public final class RecordingWriter {
                     next += names.size();
                     argument = names.isEmpty() ? Optional.empty() : keys(keys.enumType(), names);
                 }
+                case Recordings.Slot.KeyParts keyed -> {
+                    List<Object> names = values.subList(Math.min(next, values.size()), values.size());
+                    next = values.size();
+                    argument = names.isEmpty() ? Optional.empty() : one(keyed(keyed, names));
+                }
                 case Recordings.Slot.Fresh fresh -> argument = one(grammar.freshSpelling(fresh.type()));
             }
             if (argument.isEmpty()) return Optional.empty();
@@ -246,6 +251,27 @@ public final class RecordingWriter {
         Object value;
         try {
             value = parts.type().build(coerced);
+        } catch (RuntimeException | LinkageError e) {
+            return Optional.empty();
+        }
+        return value == null ? Optional.empty() : grammar.spellAny(value);
+    }
+
+    /** A varargs call over one enum, {@code Combo.of(Key.CTRL, Key.S)}: each name looked up, then built. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Optional<JavaValue> keyed(Recordings.Slot.KeyParts keyed, List<Object> names) {
+        List<Object> constants = new ArrayList<>();
+        for (Object name : names) {
+            if (!(name instanceof String key)) return Optional.empty();
+            try {
+                constants.add(Enum.valueOf((Class) keyed.enumType(), key));
+            } catch (IllegalArgumentException e) {
+                return Optional.empty();
+            }
+        }
+        Object value;
+        try {
+            value = keyed.type().build(constants);
         } catch (RuntimeException | LinkageError e) {
             return Optional.empty();
         }

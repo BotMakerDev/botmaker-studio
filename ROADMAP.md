@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Picker phase 6a, plumbing: `HostSlotContext.argumentValue`.** Finds the invocation
+- **2026-09-26 (latest) — Picker phase 6b, recording: combos as a value, the new keys named.**
+  `RecordingWriter.fill` handles plugin-host's new `Recordings.Slot.KeyParts` (every remaining key name, one
+  constant each via `valueOf`, built through the `ComponentType`, spelled by the grammar — a varargs call over
+  an enum needed no grammar change). `Gestures` names the keypad `NUMPAD_*`, KP_Enter `NUMPAD_ENTER`, the
+  keypad operators, Home/End/Page Up/Page Down/Insert, and punctuation in a chord (`PUNCTUATION`).
+- **2026-09-26 — Picker phase 6a, plumbing: `HostSlotContext.argumentValue`.** Finds the invocation
   around the slot's live node (`MethodInvocation`, `ClassInstanceCreation`, `SuperMethodInvocation`) and reads
   argument `index` with the same `read`/`formOf` as `value()`; a varargs position, a variable or an index
   outside the call answer empty (`HostSlotArgumentTest`).

@@ -103,6 +103,38 @@ class GesturesTest {
     }
 
     @Test
+    void keypad_and_navigation_keys_are_named_as_the_sdk_names_them() {
+        key(0xFFB5L, 0);      // KP_5
+        key(0xFF8DL, 100);    // KP_Enter
+        key(0xFF55L, 200);    // Prior
+        key(0xFFABL, 300);    // KP_Add
+        List<Gestures.Recognized> all = recognized().stream().filter(r -> r.gesture() == Gesture.KEY).toList();
+        assertEquals(List.of(List.of("NUMPAD_5"), List.of("NUMPAD_ENTER"), List.of("PAGE_UP"), List.of("NUMPAD_ADD")),
+                all.stream().map(Gestures.Recognized::values).toList());
+    }
+
+    @Test
+    void punctuation_inside_a_chord_is_named() {
+        events.add(new Gestures.Captured(new InputEvent.KeyPress(0, 0xFFE3L, 0), null));
+        key('[', 10);
+        key('/', 20);
+        events.add(new Gestures.Captured(new InputEvent.KeyRelease(0, 0xFFE3L, 40), null));
+
+        assertEquals(List.of(List.of("CTRL", "LEFT_BRACKET"), List.of("CTRL", "SLASH")),
+                recognized().stream().map(Gestures.Recognized::values).toList());
+    }
+
+    /** Review Focus 1: the top row keeps its name; only the keypad moved to NUMPAD_*. */
+    @Test
+    void a_top_row_digit_in_a_chord_is_still_num() {
+        events.add(new Gestures.Captured(new InputEvent.KeyPress(0, 0xFFE3L, 0), null));
+        key('5', 10);
+        events.add(new Gestures.Captured(new InputEvent.KeyRelease(0, 0xFFE3L, 30), null));
+
+        assertEquals(List.of("CTRL", "NUM5"), recognized().getFirst().values());
+    }
+
+    @Test
     void a_named_key_and_the_wheel_are_their_own_gestures() {
         key(0xFF0DL, 0);
         press(4, 150, 80, 10);
