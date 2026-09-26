@@ -421,6 +421,14 @@ public class CodeEditor {
         edit(toReplace, EditKind.BODY, false, (cu, code) -> TypeHandler.replaceVariableType(ctx(cu), code, toReplace, newType));
     }
 
+    /**
+     * Retypes a local to a type the type chooser picked — {@code Map<String, Point>} as readily as {@code int} —
+     * written as a tree with its imports, and its initialiser reset to the new type's fresh value.
+     */
+    public void replaceVariableType(VariableDeclarationStatement toReplace, java.lang.reflect.Type newType) {
+        edit(toReplace, EditKind.BODY, false, (cu, code) -> TypeHandler.replaceVariableType(ctx(cu), code, toReplace, newType));
+    }
+
     public void replaceFieldType(FieldDeclaration fieldDecl, String newTypeName) {
         edit(fieldDecl, EditKind.SIGNATURE, false, (cu, code) -> TypeHandler.replaceFieldType(ctx(cu), code, fieldDecl, ResolvedType.named(newTypeName)));
     }

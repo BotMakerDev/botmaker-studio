@@ -4,14 +4,17 @@ import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockType;
-import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.app.params.ValueEditors;
-import com.botmaker.studio.ui.render.components.BotTypePicker;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
 import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
@@ -258,30 +261,25 @@ public final class EditVariableDialog {
     // --- Type --------------------------------------------------------------------------------------------
 
     /**
-     * The type control: the curated picker when the declared type is one this editor can name, and the
-     * declared type as a read-only chip when it is not.
-     *
-     * <p>The set offered is {@link BotType#declarable()} — everything but {@code void} — rather than
-     * {@link BotType#storable()}, which is what the list screen offered and why {@code ImageTemplateGroup},
-     * {@code Matches} and {@code CaptureSource} were missing from it. {@code storable()} answers a different
-     * question: which types a <em>project variable</em> can hold, i.e. which have a value somebody types into
-     * the Parameters dialog. Nothing about that constrains what a variable in the code may be.
+     * The type control: the type chooser every other place uses, over everything a variable can be declared
+     * as ({@link TypeCatalog.Purpose#DECLARATION}) and named as Java names it — {@code int}, not "Whole
+     * number" (2026-09-26). A declared type the reader cannot take apart — an array, a wildcard — is a
+     * read-only chip.
      */
     private Node typeControl(Local local, ResolvedType type) {
-        Optional<BotType.Choice> known = BotType.Choice.fromSourceName(type.qualifiedName())
-                .filter(choice -> choice.type().declarable());
-        if (known.isEmpty()) return keptChip(local.statement().getType().toString());
+        BotRecords project = BotRecords.scan(context.getConfig(), context.getState(), PluginHost.grammar());
+        java.lang.reflect.Type known = declaredType(local, project);
+        if (known instanceof ValueTypes.Unknown) return keptChip(local.statement().getType().toString());
 
-        BotTypePicker picker = new BotTypePicker(BotTypePicker.Purpose.LOCAL_VARIABLE);
+        TypeChooser picker = new TypeChooser(() -> TypeCatalog.current(TypeCatalog.Purpose.DECLARATION, project));
         picker.setMinWidth(CONTROL_WIDTH);
         HBox.setHgrow(picker, Priority.ALWAYS);
         prefilling = true;
-        picker.setChoice(known.get());
+        picker.setType(known);
         prefilling = false;
-        picker.choiceProperty().addListener((obs, old, now) -> {
+        picker.typeProperty().addListener((obs, old, now) -> {
             if (prefilling || now == null) return;
-            find().ifPresent(fresh -> context.getCodeEditor()
-                    .replaceVariableType(fresh.statement(), ResolvedType.named(now.sourceName())));
+            find().ifPresent(fresh -> context.getCodeEditor().replaceVariableType(fresh.statement(), now));
             // A rewrite CodeEditor refuses publishes no event, so the CodeUpdatedEvent rebuild never ran and
             // this screen is still claiming a type the file does not have. Ask the file; if it disagrees, put
             // the whole screen back to what it says — the picker included. Reverted rather than retried:
@@ -292,18 +290,19 @@ public final class EditVariableDialog {
             // picker this listener belongs to has been replaced by one reading the new type. Before that split
             // the state was still a runLater behind, which is why this screen used to show the type picked one
             // click ago.
-            if (!declaredIs(now)) rebuild();
+            if (!declaredIs(now, project)) rebuild();
         });
         return picker;
     }
 
-    /** Whether the file, right now, declares this variable as {@code choice}. */
-    private boolean declaredIs(BotType.Choice choice) {
-        return find()
-                .map(local -> ProjectAnalyzer.resolveType(local.statement().getType()).qualifiedName())
-                .flatMap(BotType.Choice::fromSourceName)
-                .filter(choice::equals)
-                .isPresent();
+    /** The type {@code local} is declared as — an unknown spelling for an array, a wildcard or a stranger. */
+    private static java.lang.reflect.Type declaredType(Local local, BotRecords project) {
+        return ValueTypeResolver.of(PluginHost.grammar(), local.statement().getType(), 0, project.declaredNames());
+    }
+
+    /** Whether the file, right now, declares this variable as {@code wanted}. */
+    private boolean declaredIs(java.lang.reflect.Type wanted, BotRecords project) {
+        return find().map(local -> declaredType(local, project)).filter(wanted::equals).isPresent();
     }
 
     /** A type shown but not offered: what the file says, with no control to change it. */

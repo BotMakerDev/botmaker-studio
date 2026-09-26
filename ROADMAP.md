@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 2: toolbar sections, Versions account, only differences.**
+- **2026-09-26 (latest) — Feedback batch 2, phase 3: universal type chooser.** `ui/render/components/types/`:
+  `TypeCatalog` (pure; `Purpose` VALUE/DECLARATION/RETURN; Java → This project (`BotRecords.shapes()`) → per
+  plugin (`PluginHost.ownedTypes()`), alphabetical, `filter`) and `TypeChooser` (a `ContextMenu`: search, Wrap
+  row with no depth cap, groups). `ValueTypePicker` and `BotTypePicker` deleted. `SignatureType.Typed` +
+  `SignatureTypes` bridge a chosen `Type` to a signature (Described when a `BotType.Choice` names it);
+  `MethodHandler.typeNodeFor/defaultValueFor(Type)`; locals via `CodeEditor.replaceVariableType(stmt, Type)`.
+  Still owed: Parameters value cells for nesting deeper than one container (phase 4).
+- **2026-09-26 — Feedback batch 2, phase 2: toolbar sections, Versions account, only differences.**
   `PluginHost.ownedToolbarItems()` (`OwnedItem`: plugin id + name); `ToolbarManager` sorts owner first (Studio,
   then plugins by name) and opens each with `sectionCaption`. `IdentityCluster` lost ⑂ VCS and GitHub;
   `VersionsPane.account` signs in through `ShareActions.signIn`. *Only differences* (`OnlyDifferences` pref):

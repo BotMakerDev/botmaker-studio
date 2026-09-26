@@ -89,8 +89,8 @@ public final class ExpressionMenu {
     // since phase 10b split that vocabulary out into the contract's ValueType), so a local could not be
     // retyped to ImageTemplateGroup or Matches at all; and "Other type…" was dead on arrival, because showing
     // the child ContextMenu synchronously inside the parent item's action means JavaFX auto-hides the parent
-    // and takes the child with it. The type of a variable is now chosen with BotTypePicker
-    // (Purpose.LOCAL_VARIABLE) on EditVariableDialog — a control, not a menu, so neither problem can recur.
+    // and takes the child with it. The type of a variable is now chosen with TypeChooser
+    // (Purpose.DECLARATION) on EditVariableDialog — a control, not a menu, so neither problem can recur.
 
     /** Back-compat entry: the type-change selector for params/vars/fields (array dims on, no {@code void}). */
     public static void showTypeSelectorMenu(

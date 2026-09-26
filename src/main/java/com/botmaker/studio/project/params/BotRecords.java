@@ -136,6 +136,11 @@ public final class BotRecords {
         return byQualifiedName.keySet();
     }
 
+    /** Every type the bot declares — records and classes — for a list that offers them. */
+    public java.util.Collection<Shape> shapes() {
+        return byQualifiedName.values();
+    }
+
     /** The record a type names, or empty when the bot does not declare one by that name. */
     public Optional<Shape> find(ValueTypes.BotClass declared) {
         return declared == null ? Optional.empty()

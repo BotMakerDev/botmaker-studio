@@ -16,7 +16,8 @@ import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets.ValueEditor;
-import com.botmaker.studio.ui.render.components.ValueTypePicker;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
@@ -528,10 +529,10 @@ public final class ParametersDialog {
 
         Node type;
         if (mine) {
-            ValueTypePicker picker = new ValueTypePicker();
-            picker.setForm(entry.form());
+            TypeChooser picker = typeChooser();
+            picker.setType(entry.form());
             picker.setPrefWidth(180);
-            picker.formProperty().addListener((o, was, is) -> {
+            picker.typeProperty().addListener((o, was, is) -> {
                 if (is == null || is.equals(entry.form())) return;
                 // Retyping rewrites the field's declared Java type and resets its initialiser to the new
                 // type's fresh value: a value written for one type is not a value of another, and carrying
@@ -670,6 +671,11 @@ public final class ParametersDialog {
         why.getStyleClass().add("dialog-hint-text");
         why.setWrapText(true);
         return new VBox(2, written, why);
+    }
+
+    /** The chooser every type on this window is picked with: what a picker can write, and the bot's records. */
+    private TypeChooser typeChooser() {
+        return new TypeChooser(() -> TypeCatalog.current(TypeCatalog.Purpose.VALUE, records));
     }
 
     /** A value this window may show but not change — a plugin's category, a plugin's note. */
@@ -982,7 +988,8 @@ public final class ParametersDialog {
         TextField name = new TextField();
         name.setPromptText("parameter name");
         HBox.setHgrow(name, Priority.ALWAYS);
-        ValueTypePicker type = new ValueTypePicker();
+        TypeChooser type = typeChooser();
+        type.setType(String.class);
         type.setPrefWidth(180);
         Button add = new Button("Add parameter");
         add.getStyleClass().add("primary-button");
@@ -997,7 +1004,7 @@ public final class ParametersDialog {
                 String tag = VariableRailModel.ALL.equals(selectedTag)
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
-                Type form = type.form();
+                Type form = type.type();
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
                         form, PluginHost.grammar().freshSpelling(form).orElse(null), tag, "");
                 if (stored.isEmpty()) {

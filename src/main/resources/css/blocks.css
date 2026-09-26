@@ -2730,6 +2730,32 @@
     -fx-font-weight: bold;
 }
 
+/* The type chooser (TypeChooser): a row is the Java name and, quieter, what it is. */
+.type-chooser-menu .type-chooser-name {
+    -fx-text-fill: -bm-on-popup;
+    -fx-font-family: monospace;
+}
+
+.type-chooser-menu .type-chooser-hint {
+    -fx-text-fill: -bm-on-popup;
+    -fx-opacity: 0.6;
+    -fx-font-size: 0.9em;
+}
+
+.type-chooser-menu .menu-item:focused .type-chooser-name,
+.type-chooser-menu .menu-item:focused .type-chooser-hint {
+    -fx-text-fill: -bm-on-popup-hover;
+}
+
+.type-chooser-menu .type-chooser-current .type-chooser-name {
+    -fx-font-weight: bold;
+}
+
+.type-chooser-menu .type-chooser-wrap {
+    -fx-padding: 1 6 1 6;
+    -fx-font-size: 0.9em;
+}
+
 /*
  * The template gallery: a tag rail beside a grid of thumbnails. Everything here is over the theme's own
  * surface/foreground lookups rather than the -bm-popup-* set — the gallery is a panel in a window, not a

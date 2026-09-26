@@ -171,7 +171,10 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
         TypeDeclaration typeDecl = (TypeDeclaration) this.astNode;
         Window owner = source.getScene() == null ? null : source.getScene().getWindow();
 
-        new AddFunctionDialog(owner, MethodSignatures.declaredIn(typeDecl)).showAndWait().ifPresent(draft ->
+        new AddFunctionDialog(owner, MethodSignatures.declaredIn(typeDecl))
+                .withProject(com.botmaker.studio.project.params.BotRecords.scan(context.getConfig(),
+                        context.getState(), com.botmaker.studio.plugin.PluginHost.grammar()))
+                .showAndWait().ifPresent(draft ->
                 context.getCodeEditor().addFunctionToClass(typeDecl, draft, bodyDeclarations.size()));
     }
 

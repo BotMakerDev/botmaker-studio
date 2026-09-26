@@ -42,6 +42,22 @@ public sealed interface SignatureType {
         }
     }
 
+    /**
+     * A type chosen in the type chooser that no {@link BotType.Choice} names — {@code Map<String, Point>}, a
+     * class the bot declares, {@code List<List<Duration>>} (2026-09-26). Written through
+     * {@code ValueTypes.node} with the imports it needs, and defaulted through the grammar's fresh value.
+     */
+    record Typed(java.lang.reflect.Type type) implements SignatureType {
+        public Typed {
+            if (type == null) throw new IllegalArgumentException("a typed signature type needs a type");
+        }
+
+        @Override
+        public String sourceName() {
+            return TypeNames.label(type);
+        }
+    }
+
     static SignatureType of(BotType.Choice choice) {
         return new Described(choice);
     }
@@ -66,7 +82,8 @@ public sealed interface SignatureType {
 
     /** Whether the function gives nothing back. A carried type always gives something — it has a name. */
     default boolean isVoid() {
-        return this instanceof Described described && described.choice().isVoid();
+        return (this instanceof Described described && described.choice().isVoid())
+                || (this instanceof Typed typed && typed.type() == void.class);
     }
 
     /**
@@ -75,6 +92,7 @@ public sealed interface SignatureType {
      * for a type it knows nothing about.
      */
     default String defaultText() {
+        if (this instanceof Typed typed) return SignatureTypes.defaultText(typed.type());
         return described().map(BotType.Choice::defaultText).orElse("null");
     }
 

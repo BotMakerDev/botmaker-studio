@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **One type chooser everywhere.** Parameters, local variables, and a function's inputs and result all pick
+  their type from the same searchable list: *Java* first, then *This project* (your own records and classes),
+  then one group per plugin, each alphabetical. Types are named as Java names them — `int`, not "Whole
+  number" — with a short hint beside each.
+- **Wrap in any container, at any depth.** *Wrap in* List, Map… works for every type and wherever a type is
+  chosen, so a function can take a `Map<String, List<Point>>`.
 - **The toolbar is grouped by owner.** Studio's own buttons come first under a *Studio* caption, then each
   plugin's buttons under that plugin's name.
 - **The GitHub account lives in the Versions tab.** Its button is at the end of the tab's top strip; the ⑂ VCS

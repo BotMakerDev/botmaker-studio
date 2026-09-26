@@ -13,6 +13,24 @@ import java.util.List;
 
 public class TypeHandler {
 
+    /**
+     * {@code varDecl} retyped to {@code newType}, a type the chooser picked: the type node written as a tree
+     * with its imports ({@link MethodHandler#typeNodeFor}), and the initialiser replaced by the new type's fresh
+     * value — a value of the old type is not one of the new.
+     */
+    public static String replaceVariableType(EditContext ctx, String originalCode,
+                                             VariableDeclarationStatement varDecl, java.lang.reflect.Type newType) {
+        ctx.rewriter().replace(varDecl.getType(), MethodHandler.typeNodeFor(ctx, newType), null);
+        if (!varDecl.fragments().isEmpty()) {
+            VariableDeclarationFragment fragment = (VariableDeclarationFragment) varDecl.fragments().getFirst();
+            Expression current = fragment.getInitializer();
+            if (current != null) {
+                ctx.rewriter().replace(current, MethodHandler.defaultValueFor(ctx, newType), null);
+            }
+        }
+        return ctx.applyTo(originalCode);
+    }
+
     public static String replaceVariableType(EditContext ctx, String originalCode,
                                              VariableDeclarationStatement varDecl, ResolvedType newType) {
         AST ast = ctx.ast();

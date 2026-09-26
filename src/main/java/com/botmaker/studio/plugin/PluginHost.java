@@ -431,6 +431,24 @@ public final class PluginHost {
         return List.copyOf(merged);
     }
 
+    /** A type a plugin declares, with that plugin — what the type chooser groups its list by. */
+    public record OwnedType(String pluginId, String pluginName, Class<?> type) {}
+
+    /** Every bound plugin's declared types, in plugin order; one that throws costs only its own. */
+    public static List<OwnedType> ownedTypes() {
+        List<OwnedType> out = new ArrayList<>();
+        for (StudioPlugin plugin : plugins()) {
+            List<PluginType<?>> types = quietly(plugin, "declare types", plugin::types);
+            if (types == null) continue;
+            String name = displayNameOf(plugin);
+            for (PluginType<?> type : types) {
+                Class<?> cls = type == null ? null : quietly(plugin, "name a type", type::type);
+                if (cls != null) out.add(new OwnedType(plugin.id(), name, cls));
+            }
+        }
+        return List.copyOf(out);
+    }
+
     /** A plugin's own name for itself, falling back to its id — a plugin that throws here costs only a label. */
     private static String displayNameOf(StudioPlugin plugin) {
         try {

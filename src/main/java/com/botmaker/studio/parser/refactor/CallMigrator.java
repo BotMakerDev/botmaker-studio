@@ -167,6 +167,9 @@ public final class CallMigrator {
 
     /** A default value for {@code type}, importing whatever naming it needs in {@code ctx}'s file. */
     public static Expression defaultFor(EditContext ctx, SignatureType type) {
+        if (type instanceof SignatureType.Typed typed) {
+            return com.botmaker.studio.parser.handlers.MethodHandler.defaultValueFor(ctx, typed.type());
+        }
         // Only List needs importing: every non-primitive BotType offers is written fully qualified since
         // 2026-09-01, when the fourteen SDK class literals left and the rest became plugin-seeded.
         type.described().ifPresent(choice -> {
@@ -273,6 +276,9 @@ public final class CallMigrator {
 
     /** A {@code List<Point>} is a list; anything else is what the signature calls it. */
     private static ResolvedType resolvedOf(SignatureType type) {
+        if (type instanceof SignatureType.Typed typed) {
+            return com.botmaker.studio.plugin.ValueWire.resolvedType(typed.type());
+        }
         return type.described().filter(BotType.Choice::isList)
                 .map(choice -> ResolvedType.named("java.util.List"))
                 .orElseGet(() -> ResolvedType.named(type.sourceName()));

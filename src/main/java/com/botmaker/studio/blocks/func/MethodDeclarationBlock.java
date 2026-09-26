@@ -394,7 +394,10 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
                 SignatureEdits.explainUneditable(owner, method);
                 return;
             }
-            new AddFunctionDialog(owner, otherSignatures(method), current.get()).showAndWait()
+            new AddFunctionDialog(owner, otherSignatures(method), current.get())
+                    .withProject(com.botmaker.studio.project.params.BotRecords.scan(context.getConfig(),
+                            context.getState(), com.botmaker.studio.plugin.PluginHost.grammar()))
+                    .showAndWait()
                     .ifPresent(draft -> SignatureEdits.apply(context, owner, method, current.get(), draft));
         });
         return edit;

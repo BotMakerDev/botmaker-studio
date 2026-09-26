@@ -110,4 +110,22 @@ class AddFunctionEditTest {
 
         assertTrue(lastCode.contains("return java.time.Duration.ofSeconds(0);"), lastCode);
     }
+
+    /**
+     * A type the type chooser picked that no {@code BotType.Choice} names — a map of lists — is written as a
+     * tree with simple names and the imports they need (2026-09-26).
+     */
+    @Test
+    void aChosenNestedTypeIsWrittenWithItsImports() {
+        java.lang.reflect.Type mapOfLists = com.botmaker.studio.plugin.grammar.ValueTypes.mapOf(
+                String.class, com.botmaker.studio.plugin.grammar.ValueTypes.listOf(int.class));
+        editor.addFunctionToClass(subject(), new FunctionDraft("table",
+                com.botmaker.studio.palette.SignatureTypes.of(void.class),
+                List.of(new FunctionDraft.Parameter("rows",
+                        com.botmaker.studio.palette.SignatureTypes.of(mapOfLists)))), 1);
+
+        assertTrue(lastCode.contains("void table(Map<String, List<Integer>> rows)"), lastCode);
+        assertTrue(lastCode.contains("import java.util.Map;"), lastCode);
+        assertTrue(lastCode.contains("import java.util.List;"), lastCode);
+    }
 }

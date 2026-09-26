@@ -2,7 +2,11 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.ui.render.components.BotTypePicker;
+import com.botmaker.studio.palette.SignatureTypes;
+import com.botmaker.studio.palette.TypeNames;
+import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -54,7 +58,10 @@ public final class AddFunctionDialog {
     private final FunctionDraft editing;
 
     private final TextField nameField = new TextField();
-    private final BotTypePicker returnPicker = new BotTypePicker(BotTypePicker.Purpose.RETURN_TYPE);
+    /** The bot's own classes, offered in the choosers' <i>This project</i> group; see {@link #withProject}. */
+    private BotRecords project = BotRecords.none();
+    private final TypeChooser returnPicker =
+            new TypeChooser(() -> TypeCatalog.current(TypeCatalog.Purpose.RETURN, project));
     private final VBox parameterRows = new VBox(6);
     private final List<ParameterRow> rows = new ArrayList<>();
     private final Label signatureLabel = new Label();
@@ -92,6 +99,12 @@ public final class AddFunctionDialog {
         this.editing = editing;
     }
 
+    /** Offers the bot's own classes as input and result types. Before {@link #showAndWait()}. */
+    public AddFunctionDialog withProject(BotRecords project) {
+        this.project = project == null ? BotRecords.none() : project;
+        return this;
+    }
+
     /** Shows the dialog and blocks; empty when the user cancelled. */
     public Optional<FunctionDraft> showAndWait() {
         Stage stage = new Stage();
@@ -106,7 +119,8 @@ public final class AddFunctionDialog {
 
         nameField.setPromptText("what the function does — clickLoginButton");
         nameField.textProperty().addListener((obs, old, now) -> revalidate());
-        returnPicker.choiceProperty().addListener((obs, old, now) -> revalidate());
+        returnPicker.setType(void.class);
+        returnPicker.typeProperty().addListener((obs, old, now) -> revalidate());
         if (editing != null) prefill(editing);
         revalidate();
 
@@ -124,11 +138,12 @@ public final class AddFunctionDialog {
      */
     private void prefill(FunctionDraft draft) {
         nameField.setText(draft.name());
-        draft.returnType().described().ifPresent(returnPicker::setChoice);
+        if (!draft.returnType().isKept()) returnPicker.setType(SignatureTypes.typeOf(draft.returnType()));
         for (FunctionDraft.Parameter parameter : draft.parameters()) {
             addParameter();
             ParameterRow row = rows.getLast();
-            parameter.type().described().ifPresentOrElse(row.picker::setChoice, () -> row.keep(parameter.type()));
+            if (parameter.type().isKept()) row.keep(parameter.type());
+            else row.picker.setType(SignatureTypes.typeOf(parameter.type()));
             row.nameField.setText(parameter.name());
             // The row *is* that parameter from here on, wherever the ▲▼ take it — see FunctionDraft.Parameter.
             row.origin = parameter.origin();
@@ -246,7 +261,7 @@ public final class AddFunctionDialog {
                 .map(r -> new FunctionDraft.Parameter(r.nameField.getText(), r.type(), r.origin))
                 .toList();
         SignatureType returns =
-                keptReturnType != null ? keptReturnType : SignatureType.of(returnPicker.choice());
+                keptReturnType != null ? keptReturnType : SignatureTypes.of(returnPicker.type());
         return new FunctionDraft(nameField.getText(), returns, params);
     }
 
@@ -266,7 +281,8 @@ public final class AddFunctionDialog {
     /** One parameter's controls, plus its place in the order. */
     private final class ParameterRow {
         private final TextField nameField = new TextField();
-        private final BotTypePicker picker = new BotTypePicker(BotTypePicker.Purpose.PARAMETER);
+        private final TypeChooser picker =
+                new TypeChooser(() -> TypeCatalog.current(TypeCatalog.Purpose.DECLARATION, project));
         private final Button up = new Button("▲");
         private final Button down = new Button("▼");
         private final Button remove = new Button("✕");
@@ -277,13 +293,14 @@ public final class AddFunctionDialog {
 
         private ParameterRow() {
             nameField.setPromptText("name");
-            nameField.setText(picker.choice().suggestedName());
+            picker.setType(String.class);
+            nameField.setText(TypeNames.variableName(picker.type()));
             nameField.textProperty().addListener((obs, old, now) -> revalidate());
             // Renaming the field by hand wins: only a name still equal to the old type's suggestion follows
-            // the type, so choosing Point then Rect renames "point" to "area" but never overwrites "target".
-            picker.choiceProperty().addListener((obs, old, now) -> {
-                if (old != null && nameField.getText().equals(old.suggestedName())) {
-                    nameField.setText(now.suggestedName());
+            // the type, so choosing Point then Rect renames "point" to "rect" but never overwrites "target".
+            picker.typeProperty().addListener((obs, old, now) -> {
+                if (old != null && now != null && nameField.getText().equals(TypeNames.variableName(old))) {
+                    nameField.setText(TypeNames.variableName(now));
                 }
                 revalidate();
             });
@@ -299,7 +316,7 @@ public final class AddFunctionDialog {
 
         /** This row's type: the picked one, or the one being carried through unchanged. */
         private SignatureType type() {
-            return kept != null ? kept : SignatureType.of(picker.choice());
+            return kept != null ? kept : SignatureTypes.of(picker.type());
         }
 
         private void keep(SignatureType type) {

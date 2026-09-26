@@ -8,6 +8,9 @@ import com.botmaker.studio.parser.NodeCreator;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
+import com.botmaker.studio.palette.SignatureTypes;
+import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.parser.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -410,9 +413,23 @@ public class MethodHandler {
 
     /** A type node for a signature type: a curated choice imports what it names, a carried one is copied. */
     private static Type typeNodeFor(EditContext ctx, SignatureType type) {
+        if (type instanceof SignatureType.Typed typed) return typeNodeFor(ctx, typed.type());
         Optional<BotType.Choice> described = type.described();
         if (described.isEmpty()) return ProjectAnalyzer.createTypeNode(ctx.ast(), type.sourceName());
         return typeNodeFor(ctx, described.get());
+    }
+
+    /**
+     * A type node for a type the chooser picked — {@code Map<String, Point>} — naming each class by its simple
+     * name and importing it; a type with a leaf nothing can write falls back to its spelling.
+     */
+    public static Type typeNodeFor(EditContext ctx, java.lang.reflect.Type type) {
+        if (type == void.class) return ctx.ast().newPrimitiveType(PrimitiveType.VOID);
+        java.util.Set<String> imports = new java.util.LinkedHashSet<>();
+        Optional<Type> node = ValueTypes.node(ctx.ast(), type, imports);
+        if (node.isEmpty()) return ProjectAnalyzer.createTypeNode(ctx.ast(), ValueTypes.sourceName(type));
+        imports.forEach(ctx::addImport);
+        return node.get();
     }
 
     /**
@@ -446,9 +463,23 @@ public class MethodHandler {
      * default".
      */
     private static Expression defaultValueFor(EditContext ctx, SignatureType type) {
+        if (type instanceof SignatureType.Typed typed) return defaultValueFor(ctx, typed.type());
         Optional<BotType.Choice> described = type.described();
         return described.isPresent() ? defaultValueFor(ctx, described.get())
                 : defaultReturnExpression(ctx.ast(), ResolvedType.named(type.sourceName()));
+    }
+
+    /**
+     * The grammar's fresh value for a chosen type, with its imports — and where it has none, what the type
+     * forces: a primitive's zero, else {@code null}.
+     */
+    public static Expression defaultValueFor(EditContext ctx, java.lang.reflect.Type type) {
+        Optional<com.botmaker.studio.plugin.grammar.JavaValue> fresh = SignatureTypes.freshValue(type);
+        if (fresh.isPresent()) {
+            fresh.get().imports().forEach(ctx::addImport);
+            return fresh.get().copyInto(ctx.ast());
+        }
+        return defaultReturnExpression(ctx.ast(), ValueWire.resolvedType(type));
     }
 
     /** {@code List.of()} for a list, and the type's own catalogue default otherwise. */
