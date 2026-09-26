@@ -83,7 +83,19 @@ public final class BlockDiff {
      *
      * @param parameter whether it is a {@code @Param} — the Parameters window's row rather than a constant
      */
-    public record FieldChange(String name, String was, String now, boolean parameter) {}
+    public record FieldChange(String name, String was, String now, boolean parameter, int beforeStart,
+                              int afterStart) {
+        /**
+         * @param beforeStart where the field's declaration starts in the old source, or -1 when it is new — so
+         *                    the Versions tab can draw it as the canvas does, beside {@code afterStart}
+         */
+        public FieldChange {}
+
+        /** The change without positions, for a reader that only shows the text. */
+        public FieldChange(String name, String was, String now, boolean parameter) {
+            this(name, was, now, parameter, -1, -1);
+        }
+    }
 
     /**
      * The whole comparison.
@@ -347,22 +359,31 @@ public final class BlockDiff {
         return m.getName().getIdentifier();
     }
 
-    private record Field(String type, String initializer, boolean parameter) {}
+    /** A field as written; {@code start} is its declaration's offset, which takes no part in comparing two. */
+    private record Field(String type, String initializer, boolean parameter, int start) {
+        boolean sameAs(Field other) {
+            return other != null && Objects.equals(type, other.type) && Objects.equals(initializer, other.initializer)
+                    && parameter == other.parameter;
+        }
+    }
 
     private static List<FieldChange> fields(String before, CompilationUnit a, String after, CompilationUnit b) {
         Map<String, Field> olds = a == null ? Map.of() : fields(before, a);
         Map<String, Field> news = b == null ? Map.of() : fields(after, b);
         List<FieldChange> out = new ArrayList<>();
         for (var e : olds.entrySet()) {
+            Field was = e.getValue();
             Field now = news.get(e.getKey());
-            if (!e.getValue().equals(now)) {
-                out.add(new FieldChange(e.getKey(), shown(e.getValue(), now), now == null ? null : shown(now, e.getValue()),
-                        e.getValue().parameter() || (now != null && now.parameter())));
+            if (!was.sameAs(now)) {
+                out.add(new FieldChange(e.getKey(), shown(was, now), now == null ? null : shown(now, was),
+                        was.parameter() || (now != null && now.parameter()), was.start(),
+                        now == null ? -1 : now.start()));
             }
         }
         for (var e : news.entrySet()) {
             if (!olds.containsKey(e.getKey())) {
-                out.add(new FieldChange(e.getKey(), null, shown(e.getValue(), null), e.getValue().parameter()));
+                out.add(new FieldChange(e.getKey(), null, shown(e.getValue(), null), e.getValue().parameter(),
+                        -1, e.getValue().start()));
             }
         }
         return out;
@@ -389,7 +410,8 @@ public final class BlockDiff {
                 for (Object o : f.fragments()) {
                     VariableDeclarationFragment v = (VariableDeclarationFragment) o;
                     String init = v.getInitializer() == null ? null : text(source, v.getInitializer());
-                    out.put(path + "." + v.getName().getIdentifier(), new Field(text(source, f.getType()), init, param));
+                    out.put(path + "." + v.getName().getIdentifier(),
+                            new Field(text(source, f.getType()), init, param, f.getStartPosition()));
                 }
             } else if (member instanceof AbstractTypeDeclaration nested) {
                 fields(source, nested, path, out);

@@ -7,6 +7,7 @@ import com.botmaker.studio.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.StatementPlacement;
+import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.util.MethodSignature;
@@ -65,12 +66,13 @@ public final class StatementMenu {
                 targetBody == null ? b -> true : b -> StatementPlacement.allows(b, targetBody);
         ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search blocks…",
-                (m, query) -> new Build(m, query, analyzer, surface, allowed, onSelection).rebuild());
+                (m, query) -> new Build(m, query, analyzer, surface, targetBody, allowed, onSelection).rebuild());
         return menu;
     }
 
     /** One build of the menu body, kept so a pin can rebuild it in place for the same query. */
     private record Build(ContextMenu menu, String query, ProjectAnalyzer analyzer, SdkSurfaceService surface,
+                         org.eclipse.jdt.core.dom.ASTNode targetBody,
                          Predicate<BlockType> allowed, Consumer<BlockType> onSelection) {
         void rebuild() {
             rebuildItems(this);
@@ -105,6 +107,18 @@ public final class StatementMenu {
             }
             for (SdkCall call : sdkCalls(b.analyzer(), b.surface())) {
                 if (matches(call.block(), q)) matches.add(callItem(call, b, true));
+            }
+            // The bot's own functions, by name: searching "collect" finds collect(), not only "Call Function".
+            if (b.targetBody() != null && allowed.test(BlockCatalog.FUNCTION_CALL)) {
+                for (var method : StatementFactory.callableMethods(b.analyzer(), b.targetBody())) {
+                    BlockType.OwnCall own = ownCall(method);
+                    if (own.displayName().toLowerCase().contains(q)) {
+                        matches.add(MenuRows.entry(MenuIcons.iconFor(own.category()),
+                                MenuRows.categoryClass(own.category()), own.displayName(),
+                                "Run your function " + own.method() + ".", true,
+                                () -> b.onSelection().accept(own)));
+                    }
+                }
             }
             menu.getItems().add(MenuRows.resultCount(matches.size()));
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matching blocks"));
@@ -369,6 +383,11 @@ public final class StatementMenu {
                                         Map<BlockCategory, List<BlockType>> grouped, Build b) {
         List<BlockType> blocks = grouped.get(category);
         if (blocks == null || blocks.isEmpty()) return;
+        if (blocks.contains(BlockCatalog.FUNCTION_CALL) && b.targetBody() != null) {
+            menu.getItems().add(callFunctionMenu(b));
+            blocks = blocks.stream().filter(block -> block != BlockCatalog.FUNCTION_CALL).toList();
+            if (blocks.isEmpty()) return;
+        }
         if (blocks.size() == 1) {
             menu.getItems().add(statementItem(blocks.getFirst(), b, false));
             return;
@@ -376,6 +395,38 @@ public final class StatementMenu {
         Menu categoryMenu = MenuIcons.decorate(new Menu(category.getLabel()), MenuIcons.iconFor(category));
         for (BlockType block : blocks) categoryMenu.getItems().add(statementItem(block, b, false));
         menu.getItems().add(categoryMenu);
+    }
+
+    /**
+     * "Call Function ▸" and the bot's own methods callable where the block goes — each with its parameters, so
+     * two overloads are two rows. It was one row that inserted a call to whichever method came first, and a
+     * {@code print} when there was none (2026-09-26). An empty submenu says why instead.
+     */
+    private static MenuItem callFunctionMenu(Build b) {
+        BlockType call = BlockCatalog.FUNCTION_CALL;
+        Menu submenu = MenuIcons.decorate(new Menu(call.displayName()), MenuIcons.iconFor(call.category()));
+        List<org.eclipse.jdt.core.dom.IMethodBinding> methods =
+                StatementFactory.callableMethods(b.analyzer(), b.targetBody());
+        for (org.eclipse.jdt.core.dom.IMethodBinding method : methods) {
+            BlockType.OwnCall own = ownCall(method);
+            String returns = method.getReturnType() == null ? "void" : method.getReturnType().getName();
+            submenu.getItems().add(MenuRows.entry(MenuIcons.iconFor(own.category()),
+                    MenuRows.categoryClass(own.category()), own.displayName(), "Gives back " + returns + ".",
+                    false, () -> b.onSelection().accept(own)));
+        }
+        if (methods.isEmpty()) {
+            submenu.getItems().add(MenuBuilders.disabledItem("No function to call here — add one with + Add Function"));
+        }
+        return submenu;
+    }
+
+    static BlockType.OwnCall ownCall(org.eclipse.jdt.core.dom.IMethodBinding method) {
+        String parameters = java.util.Arrays.stream(method.getParameterTypes())
+                .map(org.eclipse.jdt.core.dom.ITypeBinding::getName)
+                .collect(Collectors.joining(", "));
+        List<String> key = StatementFactory.parameterTypes(method);
+        return new BlockType.OwnCall("CALL_" + method.getName() + key, method.getName() + "(" + parameters + ")",
+                BlockCatalog.FUNCTION_CALL.category(), method.getName(), key);
     }
 
     private static MenuItem statementItem(BlockType block, Build b, boolean inline) {

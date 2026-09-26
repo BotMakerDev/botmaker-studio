@@ -16,7 +16,6 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -31,7 +30,8 @@ import java.util.Set;
 /**
  * What one file's change looks like in the Versions tab ({@code docs/refactor/39-versions.md} §5): a card per
  * changed function, <b>Before | After</b> as blocks with the changed ones marked, the unchanged functions folded
- * into one line, fields as a table, pictures as thumbnails, and anything that is not Java — or does not parse —
+ * into one line, each changed field its own Was | Now card drawn as blocks, pictures as thumbnails, and anything
+ * that is not Java — or does not parse —
  * as its text diff. Each function card switches between <i>Blocks</i> and <i>Java</i>. Built on the FX thread
  * from what {@link VersionsPane} read off it.
  */
@@ -116,7 +116,9 @@ final class DiffCards {
         BlockPreview after = in.sides().after() == null ? null
                 : new BlockPreview(config, live, file, in.sides().afterText());
 
-        if (!diff.fields().isEmpty()) out.getChildren().add(fields(diff.fields()));
+        for (BlockDiff.FieldChange field : diff.fields()) {
+            out.getChildren().add(fieldCard(field, before, after));
+        }
         for (BlockDiff.MethodChange change : diff.methods()) {
             out.getChildren().add(card(change, before, after, in.sides(), actions));
         }
@@ -250,26 +252,38 @@ final class DiffCards {
     // Fields, pictures, text
     // -------------------------------------------------------------------------
 
-    private static Node fields(List<BlockDiff.FieldChange> changes) {
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(4);
-        grid.getStyleClass().add("versions-card");
-        grid.setPadding(new Insets(8));
-        grid.addRow(0, heading("Value"), heading("Was"), heading("Now"));
-        int row = 1;
-        for (BlockDiff.FieldChange f : changes) {
-            String name = f.name().substring(f.name().indexOf('.') + 1) + (f.parameter() ? "  (parameter)" : "");
-            grid.addRow(row++, new Label(name),
-                    new Label(f.was() == null ? "—" : f.was()), new Label(f.now() == null ? "—" : f.now()));
-        }
-        return grid;
+    /**
+     * One changed field — a {@code @Param}, a constant — drawn Was | Now as the canvas draws it (2026-09-26). It
+     * was a row of Java text, so turning a parameter from a list into a map showed two initialisers to read
+     * rather than the two value editors the user had actually seen. A side the canvas did not draw falls back
+     * to its text.
+     */
+    private Node fieldCard(BlockDiff.FieldChange f, BlockPreview before, BlockPreview after) {
+        Label title = new Label(f.name().substring(f.name().indexOf('.') + 1));
+        title.getStyleClass().add("versions-card-title");
+        Label kind = new Label(f.was() == null ? "new" : f.now() == null ? "removed"
+                : f.parameter() ? "parameter changed" : "changed");
+        BlockDiff.Mark mark = f.was() == null ? BlockDiff.Mark.ADDED
+                : f.now() == null ? BlockDiff.Mark.REMOVED : BlockDiff.Mark.CHANGED;
+        kind.getStyleClass().addAll("versions-card-kind", "versions-card-kind--" + mark.name().toLowerCase(Locale.ROOT));
+        HBox header = new HBox(6, title, kind);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        Node was = fieldSide(before, f.beforeStart(), f.was());
+        Node now = fieldSide(after, f.afterStart(), f.now());
+        VBox card = new VBox(6, header, sideBySide(was, now));
+        card.getStyleClass().add("versions-card");
+        card.setPadding(new Insets(8));
+        return card;
     }
 
-    private static Label heading(String text) {
-        Label l = new Label(text);
-        l.getStyleClass().add("versions-meta");
-        return l;
+    private static Node fieldSide(BlockPreview preview, int start, String text) {
+        Node drawn = preview == null ? null : preview.field(start);
+        if (drawn != null) {
+            drawn.getProperties().put(DRAWN, true);
+            return drawn;
+        }
+        return new Label(text == null ? "—" : text);
     }
 
     private Node pictures(VersionReader.Sides sides) {

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,10 +124,15 @@ class GluedStackTest extends FxHeadlessTest {
         assertEquals(javafx.scene.layout.CornerRadii.EMPTY, radii(inMouth), "the header and the arm touch it");
     }
 
+    /**
+     * The "+" follows the pointer (2026-09-26) and steps aside for the controls of the blocks the seam joins:
+     * entering at the right end puts it near there, and on none of them — the delete button least of all.
+     */
     @Test
-    void theSeamsPlusSitsBesideTheJointWhereverThePointerEnters() {
+    void theSeamsPlusFollowsThePointerButNeverCoversABlocksControl() {
         VBox body = rendered(threeStatements());
-        Pane seam = (Pane) body.getChildren().stream()
+        List<Node> children = body.getChildren();
+        Pane seam = (Pane) children.stream()
                 .filter(n -> n.getStyleClass().contains("block-seam")).skip(1).findFirst().orElseThrow();
         Button plus = (Button) seam.getChildren().stream().filter(n -> n instanceof Button).findFirst().orElseThrow();
         interact(() -> seam.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_ENTERED,
@@ -134,8 +140,17 @@ class GluedStackTest extends FxHeadlessTest {
                 false, false, false, false, false, false, false, false, false, false, null)));
 
         assertTrue(plus.isVisible());
-        assertEquals(InsertionSeam.PLUS_X, plus.getLayoutX(), 0.01,
-                "entering at the right end must not put the \"+\" over the delete button");
+        assertTrue(plus.getLayoutX() > seam.getWidth() / 2, "it went towards the pointer: " + plus.getLayoutX());
+        // Layout bounds: a drop shadow reaching over a neighbour is not the "+" covering it.
+        javafx.geometry.Bounds plusBounds = plus.localToScene(plus.getLayoutBounds());
+        int at = children.indexOf(seam);
+        for (Node neighbour : List.of(children.get(at - 1), children.get(at + 1))) {
+            for (Node control : neighbour.lookupAll(".button")) {
+                if (control == plus || !control.isVisible()) continue;
+                assertFalse(plusBounds.intersects(control.localToScene(control.getLayoutBounds())),
+                        "the \"+\" covers " + control);
+            }
+        }
     }
 
     private static javafx.scene.layout.CornerRadii radii(Node block) {

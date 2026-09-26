@@ -13,6 +13,7 @@ import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.css.PseudoClass;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
 
@@ -82,6 +83,13 @@ final class BlockPreview {
             }
         }
         return node;
+    }
+
+    /** The field declaration that starts at {@code start}, drawn; null when the canvas did not draw it. */
+    Node field(int start) {
+        if (start < 0) return null;
+        CodeBlock block = find(FieldDeclaration.class, start, -1);
+        return block == null ? null : block.getUINode(context);
     }
 
     static PseudoClass pseudoClass(BlockDiff.Mark mark) {

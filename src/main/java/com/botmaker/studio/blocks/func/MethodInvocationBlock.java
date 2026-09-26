@@ -145,7 +145,12 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         return determineCurrentSignature(context, resolveTargetType(getScope(), context), getMethodName());
     }
 
-    /** Rewrites this call to {@code sig}'s parameter list (arguments are smart-merged by the AST rewrite). */
+    /**
+     * Rewrites this call to {@code sig} — its name and its parameter list (arguments are smart-merged by the AST
+     * rewrite). The name is the signature's own: a palette overload picked for a fresh block can belong to a
+     * different method than the one the block was created on, and writing the block's name kept
+     * {@code seconds} under a {@code milliseconds} parameter list.
+     */
     public void switchToOverload(CodeEditorService context, MethodSignature sig) {
         if (sig == null) return;
         String scope = getScope();
@@ -154,7 +159,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         String scopeForAST = (fixedScopeName != null) ? fixedScopeName
                 : (scope.equals(currentFileClass) && !isVariableScope(context, scope) ? "" : scope);
         context.getCodeEditor().updateMethodInvocation(
-                (MethodInvocation) this.astNode, scopeForAST, getMethodName(), sig.paramTypes());
+                (MethodInvocation) this.astNode, scopeForAST, sig.name(), sig.paramTypes());
     }
 
     /**

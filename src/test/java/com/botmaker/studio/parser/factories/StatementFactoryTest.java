@@ -264,6 +264,42 @@ class StatementFactoryTest {
     }
 
     /**
+     * Call Function's submenu: one row per callable method, each overload its own, and the picked row is the
+     * call inserted — not the first method, and never a print when none is callable.
+     */
+    @Test
+    void callFunctionListsEveryCallableMethodAndInsertsThePickedOne() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public void helper() { }
+                    public static void tick() { }
+                    public static int add(int a, int b) { return a + b; }
+                    public static int add(int a) { return a; }
+                    public static void main(String[] args) {
+                    }
+                }
+                """;
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), host, TestSupport.SOURCE_ROOT);
+        MethodDeclaration main = ((TypeDeclaration) cu.types().getFirst()).getMethods()[4];
+        ProjectState state = new ProjectState();
+        ProjectAnalyzer analyzer = new ProjectAnalyzer(null, state);
+
+        List<org.eclipse.jdt.core.dom.IMethodBinding> callable =
+                StatementFactory.callableMethods(analyzer, main.getBody());
+        List<String> keys = callable.stream()
+                .map(m -> m.getName() + StatementFactory.parameterTypes(m)).toList();
+        assertEquals(List.of("tick[]", "add[int, int]", "add[int]"), keys,
+                "statics only from main, overloads apart, main itself left out");
+
+        BlockType.OwnCall pick = new BlockType.OwnCall("CALL", "add(int)", BlockCategory.FUNCTIONS,
+                "add", List.of("int"));
+        Statement call = StatementFactory.createStatement(EditContext.of(cu, analyzer, state), pick, main.getBody());
+        assertEquals("add(0);", call.toString().trim());
+    }
+
+    /**
      * A method is a class member, not a body statement. The factory says so by returning {@code null} — the
      * one live null path through {@code CodeEditor.addStatement}, and the reason B11 has a third site.
      */

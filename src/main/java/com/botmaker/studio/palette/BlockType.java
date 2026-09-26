@@ -15,7 +15,8 @@ import java.util.List;
  */
 public sealed interface BlockType
         permits BlockType.ControlFlow, BlockType.VarDecl,
-                BlockType.LibraryCall, BlockType.LambdaCall, BlockType.EnumDecl, BlockType.MethodMember {
+                BlockType.LibraryCall, BlockType.LambdaCall, BlockType.EnumDecl, BlockType.MethodMember,
+                BlockType.OwnCall {
 
     String id();
     String displayName();
@@ -124,6 +125,20 @@ public sealed interface BlockType
     /** An enum declaration — valid both as a body statement and as a class member. */
     record EnumDecl(String id, String displayName, BlockCategory category) implements BlockType {
         @Override public boolean isClassMember() { return true; }
+    }
+
+    /**
+     * A call to one of the bot's own methods, unqualified — what Call Function's submenu lists, one entry per
+     * method callable where the block goes. {@code parameterTypes} (erased, qualified) picks the overload. Made
+     * per menu, never pinned or remembered: whether a method is callable depends on where the call lands.
+     */
+    record OwnCall(String id, String displayName, BlockCategory category,
+                   String method, List<String> parameterTypes) implements BlockType {
+        public OwnCall {
+            parameterTypes = List.copyOf(parameterTypes);
+        }
+
+        @Override public boolean producesValue() { return true; }
     }
 
     /** A method declaration — only valid as a class member. */

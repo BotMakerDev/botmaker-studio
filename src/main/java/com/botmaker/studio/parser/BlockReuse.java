@@ -7,6 +7,7 @@ import org.eclipse.jdt.core.dom.ChildListPropertyDescriptor;
 import org.eclipse.jdt.core.dom.ChildPropertyDescriptor;
 import org.eclipse.jdt.core.dom.Comment;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.Javadoc;
 
 import java.util.ArrayList;
@@ -112,11 +113,34 @@ public final class BlockReuse {
         String after = slice(ctx.sourceCode(), newNode);
         if (before == null || !before.equals(after)) return null;
 
+        if (!sameSlot(oldNode, newNode, ctx)) return null;
+
         if (!policy.test(old)) return null;
 
         adopt(oldNode, newNode, ctx);
         adoptComments(oldNode, newNode, ctx);
         return old;
+    }
+
+    /**
+     * Whether an expression still sits in the slot it was drawn for: its parent's text is unchanged too. A
+     * statement answers yes: a line is drawn the same in any body.
+     *
+     * <p><b>An expression is drawn for its slot, not only for its own text</b> (2026-09-26). Its editor is chosen
+     * by the call it is an argument of and the type that call's parameter expects — a plugin's slot editor asks
+     * for the enclosing {@code Executable}. Switching {@code Wait.seconds(1)} to {@code Wait.milliseconds(1)}
+     * leaves {@code 1} untouched, so the argument survived and went on being drawn as {@code seconds}' slot; as
+     * soon as a switch changed the argument's text too, the next one worked, which is why it looked
+     * intermittent. Rebuilding an expression whose parent changed costs a few widgets on the one line edited.
+     */
+    private boolean sameSlot(ASTNode oldNode, ASTNode newNode, ParseContext ctx) {
+        if (!(newNode instanceof Expression)) return true;
+        ASTNode oldParent = oldNode.getParent();
+        ASTNode newParent = newNode.getParent();
+        if (oldParent == null || newParent == null) return oldParent == newParent;
+        if (oldNode.getLocationInParent() != newNode.getLocationInParent()) return false;
+        String before = slice(previousSource, oldParent);
+        return before != null && before.equals(slice(ctx.sourceCode(), newParent));
     }
 
     /** {@code node}'s own source text, or null when the offsets do not index into {@code source}. */

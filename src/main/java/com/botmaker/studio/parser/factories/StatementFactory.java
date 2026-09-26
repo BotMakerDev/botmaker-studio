@@ -38,7 +38,33 @@ public class StatementFactory {
             case BlockType.LambdaCall l -> buildLambdaCall(ctx, l);
             case BlockType.EnumDecl ignored -> createEnumDeclaration(ctx.ast(), context);
             case BlockType.MethodMember ignored -> null; // a method is a class member, not a body statement
+            case BlockType.OwnCall call -> createOwnCall(ctx, context, call);
         };
+    }
+
+    /** The picked method, called with a default for each parameter; null when it is not callable here any more. */
+    private static Statement createOwnCall(EditContext ctx, ASTNode context, BlockType.OwnCall call) {
+        return callableMethods(ctx.analyzer(), context).stream()
+                .filter(m -> m.getName().equals(call.method()) && parameterTypes(m).equals(call.parameterTypes()))
+                .findFirst()
+                .map(m -> callStatement(ctx.ast(), m))
+                .orElse(null);
+    }
+
+    /** {@code m}'s parameter types, erased and qualified — the key an {@link BlockType.OwnCall} picks it by. */
+    public static List<String> parameterTypes(IMethodBinding m) {
+        return java.util.Arrays.stream(m.getParameterTypes())
+                .map(t -> t.getErasure().getQualifiedName())
+                .toList();
+    }
+
+    private static Statement callStatement(AST ast, IMethodBinding target) {
+        MethodInvocation methodCall = ast.newMethodInvocation();
+        methodCall.setName(ast.newSimpleName(target.getName()));
+        for (ITypeBinding p : target.getParameterTypes()) {
+            methodCall.arguments().add(InitializerFactory.createDefaultInitializer(ast, ResolvedType.of(p)));
+        }
+        return ast.newExpressionStatement(methodCall);
     }
 
     private static Statement createControlFlow(EditContext ctx, BlockType.ControlFlow.Kind kind,
@@ -699,32 +725,26 @@ public class StatementFactory {
     }
 
     /**
-     * "Call Function" calls one of <em>the project's own</em> methods, seeded with the first one visible at the
-     * drop site. It used to emit {@code BotMaker.DefaultMethod()} — a method that has never existed in the SDK,
-     * so every drop produced an unresolvable symbol (ROADMAP B7). When the class declares nothing else to call
-     * yet, fall back to {@code BotMaker.print("")}, which always resolves.
+     * "Call Function" with no method named — a pinned row, or a caller with no drop site — calls the first of
+     * {@link #callableMethods}. It used to emit {@code BotMaker.DefaultMethod()}, a method that never existed
+     * (ROADMAP B7). When the class declares nothing else to call yet, it falls back to {@code print("")}, which
+     * always resolves: every control-flow kind must build something, or its row drops without a word
+     * ({@code CodeEditor.addStatement}). The statement menu's own path is the submenu of {@link BlockType.OwnCall}
+     * rows, whose empty case says why instead.
      */
     private static Statement createFunctionCallStatement(EditContext ctx, ASTNode context) {
-        AST ast = ctx.ast();
-        IMethodBinding target = firstCallableMethod(ctx.analyzer(), context);
-        if (target == null) return createPrintStatement(ctx);
-
-        MethodInvocation methodCall = ast.newMethodInvocation();
-        methodCall.setName(ast.newSimpleName(target.getName()));
-        for (ITypeBinding p : target.getParameterTypes()) {
-            methodCall.arguments().add(InitializerFactory.createDefaultInitializer(ast, ResolvedType.of(p)));
-        }
-        return ast.newExpressionStatement(methodCall);
+        List<IMethodBinding> methods = callableMethods(ctx.analyzer(), context);
+        return methods.isEmpty() ? createPrintStatement(ctx) : callStatement(ctx.ast(), methods.getFirst());
     }
 
     /**
-     * The first method callable unqualified at {@code context}. Constructors are skipped (they aren't statements)
-     * and so is the enclosing method itself — seeding a block with a call to the method you're editing would be
+     * The methods callable unqualified at {@code context}, in declaration order. Constructors are skipped (they
+     * aren't statements) and so is the enclosing method itself — a call to the method you're editing is
      * unbounded recursion, which compiles but is never what was meant. In a static member only static methods
      * qualify: {@code main} has no {@code this} to call an instance method on.
      */
-    private static IMethodBinding firstCallableMethod(ProjectAnalyzer analyzer, ASTNode context) {
-        if (analyzer == null || context == null) return null;
+    public static List<IMethodBinding> callableMethods(ProjectAnalyzer analyzer, ASTNode context) {
+        if (analyzer == null || context == null) return List.of();
         String enclosing = null;
         for (ASTNode n = context; n != null; n = n.getParent()) {
             if (n instanceof MethodDeclaration md) {
@@ -733,13 +753,14 @@ public class StatementFactory {
             }
         }
         boolean staticOnly = ProjectAnalyzer.isStaticContext(context);
+        List<IMethodBinding> out = new java.util.ArrayList<>();
         for (IMethodBinding m : analyzer.getAvailableScopes(context).methods()) {
             if (m.isConstructor() || m.isSynthetic()) continue;
             if (m.getName().equals(enclosing)) continue;
             if (staticOnly && !Modifier.isStatic(m.getModifiers())) continue;
-            return m;
+            out.add(m);
         }
-        return null;
+        return out;
     }
 
     // createWaitStatement went on 2026-09-13 with Kind.WAIT. It emitted

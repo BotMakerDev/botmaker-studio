@@ -260,4 +260,47 @@ class StatementMenuTest extends FxHeadlessTest {
     private static List<String> leafTexts(ContextMenu menu) {
         return leafItems(menu).stream().map(MenuItem::getText).toList();
     }
+
+    /** Call Function is a submenu of the functions callable where the block goes, and a pick names the one picked. */
+    @Test
+    void callFunctionIsASubmenuOfTheCallableFunctions() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public static void tick() { }
+                    public static int add(int a) { return a; }
+                    public static void main(String[] args) {
+                    }
+                }
+                """;
+        var cu = com.botmaker.studio.suggestions.ProjectAnalyzer.createCompilationUnit(
+                com.botmaker.studio.TestSupport.runtimeClassPath(), host,
+                com.botmaker.studio.TestSupport.SOURCE_ROOT);
+        var main = ((org.eclipse.jdt.core.dom.TypeDeclaration) cu.types().getFirst()).getMethods()[2];
+        var analyzer = new com.botmaker.studio.suggestions.ProjectAnalyzer(null,
+                new com.botmaker.studio.project.ProjectState());
+        AtomicReference<BlockType> picked = new AtomicReference<>();
+
+        ContextMenu menu = StatementMenu.create(analyzer, null, main.getBody(), picked::set);
+
+        Menu call = allMenus(menu.getItems()).stream()
+                .filter(m -> BlockCatalog.FUNCTION_CALL.displayName().equals(m.getText()))
+                .findFirst().orElseThrow(() -> new AssertionError("no Call Function submenu"));
+        List<String> rows = call.getItems().stream().map(MenuItem::getText).toList();
+        assertEquals(List.of("tick()", "add(int)"), rows);
+
+        call.getItems().get(1).fire();
+        assertTrue(picked.get() instanceof BlockType.OwnCall own && own.method().equals("add"), "" + picked.get());
+    }
+
+    private static List<Menu> allMenus(List<MenuItem> items) {
+        List<Menu> out = new ArrayList<>();
+        for (MenuItem item : items) {
+            if (item instanceof Menu menu) {
+                out.add(menu);
+                out.addAll(allMenus(menu.getItems()));
+            }
+        }
+        return out;
+    }
 }

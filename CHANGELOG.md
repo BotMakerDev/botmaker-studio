@@ -182,6 +182,15 @@ No source changes since v1.1.9; re-released for updated upstream pins.
   soft glow; a breakpoint is a wider red bar with a dot on the block's first line, drawn in the theme's colours.
   Paused on a breakpoint shows both. A method header, enum, initializer or comment no longer takes a
   breakpoint — it could never be hit — and the old red circle is gone.
+- **Switching a call's method now switches everything with it.** Changing `Wait.seconds` to `milliseconds`,
+  `time` and back sometimes kept the old method's value editor, and an overload picked from the overlay
+  palette kept the old method's name. Both came from the editor keeping a block that should have been redrawn.
+- **Call Function lists your functions.** It is a submenu of the functions you can call where the block goes
+  (each overload its own row), and search finds them by name; it used to insert whichever came first.
+- **The "+" between blocks follows your pointer again**, and steps aside rather than covering a block's own
+  buttons.
+- **A changed parameter or constant shows as blocks in Versions**, Was beside Now, instead of two lines of
+  Java — a list turned into a map reads as the two editors you saw.
 - **A text parameter's Choices take what you type.** In the Parameters window, typing a choice and pressing
   Enter added nothing, and the text stayed in the field to be joined onto the next choice (`slow` then
   `turbo` became one choice, `slowturbo`). Enter now adds the choice and clears the field, for a text

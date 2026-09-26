@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Breakpoint & current-block visuals (feedback-batch plan phase 2).**
+- **2026-09-26 (latest) — Editing papercuts (feedback-batch plan phase 3).**
+  - `BlockReuse.sameSlot`: an expression is reused only when its parent's text is unchanged — an argument kept
+    across a method switch kept the slot editor of the old call (`MethodSwitchTest`); doc 30 §5.
+  - `MethodInvocationBlock.switchToOverload` writes `sig.name()`. `BlockType.OwnCall` + `StatementMenu`'s Call
+    Function submenu over `StatementFactory.callableMethods`; search lists them too.
+  - `InsertionSeam.follow`/`freeX`: the "+" follows the pointer and skips neighbours' controls (4px margin).
+  - `BlockDiff.FieldChange` carries both sides' offsets; `DiffCards.fieldCard` draws a changed field as blocks
+    via `BlockPreview.field`.
+- **2026-09-26 — Breakpoint & current-block visuals (feedback-batch plan phase 2).**
   - `blocks.css`: `:highlighted` = canvas gap + 3px accent ring + steady glow; `:breakpoint` 5px bar;
     `:breakpoint:highlighted` layers both; `.breakpoint-dot` replaces `GutterDecorator`'s hardcoded red `Circle`.
   - `CodeBlock.canHoldBreakpoint()` (false: method, enum, initializer, comment) gates gutter, double-click, menu

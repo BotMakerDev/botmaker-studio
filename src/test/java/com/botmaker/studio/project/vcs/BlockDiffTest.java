@@ -120,7 +120,20 @@ class BlockDiffTest {
         String v2 = V1.replace("static int speed = 5;", "static int speed = 8;\n    static String name = \"x\";");
         FileDiff diff = BlockDiff.of(V1, v2);
         assertEquals(List.of(new BlockDiff.FieldChange("Bot.speed", "5", "8", false),
-                new BlockDiff.FieldChange("Bot.name", null, "\"x\"", false)), diff.fields());
+                new BlockDiff.FieldChange("Bot.name", null, "\"x\"", false)),
+                diff.fields().stream().map(f -> new BlockDiff.FieldChange(f.name(), f.was(), f.now(), f.parameter()))
+                        .toList());
+    }
+
+    /** Each side says where its declaration starts, so the Versions tab can draw it as blocks. */
+    @Test
+    void aFieldChangeKnowsWhereEachSideIs() {
+        String a = "class P { @Param static java.util.List<String> names = java.util.List.of(); }";
+        String b = "class P {\n  @Param static java.util.Map<String, Integer> names = java.util.Map.of(); }";
+        BlockDiff.FieldChange change = BlockDiff.of(a, b).fields().getFirst();
+        assertEquals(a.indexOf("@Param"), change.beforeStart());
+        assertEquals(b.indexOf("@Param"), change.afterStart());
+        assertTrue(change.was().startsWith("java.util.List<String>"), "the type is shown when it changed: " + change);
     }
 
     @Test
