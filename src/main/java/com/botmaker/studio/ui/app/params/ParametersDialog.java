@@ -4,7 +4,9 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.params.ChoiceMode;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.plugin.PluginHost;
@@ -37,6 +39,8 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.css.PseudoClass;
 import javafx.scene.input.ClipboardContent;
@@ -591,23 +595,24 @@ public final class ParametersDialog {
         grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
         row++;
 
-        // A closed-set type brings its own choices (every direction, every mouse button), so there is nothing
-        // here for the author to write down — offering an "add a choice" row over them would invite a second,
-        // hand-typed copy of a list the plugin already owns.
-        // A closed set is declared by writing the choices down, and there is no shape to pick first any more
-        // (2026-09-20): a set is not a type, so a leaf or a list of one always offers this row and a value is
-        // free until something is written in it. A closed-set type brings its own choices (every direction,
-        // every mouse button), so there is nothing here for the author to write — offering an "add a choice"
-        // row over them would invite a second, hand-typed copy of a list the plugin already owns.
+        // How the value is picked sits beside the type rather than inside it (2026-09-26): any value, one of a
+        // declared set, or any number of them — the last the one mode that changes the declared type, to a
+        // List of it. A closed-set type brings its own choices (every direction, every mouse button), so it
+        // offers no mode: an "add a choice" row over it would be a hand-typed copy of the plugin's own list.
         Type leaf = ValueTypes.leaf(entry.form());
         ValueGrammar grammar = PluginHost.grammar();
-        if (mine && leaf != null && grammar.known(leaf) && !isEnum(grammar, leaf)) {
+        ChoiceMode mode = ChoiceMode.of(entry.form(), v.options());
+        Type base = ChoiceMode.base(entry.form(), v.options());
+        List<ChoiceMode> modes = new ArrayList<>(ChoiceMode.offered(base, grammar.known(base)));
+        if (!modes.contains(mode)) modes.add(mode);
+        if (mine && modes.size() > 1) {
             Label heading = new Label("Choices");
-            heading.setTooltip(new Tooltip(entry.form() instanceof ValueTypes.Parameterized
-                    ? "The set this parameter's values are picked from. The user ticks any number of them."
-                    : "The set this parameter's value is picked from. The user picks exactly one."));
+            heading.setTooltip(new Tooltip("Whether the value is anything of its type, one of a set you write "
+                    + "down, or any number of them."));
+            VBox choices = new VBox(6, modeBar(entry, mode, modes));
+            if (mode != ChoiceMode.NONE) choices.getChildren().add(buildOptionsEditor(entry));
             grid.add(heading, 0, row);
-            grid.add(buildOptionsEditor(entry), 1, row);
+            grid.add(choices, 1, row);
             row++;
         }
 
@@ -711,12 +716,76 @@ public final class ParametersDialog {
         });
     }
 
+    /** One toggle per mode {@code entry} can be in, the current one pressed. */
+    private Node modeBar(JavaParameter entry, ChoiceMode current, List<ChoiceMode> modes) {
+        ToggleGroup group = new ToggleGroup();
+        HBox bar = new HBox();
+        bar.getStyleClass().add("choice-mode-bar");
+        for (int i = 0; i < modes.size(); i++) {
+            ChoiceMode mode = modes.get(i);
+            ToggleButton button = new ToggleButton(mode.displayName());
+            button.setToggleGroup(group);
+            button.setSelected(mode == current);
+            if (i == 0) button.getStyleClass().add("choice-mode-first");
+            if (i == modes.size() - 1) button.getStyleClass().add("choice-mode-last");
+            button.setTooltip(new Tooltip(switch (mode) {
+                case NONE -> "The value is anything of its type.";
+                case ONE -> "The value is exactly one of the choices you write down.";
+                case MANY -> "The value is any number of the choices you write down, ticked. The field is "
+                        + "declared as a List of its type.";
+            }));
+            // A pressed toggle stays pressed: clicking the current mode is not a way to have none.
+            button.setOnAction(e -> {
+                button.setSelected(true);
+                if (mode != current) switchMode(entry, mode);
+            });
+            bar.getChildren().add(button);
+        }
+        return bar;
+    }
+
     /**
-     * Whether {@code leaf} is an enum a plugin declares — a closed set that brings its own choices (every
-     * direction, every mouse button), so a hand-typed copy of that list would be a second one to drift.
+     * Puts {@code entry} in {@code to}, as one step: the declared type, the choices, and the value.
+     *
+     * <p>What was picked carries across. The first choice written down is the value the field already had,
+     * so a parameter set to 5 that becomes "one of" starts as one of {5}, picked; ticks become the first
+     * ticked one when leaving "any of", and "any of" starts with the old value ticked.
      */
-    private static boolean isEnum(ValueGrammar grammar, Type leaf) {
-        return leaf instanceof Class<?> cls && cls.isEnum() && grammar.type(cls).isPresent();
+    private void switchMode(JavaParameter entry, ChoiceMode to) {
+        ParameterRow row = entry.row();
+        ChoiceMode from = ChoiceMode.of(entry.form(), row.options());
+        Type base = ChoiceMode.base(entry.form(), row.options());
+        Type form = to.formFor(base);
+        ValueGrammar grammar = PluginHost.grammar();
+
+        List<JavaValue> held = from == ChoiceMode.MANY
+                ? ValueWire.partsOrNone(entry.form(), row.value()).stream().map(ValueGrammar.Part::kept).toList()
+                : JavaValue.parse(row.value()).stream().toList();
+        List<String> options = to == ChoiceMode.NONE ? List.of()
+                : !row.options().isEmpty() ? row.options()
+                : held.stream().map(value -> optionText(grammar, base, Optional.of(value)))
+                        .filter(text -> !text.isBlank()).distinct().toList();
+
+        change("how " + row.name() + " is picked", () -> {
+            boolean retyped = !form.equals(entry.form());
+            if (!declare(entry, current -> current.toBuilder().options(options).build(), retyped ? form : null)) {
+                error("“" + row.name() + "” could not be changed.");
+                return;
+            }
+            // A retype reset the value to the new type's fresh one; what was picked goes back over it.
+            if (!retyped || held.isEmpty()) return;
+            Optional<JavaValue> value = to == ChoiceMode.MANY
+                    ? ValueWire.compose(form, List.of(held.getFirst()))
+                    : Optional.of(held.getFirst());
+            JavaParameter now = find(entry.className(), row.name());
+            if (now == null || value.isEmpty()) return;
+            // The card the retype drew holds the fresh value; flushed on the next redraw, it would write that
+            // back over the value set here.
+            valueEditors.clear();
+            JavaParameters.setValue(config, state, now, value.get());
+            reload();
+            rebuildRail();
+        });
     }
 
     /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
@@ -772,7 +841,7 @@ public final class ParametersDialog {
         // type, so writing one down should be the same gesture as setting one: a template comes out of the
         // gallery with its picture, a colour off the screen, a duration as hours and minutes. Typed as text it
         // was a name recalled from memory — and a misremembered one is a choice that silently matches nothing.
-        ValueEditors.Editor fresh = ValueEditors.editorFor(base, null, ctx);
+        ValueEditors.Editor fresh = ValueEditors.framed(ValueEditors.editorFor(base, null, ctx));
         HBox.setHgrow(fresh.node(), Priority.ALWAYS);
         Button add = new Button("Add");
         Runnable addOption = () -> {
@@ -895,10 +964,11 @@ public final class ParametersDialog {
             updated.set(at, typed);
             replaceOptions(entry, updated);
         };
-        ValueEditors.Editor editor = ValueEditors.editorFor(base, written.get().source(), ctx, value -> {
-            pending[0] = value;
-            if (node[0] == null || !node[0].isFocusWithin()) commit.run();
-        });
+        ValueEditors.Editor editor = ValueEditors.framed(ValueEditors.editorFor(base, written.get().source(), ctx,
+                value -> {
+                    pending[0] = value;
+                    if (node[0] == null || !node[0].isFocusWithin()) commit.run();
+                }));
         node[0] = editor.node();
         node[0].focusWithinProperty().addListener((o, was, is) -> {
             if (!is) commit.run();
@@ -993,6 +1063,12 @@ public final class ParametersDialog {
         type.setPrefWidth(180);
         Button add = new Button("Add parameter");
         add.getStyleClass().add("primary-button");
+        // Ticked by default (2026-09-26): a parameter is most often added for the person running the bot, and
+        // one that silently stayed editor-only was a setting the Runner never showed them.
+        CheckBox shown = new CheckBox("Show to user");
+        shown.setSelected(true);
+        shown.setTooltip(new Tooltip("Ticked, the new parameter appears in the Runner window. Unticked, it is "
+                + "yours alone. Either way it can be changed on its card."));
 
         Runnable addParameter = () -> {
             String candidate = name.getText() == null ? "" : name.getText().trim();
@@ -1012,8 +1088,16 @@ public final class ParametersDialog {
                             + "a field of that name, or no installed plugin declares this type.");
                     return;
                 }
+                if (shown.isSelected()) {
+                    reload();
+                    JavaParameter added = find(selectedClass, candidate);
+                    if (added != null) {
+                        JavaParameters.declare(config, state, added,
+                                added.row().toBuilder().visibility(Visibility.PUBLIC).build(), added.form());
+                    }
+                }
                 // After the field, not before: a name refused above must not cost the project a dependency.
-                boolean declared = libraries.ensureContract();
+                boolean declared = libraries != null && libraries.ensureContract();
                 String created = fresh ? "Created " + selectedClass + ".java for it." : "";
                 error(declared ? (created + " Added botmaker-studio-api to pom.xml for @Param.").trim() : created);
                 name.clear();
@@ -1027,7 +1111,7 @@ public final class ParametersDialog {
             e.consume();
         });
 
-        HBox row = new HBox(6, new Label("New"), name, type, add);
+        HBox row = new HBox(6, new Label("New"), name, type, shown, add);
         List<String> classes = JavaParameters.classes(config, state);
         if (classes.size() > 1) {
             ComboBox<String> into = new ComboBox<>();

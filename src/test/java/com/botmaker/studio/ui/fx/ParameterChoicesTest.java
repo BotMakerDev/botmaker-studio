@@ -79,8 +79,13 @@ class ParameterChoicesTest extends FxHeadlessTest {
         PluginHost.bind(List.of(pluginJar().toString()), null);
     }
 
-    /** Opens the window over a project whose one parameter is {@code field}. */
+    /** Opens the window over a project whose one parameter is {@code field}, annotated {@code @Param}. */
     private void open(String imports, String field) throws IOException {
+        open(imports, "@Param", field);
+    }
+
+    /** The same, with the annotation as given — {@code @Param(options = …)} for a field picked from a set. */
+    private void open(String imports, String annotation, String field) throws IOException {
         ProjectConfig config = ProjectConfig.forProject("refbot", root);
         Files.createDirectories(config.mainPackageDir());
         parameters = config.mainPackageDir().resolve("Parameters.java");
@@ -90,15 +95,16 @@ class ParameterChoicesTest extends FxHeadlessTest {
                 import com.botmaker.plugin.api.params.Param;
                 %s
                 public final class Parameters {
-                    @Param
+                    %s
                     %s
                 }
-                """.formatted(imports, field));
+                """.formatted(imports, annotation, field));
         interact(() -> new ParametersDialog(null, config, null, null).show());
     }
 
+    /** A text parameter already picked "one of" a set holding only its own value. */
     private void openText() throws IOException {
-        open("", "public static String mode = \"fast\";");
+        open("", "@Param(options = {\"fast\"})", "public static String mode = \"fast\";");
     }
 
     @AfterEach
@@ -116,8 +122,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
         type(KeyCode.ENTER);
 
         String source = Files.readString(parameters);
-        assertTrue(source.contains("@Param(options = { \"slow\" })")
-                || source.contains("@Param(options = {\"slow\"})"), source);
+        assertTrue(source.contains("\"fast\", \"slow\""), source);
     }
 
     @Test
@@ -129,17 +134,58 @@ class ParameterChoicesTest extends FxHeadlessTest {
         clickOn(find(n -> n instanceof Button b && "Add".equals(b.getText())));
 
         String source = Files.readString(parameters);
-        assertTrue(source.contains("\"slow\", \"turbo\""), source);
+        assertTrue(source.contains("\"fast\", \"slow\", \"turbo\""), source);
     }
 
     @Test
     void aListOfTextTakesChoicesTheSameWay() throws IOException {
-        open("import java.util.List;\n", "public static List<String> modes = List.of();");
+        open("import java.util.List;\n", "@Param(options = {\"fast\"})",
+                "public static List<String> modes = List.of();");
         clickOn(addField()).write("slow");
         type(KeyCode.ENTER);
 
         String source = Files.readString(parameters);
-        assertTrue(source.contains("\"slow\""), source);
+        assertTrue(source.contains("\"fast\", \"slow\""), source);
+    }
+
+    /** A free value has no add field; "One of" declares a set holding the value it already had. */
+    @Test
+    void oneOfStartsTheSetWithTheCurrentValue() throws IOException {
+        open("", "public static String mode = \"fast\";");
+        assertEquals(null, find(n -> n instanceof TextField tf && "new choice".equals(tf.getPromptText())),
+                "a value typed freely offers no choices to add to");
+        clickOn(find(n -> n instanceof javafx.scene.control.ToggleButton b && "One of".equals(b.getText())));
+
+        String source = Files.readString(parameters);
+        assertTrue(source.contains("options = {\"fast\"}") || source.contains("options = { \"fast\" }"), source);
+        assertTrue(source.contains("String mode = \"fast\""), source);
+    }
+
+    /** A parameter added from the bar is shown to the user unless its tick is cleared first. */
+    @Test
+    void aNewParameterIsShownToTheUserByDefault() throws IOException {
+        open("", "public static String mode = \"fast\";");
+        TextField name = (TextField) find(n -> n instanceof TextField tf && "parameter name".equals(tf.getPromptText()));
+        interact(() -> {
+            name.setText("speed");
+            name.fireEvent(new javafx.event.ActionEvent());
+        });
+
+        String source = Files.readString(parameters);
+        assertTrue(source.contains("speed"), source);
+        assertTrue(source.contains("visibility"), source);
+    }
+
+    /** "Any of" is the one mode that retypes: the field becomes a list, the old value its one tick. */
+    @Test
+    void anyOfMakesTheFieldAListWithTheOldValueTicked() throws IOException {
+        open("", "public static String mode = \"fast\";");
+        clickOn(find(n -> n instanceof javafx.scene.control.ToggleButton b && "Any of".equals(b.getText())));
+
+        String source = Files.readString(parameters);
+        assertTrue(source.contains("List<String> mode"), source);
+        assertTrue(source.contains("\"fast\""), source);
+        assertTrue(source.contains("List.of(\"fast\")"), source);
     }
 
     private Node addField() {

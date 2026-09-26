@@ -225,6 +225,28 @@ public final class ValueEditors {
         return inert.node();
     }
 
+    /**
+     * {@code editor} with an outline that says it can be clicked, unless it already draws one.
+     *
+     * <p>A text field, a combo box, a spinner and a button look like controls on their own; a plugin's
+     * picker built from labels and a swatch — a point, a template's thumbnail — read as plain text beside
+     * them until 2026-09-26. The frame is {@code .param-value-frame} in {@code blocks.css}, lit on hover.
+     */
+    public static Editor framed(Editor editor) {
+        Node node = editor.node();
+        if (node instanceof javafx.scene.control.TextInputControl
+                || node instanceof javafx.scene.control.ComboBoxBase<?>
+                || node instanceof javafx.scene.control.Spinner<?>
+                || node instanceof javafx.scene.control.ButtonBase) {
+            return editor;
+        }
+        javafx.scene.layout.HBox frame = new javafx.scene.layout.HBox(node);
+        frame.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        frame.getStyleClass().add("param-value-frame");
+        javafx.scene.layout.HBox.setHgrow(node, javafx.scene.layout.Priority.ALWAYS);
+        return new Editor(frame, editor.read());
+    }
+
     /** Lets an editor fill the width it is given, which is what a form column wants and a toolbar does not. */
     public static void stretch(Node node) {
         if (node instanceof Control control) control.setMaxWidth(Double.MAX_VALUE);

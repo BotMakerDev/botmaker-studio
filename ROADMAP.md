@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 3: universal type chooser.** `ui/render/components/types/`:
+- **2026-09-26 (latest) — Feedback batch 2, phase 4: parameters model.** `project/params/ChoiceMode` (pure:
+  NONE/ONE/MANY read off form + options, `base`, `formFor`, `offered` — no ONE for a flag, none for an enum);
+  the card's Choices row is a mode bar, `ParametersDialog.switchMode` retypes/seeds choices/carries the value in
+  one step. `ParamValueWidgets.editor` is recursive (list/map/record parts at any depth, untouched parts kept);
+  `ValueEditors.framed` + `.param-value-frame`; add bar's *Show to user* ticked by default.
+- **2026-09-26 — Feedback batch 2, phase 3: universal type chooser.** `ui/render/components/types/`:
   `TypeCatalog` (pure; `Purpose` VALUE/DECLARATION/RETURN; Java → This project (`BotRecords.shapes()`) → per
   plugin (`PluginHost.ownedTypes()`), alphabetical, `filter`) and `TypeChooser` (a `ContextMenu`: search, Wrap
   row with no depth cap, groups). `ValueTypePicker` and `BotTypePicker` deleted. `SignatureType.Typed` +

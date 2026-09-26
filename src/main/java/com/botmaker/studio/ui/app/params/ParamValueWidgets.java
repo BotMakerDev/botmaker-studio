@@ -53,9 +53,10 @@ import java.util.function.Supplier;
  * {@code Map.ofEntries} throws on a repeated key, so a map that wrote one would be a bot that stops running.
  *
  * <p><b>The form decides the widget, and it decides it unconditionally.</b> A leaf is its type's own editor,
- * a list is rows, a map is two columns, a record the bot declares is one row per component. Anything else —
- * a nesting deeper than the cell draws, a leaf nothing declares — is shown <b>as the author wrote it</b> and
- * not edited. Read-only is a first-class outcome here ({@code docs/refactor/32-generic-values.md}), not a
+ * a list is rows, a map is two columns, a record the bot declares is one row per component — and each part of
+ * those is drawn the same way, as deep as the type goes (2026-09-26; one level until then). Anything else — a
+ * container nobody registered, a class the bot declares that is not a record — is shown <b>as the author
+ * wrote it</b> and not edited. Read-only is a first-class outcome here ({@code docs/refactor/32-generic-values.md}), not a
  * failure path: the window never hides a parameter the bot reads.
  *
  * <p>Shared by the Parameters dialog and the Runner window, so a type is entered the same way wherever it is
@@ -121,47 +122,99 @@ public final class ParamValueWidgets {
         return widget;
     }
 
-    /** One case of {@link Type} per widget, and a read-only fallback for the rest. */
+    /**
+     * A declared set of choices is radio buttons or ticks; anything else is {@link #editor}, one level at a
+     * time as deep as the type goes, or read-only as a whole when some part of it has no editor at all.
+     */
     private static Node cell(String group, ParameterRow row, Type form, BotRecords records,
                              ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueGrammar grammar = PluginHost.grammar();
         List<String> options = row.options();
 
-        if (form instanceof ValueTypes.BotClass declared) {
-            return records.whyNotEditable(declared) == null
-                    ? recordRows(group, row, declared, records, ctx, sink)
-                    : unreadable(row, records.whyNotEditable(declared));
+        if (!options.isEmpty()) {
+            if (ValueTypes.isLeaf(form)) return radioRow(grammar, group, row, form, options, ctx, sink);
+            List<Type> arguments = ValueTypes.arguments(form);
+            if (ValueTypes.container(form).orElse(null) == ValueContainer.LIST
+                    && ValueTypes.isLeaf(arguments.getLast())) {
+                return checkList(grammar, group, row, form, arguments.getLast(), options, ctx, sink);
+            }
         }
-        // A leaf nothing declares is not sent down the read-only path: its own editor already draws it as a
-        // disabled field holding the Java as written, and reads back blank, so nothing is written over it.
-        if (ValueTypes.isLeaf(form)) {
-            return options.isEmpty()
-                    ? single(group, row, form, ctx, sink)
-                    : radioRow(grammar, group, row, form, options, ctx, sink);
-        }
+        String why = whyNotEditable(form, records);
+        if (why != null) return unreadable(row, why);
+        ValueEditors.Editor editor = editor(grammar, form, SourceNode.parse(row.value()), records, ctx);
+        ValueEditors.stretch(editor.node());
+        sink.add(ValueEditor.of(group, row, editor.read()));
+        return editor.node();
+    }
+
+    /**
+     * Why no cell here can write {@code form}, or null when one can — at any depth: a list of maps of records
+     * is editable when every part of it is.
+     *
+     * <p>A leaf is always drawn: a leaf nothing declares is its own editor's disabled field, holding the Java
+     * as written and read back untouched.
+     */
+    static String whyNotEditable(Type form, BotRecords records) {
+        if (ValueTypes.isLeaf(form)) return null;
+        if (form instanceof ValueTypes.BotClass declared) return records.whyNotEditable(declared);
         Optional<ValueContainer<?>> container = ValueTypes.container(form);
-        List<Type> arguments = ValueTypes.arguments(form);
-        if (container.orElse(null) == ValueContainer.LIST && ValueTypes.isLeaf(arguments.getLast())) {
-            return options.isEmpty()
-                    ? listRows(grammar, group, row, form, arguments.getLast(), ctx, sink)
-                    : checkList(grammar, group, row, form, arguments.getLast(), options, ctx, sink);
+        if (container.isEmpty()) return "no editor here writes " + ValueTypes.sourceName(form);
+        for (Type argument : ValueTypes.arguments(form)) {
+            String why = whyNotEditable(argument, records);
+            if (why != null) return why;
         }
-        if (container.orElse(null) == ValueContainer.MAP
-                && ValueTypes.isLeaf(arguments.get(0)) && ValueTypes.isLeaf(arguments.get(1))) {
-            return mapGrid(group, row, form, arguments.get(0), arguments.get(1), ctx, sink);
-        }
-        return unreadable(row, "no editor here writes " + ValueTypes.sourceName(form));
+        return null;
     }
 
     // --- the editable cells --------------------------------------------------------------------------------
 
-    private static Node single(String group, ParameterRow row, Type leaf,
-                               ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ValueEditors.Editor editor = ValueEditors.editorFor(leaf, row.value(), ctx);
-        Node widget = editor.node();
-        ValueEditors.stretch(widget);
-        sink.add(ValueEditor.of(group, row, editor.read()));
-        return widget;
+    /**
+     * The editor for one value of {@code form}, seeded from {@code written} — a leaf's own editor, a list as
+     * rows, a map as two columns, a record as one row per component, each part drawn by this same method.
+     *
+     * <p><b>A part nothing edited reads back as it was written</b>, so an editor that answers blank for a
+     * value it holds (a leaf no plugin draws) never drops the part out of the composite around it. A part
+     * {@link #whyNotEditable} refuses is shown as written and kept.
+     */
+    static ValueEditors.Editor editor(ValueGrammar grammar, Type form, Optional<SourceNode> written,
+                                      BotRecords records, ValueEditors.Context ctx) {
+        Optional<JavaValue> kept = written.map(JavaValue::kept);
+        if (ValueTypes.isLeaf(form)) {
+            ValueEditors.Editor leaf = ValueEditors.framed(
+                    ValueEditors.editorFor(form, written.map(SourceNode::source).orElse(null), ctx));
+            return new ValueEditors.Editor(leaf.node(), () -> leaf.read().get().or(() -> kept));
+        }
+        if (whyNotEditable(form, records) != null) return keptAsWritten(form, written);
+        if (form instanceof ValueTypes.BotClass declared) {
+            return recordRows(grammar, declared, written, records, ctx);
+        }
+        ValueContainer<?> container = ValueTypes.container(form).orElseThrow();
+        List<Type> arguments = ValueTypes.arguments(form);
+        if (container == ValueContainer.LIST) {
+            return arguments.getLast() == String.class
+                    ? textLines(grammar, form, written)
+                    : listRows(grammar, form, arguments.getLast(), written, records, ctx);
+        }
+        if (container == ValueContainer.MAP) {
+            return mapGrid(grammar, form, arguments.get(0), arguments.get(1), written, records, ctx);
+        }
+        return keptAsWritten(form, written);
+    }
+
+    /** A part no cell here writes: its Java as written, handed back untouched. */
+    private static ValueEditors.Editor keptAsWritten(Type form, Optional<SourceNode> written) {
+        Label shown = new Label(written.map(SourceNode::source).orElse("—"));
+        shown.getStyleClass().add("dialog-hint-text");
+        shown.setTooltip(new Tooltip("Kept as written: no editor here writes " + ValueTypes.sourceName(form) + "."));
+        Optional<JavaValue> kept = written.map(JavaValue::kept);
+        return new ValueEditors.Editor(shown, () -> kept);
+    }
+
+    /** A column of a composite's rows, marked so a composite inside another one is indented beneath it. */
+    private static VBox composite() {
+        VBox column = new VBox(4);
+        column.getStyleClass().add("param-composite");
+        return column;
     }
 
     /**
@@ -232,26 +285,31 @@ public final class ParamValueWidgets {
      * where a comma is, and twenty strings are faster typed than clicked. Every other type gets a growable
      * column of that type's own editor instead.
      */
-    private static Node listRows(ValueGrammar grammar, String group, ParameterRow row, Type form,
-                                 Type leaf, ValueEditors.Context ctx, List<ValueEditor> sink) {
-        List<ValueGrammar.Part> parts = ValueWire.partsOrNone(form, row.value());
-        if (leaf == String.class) {
-            List<String> items = parts.stream()
-                    .map(part -> grammar.valueOf(leaf, part.written()).orElse(null))
-                    .filter(value -> value instanceof String)
-                    .map(value -> (String) value)
-                    .toList();
-            TextArea area = new TextArea(String.join("\n", items));
-            area.setPrefRowCount(Math.max(3, Math.min(8, items.size() + 1)));
-            area.setPromptText("One per line");
-            sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, lines(area).stream()
-                    .flatMap(line -> grammar.spell(String.class, line).stream())
-                    .toList())));
-            return area;
-        }
+    private static ValueEditors.Editor textLines(ValueGrammar grammar, Type form, Optional<SourceNode> written) {
+        List<String> items = parts(form, written).stream()
+                .map(part -> grammar.valueOf(String.class, part.written()).orElse(null))
+                .filter(value -> value instanceof String)
+                .map(value -> (String) value)
+                .toList();
+        TextArea area = new TextArea(String.join("\n", items));
+        area.setPrefRowCount(Math.max(3, Math.min(8, items.size() + 1)));
+        area.setPromptText("One per line");
+        return new ValueEditors.Editor(area, () -> ValueWire.compose(form, lines(area).stream()
+                .flatMap(line -> grammar.spell(String.class, line).stream())
+                .toList()));
+    }
 
+    /** {@code written} taken apart one level, or no parts for a fresh value or one nothing can read. */
+    private static List<ValueGrammar.Part> parts(Type form, Optional<SourceNode> written) {
+        return written.map(node -> ValueWire.partsOrNone(form, node)).orElse(List.of());
+    }
+
+    /** A list of anything but text: a growable column of the element's own editor. */
+    private static ValueEditors.Editor listRows(ValueGrammar grammar, Type form, Type element,
+                                                Optional<SourceNode> written, BotRecords records,
+                                                ValueEditors.Context ctx) {
         List<ValueEditors.Editor> editors = new ArrayList<>();
-        VBox column = new VBox(4);
+        VBox column = composite();
         Button add = new Button("Add");
         Runnable[] rebuild = new Runnable[1];
 
@@ -278,17 +336,18 @@ public final class ParamValueWidgets {
             column.getChildren().add(add);
         };
 
-        for (ValueGrammar.Part part : parts) editors.add(ValueEditors.editorFor(leaf, part.source(), ctx));
+        for (ValueGrammar.Part part : parts(form, written)) {
+            editors.add(editor(grammar, part.form(), Optional.of(part.written()), records, ctx));
+        }
         add.setOnAction(e -> {
-            editors.add(ValueEditors.editorFor(leaf, null, ctx));
+            editors.add(editor(grammar, element, Optional.empty(), records, ctx));
             rebuild[0].run();
         });
         rebuild[0].run();
 
-        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, editors.stream()
+        return new ValueEditors.Editor(column, () -> ValueWire.compose(form, editors.stream()
                 .flatMap(editor -> editor.read().get().stream())
-                .toList())));
-        return column;
+                .toList()));
     }
 
     /**
@@ -299,21 +358,24 @@ public final class ParamValueWidgets {
      * so a map that wrote one would be a bot that stops running; the marked row is the one not written, and
      * it stays on screen holding what was typed, so nothing the user entered disappears silently.
      */
-    private static Node mapGrid(String group, ParameterRow row, Type form, Type keyType,
-                                Type valueType, ValueEditors.Context ctx, List<ValueEditor> sink) {
+    private static ValueEditors.Editor mapGrid(ValueGrammar grammar, Type form, Type keyType, Type valueType,
+                                               Optional<SourceNode> written, BotRecords records,
+                                               ValueEditors.Context ctx) {
         Type entryForm = ValueTypes.container(form)
                 .map(container -> container.partTypes(ValueTypes.arguments(form), 1).getFirst())
                 .orElse(ValueTypes.NONE);
 
         List<Entry> entries = new ArrayList<>();
-        for (ValueGrammar.Part part : ValueWire.partsOrNone(form, row.value())) {
+        for (ValueGrammar.Part part : parts(form, written)) {
             List<ValueGrammar.Part> pair = ValueWire.partsOrNone(part.form(), part.written());
             if (pair.size() != 2) continue;
-            entries.add(new Entry(pair.get(0).source(), pair.get(1).source()));
+            entries.add(new Entry(Optional.of(pair.get(0).written()), Optional.of(pair.get(1).written())));
         }
+        Factory cellOf = entry -> new Cell(editor(grammar, keyType, entry.key(), records, ctx),
+                editor(grammar, valueType, entry.value(), records, ctx));
 
         List<Cell> cells = new ArrayList<>();
-        VBox column = new VBox(4);
+        VBox column = composite();
         Button add = new Button("Add");
         Runnable[] rebuild = new Runnable[1];
 
@@ -340,15 +402,15 @@ public final class ParamValueWidgets {
 
         // The watcher is wired once per cell, where the cell is made: the rows are rebuilt on every add and
         // remove, so wiring it there would stack one listener per rebuild on the same field.
-        for (Entry entry : entries) cells.add(watched(cells, keyType, valueType, entry, ctx));
+        for (Entry entry : entries) cells.add(watched(cells, cellOf.cell(entry)));
         add.setOnAction(e -> {
-            cells.add(watched(cells, keyType, valueType, new Entry(null, null), ctx));
+            cells.add(watched(cells, cellOf.cell(new Entry(Optional.empty(), Optional.empty()))));
             rebuild[0].run();
         });
         rebuild[0].run();
 
-        sink.add(ValueEditor.of(group, row, () -> {
-            List<JavaValue> written = new ArrayList<>();
+        return new ValueEditors.Editor(column, () -> {
+            List<JavaValue> pairs = new ArrayList<>();
             List<JavaValue> seen = new ArrayList<>();
             for (Cell cell : cells) {
                 Optional<JavaValue> key = cell.key().read().get();
@@ -357,51 +419,36 @@ public final class ParamValueWidgets {
                 // that is never focused out of. The first one written wins, which is the one on screen above.
                 if (key.isEmpty() || value.isEmpty() || seen.stream().anyMatch(key.get()::sameJava)) continue;
                 seen.add(key.get());
-                ValueWire.compose(entryForm, List.of(key.get(), value.get())).ifPresent(written::add);
+                ValueWire.compose(entryForm, List.of(key.get(), value.get())).ifPresent(pairs::add);
             }
-            return ValueWire.compose(form, written);
-        }));
-        return column;
+            return ValueWire.compose(form, pairs);
+        });
     }
 
     /**
-     * A record the bot declares, as one labelled row per component.
+     * A record the bot declares, as one labelled row per component, each drawn by {@link #editor}.
      *
      * <p><b>The components are fixed, so there is no Add and no ✕.</b> A list and a map are as long as the
      * user makes them, and a record is exactly as long as its own declaration — changing that is editing the
      * record, which is a thing to do in the file and not in a parameters window.
-     *
-     * <p>A component whose own form is not a leaf keeps the source it already had, shown beside its name and
-     * written back untouched.
      */
-    private static Node recordRows(String group, ParameterRow row, ValueTypes.BotClass declared,
-                                   BotRecords records, ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ValueGrammar grammar = PluginHost.grammar();
+    private static ValueEditors.Editor recordRows(ValueGrammar grammar, ValueTypes.BotClass declared,
+                                                  Optional<SourceNode> written, BotRecords records,
+                                                  ValueEditors.Context ctx) {
         List<BotRecords.Component> components = records.componentsOf(declared);
-        List<ValueGrammar.Part> held = records.partsOf(declared, row.value()).orElse(List.of());
+        List<ValueGrammar.Part> held = written.flatMap(node -> records.partsOf(declared, node.source()))
+                .orElse(List.of());
 
-        VBox column = new VBox(4);
+        VBox column = composite();
         List<ValueEditors.Editor> readers = new ArrayList<>(components.size());
         for (int i = 0; i < components.size(); i++) {
             BotRecords.Component component = components.get(i);
-            Optional<ValueGrammar.Part> part = i < held.size() ? Optional.of(held.get(i)) : Optional.empty();
-            String written = part.map(ValueGrammar.Part::source).orElse("");
+            Optional<SourceNode> part = i < held.size() ? Optional.of(held.get(i).written()) : Optional.empty();
             Label name = new Label(component.name());
             name.getStyleClass().add("dialog-hint-text");
             name.setMinWidth(72);
 
-            ValueEditors.Editor editor;
-            if (ValueTypes.isLeaf(component.form()) && grammar.known(component.form())) {
-                editor = ValueEditors.editorFor(component.form(), written, ctx);
-            } else {
-                Label shown = new Label(written.isBlank() ? "—" : written);
-                shown.getStyleClass().add("dialog-hint-text");
-                shown.setTooltip(new Tooltip("Kept as written: " + ValueTypes.sourceName(component.form())
-                                             + " is edited where the record is."));
-                // Written back as the tree it was read as, never re-parsed from what the label shows.
-                Optional<JavaValue> kept = part.map(ValueGrammar.Part::kept);
-                editor = new ValueEditors.Editor(shown, () -> kept);
-            }
+            ValueEditors.Editor editor = editor(grammar, component.form(), part, records, ctx);
             readers.add(editor);
 
             HBox line = new HBox(6, name, editor.node());
@@ -412,21 +459,25 @@ public final class ParamValueWidgets {
         if (components.isEmpty()) column.getChildren().add(hint("This record has no components."));
 
         // Every component or none: compose declines a record with a component missing.
-        sink.add(ValueEditor.of(group, row, () -> records.compose(declared, readers.stream()
+        return new ValueEditors.Editor(column, () -> records.compose(declared, readers.stream()
                 .map(editor -> editor.read().get().orElse(null))
-                .toList())));
-        return column;
+                .toList()));
     }
 
-    /** One entry's two halves as the Java they are written as. */
-    private record Entry(String key, String value) {}
+    /** One entry's two halves as the Java they are written as, or empty for a row just added. */
+    private record Entry(Optional<SourceNode> key, Optional<SourceNode> value) {}
 
-    /** One map row, with the key field watching for a key another row already has. */
-    private static Cell watched(List<Cell> cells, Type keyType, Type valueType, Entry entry,
-                                ValueEditors.Context ctx) {
-        Cell cell = new Cell(ValueEditors.editorFor(keyType, entry.key(), ctx),
-                ValueEditors.editorFor(valueType, entry.value(), ctx));
-        cell.key().node().focusedProperty().addListener((o, was, is) -> {
+    /** Builds one map row's two editors. */
+    private interface Factory {
+        Cell cell(Entry entry);
+    }
+
+    /**
+     * One map row, with the key watching for a key another row already has — on the key's focus leaving,
+     * which for a key drawn as several controls is the whole group losing it.
+     */
+    private static Cell watched(List<Cell> cells, Cell cell) {
+        cell.key().node().focusWithinProperty().addListener((o, was, is) -> {
             if (!is) markDuplicates(cells);
         });
         return cell;

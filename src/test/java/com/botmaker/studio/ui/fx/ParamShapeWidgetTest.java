@@ -142,6 +142,31 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     }
 
     /**
+     * A map of lists is editable, not read-only: every part is drawn as deep as the type goes (2026-09-26), and
+     * untouched it reads back the Java it was seeded with.
+     */
+    @Test
+    void aNestedValueIsEditedAtEveryDepthAndReadsBackAsWritten() {
+        ValueGrammar grammar = PluginHost.grammar();
+        Type table = ValueTypes.mapOf(TEXT, ValueTypes.listOf(WHOLE_NUMBER));
+        JavaValue numbers = grammar.compose(ValueTypes.listOf(WHOLE_NUMBER), List.of(
+                grammar.spell(int.class, 1).orElseThrow(), grammar.spell(int.class, 2).orElseThrow())).orElseThrow();
+        Type entry = ValueTypes.of(com.botmaker.studio.plugin.grammar.ValueContainer.ENTRY,
+                List.of(TEXT, ValueTypes.listOf(WHOLE_NUMBER)));
+        JavaValue pair = grammar.compose(entry, List.of(grammar.spell(String.class, "a").orElseThrow(), numbers))
+                .orElseThrow();
+        JavaValue seed = grammar.compose(table, List.of(pair)).orElseThrow();
+        ParameterRow row = ParameterRow.named("table", ValueTypes.sourceName(table)).value(seed.source()).build();
+
+        List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
+        widgetFor(row, table, sink);
+
+        assertEquals(1, sink.size(), "a nested value is a cell that writes, not a read-only label");
+        assertTrue(seed.sameJava(sink.getFirst().read().get().orElseThrow()),
+                sink.getFirst().read().get().orElseThrow().source());
+    }
+
+    /**
      * The reader hands back the Java the field takes, written from the option's own value and never from the
      * button's label. They part company the moment an option carries a graphic — a template's thumbnail, a
      * colour swatch — and a value read off a label would then be whatever the label said.

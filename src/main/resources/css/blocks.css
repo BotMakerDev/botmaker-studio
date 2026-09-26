@@ -513,6 +513,43 @@
     -fx-padding: 0 0 10 0;
 }
 
+/* A value picker that draws no outline of its own (a point, a thumbnail): framed like a field, so it reads as
+   something to click rather than as text, and lit on hover like one. */
+.param-value-frame {
+    -fx-background-color: -bm-field;
+    -fx-background-radius: 4;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
+    -fx-padding: 3 6 3 6;
+    -fx-cursor: hand;
+}
+
+.param-value-frame:hover {
+    -fx-border-color: -bm-primary;
+}
+
+/* A list, map or record inside another one: indented under a rule, so the depth is visible. */
+.param-composite .param-composite {
+    -fx-border-color: transparent transparent transparent -bm-divider;
+    -fx-border-width: 0 0 0 2;
+    -fx-padding: 2 0 2 8;
+}
+
+/* How a parameter is picked — Any value / One of / Any of — as one strip of toggles. JavaFX CSS has no
+   :first-child, so the ends are classes the dialog sets. */
+.choice-mode-bar .toggle-button {
+    -fx-background-radius: 0;
+}
+
+.choice-mode-bar .toggle-button.choice-mode-first {
+    -fx-background-radius: 4 0 0 4;
+}
+
+.choice-mode-bar .toggle-button.choice-mode-last {
+    -fx-background-radius: 0 4 4 0;
+}
+
 /* One plugin's section in the Parameters dialog: which plugin's parameters these are. Quieter than the
    dialog's own title, which names the category being looked at — the section is the second axis. */
 .param-section-heading {

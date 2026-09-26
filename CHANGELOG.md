@@ -24,8 +24,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   plugin's buttons under that plugin's name.
 - **The GitHub account lives in the Versions tab.** Its button is at the end of the tab's top strip; the ⑂ VCS
   and GitHub buttons are gone from the toolbar.
+- **How a parameter is picked is chosen beside its type.** *Choices* is a strip — *Any value*, *One of*, *Any
+  of* — rather than something the type implies. *One of* starts the set with the value the parameter already
+  has; *Any of* makes the field a `List` of its type with that value ticked, and is the only mode that changes
+  the type. A true/false parameter offers no *One of*.
+- **New parameters are shown to the user by default.** The add bar has a *Show to user* tick, on to begin with.
+- **Pickers look clickable.** A value picker that draws no outline of its own (a point, a picture) is framed
+  like a field and lights up on hover.
 
 ### Added
+
+- **Nested parameter values are editable.** A `List<List<Point>>`, a `Map<String, List<Integer>>` or a record
+  holding a list is edited part by part, as deep as it goes, instead of shown read-only.
 
 - **Only differences** in the Versions tab: a changed function shows just the statements that changed, as
   blocks or as Java. Remembered between sessions.
