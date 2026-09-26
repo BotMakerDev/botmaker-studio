@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Explorer overhaul and `.botmaker/settings.json` (feedback-batch plan phase 8, last).**
+- **2026-09-26 (latest) — Feedback batch 2, phase 1: three bugs.** `ExpressionMenu.freshVariableName` falls back
+  to `DefaultNames.forType` when the lower-cased name is not an identifier (`int` → `number`; was
+  `Invalid identifier : >int<`). Choices draw through `ValueEditors.optionDisplay` (preview, else the inert
+  editor) and edit in place (`ParametersDialog.optionEditor`, `editorFor(…, onChange)`), never as Java.
+  `JavaParameters.declare` drops the old leaf's options and non-number bounds on a retype (`retyped`).
+- **2026-09-26 — Explorer overhaul and `.botmaker/settings.json` (feedback-batch plan phase 8, last).**
   - `ui/app/ExplorerModel` (pure): folder tree with folded package chains, `Kind` (vector icon per file kind),
     filter via `SourceNavigation.match`, status = git's `FileStatus` + buffers differing from disk.
   - `FileExplorerManager`: My code / Resources / Library groups, filter field, Structure `TitledPane`

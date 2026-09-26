@@ -183,6 +183,29 @@ class JavaParametersTest {
                 .contains("public static String maxAttempts"));
     }
 
+    @Test
+    void aRetypeDropsTheChoicesAndBoundsOfTheOldType(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param(options = {"1", "5"}, min = 1, max = 5)
+                    public static int maxAttempts = 1;
+                """));
+
+        JavaParameter entry = only(config);
+        // The window retypes with the row as it stands, choices and all.
+        ParameterRow stored = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
+                TestValues.GRAMMAR).orElseThrow();
+
+        // A choice written for an int is no value of a String: kept, it drew as a disabled row holding the
+        // old type's Java, and the window read as if the retype had not happened.
+        assertEquals(List.of(), stored.options());
+        assertEquals(Double.NEGATIVE_INFINITY, stored.min());
+        assertEquals(Double.POSITIVE_INFINITY, stored.max());
+        String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+        assertFalse(source.contains("options"), source);
+        assertFalse(source.contains("min ="), source);
+    }
+
     // ---- values -----------------------------------------------------------------------------------------
 
     @Test

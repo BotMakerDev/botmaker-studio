@@ -14,6 +14,7 @@ import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.plugin.HostServices;
+import com.botmaker.studio.util.DefaultNames;
 import com.botmaker.studio.util.MethodSignature;
 import com.botmaker.studio.util.VariableScopeVisitor;
 import io.github.classgraph.ClassInfo;
@@ -26,6 +27,7 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 
+import javax.lang.model.SourceVersion;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -418,9 +420,19 @@ public final class ExpressionMenu {
     /** A lowercase-simple-name-based variable name (e.g. {@code direction}), suffixed to avoid clashing with
      *  an existing visible variable ({@code direction2}, …). */
     private static String freshVariableName(ResolvedType type, List<ProjectAnalyzer.VariableOption> existing) {
-        String simple = type.leafType().simpleName();
-        String base = simple.isEmpty() ? "value" : Character.toLowerCase(simple.charAt(0)) + simple.substring(1);
-        Set<String> taken = existing.stream().map(ProjectAnalyzer.VariableOption::name).collect(Collectors.toSet());
+        return freshVariableName(type.leafType().simpleName(),
+                existing.stream().map(ProjectAnalyzer.VariableOption::name).collect(Collectors.toSet()));
+    }
+
+    /**
+     * The same, from the type's simple name. A primitive's lower-cased name is the keyword itself — {@code int}
+     * is not an identifier, and JDT refuses it as one — so a name that is not a legal identifier falls back to
+     * {@link DefaultNames#forType}'s word for the type ({@code number}, {@code flag}, {@code decimal}).
+     */
+    static String freshVariableName(String simple, Set<String> taken) {
+        String lowered = simple == null || simple.isEmpty()
+                ? "value" : Character.toLowerCase(simple.charAt(0)) + simple.substring(1);
+        String base = SourceVersion.isName(lowered) ? lowered : DefaultNames.forType(simple);
         if (!taken.contains(base)) return base;
         for (int i = 2; ; i++) {
             String candidate = base + i;

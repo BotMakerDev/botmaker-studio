@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
@@ -188,6 +189,7 @@ public final class JavaParameters {
             retype(config, state, held, wantedForm, grammar);
             held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return Optional.empty();
+            wanted = retyped(wanted, before, parameter.form(), wantedForm);
         }
 
         Map<String, String> members = new LinkedHashMap<>();
@@ -226,6 +228,39 @@ public final class JavaParameters {
         }
         return reread(config, state, className, name, grammar);
     }
+
+    /**
+     * What survives of {@code wanted} once the field is {@code to} rather than {@code from}.
+     *
+     * <p>The value was reset by the retype, so the row's old one is not written back over it. A choice is a
+     * value of the leaf, so the choices go when the leaf changes and stay when only the container does
+     * ({@code int} to {@code List<Integer>} keeps them as the ticks). A bound means something only for a
+     * number. Kept, a choice of the old type drew as a disabled row holding the old type's Java.
+     */
+    private static ParameterRow retyped(ParameterRow wanted, ParameterRow before, Type from, Type to) {
+        ParameterRow.Builder kept = wanted.toBuilder().value(before.value());
+        Type leaf = ValueTypes.leaf(to);
+        if (!sameLeaf(ValueTypes.leaf(from), leaf)) kept.options(List.of());
+        if (!(leaf instanceof Class<?> cls && NUMBERS.contains(cls))) {
+            kept.bounds(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+        }
+        return kept.build();
+    }
+
+    /** Whether two leaves are one type, a primitive and its box counted as one. */
+    private static boolean sameLeaf(Type a, Type b) {
+        if (a == null || b == null) return a == b;
+        return a.equals(b) || (a instanceof Class<?> x && b instanceof Class<?> y && box(x) == box(y));
+    }
+
+    private static Class<?> box(Class<?> cls) {
+        return cls.isPrimitive() ? java.lang.invoke.MethodType.methodType(cls).wrap().returnType() : cls;
+    }
+
+    /** The types a declared range means anything for: Java's numbers, boxed or not. */
+    public static final Set<Class<?>> NUMBERS = Set.of(
+            byte.class, short.class, int.class, long.class, float.class, double.class,
+            Byte.class, Short.class, Integer.class, Long.class, Float.class, Double.class);
 
     /** A bound as the literal {@code @Param} takes — {@code 0}, {@code 2.5} — or {@code ""} for none. */
     static String bound(double value) {

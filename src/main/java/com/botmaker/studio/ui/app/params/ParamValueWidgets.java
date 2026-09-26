@@ -13,6 +13,7 @@ import com.botmaker.studio.project.params.BotRecords;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBase;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
@@ -177,14 +178,12 @@ public final class ParamValueWidgets {
         Optional<JavaValue> current = canonical(grammar, leaf, SourceNode.parse(row.value()));
         for (String option : options) {
             Optional<JavaValue> written = optionSource(grammar, leaf, option);
-            RadioButton button = new RadioButton(option);
+            RadioButton button = new RadioButton();
             button.setToggleGroup(toggles);
             button.setUserData(written.orElse(null));
             button.setDisable(written.isEmpty());
-            written.ifPresent(w -> {
-                button.setGraphic(ValueEditors.optionGraphic(leaf, w.source(), ctx));
-                button.setSelected(w.sameJava(current.orElse(null)));
-            });
+            showOption(button, leaf, option, written, ctx);
+            written.ifPresent(w -> button.setSelected(w.sameJava(current.orElse(null))));
             column.getChildren().add(button);
         }
         if (options.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
@@ -209,13 +208,11 @@ public final class ParamValueWidgets {
         VBox column = new VBox(2);
         for (String option : options) {
             Optional<JavaValue> written = optionSource(grammar, leaf, option);
-            CheckBox box = new CheckBox(option);
+            CheckBox box = new CheckBox();
             box.setUserData(written.orElse(null));
             box.setDisable(written.isEmpty());
-            written.ifPresent(w -> {
-                box.setGraphic(ValueEditors.optionGraphic(leaf, w.source(), ctx));
-                box.setSelected(held.stream().anyMatch(w::sameJava));
-            });
+            showOption(box, leaf, option, written, ctx);
+            written.ifPresent(w -> box.setSelected(held.stream().anyMatch(w::sameJava)));
             boxes.add(box);
             column.getChildren().add(box);
         }
@@ -475,6 +472,20 @@ public final class ParamValueWidgets {
     }
 
     // --- declared choices ---------------------------------------------------------------------------------
+
+    /**
+     * Dresses one choice's toggle: text for a string or an enum constant (the choice is its words), the
+     * type's own picture for everything else. The author's text is the label only when nothing can draw the
+     * value — an option the leaf cannot read, or a type no plugin draws.
+     */
+    private static void showOption(ButtonBase toggle, Type leaf, String option, Optional<JavaValue> written,
+                                   ValueEditors.Context ctx) {
+        boolean words = leaf == String.class || (leaf instanceof Class<?> cls && cls.isEnum());
+        Node picture = words ? null
+                : written.map(w -> ValueEditors.optionDisplay(leaf, w.source(), ctx)).orElse(null);
+        toggle.setGraphic(picture);
+        toggle.setText(picture == null ? option : "");
+    }
 
     /**
      * A declared choice as the Java a field of {@code leaf} takes, or empty when the author's text is not a

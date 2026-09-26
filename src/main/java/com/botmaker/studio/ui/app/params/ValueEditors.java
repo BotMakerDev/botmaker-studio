@@ -21,6 +21,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -89,11 +90,19 @@ public final class ValueEditors {
      * row wholesale: the caller throws the old editor away rather than trying to reinterpret what was in it.
      */
     public static Editor editorFor(Type leaf, String source, Context ctx) {
+        return editorFor(leaf, source, ctx, null);
+    }
+
+    /**
+     * The same, told every value the editor writes as it writes it — what a row that commits on each change
+     * wants, where a form read once on Apply does not. {@code onChange} may be null.
+     */
+    public static Editor editorFor(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange) {
         ValueGrammar grammar = PluginHost.grammar();
         // A fresh seed is written fully qualified: kept unedited, it is written back as it stands, and a kept
         // expression carries no imports.
         String seed = source != null ? source : grammar.freshInitializer(leaf).map(JavaValue::source).orElse("");
-        Editor contributed = fromPlugin(leaf, seed, ctx);
+        Editor contributed = fromPlugin(leaf, seed, ctx, onChange);
         if (contributed != null) return contributed;
         // A type no plugin draws, and — read-only — a type nothing declares. The host cannot offer a
         // meaningful editor for a value it cannot read, and letting somebody type into it would destroy the
@@ -119,9 +128,9 @@ public final class ValueEditors {
      * telling the host how to read it back. Nothing is written until an editor writes: a value opened and
      * closed with no edit reads back exactly as it was.
      */
-    private static Editor fromPlugin(Type leaf, String source, Context ctx) {
-        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
-                ctx.constants());
+    private static Editor fromPlugin(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange) {
+        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()),
+                onChange, ctx.constants());
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.create(context);
@@ -195,6 +204,25 @@ public final class ValueEditors {
             }
         }
         return null;
+    }
+
+    /**
+     * A declared choice as the user sees it: the plugin's preview when it draws one, else the type's own
+     * editor, shown and not handled — or {@code null} when nothing draws the type, in which case the caller's
+     * label is the whole of it.
+     *
+     * <p>Never the choice's Java. {@code new com.botmaker.sdk.api.geometry.Point(1144, 342)} beside a radio
+     * button is the text the choice exists to spare the user.
+     */
+    static Node optionDisplay(Type leaf, String source, Context ctx) {
+        Node preview = optionGraphic(leaf, source, ctx);
+        if (preview != null) return preview;
+        if (source == null || source.isBlank()) return null;
+        Editor inert = fromPlugin(leaf, source, ctx, null);
+        if (inert == null) return null;
+        inert.node().setMouseTransparent(true);
+        inert.node().setFocusTraversable(false);
+        return inert.node();
     }
 
     /** Lets an editor fill the width it is given, which is what a form column wants and a toolbar does not. */

@@ -715,12 +715,8 @@ public final class ParametersDialog {
 
     /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
     private static boolean isNumber(ValueGrammar grammar, Type leaf) {
-        return leaf instanceof Class<?> cls && NUMBERS.contains(cls);
+        return leaf instanceof Class<?> cls && JavaParameters.NUMBERS.contains(cls);
     }
-
-    private static final java.util.Set<Class<?>> NUMBERS = java.util.Set.of(
-            byte.class, short.class, int.class, long.class, float.class, double.class,
-            Byte.class, Short.class, Integer.class, Long.class, Float.class, Double.class);
 
     /**
      * A choice as the author writes it into {@code @Param(options = …)}: the text itself for a string, the
@@ -806,15 +802,13 @@ public final class ParametersDialog {
     /**
      * One declared choice.
      *
-     * <p>Text stays editable in place — a typo in a label is fixed by fixing it. Every other type is shown the
-     * way it is shown everywhere else (a thumbnail, a swatch, a spelled-out length) and changed by removing it
-     * and adding the right one: an in-place editor for those would need a commit gesture per row, and a
-     * three-item choice list is not where that ceremony earns its keep.
+     * <p>Every choice is edited in place: text as text, every other type through its own picker
+     * ({@link #optionEditor}), committed on focus loss. Until 2026-09-26 a non-text choice was a label of its
+     * Java, which for a type with no preview meant the user read {@code new …Point(1144, 342)}.
      */
     private Node optionRow(JavaParameter entry, Type base, ValueEditors.Context ctx,
                            List<String> options, int at) {
         String option = options.get(at);
-        ValueGrammar grammar = PluginHost.grammar();
         Node shown;
         if (base == String.class) {
             TextField field = new TextField(option);
@@ -843,11 +837,7 @@ public final class ParametersDialog {
             });
             shown = field;
         } else {
-            Label label = new Label(option, ParamValueWidgets.optionSource(grammar, base, option)
-                    .map(written -> ValueEditors.optionGraphic(base, written.source(), ctx))
-                    .orElse(null));
-            HBox.setHgrow(label, Priority.ALWAYS);
-            shown = label;
+            shown = optionEditor(entry, base, ctx, options, at);
         }
 
         Button remove = new Button("✕");
@@ -860,6 +850,55 @@ public final class ParametersDialog {
         HBox row = new HBox(6, shown, remove);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
+    }
+
+    /**
+     * A declared choice of a type that is not text: the type's own picker, seeded with the choice and edited
+     * in place — never the choice's Java, which is what this row used to show.
+     *
+     * <p>A change is committed when the row loses focus, not per change: a commit rewrites the file and
+     * rebuilds the card, and a spinner clicked five times is one decision. A change arriving while the row
+     * has no focus — a colour chosen in a popup, a point picked off the screen — has no focus loss coming,
+     * so it commits at once. A choice the leaf cannot read shows as written, with the remove button beside it.
+     */
+    private Node optionEditor(JavaParameter entry, Type base, ValueEditors.Context ctx,
+                              List<String> options, int at) {
+        String option = options.get(at);
+        ValueGrammar grammar = PluginHost.grammar();
+        Optional<JavaValue> written = ParamValueWidgets.optionSource(grammar, base, option);
+        if (written.isEmpty()) {
+            Label label = new Label(option);
+            label.getStyleClass().add("dialog-hint-text");
+            label.setTooltip(new Tooltip("Not a value of " + ValueTypes.sourceName(base) + ": remove it."));
+            HBox.setHgrow(label, Priority.ALWAYS);
+            return label;
+        }
+        JavaValue[] pending = {null};
+        Node[] node = {null};
+        Runnable commit = () -> {
+            JavaValue value = pending[0];
+            pending[0] = null;
+            if (value == null) return;
+            String typed = optionText(grammar, base, Optional.of(value));
+            if (typed.isBlank() || typed.equals(option)) return;
+            if (options.contains(typed)) {
+                error("'" + typed + "' is already a choice here.");
+                return;
+            }
+            List<String> updated = new ArrayList<>(options);
+            updated.set(at, typed);
+            replaceOptions(entry, updated);
+        };
+        ValueEditors.Editor editor = ValueEditors.editorFor(base, written.get().source(), ctx, value -> {
+            pending[0] = value;
+            if (node[0] == null || !node[0].isFocusWithin()) commit.run();
+        });
+        node[0] = editor.node();
+        node[0].focusWithinProperty().addListener((o, was, is) -> {
+            if (!is) commit.run();
+        });
+        HBox.setHgrow(node[0], Priority.ALWAYS);
+        return node[0];
     }
 
     /**

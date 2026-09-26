@@ -10,6 +10,17 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **"New int variable…" no longer crashes.** It proposed `int` as the variable's name; a primitive now gets
+  `number`, `flag` or `decimal`.
+- **Parameter choices show the value, not its Java.** A choice of a Point, a colour or any other type is drawn
+  with that type's own picker, in the Choices list and in the Value list, and can be edited in place.
+- **Changing a parameter's type starts clean.** The old type's choices, and a range that no longer applies,
+  are removed, so no greyed-out row of the old value is left behind.
+
 ## [1.1.10] — 2026-09-26
 
 No source changes since v1.1.9; re-released for updated upstream pins.
