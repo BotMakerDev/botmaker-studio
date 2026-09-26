@@ -68,6 +68,12 @@ public final class SourceNavigation {
         return Optional.ofNullable(starting[0] != null ? starting[0] : spanning[0]);
     }
 
+    /** The block drawn for what sits at {@code offset} in {@code cu}, or its nearest drawn ancestor. */
+    public static Optional<CodeBlock> blockAtOffset(CompilationUnit cu, int offset, Map<ASTNode, CodeBlock> nodeToBlock) {
+        if (cu == null || offset < 0) return Optional.empty();
+        return blockFor(org.eclipse.jdt.core.dom.NodeFinder.perform(cu, offset, 0), nodeToBlock);
+    }
+
     /** The block drawn for {@code node} or, failing that, for the nearest ancestor that has one. */
     public static Optional<CodeBlock> blockFor(ASTNode node, Map<ASTNode, CodeBlock> nodeToBlock) {
         for (ASTNode n = node; n != null; n = n.getParent()) {

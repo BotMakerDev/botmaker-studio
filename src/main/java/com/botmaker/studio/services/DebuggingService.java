@@ -15,6 +15,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.debug.DebugSnapshot;
 import com.botmaker.studio.services.debug.DebugTargets;
 import com.botmaker.studio.services.debug.FollowPacer;
 import com.sun.jdi.*;
@@ -279,7 +280,11 @@ public class DebuggingService {
         new Thread(() -> jdiEventLoop(listenerReadyLatch, found, entry, pauseAtStart), "jdi-events").start();
 
         listenerReadyLatch.await();
-        attached.resume();
+        // No attached.resume() here (2026-09-26). The debuggee waits (suspend=y) with its VMStartEvent queued,
+        // and the event loop resumes that set, which is what starts the bot. Resuming here as well let the bot
+        // run and suspend again at a class's ClassPrepareEvent before the loop had taken the VMStart set — whose
+        // resume() then released that class before its stops were requested, so the first lines of main ran
+        // past their breakpoints. DebugSnapshotTest hit it about one launch in six.
     }
 
     private void jdiEventLoop(CountDownLatch listenerReadyLatch, DebugTargets found, Path entry, Integer pauseAtStart) {
@@ -364,7 +369,13 @@ public class DebuggingService {
             return;
         }
         int id = session.get();
-        Platform.runLater(() -> showPaused(id, hit, location.lineNumber()));
+        // Read now, on this thread, while the VM is suspended: a frame is gone the moment it resumes.
+        DebugSnapshot snapshot = DebugSnapshot.of(event.thread(), targets);
+        Platform.runLater(() -> {
+            if (id != session.get() || finished.get()) return;
+            eventBus.publish(new CoreApplicationEvents.DebugSnapshotEvent(snapshot));
+            showPaused(id, hit, location.lineNumber());
+        });
     }
 
     // --- what the canvas shows (FX thread) -----------------------------------------------------------------

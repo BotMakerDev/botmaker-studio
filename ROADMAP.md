@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Navigation popups (feedback-batch plan phase 6).**
+- **2026-09-26 (latest) — Usages & Debug tabs (feedback-batch plan phase 7).**
+  - `nav/Usages` (keys by declaration, so generic instantiations are one member); `UsagesPanel` reads
+    sources on FX, parses with bindings on a worker; `Shortcuts.FIND_USAGES` (Alt+F7).
+  - `services/debug/DebugSnapshot` read on the JDI thread while suspended (no method invoked in the VM);
+    `DebugSnapshotEvent`; `DebugPanel` (frames | variables tree-table), Debug tab raised on pause.
+  - `NavigationPopups.revealOffset/revealLine` — one landing path for popups, usages and frames.
+  - Race fixed in `DebuggingService.attachJdi`: no `attached.resume()`; the VMStart set's resume starts the
+    bot. `DebugSnapshotTest` covers both launch and socket-attach paths against a real VM.
+- **2026-09-26 — Navigation popups (feedback-batch plan phase 6).**
   - `nav/SourceNavigation` (pure, over JDT): `nodeAtLine`, `blockFor`, `structure` (`StructureKind`),
     `bindingOf`, `declarationOf` (`Here` / `Elsewhere(file, key)`), `docOf` (Javadoc from `TagElement`s, or the
     SDK summary), `match` (prefix > substring > letters in order).

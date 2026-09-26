@@ -170,4 +170,12 @@ public class CoreApplicationEvents {
     public record DebugSessionResumedEvent() implements DebugSessionEvent {}
     public record DebugSessionFinishedEvent() implements DebugSessionEvent {}
     public record DebugSessionPausedEvent(int lineNumber, CodeBlock block) implements DebugSessionEvent {}
+
+    /**
+     * The paused thread's frames and variables, read while the VM was suspended — published just before the
+     * {@link DebugSessionPausedEvent} of the same pause. Not in the session family: a subscriber to that family
+     * switches over it, and this is data for the Debug tab, not a state change.
+     */
+    public record DebugSnapshotEvent(com.botmaker.studio.services.debug.DebugSnapshot snapshot)
+            implements ApplicationEvent {}
 }

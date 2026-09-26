@@ -128,6 +128,8 @@ public class UIManager implements ProjectWindow {
     private DiagnosticsPanel diagnosticsPanel;
     /** The Review bottom tab — the marks every refactor leaves. Built by {@link #createScene()}. */
     private ReviewPanel reviewPanel;
+    private UsagesPanel usagesPanel;
+    private DebugPanel debugPanel;
     /** The Assistant bottom tab. Built with the window, so its conversation lasts as long as the window does. */
     private final AssistantPane assistantPane;
     /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. */
@@ -424,8 +426,19 @@ public class UIManager implements ProjectWindow {
                 config.projectName(), this::switchToEditorMode,
                 () -> PluginOwners.absent(config), actions::openManagePlugins);
 
-        // Navigate ▸ — the popups land on blocks through this canvas, so they are wired once it exists.
-        new NavigationPopups(primaryStage, config, state, codeEditorService, editorCanvas).wire(menuBarManager);
+        // Navigate ▸ — the popups land on blocks through this canvas, so they are wired once it exists. Find
+        // Usages and a debug frame land the same way, from their tabs.
+        NavigationPopups navigation = new NavigationPopups(primaryStage, config, state, codeEditorService,
+                editorCanvas);
+        usagesPanel = new UsagesPanel(config, state, u -> navigation.revealOffset(u.file(), u.start()));
+        debugPanel = new DebugPanel(eventBus, f -> navigation.revealLine(f.file(), f.line()));
+        navigation.wire(menuBarManager, binding -> {
+            selectBottomTab(BottomTab.USAGES);
+            usagesPanel.search(binding);
+        });
+        // A pause brings the Debug tab forward, as an IDE's debugger window does; resuming leaves it where it is.
+        eventBus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class,
+                e -> selectBottomTab(BottomTab.DEBUG), true);
 
         // --- 4. Bottom Panel: Run/Errors ---
         diagnosticsPanel = new DiagnosticsPanel(diagnosticsManager, editorCanvas::scrollToBlock,
@@ -438,6 +451,8 @@ public class UIManager implements ProjectWindow {
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
         bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
+        bottomTabs.put(BottomTab.USAGES, bottomTab(BottomTab.USAGES, usagesPanel.node()));
+        bottomTabs.put(BottomTab.DEBUG, bottomTab(BottomTab.DEBUG, debugPanel.node()));
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
         bottomTabs.put(BottomTab.VERSIONS, bottomTab(BottomTab.VERSIONS, versionsPane.node()));
         bottomTabs.put(BottomTab.ASSISTANT, bottomTab(BottomTab.ASSISTANT, assistantPane.node()));

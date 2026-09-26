@@ -16,6 +16,13 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **Usages and Debug tabs.** *Navigate ▸ Find Usages* (Alt+F7) lists every place in the bot the selected
+  block's function, variable or class is used, grouped by file; click one to go there. When the bot stops
+  at a breakpoint, the Debug tab comes forward with the call stack and the selected frame's variables (one
+  level of fields, array elements); picking a frame of your code shows its block. Values are read without
+  running any of your code.
+- **Fixed: a debug run could start before its breakpoints were set.** The first lines of `main` sometimes
+  ran straight past a breakpoint; the debugger now lets the bot start only once it is listening.
 - **A Navigate menu.** *Go to Line…* (Ctrl+G) jumps to the block on a line of the open file; *Go to File…*
   (Ctrl+Shift+N) opens any source by typing part of its name; *File Structure…* (Ctrl+F12) lists the file's
   classes, fields and functions to jump to; *Go to Declaration* (Ctrl+B) takes the selected block to where

@@ -18,6 +18,8 @@ enum Shortcuts {
             new KeyCodeCombination(KeyCode.F12, KeyCombination.SHORTCUT_DOWN)),
     GO_TO_DECLARATION("go-to-declaration", "Go to Declaration",
             new KeyCodeCombination(KeyCode.B, KeyCombination.SHORTCUT_DOWN)),
+    FIND_USAGES("find-usages", "Find Usages",
+            new KeyCodeCombination(KeyCode.F7, KeyCombination.ALT_DOWN)),
     // F1, IntelliJ's macOS key, not its Ctrl+Q: Ctrl+Q is File ▸ Exit here.
     QUICK_DOCUMENTATION("quick-documentation", "Quick Documentation", new KeyCodeCombination(KeyCode.F1));
 

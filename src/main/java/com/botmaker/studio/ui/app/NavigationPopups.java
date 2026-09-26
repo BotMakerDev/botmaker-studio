@@ -58,13 +58,42 @@ final class NavigationPopups {
         this.canvas = canvas;
     }
 
-    /** Wires every {@link Shortcuts} item on {@code menuBar} to its popup. */
-    void wire(MenuBarManager menuBar) {
+    /**
+     * Wires every {@link Shortcuts} item on {@code menuBar} to its popup; Find Usages hands the selected
+     * block's binding to {@code findUsages} (the Usages tab).
+     */
+    void wire(MenuBarManager menuBar, Consumer<IBinding> findUsages) {
         menuBar.setOnNavigate(Shortcuts.GO_TO_LINE, this::goToLine);
         menuBar.setOnNavigate(Shortcuts.GO_TO_FILE, this::goToFile);
         menuBar.setOnNavigate(Shortcuts.FILE_STRUCTURE, this::fileStructure);
         menuBar.setOnNavigate(Shortcuts.GO_TO_DECLARATION, this::goToDeclaration);
+        menuBar.setOnNavigate(Shortcuts.FIND_USAGES, () -> selectedBinding().ifPresent(findUsages));
         menuBar.setOnNavigate(Shortcuts.QUICK_DOCUMENTATION, this::quickDocumentation);
+    }
+
+    // --- landing on a place ------------------------------------------------------------------------------------
+
+    /** Opens {@code file} if it is not the one showing, then lands on the block at {@code offset} in it. */
+    void revealOffset(Path file, int offset) {
+        reveal(file, cu -> SourceNavigation.blockAtOffset(cu, offset, state.getNodeToBlockMap()));
+    }
+
+    /** Opens {@code file} if it is not the one showing, then lands on the block of {@code line} in it. */
+    void revealLine(Path file, int line) {
+        reveal(file, cu -> SourceNavigation.nodeAtLine(cu, line)
+                .flatMap(n -> SourceNavigation.blockFor(n, state.getNodeToBlockMap())));
+    }
+
+    private void reveal(Path file, Function<CompilationUnit, Optional<CodeBlock>> find) {
+        Runnable land = () -> state.getCompilationUnit().flatMap(find).ifPresent(canvas::scrollToBlock);
+        Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
+        if (file == null || file.equals(active)) {
+            land.run();
+            return;
+        }
+        editor.switchToFile(file);
+        // The other file's blocks exist from the next pulse on, as for a review row.
+        Platform.runLater(land);
     }
 
     // --- the five actions --------------------------------------------------------------------------------------
@@ -137,14 +166,9 @@ final class NavigationPopups {
         switch (declaration.orElse(null)) {
             case Declaration.Here here -> SourceNavigation.blockFor(here.node(), state.getNodeToBlockMap())
                     .ifPresent(canvas::scrollToBlock);
-            case Declaration.Elsewhere elsewhere -> {
-                editor.switchToFile(elsewhere.file());
-                // The other file's blocks exist from the next pulse on, as for a review row.
-                Platform.runLater(() -> state.getCompilationUnit()
-                        .map(other -> other.findDeclaringNode(elsewhere.key()))
-                        .flatMap(node -> SourceNavigation.blockFor(node, state.getNodeToBlockMap()))
-                        .ifPresent(canvas::scrollToBlock));
-            }
+            case Declaration.Elsewhere elsewhere -> reveal(elsewhere.file(), other -> Optional
+                    .ofNullable(other.findDeclaringNode(elsewhere.key()))
+                    .flatMap(node -> SourceNavigation.blockFor(node, state.getNodeToBlockMap())));
             case null -> flash(binding.get().getName() + " is not declared in this bot — it comes from a library.");
         }
     }
