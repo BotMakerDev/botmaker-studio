@@ -43,6 +43,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin's editor can read the other arguments of its call**, as values (`SlotContext.argumentValue`) —
+  what lets the Precision picker show the colour it is a tolerance around.
 - **Go to Definition on a call.** Right-click any call block: your own function jumps to its block; a
   library's opens read-only in its own window, from the library's sources (downloaded when Maven has them) or,
   when it has none, as an outline of its public signatures. Works on read-only code too.

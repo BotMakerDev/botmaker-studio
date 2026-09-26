@@ -13,7 +13,12 @@ import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
+import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.IMethodBinding;
+import org.eclipse.jdt.core.dom.ITypeBinding;
+import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 
 import java.lang.reflect.Executable;
 import java.lang.reflect.Type;
@@ -172,6 +177,31 @@ public final class HostSlotContext implements SlotContext {
     @Override
     public int argIndex() {
         return argIndex;
+    }
+
+    /**
+     * Another argument of this slot's call, read by the grammar exactly as {@link #value} reads this one — a
+     * {@code @Managed} constant included. Asked, never captured: the invocation is found from the slot's live
+     * node on every call. Empty for an index outside the call, a varargs position (several arguments are not
+     * one value) and anything the grammar cannot read.
+     */
+    @Override
+    public <T> Optional<T> argumentValue(int index, Class<T> type) {
+        if (index == argIndex) return value(type);
+        Expression here = slot.node();
+        if (here == null || call == null || index < 0) return Optional.empty();
+        List<?> arguments = switch (here.getParent()) {
+            case MethodInvocation m -> m.arguments();
+            case ClassInstanceCreation c -> c.arguments();
+            case SuperMethodInvocation s -> s.arguments();
+            case null, default -> List.of();
+        };
+        ITypeBinding[] parameters = call.getParameterTypes();
+        if (index >= arguments.size() || index >= parameters.length) return Optional.empty();
+        if (call.isVarargs() && index >= parameters.length - 1) return Optional.empty();
+        SourceNode argument = new SourceNode((Expression) arguments.get(index), null);
+        return read(context, formOf(ResolvedType.of(parameters[index])), argument)
+                .flatMap(value -> ValueGrammar.as(value, type));
     }
 
     // enclosingCall() and replaceEnclosingCall(…) left the contract on 2026-09-23: they handed a plugin the

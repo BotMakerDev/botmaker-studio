@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 5b: Go to Definition.** `InteractionDecorator.goToDefinition`
+- **2026-09-26 (latest) — Picker phase 6a, plumbing: `HostSlotContext.argumentValue`.** Finds the invocation
+  around the slot's live node (`MethodInvocation`, `ClassInstanceCreation`, `SuperMethodInvocation`) and reads
+  argument `index` with the same `read`/`formOf` as `value()`; a varargs position, a variable or an index
+  outside the call answer empty (`HostSlotArgumentTest`).
+- **2026-09-26 — Feedback batch 2, phase 5b: Go to Definition.** `InteractionDecorator.goToDefinition`
   on any block whose binding is an `IMethodBinding` (read-only blocks too) → `GoToDefinitionRequestedEvent` →
   `NavigationPopups.goToDeclaration`; a library member → `nav/LibrarySource` (classpath jar → `-sources.jar`
   beside it or via `MavenService.resolveArtifact`, JDK `lib/src.zip`, else a ClassGraph outline) →
