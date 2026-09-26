@@ -424,6 +424,9 @@ public class UIManager implements ProjectWindow {
                 config.projectName(), this::switchToEditorMode,
                 () -> PluginOwners.absent(config), actions::openManagePlugins);
 
+        // Navigate ▸ — the popups land on blocks through this canvas, so they are wired once it exists.
+        new NavigationPopups(primaryStage, config, state, codeEditorService, editorCanvas).wire(menuBarManager);
+
         // --- 4. Bottom Panel: Run/Errors ---
         diagnosticsPanel = new DiagnosticsPanel(diagnosticsManager, editorCanvas::scrollToBlock,
                 () -> selectBottomTab(BottomTab.ERRORS));

@@ -179,6 +179,33 @@ class UIManagerSceneTest extends FxHeadlessTest {
     }
 
     /**
+     * Navigate ▸ (2026-09-26): every {@link Shortcuts} item is there and wired, and no key in the whole menu bar
+     * answers two items — IntelliJ's Ctrl+Q for Quick Documentation was already File ▸ Exit here.
+     */
+    @Test
+    void theNavigateMenuIsWiredAndNoKeyIsBoundTwice() {
+        MenuBar bar = nodesOfType(MenuBar.class).getFirst();
+        javafx.scene.control.Menu navigate = bar.getMenus().stream()
+                .filter(m -> "Navigate".equals(m.getText())).findFirst().orElseThrow();
+        for (Shortcuts shortcut : Shortcuts.values()) {
+            javafx.scene.control.MenuItem item = navigate.getItems().stream()
+                    .filter(i -> shortcut.displayName().equals(i.getText())).findFirst().orElseThrow();
+            assertFalse(item.isDisable(), shortcut + " is wired");
+            assertEquals(shortcut.accelerator(), item.getAccelerator());
+        }
+        List<javafx.scene.input.KeyCombination> keys = new ArrayList<>();
+        for (javafx.scene.control.Menu menu : bar.getMenus()) collectKeys(menu, keys);
+        assertEquals(keys.size(), Set.copyOf(keys).size(), "a key bound twice: " + keys);
+    }
+
+    private static void collectKeys(javafx.scene.control.Menu menu, List<javafx.scene.input.KeyCombination> keys) {
+        for (javafx.scene.control.MenuItem item : menu.getItems()) {
+            if (item.getAccelerator() != null) keys.add(item.getAccelerator());
+            if (item instanceof javafx.scene.control.Menu sub) collectKeys(sub, keys);
+        }
+    }
+
+    /**
      * The three groups {@code createScene} assembles by hand: edit controls left, project actions centred,
      * the run cluster right. Their labels are what a user reads, and the toolbar is the part of the shell
      * most likely to lose a button to a refactor without anyone noticing.

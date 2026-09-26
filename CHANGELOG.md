@@ -16,6 +16,12 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A Navigate menu.** *Go to Line…* (Ctrl+G) jumps to the block on a line of the open file; *Go to File…*
+  (Ctrl+Shift+N) opens any source by typing part of its name; *File Structure…* (Ctrl+F12) lists the file's
+  classes, fields and functions to jump to; *Go to Declaration* (Ctrl+B) takes the selected block to where
+  the function, variable or class it names is declared, in another file if need be; *Quick Documentation*
+  (F1) shows what the selected block names — its type, where it is declared and its documentation. Ctrl+Q
+  stays *Exit*.
 - **The Publish sheet can be widened.** It sits beside the version history in a split; drag the divider,
   and the project remembers where. Publishing no longer asks *Listed* or *Unlisted* — publishing lists the
   bot, and *Save to my copy* is how to keep a release off the gallery. *Your listing* is a short status line

@@ -53,6 +53,9 @@ public class MenuBarManager {
     private Runnable onBrowseGallery;
     private Runnable onPublishGallery;
     private Runnable onShowHistory;
+    /** What each Navigate item does; an item with no entry is greyed. */
+    private final java.util.Map<Shortcuts, Runnable> onNavigate = new java.util.EnumMap<>(Shortcuts.class);
+    private final java.util.Map<Shortcuts, MenuItem> navigateItems = new java.util.EnumMap<>(Shortcuts.class);
     private EventBus eventBus;
     private MenuItem undoItem;
     private MenuItem redoItem;
@@ -90,13 +93,39 @@ public class MenuBarManager {
         // View menu (placeholder for future)
         Menu viewMenu = createViewMenu();
 
+        Menu navigateMenu = createNavigateMenu();
+
         // Project menu
         Menu projectMenu = createProjectMenu();
 
         // Help menu
         Menu helpMenu = createHelpMenu();
 
-        menuBar.getMenus().addAll(fileMenu, editMenu, viewMenu, projectMenu, helpMenu);
+        menuBar.getMenus().addAll(fileMenu, editMenu, viewMenu, navigateMenu, projectMenu, helpMenu);
+    }
+
+    /** Navigate: one item per {@link Shortcuts}, in its order, greyed until the shell says what it does. */
+    private Menu createNavigateMenu() {
+        Menu menu = new Menu("Navigate");
+        for (Shortcuts shortcut : Shortcuts.values()) {
+            MenuItem item = new MenuItem(shortcut.displayName());
+            item.setAccelerator(shortcut.accelerator());
+            item.setDisable(true);
+            item.setOnAction(e -> {
+                Runnable action = onNavigate.get(shortcut);
+                if (action != null) action.run();
+            });
+            navigateItems.put(shortcut, item);
+            menu.getItems().add(item);
+            if (shortcut == Shortcuts.FILE_STRUCTURE) menu.getItems().add(new SeparatorMenuItem());
+        }
+        return menu;
+    }
+
+    /** Sets what a Navigate item does. */
+    void setOnNavigate(Shortcuts shortcut, Runnable action) {
+        onNavigate.put(shortcut, action);
+        navigateItems.get(shortcut).setDisable(action == null);
     }
 
     /**

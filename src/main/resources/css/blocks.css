@@ -2565,6 +2565,37 @@
     -fx-text-fill: -bm-on-popup-hover;
 }
 
+/* Navigate ▸ popups (Go to Line/File, File Structure, Quick Documentation): the context menu's surface, so a
+   popup reads as the same family in every theme. */
+.nav-popup {
+    -fx-background-color: -bm-popup-border, -bm-popup-bg;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 6, 5;
+    -fx-padding: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 14, 0, 0, 4);
+}
+
+.nav-popup .label {
+    -fx-text-fill: -bm-on-popup;
+}
+
+.nav-popup-title,
+.nav-doc-heading {
+    -fx-font-weight: bold;
+}
+
+.nav-popup-note {
+    -fx-opacity: 0.8;
+}
+
+.nav-doc-heading {
+    -fx-font-family: "JetBrains Mono", monospace;
+}
+
+.nav-popup-list {
+    -fx-font-family: "JetBrains Mono", monospace;
+}
+
 /* The tag picklist's rows. The tick is a real CheckBox inside a CustomMenuItem (only that can keep the menu
    open across several ticks), so its label is a CheckBox label rather than a .menu-item .label and needs the
    on-popup colour spelled out — otherwise it inherits the window's text colour and disappears in Dark. */

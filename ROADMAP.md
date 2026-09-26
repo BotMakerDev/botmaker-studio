@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Publish sheet (feedback-batch plan phase 5).**
+- **2026-09-26 (latest) — Navigation popups (feedback-batch plan phase 6).**
+  - `nav/SourceNavigation` (pure, over JDT): `nodeAtLine`, `blockFor`, `structure` (`StructureKind`),
+    `bindingOf`, `declarationOf` (`Here` / `Elsewhere(file, key)`), `docOf` (Javadoc from `TagElement`s, or the
+    SDK summary), `match` (prefix > substring > letters in order).
+  - `ui/app/Shortcuts` (one key table) → `MenuBarManager`'s Navigate menu; `NavigationPopups` draws the five
+    popups (`.nav-popup*` in `blocks.css`) and lands via `EditorCanvas.scrollToBlock`.
+  - Deferred: Quick Documentation on hover (the plan's "hover delay"); it is F1 on the selected block only.
+- **2026-09-26 — Publish sheet (feedback-batch plan phase 5).**
   - `VersionsPane.body`: history and `PublishSheet` in a `SplitPane`; the divider is
     `WorkspaceLayout.publishDivider` (new component, 3-arg constructor kept), saved 400 ms after a drag.
   - `TemplateProject.read`: the properties file wins when present, else `derivePackage` (the package of the
