@@ -140,6 +140,9 @@ public class CoreApplicationEvents {
     public record CopyRequestedEvent() implements ApplicationEvent {}
     public record PasteRequestedEvent() implements ApplicationEvent {}
 
+    /** A block's right-click Go to Definition: the highlighted block names what to go to. */
+    public record GoToDefinitionRequestedEvent() implements ApplicationEvent {}
+
     // --- Breakpoints ---
 
     public record BreakpointToggledEvent(CodeBlock block, boolean enabled) implements ApplicationEvent {}

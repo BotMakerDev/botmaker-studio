@@ -2701,6 +2701,19 @@
     -fx-font-family: "JetBrains Mono", monospace;
 }
 
+/* Go to Definition on a library member: its source (or outline), read-only, under a banner saying which. */
+.library-source-banner {
+    -fx-padding: 8 12 8 12;
+    -fx-text-fill: -bm-muted;
+    -fx-border-color: transparent transparent -bm-divider transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-max-width: infinity;
+}
+
+.library-source-text {
+    -fx-font-family: "JetBrains Mono", monospace;
+}
+
 /* The tag picklist's rows. The tick is a real CheckBox inside a CustomMenuItem (only that can keep the menu
    open across several ticks), so its label is a CheckBox label rather than a .menu-item .label and needs the
    on-popup colour spelled out — otherwise it inherits the window's text colour and disappears in Dark. */

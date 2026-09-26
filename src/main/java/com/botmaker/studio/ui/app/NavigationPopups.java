@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.nav.LibrarySource;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Declaration;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
@@ -8,6 +9,7 @@ import com.botmaker.studio.palette.SdkDocs;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Bounds;
@@ -31,6 +33,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -169,8 +172,31 @@ final class NavigationPopups {
             case Declaration.Elsewhere elsewhere -> reveal(elsewhere.file(), other -> Optional
                     .ofNullable(other.findDeclaringNode(elsewhere.key()))
                     .flatMap(node -> SourceNavigation.blockFor(node, state.getNodeToBlockMap())));
-            case null -> flash(binding.get().getName() + " is not declared in this bot — it comes from a library.");
+            case null -> openLibrary(binding.get());
         }
+    }
+
+    /**
+     * A member the bot does not declare opens read-only in {@link LibrarySourceWindow}: the library's sources,
+     * downloaded beside its jar when Maven has them, else an outline of its signatures. Found off the FX thread,
+     * since a sources jar may have to be downloaded.
+     */
+    private void openLibrary(IBinding binding) {
+        Optional<LibrarySource.Target> target = LibrarySource.Target.of(binding);
+        if (target.isEmpty()) {
+            flash(binding.getName() + " is not declared in this bot — it comes from a library.");
+            return;
+        }
+        List<String> classpath = List.copyOf(state.getResolvedClasspath());
+        Path jdk = config.javaHome() == null || config.javaHome().isBlank() ? null : Path.of(config.javaHome());
+        Path repository = Path.of(System.getProperty("user.home"), ".m2", "repository");
+        CompletableFuture.supplyAsync(() -> LibrarySource.locate(target.get(), classpath, jdk,
+                        jar -> LibrarySource.coordinatesOf(jar, repository).flatMap(c -> MavenService.resolveArtifact(
+                                config.projectPath(), c.groupId(), c.artifactId(), "sources", c.version()))))
+                .whenComplete((view, failure) -> Platform.runLater(() -> {
+                    if (view != null && view.isPresent()) LibrarySourceWindow.show(owner, view.get());
+                    else flash("The library declaring " + binding.getName() + " could not be read.");
+                }));
     }
 
     void quickDocumentation() {

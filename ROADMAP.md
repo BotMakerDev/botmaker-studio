@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Feedback batch 2, phase 5a: canvas.** `BlockCatalog.DECLARE_VARIABLE` (menu's one
+- **2026-09-26 (latest) — Feedback batch 2, phase 5b: Go to Definition.** `InteractionDecorator.goToDefinition`
+  on any block whose binding is an `IMethodBinding` (read-only blocks too) → `GoToDefinitionRequestedEvent` →
+  `NavigationPopups.goToDeclaration`; a library member → `nav/LibrarySource` (classpath jar → `-sources.jar`
+  beside it or via `MavenService.resolveArtifact`, JDK `lib/src.zip`, else a ClassGraph outline) →
+  `ui/app/LibrarySourceWindow` (read-only, member line selected).
+- **2026-09-26 — Feedback batch 2, phase 5a: canvas.** `BlockCatalog.DECLARE_VARIABLE` (menu's one
   declaration; `BodyBlock` → `ui/app/vars/DeclareVariableDialog` → `CodeEditor.declareLocal(body, i, name, Type)`);
   fixed-type declares, Create List and Define Enum left `LANGUAGE`. `ClassBlock` *+ Add Enum* →
   `CodeEditor.addEnumToClass(type, EnumDraft, i)`. `ui/dnd/InsertGlide`: one easing "+" per body on the nearest

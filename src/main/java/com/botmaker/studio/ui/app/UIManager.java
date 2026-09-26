@@ -436,6 +436,9 @@ public class UIManager implements ProjectWindow {
             selectBottomTab(BottomTab.USAGES);
             usagesPanel.search(binding);
         });
+        // A block's right-click Go to Definition highlights the block first, so it is Navigate ▸'s own action.
+        eventBus.subscribe(CoreApplicationEvents.GoToDefinitionRequestedEvent.class,
+                e -> navigation.goToDeclaration(), true);
         // A pause brings the Debug tab forward, as an IDE's debugger window does; resuming leaves it where it is.
         eventBus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class,
                 e -> selectBottomTab(BottomTab.DEBUG), true);

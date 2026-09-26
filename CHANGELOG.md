@@ -43,6 +43,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Go to Definition on a call.** Right-click any call block: your own function jumps to its block; a
+  library's opens read-only in its own window, from the library's sources (downloaded when Maven has them) or,
+  when it has none, as an outline of its public signatures. Works on read-only code too.
 - **Nested parameter values are editable.** A `List<List<Point>>`, a `Map<String, List<Integer>>` or a record
   holding a list is edited part by part, as deep as it goes, instead of shown read-only.
 
