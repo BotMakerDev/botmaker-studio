@@ -77,7 +77,7 @@ class ProjectRepairTest {
         Files.createDirectories(config.resourcesRoot());
         MavenService.writePom(config.projectPath(), config, MavenService.SDK_FALLBACK_VERSION);
         BotSettings.write(config.resourcesRoot(), BotSettings.GAME_DEFAULTS);
-        StudioProjectSettings.empty().withTemplate(ProjectTemplate.GAME_BOT).write(config.resourcesRoot());
+        StudioProjectSettings.empty().withTemplate(ProjectTemplate.GAME_BOT).write(config.studioRoot());
         // The placeholder picture was laid down here too, through the SDK's library. It is not laid down and
         // not looked for any more: this class tests what the editor recovers, and a picture is not one of the
         // editor's files.
@@ -200,7 +200,7 @@ class ProjectRepairTest {
     @Test
     void deletedResourceFilesAreFoundAndRestored() throws IOException {
         Path properties = config.resourcesRoot().resolve(ProjectProperties.FILE_NAME);
-        Path settings = config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME);
+        Path settings = config.studioRoot().resolve(StudioProjectSettings.FILE_NAME);
         Files.delete(properties);
         Files.delete(settings);
 
@@ -217,12 +217,12 @@ class ProjectRepairTest {
         // The template is the one thing settings.json holds that cannot be re-derived, so it is restored only
         // with the recorded one written back into it — never guessed at from what the source files look like.
         assertEquals(ProjectTemplate.GAME_BOT,
-                StudioProjectSettings.read(config.resourcesRoot()).template());
+                StudioProjectSettings.read(config.studioRoot()).template());
     }
 
     @Test
     void editorSettingsAreNotInventedForAProjectWhoseTemplateIsUnknown() throws IOException {
-        Files.delete(config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME));
+        Files.delete(config.studioRoot().resolve(StudioProjectSettings.FILE_NAME));
 
         List<ProjectRepair.Missing> missing =
                 ProjectRepair.findMissing(config, null);

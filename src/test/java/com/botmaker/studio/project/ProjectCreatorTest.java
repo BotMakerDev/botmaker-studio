@@ -31,7 +31,7 @@ class ProjectCreatorTest {
         ProjectConfig config = ProjectConfig.forProject("MyBot", root);
         ProjectCreator.seedSettings(config, ProjectTemplate.GAME_BOT);
 
-        StudioProjectSettings settings = StudioProjectSettings.read(config.resourcesRoot());
+        StudioProjectSettings settings = StudioProjectSettings.read(config.studioRoot());
         assertEquals(ProjectTemplate.GAME_BOT, settings.template());
     }
 
@@ -120,11 +120,11 @@ class ProjectCreatorTest {
     @Test
     void aLegacySettingsFileWithoutATemplateStillReads(@TempDir Path root) throws IOException {
         ProjectConfig config = ProjectConfig.forProject("MyBot", root);
-        java.nio.file.Files.createDirectories(config.resourcesRoot());
-        java.nio.file.Files.writeString(config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME),
+        java.nio.file.Files.createDirectories(config.studioRoot());
+        java.nio.file.Files.writeString(config.studioRoot().resolve(StudioProjectSettings.FILE_NAME),
                 "{\"captureTargets\":[],\"defaultTargetIndex\":null}");
 
-        assertNull(StudioProjectSettings.read(config.resourcesRoot()).template(),
+        assertNull(StudioProjectSettings.read(config.studioRoot()).template(),
                 "an older project has no template recorded; callers fall back to the heuristic");
     }
 

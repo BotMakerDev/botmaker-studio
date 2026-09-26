@@ -45,6 +45,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > `enclosingMethodName`, `className`/`methodName` on `PickerContext` and `TypeRef.simpleName/qualifiedName`
 > below as gone. `HostValueContext.typeName()` is the *Edit with* key the canvas also uses.
 
+> **`settings.json` is `<project>/.botmaker/settings.json` since 2026-09-26** (`ProjectConfig.studioRoot()`,
+> `SchemaFile.dirOf`). Every mention below of it "in `src/main/resources`" is the old place: an old project's
+> file is moved once, first thing on open (`StudioProjectSettings.moveOutOfResources`, from
+> `ProjectSchema.check`), and `ProjectVcs` keeps `/.botmaker/` out of git through `.git/info/exclude`.
+> The explorer is a folded folder tree over `ui/app/ExplorerModel` since the same day, not the flat list
+> described below.
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,

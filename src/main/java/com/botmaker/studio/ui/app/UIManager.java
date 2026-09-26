@@ -430,6 +430,7 @@ public class UIManager implements ProjectWindow {
         // Usages and a debug frame land the same way, from their tabs.
         NavigationPopups navigation = new NavigationPopups(primaryStage, config, state, codeEditorService,
                 editorCanvas);
+        fileExplorerManager.setOnReveal(editorCanvas::scrollToBlock);
         usagesPanel = new UsagesPanel(config, state, u -> navigation.revealOffset(u.file(), u.start()));
         debugPanel = new DebugPanel(eventBus, f -> navigation.revealLine(f.file(), f.line()));
         navigation.wire(menuBarManager, binding -> {

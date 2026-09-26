@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Orchestrates the project's editor {@link StudioProjectSettings} — the remembered window titles, the
  * picker preferences, the originating template and the two window layouts. Persistence is a single
- * {@code settings.json} under {@code src/main/resources}. All I/O lives here at the service edge;
+ * {@code settings.json} under the project's {@code .botmaker}. All I/O lives here at the service edge;
  * {@link #update} runs off the calling thread and publishes {@link SettingsChangedEvent} once state is
  * refreshed. Modeled on {@link ActivityService}.
  */
@@ -59,7 +59,7 @@ public final class ProjectSettingsService {
      * only once per open rather than on every {@code FileRole} lookup.
      */
     public StudioProjectSettings load() {
-        StudioProjectSettings loaded = StudioProjectSettings.read(config.resourcesRoot());
+        StudioProjectSettings loaded = StudioProjectSettings.read(config.studioRoot());
         state.setSettings(loaded);
         state.setTemplate(loaded.template() != null
                 ? loaded.template()
@@ -76,7 +76,7 @@ public final class ProjectSettingsService {
      */
     public void saveNow(StudioProjectSettings newSettings) {
         try {
-            newSettings.write(config.resourcesRoot());
+            newSettings.write(config.studioRoot());
             state.setSettings(newSettings);
         } catch (IOException e) {
             System.err.println("Failed to save settings: " + e.getMessage());
@@ -95,7 +95,7 @@ public final class ProjectSettingsService {
     public CompletableFuture<Void> update(StudioProjectSettings newSettings) {
         return CompletableFuture.runAsync(() -> {
             try {
-                newSettings.write(config.resourcesRoot());
+                newSettings.write(config.studioRoot());
             } catch (IOException e) {
                 throw new RuntimeException("Failed to save settings: " + e.getMessage(), e);
             }

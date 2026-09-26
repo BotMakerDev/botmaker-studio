@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.migration;
 
 import com.botmaker.shared.config.ProjectProperties;
+import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -39,7 +40,7 @@ import java.util.Properties;
  */
 public enum SchemaFile {
 
-    /** {@code settings.json} — per-project editor state (capture targets, overlay position, layout). */
+    /** {@code .botmaker/settings.json} — per-project editor state (favourites, overlay position, layout). */
     SETTINGS(StudioProjectSettings.FILE_NAME, Format.JSON, "editor settings"),
 
     /** {@code botmaker-project.properties} — the runtime contract the SDK reads inside the bot. */
@@ -63,9 +64,17 @@ public enum SchemaFile {
         this.description = description;
     }
 
-    /** The file's name inside the project's {@code src/main/resources}. */
+    /** The file's name inside {@link #dirOf}. */
     public String fileName() {
         return fileName;
+    }
+
+    /**
+     * The directory this file lives in: the project's {@code .botmaker} for {@link #SETTINGS} (since
+     * 2026-09-26), its {@code src/main/resources} for {@link #PROPERTIES}, which the bot reads off its classpath.
+     */
+    public Path dirOf(ProjectConfig config) {
+        return this == SETTINGS ? config.studioRoot() : config.resourcesRoot();
     }
 
     /** A short human phrase for a refusal message ("activity model", …). */
@@ -78,7 +87,7 @@ public enum SchemaFile {
         return SchemaMigrations.stepsFor(this).size();
     }
 
-    /** This file inside {@code resourcesDir}. */
+    /** This file inside {@code resourcesDir} — the directory {@link #dirOf} names for it. */
     public Path in(Path resourcesDir) {
         return resourcesDir.resolve(fileName);
     }

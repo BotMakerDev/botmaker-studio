@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Usages & Debug tabs (feedback-batch plan phase 7).**
+- **2026-09-26 (latest) — Explorer overhaul and `.botmaker/settings.json` (feedback-batch plan phase 8, last).**
+  - `ui/app/ExplorerModel` (pure): folder tree with folded package chains, `Kind` (vector icon per file kind),
+    filter via `SourceNavigation.match`, status = git's `FileStatus` + buffers differing from disk.
+  - `FileExplorerManager`: My code / Resources / Library groups, filter field, Structure `TitledPane`
+    (refreshed on `UIBlocksUpdatedEvent`), context menu (file manager, copy path, Rename… via `nav/TypeRename`
+    after a `SAFETY` version). Explorer CSS on theme tokens (`-bm-vcs-new/-modified` per theme).
+  - `ProjectConfig.studioRoot()`; `SchemaFile.dirOf`; `StudioProjectSettings.moveOutOfResources` run first in
+    `ProjectSchema.check`; `ProjectVcs` writes `/.botmaker/` to `.gitignore` (new) and `.git/info/exclude`.
+- **2026-09-26 — Usages & Debug tabs (feedback-batch plan phase 7).**
   - `nav/Usages` (keys by declaration, so generic instantiations are one member); `UsagesPanel` reads
     sources on FX, parses with bindings on a worker; `Shortcuts.FIND_USAGES` (Alt+F7).
   - `services/debug/DebugSnapshot` read on the JDI thread while suspended (no method invoked in the VM);

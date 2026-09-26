@@ -271,7 +271,7 @@ public class ProjectCreator {
     static void seedSettings(ProjectConfig cfg, ProjectTemplate template) throws IOException {
         StudioProjectSettings.empty()
                 .withTemplate(template)
-                .write(cfg.resourcesRoot());
+                .write(cfg.studioRoot());
     }
 
     /**

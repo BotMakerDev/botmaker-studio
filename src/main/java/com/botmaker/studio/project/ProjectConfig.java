@@ -187,6 +187,18 @@ public record ProjectConfig(
         return projectPath.resolve("src").resolve("main").resolve("resources");
     }
 
+    /**
+     * {@code .botmaker} at the project root — Studio's own editor state for this checkout ({@code settings.json}).
+     * Outside {@code src} so none of it is packaged into the bot's jar, and ignored by git (the project's
+     * {@code .gitignore} for a new project, {@code .git/info/exclude} for every one — {@code ProjectVcs}).
+     */
+    public Path studioRoot() {
+        return projectPath.resolve(STUDIO_DIR);
+    }
+
+    /** The name of {@link #studioRoot()}'s directory. */
+    public static final String STUDIO_DIR = ".botmaker";
+
     /** {@code src/main/resources/images} — the saved image-template directory. */
     public Path imagesRoot() {
         return resourcesRoot().resolve("images");

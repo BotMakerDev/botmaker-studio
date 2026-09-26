@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.migration;
 
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.StudioProjectSettings;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -38,9 +39,16 @@ public final class ProjectSchema {
      * first two have no claim to check and the third means 0, which is the oldest shape, not a newer one.
      */
     public static void check(ProjectConfig config) throws ProjectSchemaTooNew {
-        Path resources = config.resourcesRoot();
+        // The one open step every audience runs first, so the settings file is where every reader looks for
+        // it before any of them does (StudioProjectSettings.moveOutOfResources).
+        try {
+            StudioProjectSettings.moveOutOfResources(config);
+        } catch (IOException ex) {
+            System.err.println("Could not move " + StudioProjectSettings.FILE_NAME + " to "
+                    + config.studioRoot() + ": " + ex.getMessage());
+        }
         for (SchemaFile file : SchemaFile.values()) {
-            OptionalInt found = file.versionIn(resources);
+            OptionalInt found = file.versionIn(file.dirOf(config));
             if (found.isEmpty()) continue;
             int current = file.current();
             if (found.getAsInt() > current) {
@@ -68,10 +76,10 @@ public final class ProjectSchema {
      * @param mainRewritten told the new entry-point source when a step rewrote it ({@code null} = untouched)
      */
     public static List<String> migrate(ProjectConfig config, Consumer<String> mainRewritten) {
-        Path resources = config.resourcesRoot();
         List<String> applied = new ArrayList<>();
         for (SchemaFile file : SchemaFile.values()) {
-            int from = file.versionIn(resources).orElse(0);
+            Path dir = file.dirOf(config);
+            int from = file.versionIn(dir).orElse(0);
             List<SchemaMigration> steps = SchemaMigrations.stepsFor(file);
             if (from >= steps.size()) continue;
 
@@ -88,7 +96,7 @@ public final class ProjectSchema {
                     break;
                 }
             }
-            if (reached > from) stamp(file, resources, reached, steps.size());
+            if (reached > from) stamp(file, dir, reached, steps.size());
         }
         return applied;
     }

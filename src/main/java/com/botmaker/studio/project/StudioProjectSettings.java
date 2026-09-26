@@ -17,9 +17,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Per-project editor settings, persisted as {@code settings.json} under the project's
- * {@code src/main/resources}. It is the only project file the editor itself both writes and versions —
+ * Per-project editor settings, persisted as {@code settings.json} under the project's {@code .botmaker}
+ * ({@link ProjectConfig#studioRoot()}). It is the only project file the editor itself both writes and versions —
  * {@code activities.json} was the other, and that one is the SDK plugin's since 2026-09-11.
+ *
+ * <p><b>It lived in {@code src/main/resources} until 2026-09-26</b>, which put one machine's window layout into
+ * every jar the bot was packaged as. {@link #moveOutOfResources} takes an old project's file across once, on
+ * open: the same file in the same format, moved rather than read in two places.
  *
  * <p><b>Nothing about capture is in this record any more (2026-09-01).</b> It carried three components that
  * were read from and written to the SDK's {@code capture.json} through {@code Authoring} — the saved capture
@@ -313,20 +317,38 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         return favoriteMethods.getOrDefault(className, List.of());
     }
 
-    /** Reads {@code settings.json} from {@code resourcesDir}; returns {@link #empty()} if absent/invalid. */
-    public static StudioProjectSettings read(Path resourcesDir) {
-        Path file = resourcesDir.resolve(FILE_NAME);
+    /** Reads {@code settings.json} from {@code studioDir}; returns {@link #empty()} if absent/invalid. */
+    public static StudioProjectSettings read(Path studioDir) {
+        Path file = studioDir.resolve(FILE_NAME);
         if (!Files.exists(file)) return empty();
         try {
             return MAPPER.readValue(file.toFile(), StudioProjectSettings.class);
         } catch (Exception e) {
-            System.err.println("Failed to read " + FILE_NAME + " in " + resourcesDir + ": " + e.getMessage());
+            System.err.println("Failed to read " + FILE_NAME + " in " + studioDir + ": " + e.getMessage());
             return empty();
         }
     }
 
     /**
-     * Writes (overwrites) {@code settings.json} into {@code resourcesDir}, creating it if needed, stamped with
+     * Moves a project's {@code settings.json} from {@code src/main/resources} to {@code .botmaker}, when it is
+     * still in the old place and not yet in the new one. Returns true when it moved a file.
+     *
+     * <p>Run before anything reads the file — {@code ProjectSchema.check}, the first thing every open does — so
+     * no reader has to know there were two places. Moved, never copied: a copy left in the resources is still
+     * packaged into the jar, which is the whole reason for the move. When both exist the new one is the answer
+     * and the old one is left for the user; deleting a file this method did not just move is not its call.
+     */
+    public static boolean moveOutOfResources(ProjectConfig config) throws IOException {
+        Path legacy = config.resourcesRoot().resolve(FILE_NAME);
+        Path current = config.studioRoot().resolve(FILE_NAME);
+        if (!Files.isRegularFile(legacy) || Files.exists(current)) return false;
+        Files.createDirectories(current.getParent());
+        Files.move(legacy, current);
+        return true;
+    }
+
+    /**
+     * Writes (overwrites) {@code settings.json} into {@code studioDir}, creating it if needed, stamped with
      * the file's {@code schemaVersion} — see {@link SchemaFile#stamped}.
      *
      * <p>It writes one file and no longer merges a second. The {@code Authoring.writeCapture} call that used
@@ -334,9 +356,9 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
      * because the plugin writes the rest of that file while the editor is not looking. With no component left
      * to own, the merge and the reason for it both go.
      */
-    public void write(Path resourcesDir) throws IOException {
-        Files.createDirectories(resourcesDir);
+    public void write(Path studioDir) throws IOException {
+        Files.createDirectories(studioDir);
         ObjectNode body = MAPPER.valueToTree(this);
-        MAPPER.writeValue(resourcesDir.resolve(FILE_NAME).toFile(), SchemaFile.SETTINGS.stamped(body));
+        MAPPER.writeValue(studioDir.resolve(FILE_NAME).toFile(), SchemaFile.SETTINGS.stamped(body));
     }
 }

@@ -20,6 +20,11 @@
     -bm-accent-dark: #16a085;
     -bm-muted: #7f8c8d;
 
+    /* A file's row in the explorer when it differs from the last saved version (VcsFileStatus): new to
+       git, and changed. The hues VcsFileStatus already used, darkened enough to read on a white panel. */
+    -bm-vcs-new: #1a7f37;
+    -bm-vcs-modified: #9a6700;
+
     /* Per-category block colours (palette/BlockCategory) */
     -bm-cat-output: #3498db;
     -bm-cat-input: #9b59b6;
@@ -518,10 +523,13 @@
  * against, which every plugin's stylesheet may build on because the host's sheets are applied first.
  */
 
+/* The explorer's text follows the theme's own text colour (-fx-text-background-color), never a grey literal:
+   #444 and #333 were near-invisible on every dark panel. */
 .file-explorer .sidebar-header {
     -fx-font-weight: bold;
     -fx-font-size: 12px;
-    -fx-text-fill: #444;
+    -fx-text-fill: -fx-text-background-color;
+    -fx-opacity: 0.85;
     -fx-padding: 2 4 2 4;
 }
 
@@ -534,24 +542,72 @@
     -fx-border-color: transparent;
 }
 
-.file-tree .tree-icon {
-    -fx-padding: 0 4 0 0;
-    -fx-font-size: 12px;
+/* Row icons (ExplorerModel.Kind): 12×12 vector shapes in the row's own text colour, with a hue for the
+   three kinds worth finding at a glance — where the bot starts, its parameters, a plugin's file. */
+.file-tree .tree-icon-svg {
+    -fx-fill: -fx-text-background-color;
+    -fx-opacity: 0.7;
+}
+
+.file-tree .tree-kind-entry-point {
+    -fx-fill: -bm-accent;
+    -fx-opacity: 1;
+}
+
+.file-tree .tree-kind-parameters {
+    -fx-fill: -bm-cat-variables;
+    -fx-opacity: 1;
+}
+
+.file-tree .tree-kind-plugin-file {
+    -fx-fill: -bm-primary;
+    -fx-opacity: 1;
+}
+
+.file-tree .tree-kind-picture {
+    -fx-fill: -bm-cat-vision;
+    -fx-opacity: 1;
+}
+
+.file-tree .tree-group {
+    -fx-font-weight: bold;
 }
 
 .file-tree .tree-dir {
     -fx-font-weight: bold;
-    -fx-text-fill: #333;
 }
 
 .file-tree .tree-lib {
-    -fx-text-fill: #888;
     -fx-font-style: italic;
+    -fx-opacity: 0.7;
+}
+
+.file-tree .tree-cell.vcs-new,
+.file-tree .tree-cell.vcs-added {
+    -fx-text-fill: -bm-vcs-new;
+}
+
+.file-tree .tree-cell.vcs-modified {
+    -fx-text-fill: -bm-vcs-modified;
 }
 
 .file-tree .tree-active {
     -fx-font-weight: bold;
-    -fx-text-fill: #007bff;
+    -fx-underline: true;
+}
+
+/* A selected row keeps the selection's own text colour, whatever it was tinted. */
+.file-tree .tree-cell:selected {
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.file-structure > .content {
+    -fx-padding: 0;
+}
+
+.file-structure-list {
+    -fx-font-family: "JetBrains Mono", monospace;
+    -fx-font-size: 11px;
 }
 
 *:breakpoint {
@@ -2837,6 +2893,8 @@
     -bm-accent: #1abc9c;
     -bm-accent-dark: #16a085;
     -bm-muted: #95a5a6;
+    -bm-vcs-new: #3fb950;
+    -bm-vcs-modified: #d29922;
 
     /* Per-category block colours */
     -bm-cat-output: #4a90d9;
@@ -2947,6 +3005,8 @@
     -bm-accent: #00bcd4;
     -bm-accent-dark: #0097a7;
     -bm-muted: #b0bec5;
+    -bm-vcs-new: #3fb950;
+    -bm-vcs-modified: #d29922;
 
     /* Per-category block colours */
     -bm-cat-output: #2196f3;
@@ -3047,6 +3107,8 @@
     -bm-accent: #00ffff;
     -bm-accent-dark: #00cccc;
     -bm-muted: #ffffff;
+    -bm-vcs-new: #00ff00;
+    -bm-vcs-modified: #ffa500;
 
     /* Per-category block colours — kept maximally distinct rather than thematically consistent */
     -bm-cat-output: #00ffff;

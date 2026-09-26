@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.vcs;
 
+import com.botmaker.studio.project.ProjectConfig;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ResetCommand.ResetType;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -101,12 +102,13 @@ public final class ProjectVcs {
     /**
      * Names git should ignore. Mirrors {@code ProjectArchive}'s publish exclusions for build output, and adds
      * the local-only editor state {@code ProjectArchive} also excludes but that additionally shouldn't clutter
-     * local history: the Reader/Editor opt-in marker. (Provenance, {@code botmaker-source.json}, is deliberately
-     * left tracked — it is worth versioning so a rollback keeps a bot's origin.)
+     * local history: the Reader/Editor opt-in marker, and Studio's editor state under {@code .botmaker/}.
+     * (Provenance, {@code botmaker-source.json}, is deliberately left tracked — it is worth versioning so a
+     * rollback keeps a bot's origin.)
      */
     private static final List<String> GITIGNORE_LINES = List.of(
             "target/", ".idea/", ".gradle/", "build/", "out/", "*.class",
-            com.botmaker.studio.project.ProjectMode.MARKER);
+            com.botmaker.studio.project.ProjectMode.MARKER, "/" + ProjectConfig.STUDIO_DIR + "/");
 
     private final Path projectDir;
     private final PersonIdent author;
@@ -140,6 +142,7 @@ public final class ProjectVcs {
         if (isRepo()) return;
         try (Git git = Git.init().setDirectory(projectDir.toFile()).call()) {
             writeGitignore();
+            excludeStudioState();
             git.add().addFilepattern(".").call();
             git.commit().setAuthor(author).setCommitter(author)
                     .setMessage(VersionOrigin.CREATE.stamp("Initial commit")).call();
@@ -1122,12 +1125,32 @@ public final class ProjectVcs {
 
     /** The repository, for this package's readers ({@link VersionReader}); the caller closes it. */
     Git open() throws IOException {
+        excludeStudioState();
         Repository repo = new FileRepositoryBuilder()
                 .setGitDir(projectDir.resolve(".git").toFile())
                 .readEnvironment()
                 .findGitDir()
                 .build();
         return new Git(repo);
+    }
+
+    /**
+     * Keeps Studio's {@code .botmaker/} out of every version, whatever the project's {@code .gitignore} says:
+     * a line in {@code .git/info/exclude}, which git reads exactly like a {@code .gitignore} and which never
+     * leaves this machine. The {@code .gitignore} is the user's (and, for a clone, the author's), and one
+     * written before 2026-09-26 does not name the directory — so the rule goes where only this checkout sees
+     * it rather than into a file that would then show up as a change of theirs.
+     */
+    private void excludeStudioState() throws IOException {
+        Path info = projectDir.resolve(".git").resolve("info");
+        if (!Files.isDirectory(projectDir.resolve(".git"))) return;
+        Path exclude = info.resolve("exclude");
+        String line = "/" + ProjectConfig.STUDIO_DIR + "/";
+        String existing = Files.exists(exclude) ? Files.readString(exclude) : "";
+        if (existing.lines().anyMatch(l -> l.trim().equals(line))) return;
+        Files.createDirectories(info);
+        String separator = existing.isEmpty() || existing.endsWith("\n") ? "" : System.lineSeparator();
+        Files.writeString(exclude, existing + separator + line + System.lineSeparator());
     }
 
     private void writeGitignore() throws IOException {

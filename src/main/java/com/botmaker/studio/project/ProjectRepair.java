@@ -246,10 +246,10 @@ public final class ProjectRepair {
                     "project properties"));
         }
 
-        Path settings = config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME);
+        Path settings = config.studioRoot().resolve(StudioProjectSettings.FILE_NAME);
         if (recorded != null && !Files.exists(settings)) {
             missing.add(new Missing(settings,
-                    target -> StudioProjectSettings.empty().withTemplate(recorded).write(config.resourcesRoot()),
+                    target -> StudioProjectSettings.empty().withTemplate(recorded).write(config.studioRoot()),
                     "editor settings"));
         }
 

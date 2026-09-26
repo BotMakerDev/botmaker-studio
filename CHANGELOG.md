@@ -16,6 +16,16 @@ No source changes since v1.1.9; re-released for updated upstream pins.
 
 ### Added
 
+- **A better Project Files panel.** Files show as a folder tree again, with package chains folded into one
+  row (`com.mybot`), plus a **Resources** group for pictures and data files. Icons say what each file is:
+  the entry point, parameter files, files a plugin handed the bot, pictures. A file changed since the last
+  saved version is coloured (unsaved edits included). A filter field narrows the tree as you type, and a
+  collapsible **Structure** section lists the open file's classes, fields and functions — click one to go
+  there. Right-click a file for *Show in file manager*, *Copy path* and *Rename…*: renaming a class renames
+  every use of it in the bot, after a safety version.
+- **Studio's editor state moved to `.botmaker/settings.json`.** It sat in `src/main/resources`, so every jar
+  the bot was built into carried your window layout. An existing project's file is moved on open; git never
+  records the folder (a new project's `.gitignore` names it, and every checkout excludes it locally).
 - **Usages and Debug tabs.** *Navigate ▸ Find Usages* (Alt+F7) lists every place in the bot the selected
   block's function, variable or class is used, grouped by file; click one to go there. When the bot stops
   at a breakpoint, the Debug tab comes forward with the call stack and the selected frame's variables (one
