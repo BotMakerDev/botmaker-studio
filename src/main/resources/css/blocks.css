@@ -2806,6 +2806,21 @@
     -fx-font-size: 0.9em;
 }
 
+/* An on/off switch (the toolkit's Styles.SWITCH): the state in its colour as well as its word — red Off, green
+   On — over the theme's own danger and ok tokens, so each theme keeps the contrast it already tuned. */
+.value-switch {
+    -fx-font-weight: bold;
+    -fx-text-fill: -bm-danger;
+    -fx-border-color: -bm-danger;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+}
+
+.value-switch:selected {
+    -fx-text-fill: -bm-severity-ok-text;
+    -fx-border-color: -bm-severity-ok-text;
+}
+
 /*
  * The template gallery: a tag rail beside a grid of thumbnails. Everything here is over the theme's own
  * surface/foreground lookups rather than the -bm-popup-* set — the gallery is a panel in a window, not a

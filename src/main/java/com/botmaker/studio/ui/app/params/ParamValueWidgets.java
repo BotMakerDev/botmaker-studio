@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.JavaValue;
@@ -108,7 +109,7 @@ public final class ParamValueWidgets {
     public static Node build(String group, ParameterRow row, Type form, ProjectConfig config,
                              BotRecords records, List<ValueEditor> sink) {
         String owner = group == null ? "" : group;
-        ValueEditors.Context ctx = ValueEditors.Context.of(config);
+        ValueEditors.Context ctx = ValueEditors.Context.of(config).withBounds(new Bounds(row.min(), row.max()));
         Node widget = cell(owner, row, form == null ? ValueTypes.NONE : form,
                 records == null ? BotRecords.none() : records, ctx, sink);
         widget.setId("param-value-" + row.name());

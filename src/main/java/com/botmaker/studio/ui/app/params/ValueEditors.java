@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
+import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.studio.plugin.ConstantValues;
 import com.botmaker.studio.plugin.EditorContest;
@@ -58,15 +59,28 @@ public final class ValueEditors {
         }
     }
 
-    /** What an editor may need beyond the value itself: the project a plugin's services are built for. */
-    public record Context(ProjectConfig project) {
+    /**
+     * What an editor may need beyond the value itself: the project a plugin's services are built for, and the
+     * range the field declares ({@code @Param(min, max)}, 2026-09-27) — carried here so every number drawn
+     * for the row, a list's elements included, is told it.
+     */
+    public record Context(ProjectConfig project, Bounds bounds) {
+
+        public Context {
+            bounds = bounds == null ? Bounds.NONE : bounds;
+        }
 
         public static Context of(ProjectConfig project) {
-            return new Context(project);
+            return new Context(project, Bounds.NONE);
         }
 
         public static Context none() {
-            return new Context(null);
+            return new Context(null, Bounds.NONE);
+        }
+
+        /** The same, with the field's declared range. */
+        public Context withBounds(Bounds range) {
+            return new Context(project, range);
         }
 
         /**
@@ -134,7 +148,7 @@ public final class ValueEditors {
      */
     private static Editor fromPlugin(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange) {
         HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()),
-                onChange, ctx.constants());
+                onChange, ctx.constants()).withBounds(ctx.bounds());
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.create(context);

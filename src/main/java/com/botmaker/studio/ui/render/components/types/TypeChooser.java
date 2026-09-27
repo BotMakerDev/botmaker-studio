@@ -4,6 +4,8 @@ import com.botmaker.studio.palette.TypeNames;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
+import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Pos;
@@ -16,6 +18,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -35,8 +38,13 @@ import java.util.function.Supplier;
  * cells that must draw what they are given.
  *
  * <p><b>Picking a type replaces the leaf and keeps the containers</b>, so choosing a different element does
- * not throw away a list just asked for. Every change closes the menu: a caller may rebuild the row this
- * button sits in on the change, and a menu left open over a replaced row goes nowhere.
+ * not throw away a list just asked for.
+ *
+ * <p><b>The menu stays open while the type is put together (2026-09-27)</b> — wrap, pick a leaf, unwrap — and
+ * shows the type so far in its header. It is committed once, when the menu closes (Done, Enter in the search
+ * field, or a click outside); Escape closes it with nothing changed. One commit rather than one per click
+ * because a caller may rebuild the row this button sits in on a change, and a menu left open over a replaced
+ * row goes nowhere.
  *
  * <p>A {@link ContextMenu} rather than a hand-made popup, so it is styled, themed and keyboard-driven exactly
  * as every other menu in the editor.
@@ -89,13 +97,17 @@ public final class TypeChooser extends Button {
         TypeCatalog offered = catalog.get();
         ContextMenu menu = new ContextMenu();
         menu.getStyleClass().add("type-chooser-menu");
+        // The type being put together; committed when the menu closes, unless Escape closed it.
+        ObjectProperty<Type> draft = new SimpleObjectProperty<>(type.get());
+        boolean[] cancelled = {false};
 
+        menu.getItems().add(headerRow(menu, draft));
         TextField search = new TextField();
         search.setPromptText("Search types");
         CustomMenuItem searchItem = new CustomMenuItem(search);
         searchItem.setHideOnClick(false);
         menu.getItems().add(searchItem);
-        menu.getItems().add(wrapRow(menu));
+        menu.getItems().add(wrapRow(draft));
 
         int body = menu.getItems().size();
         List<TypeCatalog.Entry> shown = new ArrayList<>();
@@ -114,26 +126,54 @@ public final class TypeChooser extends Button {
                 header.getStyleClass().add("block-section-header");
                 menu.getItems().add(header);
                 for (TypeCatalog.Entry entry : group.entries()) {
-                    menu.getItems().add(entryItem(entry));
+                    menu.getItems().add(entryItem(entry, draft));
                     shown.add(entry);
                 }
             }
         };
         rebuild.run();
         search.textProperty().addListener((o, was, now) -> rebuild.run());
-        // Enter in the search field takes the first match: typing "poi" and Enter is the whole gesture.
+        // The current leaf's highlight follows the draft — after the click that changed it has finished, since
+        // the rebuild removes the very item being clicked.
+        draft.addListener((o, was, now) -> Platform.runLater(rebuild));
+        // Enter in the search field takes the first match and closes: typing "poi" and Enter is the whole gesture.
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER && !shown.isEmpty()) {
-                pick(shown.getFirst());
+                draft.set(withLeaf(draft.get(), shown.getFirst().type()));
                 menu.hide();
                 e.consume();
             }
+        });
+        menu.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ESCAPE) cancelled[0] = true;
+        });
+        menu.setOnHidden(e -> {
+            if (!cancelled[0] && draft.get() != null && !draft.get().equals(type.get())) type.set(draft.get());
         });
         menu.setOnShown(e -> search.requestFocus());
         menu.show(this, Side.BOTTOM, 0, 0);
     }
 
-    private MenuItem entryItem(TypeCatalog.Entry entry) {
+    /** The type so far, and <i>Done</i>. */
+    private MenuItem headerRow(ContextMenu menu, ObjectProperty<Type> draft) {
+        Label now = new Label();
+        now.getStyleClass().add("type-chooser-name");
+        now.textProperty().bind(Bindings.createStringBinding(
+                () -> draft.get() == null ? "No type yet" : label(draft.get()), draft));
+        Region gap = new Region();
+        HBox.setHgrow(gap, Priority.ALWAYS);
+        Button done = new Button("Done");
+        done.getStyleClass().add("type-chooser-wrap");
+        done.setOnAction(e -> menu.hide());
+        HBox row = new HBox(8, now, gap, done);
+        row.setAlignment(Pos.CENTER_LEFT);
+        CustomMenuItem item = new CustomMenuItem(row);
+        item.setHideOnClick(false);
+        item.getStyleClass().add("type-chooser-current");
+        return item;
+    }
+
+    private MenuItem entryItem(TypeCatalog.Entry entry, ObjectProperty<Type> draft) {
         Label name = new Label(entry.label());
         name.getStyleClass().add("type-chooser-name");
         Label hint = new Label(entry.hint());
@@ -144,36 +184,32 @@ public final class TypeChooser extends Button {
         row.setAlignment(Pos.CENTER_LEFT);
         row.setMinWidth(220);
         CustomMenuItem item = new CustomMenuItem(row);
-        if (isLeaf(entry.type())) item.getStyleClass().add("type-chooser-current");
-        item.setOnAction(e -> pick(entry));
+        item.setHideOnClick(false);
+        if (entry.type().equals(innermost(draft.get()))) item.getStyleClass().add("type-chooser-current");
+        item.setOnAction(e -> draft.set(withLeaf(draft.get(), entry.type())));
         return item;
     }
 
-    /** <i>Wrap in</i> — one button per container — and <i>Unwrap</i>, on one row. */
-    private MenuItem wrapRow(ContextMenu menu) {
+    /** <i>Wrap in</i> — one button per container — and <i>Unwrap</i>, on one row, over the type so far. */
+    private MenuItem wrapRow(ObjectProperty<Type> draft) {
         HBox row = new HBox(4);
         row.setAlignment(Pos.CENTER_LEFT);
         Label title = new Label("Wrap in");
         title.getStyleClass().add("type-chooser-hint");
         row.getChildren().add(title);
-        Type now = type.get();
-        boolean wrappable = now != null && now != void.class && !(now instanceof ValueTypes.Unknown);
         for (ValueContainer<?> container : ValueWire.containers()) {
             Button wrap = new Button(container.label());
             wrap.getStyleClass().add("type-chooser-wrap");
-            wrap.setDisable(!wrappable);
-            wrap.setOnAction(e -> {
-                menu.hide();
-                type.set(wrapped(container, type.get()));
-            });
+            wrap.disableProperty().bind(Bindings.createBooleanBinding(() -> !wrappable(draft.get()), draft));
+            wrap.setOnAction(e -> draft.set(wrapped(container, draft.get())));
             row.getChildren().add(wrap);
         }
         Button unwrap = new Button("Unwrap");
         unwrap.getStyleClass().add("type-chooser-wrap");
-        unwrap.setDisable(!(now instanceof ValueTypes.Parameterized));
+        unwrap.disableProperty().bind(Bindings.createBooleanBinding(
+                () -> !(draft.get() instanceof ValueTypes.Parameterized), draft));
         unwrap.setOnAction(e -> {
-            menu.hide();
-            if (type.get() instanceof ValueTypes.Parameterized p) type.set(p.last());
+            if (draft.get() instanceof ValueTypes.Parameterized p) draft.set(p.last());
         });
         row.getChildren().add(unwrap);
         CustomMenuItem item = new CustomMenuItem(row);
@@ -181,12 +217,8 @@ public final class TypeChooser extends Button {
         return item;
     }
 
-    private void pick(TypeCatalog.Entry entry) {
-        type.set(withLeaf(type.get(), entry.type()));
-    }
-
-    private boolean isLeaf(Type candidate) {
-        return candidate.equals(innermost(type.get()));
+    private static boolean wrappable(Type now) {
+        return now != null && now != void.class && !(now instanceof ValueTypes.Unknown);
     }
 
     /** The type at the bottom of every container: {@code Point} in {@code List<Map<String, Point>>}. */

@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker phase 6e2: collections.** `ValueContainer.SET` (`Set.of`, built as an ordered
+- **2026-09-27 (latest) — Picker feedback 2, phase 1.** `HostValueContext.withBounds`/`bounds()` carries a row's
+  `@Param(min, max)` (via `ValueEditors.Context.bounds`, so list elements get it too) and `set` clamps a number
+  in its own box. `TypeChooser` edits a draft type in an open menu, committed once on close, Escape cancels.
+  `.value-switch` styles the toolkit's `Styles.SWITCH` (danger / ok tokens).
+- **2026-09-27 — Picker phase 6e2: collections.** `ValueContainer.SET` (`Set.of`, built as an ordered
   set) and `DEQUE` (`new ArrayDeque<>(List.of(…))`, the one constructor-written container: `ValueWriter.containerCall`,
   `ExpressionReader` reads a `ClassInstanceCreation`). `ParamValueWidgets.growable`: ↑/↓/⧉/✕ rows for list, set
   and map; `dequeRows` wraps the list. Canvas: `pickers/ContainerPicker` (FALLBACKS, before the enum) — a pill over

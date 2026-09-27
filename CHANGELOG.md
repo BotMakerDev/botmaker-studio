@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Range limits the number.** A parameter's `@Param(min, max)` is handed to its editor, and a value written
+  outside it is written at the nearest end.
+- **The type chooser stays open** while a type is put together: wrap, pick, unwrap, then Done, Enter or a
+  click outside commits it once; Escape changes nothing. Its header shows the type so far.
+
 ### Added
 
 - **Sets and stacks/queues.** A `Set<T>` (written `Set.of(…)`) and a `Deque<T>` (written

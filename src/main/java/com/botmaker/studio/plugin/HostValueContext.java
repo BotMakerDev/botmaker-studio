@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.studio.plugin.grammar.JavaValue;
@@ -49,6 +50,8 @@ public final class HostValueContext implements ValueContext {
     /** The last value an editor set, and the tree it was written as; {@code null} before any write. */
     private Object held;
     private JavaValue written;
+    /** The field's {@code @Param(min, max)}; set once, by whoever built this, before an editor sees it. */
+    private Bounds bounds = Bounds.NONE;
 
     public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
                             StudioServices services, Consumer<JavaValue> onChange) {
@@ -156,11 +159,50 @@ public final class HostValueContext implements ValueContext {
      */
     @Override
     public void set(Object value) {
-        ConstantValues.write(grammar, constants, form, value).ifPresent(tree -> {
-            held = value;
+        Object kept = clamped(value, bounds);
+        ConstantValues.write(grammar, constants, form, kept).ifPresent(tree -> {
+            held = kept;
             written = tree;
             if (onChange != null) onChange.accept(tree);
         });
+    }
+
+    /**
+     * The range {@code value} is declared to stay within (2026-09-27) — a Parameters row's
+     * {@code @Param(min, max)}. Call it once, before the context reaches an editor.
+     */
+    public HostValueContext withBounds(Bounds range) {
+        this.bounds = range == null ? Bounds.NONE : range;
+        return this;
+    }
+
+    @Override
+    public Bounds bounds() {
+        return bounds;
+    }
+
+    /**
+     * {@code value} held inside {@code range}, in its own box: an editor that ignores the range still cannot
+     * write outside it. A whole number stays whole at a fractional end — the nearest whole number inside.
+     */
+    static Object clamped(Object value, Bounds range) {
+        if (!range.isBounded() || !(value instanceof Number number)) return value;
+        double raw = number.doubleValue();
+        return switch (value) {
+            case Double d -> range.clamp(raw);
+            case Float f -> (float) range.clamp(raw);
+            case Integer i -> (int) whole(raw, range);
+            case Long l -> (long) whole(raw, range);
+            case Short s -> (short) whole(raw, range);
+            case Byte b -> (byte) whole(raw, range);
+            default -> value;
+        };
+    }
+
+    private static double whole(double raw, Bounds range) {
+        double low = Math.ceil(range.min());
+        double high = Math.floor(range.max());
+        return low > high ? Math.rint(range.clamp(raw)) : Math.max(low, Math.min(high, raw));
     }
 
     @Override
