@@ -12,8 +12,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Pictures and data files open beside the canvas.** Clicking a `.png`, `.json`, `.properties`, `.txt`,
+  `.yml`, `.xml`, `.csv` or `.md` file in Project Files opens it in a tab next to the canvas: a picture at its
+  own size, JSON as a tree, a properties file as a table of keys and values, anything else as text. Viewing
+  only. The tab strip appears only once something is open beside the canvas.
+
 ### Changed
 
+- **Go to Definition on a library shows the whole class as blocks.** The class opens in a tab beside the
+  canvas, locked, with the member you asked for open and highlighted and every other function folded (open
+  one to see its code). A library with no sources shows its signatures, each saying "No source for this
+  library — signature only" where its code would be. This replaces the read-only text window.
 - **A refactor that guesses says so with `@Refactor`, and you pick every guess.** Where an upgrade, a
   signature change or a plugin's rewrite puts a value you did not choose, the function is marked with the
   plugin contract's `@Refactor`; *Mark Reviewed* keeps it as `done = true`. Studio no longer writes a

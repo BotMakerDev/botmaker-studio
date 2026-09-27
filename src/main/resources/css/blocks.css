@@ -2785,8 +2785,38 @@
     -fx-max-width: infinity;
 }
 
-.library-source-text {
+/* Where an outlined library function's body would be (LibraryClassView): a muted dashed pill, so an absent body
+   never reads as a function that does nothing. */
+.missing-body-pill {
+    -fx-padding: 4 10 4 10;
+    -fx-font-size: 11px;
+    -fx-text-fill: -bm-muted;
+    -fx-background-radius: 8px;
+    -fx-border-color: -bm-muted;
+    -fx-border-style: segments(3, 3);
+    -fx-border-radius: 8px;
+}
+
+/* The centre column's tabs (CenterTabs): the canvas, and what was opened beside it to be read. With the canvas
+   alone the strip takes no room, so nothing moves for a project that never opens anything else. */
+.center-tabs--single > .tab-header-area {
+    visibility: hidden;
+    -fx-pref-height: 0;
+    -fx-min-height: 0;
+    -fx-max-height: 0;
+    -fx-padding: 0;
+}
+
+.resource-viewer-text {
     -fx-font-family: "JetBrains Mono", monospace;
+}
+
+.resource-viewer-tree {
+    -fx-font-family: "JetBrains Mono", monospace;
+}
+
+.resource-viewer-note {
+    -fx-text-fill: -bm-muted;
 }
 
 /* The tag picklist's rows. The tick is a real CheckBox inside a CustomMenuItem (only that can keep the menu

@@ -6,7 +6,17 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — `@Refactor` marks every guess; annotations on the canvas.** The review mark is the
+- **2026-09-27 (latest) — Resource viewers; a library class as locked blocks.** `ui/app/CenterTabs` puts the
+  canvas in a tab (never closed, strip hidden while alone) with one closable tab per thing opened beside it; a
+  landed-on block (`BlockHighlightEvent`) brings the canvas back. `ui/app/viewers/ResourceViewers`: pictures
+  (`Image`, lifted out of `DiffCards` as `thumbnail`), JSON (Jackson tree → `TreeView`), `.properties`
+  (`Properties` → `TableView`), text; its `Format` is also `ExplorerModel.kindOf`'s extension list. Go to
+  Definition on a library opens `LibraryClassView`: `BlockConverter.convertReadOnly` (no `LockResolver`, a block
+  map of its own, a nested class drawn alone), every function folded but the target via
+  `MethodDeclarationBlock.collapseHere` (body built on first open, fold never written to project state), outline
+  functions carry `setMissingBody`. `java.lang.String`: 14 s with every body built, ~1.5 s folded.
+  `LibrarySourceWindow` is deleted.
+- **2026-09-27 — `@Refactor` marks every guess; annotations on the canvas.** The review mark is the
   contract's `@Refactor(value, done)` (studio-api 0.3.0, unreleased), read by `BotAnnotation.REFACTOR`, written
   only where the classpath carries it (`ReviewMarker.available`); `NeedsReview.java` is no longer generated.
   Every guessing edit marks — upgrade default, signature change, plugin rewrite with a note, deleted variable's

@@ -6,6 +6,7 @@ import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Declaration;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
 import com.botmaker.studio.palette.SdkDocs;
+import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.CodeEditorService;
@@ -51,14 +52,16 @@ final class NavigationPopups {
     private final ProjectState state;
     private final CodeEditorService editor;
     private final EditorCanvas canvas;
+    private final CenterTabs tabs;
 
     NavigationPopups(Stage owner, ProjectConfig config, ProjectState state, CodeEditorService editor,
-                     EditorCanvas canvas) {
+                     EditorCanvas canvas, CenterTabs tabs) {
         this.owner = owner;
         this.config = config;
         this.state = state;
         this.editor = editor;
         this.canvas = canvas;
+        this.tabs = tabs;
     }
 
     /**
@@ -177,9 +180,9 @@ final class NavigationPopups {
     }
 
     /**
-     * A member the bot does not declare opens read-only in {@link LibrarySourceWindow}: the library's sources,
-     * downloaded beside its jar when Maven has them, else an outline of its signatures. Found off the FX thread,
-     * since a sources jar may have to be downloaded.
+     * A member the bot does not declare opens its whole class as locked blocks in a tab beside the canvas
+     * ({@link LibraryClassView}): the library's sources, downloaded beside its jar when Maven has them, else an
+     * outline of its signatures. Found off the FX thread, since a sources jar may have to be downloaded.
      */
     private void openLibrary(IBinding binding) {
         Optional<LibrarySource.Target> target = LibrarySource.Target.of(binding);
@@ -194,9 +197,16 @@ final class NavigationPopups {
                         jar -> LibrarySource.coordinatesOf(jar, repository).flatMap(c -> MavenService.resolveArtifact(
                                 config.projectPath(), c.groupId(), c.artifactId(), "sources", c.version()))))
                 .whenComplete((view, failure) -> Platform.runLater(() -> {
-                    if (view != null && view.isPresent()) LibrarySourceWindow.show(owner, view.get());
+                    if (view != null && view.isPresent()) showLibrary(view.get());
                     else flash("The library declaring " + binding.getName() + " could not be read.");
                 }));
+    }
+
+    /** One tab per library class; opening another of its members draws it again, landed on that one. */
+    private void showLibrary(LibrarySource.View view) {
+        String where = view.from() == null ? "the Java runtime" : view.from().toString();
+        tabs.open("library:" + where + "!" + view.title(), view.title() + " (read-only)", where,
+                () -> LibraryClassView.build(view, new BlockConverter(config, state), editor));
     }
 
     void quickDocumentation() {

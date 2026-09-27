@@ -65,6 +65,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > The explorer is a folded folder tree over `ui/app/ExplorerModel` since the same day, not the flat list
 > described below.
 
+> **The centre column is `ui/app/CenterTabs` since 2026-09-27**: the canvas's tab, never closed, plus one tab
+> per thing opened only to be read — a file through `ui/app/viewers/ResourceViewers` (picture, JSON tree,
+> properties table, text; view only, parsed by `Image`/Jackson/`Properties`, never by hand), or a library class
+> through `LibraryClassView` (Go to Definition; `LibrarySourceWindow` is deleted). A library class is drawn by
+> `BlockConverter.convertReadOnly` into a block map of its own — never `ProjectState`'s, never through
+> `LockResolver`, which speaks for the open project file — and its functions fold with
+> `MethodDeclarationBlock.collapseHere`, which builds a body on first open and writes no fold into the project.
+
 ## Planning
 
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,

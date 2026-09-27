@@ -114,32 +114,61 @@ public class BlockConverter {
                                  boolean isReadOnly,
                                  boolean markNewIdentifiersAsUnedited,
                                  BlockReuse reuse) {
+        CompilationUnit ast;
         try {
-            CompilationUnit ast = parsed != null ? parsed : parse(javaCode);
+            ast = parsed != null ? parsed : parse(javaCode);
+        } catch (RuntimeException e) {
+            return unreadable(e);
+        }
+        return convert(ast, javaCode, null, nodeToBlockMap, manager, isReadOnly,
+                LockResolver.forActiveFile(config, state), markNewIdentifiersAsUnedited, reuse);
+    }
 
+    /**
+     * A file that is not the bot's, drawn with every block locked: a library class opened by Go to Definition
+     * (2026-09-27). No {@link LockResolver} is asked — the resolver speaks for the open project file, and this
+     * one is not in the project at all — so nothing in it answers to the bot's lock rules, and nothing in it
+     * can be edited.
+     *
+     * <p>{@code type} is the one drawn: the file's first when null, and otherwise a nested one — the canvas has
+     * no row for a class inside a class, so {@code Map.Entry}'s members are only reachable by drawing it alone.
+     */
+    public ConvertResult convertReadOnly(CompilationUnit parsed, String javaCode, AbstractTypeDeclaration type,
+                                         Map<ASTNode, CodeBlock> nodeToBlockMap, BlockDragAndDropManager manager) {
+        return convert(parsed, javaCode, type, nodeToBlockMap, manager, true, null, false, BlockReuse.NONE);
+    }
+
+    private ConvertResult convert(CompilationUnit ast, String javaCode, AbstractTypeDeclaration type,
+                                  Map<ASTNode, CodeBlock> nodeToBlockMap,
+                                  BlockDragAndDropManager manager, boolean isReadOnly, LockResolver resolver,
+                                  boolean markNewIdentifiersAsUnedited, BlockReuse reuse) {
+        try {
             List<Comment> comments = new ArrayList<>();
             for (Object obj : ast.getCommentList()) {
                 if (obj instanceof Comment c && !(obj instanceof Javadoc)) comments.add(c);
             }
 
             ParseContext ctx = new ParseContext(
-                    ast, javaCode, comments, nodeToBlockMap, manager, isReadOnly,
-                    LockResolver.forActiveFile(config, state),
+                    ast, javaCode, comments, nodeToBlockMap, manager, isReadOnly, resolver,
                     markNewIdentifiersAsUnedited, reuse);
 
             if (ast.types().isEmpty()) return new ConvertResult(null, ast);
 
-            AbstractTypeDeclaration rootNode = (AbstractTypeDeclaration) ast.types().getFirst();
+            AbstractTypeDeclaration rootNode = type != null ? type : (AbstractTypeDeclaration) ast.types().getFirst();
             List<String> problems = new ArrayList<>();
             AbstractCodeBlock root = parseRoot(rootNode, ctx, problems);
             return new ConvertResult(root, ast, List.copyOf(problems));
 
         } catch (Exception e) {
-            System.err.println("Critical error in BlockConverter.convert: " + e.getMessage());
-            e.printStackTrace();
-            return new ConvertResult(null, null, List.of("This file could not be drawn ("
-                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")."));
+            return unreadable(e);
         }
+    }
+
+    private static ConvertResult unreadable(Exception e) {
+        System.err.println("Critical error in BlockConverter.convert: " + e.getMessage());
+        e.printStackTrace();
+        return new ConvertResult(null, null, List.of("This file could not be drawn ("
+                + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")."));
     }
 
     /**

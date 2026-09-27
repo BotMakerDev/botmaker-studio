@@ -81,6 +81,49 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         this.body = body;
     }
 
+    /** Said where the body would be, when there is none to draw; null draws nothing. */
+    private String missingBody;
+
+    /**
+     * What to show in place of a body this method has none of — a library outlined from its compiled classes
+     * (2026-09-27), whose signatures are known and whose code is not. A method with no body and no note is an
+     * abstract one, which draws as a bare header.
+     */
+    public void setMissingBody(String note) {
+        this.missingBody = note;
+    }
+
+    public String missingBody() {
+        return missingBody;
+    }
+
+    /** A fold this block keeps to itself, or null to read and write the project's. */
+    private Boolean collapsedHere;
+
+    /**
+     * Folds this function without touching the project's remembered folds, and builds its body only when it is
+     * first opened (2026-09-27). For a class that is not the bot's — a library opened by Go to Definition —
+     * whose folds are nobody's to remember, and whose hundred bodies drawn at once took {@code String} fourteen
+     * seconds.
+     */
+    public void collapseHere(boolean collapsed) {
+        this.collapsedHere = collapsed;
+    }
+
+    /** The body's content — the drawn body, or the note standing in for one — put into {@code wrapper}. */
+    private void fillBody(VBox wrapper, CodeEditorService context) {
+        if (!wrapper.getChildren().isEmpty()) return;
+        if (body != null) {
+            Node bodyNode = body.getUINode(context);
+            VBox.setVgrow(bodyNode, javafx.scene.layout.Priority.ALWAYS);
+            wrapper.getChildren().add(bodyNode);
+        } else if (missingBody != null) {
+            Label note = new Label(missingBody);
+            note.getStyleClass().add("missing-body-pill");
+            wrapper.getChildren().add(note);
+        }
+    }
+
     /**
      * The header alone, whenever this method's lock is its <em>signature's</em> — an activity's
      * {@code Outcome run()} is the case that matters, where the signature is fixed and the body is the whole
@@ -140,7 +183,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         String methodKey = parentName + "." + methodName;
 
         // Restore state from ApplicationState
-        this.isCollapsed = context.getState().isMethodCollapsed(methodKey);
+        this.isCollapsed = collapsedHere != null ? collapsedHere : context.getState().isMethodCollapsed(methodKey);
 
         // --- HEADER SECTION ---
         VBox headerBox = new VBox(5);
@@ -151,11 +194,9 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         VBox bodyWrapper = new VBox();
         bodyWrapper.getStyleClass().add("block-body-wrapper");
 
-        if (body != null) {
-            Node bodyNode = body.getUINode(context);
-            VBox.setVgrow(bodyNode, javafx.scene.layout.Priority.ALWAYS);
-            bodyWrapper.getChildren().add(bodyNode);
-        }
+        // A body folded here is built the first time it opens; the bot's own are built at once, as they always
+        // were — the canvas's other readers (errors, breakpoints, a paused debugger) expect every block drawn.
+        if (collapsedHere == null || !isCollapsed) fillBody(bodyWrapper, context);
 
         // 2. Collapse Toggle Button
         Button collapseBtn = new Button(isCollapsed ? "▶" : "▼");
@@ -165,12 +206,14 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         collapseBtn.setOnAction(e -> {
             this.isCollapsed = !this.isCollapsed;
             collapseBtn.setText(isCollapsed ? "▶" : "▼");
-            context.getState().setMethodCollapsed(methodKey, this.isCollapsed);
+            if (collapsedHere != null) collapsedHere = isCollapsed;
+            else context.getState().setMethodCollapsed(methodKey, this.isCollapsed);
             headerBox.pseudoClassStateChanged(COLLAPSED, isCollapsed);
 
             if (isCollapsed) {
                 container.getChildren().remove(bodyWrapper);
             } else {
+                fillBody(bodyWrapper, context);
                 container.getChildren().add(bodyWrapper);
             }
         });

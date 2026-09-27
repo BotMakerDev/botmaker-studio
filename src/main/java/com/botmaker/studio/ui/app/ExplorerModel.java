@@ -7,6 +7,7 @@ import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
+import com.botmaker.studio.ui.app.viewers.ResourceViewers;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -150,12 +151,10 @@ final class ExplorerModel {
             if (source != null && source.contains("@Param")) return Kind.PARAMETERS;
             return Kind.JAVA;
         }
-        int dot = name.lastIndexOf('.');
-        return switch (dot < 0 ? "" : name.substring(dot + 1)) {
-            case "png", "jpg", "jpeg", "gif", "bmp", "webp" -> Kind.PICTURE;
-            case "json", "properties", "txt", "yml", "yaml", "xml", "csv" -> Kind.DATA;
-            default -> Kind.OTHER;
-        };
+        // One list of extensions, the viewers': a row whose icon says "picture" is one the explorer can open.
+        return ResourceViewers.Format.of(file)
+                .map(format -> format == ResourceViewers.Format.IMAGE ? Kind.PICTURE : Kind.DATA)
+                .orElse(Kind.OTHER);
     }
 
     /**

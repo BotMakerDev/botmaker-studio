@@ -18,6 +18,7 @@ import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.ui.app.viewers.ResourceViewers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.animation.PauseTransition;
@@ -94,6 +95,8 @@ public class FileExplorerManager {
     private Map<Path, VcsFileStatus> status = Map.of();
     private int statusRun;
     private Consumer<CodeBlock> onReveal = block -> { };
+    private Runnable onCanvas = () -> { };
+    private Consumer<Path> onView = path -> { };
 
     /**
      * A tree row: a group heading, a folder, or a file.
@@ -114,6 +117,11 @@ public class FileExplorerManager {
         /** A Java file the canvas can draw. */
         boolean opens() {
             return !group && !isFolder() && path.getFileName().toString().endsWith(".java");
+        }
+
+        /** A file a viewer shows beside the canvas — a picture, JSON, properties, text. */
+        boolean views() {
+            return !group && !isFolder() && ResourceViewers.canView(path);
         }
 
         /** Stable key for save/restore of expansion state. */
@@ -143,6 +151,15 @@ public class FileExplorerManager {
     /** Where a Structure row lands: the canvas's own scroll-and-select. */
     public void setOnReveal(Consumer<CodeBlock> onReveal) {
         this.onReveal = onReveal == null ? block -> { } : onReveal;
+    }
+
+    /**
+     * Where a file row goes: {@code canvas} once a Java file is the one drawn, {@code view} with a file a viewer
+     * shows (a picture, a data file) — each the centre column's tab for it.
+     */
+    public void setOnOpen(Runnable canvas, Consumer<Path> view) {
+        this.onCanvas = canvas == null ? () -> { } : canvas;
+        this.onView = view == null ? path -> { } : view;
     }
 
     public VBox createView() {
@@ -222,14 +239,38 @@ public class FileExplorerManager {
         });
 
         fileTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal == null || newVal.getValue() == null) return;
-            ExplorerNode node = newVal.getValue();
-            if (!node.opens() || !Files.isRegularFile(node.path())) return;
-            if (state.getActiveFile() == null || !state.getActiveFile().getPath().equals(node.path())) {
-                codeEditorService.switchToFile(node.path());
-                fileTree.refresh();
-            }
+            shownBySelection = newVal;
+            show(newVal);
         });
+        // A click on the row already selected changes no selection, and is still "show me this file" — the
+        // user closed its tab, or went back to the canvas, and wants it again. The click that also selected the
+        // row was answered by the selection.
+        fileTree.setOnMouseClicked(e -> {
+            TreeItem<ExplorerNode> item = fileTree.getSelectionModel().getSelectedItem();
+            boolean answered = item == shownBySelection;
+            shownBySelection = null;
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && !answered) show(item);
+        });
+    }
+
+    /** The row the last selection change showed, until the click that made it has been seen. */
+    private TreeItem<ExplorerNode> shownBySelection;
+
+    /** Brings {@code item}'s file forward: its viewer's tab, or the canvas drawing it. */
+    private void show(TreeItem<ExplorerNode> item) {
+        if (item == null || item.getValue() == null) return;
+        ExplorerNode node = item.getValue();
+        if (node.group() || node.isFolder() || !Files.isRegularFile(node.path())) return;
+        if (node.views()) {
+            onView.accept(node.path());
+            return;
+        }
+        if (!node.opens()) return;
+        if (state.getActiveFile() == null || !state.getActiveFile().getPath().equals(node.path())) {
+            codeEditorService.switchToFile(node.path());
+            fileTree.refresh();
+        }
+        onCanvas.run();
     }
 
     private static SVGPath icon(ExplorerModel.Kind kind) {

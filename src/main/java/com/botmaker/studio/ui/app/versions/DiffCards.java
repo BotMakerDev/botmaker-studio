@@ -4,6 +4,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.BlockDiff;
 import com.botmaker.studio.project.vcs.VersionReader;
+import com.botmaker.studio.ui.app.viewers.ResourceViewers;
 import com.botmaker.studio.ui.render.theme.BlockFontPreference;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import javafx.geometry.Insets;
@@ -14,14 +15,11 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
-import java.io.ByteArrayInputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -329,10 +327,7 @@ final class DiffCards {
 
     private static Node picture(byte[] bytes) {
         if (bytes == null) return note("—");
-        ImageView view = new ImageView(new Image(new ByteArrayInputStream(bytes)));
-        view.setPreserveRatio(true);
-        view.setFitWidth(Math.min(240, view.getImage().getWidth()));
-        return view;
+        return ResourceViewers.thumbnail(bytes, 240);
     }
 
     private static Node text(String diff) {

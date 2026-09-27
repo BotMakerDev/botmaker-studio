@@ -425,10 +425,21 @@ public class UIManager implements ProjectWindow {
                 config.projectName(), this::switchToEditorMode,
                 () -> PluginOwners.absent(config), actions::openManagePlugins);
 
+        // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
+        // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.
+        CenterTabs centerTabs = new CenterTabs(editorCanvas.node());
+        fileExplorerManager.setOnOpen(centerTabs::showCanvas, centerTabs::openResource);
+        eventBus.subscribe(CoreApplicationEvents.BlockHighlightEvent.class, e -> {
+            if (e.block() != null) centerTabs.showCanvas();
+        }, true);
+        eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> centerTabs.setCanvasTitle(
+                state.getActiveFile() == null ? null : state.getActiveFile().getPath().getFileName().toString()),
+                true);
+
         // Navigate ▸ — the popups land on blocks through this canvas, so they are wired once it exists. Find
         // Usages and a debug frame land the same way, from their tabs.
         NavigationPopups navigation = new NavigationPopups(primaryStage, config, state, codeEditorService,
-                editorCanvas);
+                editorCanvas, centerTabs);
         fileExplorerManager.setOnReveal(editorCanvas::scrollToBlock);
         usagesPanel = new UsagesPanel(config, state, u -> navigation.revealOffset(u.file(), u.start()));
         actions.setOnReveal(u -> navigation.revealOffset(u.file(), u.start()));
@@ -484,7 +495,7 @@ public class UIManager implements ProjectWindow {
         // --- 5. Layout Assembly ---
         SplitPane verticalSplit = new SplitPane();
         verticalSplit.setOrientation(Orientation.VERTICAL);
-        verticalSplit.getItems().addAll(editorCanvas.node(), bottomTabPane);
+        verticalSplit.getItems().addAll(centerTabs.node(), bottomTabPane);
         verticalSplit.setDividerPositions(0.82);
 
         SplitPane mainSplit = new SplitPane();

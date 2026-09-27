@@ -92,6 +92,10 @@ public class ConstructorBlock extends MethodDeclarationBlock {
             Node bodyNode = getChildren().getFirst().getUINode(context);
             javafx.scene.layout.VBox.setVgrow(bodyNode, javafx.scene.layout.Priority.ALWAYS);
             bodyWrapper.getChildren().add(bodyNode);
+        } else if (missingBody() != null) {
+            javafx.scene.control.Label note = new javafx.scene.control.Label(missingBody());
+            note.getStyleClass().add("missing-body-pill");
+            bodyWrapper.getChildren().add(note);
         }
         container.getChildren().add(bodyWrapper);
 
