@@ -58,10 +58,10 @@ public final class PluginFiles {
         for (StudioPlugin plugin : plugins) {
             try {
                 String segment = ManagedHolders.segment(plugin.id());
-                List<ManagedValue> values = plugin.managedValues();
+                List<ManagedValue<?>> values = plugin.managedValues();
                 if (segment == null || values == null) continue;
                 Set<String> classes = new LinkedHashSet<>();
-                for (ManagedValue value : values) {
+                for (ManagedValue<?> value : values) {
                     if (value != null && value.holder() != null && !value.holder().isBlank()) {
                         classes.add(value.holder());
                     }

@@ -133,7 +133,7 @@ public final class PluginHost {
     private static volatile List<ToolbarItem> toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
 
     /** Memoised the same way. See {@link #managedValues()}. */
-    private static volatile List<ManagedValue> managedValues = mergeManagedValues(BUNDLED);
+    private static volatile List<ManagedValue<?>> managedValues = mergeManagedValues(BUNDLED);
 
     /** The holder files the bound plugins declare, rebuilt on the same bind. See {@link #pluginFiles()}. */
     private static volatile List<com.botmaker.studio.project.PluginFiles.Holder> pluginFiles =
@@ -546,7 +546,7 @@ public final class PluginHost {
      * before letting the canvas edit a {@code @Managed} method or class. Empty with no project, so nothing
      * is locked by it.
      */
-    public static List<ManagedValue> managedValues() {
+    public static List<ManagedValue<?>> managedValues() {
         return managedValues;
     }
 
@@ -560,13 +560,13 @@ public final class PluginHost {
     }
 
     /** Every plugin's entries, a throwing or malformed one costing only itself. */
-    static List<ManagedValue> mergeManagedValues(List<StudioPlugin> set) {
-        List<ManagedValue> merged = new ArrayList<>();
+    static List<ManagedValue<?>> mergeManagedValues(List<StudioPlugin> set) {
+        List<ManagedValue<?>> merged = new ArrayList<>();
         for (StudioPlugin plugin : set) {
             try {
-                List<ManagedValue> offered = plugin.managedValues();
+                List<ManagedValue<?>> offered = plugin.managedValues();
                 if (offered == null) continue;
-                for (ManagedValue value : offered) {
+                for (ManagedValue<?> value : offered) {
                     if (value != null && value.id() != null && !value.id().isBlank()) merged.add(value);
                 }
             } catch (RuntimeException | LinkageError e) {

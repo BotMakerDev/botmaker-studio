@@ -173,9 +173,9 @@ class LockResolverTest {
 
     // --- files and fields another window owns (2026-09-19) --------------------------------------------------
 
-    private static final List<ManagedValue> PICTURES = List.of(
-            new ManagedValue("pictures", "Change pictures in the picture window."),
-            new ManagedValue("flow", "Draw the flow in ✂ Activity Flow."));
+    private static final List<ManagedValue<?>> PICTURES = List.of(
+            ManagedValue.openOnly("pictures", "Change pictures in the picture window."),
+            ManagedValue.openOnly("flow", "Draw the flow in ✂ Activity Flow."));
 
     private static TypeDeclaration typeOf(String source) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
@@ -277,7 +277,7 @@ class LockResolverTest {
 
         assertNull(LockResolver.managedReason(type.getMethods()[0], PICTURES));
         assertNotNull(LockResolver.managedReason(type.getMethods()[0],
-                List.of(new ManagedValue("something-of-my-own", "Mine."))));
+                List.of(ManagedValue.openOnly("something-of-my-own", "Mine."))));
     }
 
     /**

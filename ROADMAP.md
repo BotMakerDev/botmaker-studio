@@ -6,7 +6,9 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — `ParameterRow` and `Visibility` are Studio's.** Moved from the contract into
+- **2026-09-28 (latest) — typed `ManagedValue<?>`.** `ManagedHolders`, `PluginHost`, `PluginFiles`,
+  `HostPluginValues` and `LockResolver` read the contract's typed record (`type()`, `isOpenSet()`).
+- **2026-09-28 — `ParameterRow` and `Visibility` are Studio's.** Moved from the contract into
   `project/params/` (no plugin used either); `HostActionContext`/`HostOverlayContext` lost the pin supplier and
   `openProjectName`/`pinnedVersion` with the contract members. Row tests are `ParameterRowTest`.
 - **2026-09-27 — No `botmaker-template.properties`.** `TemplateProject.read` is the package of the

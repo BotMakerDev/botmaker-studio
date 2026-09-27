@@ -115,14 +115,14 @@ public final class HostPluginValues implements PluginValues {
         if (id == null || id.isBlank()) return Optional.of("No value was named.");
         if (JavaManagedValues.find(config, state, id).isPresent()) return Optional.empty();
         for (StudioPlugin plugin : PluginHost.plugins()) {
-            List<ManagedValue> declared;
+            List<ManagedValue<?>> declared;
             try {
                 declared = plugin.managedValues();
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
             if (declared == null) continue;
-            for (ManagedValue value : declared) {
+            for (ManagedValue<?> value : declared) {
                 if (value == null || !id.equals(value.id())) continue;
                 ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.id(), value, declared,
                         PluginHost.grammar());
@@ -156,10 +156,10 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private List<String> writeMissing() {
-        java.util.Map<String, List<ManagedValue>> byPlugin = new java.util.LinkedHashMap<>();
+        java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
         for (StudioPlugin plugin : PluginHost.plugins()) {
             try {
-                List<ManagedValue> declared = plugin.managedValues();
+                List<ManagedValue<?>> declared = plugin.managedValues();
                 if (declared != null && !declared.isEmpty()) byPlugin.put(plugin.id(), declared);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.

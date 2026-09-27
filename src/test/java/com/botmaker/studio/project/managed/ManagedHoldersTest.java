@@ -25,17 +25,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ManagedHoldersTest {
 
-    private static final List<ManagedValue> DECLARED = List.of(
-            new ManagedValue("greeting", "Mine.", "Sdk", TestValues.TEXT),
-            new ManagedValue("rest-between", "Mine.", "Sdk", TestValues.DURATION),
-            new ManagedValue("pictures", "Mine.", "Pictures", null),
-            new ManagedValue("opened-only", "Mine."));
+    private static final List<ManagedValue<?>> DECLARED = List.of(
+            ManagedValue.of("greeting", "Sdk", String.class, null, "Mine."),
+            ManagedValue.of("rest-between", "Sdk", java.time.Duration.class, null, "Mine."),
+            ManagedValue.openSet("pictures", "Pictures", "Mine."),
+            ManagedValue.openOnly("opened-only", "Mine."));
 
     @TempDir
     Path dir;
 
     private ManagedHolders.Plan plan(String id) {
-        ManagedValue value = DECLARED.stream().filter(v -> v.id().equals(id)).findFirst().orElseThrow();
+        ManagedValue<?> value = DECLARED.stream().filter(v -> v.id().equals(id)).findFirst().orElseThrow();
         return ManagedHolders.plan(ProjectConfig.forDirectory(dir), "com.botmaker.sdk", value, DECLARED,
                 TestValues.GRAMMAR);
     }
@@ -97,7 +97,7 @@ class ManagedHoldersTest {
     @Test
     void onBindAHolderTheBotAlreadyHasIsLeftAlone() throws Exception {
         ProjectConfig config = ProjectConfig.forDirectory(dir);
-        java.util.Map<String, List<ManagedValue>> sdk = java.util.Map.of("com.botmaker.sdk", DECLARED);
+        java.util.Map<String, List<ManagedValue<?>>> sdk = java.util.Map.of("com.botmaker.sdk", DECLARED);
         // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
         assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
                 java.util.Set.of("rest-between"), java.util.Set.of(), TestValues.GRAMMAR)));

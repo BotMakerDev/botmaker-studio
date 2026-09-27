@@ -71,7 +71,8 @@ public final class ManagedHolders {
      * @param declared every value the same plugin declares; those sharing {@code value}'s holder go in the
      *                 same class
      */
-    public static Plan plan(ProjectConfig config, String pluginId, ManagedValue value, List<ManagedValue> declared,
+    public static Plan plan(ProjectConfig config, String pluginId, ManagedValue<?> value,
+                            List<ManagedValue<?>> declared,
                             ValueGrammar grammar) {
         String holder = value.holder();
         if (holder == null || !SourceVersion.isName(holder) || holder.contains(".")) {
@@ -91,19 +92,19 @@ public final class ManagedHolders {
         type.setJavadoc(javadoc(ast, pluginId));
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> typeModifiers = type.modifiers();
-        boolean typeLevel = value.valueType() == null;
+        boolean typeLevel = value.isOpenSet();
         if (typeLevel) typeModifiers.add(managed(ast, value.id()));
         typeModifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
         typeModifiers.add(ast.newModifier(Modifier.ModifierKeyword.FINAL_KEYWORD));
         @SuppressWarnings("unchecked")
         List<BodyDeclaration> members = type.bodyDeclarations();
         if (!typeLevel) {
-            for (ManagedValue sibling : declared) {
-                if (!holder.equals(sibling.holder()) || sibling.valueType() == null) continue;
+            for (ManagedValue<?> sibling : declared) {
+                if (!holder.equals(sibling.holder()) || sibling.isOpenSet()) continue;
                 MethodDeclaration method = method(ast, sibling, grammar, imports);
                 if (method == null) {
                     return new Plan.Refused("BotMaker cannot write a starting value for \"" + sibling.id()
-                            + "\": no plugin in this project declares " + ValueTypes.sourceName(sibling.valueType())
+                            + "\": no plugin in this project declares " + ValueTypes.sourceName(sibling.type())
                             + ".");
                 }
                 members.add(method);
@@ -198,18 +199,18 @@ public final class ManagedHolders {
      * @param declaredIds the ids the bot's sources already declare
      * @param fileNames   the file names of every bot source, {@code Sdk.java} and the like
      */
-    public static List<Plan> missing(ProjectConfig config, java.util.Map<String, List<ManagedValue>> byPlugin,
+    public static List<Plan> missing(ProjectConfig config, java.util.Map<String, List<ManagedValue<?>>> byPlugin,
                                      java.util.Set<String> declaredIds, java.util.Set<String> fileNames,
                                      ValueGrammar grammar) {
         List<Plan> out = new ArrayList<>();
         java.util.Set<String> planned = new java.util.HashSet<>(fileNames);
         byPlugin.forEach((pluginId, declared) -> {
             java.util.Set<String> holders = new java.util.LinkedHashSet<>();
-            for (ManagedValue value : declared) {
+            for (ManagedValue<?> value : declared) {
                 if (value != null && value.holder() != null) holders.add(value.holder());
             }
             for (String holder : holders) {
-                List<ManagedValue> held = declared.stream()
+                List<ManagedValue<?>> held = declared.stream()
                         .filter(v -> v != null && holder.equals(v.holder())).toList();
                 if (planned.contains(holder + ".java")) continue;
                 if (held.stream().anyMatch(v -> declaredIds.contains(v.id()))) continue;
@@ -226,9 +227,9 @@ public final class ManagedHolders {
      * One {@code @Managed} method returning its value — the grammar's node, copied in — its imports added to
      * {@code imports}; null when the type has no node or no fresh value.
      */
-    private static MethodDeclaration method(AST ast, ManagedValue value, ValueGrammar grammar,
+    private static MethodDeclaration method(AST ast, ManagedValue<?> value, ValueGrammar grammar,
                                             TreeSet<String> imports) {
-        Type type = value.valueType();
+        Type type = value.type();
         JavaValue fresh = (value.initial() != null ? grammar.spell(type, value.initial())
                 : grammar.freshSpelling(type)).orElse(null);
         if (fresh == null) return null;

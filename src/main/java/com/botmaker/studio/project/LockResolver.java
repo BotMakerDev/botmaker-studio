@@ -173,7 +173,7 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
      * constants was managed whole. Both were guesses from shape. {@code @Managed("id")} is a statement, and
      * it carries which of a plugin's values a method holds.
      */
-    public static String managedReason(ASTNode node, List<ManagedValue> managed) {
+    public static String managedReason(ASTNode node, List<ManagedValue<?>> managed) {
         FieldDeclaration field = enclosing(node, FieldDeclaration.class);
         if (field != null && JavaParameterSource.paramAnnotation(field) != null) return PARAM_REASON;
         if (managed.isEmpty()) return null;
@@ -195,12 +195,12 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
     }
 
     /** The reason of the managed entry this declaration's {@code @Managed} id names, or {@code null}. */
-    private static String pluginReason(BodyDeclaration declaration, List<ManagedValue> managed) {
+    private static String pluginReason(BodyDeclaration declaration, List<ManagedValue<?>> managed) {
         Annotation annotation = JavaManagedSource.managedAnnotation(declaration);
         if (annotation == null) return null;
         String id = JavaManagedSource.idOf(annotation);
         if (id.isEmpty()) return null;
-        for (ManagedValue entry : managed) {
+        for (ManagedValue<?> entry : managed) {
             if (id.equals(entry.id())) return entry.reason();
         }
         return null;
