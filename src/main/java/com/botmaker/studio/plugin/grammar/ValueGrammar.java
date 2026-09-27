@@ -419,6 +419,14 @@ public final class ValueGrammar {
         return component == null ? null : classOf(component);
     }
 
+    /**
+     * The component that takes {@code value} apart and writes it back, or empty — by the value's own runtime
+     * class, so an interface-typed value ({@code CaptureSource}) answers the call it was read from.
+     */
+    public Optional<ComponentType<?>> componentOf(Object value) {
+        return value == null ? Optional.empty() : Optional.ofNullable(canonical(value.getClass()));
+    }
+
     /** The component that writes {@code type}, or {@code null}: the writer's registry. */
     ComponentType<?> canonical(Class<?> type) {
         return type == null ? null : componentByName.get(JavaNames.canonical(type));
