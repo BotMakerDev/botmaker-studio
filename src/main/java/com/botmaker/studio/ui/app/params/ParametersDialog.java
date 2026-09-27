@@ -601,8 +601,8 @@ public final class ParametersDialog {
         grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
         row++;
 
-        // A closed-set type brings its own choices (every direction, every mouse button), so it offers no
-        // mode: an "add a choice" row over it would be a hand-typed copy of the plugin's own list.
+        // An enum is its own set of choices (every day, every mouse button), so it is picked one or several,
+        // never freely, and its choices start as every constant ticked (feedback 3).
         Type leaf = ValueTypes.leaf(entry.form());
         List<ChoiceMode> modes = new ArrayList<>(ChoiceMode.offered(base, grammar.known(base)));
         if (!modes.contains(mode)) modes.add(mode);
@@ -763,8 +763,10 @@ public final class ParametersDialog {
         List<JavaValue> held = from == ChoiceMode.MANY
                 ? ValueWire.partsOrNone(entry.form(), row.value()).stream().map(ValueGrammar.Part::kept).toList()
                 : JavaValue.parse(row.value()).stream().toList();
+        // An enum's choices carry across as they are — none written is every constant, in either mode.
+        boolean closed = base instanceof Class<?> cls && cls.isEnum();
         List<String> options = to == ChoiceMode.NONE ? List.of()
-                : !row.options().isEmpty() ? row.options()
+                : closed || !row.options().isEmpty() ? row.options()
                 : held.stream().map(value -> optionText(grammar, base, Optional.of(value)))
                         .filter(text -> !text.isBlank()).distinct().toList();
 
@@ -795,8 +797,8 @@ public final class ParametersDialog {
      *
      * <p>The chooser speaks of the base type, so picking a new one in "Any of" writes a {@code List} of it and
      * stays "Any of" — it used to write the pick itself, and a ticked field retyped to a leaf fell back to
-     * any value with its ticks gone. A mode the new type cannot be in (ticks over a list, one of an enum) falls
-     * back to any value. Choices that are still values of the new type stay; when none are, the new type's
+     * any value with its ticks gone. A mode the new type cannot be in (ticks over a list, any value of an enum)
+     * falls to the new type's first ({@link ChoiceMode#afterRetype}). Choices that are still values of the new type stay; when none are, the new type's
      * own fresh value becomes the first choice, since a mode is read off its choices and none would be no mode.
      *
      * <p>The value is reset to the new type's fresh one: a value written for one type is not a value of
@@ -804,11 +806,15 @@ public final class ParametersDialog {
      */
     private void retype(JavaParameter entry, ChoiceMode mode, Type base) {
         ValueGrammar grammar = PluginHost.grammar();
-        ChoiceMode kept = ChoiceMode.offered(base, grammar.known(base)).contains(mode) ? mode : ChoiceMode.NONE;
+        ChoiceMode kept = ChoiceMode.afterRetype(mode, !entry.row().options().isEmpty(), base,
+                grammar.known(base));
         Type form = kept == ChoiceMode.MANY ? ValueTypes.listOf(base) : base;
         List<String> surviving = ChoiceMode.kept(grammar, form, entry.row().options());
+        // An enum with no choices written down is picked from every constant, so it needs no first one.
+        boolean closed = base instanceof Class<?> cls && cls.isEnum();
         List<String> options = kept == ChoiceMode.NONE ? List.of()
                 : !surviving.isEmpty() ? surviving
+                : closed ? List.of()
                 : firstChoice(grammar, base).map(List::of).orElse(List.of());
         edit(entry, "the type", current -> ChoiceMode.declare(current, options), null, form);
     }
@@ -867,9 +873,14 @@ public final class ParametersDialog {
         // A choice is a value of the base type — a whole list when the field is one of several lists — and a
         // number's choices keep to its range, as its value does.
         Type base = ChoiceMode.base(entry.form(), v.options(), grammar);
+        if (ChoiceMode.toggled(base)) return enumChoices(entry, (Class<?>) base);
         ValueEditors.Context ctx = ValueEditors.Context.of(config).withBounds(new Bounds(v.min(), v.max()));
         VBox box = new VBox(4);
         List<String> options = v.options();
+        if (options.isEmpty() && base instanceof Class<?> cls && cls.isEnum()) {
+            box.getChildren().add(hintLabel("Every " + ValueTypes.sourceName(base) + " — add one to allow only "
+                    + "the ones you add."));
+        }
 
         for (int i = 0; i < options.size(); i++) {
             box.getChildren().add(optionRow(entry, base, ctx, options, i));
@@ -909,6 +920,39 @@ public final class ParametersDialog {
         addRow.setAlignment(Pos.CENTER_LEFT);
         box.getChildren().add(addRow);
         return box;
+    }
+
+    /**
+     * A small enum's choices: one toggle per constant, in the enum's order, the choices the ones that are on
+     * (feedback 3). Every one on is written as no choices ({@link ChoiceMode#enumOptions}). The last one on
+     * cannot be turned off — a field picked from nothing has no value.
+     */
+    private Node enumChoices(JavaParameter entry, Class<?> constants) {
+        List<String> on = ChoiceMode.ticked(constants, entry.row().options());
+        javafx.scene.layout.FlowPane strip = new javafx.scene.layout.FlowPane(2, 2);
+        List<ToggleButton> toggles = new ArrayList<>();
+        for (Object constant : constants.getEnumConstants()) {
+            String name = ((Enum<?>) constant).name();
+            ToggleButton toggle = new ToggleButton(EnumLabels.label(name));
+            toggle.setTooltip(new Tooltip(name));
+            toggle.setUserData(name);
+            toggle.setSelected(on.contains(name));
+            toggles.add(toggle);
+        }
+        for (ToggleButton toggle : toggles) {
+            toggle.setOnAction(e -> {
+                List<String> ticked = toggles.stream().filter(ToggleButton::isSelected)
+                        .map(t -> (String) t.getUserData()).toList();
+                if (ticked.isEmpty()) {
+                    toggle.setSelected(true);
+                    error("Keep at least one choice.");
+                    return;
+                }
+                replaceOptions(entry, ChoiceMode.enumOptions(constants, ticked));
+            });
+        }
+        strip.getChildren().addAll(toggles);
+        return strip;
     }
 
     /**

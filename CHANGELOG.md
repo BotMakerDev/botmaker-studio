@@ -14,6 +14,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **An enum is always picked from its constants.** A `DayOfWeek`, `Month` or any other enum parameter offers
+  **One of** and **Any of**, never "Any value": with nothing written down it is one of every constant (a list
+  of it, any number of them). Its choices are a strip of toggles, all on at first; every one on is written as
+  no `options` at all. An enum of more than 16 constants (`Key`) keeps the add-a-choice rows with its own
+  picker, and a list of one is rows rather than a hundred toggles.
+- **The type chooser changes the part you click.** Its header spells the type so far one name at a time —
+  `Map` `<` `String` `,` `List` `<` `Point` `>` `>` — and a click selects the part a pick replaces, so a map's
+  key can be changed as well as its value. *Wrap in* wraps the selected part; *Unwrap* unwraps the container
+  at or around it. It starts on the innermost last argument, as before.
 - **"Any of" keeps its type.** The type button shows the type being ticked (`int`), never the `List<Integer>`
   it is written as, and picking another type in "Any of" or "One of" stays in that mode, starting from the
   new type's first choice.

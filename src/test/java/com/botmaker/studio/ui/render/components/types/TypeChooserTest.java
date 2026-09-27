@@ -85,6 +85,25 @@ class TypeChooserTest extends FxHeadlessTest {
         assertEquals(double.class, chooser.type());
     }
 
+    /** A map's key is picked by clicking it in the header first: a pick used to reach only the value. */
+    @Test
+    void aClickedPartOfTheHeaderIsThePartAPickChanges() {
+        interact(() -> chooser.setType(com.botmaker.studio.plugin.grammar.ValueTypes.mapOf(String.class,
+                Integer.class)));
+        ContextMenu menu = opened();
+        Node header = ((CustomMenuItem) menu.getItems().getFirst()).getContent();
+        Node key = header.lookupAll(".type-path-part").stream()
+                .filter(n -> n instanceof javafx.scene.control.Label l && l.getText().equals("String"))
+                .findFirst().orElseThrow(() -> new AssertionError("no key in the header"));
+
+        interact(() -> key.fireEvent(new MouseEvent(MouseEvent.MOUSE_CLICKED, 0, 0, 0, 0, MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, true, false, false, null)));
+        interact(() -> entry(menu, "int").fire());
+        interact(menu::hide);
+
+        assertEquals(com.botmaker.studio.plugin.grammar.ValueTypes.mapOf(int.class, Integer.class), chooser.type());
+    }
+
     @Test
     void doneLeadsTheHeader() {
         ContextMenu menu = opened();

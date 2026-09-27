@@ -2822,6 +2822,32 @@
     -fx-font-size: 0.9em;
 }
 
+/* The type so far, one clickable name per part (TypePath): the selected part — the one a pick changes — is
+   filled in the accent (feedback 3). */
+.type-chooser-menu .type-path-part,
+.type-chooser-menu .type-path-mark {
+    -fx-text-fill: -bm-on-popup;
+    -fx-font-family: monospace;
+    -fx-font-weight: bold;
+}
+
+.type-chooser-menu .type-path-part {
+    -fx-padding: 1 2 1 2;
+    -fx-background-radius: 3;
+    -fx-cursor: hand;
+}
+
+.type-chooser-menu .type-path-part:hover {
+    -fx-background-color: -bm-popup-hover;
+    -fx-text-fill: -bm-on-popup-hover;
+}
+
+.type-chooser-menu .type-path-selected,
+.type-chooser-menu .type-path-selected:hover {
+    -fx-background-color: -bm-accent;
+    -fx-text-fill: -bm-on-accent;
+}
+
 /* Done leads the header at full size (feedback 3): it closes the list, so it sits where the eye starts. */
 .type-chooser-menu .type-chooser-done {
     -fx-font-weight: bold;

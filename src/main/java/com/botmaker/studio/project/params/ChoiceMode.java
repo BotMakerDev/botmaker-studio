@@ -21,7 +21,9 @@ import java.util.Optional;
  * field with none is {@link #NONE}, and one with some is {@link #ONE} or {@link #MANY}. <b>The choices' own
  * shape tells those two apart (2026-09-27)</b>: over a {@code List<X>}, a choice that reads as the list is one
  * of several lists, and a choice that reads as an {@code X} is a tick. A list with no choices is a list typed
- * freely, which is {@code NONE} over {@code List<T>}.
+ * freely, which is {@code NONE} over {@code List<T>}. <b>An enum is the exception</b>: with no choices it is
+ * {@code ONE} over every constant, and a list of it {@code MANY} — every constant ticked is written as no
+ * choices, since the two mean the same.
  */
 public enum ChoiceMode {
 
@@ -47,7 +49,10 @@ public enum ChoiceMode {
 
     /** The mode a field declared as {@code form} with {@code options} is in. */
     public static ChoiceMode of(Type form, List<String> options, ValueGrammar grammar) {
-        if (options == null || options.isEmpty()) return NONE;
+        if (options == null || options.isEmpty()) {
+            // An enum has no free mode: with nothing written down it is picked from every constant.
+            return closedSet(form, grammar).map(constants -> form == constants ? ONE : MANY).orElse(NONE);
+        }
         if (ValueTypes.isLeaf(form) || listElement(form).isEmpty()) return ONE;
         return options.stream().anyMatch(option -> reads(grammar, form, option)) ? ONE : MANY;
     }
@@ -74,8 +79,9 @@ public enum ChoiceMode {
     }
 
     /**
-     * The modes {@code base} can be put in, {@link #NONE} always first. Choices are values the grammar can
-     * read, so a type nobody declares has none; an enum brings its own set. {@link #ONE} over a flag is a flag
+     * The modes {@code base} can be put in, {@link #NONE} first wherever it is one. Choices are values the
+     * grammar can read, so a type nobody declares has none. An enum is its own set, so it is one of its
+     * constants or several of them and never "any value" (feedback 3). {@link #ONE} over a flag is a flag
      * with its two values written out again, so a flag is free or ticked. A container can be one of several
      * of its own values, and is never ticked — ticks over a list would be a list of lists.
      */
@@ -84,7 +90,7 @@ public enum ChoiceMode {
         if (!ValueTypes.isLeaf(base)) {
             return ValueTypes.container(base).isPresent() ? List.of(NONE, ONE) : List.of(NONE);
         }
-        if (base instanceof Class<?> cls && cls.isEnum()) return List.of(NONE);
+        if (base instanceof Class<?> cls && cls.isEnum()) return List.of(ONE, MANY);
         if (base == boolean.class || base == Boolean.class) return List.of(NONE, MANY);
         return List.of(NONE, ONE, MANY);
     }
@@ -113,6 +119,52 @@ public enum ChoiceMode {
                 .filter(option -> reads(grammar, form, option)
                         || element.map(type -> reads(grammar, type, option)).orElse(false))
                 .toList();
+    }
+
+    /**
+     * The choices an enum's strip writes when {@code ticked} are on: the ticked names in the enum's own order,
+     * or none when every constant is ticked — which is what no choices means for an enum, and the shorter Java.
+     */
+    public static List<String> enumOptions(Class<?> constants, java.util.Collection<String> ticked) {
+        List<String> names = names(constants);
+        List<String> kept = names.stream().filter(ticked::contains).toList();
+        return kept.size() == names.size() ? List.of() : kept;
+    }
+
+    /** The constants an enum's {@code options} leave on: every one when none are written down. */
+    public static List<String> ticked(Class<?> constants, List<String> options) {
+        return options == null || options.isEmpty() ? names(constants) : options;
+    }
+
+    /**
+     * The mode a field in {@code mode} keeps when it is retyped to {@code base}. {@code written} says whether
+     * its choices were written down: an enum's every-constant is not, and a choice nobody made does not
+     * survive the enum — an enum picked from all its days becomes a free int, not one of {0}. An enum keeps
+     * its mode from another enum either way. A mode the new type cannot be in falls to its first.
+     */
+    public static ChoiceMode afterRetype(ChoiceMode mode, boolean written, Type base, boolean known) {
+        List<ChoiceMode> offered = offered(base, known);
+        boolean closed = base instanceof Class<?> cls && cls.isEnum();
+        return offered.contains(mode) && (written || closed || mode == NONE) ? mode : offered.getFirst();
+    }
+
+    /** The largest enum whose constants are drawn as one strip of toggles; above it, rows of its own picker. */
+    public static final int TOGGLES = 16;
+
+    /** Whether {@code type} is an enum small enough for a strip of toggles. */
+    public static boolean toggled(Type type) {
+        return type instanceof Class<?> cls && cls.isEnum() && cls.getEnumConstants().length <= TOGGLES;
+    }
+
+    private static List<String> names(Class<?> constants) {
+        return java.util.Arrays.stream(constants.getEnumConstants()).map(c -> ((Enum<?>) c).name()).toList();
+    }
+
+    /** The enum {@code form} picks from with no choices written down: itself, or a list's element. */
+    private static Optional<Class<?>> closedSet(Type form, ValueGrammar grammar) {
+        Type element = form instanceof Class<?> ? form : listElement(form).orElse(null);
+        return element instanceof Class<?> cls && cls.isEnum() && grammar.known(cls)
+                ? Optional.of(cls) : Optional.empty();
     }
 
     private static boolean reads(ValueGrammar grammar, Type type, String option) {

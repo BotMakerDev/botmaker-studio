@@ -38,8 +38,11 @@ import java.util.function.Supplier;
  * the two-container cap the Parameters window had was a limit of its value cells, not of types, and it is the
  * cells that must draw what they are given.
  *
- * <p><b>Picking a type replaces the leaf and keeps the containers</b>, so choosing a different element does
- * not throw away a list just asked for.
+ * <p><b>A pick changes one part of the type (feedback 3, 2026-09-27)</b>: the part selected in the header,
+ * where every name — a container's included — can be clicked. It starts on the innermost last argument, the
+ * part a pick always changed, so choosing a different element does not throw away a list just asked for; a
+ * click on a map's key is how the key is changed ({@link TypePath}). Wrap wraps the selected part, and Unwrap
+ * unwraps the container at or around it.
  *
  * <p><b>The menu stays open while the type is put together (2026-09-27)</b> — wrap, pick a leaf, unwrap — and
  * shows the type so far in its header. It is committed once, when the menu closes (Done, a double-click on a
@@ -51,9 +54,6 @@ import java.util.function.Supplier;
  * as every other menu in the editor.
  */
 public final class TypeChooser extends Button {
-
-    /** What a map's key, and anything else wrapped around a type besides it, starts as. */
-    private static final Type TEXT = String.class;
 
     private final ObjectProperty<Type> type = new SimpleObjectProperty<>();
     private final Supplier<TypeCatalog> catalog;
@@ -94,13 +94,39 @@ public final class TypeChooser extends Button {
 
     // ---- the menu -------------------------------------------------------------------------------------------
 
+    /** The type being put together and the part of it a pick changes; each change of one is checked against the other. */
+    private static final class Draft {
+        final ObjectProperty<Type> type;
+        final ObjectProperty<TypePath> part;
+
+        Draft(Type start) {
+            type = new SimpleObjectProperty<>(start);
+            part = new SimpleObjectProperty<>(TypePath.innermost(start));
+        }
+
+        /** The selected part, cut back to what the type still has. */
+        TypePath part() {
+            return part.get().within(type.get());
+        }
+
+        void set(Type next, TypePath selected) {
+            part.set(selected.within(next));
+            type.set(next);
+        }
+
+        void pick(Type picked) {
+            Type next = part().replace(type.get(), picked);
+            set(next, part());
+        }
+    }
+
     /** Opens the menu under the button; answers it, so a test can drive the rows. */
     ContextMenu open() {
         TypeCatalog offered = catalog.get();
         ContextMenu menu = new ContextMenu();
         menu.getStyleClass().add("type-chooser-menu");
         // The type being put together; committed when the menu closes, unless Escape closed it.
-        ObjectProperty<Type> draft = new SimpleObjectProperty<>(type.get());
+        Draft draft = new Draft(type.get());
         boolean[] cancelled = {false};
 
         TextField search = new TextField();
@@ -138,15 +164,16 @@ public final class TypeChooser extends Button {
                     shown.add(entry);
                 }
             }
-            highlight(rows, shown, draft.get());
+            highlight(rows, shown, draft);
         };
         rebuild.run();
         search.textProperty().addListener((o, was, now) -> rebuild.run());
-        draft.addListener((o, was, now) -> highlight(rows, shown, now));
+        draft.type.addListener((o, was, now) -> highlight(rows, shown, draft));
+        draft.part.addListener((o, was, now) -> highlight(rows, shown, draft));
         // Enter in the search field takes the first match and closes: typing "poi" and Enter is the whole gesture.
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER && !shown.isEmpty()) {
-                draft.set(withLeaf(draft.get(), shown.getFirst().type()));
+                draft.pick(shown.getFirst().type());
                 menu.hide();
                 e.consume();
             }
@@ -155,7 +182,8 @@ public final class TypeChooser extends Button {
             if (e.getCode() == KeyCode.ESCAPE) cancelled[0] = true;
         });
         menu.setOnHidden(e -> {
-            if (!cancelled[0] && draft.get() != null && !draft.get().equals(type.get())) type.set(draft.get());
+            Type chosen = draft.type.get();
+            if (!cancelled[0] && chosen != null && !chosen.equals(type.get())) type.set(chosen);
         });
         menu.setOnShown(e -> search.requestFocus());
         menu.show(this, Side.BOTTOM, 0, 0);
@@ -164,20 +192,23 @@ public final class TypeChooser extends Button {
 
     /**
      * <i>Done</i>, then the type so far. Done leads, full size and as tall as the search field under it: at the
-     * far end of the row, small, it was a long way from the list it closes (feedback 3).
+     * far end of the row, small, it was a long way from the list it closes (feedback 3). The type is one
+     * clickable name per part, the selected one marked: that is the part a pick changes.
      */
-    private MenuItem headerRow(ContextMenu menu, ObjectProperty<Type> draft, TextField search) {
+    private MenuItem headerRow(ContextMenu menu, Draft draft, TextField search) {
         Button done = new Button("Done");
         done.getStyleClass().add("type-chooser-done");
         done.setDefaultButton(true);
         done.setMinWidth(80);
         done.prefHeightProperty().bind(search.heightProperty());
         done.setOnAction(e -> menu.hide());
-        Label now = new Label();
-        now.getStyleClass().add("type-chooser-name");
-        now.textProperty().bind(Bindings.createStringBinding(
-                () -> draft.get() == null ? "No type yet" : label(draft.get()), draft));
-        HBox row = new HBox(8, done, now);
+        HBox parts = new HBox();
+        parts.setAlignment(Pos.CENTER_LEFT);
+        Runnable spell = () -> spellParts(parts, draft);
+        draft.type.addListener((o, was, now) -> spell.run());
+        draft.part.addListener((o, was, now) -> spell.run());
+        spell.run();
+        HBox row = new HBox(8, done, parts);
         row.setAlignment(Pos.CENTER_LEFT);
         CustomMenuItem item = new CustomMenuItem(row);
         item.setHideOnClick(false);
@@ -185,19 +216,44 @@ public final class TypeChooser extends Button {
         return item;
     }
 
-    /** The row of the draft's innermost type carries the highlight; every other row loses it. */
-    private static void highlight(List<CustomMenuItem> rows, List<TypeCatalog.Entry> shown, Type draft) {
-        Type leaf = innermost(draft);
+    /** The draft as its {@link TypePath#segments}: a name selects its part, punctuation is only read. */
+    private static void spellParts(HBox parts, Draft draft) {
+        parts.getChildren().clear();
+        Type now = draft.type.get();
+        if (now == null) {
+            parts.getChildren().add(new Label("No type yet"));
+            return;
+        }
+        TypePath selected = draft.part();
+        for (TypePath.Segment segment : TypePath.segments(now)) {
+            Label text = new Label(segment.text());
+            text.getStyleClass().add(segment.path() == null ? "type-path-mark" : "type-path-part");
+            if (segment.path() != null) {
+                if (segment.path().equals(selected)) text.getStyleClass().add("type-path-selected");
+                text.setTooltip(new Tooltip("Click, then pick a type to change this part"));
+                text.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+                    if (e.getButton() != MouseButton.PRIMARY) return;
+                    draft.part.set(segment.path());
+                    e.consume();
+                });
+            }
+            parts.getChildren().add(text);
+        }
+    }
+
+    /** The row of the selected part's type carries the highlight; every other row loses it. */
+    private static void highlight(List<CustomMenuItem> rows, List<TypeCatalog.Entry> shown, Draft draft) {
+        Type part = draft.type.get() == null ? null : draft.part().at(draft.type.get());
         for (int i = 0; i < rows.size(); i++) {
             List<String> classes = rows.get(i).getStyleClass();
-            boolean current = shown.get(i).type().equals(leaf);
+            boolean current = shown.get(i).type().equals(part);
             if (current && !classes.contains("type-chooser-current")) classes.add("type-chooser-current");
             if (!current) classes.remove("type-chooser-current");
         }
     }
 
     /** One type: a click picks it and keeps the menu open, a double-click picks it and closes. */
-    private CustomMenuItem entryItem(ContextMenu menu, TypeCatalog.Entry entry, ObjectProperty<Type> draft) {
+    private CustomMenuItem entryItem(ContextMenu menu, TypeCatalog.Entry entry, Draft draft) {
         Label name = new Label(entry.label());
         name.getStyleClass().add("type-chooser-name");
         Label hint = new Label(entry.hint());
@@ -209,17 +265,20 @@ public final class TypeChooser extends Button {
         row.setMinWidth(220);
         CustomMenuItem item = new CustomMenuItem(row);
         item.setHideOnClick(false);
-        item.setOnAction(e -> draft.set(withLeaf(draft.get(), entry.type())));
+        item.setOnAction(e -> draft.pick(entry.type()));
         row.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
             if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 2) return;
-            draft.set(withLeaf(draft.get(), entry.type()));
+            draft.pick(entry.type());
             menu.hide();
         });
         return item;
     }
 
-    /** <i>Wrap in</i> — one button per container — and <i>Unwrap</i>, on one row, over the type so far. */
-    private MenuItem wrapRow(ObjectProperty<Type> draft) {
+    /**
+     * <i>Wrap in</i> — one button per container — and <i>Unwrap</i>, on one row, over the selected part. A
+     * wrap moves the selection inside the new container, so the next pick changes what it holds.
+     */
+    private MenuItem wrapRow(Draft draft) {
         HBox row = new HBox(4);
         row.setAlignment(Pos.CENTER_LEFT);
         Label title = new Label("Wrap in");
@@ -228,16 +287,23 @@ public final class TypeChooser extends Button {
         for (ValueContainer<?> container : ValueWire.containers()) {
             Button wrap = new Button(container.label());
             wrap.getStyleClass().add("type-chooser-wrap");
-            wrap.disableProperty().bind(Bindings.createBooleanBinding(() -> !wrappable(draft.get()), draft));
-            wrap.setOnAction(e -> draft.set(wrapped(container, draft.get())));
+            wrap.disableProperty().bind(Bindings.createBooleanBinding(
+                    () -> !wrappable(draft), draft.type, draft.part));
+            wrap.setOnAction(e -> {
+                TypePath part = draft.part();
+                Type next = part.wrap(draft.type.get(), container);
+                draft.set(next, part.then(TypePath.innermost(part.at(next))));
+            });
             row.getChildren().add(wrap);
         }
         Button unwrap = new Button("Unwrap");
         unwrap.getStyleClass().add("type-chooser-wrap");
         unwrap.disableProperty().bind(Bindings.createBooleanBinding(
-                () -> !(draft.get() instanceof ValueTypes.Parameterized), draft));
+                () -> draft.type.get() == null || draft.part().container(draft.type.get()) == null,
+                draft.type, draft.part));
         unwrap.setOnAction(e -> {
-            if (draft.get() instanceof ValueTypes.Parameterized p) draft.set(p.last());
+            TypePath around = draft.part().container(draft.type.get());
+            if (around != null) draft.set(around.unwrap(draft.type.get()), around);
         });
         row.getChildren().add(unwrap);
         CustomMenuItem item = new CustomMenuItem(row);
@@ -245,35 +311,9 @@ public final class TypeChooser extends Button {
         return item;
     }
 
-    private static boolean wrappable(Type now) {
-        return now != null && now != void.class && !(now instanceof ValueTypes.Unknown);
-    }
-
-    /** The type at the bottom of every container: {@code Point} in {@code List<Map<String, Point>>}. */
-    static Type innermost(Type type) {
-        return type instanceof ValueTypes.Parameterized p ? innermost(p.last()) : type;
-    }
-
-    /**
-     * {@code inner} inside {@code container}: the last argument, with any earlier ones text. The last because
-     * that is what a container holds — a list's element, a map's value — so wrapping a {@code Duration} in a
-     * map gives {@code Map<String, Duration>}, the map people write.
-     */
-    static Type wrapped(ValueContainer<?> container, Type inner) {
-        List<Type> arguments = new ArrayList<>();
-        for (int i = 0; i < container.arity() - 1; i++) arguments.add(TEXT);
-        arguments.add(inner);
-        return ValueTypes.of(container, arguments);
-    }
-
-    /** {@code current} with its innermost leaf replaced — {@code leaf} itself when it is one. */
-    static Type withLeaf(Type current, Type leaf) {
-        // void cannot sit inside a container, so picking it drops the containers.
-        if (current instanceof ValueTypes.Parameterized p && leaf != void.class) {
-            List<Type> arguments = new ArrayList<>(p.arguments());
-            arguments.set(arguments.size() - 1, withLeaf(p.last(), leaf));
-            return new ValueTypes.Parameterized(p.raw(), arguments);
-        }
-        return leaf;
+    private static boolean wrappable(Draft draft) {
+        Type now = draft.type.get();
+        Type part = now == null ? null : draft.part().at(now);
+        return part != null && part != void.class && !(part instanceof ValueTypes.Unknown);
     }
 }

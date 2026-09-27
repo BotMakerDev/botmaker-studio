@@ -158,14 +158,25 @@ public final class ParamValueWidgets {
         List<String> options = row.options();
 
         // The choices' shape says which (ChoiceMode): one of them — a leaf, or one of several whole lists — or
-        // any number of them, ticked.
+        // any number of them, ticked. An enum with none written down is picked from every constant, which is
+        // what its own editor already offers, so it falls through to that editor (feedback 3).
         switch (ChoiceMode.of(form, options, grammar)) {
             case ONE -> {
-                return radioRow(grammar, group, row, form, options, ctx, sink);
+                if (!options.isEmpty()) return radioRow(grammar, group, row, form, options, ctx, sink);
             }
             case MANY -> {
-                return checkList(grammar, group, row, form, ValueTypes.arguments(form).getLast(), options, ctx,
-                        sink);
+                Type leaf = ValueTypes.arguments(form).getLast();
+                if (ChoiceMode.toggled(leaf) && !options.isEmpty()) {
+                    List<Object> declared = options.stream()
+                            .flatMap(option -> grammar.valueOf(leaf, option).stream()).toList();
+                    ValueEditors.Editor toggles = enumToggles(grammar, form, (Class<?>) leaf, declared,
+                            SourceNode.parse(row.value()));
+                    sink.add(ValueEditor.of(group, row, toggles.read()));
+                    return toggles.node();
+                }
+                if (!options.isEmpty()) {
+                    return checkList(grammar, group, row, form, leaf, options, ctx, sink);
+                }
             }
             case NONE -> { }
         }
@@ -221,10 +232,12 @@ public final class ParamValueWidgets {
         ValueContainer<?> container = ValueTypes.container(form).orElseThrow();
         List<Type> arguments = ValueTypes.arguments(form);
         if ((container == ValueContainer.LIST || container == ValueContainer.SET)
-                && arguments.getLast() instanceof Class<?> cls && cls.isEnum() && grammar.known(cls)) {
+                && ChoiceMode.toggled(arguments.getLast()) && grammar.known(arguments.getLast())) {
             // Only an enum the grammar reads: one nobody declares could be neither read nor written, and the
-            // strip would hand back an empty list over the author's.
-            return enumToggles(grammar, form, cls, written);
+            // strip would hand back an empty list over the author's. Only a small one: a hundred keys as
+            // toggles is a wall, and rows of the key's own picker are how a few of them are chosen.
+            Class<?> cls = (Class<?>) arguments.getLast();
+            return enumToggles(grammar, form, cls, List.of(cls.getEnumConstants()), written);
         }
         if (container == ValueContainer.LIST) {
             return arguments.getLast() == String.class
@@ -385,15 +398,17 @@ public final class ParamValueWidgets {
      * values. Read back in constant order, each at most once, which is what a set is and what a list of days
      * means; a hand-written list that repeats a constant or orders them otherwise is rewritten that way only
      * when a toggle is touched. A stack or a queue keeps its rows: there the order is the value.
+     *
+     * <p>{@code offered} are the constants drawn: every one, or the choices declared for the field.
      */
     private static ValueEditors.Editor enumToggles(ValueGrammar grammar, Type form, Class<?> constants,
-                                                   Optional<SourceNode> written) {
+                                                   List<?> offered, Optional<SourceNode> written) {
         List<Object> held = parts(form, written).stream()
                 .flatMap(part -> grammar.valueOf(constants, part.written()).stream())
                 .toList();
         javafx.scene.layout.FlowPane strip = new javafx.scene.layout.FlowPane(2, 2);
         List<ToggleButton> toggles = new ArrayList<>();
-        for (Object constant : constants.getEnumConstants()) {
+        for (Object constant : offered) {
             String name = ((Enum<?>) constant).name();
             ToggleButton toggle = new ToggleButton(EnumLabels.label(name));
             toggle.setTooltip(new Tooltip(name));

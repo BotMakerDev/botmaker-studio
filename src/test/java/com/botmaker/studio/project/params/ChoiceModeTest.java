@@ -49,7 +49,7 @@ class ChoiceModeTest {
     void aFlagIsNeverPickedOneOfTwoAndAListIsNeverTicked() {
         assertEquals(List.of(ChoiceMode.NONE, ChoiceMode.MANY), ChoiceMode.offered(boolean.class, true));
         assertEquals(List.of(ChoiceMode.NONE, ChoiceMode.ONE, ChoiceMode.MANY), ChoiceMode.offered(int.class, true));
-        assertEquals(List.of(ChoiceMode.NONE), ChoiceMode.offered(DayOfWeek.class, true));
+        assertEquals(List.of(ChoiceMode.ONE, ChoiceMode.MANY), ChoiceMode.offered(DayOfWeek.class, true));
         // A list can be one of several lists; ticks over a list would be a list of lists.
         assertEquals(List.of(ChoiceMode.NONE, ChoiceMode.ONE),
                 ChoiceMode.offered(ValueTypes.listOf(int.class), true));
@@ -64,6 +64,65 @@ class ChoiceModeTest {
         assertEquals(List.of("1", "5"),
                 ChoiceMode.kept(GRAMMAR, ValueTypes.listOf(Integer.class), List.of("1", "5")));
         assertEquals(List.of("5"), ChoiceMode.kept(GRAMMAR, int.class, List.of("\"a\"", "5")));
+    }
+
+    /** A grammar that declares an enum, which {@link TestValues#GRAMMAR} does not. */
+    private static final ValueGrammar DAYS = ValueGrammar.of(List.of(TestValues.WHOLE_NUMBER_TYPE,
+            new com.botmaker.plugin.api.value.PluginType<DayOfWeek>() {
+                @Override public Class<DayOfWeek> type() { return DayOfWeek.class; }
+                @Override public DayOfWeek fresh() { return DayOfWeek.MONDAY; }
+            }), List.of());
+
+    private static final List<String> WEEK = List.of("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY",
+            "SATURDAY", "SUNDAY");
+
+    /**
+     * An enum is already a closed set, so "any value" says nothing about it (feedback 3): with no choices
+     * written down it is one of every constant, and a list of it is any number of them.
+     */
+    @Test
+    void anEnumIsAlwaysPickedFromItsConstants() {
+        var days = ValueTypes.listOf(DayOfWeek.class);
+        assertEquals(ChoiceMode.ONE, ChoiceMode.of(DayOfWeek.class, List.of(), DAYS));
+        assertEquals(ChoiceMode.MANY, ChoiceMode.of(days, List.of(), DAYS));
+        assertEquals(DayOfWeek.class, ChoiceMode.base(days, List.of(), DAYS));
+        assertEquals(ChoiceMode.ONE, ChoiceMode.of(DayOfWeek.class, List.of("MONDAY", "FRIDAY"), DAYS));
+        assertEquals(ChoiceMode.MANY, ChoiceMode.of(days, List.of("MONDAY", "FRIDAY"), DAYS));
+        // An enum nothing declares is read by nobody, so it has no constants to pick from.
+        assertEquals(ChoiceMode.NONE, ChoiceMode.of(DayOfWeek.class, List.of(), TestValues.GRAMMAR));
+    }
+
+    /** Every constant ticked means the same as no choices, so it is written as none. */
+    @Test
+    void everyConstantTickedIsWrittenAsNoChoices() {
+        assertEquals(List.of(), ChoiceMode.enumOptions(DayOfWeek.class, WEEK));
+        // Kept in the enum's own order, however they were ticked.
+        assertEquals(List.of("MONDAY", "FRIDAY"), ChoiceMode.enumOptions(DayOfWeek.class, List.of("FRIDAY", "MONDAY")));
+        assertEquals(WEEK, ChoiceMode.ticked(DayOfWeek.class, List.of()));
+        assertEquals(List.of("MONDAY", "FRIDAY"), ChoiceMode.ticked(DayOfWeek.class, List.of("MONDAY", "FRIDAY")));
+    }
+
+    /** Seven days are a strip of toggles; thirty fields, like a hundred keys, are rows of their own picker. */
+    @Test
+    void onlyASmallEnumIsAStripOfToggles() {
+        assertEquals(true, ChoiceMode.toggled(DayOfWeek.class));
+        assertEquals(false, ChoiceMode.toggled(java.time.temporal.ChronoField.class));
+        assertEquals(false, ChoiceMode.toggled(int.class));
+    }
+
+    /**
+     * A retype keeps its mode where the mode still means something. An enum's unwritten "every constant" is
+     * not a choice the user made, so it does not survive becoming an int; a free int becoming an enum is one
+     * of its constants, since an enum has no free mode.
+     */
+    @Test
+    void aRetypeKeepsTheModeWhereItStillMeansSomething() {
+        assertEquals(ChoiceMode.NONE, ChoiceMode.afterRetype(ChoiceMode.ONE, false, int.class, true));
+        assertEquals(ChoiceMode.ONE, ChoiceMode.afterRetype(ChoiceMode.ONE, true, int.class, true));
+        assertEquals(ChoiceMode.ONE, ChoiceMode.afterRetype(ChoiceMode.NONE, false, DayOfWeek.class, true));
+        assertEquals(ChoiceMode.MANY, ChoiceMode.afterRetype(ChoiceMode.MANY, false, java.time.Month.class, true));
+        assertEquals(ChoiceMode.NONE,
+                ChoiceMode.afterRetype(ChoiceMode.MANY, true, ValueTypes.listOf(int.class), true));
     }
 
     /**

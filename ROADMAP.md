@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 3, phase 1: chooser clicks, switch fill, choices over Range.**
+- **2026-09-27 (latest) — Picker feedback 3, phase 2: enums picked from their constants, typed parts.**
+  `ChoiceMode.offered` gives an enum ONE/MANY; `of` reads an enum (or a `List` of one) with no options as
+  ONE (MANY) over every constant; `enumOptions`/`ticked` write every constant on as no options; `afterRetype`
+  drops an unwritten every-constant on leaving the enum; `toggled` caps strips at 16. `ParametersDialog`'s
+  enum choices are a toggle strip; `ParamValueWidgets` falls through to the enum's own editor with no options.
+  New pure `TypePath` (steps of argument indexes; `replace`/`wrap`/`unwrap`/`within`/`segments`) is what
+  `TypeChooser`'s header selects; `withLeaf`/`innermost` went into it.
+- **2026-09-27 — Picker feedback 3, phase 1: chooser clicks, switch fill, choices over Range.**
   `TypeChooser` rebuilds rows only on a search (a pick moves the highlight), double-click commits, Done leads;
   `.value-switch` fills from `-bm-switch-*` tokens (`SwitchStyleTest`); `ChoiceMode.declare` drops the range
   with choices; `TypeCatalog` leaves `freshCall` types out of VALUE; `StudioWindow.fitInto` pulls a restored
