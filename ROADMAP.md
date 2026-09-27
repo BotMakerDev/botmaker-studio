@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-26 (latest) — Picker phase 6b, recording: combos as a value, the new keys named.**
+- **2026-09-27 (latest) — Picker phase 6f, Studio's half: every value gets a picker.** `PluginHost` makes an
+  owner editor only of an `EditableType` (contract 0.3.0). `ui/app/params/FallbackShape` (pure) +
+  `ShapeFallbackView` draw a value no plugin draws — enum dropdown, JDK literal field, a declared call as one row
+  per part (depth ≤ 4), else kept with Reset — in `ValueEditors.editorFor` and `optionDisplay`.
+  `TimeArgPicker`/`DateArgPicker` and their `PickerRegistry` entries are deleted (`PickerRegistryJdkTest`).
+  Deferred: `DayOfWeek`/`Month` on the canvas rely on `EnumPicker` until basics declares them (6e).
+- **2026-09-26 — Picker phase 6b, recording: combos as a value, the new keys named.**
   `RecordingWriter.fill` handles plugin-host's new `Recordings.Slot.KeyParts` (every remaining key name, one
   constant each via `valueOf`, built through the `ComponentType`, spelled by the grammar — a varargs call over
   an enum needed no grammar change). `Gestures` names the keypad `NUMPAD_*`, KP_Enter `NUMPAD_ENTER`, the

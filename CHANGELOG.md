@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **A value no plugin draws still gets a picker.** In the Parameters window and a Choices row, an enum is a
+  dropdown, a number or text a field, a declared call one row per part (each drawn by its own picker), and
+  anything else its source with **Reset** when a fresh value is known. Untouched, it writes nothing; an
+  unreadable value changes only through Reset.
+
+### Removed
+
+- Studio's own `LocalTime`, `LocalDate`, `DayOfWeek` and `Month` canvas pickers. Basics draws the JDK types;
+  without basics, the enum dropdown and the by-shape fallback do.
+
 ### Changed
 
 - **Only a type its plugin draws gets that plugin's editor** (contract 0.3.0, `EditableType`). A plain

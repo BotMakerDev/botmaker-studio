@@ -60,32 +60,14 @@ public final class PickerRegistry {
     /**
      * The pickers consulted <b>after</b> every plugin's, and the reason the list is split in two.
      *
-     * <p>These are not editors for anybody's types — they are the host's answers for the JDK
-     * ({@code LocalTime}, {@code LocalDate}, {@code DayOfWeek}, {@code Month}, {@code java.awt.Color}) and the
-     * generic enum dropdown, which claims <em>any</em> enum it can resolve. A plugin that ships an editor for
+     * <p>Not an editor for anybody's type — the generic enum dropdown, which claims <em>any</em> enum it can
+     * resolve. The host drew five JDK types here until 2026-09-27; basics draws them. A plugin that ships an editor for
      * its own enum would never get to draw it if that fallback ran first, so the fallbacks run last and the
      * merge order is: the host's own specials, then plugins', then these.
      */
     private static final List<SpecialTypePicker> FALLBACKS = List.of(
-            // The clock and calendar of the Time facade's daily-reset predicates. All three are type-based:
-            // the facade's bare-hour isBetween(int, int) overloads — the only Time arguments that ever needed
-            // a (method, argIndex) hook — are gone, and PickerContext no longer carries one.
-            SpecialTypePicker.of(ctx -> ctx.isType("LocalTime"),
-                    ctx -> TimeArgPicker.localTime(ctx.context(), ctx.arg())),
-            // A calendar day, on the same reasoning and for the same reason it was missing: java.time is not
-            // in the project type index, so without an entry here a date is a raw LocalDate.parse("…") pill.
-            SpecialTypePicker.of(ctx -> ctx.isType("LocalDate"),
-                    ctx -> DateArgPicker.create(ctx.context(), ctx.arg())),
-            SpecialTypePicker.of(ctx -> ctx.isType("DayOfWeek"),
-                    ctx -> TimeArgPicker.dayOfWeek(ctx.context(), ctx.arg())),
-            SpecialTypePicker.of(ctx -> ctx.isType("Month"),
-                    ctx -> TimeArgPicker.month(ctx.context(), ctx.arg())),
-            // Color is gone from this list too, since 2026-08-30, and for the reason that emptied the arm
-            // beside it in the Parameters window: a type this list answers is a type no plugin is ever
-            // offered, so leaving it here is what would stop the SDK's own colour editor being drawn.
-            // Rect, Point and Size are gone from this list: they are the SDK's types, so they are the SDK's
-            // editors now (its own internal geometry editors), reached through
-            // PluginPickers below exactly as any other plugin's would be.
+            // The JDK types are plugin-basics' to draw since 2026-09-27 (LocalTime, LocalDate, DayOfWeek and
+            // Month left then); Color, Rect, Point and Size left earlier for the same reason.
 
             // Enum fallback (re-resolves name-only SDK types through the project/library index).
             EnumPicker.asSpecialType()
