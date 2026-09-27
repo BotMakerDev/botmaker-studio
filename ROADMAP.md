@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — One refactor system: index, finder, rename, refusal.** `project/source/BotIndex`
+- **2026-09-27 (latest) — Every reader of a bot on the one index.** `JavaParameters.scan`,
+  `JavaManagedValues.scan` (and their `over(BotIndex, grammar)`) and `BotRecords.over` walk `BotIndex`'s
+  units instead of parsing each file again. `project/managed/MethodReferences` → `ManagedTargets`: the HUD's
+  activity list resolves `Collect::body` by binding to the file declaring the method (a nested class, a
+  same-named class in another package, a qualified reference). `JavaParameterSource.parse` →
+  `BotParser.syntax`, the one syntax-only configuration. `ManagedHolders` builds the holder file as a JDT
+  unit (`ValueTypes.node`, the grammar's node copied in) instead of a `StringBuilder`.
+- **2026-09-27 — One refactor system: index, finder, rename, refusal.** `project/source/BotIndex`
   batch-parses the buffers (scratch tree, cached by content; `with`/`firstNewError` judge an edit before it
   is written). `nav/Refactor.rename` renames fields, methods (with `Collect::body`), types (file moves),
   enums and constants by binding and refuses a plan that breaks the build, offering a free name.

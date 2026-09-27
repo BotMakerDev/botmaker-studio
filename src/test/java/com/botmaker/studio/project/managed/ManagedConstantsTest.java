@@ -6,7 +6,7 @@ import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -91,7 +91,7 @@ class ManagedConstantsTest {
     }
 
     private static QualifiedName fieldValue(String source) {
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         TypeDeclaration type = (TypeDeclaration) unit.types().getFirst();
         VariableDeclarationFragment fragment =
                 (VariableDeclarationFragment) type.getFields()[0].fragments().getFirst();

@@ -2,12 +2,15 @@ package com.botmaker.studio.project.source;
 
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /**
  * How a bot's source is parsed when the host reads what it declares: against the project's resolved
@@ -62,8 +65,24 @@ public record BotParser(List<String> classpath, Path sourceRoot) {
      * reads.
      */
     public CompilationUnit parse(Path file, String source) {
-        if (!binds()) return JavaParameterSource.parse(source);
+        if (!binds()) return syntax(source);
         return ProjectAnalyzer.createCompilationUnit(classpath, source, sourceRoot,
                 file == null ? null : file.toAbsolutePath().toString());
+    }
+
+    /**
+     * {@code source} as a unit with no bindings — for text the host is about to rewrite, which it reads
+     * through its imports. The one syntax-only configuration for a bot's source; it was
+     * {@code JavaParameterSource.parse} until 2026-09-27.
+     */
+    public static CompilationUnit syntax(String source) {
+        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
+        parser.setKind(ASTParser.K_COMPILATION_UNIT);
+        parser.setSource(source.toCharArray());
+        Map<String, String> options = JavaCore.getOptions();
+        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
+        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
+        parser.setCompilerOptions(options);
+        return (CompilationUnit) parser.createAST(null);
     }
 }

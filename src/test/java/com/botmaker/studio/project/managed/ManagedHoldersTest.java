@@ -50,6 +50,9 @@ class ManagedHoldersTest {
                 source);
         assertTrue(source.contains("import " + ManagedHolders.MANAGED + ";"), source);
         assertTrue(source.contains("import java.time.Duration;"), source);
+        assertTrue(source.contains(" * it is never rewritten. BotMaker changes the expression a {@code @Managed} method"
+                + " returns and nothing else.\n"), source);
+        assertTrue(source.lines().noneMatch(line -> !line.equals(line.stripTrailing())), source);
 
         CompilationUnit unit = parse(source);
         assertEquals(0, unit.getProblems().length, source);

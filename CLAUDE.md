@@ -51,8 +51,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > local variable); `nav/Refactor.rename` is the only rename of a field, method, type, enum or constant, and a
 > plan that would not compile is refused; `ui/app/RefusalDialog` is the only refusal window. Read
 > `project/managed/MethodReferences`' and `parser/refactor/MethodReferences`' "syntax only, no bindings"
-> below as history for the second: it finds calls and `Collect::body` references by binding now. Never add a
-> rename that walks names by spelling, and never refuse an edit through a bare status line or `Alert`.
+> below as history: the second finds calls and `Collect::body` references by binding, and the first is
+> `project/managed/ManagedTargets`, which resolves each reference to the file javac says. The Parameters,
+> managed-value and record scans read `BotIndex`'s units too (`JavaParameters.over`, `JavaManagedValues.over`,
+> `BotRecords.over`); `JavaParameterSource.parse` is `BotParser.syntax`, and `ManagedHolders` writes the holder
+> as a JDT unit. Never add a rename that walks names by spelling, a second parse of the whole bot, or Java
+> joined as text, and never refuse an edit through a bare status line or `Alert`.
 
 > **`settings.json` is `<project>/.botmaker/settings.json` since 2026-09-26** (`ProjectConfig.studioRoot()`,
 > `SchemaFile.dirOf`). Every mention below of it "in `src/main/resources`" is the old place: an old project's

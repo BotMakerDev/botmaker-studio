@@ -9,10 +9,7 @@ import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
-import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -49,26 +46,12 @@ public final class JavaParameterSource {
 
     private JavaParameterSource() {}
 
-    /** Parses {@code source} without bindings — the one parser configuration this package uses. */
-    public static CompilationUnit parse(String source) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_COMPILATION_UNIT);
-        parser.setSource(source.toCharArray());
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        parser.setCompilerOptions(options);
-        return (CompilationUnit) parser.createAST(null);
-    }
-
     /**
      * One expression parsed on its own, or {@code null} when the text is not one.
      *
      * <p>A real parser rather than a bracket-matching split, because reading a value means reading Java this
      * host did not necessarily write: {@code new Point(x + 1, f(2, 3))} is two arguments, and a comma count
-     * says three. Public for the same reason {@link #parse} is — it is the one parser configuration for an
-     * expression, and a second copy of it somewhere else is a second set of compiler options to keep in
-     * step.
+     * says three. The one parser configuration for an expression, as {@link BotParser#syntax} is for a unit.
      */
     public static Expression expression(String source) {
         return JavaExpressions.parse(source);
@@ -99,8 +82,14 @@ public final class JavaParameterSource {
      */
     public static List<JavaParameter> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records, BotParser parser) {
+        return read(file, source, parser.parse(file, source), grammar, records);
+    }
+
+    /** The same over {@code unit}, already parsed from {@code source} — one of a {@code BotIndex}'s. */
+    public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
+                                           BotRecords records) {
         List<JavaParameter> out = new ArrayList<>();
-        parser.parse(file, source).accept(new ASTVisitor() {
+        unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(FieldDeclaration field) {
                 Annotation annotation = paramAnnotation(field);

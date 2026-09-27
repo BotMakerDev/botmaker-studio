@@ -7,6 +7,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
@@ -110,8 +111,16 @@ public final class BotRecords {
      * {@link JavaParameterSource} is.
      */
     static BotRecords of(ValueGrammar grammar, List<String> sources) {
+        return over(grammar, sources.stream().map(BotParser::syntax).toList());
+    }
+
+    /**
+     * The same over units already parsed — a {@code BotIndex}'s, so a scan that reads the bot's fields reads
+     * its records off the same trees. Walks the units, so call it inside {@code BotIndex.read}.
+     */
+    public static BotRecords over(ValueGrammar grammar, java.util.Collection<CompilationUnit> units) {
         Map<String, Raw> raw = new LinkedHashMap<>();
-        for (String source : sources) collect(source, raw);
+        for (CompilationUnit unit : units) collect(unit, raw);
         if (raw.isEmpty()) return NONE;
 
         Set<String> names = Set.copyOf(raw.keySet());
@@ -254,8 +263,7 @@ public final class BotRecords {
     private record Raw(String qualifiedName, String simpleName, boolean isRecord,
                        List<RawComponent> components) {}
 
-    private static void collect(String source, Map<String, Raw> out) {
-        CompilationUnit unit = JavaParameterSource.parse(source);
+    private static void collect(CompilationUnit unit, Map<String, Raw> out) {
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(RecordDeclaration declaration) {

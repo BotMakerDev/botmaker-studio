@@ -166,8 +166,9 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
      * Why {@code node} belongs to another window, or {@code null} when nothing but the file decides.
      *
      * <p>Pure, and public for that reason: the plugin rule is tested with a list rather than a bound plugin.
-     * Nothing is resolved — the annotation is matched by simple name, as {@code @Param} is — because the
-     * editor routinely draws a file whose siblings do not compile.
+     * The annotation is identified by class ({@code BotAnnotation}): by its binding in the canvas's bound unit,
+     * and through the unit's imports when the editor draws a file whose siblings do not compile — never by a
+     * simple name alone.
      *
      * <p><b>An annotation, since 2026-09-20.</b> This matched a field's <em>declared type</em> until then,
      * which cannot tell two same-typed classes apart, and inferred that a class of nothing but such

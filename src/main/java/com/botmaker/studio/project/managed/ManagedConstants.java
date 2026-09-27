@@ -6,6 +6,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -143,7 +144,7 @@ public final class ManagedConstants {
 
     /** The constants of the {@code @Managed} top-level types in one file. */
     static List<Constant> read(String source) {
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName() + ".";
         List<Constant> out = new ArrayList<>();
         unit.accept(new ASTVisitor() {

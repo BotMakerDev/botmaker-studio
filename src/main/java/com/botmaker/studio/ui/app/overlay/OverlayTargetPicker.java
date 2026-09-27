@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.studio.project.managed.MethodReferences;
+import com.botmaker.studio.project.managed.ManagedTargets;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.geometry.Pos;
@@ -115,7 +115,7 @@ final class OverlayTargetPicker {
 
     /**
      * The methods this bot's {@code @Managed} values reference — {@code Collect::body} in the flow — read out
-     * of its own source ({@link MethodReferences}).
+     * of its own source ({@link ManagedTargets}).
      *
      * <p>It was the {@code Activities.define("…")} calls until SDK 2.0 deleted {@code define}, and the flow's
      * list out of {@code activities.json} before 2026-09-11. A method reference is what a flow names now, so
@@ -123,8 +123,8 @@ final class OverlayTargetPicker {
      * the method.
      */
     private List<String> activityNames() {
-        return MethodReferences.scan(context.getConfig(), context.getState()).stream()
-                .map(MethodReferences.Target::label).toList();
+        return ManagedTargets.scan(context.getConfig(), context.getState()).stream()
+                .map(ManagedTargets.Target::label).toList();
     }
 
     /**
@@ -207,7 +207,7 @@ final class OverlayTargetPicker {
      * Resolves the picked target to a file and reports it.
      *
      * <p>For a method reference that means <b>finding</b> the file declaring its class
-     * ({@link MethodReferences}), because nothing writes a user's sources and so nothing knows where it is;
+     * ({@link ManagedTargets}), because nothing writes a user's sources and so nothing knows where it is;
      * the method it names is then the one the tree opens scoped to. For a scaffold hook it is
      * {@code <name>.java} beside the main source — {@link #targetNames} offers both, so this resolves both.
      *
@@ -217,7 +217,7 @@ final class OverlayTargetPicker {
      */
     private void selectActivity(String name) {
         if (name == null || SCAFFOLD_HEADER.equals(name)) return;
-        MethodReferences.Target target = MethodReferences.find(context.getConfig(), context.getState(), name);
+        ManagedTargets.Target target = ManagedTargets.find(context.getConfig(), context.getState(), name);
         Path file = target == null ? null : target.file();
         if (target == null) {
             Path pkg = context.getConfig().mainSourceFile().getParent();

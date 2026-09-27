@@ -11,6 +11,7 @@ import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
@@ -25,11 +26,10 @@ import java.util.List;
  * Reads {@code @Managed} methods out of <b>one</b> Java source, with no project, no filesystem and no host.
  *
  * <p><b>The same shape as {@code JavaParameterSource}, deliberately.</b> Pure, so the reading can be tested
- * over source text headlessly; parsed by the caller's {@link BotParser}, and {@code @Managed} identified by
- * class ({@link BotAnnotation#MANAGED}), so a bot whose dependencies do not resolve still shows its plugin's
- * values instead of an empty window. The form derivation, the parser configuration and
- * the annotation match are that class's — asked here rather than copied, because a second set of compiler
- * options is a second thing to keep in step.
+ * over source text headlessly; parsed by the caller's {@link BotParser} or handed a {@code BotIndex} unit, and
+ * {@code @Managed} identified by class ({@link BotAnnotation#MANAGED}), so a bot whose dependencies do not
+ * resolve still shows its plugin's values instead of an empty window. The form derivation and the annotation
+ * match are shared with that class — asked rather than copied, so there is one rule to keep in step.
  *
  * <p><b>What is different is the member and the body rule.</b> A parameter is a field whose initialiser is
  * the value. A managed value is a method whose <em>whole body</em> must be exactly one
@@ -58,8 +58,14 @@ public final class JavaManagedSource {
     /** The same, parsed by {@code parser} — the project's, so {@code @Managed} and its id are resolved. */
     public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records, BotParser parser) {
+        return read(file, source, parser.parse(file, source), grammar, records);
+    }
+
+    /** The same over {@code unit}, already parsed from {@code source} — one of a {@code BotIndex}'s. */
+    public static List<ManagedMethod> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
+                                           BotRecords records) {
         List<ManagedMethod> out = new ArrayList<>();
-        parser.parse(file, source).accept(new ASTVisitor() {
+        unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodDeclaration method) {
                 Annotation annotation = managedAnnotation(method);

@@ -3,6 +3,7 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -43,7 +44,7 @@ public final class JavaManagedEdits {
      */
     public static String setValue(String source, String className, String methodName, JavaValue expression) {
         if (expression == null) return source;
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
         ASTRewrite rewrite = ASTRewrite.create(ast);
         boolean[] found = {false};

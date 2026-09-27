@@ -8,6 +8,7 @@ import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
@@ -193,7 +194,7 @@ public final class JavaParameterEdits {
     public static String add(String source, ValueGrammar grammar, String className, String fieldName,
                              Type form, JavaValue initializer, String category, String description) {
         if (!writable(grammar, form) || fieldName == null || fieldName.isBlank()) return source;
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         TypeDeclaration target = typeDeclaration(unit, className);
         if (target == null || declares(target, fieldName)) return source;
 
@@ -223,7 +224,7 @@ public final class JavaParameterEdits {
         rewrite.getListRewrite(target, TypeDeclaration.BODY_DECLARATIONS_PROPERTY).insertLast(field, null);
         String declared = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
 
-        CompilationUnit reparsed = JavaParameterSource.parse(declared);
+        CompilationUnit reparsed = BotParser.syntax(declared);
         ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
         addImports(reparsed, importing, List.copyOf(imports));
         return AstRewriteHelper.applyRewrite(importing, declared);
@@ -277,7 +278,7 @@ public final class JavaParameterEdits {
      * uses were silently rewritten is a bot that compiles and behaves differently.
      */
     public static String remove(String source, String className, String fieldName) {
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
         boolean[] found = {false};
 
@@ -318,7 +319,7 @@ public final class JavaParameterEdits {
 
     /** Finds {@code className.fieldName}, applies {@code edit}, and answers the rewritten source. */
     private static String edit(String source, String className, String fieldName, FieldEdit edit) {
-        CompilationUnit unit = JavaParameterSource.parse(source);
+        CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
         ASTRewrite rewrite = ASTRewrite.create(ast);
         boolean[] found = {false};

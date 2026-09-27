@@ -6,7 +6,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
@@ -20,8 +20,9 @@ import java.util.function.UnaryOperator;
  *
  * <p><b>The twin of {@code JavaParameters}, over the same walk and for the same reasons.</b> Buffers before
  * files, both written, so a scan does not miss the user's last ten minutes and a rewrite is not undone by
- * the next save. Nothing is cached: the source file is the truth, it is cheap to re-read, and a cache here
- * would be a second answer to "what does this bot hold", which is the failure the JSON arrangement had.
+ * the next save. The trees are {@link BotIndex}'s, the one parse of the bot, which is reused only while every
+ * source is the text it was built from — the source file stays the truth, and there is no second answer to
+ * "what does this bot hold", which is the failure the JSON arrangement had.
  *
  * <p><b>This is where {@code plugins/<id>/<name>.json} went</b> (2026-09-20). A plugin's data is a method
  * in a file the plugin shipped and the user owns, so a developer with no BotMaker installed can read it,
@@ -40,14 +41,21 @@ public final class JavaManagedValues {
     /** The same, against a given grammar — the seam a test uses, and the one place the grammar enters. */
     public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
-        // Two walks, as the parameters scan does: a value may be typed with a record declared in a file the
-        // managed walk has not reached yet, so what the bot declares has to be known before the first read.
-        BotRecords records = BotRecords.scan(config, state, grammar);
-        List<ManagedMethod> out = new ArrayList<>();
-        BotParser parser = BotParser.of(state);
-        BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaManagedSource.read(file, source, grammar, records, parser)));
-        return List.copyOf(out);
+        return over(BotIndex.of(config, state), grammar);
+    }
+
+    /**
+     * Every {@code @Managed} method in {@code index}, the bot's one parse. Two walks, as the parameters scan
+     * does: a value may be typed with a record declared in a file the managed walk has not reached yet.
+     */
+    public static List<ManagedMethod> over(BotIndex index, ValueGrammar grammar) {
+        return index.read(units -> {
+            BotRecords records = BotRecords.over(grammar, units.values());
+            List<ManagedMethod> out = new ArrayList<>();
+            units.forEach((file, unit) -> out.addAll(
+                    JavaManagedSource.read(file, index.sources().get(file), unit, grammar, records)));
+            return List.copyOf(out);
+        });
     }
 
     /** The value carrying {@code id}, or empty when the bot declares none — the first one if it declares two. */

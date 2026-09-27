@@ -14,7 +14,6 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.source.BotIndex;
-import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Assignment;
@@ -103,15 +102,24 @@ public final class JavaParameters {
      */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
-        // Two walks rather than one, and cheap for the same reason nothing here is cached: a field may be
-        // typed with a record declared in a file the parameter walk has not reached yet, so what the bot
-        // declares has to be known in full before the first field is read.
-        BotRecords records = BotRecords.scan(config, state, grammar);
-        List<JavaParameter> out = new ArrayList<>();
-        BotParser parser = BotParser.of(state);
-        BotSources.scan(config, state, (file, source) ->
-                out.addAll(JavaParameterSource.read(file, source, grammar, records, parser)));
-        return List.copyOf(out);
+        return over(BotIndex.of(config, state), grammar);
+    }
+
+    /**
+     * Every {@code @Param} field in {@code index} — the bot's one parse, so a field's annotation and type are
+     * resolved against the same trees every rename and usage search reads.
+     *
+     * <p>Two walks over those trees: a field may be typed with a record declared in a file the parameter walk
+     * has not reached yet, so what the bot declares has to be known in full before the first field is read.
+     */
+    public static List<JavaParameter> over(BotIndex index, ValueGrammar grammar) {
+        return index.read(units -> {
+            BotRecords records = BotRecords.over(grammar, units.values());
+            List<JavaParameter> out = new ArrayList<>();
+            units.forEach((file, unit) -> out.addAll(
+                    JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records)));
+            return List.copyOf(out);
+        });
     }
 
     /**
