@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -531,17 +532,22 @@ public final class ParametersDialog {
             name = label;
         }
 
+        // How the value is picked sits beside the type rather than inside it (2026-09-26): any value, one of a
+        // declared set, or any number of them — the last the one mode that changes the declared type, to a
+        // List of it. The chooser shows the base type in every mode (2026-09-27): "Any of" an int is an int
+        // ticked, and the List it is written as is not the user's choice of type.
+        ValueGrammar grammar = PluginHost.grammar();
+        ChoiceMode mode = ChoiceMode.of(entry.form(), v.options(), grammar);
+        Type base = ChoiceMode.base(entry.form(), v.options(), grammar);
+
         Node type;
         if (mine) {
             TypeChooser picker = typeChooser();
-            picker.setType(entry.form());
+            picker.setType(base);
             picker.setPrefWidth(180);
             picker.typeProperty().addListener((o, was, is) -> {
-                if (is == null || is.equals(entry.form())) return;
-                // Retyping rewrites the field's declared Java type and resets its initialiser to the new
-                // type's fresh value: a value written for one type is not a value of another, and carrying
-                // it across would leave a bot that does not compile.
-                edit(entry, "the type", UnaryOperator.identity(), null, is);
+                if (is == null || is.equals(base)) return;
+                retype(entry, mode, is);
             });
             type = picker;
         } else {
@@ -595,14 +601,9 @@ public final class ParametersDialog {
         grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
         row++;
 
-        // How the value is picked sits beside the type rather than inside it (2026-09-26): any value, one of a
-        // declared set, or any number of them — the last the one mode that changes the declared type, to a
-        // List of it. A closed-set type brings its own choices (every direction, every mouse button), so it
-        // offers no mode: an "add a choice" row over it would be a hand-typed copy of the plugin's own list.
+        // A closed-set type brings its own choices (every direction, every mouse button), so it offers no
+        // mode: an "add a choice" row over it would be a hand-typed copy of the plugin's own list.
         Type leaf = ValueTypes.leaf(entry.form());
-        ValueGrammar grammar = PluginHost.grammar();
-        ChoiceMode mode = ChoiceMode.of(entry.form(), v.options());
-        Type base = ChoiceMode.base(entry.form(), v.options());
         List<ChoiceMode> modes = new ArrayList<>(ChoiceMode.offered(base, grammar.known(base)));
         if (!modes.contains(mode)) modes.add(mode);
         if (mine && modes.size() > 1) {
@@ -753,10 +754,10 @@ public final class ParametersDialog {
      */
     private void switchMode(JavaParameter entry, ChoiceMode to) {
         ParameterRow row = entry.row();
-        ChoiceMode from = ChoiceMode.of(entry.form(), row.options());
-        Type base = ChoiceMode.base(entry.form(), row.options());
-        Type form = to.formFor(base);
         ValueGrammar grammar = PluginHost.grammar();
+        ChoiceMode from = ChoiceMode.of(entry.form(), row.options(), grammar);
+        Type base = ChoiceMode.base(entry.form(), row.options(), grammar);
+        Type form = to.formFor(base);
 
         List<JavaValue> held = from == ChoiceMode.MANY
                 ? ValueWire.partsOrNone(entry.form(), row.value()).stream().map(ValueGrammar.Part::kept).toList()
@@ -786,6 +787,40 @@ public final class ParametersDialog {
             reload();
             rebuildRail();
         });
+    }
+
+    /**
+     * Retypes {@code entry} to {@code base}, keeping how it is picked (2026-09-27).
+     *
+     * <p>The chooser speaks of the base type, so picking a new one in "Any of" writes a {@code List} of it and
+     * stays "Any of" — it used to write the pick itself, and a ticked field retyped to a leaf fell back to
+     * any value with its ticks gone. A mode the new type cannot be in (ticks over a list, one of an enum) falls
+     * back to any value. Choices that are still values of the new type stay; when none are, the new type's
+     * own fresh value becomes the first choice, since a mode is read off its choices and none would be no mode.
+     *
+     * <p>The value is reset to the new type's fresh one: a value written for one type is not a value of
+     * another, and carrying it across would leave a bot that does not compile.
+     */
+    private void retype(JavaParameter entry, ChoiceMode mode, Type base) {
+        ValueGrammar grammar = PluginHost.grammar();
+        ChoiceMode kept = ChoiceMode.offered(base, grammar.known(base)).contains(mode) ? mode : ChoiceMode.NONE;
+        Type form = kept == ChoiceMode.MANY ? ValueTypes.listOf(base) : base;
+        List<String> surviving = ChoiceMode.kept(grammar, form, entry.row().options());
+        List<String> options = kept == ChoiceMode.NONE ? List.of()
+                : !surviving.isEmpty() ? surviving
+                : firstChoice(grammar, base).map(List::of).orElse(List.of());
+        edit(entry, "the type", current -> current.toBuilder().options(options).build(), null, form);
+    }
+
+    /**
+     * The choice a field retyped into "One of" or "Any of" starts with: its type's fresh value, written as
+     * Java so a retype reads it back as a value of the new type — and, for text, a word rather than nothing.
+     */
+    private static Optional<String> firstChoice(ValueGrammar grammar, Type base) {
+        Optional<JavaValue> fresh = base == String.class
+                ? grammar.initializer(String.class, "choice")
+                : grammar.freshInitializer(base);
+        return fresh.map(JavaValue::source).filter(source -> !source.isBlank());
     }
 
     /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
@@ -827,9 +862,11 @@ public final class ParametersDialog {
      */
     private Node buildOptionsEditor(JavaParameter entry) {
         ParameterRow v = entry.row();
-        Type base = ValueTypes.leaf(entry.form());
         ValueGrammar grammar = PluginHost.grammar();
-        ValueEditors.Context ctx = ValueEditors.Context.of(config);
+        // A choice is a value of the base type — a whole list when the field is one of several lists — and a
+        // number's choices keep to its range, as its value does.
+        Type base = ChoiceMode.base(entry.form(), v.options(), grammar);
+        ValueEditors.Context ctx = ValueEditors.Context.of(config).withBounds(new Bounds(v.min(), v.max()));
         VBox box = new VBox(4);
         List<String> options = v.options();
 
@@ -841,7 +878,7 @@ public final class ParametersDialog {
         // type, so writing one down should be the same gesture as setting one: a template comes out of the
         // gallery with its picture, a colour off the screen, a duration as hours and minutes. Typed as text it
         // was a name recalled from memory — and a misremembered one is a choice that silently matches nothing.
-        ValueEditors.Editor fresh = ValueEditors.framed(ValueEditors.editorFor(base, null, ctx));
+        ValueEditors.Editor fresh = ParamValueWidgets.choiceEditor(base, null, ctx, records, null);
         HBox.setHgrow(fresh.node(), Priority.ALWAYS);
         Button add = new Button("Add");
         Runnable addOption = () -> {
@@ -877,43 +914,14 @@ public final class ParametersDialog {
     /**
      * One declared choice.
      *
-     * <p>Every choice is edited in place: text as text, every other type through its own picker
-     * ({@link #optionEditor}), committed on focus loss. Until 2026-09-26 a non-text choice was a label of its
-     * Java, which for a type with no preview meant the user read {@code new …Point(1144, 342)}.
+     * <p>Every choice is edited in place through its type's own picker ({@link #optionEditor}), committed on
+     * focus loss — text included since 2026-09-27, which was a bare field here and the text editor, with its
+     * multi-line ⤢, everywhere else. Until 2026-09-26 a non-text choice was a label of its Java, which for a
+     * type with no preview meant the user read {@code new …Point(1144, 342)}.
      */
     private Node optionRow(JavaParameter entry, Type base, ValueEditors.Context ctx,
                            List<String> options, int at) {
-        String option = options.get(at);
-        Node shown;
-        if (base == String.class) {
-            TextField field = new TextField(option);
-            HBox.setHgrow(field, Priority.ALWAYS);
-            Runnable commit = () -> {
-                String typed = field.getText() == null ? "" : field.getText().trim();
-                if (typed.isEmpty() || typed.equals(option)) {
-                    field.setText(option);
-                    return;
-                }
-                if (options.contains(typed)) {
-                    error("'" + typed + "' is already a choice here.");
-                    field.setText(option);
-                    return;
-                }
-                List<String> updated = new ArrayList<>(options);
-                updated.set(at, typed);
-                replaceOptions(entry, updated);
-            };
-            field.focusedProperty().addListener((o, was, is) -> {
-                if (!is) commit.run();
-            });
-            field.setOnAction(e -> {
-                commit.run();
-                e.consume();
-            });
-            shown = field;
-        } else {
-            shown = optionEditor(entry, base, ctx, options, at);
-        }
+        Node shown = optionEditor(entry, base, ctx, options, at);
 
         Button remove = new Button("✕");
         remove.getStyleClass().add("row-icon-button");
@@ -928,8 +936,8 @@ public final class ParametersDialog {
     }
 
     /**
-     * A declared choice of a type that is not text: the type's own picker, seeded with the choice and edited
-     * in place — never the choice's Java, which is what this row used to show.
+     * A declared choice: the type's own picker — a container's own rows for one of several lists — seeded
+     * with the choice and edited in place, never the choice's Java, which is what this row used to show.
      *
      * <p>A change is committed when the row loses focus, not per change: a commit rewrites the file and
      * rebuilds the card, and a spinner clicked five times is one decision. A change arriving while the row
@@ -953,7 +961,7 @@ public final class ParametersDialog {
         Runnable commit = () -> {
             JavaValue value = pending[0];
             pending[0] = null;
-            if (value == null) return;
+            if (value == null || value.sameJava(written.get())) return;
             String typed = optionText(grammar, base, Optional.of(value));
             if (typed.isBlank() || typed.equals(option)) return;
             if (options.contains(typed)) {
@@ -964,14 +972,17 @@ public final class ParametersDialog {
             updated.set(at, typed);
             replaceOptions(entry, updated);
         };
-        ValueEditors.Editor editor = ValueEditors.framed(ValueEditors.editorFor(base, written.get().source(), ctx,
+        ValueEditors.Editor editor = ParamValueWidgets.choiceEditor(base, written.get().source(), ctx, records,
                 value -> {
                     pending[0] = value;
                     if (node[0] == null || !node[0].isFocusWithin()) commit.run();
-                }));
+                });
         node[0] = editor.node();
         node[0].focusWithinProperty().addListener((o, was, is) -> {
-            if (!is) commit.run();
+            if (is) return;
+            // A container's rows tell nobody as they change; what they read when the focus leaves is the edit.
+            if (pending[0] == null && !ValueTypes.isLeaf(base)) pending[0] = editor.read().get().orElse(null);
+            commit.run();
         });
         HBox.setHgrow(node[0], Priority.ALWAYS);
         return node[0];

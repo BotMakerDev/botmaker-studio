@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.studio.plugin.grammar.ValueContainer;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 
 import java.lang.reflect.Type;
@@ -16,8 +17,10 @@ import java.util.Optional;
  * {@code List<T>} — and the base type {@code T} is what the chooser, the choices and every mode speak of.
  *
  * <p><b>Read off the declaration, never stored.</b> Choices are written as {@code @Param(options = …)}, so a
- * field with none is {@link #NONE}, a leaf with some is {@link #ONE}, and a list of a leaf with some is
- * {@link #MANY}. A list with no choices is a list typed freely, which is {@code NONE} over {@code List<T>}.
+ * field with none is {@link #NONE}, and one with some is {@link #ONE} or {@link #MANY}. <b>The choices' own
+ * shape tells those two apart (2026-09-27)</b>: over a {@code List<X>}, a choice that reads as the list is one
+ * of several lists, and a choice that reads as an {@code X} is a tick. A list with no choices is a list typed
+ * freely, which is {@code NONE} over {@code List<T>}.
  */
 public enum ChoiceMode {
 
@@ -42,17 +45,18 @@ public enum ChoiceMode {
     }
 
     /** The mode a field declared as {@code form} with {@code options} is in. */
-    public static ChoiceMode of(Type form, List<String> options) {
+    public static ChoiceMode of(Type form, List<String> options, ValueGrammar grammar) {
         if (options == null || options.isEmpty()) return NONE;
-        return listElement(form).isPresent() ? MANY : ONE;
+        if (ValueTypes.isLeaf(form) || listElement(form).isEmpty()) return ONE;
+        return options.stream().anyMatch(option -> reads(grammar, form, option)) ? ONE : MANY;
     }
 
     /**
      * The type every mode speaks of: the element of a ticked list, and the declared type otherwise — a free
-     * {@code List<T>} is its own base, since nothing is picked from a set there.
+     * {@code List<T>}, and one picked from several lists, are their own base.
      */
-    public static Type base(Type form, List<String> options) {
-        return of(form, options) == MANY ? listElement(form).orElse(form) : form;
+    public static Type base(Type form, List<String> options, ValueGrammar grammar) {
+        return of(form, options, grammar) == MANY ? listElement(form).orElse(form) : form;
     }
 
     /**
@@ -69,15 +73,36 @@ public enum ChoiceMode {
     }
 
     /**
-     * The modes {@code base} can be put in, {@link #NONE} always first. Choices are values of a single leaf
-     * the grammar can read, so a container or a type nobody declares has none; an enum brings its own set.
-     * {@link #ONE} over a flag is a flag with its two values written out again, so a flag is free or ticked.
+     * The modes {@code base} can be put in, {@link #NONE} always first. Choices are values the grammar can
+     * read, so a type nobody declares has none; an enum brings its own set. {@link #ONE} over a flag is a flag
+     * with its two values written out again, so a flag is free or ticked. A container can be one of several
+     * of its own values, and is never ticked — ticks over a list would be a list of lists.
      */
     public static List<ChoiceMode> offered(Type base, boolean known) {
-        if (!ValueTypes.isLeaf(base) || !known) return List.of(NONE);
+        if (!known) return List.of(NONE);
+        if (!ValueTypes.isLeaf(base)) {
+            return ValueTypes.container(base).isPresent() ? List.of(NONE, ONE) : List.of(NONE);
+        }
         if (base instanceof Class<?> cls && cls.isEnum()) return List.of(NONE);
         if (base == boolean.class || base == Boolean.class) return List.of(NONE, MANY);
         return List.of(NONE, ONE, MANY);
+    }
+
+    /**
+     * The choices of {@code options} that are still values once the field is declared as {@code form} — of
+     * the form itself, or of its element when it is a list. Read strictly, as Java: {@code "1"} is no
+     * {@code String}, so an {@code int}'s choices do not survive becoming text.
+     */
+    public static List<String> kept(ValueGrammar grammar, Type form, List<String> options) {
+        Optional<Type> element = listElement(form);
+        return options.stream()
+                .filter(option -> reads(grammar, form, option)
+                        || element.map(type -> reads(grammar, type, option)).orElse(false))
+                .toList();
+    }
+
+    private static boolean reads(ValueGrammar grammar, Type type, String option) {
+        return option != null && !option.isBlank() && grammar.valueOf(type, option).isPresent();
     }
 
     private static Optional<Type> listElement(Type form) {

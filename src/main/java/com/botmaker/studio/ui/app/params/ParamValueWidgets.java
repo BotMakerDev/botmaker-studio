@@ -11,6 +11,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.params.ChoiceMode;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -20,6 +21,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
@@ -126,6 +128,18 @@ public final class ParamValueWidgets {
                 ValueEditors.Context.of(config));
     }
 
+    /**
+     * The editor for one declared choice of {@code base}, seeded from {@code source} (a fresh value when
+     * null): a leaf's own editor, told each value it writes through {@code onChange}, or a container's own
+     * rows, which tell nobody and are read when their row is left (2026-09-27).
+     */
+    static ValueEditors.Editor choiceEditor(Type base, String source, ValueEditors.Context ctx, BotRecords records,
+                                            java.util.function.Consumer<JavaValue> onChange) {
+        if (ValueTypes.isLeaf(base)) return ValueEditors.framed(ValueEditors.editorFor(base, source, ctx, onChange));
+        Optional<SourceNode> written = source == null ? Optional.empty() : SourceNode.parse(source);
+        return editor(PluginHost.grammar(), base, written, records == null ? BotRecords.none() : records, ctx);
+    }
+
     /** The same widget, pinned to one width — what a list of rows wants, and a form does not. */
     public static Node buildFixedWidth(String group, ParameterRow row, Type form, ProjectConfig config,
                                        List<ValueEditor> sink) {
@@ -143,13 +157,17 @@ public final class ParamValueWidgets {
         ValueGrammar grammar = PluginHost.grammar();
         List<String> options = row.options();
 
-        if (!options.isEmpty()) {
-            if (ValueTypes.isLeaf(form)) return radioRow(grammar, group, row, form, options, ctx, sink);
-            List<Type> arguments = ValueTypes.arguments(form);
-            if (ValueTypes.container(form).orElse(null) == ValueContainer.LIST
-                    && ValueTypes.isLeaf(arguments.getLast())) {
-                return checkList(grammar, group, row, form, arguments.getLast(), options, ctx, sink);
+        // The choices' shape says which (ChoiceMode): one of them — a leaf, or one of several whole lists — or
+        // any number of them, ticked.
+        switch (ChoiceMode.of(form, options, grammar)) {
+            case ONE -> {
+                return radioRow(grammar, group, row, form, options, ctx, sink);
             }
+            case MANY -> {
+                return checkList(grammar, group, row, form, ValueTypes.arguments(form).getLast(), options, ctx,
+                        sink);
+            }
+            case NONE -> { }
         }
         String why = whyNotEditable(form, records);
         if (why != null) return unreadable(row, why);
@@ -202,6 +220,12 @@ public final class ParamValueWidgets {
         }
         ValueContainer<?> container = ValueTypes.container(form).orElseThrow();
         List<Type> arguments = ValueTypes.arguments(form);
+        if ((container == ValueContainer.LIST || container == ValueContainer.SET)
+                && arguments.getLast() instanceof Class<?> cls && cls.isEnum() && grammar.known(cls)) {
+            // Only an enum the grammar reads: one nobody declares could be neither read nor written, and the
+            // strip would hand back an empty list over the author's.
+            return enumToggles(grammar, form, cls, written);
+        }
         if (container == ValueContainer.LIST) {
             return arguments.getLast() == String.class
                     ? textLines(grammar, form, written)
@@ -352,6 +376,42 @@ public final class ParamValueWidgets {
                 values.add(value.get());
             }
             return ValueWire.compose(form, values);
+        });
+    }
+
+    /**
+     * A list or a set of an enum's constants, as one toggle per constant in the enum's own order
+     * (2026-09-27) — seven days, five mouse buttons — rather than rows each holding a picker of the same few
+     * values. Read back in constant order, each at most once, which is what a set is and what a list of days
+     * means; a hand-written list that repeats a constant or orders them otherwise is rewritten that way only
+     * when a toggle is touched. A stack or a queue keeps its rows: there the order is the value.
+     */
+    private static ValueEditors.Editor enumToggles(ValueGrammar grammar, Type form, Class<?> constants,
+                                                   Optional<SourceNode> written) {
+        List<Object> held = parts(form, written).stream()
+                .flatMap(part -> grammar.valueOf(constants, part.written()).stream())
+                .toList();
+        javafx.scene.layout.FlowPane strip = new javafx.scene.layout.FlowPane(2, 2);
+        List<ToggleButton> toggles = new ArrayList<>();
+        for (Object constant : constants.getEnumConstants()) {
+            String name = ((Enum<?>) constant).name();
+            ToggleButton toggle = new ToggleButton(EnumLabels.label(name));
+            toggle.setTooltip(new Tooltip(name));
+            toggle.setUserData(constant);
+            toggle.setSelected(held.contains(constant));
+            toggles.add(toggle);
+        }
+        strip.getChildren().addAll(toggles);
+        Optional<JavaValue> kept = written.map(JavaValue::kept);
+        boolean[] touched = {false};
+        toggles.forEach(toggle -> toggle.setOnAction(e -> touched[0] = true));
+        return new ValueEditors.Editor(strip, () -> {
+            // Untouched, the list is handed back as it was written — opening a window rewrites nothing.
+            if (!touched[0] && kept.isPresent()) return kept;
+            return ValueWire.compose(form, toggles.stream()
+                    .filter(ToggleButton::isSelected)
+                    .flatMap(toggle -> grammar.spell(constants, toggle.getUserData()).stream())
+                    .toList());
         });
     }
 
@@ -601,6 +661,12 @@ public final class ParamValueWidgets {
      */
     private static void showOption(ButtonBase toggle, Type leaf, String option, Optional<JavaValue> written,
                                    ValueEditors.Context ctx) {
+        if (!ValueTypes.isLeaf(leaf)) {
+            // One of several whole lists: its items, in a line, rather than the Java that builds it.
+            toggle.setGraphic(null);
+            toggle.setText(written.map(w -> itemsOf(leaf, w)).orElse(option));
+            return;
+        }
         boolean words = leaf == String.class || (leaf instanceof Class<?> cls && cls.isEnum());
         Node picture = words ? null
                 : written.map(w -> ValueEditors.optionDisplay(leaf, w.source(), ctx)).orElse(null);
@@ -634,6 +700,14 @@ public final class ParamValueWidgets {
         return written.map(node -> grammar.valueOf(leaf, node)
                 .flatMap(value -> grammar.spell(leaf, value))
                 .orElse(JavaValue.kept(node)));
+    }
+
+    /** A container's items as they are written, in a line: {@code [1, 2]}, or {@code [ ]} for none. */
+    static String itemsOf(Type form, JavaValue written) {
+        List<ValueGrammar.Part> parts = ValueWire.partsOrNone(form, written.source());
+        if (parts.isEmpty()) return "[ ]";
+        return parts.stream().map(part -> part.written().source())
+                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
     }
 
     // --- small helpers ------------------------------------------------------------------------------------

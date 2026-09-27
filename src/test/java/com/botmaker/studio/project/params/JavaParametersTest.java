@@ -206,6 +206,24 @@ class JavaParametersTest {
         assertFalse(source.contains("min ="), source);
     }
 
+    @Test
+    void aRetypeCarriesTheNewTypesOwnChoices(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param(options = {"1", "5"})
+                    public static int maxAttempts = 1;
+                """));
+
+        JavaParameter entry = only(config);
+        // "One of" retyped to text: the window hands the new type's first choice over with the retype, so
+        // the field is still one of a set rather than falling back to any value.
+        ParameterRow wanted = entry.row().toBuilder().options(List.of("\"fast\"")).build();
+        ParameterRow stored = JavaParameters.declare(config, null, entry, wanted, TestValues.TEXT,
+                TestValues.GRAMMAR).orElseThrow();
+
+        assertEquals(List.of("\"fast\""), stored.options());
+    }
+
     // ---- values -----------------------------------------------------------------------------------------
 
     @Test

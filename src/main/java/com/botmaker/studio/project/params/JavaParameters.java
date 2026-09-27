@@ -189,7 +189,7 @@ public final class JavaParameters {
             retype(config, state, held, wantedForm, grammar);
             held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return Optional.empty();
-            wanted = retyped(wanted, before, parameter.form(), wantedForm);
+            wanted = retyped(wanted, before, wantedForm, grammar);
         }
 
         Map<String, String> members = new LinkedHashMap<>();
@@ -232,29 +232,20 @@ public final class JavaParameters {
     /**
      * What survives of {@code wanted} once the field is {@code to} rather than {@code from}.
      *
-     * <p>The value was reset by the retype, so the row's old one is not written back over it. A choice is a
-     * value of the leaf, so the choices go when the leaf changes and stay when only the container does
-     * ({@code int} to {@code List<Integer>} keeps them as the ticks). A bound means something only for a
-     * number. Kept, a choice of the old type drew as a disabled row holding the old type's Java.
+     * <p>The value was reset by the retype, so the row's old one is not written back over it. A choice stays
+     * when it is still a value of the new type, or of its element ({@code int} to {@code List<Integer>} keeps
+     * them as the ticks), and goes otherwise — which is also how a caller hands the new type's own choices
+     * over with the retype (2026-09-27). A bound means something only for a number. Kept, a choice of the
+     * old type drew as a disabled row holding the old type's Java.
      */
-    private static ParameterRow retyped(ParameterRow wanted, ParameterRow before, Type from, Type to) {
-        ParameterRow.Builder kept = wanted.toBuilder().value(before.value());
+    private static ParameterRow retyped(ParameterRow wanted, ParameterRow before, Type to, ValueGrammar grammar) {
+        ParameterRow.Builder kept = wanted.toBuilder().value(before.value())
+                .options(ChoiceMode.kept(grammar, to, wanted.options()));
         Type leaf = ValueTypes.leaf(to);
-        if (!sameLeaf(ValueTypes.leaf(from), leaf)) kept.options(List.of());
         if (!(leaf instanceof Class<?> cls && NUMBERS.contains(cls))) {
             kept.bounds(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
         }
         return kept.build();
-    }
-
-    /** Whether two leaves are one type, a primitive and its box counted as one. */
-    private static boolean sameLeaf(Type a, Type b) {
-        if (a == null || b == null) return a == b;
-        return a.equals(b) || (a instanceof Class<?> x && b instanceof Class<?> y && box(x) == box(y));
-    }
-
-    private static Class<?> box(Class<?> cls) {
-        return cls.isPrimitive() ? java.lang.invoke.MethodType.methodType(cls).wrap().returnType() : cls;
     }
 
     /** The types a declared range means anything for: Java's numbers, boxed or not. */

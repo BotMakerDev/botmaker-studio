@@ -183,6 +183,24 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         assertEquals("\"slow\"", sink.getFirst().read().get().orElseThrow().source());
     }
 
+    /**
+     * A choice that reads as the whole list makes the field one of several lists: a radio per list, labelled
+     * by its items (2026-09-27). The same field with element choices is ticks — the choices' shape decides.
+     */
+    @Test
+    void choicesThatAreWholeListsAreRadioButtons() {
+        Type numbers = ValueTypes.listOf(Integer.class);
+        ParameterRow lists = ParameterRow.named("sizes", ValueTypes.sourceName(numbers)).value("List.of(1, 2)")
+                .options(List.of("List.of(1, 2)", "List.of(3)")).build();
+
+        List<Node> rows = childrenOf(widgetFor(lists, numbers));
+
+        assertEquals(2, rows.size());
+        for (Node button : rows) assertInstanceOf(RadioButton.class, button);
+        assertEquals("[1, 2]", ((RadioButton) rows.getFirst()).getText());
+        assertTrue(((RadioButton) rows.getFirst()).isSelected());
+    }
+
     /** A stored value is matched against the choices by its value, so {@code "fast"} selects "fast". */
     @Test
     void theStoredValueSelectsItsChoice() {

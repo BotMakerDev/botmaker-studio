@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **"Any of" keeps its type.** The type button shows the type being ticked (`int`), never the `List<Integer>`
+  it is written as, and picking another type in "Any of" or "One of" stays in that mode, starting from the
+  new type's first choice.
+- **Choices on a list.** A `List<T>` can be one of several lists: a choice written as a whole list makes it
+  "One of", and each choice is edited with the list's own rows.
+- **A list or set of an enum is toggles**, one per constant in the enum's order — a list of days is seven
+  day toggles, also in the canvas's container popover.
+- **Choices are edited with the type's own editor everywhere**, text included, and a number's choices keep
+  to its Range.
+
 ### Fixed
 
 - **A Range limits the number.** A parameter's `@Param(min, max)` is handed to its editor, and a value written

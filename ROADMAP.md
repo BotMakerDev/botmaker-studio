@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 2, phase 1.** `HostValueContext.withBounds`/`bounds()` carries a row's
+- **2026-09-27 (latest) — Picker feedback 2, phase 2.** `ChoiceMode.of/base` take the grammar and tell "One of"
+  a list from "Any of" its element by the choices' shape; `offered` gives a container NONE/ONE; `kept` is the
+  retype rule `JavaParameters.retyped` now applies. `ParametersDialog.retype` keeps the mode, the chooser shows
+  the base; `ParamValueWidgets.enumToggles` (`EnumLabels`) draws a list/set of a known enum; `choiceEditor`
+  edits every choice, text and containers included, with the row's bounds.
+- **2026-09-27 — Picker feedback 2, phase 1.** `HostValueContext.withBounds`/`bounds()` carries a row's
   `@Param(min, max)` (via `ValueEditors.Context.bounds`, so list elements get it too) and `set` clamps a number
   in its own box. `TypeChooser` edits a draft type in an open menu, committed once on close, Escape cancels.
   `.value-switch` styles the toolkit's `Styles.SWITCH` (danger / ok tokens).
