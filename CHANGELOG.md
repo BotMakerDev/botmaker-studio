@@ -33,6 +33,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Live values while debugging.** While the bot is paused, each variable declaration, assignment and name
+  block whose local is in scope shows its value in a small chip at the end of its row, with the whole value
+  in the chip's tooltip. A vision result reads as a sentence from its field names: "found at 120, 340 · 93%",
+  "“Start” at 10, 20 · 87%", "not found", "3 found". The chips go when the bot resumes or stops. Collections
+  show their size ("ArrayList (2)") in the Debug tab too, and a bot frame's objects are read two levels deep.
 - **Sets and stacks/queues.** A `Set<T>` (written `Set.of(…)`) and a `Deque<T>` (written
   `new ArrayDeque<>(List.of(…))`) are values like a list: wrap a type in them in the type chooser, edit them as
   rows. A set drops a repeated element rather than write one `Set.of` would refuse.

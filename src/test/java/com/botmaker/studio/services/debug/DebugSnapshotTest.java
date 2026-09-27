@@ -92,6 +92,54 @@ class DebugSnapshotTest {
                 .map(c -> c.name() + "=" + c.value()).toList());
     }
 
+    private static final String RESULTS = """
+            package com.mybot;
+
+            public class Results {
+                record Spot(int x, int y) {}
+                static final class Hit { Spot location = new Spot(120, 340); boolean found = true; double confidence = 0.93; }
+
+                public static void main(String[] args) {
+                    Hit hit = new Hit();
+                    java.util.List<String> names = new java.util.ArrayList<>(java.util.List.of("a", "b"));
+                    java.util.Map<String, Integer> byId = java.util.Collections.unmodifiableMap(
+                            new java.util.LinkedHashMap<>(java.util.Map.of("ore", 1, "gem", 2, "key", 3)));
+                    System.out.println(hit.found + " " + names + byId);
+                }
+            }
+            """;
+
+    /**
+     * What the canvas's value chips summarise: a bot frame's object is read two levels down, so a result's
+     * {@code location} carries its {@code x} and {@code y}; a collection says how many it holds, through an
+     * unmodifiable wrapper too, without calling {@code size()}.
+     */
+    @Test
+    void aBotFrameReadsNestedFieldsAndCollectionSizes(@TempDir Path dir) throws Exception {
+        Path sourceRoot = dir.resolve("src");
+        Path file = sourceRoot.resolve("com/mybot/Results.java");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, RESULTS);
+        Path classes = dir.resolve("classes");
+        Files.createDirectories(classes);
+        assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null,
+                "-g", "-d", classes.toString(), file.toString()));
+        DebugTargets targets = DebugTargets.of(sourceRoot, List.of(new SourceFile(file, RESULTS)), Map.of());
+
+        DebugSnapshot snapshot = pauseAt(classes, "com.mybot.Results", 12, targets);
+
+        Map<String, DebugSnapshot.Variable> vars = new java.util.LinkedHashMap<>();
+        for (DebugSnapshot.Variable v : snapshot.frames().getFirst().variables()) vars.put(v.name(), v);
+        DebugSnapshot.Variable location = vars.get("hit").children().getFirst();
+        assertEquals("location", location.name());
+        assertEquals(List.of("x=120", "y=340"), location.children().stream()
+                .map(c -> c.name() + "=" + c.value()).toList());
+        assertEquals(2, vars.get("names").size());
+        assertEquals("ArrayList (2)", vars.get("names").value());
+        assertEquals(3, vars.get("byId").size());
+        assertEquals(-1, vars.get("hit").size());
+    }
+
     /**
      * The debugger's own way in: a {@code suspend=y} JVM attached over a socket, and nothing resumed but the
      * event sets — the VMStart set is what starts it. If an attach delivered no VMStartEvent the bot would never

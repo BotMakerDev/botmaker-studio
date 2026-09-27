@@ -63,8 +63,16 @@ public record DebugSnapshot(String thread, List<Frame> frames) {
         }
     }
 
-    /** One variable or field, and what is inside it (an array's elements, an object's fields). */
-    public record Variable(String name, String type, String value, List<Variable> children) {}
+    /**
+     * One variable or field, and what is inside it (an array's elements, an object's fields).
+     *
+     * @param size how many elements a JDK collection holds, read off its fields; -1 for anything else
+     */
+    public record Variable(String name, String type, String value, List<Variable> children, int size) {
+        public Variable(String name, String type, String value, List<Variable> children) {
+            this(name, type, value, children, -1);
+        }
+    }
 
     public static DebugSnapshot empty() {
         return new DebugSnapshot("", List.of());
@@ -94,9 +102,12 @@ public record DebugSnapshot(String thread, List<Frame> frames) {
         ObjectReference self = frame.thisObject();
         if (self != null && file != null) variables.add(variable("this", self.referenceType().name(), self, 1));
         if (!isPlatform(className)) {
+            // A bot frame's locals are read a level deeper: the canvas's chip says where a result was found,
+            // and a result's location is a field of a field. A library frame keeps one level.
+            int depth = file != null ? 2 : 1;
             try {
                 for (LocalVariable local : frame.visibleVariables()) {
-                    variables.add(variable(local.name(), local.typeName(), frame.getValue(local), 1));
+                    variables.add(variable(local.name(), local.typeName(), frame.getValue(local), depth));
                 }
             } catch (AbsentInformationException noDebugInfo) {
                 // A library compiled without -g: its frame is listed, its locals are not.
@@ -111,7 +122,32 @@ public record DebugSnapshot(String thread, List<Frame> frames) {
 
     /** A value and, {@code depth} levels down, what it holds. */
     static Variable variable(String name, String type, Value value, int depth) {
-        return new Variable(name, simple(type), describe(value), depth > 0 ? children(value, depth - 1) : List.of());
+        int size = value instanceof ObjectReference o && !(value instanceof ArrayReference) ? size(o, 2) : -1;
+        return new Variable(name, simple(type), describe(value), depth > 0 ? children(value, depth - 1) : List.of(),
+                size);
+    }
+
+    /**
+     * How many elements a JDK collection holds, read off its fields, or -1. A {@code size} field answers for
+     * {@code ArrayList}, {@code HashMap} and their kin; a wrapper ({@code Collections.unmodifiableMap}'s
+     * {@code m}, a collection's {@code c}, a list's {@code list}) is looked through; an {@code Empty…} is 0.
+     */
+    private static int size(ObjectReference o, int hops) {
+        String type = o.referenceType().name();
+        if (!type.startsWith("java.util.")) return -1;
+        if (type.contains("$Empty")) return 0;
+        Field size = o.referenceType().fieldByName("size");
+        if (size != null && !size.isStatic() && o.getValue(size) instanceof com.sun.jdi.IntegerValue n) {
+            return n.value();
+        }
+        if (hops == 0) return -1;
+        for (String wrapped : List.of("m", "c", "list")) {
+            Field inner = o.referenceType().fieldByName(wrapped);
+            if (inner != null && !inner.isStatic() && o.getValue(inner) instanceof ObjectReference held) {
+                return size(held, hops - 1);
+            }
+        }
+        return -1;
     }
 
     private static List<Variable> children(Value value, int depth) {
@@ -157,6 +193,8 @@ public record DebugSnapshot(String thread, List<Frame> frames) {
             Value boxed = o.getValue(o.referenceType().fieldByName("value"));
             if (boxed instanceof PrimitiveValue) return describe(boxed);
         }
+        int size = size(o, 2);
+        if (size >= 0) return simple(type) + " (" + size + ")";
         return simple(type) + " #" + o.uniqueID();
     }
 

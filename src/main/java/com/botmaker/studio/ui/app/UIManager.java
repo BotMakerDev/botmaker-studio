@@ -432,6 +432,8 @@ public class UIManager implements ProjectWindow {
         fileExplorerManager.setOnReveal(editorCanvas::scrollToBlock);
         usagesPanel = new UsagesPanel(config, state, u -> navigation.revealOffset(u.file(), u.start()));
         debugPanel = new DebugPanel(eventBus, f -> navigation.revealLine(f.file(), f.line()));
+        // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
+        new LiveValues(eventBus, state);
         navigation.wire(menuBarManager, binding -> {
             selectBottomTab(BottomTab.USAGES);
             usagesPanel.search(binding);

@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 2, phase 2.** `ChoiceMode.of/base` take the grammar and tell "One of"
+- **2026-09-27 (latest) — Picker feedback 2, phase 5: live values while debugging.** `ui/app/LiveValues` puts a
+  chip on each declaration, assignment and name block while paused (top bot frame, open file only);
+  `services/debug/LiveScope` decides which names are live with no binding; `ValueSummary` words a value by its
+  field names. `DebugSnapshot.Variable.size` counts JDK collections; bot frames read two levels.
+- **2026-09-27 — Picker feedback 2, phase 2.** `ChoiceMode.of/base` take the grammar and tell "One of"
   a list from "Any of" its element by the choices' shape; `offered` gives a container NONE/ONE; `kept` is the
   retype rule `JavaParameters.retyped` now applies. `ParametersDialog.retype` keeps the mode, the chooser shows
   the base; `ParamValueWidgets.enumToggles` (`EnumLabels`) draws a list/set of a known enum; `choiceEditor`

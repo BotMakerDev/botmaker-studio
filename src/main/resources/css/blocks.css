@@ -1194,6 +1194,18 @@
     -fx-border-insets: -2, -5, 0 0 0 -11;
     -fx-border-radius: 9, 12, 0;
 }
+/* A paused variable's value (ui/app/LiveValues), at the end of its block's row. The popup pair, whose
+   contrast is measured above in both themes, so it reads the same on any category fill; the primary rim
+   says it belongs to the pause, like the ring on the paused line. */
+.live-value-chip {
+    -fx-background-color: -bm-primary, -bm-popup-bg;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8, 7;
+    -fx-text-fill: -bm-on-popup;
+    -fx-padding: 1 7 1 7;
+    -fx-font-size: 0.85em;
+    -fx-font-family: monospace;
+}
 /* The gutter's dot (core/render/GutterDecorator): a filled danger circle with a canvas-coloured rim. */
 .breakpoint-dot {
     -fx-background-color: -bm-canvas, -bm-danger;
