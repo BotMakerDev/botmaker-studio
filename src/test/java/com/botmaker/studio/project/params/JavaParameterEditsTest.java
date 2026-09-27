@@ -274,7 +274,7 @@ class JavaParameterEditsTest {
         assertFalse(edited.contains("\"public\""), edited);
         JavaParameter parameter = JavaParameterSource.read(null, edited, TestValues.GRAMMAR).stream()
                 .filter(p -> p.name().equals("maxAttempts")).findFirst().orElseThrow();
-        assertEquals(com.botmaker.plugin.api.value.Visibility.PUBLIC, parameter.row().visibility());
+        assertEquals(Visibility.PUBLIC, parameter.row().visibility());
     }
 
     @Test

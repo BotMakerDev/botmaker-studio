@@ -1,7 +1,6 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
-import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.helpers.SourceFormatter;

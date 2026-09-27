@@ -21,6 +21,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The Parameters window's row type is Studio's own.** `ParameterRow` and `Visibility` left the plugin
+  contract, which no plugin used them from; nothing changes on screen.
+
 - **A template needs no `botmaker-template.properties`.** Its package is the one holding its `main`, both when
   New Project copies it and when Publish checks it. A copy of an older template that still ships the file has
   it removed. The Publish sheet starts on *A starting template* when the gallery already lists the project as

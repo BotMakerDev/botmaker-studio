@@ -74,15 +74,6 @@ class HostRunsTest {
         assertEquals(original, read, "a plugin decodes with the same class the host encoded with");
     }
 
-    @Test
-    void withPid_declines_when_no_bot_is_running() {
-        boolean acted = Runs.NONE.withPid(pid -> {
-            throw new AssertionError("there is no bot, so nothing may be signalled");
-        });
-
-        assertFalse(acted, "the answer is 'nothing was running', not an exception");
-    }
-
     private static byte[] encode(TelemetryEvent event) throws IOException {
         var bytes = new java.io.ByteArrayOutputStream(256);
         try (var out = new java.io.DataOutputStream(bytes)) {

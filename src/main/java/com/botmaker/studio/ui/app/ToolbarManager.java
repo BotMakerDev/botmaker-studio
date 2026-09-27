@@ -417,9 +417,7 @@ public class ToolbarManager {
      * the project it was built under.
      */
     private ActionContext actionContext() {
-        return new HostActionContext(
-                () -> settings == null ? null : settings.projectConfig(),
-                () -> "");
+        return new HostActionContext(() -> settings == null ? null : settings.projectConfig());
     }
 
     /**

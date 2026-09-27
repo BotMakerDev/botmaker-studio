@@ -26,25 +26,14 @@ public final class HostOverlayContext implements ActionContext {
 
     /**
      * @param project     where the currently open project comes from; may answer null
-     * @param pin         how the calling plugin's pinned version is read, as {@link HostActionContext} takes it
      * @param windowTitle the title of the window the HUD is currently drawn over; null or blank reads as none
      * @param bounds      where that window sits <em>right now</em>; null reads as none
      */
-    public HostOverlayContext(Supplier<ProjectConfig> project, Supplier<String> pin,
-                              Supplier<String> windowTitle, Supplier<ActionContext.Area> bounds) {
-        this.base = new HostActionContext(project, pin);
+    public HostOverlayContext(Supplier<ProjectConfig> project, Supplier<String> windowTitle,
+                              Supplier<ActionContext.Area> bounds) {
+        this.base = new HostActionContext(project);
         this.windowTitle = windowTitle;
         this.bounds = bounds;
-    }
-
-    @Override
-    public Optional<String> openProjectName() {
-        return base.openProjectName();
-    }
-
-    @Override
-    public String pinnedVersion() {
-        return base.pinnedVersion();
     }
 
     @Override

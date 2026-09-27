@@ -1,8 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.params.Param;
-import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;

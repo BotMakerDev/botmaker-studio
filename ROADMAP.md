@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — No `botmaker-template.properties`.** `TemplateProject.read` is the package of the
+- **2026-09-28 (latest) — `ParameterRow` and `Visibility` are Studio's.** Moved from the contract into
+  `project/params/` (no plugin used either); `HostActionContext`/`HostOverlayContext` lost the pin supplier and
+  `openProjectName`/`pinnedVersion` with the contract members. Row tests are `ParameterRowTest`.
+- **2026-09-27 — No `botmaker-template.properties`.** `TemplateProject.read` is the package of the
   class holding `main`, always; `FILE_NAME` and the properties branch are deleted, and `renameInto` removes an
   older template's file from the copy. `PublishSheet` picks *template* from the listing's `template` tag until
   the author picks. (The flow's card positions left `flow-layout.json` for the SDK's `Sdk.flowLayout()` the

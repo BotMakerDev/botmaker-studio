@@ -1,7 +1,5 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
-import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.source.BotParser;

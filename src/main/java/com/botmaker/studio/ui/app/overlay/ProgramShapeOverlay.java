@@ -649,14 +649,11 @@ public final class ProgramShapeOverlay {
      *
      * <p>Every field is read through a supplier rather than captured, because all three move while the HUD is
      * up: the user drags the game window, the window manager re-raises it, and the insertion cursor changes
-     * on every click in the tree. The pin is {@code ""} exactly as the main bar's context leaves it — Studio
-     * does not know which plugin is about to be pressed, and the contract documents the string as the
-     * plugin's own to interpret.
+     * on every click in the tree.
      */
     private ActionContext itemContext() {
         return new HostOverlayContext(
                 context::getConfig,
-                () -> "",
                 () -> window == null ? null : window.titleSubstring(),
                 () -> windowBounds == null ? null : new ActionContext.Area(
                         windowBounds.x, windowBounds.y, windowBounds.width, windowBounds.height));

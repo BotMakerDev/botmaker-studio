@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.runner;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;

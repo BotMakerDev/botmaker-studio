@@ -1,6 +1,6 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.studio.project.params.ParameterRow;
 
 import java.util.ArrayList;
 import java.util.List;

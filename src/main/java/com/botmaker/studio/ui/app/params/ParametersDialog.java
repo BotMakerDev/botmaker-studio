@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.slot.Bounds;
-import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.project.params.ParameterRow;
+import com.botmaker.studio.project.params.Visibility;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;

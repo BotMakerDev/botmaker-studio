@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;

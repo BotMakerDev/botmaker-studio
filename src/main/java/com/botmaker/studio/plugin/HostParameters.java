@@ -1,10 +1,10 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 

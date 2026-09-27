@@ -131,8 +131,7 @@ class ChoiceModeTest {
      */
     @Test
     void choicesDropTheRangeAndNoChoicesKeepIt() {
-        com.botmaker.plugin.api.parameters.ParameterRow ranged =
-                com.botmaker.plugin.api.parameters.ParameterRow.named("speed", "int").bounds(0, 10).build();
+        ParameterRow ranged = ParameterRow.named("speed", "int").bounds(0, 10).build();
 
         var picked = ChoiceMode.declare(ranged, List.of("1", "5"));
         assertEquals(List.of("1", "5"), picked.options());

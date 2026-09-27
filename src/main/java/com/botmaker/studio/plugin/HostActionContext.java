@@ -17,26 +17,8 @@ public final class HostActionContext implements ActionContext {
     /** Where the currently open project comes from; may answer null, which is an ordinary state. */
     private final java.util.function.Supplier<ProjectConfig> project;
 
-    /** How the pin is read for whichever plugin's item is being pressed. */
-    private final java.util.function.Supplier<String> pin;
-
-    public HostActionContext(java.util.function.Supplier<ProjectConfig> project,
-                             java.util.function.Supplier<String> pin) {
+    public HostActionContext(java.util.function.Supplier<ProjectConfig> project) {
         this.project = project == null ? () -> null : project;
-        this.pin = pin == null ? () -> "" : pin;
-    }
-
-    @Override
-    public java.util.Optional<String> openProjectName() {
-        ProjectConfig config = project.get();
-        return config == null ? java.util.Optional.empty()
-                : java.util.Optional.ofNullable(config.projectName());
-    }
-
-    @Override
-    public String pinnedVersion() {
-        String version = pin.get();
-        return version == null ? "" : version;
     }
 
     @Override

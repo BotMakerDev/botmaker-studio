@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.slot.Bounds;
+import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.JavaValue;
