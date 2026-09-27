@@ -3,6 +3,8 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.nav.Usages;
+import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -13,6 +15,7 @@ import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 
+import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -160,9 +163,8 @@ public final class JavaParameters {
      * together, because they are one annotation; the value last, because everything before it changes what a
      * value may be.
      */
-    public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
-                                                 JavaParameter parameter, ParameterRow wanted,
-                                                 Type wantedForm) {
+    public static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                  ParameterRow wanted, Type wantedForm) {
         return declare(config, state, parameter, wanted, wantedForm, PluginHost.grammar());
     }
 
@@ -170,25 +172,57 @@ public final class JavaParameters {
      * The same, against a given grammar. {@code wantedForm} is the type the field should have, which the
      * row cannot say for itself — it carries the type's written name, not its tree.
      */
-    public static Optional<ParameterRow> declare(ProjectConfig config, ProjectState state,
-                                                 JavaParameter parameter, ParameterRow wanted,
-                                                 Type wantedForm, ValueGrammar grammar) {
-        if (parameter == null || wanted == null) return Optional.empty();
+    public static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                  ParameterRow wanted, Type wantedForm, ValueGrammar grammar) {
+        return declare(config, state, parameter, wanted, wantedForm, grammar, guardParser(config, state));
+    }
+
+    /**
+     * The same, held to the compile guard {@code guard} parses with — null for none.
+     *
+     * <p><b>All or nothing, and never a bot that stops compiling</b> (2026-09-27). The declaration is several
+     * edits in a row; a refusal part-way puts every file back as it was. And an edit that compiles in its own
+     * file can break another — {@code Parameters.j} retyped to {@code String} breaks {@code int x =
+     * Parameters.j} in {@code Base.java} — so every file that spells the name is compiled before and after,
+     * and a new error anywhere puts everything back. An error a file already had never refuses.
+     */
+    static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter, ParameterRow wanted,
+                           Type wantedForm, ValueGrammar grammar, BotParser guard) {
+        if (parameter == null || wanted == null) return gone(parameter);
+        Map<Path, String> before = Usages.sources(config, state);
+        Map<Path, List<CompileGuard.Problem>> errors = guard == null ? Map.of()
+                : CompileGuard.errorsIn(guard, spelling(before, parameter.name()));
+        Outcome outcome = apply(config, state, parameter, wanted, wantedForm, grammar);
+        if (outcome instanceof Outcome.Refused) {
+            putBack(config, state, before);
+            return outcome;
+        }
+        if (guard == null) return outcome;
+        Optional<String> broke = CompileGuard.firstIntroduced(guard, errors, Usages.sources(config, state));
+        if (broke.isEmpty()) return outcome;
+        putBack(config, state, before);
+        return new Outcome.Refused("That would stop the bot compiling, so nothing was changed: " + broke.get());
+    }
+
+    /** {@link #declare}'s edits, one after the other, each re-reading the field the one before it moved. */
+    private static Outcome apply(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                 ParameterRow wanted, Type wantedForm, ValueGrammar grammar) {
         String className = parameter.className();
         ParameterRow before = parameter.row();
         String name = before.name();
 
         if (!wanted.name().equals(name)) {
-            if (!rename(config, state, parameter, wanted.name())) return Optional.empty();
+            Optional<String> refused = rename(config, state, parameter, wanted.name());
+            if (refused.isPresent()) return new Outcome.Refused(refused.get());
             name = wanted.name();
         }
         JavaParameter held = find(config, state, className, name, grammar).orElse(null);
-        if (held == null) return Optional.empty();
+        if (held == null) return gone(parameter);
 
         if (wantedForm != null && !wantedForm.equals(parameter.form())) {
             retype(config, state, held, wantedForm, grammar);
             held = find(config, state, className, name, grammar).orElse(null);
-            if (held == null) return Optional.empty();
+            if (held == null) return gone(parameter);
             wanted = retyped(wanted, before, wantedForm, grammar);
         }
 
@@ -211,13 +245,13 @@ public final class JavaParameters {
         if (!members.isEmpty()) {
             setMembers(config, state, held, members);
             held = find(config, state, className, name, grammar).orElse(null);
-            if (held == null) return Optional.empty();
+            if (held == null) return gone(parameter);
         }
 
         if (!wanted.options().equals(before.options())) {
             setOptions(config, state, held, wanted.options());
             held = find(config, state, className, name, grammar).orElse(null);
-            if (held == null) return Optional.empty();
+            if (held == null) return gone(parameter);
         }
 
         if (!wanted.value().equals(before.value()) && held.editable()) {
@@ -226,7 +260,8 @@ public final class JavaParameters {
             JavaParameter target = held;
             JavaValue.parse(wanted.value()).ifPresent(value -> writeValue(config, state, target, value));
         }
-        return reread(config, state, className, name, grammar);
+        return reread(config, state, className, name, grammar)
+                .<Outcome>map(Outcome.Stored::new).orElseGet(() -> gone(parameter));
     }
 
     /**
@@ -288,16 +323,34 @@ public final class JavaParameters {
     }
 
     /**
-     * Removes a parameter's declaration. Its <em>uses</em> are left alone.
+     * Removes a parameter's declaration — <b>only when nothing uses it</b> (2026-09-27).
      *
-     * <p>Deliberately: what a use should become is a judgement — a literal default plus a review mark — and
-     * a removal whose uses were silently rewritten is a bot that still compiles and behaves differently.
-     * The window makes that call and tells the user what it did.
+     * <p>The same rule a function's delete has ({@code SignatureEdits.delete}): a use of a field that no
+     * longer exists has no honest edit to become, so the uses come out first, by hand, and this says where
+     * they are. Removing anyway and warning, which this did until then, left {@code Parameters.j} in a file
+     * the user was not looking at and a bot that did not compile. A field whose uses cannot be told — its
+     * file does not parse — is refused for the same reason.
      */
-    public static boolean remove(ProjectConfig config, ProjectState state, JavaParameter parameter) {
-        if (parameter == null) return false;
+    public static Outcome remove(ProjectConfig config, ProjectState state, JavaParameter parameter) {
+        if (parameter == null) return gone(null);
+        Optional<List<Usages.Usage>> uses = uses(config, state, parameter);
+        if (uses.isEmpty()) {
+            return new Outcome.Refused(parameter.qualified() + " could not be resolved, so whether anything "
+                    + "still uses it cannot be told. Nothing was removed.");
+        }
+        if (!uses.get().isEmpty()) return new Outcome.Refused(stillUsed(parameter, uses.get()), uses.get());
         return rewrite(config, state, parameter.file(),
-                source -> JavaParameterEdits.remove(source, parameter.className(), parameter.name()));
+                source -> JavaParameterEdits.remove(source, parameter.className(), parameter.name()))
+                ? new Outcome.Removed() : gone(parameter);
+    }
+
+    /** Why a remove cannot happen yet: how many uses, and which files they are in. */
+    private static String stillUsed(JavaParameter parameter, List<Usages.Usage> uses) {
+        List<String> where = uses.stream().map(use -> use.file().getFileName() + ":" + use.line())
+                .distinct().limit(3).toList();
+        return parameter.qualified() + " is still used " + uses.size() + (uses.size() == 1 ? " time" : " times")
+                + ", in " + String.join(", ", where) + (uses.size() > where.size() ? ", …" : "")
+                + ". Remove " + (uses.size() == 1 ? "that use" : "those uses") + " first.";
     }
 
     /**
@@ -330,21 +383,92 @@ public final class JavaParameters {
         return ProjectWrites.create(config, file, source, "Create " + className);
     }
 
-    /** Every place in the bot that names this parameter, for the window to show before a destructive edit. */
-    public static List<Use> uses(ProjectConfig config, ProjectState state, JavaParameter parameter) {
-        List<Use> uses = new ArrayList<>();
-        String needle = parameter.qualified();
-        BotSources.scan(config, state, (file, source) -> {
-            String[] lines = source.split("\n", -1);
-            for (int i = 0; i < lines.length; i++) {
-                if (lines[i].contains(needle)) uses.add(new Use(file, i + 1, lines[i].strip()));
-            }
-        });
-        return List.copyOf(uses);
+    /**
+     * Every place in the bot that reads or writes this parameter, the declaration itself left out — found by
+     * binding ({@link Usages}), so a local variable spelled the same and the name inside a string are not
+     * uses, and a static import and a bare name inside the declaring class are. Empty when the field cannot
+     * be resolved, which is not the same answer as "nothing uses it".
+     */
+    public static Optional<List<Usages.Usage>> uses(ProjectConfig config, ProjectState state,
+                                                    JavaParameter parameter) {
+        if (config == null || parameter == null) return Optional.empty();
+        Map<Path, String> sources = Usages.sources(config, state);
+        BotParser parser = BotParser.of(config, state);
+        String key = fieldKey(sources, parser, parameter);
+        if (key == null) return Optional.empty();
+        return Optional.of(Usages.across(sources, parser, key, parameter.name()).stream()
+                .filter(use -> !use.declaration()).toList());
     }
 
-    /** One line of the bot's source that names a parameter. */
-    public record Use(Path file, int line, String text) {}
+    /** The binding key of {@code parameter}'s field, read off its own file, or null when it cannot be. */
+    private static String fieldKey(Map<Path, String> sources, BotParser parser, JavaParameter parameter) {
+        Path file = parameter.file().toAbsolutePath().normalize();
+        String source = sources.get(file);
+        if (source == null) return null;
+        return Usages.fieldKey(parser.parse(file, source), parameter.className(), parameter.name());
+    }
+
+    /** What an edit through this class did. */
+    public sealed interface Outcome {
+
+        /** Written, and the row as the source now reads it. */
+        record Stored(ParameterRow row) implements Outcome {}
+
+        /** The declaration is gone. */
+        record Removed() implements Outcome {}
+
+        /**
+         * Nothing was written, and the sentence that says why.
+         *
+         * @param uses where the bot still uses the field, when that is the reason — for the window to offer
+         */
+        record Refused(String reason, List<Usages.Usage> uses) implements Outcome {
+            public Refused {
+                uses = List.copyOf(uses);
+            }
+
+            public Refused(String reason) {
+                this(reason, List.of());
+            }
+        }
+
+        /** The row a {@link Stored} holds, and empty for anything else. */
+        default Optional<ParameterRow> stored() {
+            return this instanceof Stored stored ? Optional.of(stored.row()) : Optional.empty();
+        }
+    }
+
+    /** The refusal for a field that is not where the caller last saw it. */
+    private static Outcome gone(JavaParameter parameter) {
+        return new Outcome.Refused(parameter == null ? "There is no such parameter."
+                : "“" + parameter.name() + "” could not be found. It may have been changed in the meantime.");
+    }
+
+    /** The files of {@code sources} that spell {@code name} — the only ones an edit to it can break. */
+    private static Map<Path, String> spelling(Map<Path, String> sources, String name) {
+        Map<Path, String> out = new LinkedHashMap<>();
+        sources.forEach((file, source) -> {
+            if (source.contains(name)) out.put(file, source);
+        });
+        return out;
+    }
+
+    /** Puts every file that differs from {@code before} back, buffer and disk. */
+    private static void putBack(ProjectConfig config, ProjectState state, Map<Path, String> before) {
+        BotSources.forEach(config, state, (file, source) -> {
+            String was = before.get(file);
+            return was == null || was.equals(source) ? null : was;
+        });
+    }
+
+    /**
+     * The parser {@link #declare} compiles with to hold an edit to the guard, or null for none: only with a
+     * resolved classpath. Without one every type a plugin declares reads as unknown, so a retype to one would
+     * refuse — the same condition {@code CodeEditor.wouldNotCompile} applies to a canvas edit.
+     */
+    private static BotParser guardParser(ProjectConfig config, ProjectState state) {
+        return state == null || state.getResolvedClasspath().isEmpty() ? null : BotParser.of(config, state);
+    }
 
     // ---- the single-field edits ---------------------------------------------------------------------
     //
@@ -364,12 +488,39 @@ public final class JavaParameters {
      *
      * <p>Project-wide because a bot reads {@code Parameters.restBetween} wherever it likes: a rename that
      * touched only the declaring file would leave the bot not compiling, which is the one outcome an editor
-     * must never produce from a rename.
+     * must never produce from a rename. What is renamed is exactly what {@link Usages} binds to the field —
+     * the declaration, {@code Parameters.x}, a static import, a bare {@code x} inside the class — and a local
+     * variable of the same name is left alone, as is a comment. A field that cannot be resolved is not
+     * renamed at all rather than renamed by guess.
+     *
+     * @return why nothing was renamed, or empty when it was
      */
-    private static boolean rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                  String newName) {
-        return rewriteAll(config, state, source ->
-                JavaParameterEdits.rename(source, parameter.className(), parameter.name(), newName));
+    private static Optional<String> rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                           String newName) {
+        if (!SourceVersion.isIdentifier(newName) || SourceVersion.isKeyword(newName)) {
+            return Optional.of("“" + newName + "” is not a name Java accepts.");
+        }
+        Map<Path, String> sources = Usages.sources(config, state);
+        BotParser parser = BotParser.of(config, state);
+        String key = fieldKey(sources, parser, parameter);
+        if (key == null) {
+            return Optional.of(parameter.qualified() + " could not be resolved, so the places that use it "
+                    + "cannot be found. Nothing was renamed.");
+        }
+        Map<Path, List<Integer>> starts = new LinkedHashMap<>();
+        for (Usages.Usage use : Usages.across(sources, parser, key, parameter.name())) {
+            starts.computeIfAbsent(use.file(), f -> new ArrayList<>()).add(use.start());
+        }
+        boolean[] declared = {false};
+        BotSources.forEach(config, state, (file, source) -> {
+            List<Integer> at = starts.get(file);
+            if (at == null || !source.equals(sources.get(file))) return null;
+            String rewritten = Usages.renamed(source, at, parameter.name(), newName);
+            if (file.equals(parameter.file().toAbsolutePath().normalize())) declared[0] = true;
+            return rewritten.equals(source) ? null : rewritten;
+        });
+        return declared[0] ? Optional.empty()
+                : Optional.of(parameter.qualified() + "'s declaration could not be found. Nothing was renamed.");
     }
 
     /** Changes a parameter's type, resetting its value to that type's default. */

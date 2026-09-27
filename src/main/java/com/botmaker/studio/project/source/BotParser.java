@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.source;
 
+import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -36,6 +37,18 @@ public record BotParser(List<String> classpath, Path sourceRoot) {
     /** The parser for the open project, or {@link #SYNTAX} with none. FX thread, as {@link ProjectState} is. */
     public static BotParser of(ProjectState state) {
         return state == null ? SYNTAX : new BotParser(state.getResolvedClasspath(), state.getSourcePath());
+    }
+
+    /**
+     * The parser a question about the bot's <em>own</em> names is asked with — where a field is used, what a
+     * rename touches. It always binds: with no project state (a file nobody has open, a test) it resolves
+     * against the bot's sources alone, which is all a reference from one of the bot's classes to another needs.
+     * A missing jar only makes a library type <em>recovered</em>; it never unbinds {@code Parameters.j}.
+     */
+    public static BotParser of(ProjectConfig config, ProjectState state) {
+        Path root = state != null && state.getSourcePath() != null ? state.getSourcePath()
+                : config == null ? null : config.sourceRoot();
+        return new BotParser(state == null ? List.of() : state.getResolvedClasspath(), root);
     }
 
     /** Whether units from this parser carry bindings. */

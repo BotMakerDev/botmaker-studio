@@ -76,34 +76,8 @@ public final class JavaParameterEdits {
         });
     }
 
-    /**
-     * Renames the field, and repoints every {@code className.oldName} written anywhere in {@code source}.
-     *
-     * <p>The uses are repointed by name because this parser has no bindings: {@code Parameters.restBetween}
-     * is matched as a qualified name whose qualifier is the class and whose name is the field, which is
-     * exactly what a bot writes. A bare {@code restBetween} inside the declaring class is repointed too —
-     * it resolves to the same field — and a {@code restBetween} that is somebody else's local variable is
-     * not, because it is not a field access of this class.
-     */
-    public static String rename(String source, String className, String fieldName, String newName) {
-        if (newName == null || newName.isBlank() || newName.equals(fieldName)) return source;
-        CompilationUnit unit = JavaParameterSource.parse(source);
-        AST ast = unit.getAST();
-        ASTRewrite rewrite = ASTRewrite.create(ast);
-        boolean[] found = {false};
-
-        unit.accept(new ASTVisitor() {
-            @Override
-            public boolean visit(SimpleName name) {
-                if (!name.getIdentifier().equals(fieldName)) return true;
-                if (!isReferenceTo(name, className, fieldName)) return true;
-                found[0] = true;
-                rewrite.replace(name, ast.newSimpleName(newName), null);
-                return true;
-            }
-        });
-        return found[0] ? AstRewriteHelper.applyRewrite(rewrite, source) : source;
-    }
+    // A rename is not here (2026-09-27): it is project-wide and found by binding, so it is
+    // JavaParameters.rename over nav/Usages. The one that stood here matched names by how they were spelled.
 
     /**
      * Changes the field's declared type, and resets its value to the new type's fresh one.
@@ -363,31 +337,6 @@ public final class JavaParameterEdits {
             }
         });
         return found[0] ? AstRewriteHelper.applyRewrite(rewrite, source) : source;
-    }
-
-    /**
-     * Whether this name is a reference to {@code className.fieldName}.
-     *
-     * <p>Three shapes count and nothing else: the declaration itself, a qualified {@code Class.name}, and a
-     * bare {@code name} written inside the declaring class. The last one is deliberately narrow — a bare
-     * name elsewhere is somebody else's variable, and renaming it would be a refactor nobody asked for.
-     */
-    private static boolean isReferenceTo(SimpleName name, String className, String fieldName) {
-        ASTNode parent = name.getParent();
-        if (parent instanceof VariableDeclarationFragment fragment && fragment.getName() == name) {
-            return className.equals(JavaParameterSource.enclosingTypeName(fragment));
-        }
-        if (parent instanceof org.eclipse.jdt.core.dom.QualifiedName qualified) {
-            return qualified.getName() == name && qualified.getQualifier().toString().equals(className);
-        }
-        if (parent instanceof org.eclipse.jdt.core.dom.FieldAccess access) {
-            return access.getName() == name && className.equals(access.getExpression().toString());
-        }
-        if (parent instanceof org.eclipse.jdt.core.dom.MethodInvocation invocation
-                && invocation.getName() == name) {
-            return false;                                   // a method call that happens to share the name
-        }
-        return className.equals(JavaParameterSource.enclosingTypeName(name));
     }
 
     /**

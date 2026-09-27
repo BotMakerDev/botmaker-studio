@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 3, phase 3: Local | UTC.** `project/params/ClockSwitch` retypes
+- **2026-09-27 (latest) — A parameter's uses are found by binding, and an edit never breaks the bot.**
+  `nav/Usages.across/inProject/fieldKey/renamed` is the one "where is this used" (Usages tab, `TypeRename`,
+  Parameters). `JavaParameters.remove` refuses while the bot uses the field (lists file:line, *Show where ▾*
+  opens the block), rename rewrites exactly the bound names, and `declare` is all-or-nothing under
+  `CompileGuard.errorsIn/firstIntroduced` over every file spelling the name. Text `uses`, `isReferenceTo`
+  and `JavaParameterEdits.rename` deleted. Undo of a rename replays as a rename.
+- **2026-09-27 — Picker feedback 3, phase 3: Local | UTC.** `project/params/ClockSwitch` retypes
   `LocalTime` ↔ `OffsetTime` and writes back the same clock reading (`ClockSwitchTest`, on a grammar declaring
   the three JDK types like basics does); `ParametersDialog.clockBar` beside the type, NONE mode only.
   `ValueWriter.namedConstant` writes a value equal to one of `ComponentType.constants()` as that field.

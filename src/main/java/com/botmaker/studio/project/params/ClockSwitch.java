@@ -44,7 +44,7 @@ public final class ClockSwitch {
         if (to == null) return Optional.empty();
         Optional<Object> kept = grammar.valueOf(parameter.form(), parameter.row().value()).map(ClockSwitch::flipped);
         Optional<ParameterRow> retyped = JavaParameters.declare(config, state, parameter, parameter.row(), to,
-                grammar);
+                grammar).stored();
         if (retyped.isEmpty() || kept.isEmpty()) return retyped;
         Optional<JavaValue> written = grammar.initializer(to, kept.get());
         JavaParameter now = JavaParameters.find(config, state, parameter.className(), parameter.row().name(),

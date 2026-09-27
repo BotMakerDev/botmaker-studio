@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app.params;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.plugin.ValueWire;
@@ -34,10 +35,13 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
@@ -133,6 +137,9 @@ public final class ParametersDialog {
     private final Button moveHere = new Button("Move parameters here…");
     private final VBox paramColumn = new VBox(10);
     private final Label statusLabel = new Label();
+    /** Beside the status line while it names uses: each one, to go to. */
+    private final Hyperlink usesLink = new Hyperlink("Show where ▾");
+    private final Consumer<Usages.Usage> reveal;
 
     // The (group, row) pair was a record of this class until 2026-09-17, then ParameterSurface.Entry, and
     // since 2026-09-22 it is JavaParameter — the field itself, because a field is the only thing a row ever
@@ -178,10 +185,17 @@ public final class ParametersDialog {
     private Timeline typingWatch;
 
     public ParametersDialog(Window owner, ProjectConfig config, ProjectState state, LibraryService libraries) {
+        this(owner, config, state, libraries, null);
+    }
+
+    /** @param reveal opens the block a use is in, after this window closes; null offers no link */
+    public ParametersDialog(Window owner, ProjectConfig config, ProjectState state, LibraryService libraries,
+                            Consumer<Usages.Usage> reveal) {
         this.owner = owner;
         this.config = config;
         this.state = state;
         this.libraries = libraries;
+        this.reveal = reveal;
     }
 
     public void show() {
@@ -700,25 +714,20 @@ public final class ParametersDialog {
     }
 
     /**
-     * Removes a field's declaration, after saying how many places read it.
+     * Removes a field's declaration — or, while the bot still uses it, says where and removes nothing.
      *
-     * <p><b>The uses are left alone on purpose.</b> What a use should become is a judgement — a literal
-     * default, a different parameter, a deleted line — and a removal whose uses were silently rewritten is a
-     * bot that still compiles and behaves differently. So the count is shown before, and the compiler is what
-     * finds them afterwards.
+     * <p>The uses are not rewritten: what one should become is a judgement — a literal, another parameter, a
+     * deleted line — so they are the user's to change first, exactly as a function still called cannot be
+     * deleted. A removal that left them behind was a bot that stopped compiling (2026-09-27).
      */
     private void removeParameter(JavaParameter entry) {
-        if (!true) return;
-        int uses = JavaParameters.uses(config, state, entry).size() - 1;   // the declaration itself
         change("removing " + entry.row().name(), () -> {
-            if (!JavaParameters.remove(config, state, entry)) {
-                error("“" + entry.row().name() + "” could not be removed — it may already be gone.");
+            if (JavaParameters.remove(config, state, entry) instanceof JavaParameters.Outcome.Refused refused) {
+                error(refused.reason());
+                offerUses(refused.uses());
                 return;
             }
-            error(uses > 0
-                    ? "Removed. " + uses + (uses == 1 ? " place" : " places") + " in your bot still name "
-                            + entry.qualified() + " — the compiler will point at them."
-                    : "");
+            error("");
             reload();
             rebuildRail();
         });
@@ -1307,11 +1316,12 @@ public final class ParametersDialog {
         JavaParameter held = find(entry.className(), entry.row().name());
         if (held == null) return false;
         ParameterRow wanted = change.apply(held.row());
-        boolean stored = JavaParameters.declare(config, state, held, wanted,
-                newForm == null ? held.form() : newForm).isPresent();
+        JavaParameters.Outcome outcome = JavaParameters.declare(config, state, held, wanted,
+                newForm == null ? held.form() : newForm);
+        if (outcome instanceof JavaParameters.Outcome.Refused refused) error(refused.reason());
         reload();
         rebuildRail();
-        return stored;
+        return outcome.stored().isPresent();
     }
 
     private static ParameterRow rename(ParameterRow row, String name) {
@@ -1370,6 +1380,20 @@ public final class ParametersDialog {
      */
     private void restore(List<JavaParameter> snapshot) {
         valueEditors.clear();
+        // A rename first, as a rename: one field the snapshot lacks and one it holds that the project lacks, in
+        // the same class, are the two ends of it. Replayed as a remove and an add it would be refused whenever
+        // the bot uses the field, and would lose every use's name even when it was not.
+        for (JavaParameter extra : List.copyOf(rows)) {
+            if (snapshot.stream().anyMatch(kept -> kept.is(extra.className(), extra.row().name()))) continue;
+            List<JavaParameter> extras = rows.stream().filter(e -> e.className().equals(extra.className())
+                    && snapshot.stream().noneMatch(kept -> kept.is(e.className(), e.row().name()))).toList();
+            List<JavaParameter> missing = snapshot.stream().filter(kept -> kept.className().equals(extra.className())
+                    && find(kept.className(), kept.row().name()) == null).toList();
+            if (extras.size() == 1 && missing.size() == 1) {
+                JavaParameters.declare(config, state, extra, missing.getFirst().row(), missing.getFirst().form());
+                reload();
+            }
+        }
         for (JavaParameter entry : List.copyOf(rows)) {
             if (snapshot.stream().noneMatch(kept -> kept.is(entry.className(), entry.row().name()))) {
                 JavaParameters.remove(config, state, entry);
@@ -1450,9 +1474,12 @@ public final class ParametersDialog {
 
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
+        statusLabel.setWrapText(true);
+        usesLink.setVisible(false);
+        usesLink.managedProperty().bind(usesLink.visibleProperty());
         HBox bar = new HBox(10, undoButton(), redoButton(),
                 new Separator(javafx.geometry.Orientation.VERTICAL),
-                statusLabel, spacer, close);
+                statusLabel, usesLink, spacer, close);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10));
         return bar;
@@ -1489,5 +1516,28 @@ public final class ParametersDialog {
 
     private void error(String message) {
         statusLabel.setText(message);
+        usesLink.setVisible(false);
+    }
+
+    /**
+     * Shows {@link #usesLink} for {@code uses}: a menu of each, file, line and the line's text, where picking
+     * one closes this window and opens the block. Hidden again by the next status line.
+     */
+    private void offerUses(List<Usages.Usage> uses) {
+        if (reveal == null || uses.isEmpty()) return;
+        usesLink.setVisible(true);
+        usesLink.setOnAction(e -> {
+            ContextMenu menu = new ContextMenu();
+            for (Usages.Usage use : uses) {
+                MenuItem item = new MenuItem(use.file().getFileName() + ":" + use.line() + "   " + use.text());
+                item.setOnAction(pick -> {
+                    commitPending("the value you typed");
+                    stage.close();
+                    reveal.accept(use);
+                });
+                menu.getItems().add(item);
+            }
+            menu.show(usesLink, javafx.geometry.Side.TOP, 0, 0);
+        });
     }
 }

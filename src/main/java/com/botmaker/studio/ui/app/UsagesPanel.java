@@ -92,15 +92,10 @@ final class UsagesPanel {
             return;
         }
         summary.setText("Searching for " + name + "…");
-        Map<Path, String> sources = new LinkedHashMap<>();
-        BotSources.scan(config, state, sources::put);
-        BotParser parser = BotParser.of(state);
+        Map<Path, String> sources = Usages.sources(config, state);
+        BotParser parser = BotParser.of(config, state);
         Thread worker = new Thread(() -> {
-            List<Usages.Usage> found = new ArrayList<>();
-            sources.forEach((file, source) -> {
-                // A cheap guard first: a file that never spells the name cannot use it.
-                if (source.contains(name)) found.addAll(Usages.in(file, source, parser.parse(file, source), key));
-            });
+            List<Usages.Usage> found = Usages.across(sources, parser, key, name);
             Platform.runLater(() -> {
                 if (id == search) show(name, found);
             });

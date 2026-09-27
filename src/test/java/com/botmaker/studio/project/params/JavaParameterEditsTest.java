@@ -126,49 +126,7 @@ class JavaParameterEditsTest {
         assertTrue(edited.contains("maxAttempts = java.util.Map.ofEntries(java.util.Map.entry(\"a\", 1));"), edited);
     }
 
-    // ---- renames --------------------------------------------------------------------------------------
-
-    @Test
-    void aRenameRepointsTheDeclarationAndTheQualifiedUses() {
-        String source = SOURCE + """
-
-                final class Bot {
-                    void run() {
-                        int n = Parameters.maxAttempts;
-                        int other = Elsewhere.maxAttempts;
-                        int local = maxAttempts;
-                    }
-                }
-                """;
-        String edited = JavaParameterEdits.rename(source, "Parameters", "maxAttempts", "attempts");
-
-        assertTrue(edited.contains("public static int attempts = 10;"), edited);
-        assertTrue(edited.contains("int n = Parameters.attempts;"), edited);
-        // Somebody else's class, and somebody else's local: neither is this field.
-        assertTrue(edited.contains("int other = Elsewhere.maxAttempts;"), edited);
-        assertTrue(edited.contains("int local = maxAttempts;"), edited);
-    }
-
-    @Test
-    void aBareUseInsideTheDeclaringClassIsRepointed() {
-        String source = """
-                package com.example.bot;
-                public final class Parameters {
-                    @Param public static int maxAttempts = 10;
-                    public static int twice() { return maxAttempts * 2; }
-                }
-                """;
-        String edited = JavaParameterEdits.rename(source, "Parameters", "maxAttempts", "attempts");
-
-        assertTrue(edited.contains("return attempts * 2;"), edited);
-    }
-
-    @Test
-    void renamingToTheSameNameOrToNothingChangesNothing() {
-        assertSame(SOURCE, JavaParameterEdits.rename(SOURCE, "Parameters", "maxAttempts", "maxAttempts"));
-        assertSame(SOURCE, JavaParameterEdits.rename(SOURCE, "Parameters", "maxAttempts", "  "));
-        assertSame(SOURCE, JavaParameterEdits.rename(SOURCE, "Parameters", "notDeclared", "x"));
-    }
+    // Renames are project-wide and found by binding since 2026-09-27: JavaParametersTest holds them.
 
     // ---- types ----------------------------------------------------------------------------------------
 

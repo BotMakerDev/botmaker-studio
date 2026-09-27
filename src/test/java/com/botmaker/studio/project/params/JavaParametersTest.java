@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.value.Visibility;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.source.BotParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -102,19 +104,96 @@ class JavaParametersTest {
         write(config, "Bot.java", """
                 package com.refbot;
 
+                import static com.refbot.Parameters.maxAttempts;
+
                 public class Bot {
                     void run() { for (int i = 0; i < Parameters.maxAttempts; i++) {} }
+                    int bare() { return maxAttempts; }
+                    int local() { int maxAttempts = 3; return maxAttempts; }
+                    String text() { return "Parameters.maxAttempts"; }
                 }
                 """);
 
         JavaParameter entry = only(config);
         Optional<ParameterRow> stored = JavaParameters.declare(config, null, entry,
-                renamed(entry.row(), "tries"), entry.form(), TestValues.GRAMMAR);
+                renamed(entry.row(), "tries"), entry.form(), TestValues.GRAMMAR).stored();
 
         assertTrue(stored.isPresent());
         assertEquals("tries", stored.get().name());
-        assertTrue(Files.readString(config.mainPackageDir().resolve("Bot.java"))
-                .contains("Parameters.tries"));
+        String bot = Files.readString(config.mainPackageDir().resolve("Bot.java"));
+        assertTrue(bot.contains("i < Parameters.tries"), bot);
+        assertTrue(bot.contains("import static com.refbot.Parameters.tries;"), bot);
+        assertTrue(bot.contains("int bare() { return tries; }"), bot);
+        // Found by binding, not by spelling: a local of the same name and a string are somebody else's.
+        assertTrue(bot.contains("int local() { int maxAttempts = 3; return maxAttempts; }"), bot);
+        assertTrue(bot.contains("return \"Parameters.maxAttempts\";"), bot);
+    }
+
+    @Test
+    void aSameNamedFieldOfAnotherClassIsNotRenamed(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        write(config, "Limits.java", """
+                package com.refbot;
+
+                public class Limits {
+                    public static int maxAttempts = 4;
+                    int read() { return Limits.maxAttempts + Parameters.maxAttempts; }
+                }
+                """);
+
+        JavaParameter entry = only(config);
+        JavaParameters.declare(config, null, entry, renamed(entry.row(), "tries"), entry.form(), TestValues.GRAMMAR);
+
+        String limits = Files.readString(config.mainPackageDir().resolve("Limits.java"));
+        assertTrue(limits.contains("public static int maxAttempts = 4;"), limits);
+        assertTrue(limits.contains("return Limits.maxAttempts + Parameters.tries;"), limits);
+    }
+
+    @Test
+    void aRenameToANameJavaRefusesChangesNothing(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        String before = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+
+        JavaParameter entry = only(config);
+        JavaParameters.Outcome outcome = JavaParameters.declare(config, null, entry, renamed(entry.row(), "class"),
+                entry.form(), TestValues.GRAMMAR);
+
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, outcome);
+        assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")));
+    }
+
+    @Test
+    void aRetypeThatBreaksAUseElsewhereIsPutBack(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        write(config, "Bot.java", """
+                package com.refbot;
+
+                public class Bot {
+                    int tries() { return Parameters.maxAttempts; }
+                }
+                """);
+        String before = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+
+        JavaParameter entry = only(config);
+        JavaParameters.Outcome outcome = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
+                TestValues.GRAMMAR, new BotParser(List.of(), config.sourceRoot()));
+
+        JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class, outcome);
+        assertTrue(refused.reason().contains("Bot.java"), refused.reason());
+        assertEquals(before, Files.readString(config.mainPackageDir().resolve("Parameters.java")),
+                "a String where Bot.java returns an int would not compile, so the retype is undone");
     }
 
     @Test
@@ -133,7 +212,7 @@ class JavaParametersTest {
                 .bounds(1, 50.5)
                 .build();
         Optional<ParameterRow> stored =
-                JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR);
+                JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR).stored();
 
         assertTrue(stored.isPresent());
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
@@ -174,7 +253,7 @@ class JavaParametersTest {
 
         JavaParameter entry = only(config);
         ParameterRow stored = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
-                TestValues.GRAMMAR).orElseThrow();
+                TestValues.GRAMMAR).stored().orElseThrow();
 
         assertEquals("String", stored.typeName());
         // The old type's text is not carried across: a value written for one type is not a value of another.
@@ -194,7 +273,7 @@ class JavaParametersTest {
         JavaParameter entry = only(config);
         // The window retypes with the row as it stands, choices and all.
         ParameterRow stored = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
-                TestValues.GRAMMAR).orElseThrow();
+                TestValues.GRAMMAR).stored().orElseThrow();
 
         // A choice written for an int is no value of a String: kept, it drew as a disabled row holding the
         // old type's Java, and the window read as if the retype had not happened.
@@ -219,7 +298,7 @@ class JavaParametersTest {
         // the field is still one of a set rather than falling back to any value.
         ParameterRow wanted = entry.row().toBuilder().options(List.of("\"fast\"")).build();
         ParameterRow stored = JavaParameters.declare(config, null, entry, wanted, TestValues.TEXT,
-                TestValues.GRAMMAR).orElseThrow();
+                TestValues.GRAMMAR).stored().orElseThrow();
 
         assertEquals(List.of("\"fast\""), stored.options());
     }
@@ -264,7 +343,7 @@ class JavaParametersTest {
     // ---- removing ---------------------------------------------------------------------------------------
 
     @Test
-    void removingTakesTheDeclarationAndLeavesTheUses(@TempDir Path root) throws IOException {
+    void aParameterTheBotStillUsesIsNotRemoved(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         write(config, "Parameters.java", parameters("""
                     @Param
@@ -278,12 +357,32 @@ class JavaParametersTest {
                 }
                 """);
 
-        assertTrue(JavaParameters.remove(config, null, only(config)));
+        JavaParameters.Outcome outcome = JavaParameters.remove(config, null, only(config));
+
+        // The bug this replaced: removed anyway, and Bot.java stopped compiling.
+        JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class, outcome);
+        assertTrue(refused.reason().contains("Bot.java:4"), refused.reason());
+        assertEquals(1, JavaParameters.scan(config, null, TestValues.GRAMMAR).size());
+    }
+
+    @Test
+    void anUnusedParameterIsRemovedWhateverSharesItsName(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        write(config, "Bot.java", """
+                package com.refbot;
+
+                public class Bot {
+                    int tries() { int maxAttempts = 2; return maxAttempts; }
+                }
+                """);
+
+        assertInstanceOf(JavaParameters.Outcome.Removed.class, JavaParameters.remove(config, null, only(config)));
 
         assertEquals(List.of(), JavaParameters.scan(config, null, TestValues.GRAMMAR));
-        // Left alone on purpose: what a use should become is a judgement, and the compiler is what finds it.
-        assertTrue(Files.readString(config.mainPackageDir().resolve("Bot.java"))
-                .contains("Parameters.maxAttempts"));
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------

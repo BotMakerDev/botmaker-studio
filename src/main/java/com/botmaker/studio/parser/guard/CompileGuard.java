@@ -8,8 +8,11 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Whether an edit makes a file compile worse than it did — the rule every generated edit is held to,
@@ -75,6 +78,35 @@ public record CompileGuard(BotParser parser, Path file) {
         List<Problem> introduced = new ArrayList<>(errorsOf(after));
         for (Problem existing : errorsOf(before)) introduced.remove(existing);
         return introduced;
+    }
+
+    /**
+     * The errors each of {@code files} compiles with now — the "before" of an edit to <em>another</em> file
+     * they depend on, which {@link #introduced} cannot see: a field retyped in {@code Parameters.java} breaks
+     * {@code Base.java}, whose own text did not change.
+     */
+    public static Map<Path, List<Problem>> errorsIn(BotParser parser, Map<Path, String> files) {
+        Map<Path, List<Problem>> out = new LinkedHashMap<>();
+        files.forEach((file, code) -> out.put(file, new CompileGuard(parser, file).errorsOf(code)));
+        return out;
+    }
+
+    /**
+     * The first error one of the files in {@code before} has in {@code now} that it did not have then, as the
+     * sentence {@link #describe} makes of it prefixed with the file's name — or empty when none is new.
+     */
+    public static Optional<String> firstIntroduced(BotParser parser, Map<Path, List<Problem>> before,
+                                                   Map<Path, String> now) {
+        for (Map.Entry<Path, List<Problem>> entry : before.entrySet()) {
+            String code = now.get(entry.getKey());
+            if (code == null) continue;
+            List<Problem> introduced = new ArrayList<>(new CompileGuard(parser, entry.getKey()).errorsOf(code));
+            for (Problem existing : entry.getValue()) introduced.remove(existing);
+            if (!introduced.isEmpty()) {
+                return Optional.of(entry.getKey().getFileName() + ", " + describe(introduced, code).getFirst());
+            }
+        }
+        return Optional.empty();
     }
 
     /** One sentence per problem, with the line it is on in {@code code}. */

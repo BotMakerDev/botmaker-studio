@@ -10,7 +10,6 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import javax.lang.model.SourceVersion;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,7 +83,7 @@ public final class TypeRename {
             List<Integer> starts = new ArrayList<>();
             for (Usages.Usage use : Usages.in(entry.getKey(), text, cu, key)) starts.add(use.start());
             starts.addAll(constructorNames(cu, key));
-            String rewritten = replace(text, starts, oldName, name);
+            String rewritten = Usages.renamed(text, starts, oldName, name);
             if (!rewritten.equals(text)) rewrites.put(entry.getKey(), rewritten);
         }
         if (!rewrites.containsKey(file)) return new Result.Refused(oldName + "'s declaration could not be found.");
@@ -113,14 +112,5 @@ public final class TypeRename {
             }
         });
         return out;
-    }
-
-    /** {@code text} with {@code oldName} at each start replaced, back to front so the offsets hold. */
-    private static String replace(String text, List<Integer> starts, String oldName, String newName) {
-        StringBuilder out = new StringBuilder(text);
-        starts.stream().distinct().sorted(Comparator.reverseOrder()).forEach(start -> {
-            if (text.startsWith(oldName, start)) out.replace(start, start + oldName.length(), newName);
-        });
-        return out.toString();
     }
 }
