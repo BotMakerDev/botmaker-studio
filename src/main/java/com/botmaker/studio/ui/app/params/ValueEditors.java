@@ -13,8 +13,6 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import javafx.scene.Node;
 import javafx.scene.control.Control;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Region;
 
 import java.lang.reflect.Type;
@@ -98,21 +96,27 @@ public final class ValueEditors {
      * wants, where a form read once on Apply does not. {@code onChange} may be null.
      */
     public static Editor editorFor(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange) {
+        return editorFor(leaf, source, ctx, onChange, 0);
+    }
+
+    /** {@link #editorFor(Type, String, Context, Consumer)} for a part {@code depth} levels inside a fallback. */
+    static Editor editorFor(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange, int depth) {
         ValueGrammar grammar = PluginHost.grammar();
         // A fresh seed is written fully qualified: kept unedited, it is written back as it stands, and a kept
         // expression carries no imports.
         String seed = source != null ? source : grammar.freshInitializer(leaf).map(JavaValue::source).orElse("");
         Editor contributed = fromPlugin(leaf, seed, ctx, onChange);
         if (contributed != null) return contributed;
-        // A type no plugin draws, and — read-only — a type nothing declares. The host cannot offer a
-        // meaningful editor for a value it cannot read, and letting somebody type into it would destroy the
-        // Java of a variable whose plugin is merely absent today.
-        TextField field = new TextField(seed);
-        field.setEditable(false);
-        field.setTooltip(new Tooltip(grammar.known(leaf)
-                ? "No installed plugin draws an editor for " + ValueTypes.sourceName(leaf) + ". It is kept as written."
-                : "No installed plugin declares " + ValueTypes.sourceName(leaf) + ". It is kept as written."));
-        return Editor.readOnly(field);
+        // A type no plugin draws, and a type nothing declares. The host cannot offer a meaningful editor for a
+        // value it cannot read, and letting somebody type into it would destroy the Java of a variable whose
+        // plugin is merely absent today — unless its shape is readable: an enum, a JDK literal, or a declared
+        // call taken apart into parts (6f). Anything else is kept as written, with Reset.
+        return ShapeFallbackView.editor(grammar, leaf, seed, ctx, onChange, depth);
+    }
+
+    /** What {@link #editorFor} draws once every plugin declined — named so it is testable without a screen. */
+    static FallbackShape fallbackShape(ValueGrammar grammar, Type leaf, String source, int depth) {
+        return FallbackShape.of(grammar, leaf, source, depth);
     }
 
     /**
@@ -219,7 +223,7 @@ public final class ValueEditors {
         if (preview != null) return preview;
         if (source == null || source.isBlank()) return null;
         Editor inert = fromPlugin(leaf, source, ctx, null);
-        if (inert == null) return null;
+        if (inert == null) inert = ShapeFallbackView.editor(PluginHost.grammar(), leaf, source, ctx, null, 0);
         inert.node().setMouseTransparent(true);
         inert.node().setFocusTraversable(false);
         return inert.node();

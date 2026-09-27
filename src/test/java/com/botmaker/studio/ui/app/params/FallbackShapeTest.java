@@ -99,6 +99,16 @@ class FallbackShapeTest {
         assertTrue(kept.fresh().isPresent(), "Pair declares a fresh value");
     }
 
+    /**
+     * A plugin editor that answers nothing (a picture editor with no picture) is not the end: the value still
+     * gets its shape. Here the decision is the same one `ValueEditors` makes after every claimant declined.
+     */
+    @Test
+    void a_null_plugin_editor_falls_through_to_the_shape() {
+        assertInstanceOf(FallbackShape.Parts.class,
+                ValueEditors.fallbackShape(GRAMMAR, Pair.class, spelled(new Pair("x", new Inner(3))), 0));
+    }
+
     @Test
     void a_jdk_literal_is_a_field_that_reads_what_is_typed() {
         var literal = assertInstanceOf(FallbackShape.Literal.class,
