@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * A published bot used as a <b>starting template</b>: what it declares about itself, and the one thing that
@@ -23,13 +22,8 @@ import java.util.Properties;
  *
  * <h2>The project arrives as its author shipped it, except for its package</h2>
  *
- * <p>One {@value #FILE_NAME} at the project root, one key:
- *
- * <pre>
- * package=com.botmaker.gamebot
- * </pre>
- *
- * <p>That prefix is replaced with the user's own — {@code com.myfarmer} — and the directories move with it.
+ * <p>The template's package is the one holding its {@code main} — {@code com.botmaker.gamebot} — and that
+ * prefix is replaced with the user's own — {@code com.myfarmer} — and the directories move with it.
  * <b>Nothing else is renamed.</b> A template's entry class stays {@code GameBot}, its helper classes keep
  * their names, and its javadoc keeps its wording: what the author shipped is what demonstrably built for
  * them, and a copy that quietly renames their types is a copy whose stack traces and README stop matching.
@@ -38,18 +32,19 @@ import java.util.Properties;
  * user reads in their own file.
  *
  * <p>A directory tree alone cannot say which of {@code com}, {@code com.botmaker} and
- * {@code com.botmaker.gamebot} was meant, but the Java can: since 2026-09-26 the package is the one holding
- * {@code main}, and the file is optional — an author who wants another answer still writes it in one line.
+ * {@code com.botmaker.gamebot} was meant, but the Java can. A {@code botmaker-template.properties} declared it
+ * until 2026-09-27; it is read no more, and a template that still ships one has it deleted from the copy.
  *
  * <p>Since the entry class keeps the author's name, nothing may assume it is named after the project — see
  * {@link ProjectConfig#entrySourceFile()}, which finds it rather than deriving it.
  */
 public final class TemplateProject {
 
-    /** The declaration file, at the template project's root. */
-    public static final String FILE_NAME = "botmaker-template.properties";
-
-    private static final String KEY_PACKAGE = "package";
+    /**
+     * The declaration file templates carried until 2026-09-27. Nothing reads it; a copy made from an older
+     * template release has it removed, since it only ever said how to unpack the template.
+     */
+    private static final String OLD_DECLARATION = "botmaker-template.properties";
 
     /** Files whose bytes are not text and must be copied through untouched. */
     private static final List<String> BINARY_SUFFIXES =
@@ -66,30 +61,16 @@ public final class TemplateProject {
     }
 
     /**
-     * The template's package: {@value #FILE_NAME}'s when the file is there, else the package of the class
-     * holding {@code main} (2026-09-26 — an author should not have to write down what their Java already
-     * says, and a missing file was the one error every first publish hit).
+     * The template's package: the package of the class holding {@code main} — an author should not have to
+     * write down what their Java already says.
      *
-     * @throws IOException if neither answers — no file and no {@code main}, {@code main} in packages that share
-     *                     no root, or a file whose key is blank. A template whose package is unknown cannot
-     *                     have it replaced, and a replacement that silently matches nothing produces a project
-     *                     sitting in somebody else's package that still compiles, which is the one failure
-     *                     worth refusing outright
+     * @throws IOException if there is no {@code main}, or {@code main} sits in packages that share no root. A
+     *                     template whose package is unknown cannot have it replaced, and a replacement that
+     *                     silently matches nothing produces a project sitting in somebody else's package that
+     *                     still compiles, which is the one failure worth refusing outright
      */
     public static TemplateProject read(Path projectDir) throws IOException {
-        Path file = projectDir.resolve(FILE_NAME);
-        if (!Files.exists(file)) {
-            return new TemplateProject(derivePackage(projectDir));
-        }
-        Properties properties = new Properties();
-        try (var in = Files.newInputStream(file)) {
-            properties.load(in);
-        }
-        String pkg = properties.getProperty(KEY_PACKAGE, "").trim();
-        if (pkg.isBlank()) {
-            throw new IOException(FILE_NAME + " must set " + KEY_PACKAGE + ".");
-        }
-        return new TemplateProject(pkg);
+        return new TemplateProject(derivePackage(projectDir));
     }
 
     private static final java.util.regex.Pattern PACKAGE =
@@ -117,30 +98,30 @@ public final class TemplateProject {
         }
         if (packages.isEmpty()) {
             throw new IOException("BotMaker can't tell this template's package: no class in a package has a "
-                    + "main method. Add one, or a " + FILE_NAME + " with package=<your package>.");
+                    + "main method. Add one to the class the template starts from.");
         }
         String root = packages.first();
         for (String other : packages) {
             if (!other.equals(root) && !other.startsWith(root + ".")) {
                 throw new IOException("Classes with a main method sit in " + root + " and " + other
-                        + ", so BotMaker can't tell which package is the template's. Add a " + FILE_NAME
-                        + " with package=<your package>.");
+                        + ", so BotMaker can't tell which package is the template's. Keep every main method"
+                        + " in the template's package or below it.");
             }
         }
         return root;
     }
 
     /**
-     * True when this declaration matches what is actually in {@code projectDir} — there are sources in the
-     * declared package. Checked before publishing, where the author can still fix it.
+     * True when there are sources in the package this template names. Checked before publishing, where the
+     * author can still fix it.
      */
     public boolean matches(Path projectDir) {
         return Files.isDirectory(projectDir.resolve("src/main/java").resolve(packageName.replace('.', '/')));
     }
 
     /**
-     * Rewrites {@code projectDir} in place so it lives in {@code newPackage}, and removes the declaration
-     * file. The unpacked copy is the user's from here on.
+     * Rewrites {@code projectDir} in place so it lives in {@code newPackage}, and removes an older template's
+     * declaration file. The unpacked copy is the user's from here on.
      *
      * <p>The prefix is replaced everywhere in every text file, string literals included. That is right often
      * enough (a logger category, a resource path, a {@code Class.forName}) and harmless where it is not —
@@ -149,15 +130,15 @@ public final class TemplateProject {
     public void renameInto(Path projectDir, String newPackage) throws IOException {
         Path sources = projectDir.resolve("src/main/java").resolve(packageName.replace('.', '/'));
         if (!Files.isDirectory(sources)) {
-            throw new IOException("This template declares package " + packageName
-                    + ", but there are no sources in it. Ask its author to fix its " + FILE_NAME + ".");
+            throw new IOException("This template's package is " + packageName
+                    + ", but there are no sources in it. Ask its author to fix it.");
         }
 
         // Text first, then the moves. Rewriting after the move would mean walking a tree whose shape has
         // already changed, and a half-moved tree is the state that is hardest to recover from.
         rewriteText(projectDir, newPackage);
         movePackage(projectDir, newPackage);
-        Files.deleteIfExists(projectDir.resolve(FILE_NAME));
+        Files.deleteIfExists(projectDir.resolve(OLD_DECLARATION));
     }
 
     private void rewriteText(Path projectDir, String newPackage) throws IOException {

@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — No `botmaker-project.properties`; run properties; tested-on in the gallery.** Deleted
+- **2026-09-27 (latest) — No `botmaker-template.properties`.** `TemplateProject.read` is the package of the
+  class holding `main`, always; `FILE_NAME` and the properties branch are deleted, and `renameInto` removes an
+  older template's file from the copy. `PublishSheet` picks *template* from the listing's `template` tag until
+  the author picks. (The flow's card positions left `flow-layout.json` for the SDK's `Sdk.flowLayout()` the
+  same day; nothing in Studio changed for it.)
+- **2026-09-27 — No `botmaker-project.properties`; run properties; tested-on in the gallery.** Deleted
   `project/BotSettings`, `SessionSetting`, `ui/app/BotSettingsDialog`, every properties read/write in
   `ProjectCreator`, the repair row, `SchemaFile.PROPERTIES` and its steps, the 🐞 Debug toggle and 🖱 Input
   (the SDK's ⚙ Bot Settings edits its `@Managed("settings")` value). `HostRuns.property/setProperty` keep a

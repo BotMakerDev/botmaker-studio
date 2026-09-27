@@ -49,7 +49,6 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -108,6 +107,12 @@ public final class PublishSheet {
      */
     private final Map<LaunchKind, CheckBox> targetBoxes = new EnumMap<>(LaunchKind.class);
     private boolean targetsTouched;
+
+    /**
+     * Whether the author picked bot or template themselves. Until then a listing tagged {@code template} picks
+     * template (2026-09-27; a {@code botmaker-template.properties} at the project root decided it before).
+     */
+    private boolean kindTouched;
 
     private final VBox root = new VBox(8);
     private GitHubAccountBar accountBar;
@@ -225,10 +230,11 @@ public final class PublishSheet {
         ToggleGroup kind = new ToggleGroup();
         kindBot.setToggleGroup(kind);
         kindTemplate.setToggleGroup(kind);
-        // A project carrying the template file was almost certainly written to be one; that is only the
-        // starting choice, and the author can change it.
-        boolean wasTemplate = Files.exists(projectDir.resolve(TemplateProject.FILE_NAME));
-        (wasTemplate ? kindTemplate : kindBot).setSelected(true);
+        // A bot until the listing says otherwise: a re-publish of a template starts as one once the listing is
+        // read, and the author can change it either way.
+        kindBot.setSelected(true);
+        kindBot.setOnAction(e -> kindTouched = true);
+        kindTemplate.setOnAction(e -> kindTouched = true);
         kind.selectedToggleProperty().addListener((o, was, now) -> refreshAll());
         templateProblem.getStyleClass().add("form-problem");
         templateProblem.setWrapText(true);
@@ -588,6 +594,10 @@ public final class PublishSheet {
                     tagsField.setText(String.join(", ", currentListing.tags().stream()
                             .filter(t -> !GalleryEntry.TEMPLATE_TAG.equalsIgnoreCase(t)).toList()));
                 }
+                if (!kindTouched && currentListing.tags().stream()
+                        .anyMatch(GalleryEntry.TEMPLATE_TAG::equalsIgnoreCase)) {
+                    kindTemplate.setSelected(true);
+                }
                 if (!targetsTouched) {
                     SupportedTargets listed = currentListing.launchTargets();
                     targetBoxes.forEach((kind, box) -> box.setSelected(listed.kinds().contains(kind)));
@@ -758,8 +768,8 @@ public final class PublishSheet {
         try {
             return TemplateProject.read(projectDir).matches(projectDir)
                     ? null
-                    : "Your " + TemplateProject.FILE_NAME + " names a package that has no sources in it, so "
-                            + "nothing would be renamed when somebody starts from this template.";
+                    : "The package of your class with main has no sources in it, so nothing would be renamed"
+                            + " when somebody starts from this template.";
         } catch (java.io.IOException missing) {
             return missing.getMessage();
         }

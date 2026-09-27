@@ -347,8 +347,8 @@ repositories holds every other Maven project too — and a project elsewhere is 
 at a time. Archive, restore and delete move folders, so they act only on the root's projects; an outside one
 is *Removed from Recents*, never moved. The template (`../botmaker-gamebot`) is opened this way, and its SDK
 upgrade goes through *Project ▸ Upgrade…*, not a hand edit. Each project is a standard **Maven** project with
-the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a template, the package its
-`botmaker-template.properties` declares. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
+the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a template, the package of
+its class holding `main`. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
 
 ### Relationship to the SDK and shared
 
@@ -1587,9 +1587,10 @@ That reuse is the whole point, and it is what a Maven archetype or a bundled res
 templates. What Studio composes itself is one blank project (`StarterSources`), which is what makes New
 Project work with no network — and is the only reason it composes any at all.
 
-- **A template arrives as its author shipped it, except for its package.** `project/TemplateProject` reads a
-  one-key `botmaker-template.properties` (`package=com.botmaker.gamebot`) at the repo root, replaces that
-  prefix in every text file and moves the directories. **The entry class keeps the author's name.** Renaming
+- **A template arrives as its author shipped it, except for its package.** `project/TemplateProject` takes
+  the package of the class holding `main` (`com.botmaker.gamebot`), replaces that prefix in every text file
+  and moves the directories. The one-key `botmaker-template.properties` that declared it is read by nothing
+  since 2026-09-27; a copy of an older release has it deleted. **The entry class keeps the author's name.** Renaming
   it was built and then dropped: a copy that quietly renames somebody's types is a copy whose stack traces
   and README stop matching, and the package is the one name that genuinely must not be shared.
 - **So nothing may assume the entry class is named after the project.** `ProjectConfig.entrySourceFile()` /

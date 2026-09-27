@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class TemplateProjectTest {
 
-    /** A minimal published template: one class, one helper, a pom and the declaration file. */
-    private static Path template(@TempDir Path root, String declaredPackage) throws IOException {
+    /** A minimal published template: one class with main, one helper and a pom. */
+    private static Path template(@TempDir Path root) throws IOException {
         Path dir = root.resolve("unpacked");
         Path sources = dir.resolve("src/main/java/com/botmaker/gamebot");
         Files.createDirectories(sources);
@@ -41,13 +41,12 @@ class TemplateProjectTest {
                 """);
         Files.writeString(dir.resolve("pom.xml"),
                 "<project><artifactId>game-bot</artifactId></project>\n");
-        Files.writeString(dir.resolve(TemplateProject.FILE_NAME), "package=" + declaredPackage + "\n");
         return dir;
     }
 
     @Test
     void thePackageMovesAndEveryMentionOfItFollows(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
+        Path dir = template(root);
 
         TemplateProject.read(dir).renameInto(dir, "com.myfarmer");
 
@@ -62,7 +61,7 @@ class TemplateProjectTest {
     /** The point of the whole thing: what the author shipped is what the user gets. */
     @Test
     void nothingButThePackageIsRenamed(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
+        Path dir = template(root);
 
         TemplateProject.read(dir).renameInto(dir, "com.myfarmer");
 
@@ -76,23 +75,17 @@ class TemplateProjectTest {
                 "the pom is the author's, versions and all");
     }
 
-    @Test
-    void theDeclarationFileIsNotPartOfTheUsersProject(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
-
-        TemplateProject.read(dir).renameInto(dir, "com.myfarmer");
-
-        assertFalse(Files.exists(dir.resolve(TemplateProject.FILE_NAME)),
-                "it says how to unpack a template, which is over");
-    }
-
     /**
-     * A declared package with no sources in it would leave the project sitting in the author's package and
-     * still compiling — the one failure worth refusing outright rather than reporting later.
+     * A main whose package line disagrees with its directory names a package with no sources in it, which
+     * would leave the project sitting in the author's package and still compiling — the one failure worth
+     * refusing outright rather than reporting later.
      */
     @Test
-    void aDeclarationThatMatchesNothingIsRefused(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.somebody.else");
+    void aPackageWithNoSourcesInItIsRefused(@TempDir Path root) throws IOException {
+        Path dir = template(root);
+        Path entry = dir.resolve("src/main/java/com/botmaker/gamebot/GameBot.java");
+        Files.writeString(entry, Files.readString(entry).replace("package com.botmaker.gamebot;",
+                "package com.somebody.else;"));
 
         TemplateProject subject = TemplateProject.read(dir);
         assertFalse(subject.matches(dir), "the publish-time check sees it first");
@@ -100,11 +93,23 @@ class TemplateProjectTest {
                 "and the unpack refuses rather than renaming nothing");
     }
 
-    /** Since 2026-09-26 the file is optional: the package holding main is the template's. */
+    /** An older template release still ships the declaration file; nothing reads it, and the copy drops it. */
     @Test
-    void withNoDeclarationThePackageOfMainIsTheTemplates(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
-        Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+    void anOldDeclarationFileIsIgnoredAndNotPartOfTheUsersProject(@TempDir Path root) throws IOException {
+        Path dir = template(root);
+        Files.writeString(dir.resolve("botmaker-template.properties"), "package=com.somebody.else\n");
+
+        assertEquals("com.botmaker.gamebot", TemplateProject.read(dir).packageName());
+        TemplateProject.read(dir).renameInto(dir, "com.myfarmer");
+
+        assertFalse(Files.exists(dir.resolve("botmaker-template.properties")),
+                "it said how to unpack a template, which is over");
+    }
+
+    /** The package holding main is the template's, and a main further down does not change it. */
+    @Test
+    void thePackageOfMainIsTheTemplates(@TempDir Path root) throws IOException {
+        Path dir = template(root);
         Path sub = dir.resolve("src/main/java/com/botmaker/gamebot/tools");
         Files.createDirectories(sub);
         Files.writeString(sub.resolve("Probe.java"), """
@@ -118,19 +123,17 @@ class TemplateProjectTest {
     }
 
     @Test
-    void withNoDeclarationAndNoMainItIsRefusedWithASentenceForItsAuthor(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
-        Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+    void withNoMainItIsRefusedWithASentenceForItsAuthor(@TempDir Path root) throws IOException {
+        Path dir = template(root);
         Files.delete(dir.resolve("src/main/java/com/botmaker/gamebot/GameBot.java"));
 
         IOException thrown = assertThrows(IOException.class, () -> TemplateProject.read(dir));
-        assertTrue(thrown.getMessage().contains(TemplateProject.FILE_NAME), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("main method"), thrown.getMessage());
     }
 
     @Test
     void mainInUnrelatedPackagesIsRefused(@TempDir Path root) throws IOException {
-        Path dir = template(root, "com.botmaker.gamebot");
-        Files.delete(dir.resolve(TemplateProject.FILE_NAME));
+        Path dir = template(root);
         Path other = dir.resolve("src/main/java/org/other");
         Files.createDirectories(other);
         Files.writeString(other.resolve("Other.java"), """

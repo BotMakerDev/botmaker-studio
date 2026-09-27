@@ -40,11 +40,10 @@ class ProjectDirectoryTest {
     }
 
     @Test
-    void aTemplatesDeclaredPackageWinsOverItsFolderName() throws IOException {
+    void aTemplatesPackageOfMainWinsOverItsFolderName() throws IOException {
         // The case that forced it: botmaker-gamebot holds com.botmaker.gamebot, and nothing derives one
         // from the other.
         Path dir = project(tmp.resolve("repos/botmaker-gamebot"), "com/botmaker/gamebot");
-        Files.writeString(dir.resolve(TemplateProject.FILE_NAME), "package=com.botmaker.gamebot\n");
         Path entry = dir.resolve("src/main/java/com/botmaker/gamebot/Gamebot.java");
         Files.writeString(entry, "package com.botmaker.gamebot;\nclass Gamebot { public static void main(String[] a) {} }");
 
@@ -59,9 +58,11 @@ class ProjectDirectoryTest {
     }
 
     @Test
-    void aDeclarationOutsideComIsIgnoredRatherThanMisread() throws IOException {
+    void aMainOutsideComIsIgnoredRatherThanMisread() throws IOException {
         Path dir = project(tmp.resolve("Odd"), "com/odd");
-        Files.writeString(dir.resolve(TemplateProject.FILE_NAME), "package=org.example\n");
+        Path other = Files.createDirectories(dir.resolve("src/main/java/org/example"));
+        Files.writeString(other.resolve("Tool.java"),
+                "package org.example;\nclass Tool { public static void main(String[] a) {} }");
         assertEquals("com.odd", ProjectConfig.forDirectory(dir).mainPackage());
     }
 

@@ -21,6 +21,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A template needs no `botmaker-template.properties`.** Its package is the one holding its `main`, both when
+  New Project copies it and when Publish checks it. A copy of an older template that still ships the file has
+  it removed. The Publish sheet starts on *A starting template* when the gallery already lists the project as
+  one.
 - **The bot's settings moved into its own Java.** Delays, match confidence, real input, debug output and the
   private display are edited in the SDK's **⚙ Bot Settings** and written into `Sdk.settings()`; Studio's
   🖱 Input window and 🐞 Debug toggle are gone, and Studio no longer writes a `botmaker-project.properties` (an
