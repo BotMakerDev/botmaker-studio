@@ -70,6 +70,9 @@ public final class ValueGrammar {
 
     private final Map<String, ComponentType<?>> componentByName;
 
+    /** The chains on part 0 that build each class, in declaration order: what writes a value its factory loses. */
+    private final Map<String, List<ComponentType<?>>> chainsByName;
+
     /** The read half, over parsed expressions. Built last, from the registries above. */
     private final ExpressionReader reader;
 
@@ -79,6 +82,7 @@ public final class ValueGrammar {
     private ValueGrammar(List<? extends PluginType<?>> types, List<? extends ComponentType<?>> components) {
         Map<String, PluginType<?>> byName = new LinkedHashMap<>();
         Map<String, ComponentType<?>> componentsByName = new LinkedHashMap<>();
+        Map<String, List<ComponentType<?>>> chains = new LinkedHashMap<>();
         // Every enum a plugin mentions — declared, or a component's part — for reading an untyped constant.
         Set<Class<?>> enums = new LinkedHashSet<>();
         // Every class a plugin names as a type, the only classes whose constants are read.
@@ -91,7 +95,7 @@ public final class ValueGrammar {
             byName.putIfAbsent(JavaNames.canonical(cls), type);
             declared.add(cls);
             if (type instanceof ComponentType<?> component) {
-                register(component, cls, componentsByName, calls);
+                register(component, cls, componentsByName, chains, calls);
                 for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
             }
             if (cls.isEnum()) enums.add(cls);
@@ -100,26 +104,40 @@ public final class ValueGrammar {
             Class<?> cls = classOf(component);
             if (cls == null) continue;
             declared.add(cls);
-            register(component, cls, componentsByName, calls);
+            register(component, cls, componentsByName, chains, calls);
             for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
         }
         this.types = List.copyOf(byName.values());
         this.typeByName = Map.copyOf(byName);
         this.componentByName = Map.copyOf(componentsByName);
+        Map<String, List<ComponentType<?>>> frozen = new LinkedHashMap<>();
+        chains.forEach((name, list) -> frozen.put(name, List.copyOf(list)));
+        this.chainsByName = Map.copyOf(frozen);
         this.reader = new ExpressionReader(this, calls, List.copyOf(enums), List.copyOf(declared));
         this.writer = new ValueWriter(this);
     }
 
     /**
      * {@code component} as the reader sees it, and — the first time its class is seen, when its factory is
-     * not a chain on part 0 — as the one the writer writes that class with.
+     * not a chain on part 0 — as the one the writer writes that class with. A chain on part 0 is kept for the
+     * writer too, as the way to write a value that one would lose part of.
      */
     private static void register(ComponentType<?> component, Class<?> cls, Map<String, ComponentType<?>> writers,
-                                 List<ExpressionReader.Call> calls) {
+                                 Map<String, List<ComponentType<?>>> chains, List<ExpressionReader.Call> calls) {
         Optional<Factory> factory = Factory.of(component);
         if (factory.isEmpty()) return;
         calls.add(new ExpressionReader.Call(component, factory.get()));
-        if (factory.get().kind() != Factory.Kind.RECEIVER) writers.putIfAbsent(JavaNames.canonical(cls), component);
+        String name = JavaNames.canonical(cls);
+        if (factory.get().kind() != Factory.Kind.RECEIVER) {
+            writers.putIfAbsent(name, component);
+        } else {
+            chains.computeIfAbsent(name, n -> new ArrayList<>()).add(component);
+        }
+    }
+
+    /** The chains on part 0 that build {@code type}, in declaration order: the writer's way past a lossy factory. */
+    List<ComponentType<?>> chains(Class<?> type) {
+        return type == null ? List.of() : chainsByName.getOrDefault(JavaNames.canonical(type), List.of());
     }
 
     /**

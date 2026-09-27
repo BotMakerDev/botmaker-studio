@@ -32,7 +32,7 @@ public record Factory(Executable executable) {
         CONSTRUCTOR,
         /** {@code Owner.name(p₁, …)}. */
         STATIC,
-        /** {@code part₀.name(p₁, …)}: read, never written. */
+        /** {@code part₀.name(p₁, …)}: read; written only where the owning factory would lose part of a value. */
         RECEIVER
     }
 

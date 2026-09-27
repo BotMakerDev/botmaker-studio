@@ -26,7 +26,8 @@ import java.util.Set;
  * tree; before this, the same shape left as a string that every sink placed into its rewrite verbatim.
  *
  * <p>Every rule of the old writer stands: one part that cannot be written empties the whole answer, plugin
- * code that throws declines that value, and a chain on part 0 is read and never written.
+ * code that throws declines that value, and a chain on part 0 is written only for a value the declaration's
+ * own factory would lose part of (2026-09-27, {@link #call}).
  */
 final class ValueWriter {
 
@@ -126,9 +127,73 @@ final class ValueWriter {
         return Optional.empty();
     }
 
+    /**
+     * {@code value} through {@code component}, or — when that would lose part of it — through a chain on part 0
+     * that keeps it: {@code Combo.of(Key.CTRL, Key.S).held(Duration.ofMillis(200))}, where the declaration's
+     * {@code Combo.of} has no hold. Before 2026-09-27 a chain was never written and such a value was written
+     * with the part dropped. With no chain that keeps it, the factory writes it as before: a class whose
+     * {@code equals} is identity never round-trips equal, and must not stop being written for that.
+     */
     private Optional<Expression> call(ComponentType<?> component, Object value, Names names) {
         Class<?> type = ValueGrammar.classOf(component);
         if (type == null || !type.isInstance(value)) return Optional.empty();
+        List<ComponentType<?>> chains = grammar.chains(type);
+        if (!chains.isEmpty() && !keeps(component, value)) {
+            for (ComponentType<?> chain : chains) {
+                Optional<Expression> written = chained(component, chain, type, value, names);
+                if (written.isPresent()) return written;
+            }
+        }
+        return direct(component, type, value, names);
+    }
+
+    /** Whether {@code component}'s own parts build {@code value} back whole; plugin code that throws does not. */
+    private static boolean keeps(ComponentType<?> component, Object value) {
+        try {
+            List<Object> parts = component.componentsOf(value);
+            return parts != null && value.equals(component.build(parts));
+        } catch (RuntimeException | LinkageError e) {
+            return false;
+        }
+    }
+
+    /**
+     * {@code receiver.method(…)} for {@code chain}, whose part 0 is written by {@code component} alone — so a
+     * chain is one link deep and a chain that answers the value itself as its receiver (a wither) writes
+     * nothing.
+     */
+    private Optional<Expression> chained(ComponentType<?> component, ComponentType<?> chain, Class<?> type,
+                                         Object value, Names names) {
+        Optional<Factory> factory = Factory.of(chain);
+        if (factory.isEmpty() || factory.get().kind() != Factory.Kind.RECEIVER) return Optional.empty();
+        List<Object> parts;
+        try {
+            parts = chain.componentsOf(value);
+            if (parts == null || parts.isEmpty() || !value.equals(chain.build(parts))) return Optional.empty();
+        } catch (RuntimeException | LinkageError e) {
+            return Optional.empty();
+        }
+        Object receiver = parts.getFirst();
+        if (!type.isInstance(receiver) || receiver.equals(value) || !keeps(component, receiver)) {
+            return Optional.empty();
+        }
+        Optional<Expression> on = direct(component, type, receiver, names);
+        if (on.isEmpty()) return Optional.empty();
+        MethodInvocation invocation = names.ast.newMethodInvocation();
+        invocation.setExpression(on.get());
+        invocation.setName(names.ast.newSimpleName(factory.get().name()));
+        List<Class<?>> declared = ValueGrammar.componentTypesOf(chain);
+        List<Expression> arguments = arguments(invocation);
+        for (int i = 1; i < parts.size(); i++) {
+            Optional<Expression> part = ofClass(ValueGrammar.partType(declared, i, parts.size()), parts.get(i), names);
+            if (part.isEmpty()) return Optional.empty();
+            arguments.add(part.get());
+        }
+        return Optional.of(invocation);
+    }
+
+    /** {@code value} as one of its type's named constants, else through {@code component}'s own factory. */
+    private Optional<Expression> direct(ComponentType<?> component, Class<?> type, Object value, Names names) {
         Optional<Expression> named = namedConstant(component, type, value, names);
         if (named.isPresent()) return named;
         Optional<Factory> factory = Factory.of(component);

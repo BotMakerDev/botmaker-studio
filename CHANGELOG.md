@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A value its type's factory would lose part of is written as the chain that keeps it.** A held combo is
+  written `Combo.of(Key.CTRL, Key.S).held(Duration.ofMillis(200))`; before, the hold was dropped on write. Only
+  a chain a plugin declares, one link deep; every other value is written as before.
 - **Local | UTC on a time parameter.** Beside a `LocalTime` or `OffsetTime` field's type, one click switches
   between this computer's clock and a time at an offset from UTC, keeping the hours and minutes (07:30 stays
   07:30). A value equal to a constant its type names is written as that constant: `ZoneOffset.UTC`.

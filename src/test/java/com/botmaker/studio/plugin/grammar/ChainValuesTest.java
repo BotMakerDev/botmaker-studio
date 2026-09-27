@@ -118,6 +118,51 @@ class ChainValuesTest {
                 GRAMMAR.initializer(FORM, new Tone(1, 0)).map(JavaValue::source), "named by nobody: the factory");
     }
 
+    /** A value whose declaration cannot write all of it: {@code Chime.of(pitch)} has no hold. */
+    public record Chime(int pitch, int hold) {
+        public static Chime of(int pitch) { return new Chime(pitch, 0); }
+        public Chime held(int hold) { return new Chime(pitch, hold); }
+    }
+
+    private static final ComponentType<Chime> CHIME = new ComponentType<>() {
+        @Override public Class<Chime> type() { return Chime.class; }
+        @Override public Executable factory() { return TestValues.method(Chime.class, "of", int.class); }
+        @Override public List<Class<?>> componentTypes() { return List.of(int.class); }
+        @Override public List<Object> components(Chime c) { return List.of(c.pitch()); }
+        @Override public Chime build(List<Object> parts) { return Chime.of(((Number) parts.get(0)).intValue()); }
+    };
+
+    private static final ComponentType<Chime> CHIME_HELD = new ComponentType<>() {
+        @Override public Class<Chime> type() { return Chime.class; }
+        @Override public Executable factory() { return TestValues.method(Chime.class, "held", int.class); }
+        @Override public List<Class<?>> componentTypes() { return List.of(Chime.class, int.class); }
+        @Override public List<Object> components(Chime c) { return List.of(c.held(0), c.hold()); }
+        @Override public Chime build(List<Object> parts) {
+            return ((Chime) parts.get(0)).held(((Number) parts.get(1)).intValue());
+        }
+    };
+
+    /**
+     * A value the declaration's own factory would write with something lost is written as the chain that keeps
+     * it, on the value the factory does write; a value the factory writes whole keeps the factory's form. A
+     * chain whose receiver is the value itself (a wither on {@code Tone}) is never a way to write it.
+     */
+    @Test
+    void aValueTheFactoryWouldLosePartOfIsWrittenAsTheChainThatKeepsIt() {
+        ValueGrammar grammar = ValueGrammar.of(List.of(), List.of(CHIME, CHIME_HELD));
+        String owner = JavaNames.canonical(Chime.class);
+
+        assertEquals(Optional.of(owner + ".of(3)"),
+                grammar.initializer(Chime.class, new Chime(3, 0)).map(JavaValue::source));
+        assertEquals(Optional.of(owner + ".of(3).held(200)"),
+                grammar.initializer(Chime.class, new Chime(3, 200)).map(JavaValue::source));
+        assertEquals(Optional.of(new Chime(3, 200)), grammar.valueOf(Chime.class, "Chime.of(3).held(200)"));
+        assertEquals(Optional.of(owner + ".of(3)"),
+                ValueGrammar.of(List.of(), List.of(CHIME)).initializer(Chime.class, new Chime(3, 200))
+                        .map(JavaValue::source),
+                "no chain declared: the factory writes it as it always did");
+    }
+
     @Test
     void aPartIsShownAsItWasWritten() {
         java.lang.reflect.Type list = ValueTypes.listOf(FORM);
