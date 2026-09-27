@@ -1,7 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.nav.SourceNavigation;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
+import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
@@ -36,7 +38,7 @@ final class ExplorerModel {
         FOLDER("folder", "Folder", "M1 3h4l1 1.2h5V10H1z"),
         ENTRY_POINT("entry-point", "Entry point — where the bot starts", "M3 1.5l7.5 4.5L3 10.5z"),
         PARAMETERS("parameters", "Parameters (@Param fields)", "M1 2.5h10v1H1zM1 8h10v1H1zM3 1h2v4H3zM7 6.5h2v4H7z"),
-        PLUGIN_FILE("plugin-file", "A plugin's file — yours to edit", "M3 1h1.2v3H3zM7.8 1H9v3H7.8zM2 4h8v2.2A4 4 0 0 1 6.6 9.6V11H5.4V9.6A4 4 0 0 1 2 6.2z"),
+        PLUGIN_FILE("plugin-file", "A plugin's file — its values change in the plugin's windows", "M3 1h1.2v3H3zM7.8 1H9v3H7.8zM2 4h8v2.2A4 4 0 0 1 6.6 9.6V11H5.4V9.6A4 4 0 0 1 2 6.2z"),
         JAVA("java", "Java source", "M2 1h5l3 3v7H2zM7 1v3h3"),
         LIBRARY("library", "Bundled library code — read only", "M1 3l5-2 5 2v6l-5 2-5-2zM6 5v6M1 3l5 2 5-2"),
         PICTURE("picture", "Picture", "M1 2h10v8H1zM2 9l3-3.2 2 2 1.2-1.2L10 9zM8 4.5a1 1 0 1 0 0.01 0z"),
@@ -135,11 +137,16 @@ final class ExplorerModel {
      * {@code entryPoint} the file declaring the bot's {@code main}, or null.
      */
     static Kind kindOf(Path file, String source, Path entryPoint) {
+        return kindOf(file, source, entryPoint, PluginHost.pluginFiles());
+    }
+
+    /** The same, against the plugin files {@code holders} declare — the seam a test uses. */
+    static Kind kindOf(Path file, String source, Path entryPoint, List<PluginFiles.Holder> holders) {
         String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
         if (name.endsWith(".java")) {
             if (FileRole.of(file) == FileRole.LIBRARY) return Kind.LIBRARY;
             if (file.equals(entryPoint)) return Kind.ENTRY_POINT;
-            if (isPluginFile(file)) return Kind.PLUGIN_FILE;
+            if (PluginFiles.owner(file, holders).isPresent()) return Kind.PLUGIN_FILE;
             if (source != null && source.contains("@Param")) return Kind.PARAMETERS;
             return Kind.JAVA;
         }
@@ -149,16 +156,6 @@ final class ExplorerModel {
             case "json", "properties", "txt", "yml", "yaml", "xml", "csv" -> Kind.DATA;
             default -> Kind.OTHER;
         };
-    }
-
-    /**
-     * A file a plugin handed the bot: {@code …/plugins/<segment>/<Name>.java}, exactly one package below
-     * {@code plugins} — where {@code HostPluginValues} writes one.
-     */
-    static boolean isPluginFile(Path file) {
-        Path segment = file.getParent();
-        Path plugins = segment == null ? null : segment.getParent();
-        return plugins != null && plugins.getFileName() != null && plugins.getFileName().toString().equals("plugins");
     }
 
     /**

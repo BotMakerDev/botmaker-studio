@@ -83,7 +83,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
     /** True for a call into code the bot does not own: a plugin's, the JDK's or a library's. */
     protected abstract boolean external();
 
-    /** What the block says first: "call" for the bot's own method, "use" before another owner's. */
+    /** What the block says first: "call" for the bot's own method; null, nothing, before another owner's pill. */
     protected abstract String verb();
 
     protected void setFixedScope(String className) {
@@ -188,7 +188,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         java.util.function.Supplier<ArgPlan> plan = once(() -> argPlan(context, controls.get()));
 
         ComponentSpec.Builder spec = ComponentSpec.builder()
-                .label("kind", () -> SentenceLayoutBuilder.keywordNode(verb()))
+                .label("kind", () -> verb() == null ? null : SentenceLayoutBuilder.keywordNode(verb()))
                 .label("owner", this::ownerBadge)
                 .custom("scope", () -> controls.get().scopeNode())
                 .custom("method", () -> methodNode(context, controls.get()));

@@ -35,6 +35,18 @@ public abstract class AbstractStatementBlock extends AbstractCodeBlock implement
         return BlockShape.STACK;
     }
 
+    /**
+     * Only a statement is a piece of a stack. A class member drawn as a statement block — a field, a member enum,
+     * an initializer — sits in the class card between its own separators, with nothing above to fit its dent and
+     * nothing below to take its tab: its notch was the empty canvas-coloured cut at its top (2026-09-27). A type
+     * declared inside a method body is a statement there, and joins its stack.
+     */
+    @Override
+    protected boolean joinsStack() {
+        return !(astNode instanceof org.eclipse.jdt.core.dom.BodyDeclaration)
+                || astNode.getParent() instanceof org.eclipse.jdt.core.dom.TypeDeclarationStatement;
+    }
+
     // --- Helpers used by subclasses ---
     //
     // The factories below return null when this block is read-only, and the layout builders skip null nodes.

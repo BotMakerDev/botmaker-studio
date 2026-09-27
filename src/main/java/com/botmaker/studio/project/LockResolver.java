@@ -31,7 +31,7 @@ import java.util.List;
  * denied  &lt;- the project is open for reading  (an installed bot, see {@link ProjectMode})
  * denied  &lt;- the file is bundled library source, or a plugin's generated model ({@link FileRole})
  * denied  &lt;- SIGNATURE edits to {@code public static void main(String[])}
- * denied  &lt;- anything in the file the Parameters window owns ({@link Managed})
+ * denied  &lt;- anything in the file the Parameters window owns, or a loaded plugin's file ({@link Managed})
  * denied  &lt;- a {@code @Param} field, wherever it is
  * denied  &lt;- a {@code @Managed} method's body, and all of a {@code @Managed} class ({@link ManagedValue})
  * allowed &lt;- otherwise, the BODY of {@code main} included
@@ -42,8 +42,9 @@ import java.util.List;
  * the canvas does not — the annotation's members — so an edit made on the canvas is the one that leaves a
  * parameter half-changed. The blocks are still drawn, with their pickers as previews: the file is shown and
  * refused, never hidden. The window writes through {@code BotSources}, not through here, so the rule stops
- * the canvas and nothing else. <b>Only the host's own file is named</b>: a file a plugin's vocabulary shapes
- * (a class of {@code ImageTemplate} constants) is that plugin's to speak for, not this class's.
+ * the canvas and nothing else. <b>A plugin's file is locked whole the same way (2026-09-27)</b>, and it is the
+ * plugin that says which files are its own — the holders its managed values name, in {@code plugins/<segment>/}
+ * ({@link PluginFiles}). A file of {@code ImageTemplate} constants the user wrote elsewhere is still theirs.
  *
  * <p><b>The last two are matched on an annotation the author wrote.</b> A {@code @Param} field is the
  * Parameters window's wherever its author put it, so being in another file does not make it editable. A
@@ -100,34 +101,31 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         }
     }
 
-    /** A file whose contents another window owns, with where to go instead and the status-line badge. */
-    public enum Managed {
-        PARAMETERS("Parameters.java holds the bot's parameters. Change them in Project ▸ Parameters…",
+    /**
+     * A file whose contents another window owns, with where to go instead and the status-line badge: the
+     * Parameters window's file, or a loaded plugin's ({@link PluginFiles}, 2026-09-27).
+     */
+    public record Managed(String reason, String badge) {
+        public static final Managed PARAMETERS = new Managed(
+                "Parameters.java holds the bot's parameters. Change them in Project ▸ Parameters…",
                 "Parameters - Read Only");
 
-        private final String reason;
-        private final String badge;
-
-        Managed(String reason, String badge) {
-            this.reason = reason;
-            this.badge = badge;
-        }
-
-        public String reason() {
-            return reason;
-        }
-
-        public String badge() {
-            return badge;
+        static Managed of(PluginFiles.Holder holder) {
+            return new Managed(holder.reason(), holder.badge());
         }
     }
 
     /** Which window owns this file, or {@code null} for a file the canvas may edit. */
     public Managed managed() {
+        return managed(PluginHost.pluginFiles());
+    }
+
+    /** The same, against the plugin files {@code holders} declare — the seam a test uses. */
+    public Managed managed(List<PluginFiles.Holder> holders) {
         if (config == null || file == null) return null;
         Path normalized = file.toAbsolutePath().normalize();
-        return normalized.equals(config.parametersSourceFile().toAbsolutePath().normalize())
-                ? Managed.PARAMETERS : null;
+        if (normalized.equals(config.parametersSourceFile().toAbsolutePath().normalize())) return Managed.PARAMETERS;
+        return PluginFiles.owner(normalized, holders).map(Managed::of).orElse(null);
     }
 
     /** The status-line suffix for this file, or {@code null} for an ordinary one. */

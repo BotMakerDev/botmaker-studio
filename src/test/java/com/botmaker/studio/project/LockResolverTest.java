@@ -279,4 +279,22 @@ class LockResolverTest {
         assertNotNull(LockResolver.managedReason(type.getMethods()[0],
                 List.of(new ManagedValue("something-of-my-own", "Mine."))));
     }
+
+    /**
+     * A loaded plugin's holder file is locked whole, with a badge naming the plugin (2026-09-27); a file beside
+     * it that no plugin declares, or the same file with its plugin not loaded, is the user's.
+     */
+    @Test
+    void aLoadedPluginsFileIsTheWholeFileLocked() {
+        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Sdk"));
+        Path plugins = CONFIG.mainPackageDir().resolve("plugins").resolve("sdk");
+
+        LockResolver.Managed managed = new LockResolver(CONFIG, plugins.resolve("Sdk.java")).managed(sdk);
+        assertNotNull(managed);
+        assertEquals("SDK plugin - Read Only", managed.badge());
+        assertTrue(managed.reason().contains("Sdk.java belongs to the SDK plugin"), managed.reason());
+
+        assertNull(new LockResolver(CONFIG, plugins.resolve("Mine.java")).managed(sdk));
+        assertNull(new LockResolver(CONFIG, plugins.resolve("Sdk.java")).managed(List.of()));
+    }
 }

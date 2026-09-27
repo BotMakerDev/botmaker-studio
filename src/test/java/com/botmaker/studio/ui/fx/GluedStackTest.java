@@ -187,24 +187,34 @@ class GluedStackTest extends FxHeadlessTest {
     }
 
     /**
-     * A double-click anywhere on a statement sets its breakpoint (2026-09-26) — the innermost one: inside a
-     * loop's body it is the statement, never the loop around it.
+     * A breakpoint is set from the gutter strip, with one click, on the statement whose strip it is (2026-09-27).
+     * A double-click on the block's text sets nothing: it was a second way that fired on clicks meant for the
+     * block's own controls.
      */
     @Test
-    void aDoubleClickSetsTheBreakpointOfTheInnermostStatement() {
+    void theGutterStripSetsTheBreakpointAndADoubleClickDoesNot() {
         VBox body = rendered(nested());
         Parent loop = (Parent) statementsOf(body).get(1);
-        Node inner = statementsOf((VBox) loop.lookup(".bc-body").lookup(".body-block")).getFirst();
-        Node label = inner.lookup(".label");
-        assertNotNull(label, "the statement draws some text to click on");
-        interact(() -> label.fireEvent(new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,
-                1, 1, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 2,
-                false, false, false, false, true, false, false, false, false, false, null)));
-
+        Parent inner = (Parent) statementsOf((VBox) loop.lookup(".bc-body").lookup(".body-block")).getFirst();
         var innerBlock = (com.botmaker.studio.core.CodeBlock) inner.getProperties().get("botmaker.breakpoint-root");
         var loopBlock = (com.botmaker.studio.core.CodeBlock) loop.getProperties().get("botmaker.breakpoint-root");
-        assertTrue(innerBlock.isBreakpoint(), "the statement double-clicked");
+
+        Node label = inner.lookup(".label");
+        assertNotNull(label, "the statement draws some text to click on");
+        interact(() -> label.fireEvent(click(2)));
+        assertFalse(innerBlock.isBreakpoint(), "a double-click on the block is the block's own");
+
+        Node strip = inner.getChildrenUnmodifiable().stream()
+                .filter(n -> n instanceof javafx.scene.shape.Rectangle).findFirst().orElseThrow();
+        interact(() -> strip.fireEvent(click(1)));
+        assertTrue(innerBlock.isBreakpoint(), "the statement whose strip was clicked");
         assertFalse(loopBlock.isBreakpoint(), "not the loop around it");
+    }
+
+    private static javafx.scene.input.MouseEvent click(int count) {
+        return new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,
+                1, 1, 0, 0, javafx.scene.input.MouseButton.PRIMARY, count,
+                false, false, false, false, true, false, false, false, false, false, null);
     }
 
     @Test
@@ -220,6 +230,10 @@ class GluedStackTest extends FxHeadlessTest {
         assertTrue(first.getStyleClass().contains(com.botmaker.studio.core.BodyBlock.FIRST_STYLE_CLASS));
         assertTrue(!((Parent) first).lookup("." + StackJoints.NOTCH).isVisible(),
                 "the first block's dent has no tab above it to fit");
+        Node last = statementsOf(inner).getLast();
+        assertTrue(last.getStyleClass().contains(com.botmaker.studio.core.BodyBlock.LAST_STYLE_CLASS));
+        assertTrue(!((Parent) last).lookup("." + StackJoints.TAB).isVisible(),
+                "the last block's tab has no dent below it to fill");
     }
 
     @Test
@@ -233,6 +247,29 @@ class GluedStackTest extends FxHeadlessTest {
                                 || n.getStyleClass().contains(StackJoints.TAB)),
                 "an else-if link carries no joints");
         assertEquals(0.0, ((Region) link).getPadding().getBottom(), 0.01, "the chain's first if closes it");
+    }
+
+    /** A field sits in the class card, not in a stack: no dent at its top, no tab under it (2026-09-27). */
+    @Test
+    void aClassMemberCarriesNoJoints() {
+        EditorFixture f = new EditorFixture("""
+                package com.mybot;
+                public class Subject {
+                    static int count = 1;
+                    public void run() {
+                        int a = 1;
+                    }
+                }
+                """);
+        var field = f.state.getNodeToBlockMap().values().stream()
+                .filter(com.botmaker.studio.blocks.var.DeclareClassVariableBlock.class::isInstance)
+                .findFirst().orElseThrow();
+        AtomicReference<Node> node = new AtomicReference<>();
+        interact(() -> node.set(field.getUINode(f.context())));
+        assertTrue(((Parent) node.get()).getChildrenUnmodifiable().stream()
+                        .noneMatch(n -> n.getStyleClass().contains(StackJoints.NOTCH)
+                                || n.getStyleClass().contains(StackJoints.TAB)),
+                "a field carries no joints");
     }
 
     @Test

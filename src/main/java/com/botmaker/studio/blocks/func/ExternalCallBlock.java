@@ -3,7 +3,7 @@ package com.botmaker.studio.blocks.func;
 import org.eclipse.jdt.core.dom.ASTNode;
 
 /**
- * "use ‹owner› ‹class› ‹method›": a call into code the bot does not own — a plugin's ({@code Mouse.click()}),
+ * "‹owner› ‹class› ‹method›": a call into code the bot does not own — a plugin's ({@code Mouse.click()}),
  * the JDK's ({@code Math.max}) or a library's. The owner is a small pill ({@link CallOwner}); the scope
  * dropdown lists each plugin's classes under the plugin's name, then the JDK's and the libraries' static
  * classes, and picking one rewrites the call onto it.
@@ -28,13 +28,17 @@ public class ExternalCallBlock extends MethodInvocationBlock {
         return true;
     }
 
+    /**
+     * None (2026-09-27): the owner pill already says whose call it is, and "use" before it read as an instruction
+     * rather than a call.
+     */
     @Override
     protected String verb() {
-        return "use";
+        return null;
     }
 
     @Override
     public String getDetails() {
-        return "Use " + getScope() + "." + methodName + "()";
+        return getScope() + "." + methodName + "()";
     }
 }

@@ -10,8 +10,6 @@ import java.util.List;
 
 public class EnumManipulationHandler {
 
-    // ... (Keep existing methods: addEnumToClass, deleteEnumFromClass, renameEnum, addEnumConstant, deleteEnumConstant, renameEnumConstant)
-
     /**
      * Replaces an expression with {@code enumType.constantName} (an enum constant or a {@code Class.FIELD}
      * reference — same {@link QualifiedName} shape). Also imports {@code enumType} so the reference resolves:

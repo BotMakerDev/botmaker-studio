@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Every reader of a bot on the one index.** `JavaParameters.scan`,
+- **2026-09-27 (latest) — Canvas fixes: plugin files locked, add buttons where they are, gutter breakpoints.**
+  `project/PluginFiles` (holders a loaded plugin declares, `plugins/<segment>/<Holder>.java`, memoised per bind
+  as `PluginHost.pluginFiles()`) is what `LockResolver.managed()` locks whole (badge `<Plugin> plugin - Read
+  Only`) and what the explorer's plugin icon means; `ExplorerModel.isPluginFile`'s folder guess is gone.
+  `ClassBlock`'s top bar adds first, the bottom bar last; *+ Add Enum* is painted `--enum`. An external call
+  says no "use" (`verb()` null). Breakpoints: the gutter strip only — a ghost dot on hover (`:ghost`), one click
+  toggles, plus the right-click menu; the double-click filter is deleted; a class and a field hold none.
+  `body-last` hides the last statement's tab; a class member (field, member enum, initializer) no longer joins
+  a stack, which was the empty notch at its top.
+- **2026-09-27 — Every reader of a bot on the one index.** `JavaParameters.scan`,
   `JavaManagedValues.scan` (and their `over(BotIndex, grammar)`) and `BotRecords.over` walk `BotIndex`'s
   units instead of parsing each file again. `project/managed/MethodReferences` → `ManagedTargets`: the HUD's
   activity list resolves `Collect::body` by binding to the file declaring the method (a nested class, a

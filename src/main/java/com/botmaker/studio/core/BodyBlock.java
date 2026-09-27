@@ -21,6 +21,8 @@ import java.util.List;
 public class BodyBlock extends AbstractStatementBlock implements BlockWithChildren {
     /** Style class of a body's first statement: it sits under the header, so its dent has nothing to fit. */
     public static final String FIRST_STYLE_CLASS = "body-first";
+    /** Style class of a body's last statement: nothing is stacked under it, so its tab has nothing to fit. */
+    public static final String LAST_STYLE_CLASS = "body-last";
 
     private final List<StatementBlock> statements = new ArrayList<>();
     private final BlockDragAndDropManager dragAndDropManager;
@@ -105,8 +107,9 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
                 StatementBlock statement = statements.get(i);
                 Node statementNode = statement.getUINode(context);
                 statementNode.setViewOrder(i);
-                statementNode.getStyleClass().remove(FIRST_STYLE_CLASS);
+                statementNode.getStyleClass().removeAll(FIRST_STYLE_CLASS, LAST_STYLE_CLASS);
                 if (i == 0) statementNode.getStyleClass().add(FIRST_STYLE_CLASS);
+                if (i == statements.size() - 1) statementNode.getStyleClass().add(LAST_STYLE_CLASS);
                 makeStatementDraggable(statementNode, statement);
                 statementNodes.add(statementNode);
                 container.getChildren().add(statementNode);

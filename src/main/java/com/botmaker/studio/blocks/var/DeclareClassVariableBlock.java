@@ -29,6 +29,10 @@ import com.botmaker.studio.ui.render.components.TypeChip;
 
 public class DeclareClassVariableBlock extends AbstractStatementBlock {
 
+    /** A field is a declaration, not a line the bot stops on — the same answer an enum or a method gives. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     private final String variableName;
     private final ResolvedType fieldType;
     private final boolean isStatic;

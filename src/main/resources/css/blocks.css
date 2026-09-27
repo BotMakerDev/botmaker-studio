@@ -870,6 +870,10 @@
 .body-first > .block-notch {
     visibility: hidden;
 }
+/* The last block of a stack has nothing under it to take its tab (.body-last, BodyBlock). */
+.body-last > .block-tab {
+    visibility: hidden;
+}
 
 /*
  * The next link of an else-if chain is an if block drawn inside the one before it (IfBlock.chainedNode). It is
@@ -1215,6 +1219,10 @@
     -fx-background-color: -bm-canvas, -bm-danger;
     -fx-background-insets: 0, 2;
     -fx-background-radius: 7, 5;
+}
+/* Where a click would set one: the same dot, faint, while the pointer is over the gutter strip. */
+.breakpoint-dot:ghost {
+    -fx-opacity: 0.35;
 }
 .blocks-canvas .shape-reporter:highlighted,
 .blocks-canvas .shape-reporter:error {
@@ -1606,6 +1614,14 @@
 }
 .block-action-button--primary:hover {
     -fx-background-color: derive(-bm-primary, 15%);
+}
+/* "+ Add Enum" in the colour of the enum block it adds (.enum-block below), not the neutral grey. */
+.block-action-button--enum {
+    -fx-background-color: -bm-fill-variables;
+    -fx-text-fill: -bm-on-fill-variables;
+}
+.block-action-button--enum:hover {
+    -fx-background-color: derive(-bm-fill-variables, 12%);
 }
 
 .block-action-button--mini {

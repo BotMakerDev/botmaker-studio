@@ -8,7 +8,6 @@ import javafx.geometry.Insets;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
@@ -45,29 +44,15 @@ public final class GutterDecorator implements BlockDecorator {
                 existing.getLeft() + gutter
         ));
 
-        // A declaration is not a line the bot stops on: no strip, no dot, no double-click.
+        // A declaration is not a line the bot stops on: no strip, no dot.
         if (!block.canHoldBreakpoint()) return;
-
-        // Double-click anywhere on the block toggles its breakpoint — on every block that can hold one, whatever
-        // its root node is (2026-09-26). It was a handler, added only on a Pane root, so it never reached a
-        // block drawn another way, and it lost every double-click a control inside the block consumed first.
-        // As a filter it sees each one; the block it belongs to is the innermost breakpoint block around the
-        // click, so a double-click inside a loop's body toggles that statement and not the loop. A double-click
-        // in a text field is left to the field: that is how a word is selected.
         node.getProperties().put(BREAKPOINT_ROOT, block);
-        if (!block.isReadOnly()) {
-            node.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
-                if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 2) return;
-                if (!(e.getTarget() instanceof Node target) || typingIn(target, node)) return;
-                if (owner(target) != node) return;
-                block.toggleBreakpoint();
-                e.consume();
-            });
-        }
 
+        // One way to set a breakpoint on the canvas, as in an IDE: the gutter strip, which shows a faint dot
+        // while the pointer is over it and toggles on a single click — plus the block's right-click menu. The
+        // double-click anywhere on a block (2026-09-26) is gone (2026-09-27): it fired on double-clicks meant
+        // for the block's own controls, and a breakpoint set by accident is one nobody knows to look for.
         if (node instanceof Pane pane) {
-            // Transparent click target spanning the reserved gutter strip: single left-click toggles the
-            // breakpoint IDE-style (works even when no circle is showing yet, so it can *add* one).
             Rectangle hitStrip = new Rectangle();
             hitStrip.setManaged(false);
             hitStrip.setFill(Color.TRANSPARENT);
@@ -95,27 +80,24 @@ public final class GutterDecorator implements BlockDecorator {
             dot.setLayoutX(existing.getLeft() + (gutter - DOT_SIZE) / 2);
             dot.layoutYProperty().bind(Bindings.min(pane.heightProperty(), FIRST_LINE_HEIGHT)
                     .subtract(DOT_SIZE).divide(2));
-            dot.visibleProperty().bind(block.breakpointActiveProperty());
+            // Shown when set, and as a ghost (:ghost, blocks.css) while the pointer is over an editable strip —
+            // the answer to "where do I click", which an empty gutter never gave.
+            javafx.beans.value.ObservableBooleanValue hovering = block.isReadOnly()
+                    ? new javafx.beans.property.SimpleBooleanProperty(false) : hitStrip.hoverProperty();
+            dot.visibleProperty().bind(block.breakpointActiveProperty().or(hovering));
+            // A binding listens to the block weakly, so a block that outlives this render (blocks are reused
+            // across re-parses) does not keep every old dot alive; the dot keeps the binding.
+            javafx.beans.binding.BooleanBinding unset = block.breakpointActiveProperty().not();
+            dot.getProperties().put(GHOST, unset);
+            unset.addListener((obs, was, now) -> dot.pseudoClassStateChanged(GHOST, now));
+            dot.pseudoClassStateChanged(GHOST, unset.get());
             pane.getChildren().add(dot);
         }
     }
 
-    /** Marks a block's root as one a breakpoint can be set on — what {@link #owner} walks up to. */
+    /** A dot drawn under the pointer where no breakpoint is set yet. */
+    static final javafx.css.PseudoClass GHOST = javafx.css.PseudoClass.getPseudoClass("ghost");
+
+    /** Marks a block's root as one a breakpoint can be set on — how a test finds the block a node draws. */
     private static final String BREAKPOINT_ROOT = "botmaker.breakpoint-root";
-
-    /** The innermost breakpoint block's root around {@code target}, or null. */
-    static Node owner(Node target) {
-        for (Node at = target; at != null; at = at.getParent()) {
-            if (at.getProperties().containsKey(BREAKPOINT_ROOT)) return at;
-        }
-        return null;
-    }
-
-    /** Whether {@code target} is inside a text control within {@code root}, where a double-click selects. */
-    private static boolean typingIn(Node target, Node root) {
-        for (Node at = target; at != null && at != root; at = at.getParent()) {
-            if (at instanceof javafx.scene.control.TextInputControl input && input.isEditable()) return true;
-        }
-        return false;
-    }
 }

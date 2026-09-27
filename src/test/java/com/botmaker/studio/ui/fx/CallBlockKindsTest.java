@@ -75,13 +75,14 @@ class CallBlockKindsTest extends FxHeadlessTest {
     }
 
     @Test
-    void aJdkCallSaysUseJavaAndLooksLikeEveryOtherBlock() {
+    void aJdkCallStartsWithItsJavaPillAndLooksLikeEveryOtherBlock() {
         EditorFixture f = new EditorFixture(SOURCE);
         assertInstanceOf(ExternalCallBlock.class, f.body("run").getStatements().get(1));
         Node call = rendered(f).get(1);
 
         assertTrue(call.getStyleClass().contains("category-functions"), call.getStyleClass().toString());
-        assertTrue(labels(call).contains("use"), labels(call).toString());
+        assertTrue(!labels(call).contains("use") && !labels(call).contains("call"),
+                "the owner pill says whose call it is: " + labels(call));
         assertEquals("Java", ((Label) ((Parent) call).lookup(".call-owner-badge")).getText());
         assertTrue(call.getStyleClass().stream().noneMatch(c -> c.startsWith("sdk-")), "no plugin frame of its own");
     }

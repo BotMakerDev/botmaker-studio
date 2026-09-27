@@ -32,6 +32,10 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
     private final List<CodeBlock> bodyDeclarations = new ArrayList<>();
     private final BlockDragAndDropManager dragAndDropManager;
 
+    /** A class is not a line the bot stops on; its members' statements are. */
+    @Override
+    public boolean canHoldBreakpoint() { return false; }
+
     public ClassBlock(String id, TypeDeclaration astNode, BlockDragAndDropManager manager) {
         super(id, astNode);
         this.className = astNode.getName().getIdentifier();
@@ -115,7 +119,7 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
 
         // --- 1. ADD BUTTONS AT TOP (Call helper to get NEW instances) ---
         if (editable) {
-            container.getChildren().add(createControlToolbar(context));
+            container.getChildren().add(createControlToolbar(context, 0));
             container.getChildren().add(createClassMemberSeparator(context, 0));
         }
 
@@ -138,16 +142,17 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
 
         // --- 2. ADD BUTTONS AT BOTTOM (Call helper AGAIN to get NEW instances) ---
         if (editable) {
-            container.getChildren().add(createControlToolbar(context));
+            container.getChildren().add(createControlToolbar(context, bodyDeclarations.size()));
         }
 
         return container;
     }
 
     /**
-     * Helper method to create a fresh set of buttons every time it is called.
+     * A fresh set of buttons, adding at {@code insertIndex}: the top bar puts a new member first, the bottom bar
+     * last — each where the button is (2026-09-27; both appended until then, so the top one added out of sight).
      */
-    private Node createControlToolbar(CodeEditorService context) {
+    private Node createControlToolbar(CodeEditorService context, int insertIndex) {
         // Using HBox to put them side-by-side, or VBox if you prefer them stacked
         javafx.scene.layout.HBox toolbar = new javafx.scene.layout.HBox(10);
         toolbar.setAlignment(Pos.CENTER_LEFT);
@@ -156,26 +161,26 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
         // constructors, and exposing one only invites broken generated code. Keep only "Add Function".
         Button addMethodBtn = new Button("+ Add Function");
         addMethodBtn.getStyleClass().addAll("block-action-button", "block-action-button--primary");
-        addMethodBtn.setOnAction(e -> addFunction(context, addMethodBtn));
+        addMethodBtn.setOnAction(e -> addFunction(context, addMethodBtn, insertIndex));
 
         // Beside Add Function since 2026-09-26: an enum is a type the class declares, so it is added where the
-        // class's members are, not from a body's statement menu.
+        // class's members are, not from a body's statement menu. Painted in the enum block's own colour.
         Button addEnumBtn = new Button("+ Add Enum");
-        addEnumBtn.getStyleClass().add("block-action-button");
-        addEnumBtn.setOnAction(e -> addEnum(context, addEnumBtn));
+        addEnumBtn.getStyleClass().addAll("block-action-button", "block-action-button--enum");
+        addEnumBtn.setOnAction(e -> addEnum(context, addEnumBtn, insertIndex));
 
         toolbar.getChildren().addAll(addMethodBtn, addEnumBtn);
         return toolbar;
     }
 
     /** Asks for the enum's name and values, then declares it as a member of this class. */
-    private void addEnum(CodeEditorService context, Node source) {
+    private void addEnum(CodeEditorService context, Node source, int insertIndex) {
         TypeDeclaration typeDecl = (TypeDeclaration) this.astNode;
         Window owner = source.getScene() == null ? null : source.getScene().getWindow();
         com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
                         com.botmaker.studio.parser.factories.StatementFactory.uniqueTypeName(typeDecl, "MyEnum"),
                         com.botmaker.studio.parser.factories.StatementFactory.declaredTypeNames(typeDecl))
-                .ifPresent(draft -> context.getCodeEditor().addEnumToClass(typeDecl, draft, bodyDeclarations.size()));
+                .ifPresent(draft -> context.getCodeEditor().addEnumToClass(typeDecl, draft, insertIndex));
     }
 
     /**
@@ -183,7 +188,7 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
      * — see {@link MethodSignatures#declaredIn}, which reads them from the AST so a member the editor hides
      * still counts, and which compares whole signatures so an overload is not mistaken for a duplicate.
      */
-    private void addFunction(CodeEditorService context, Node source) {
+    private void addFunction(CodeEditorService context, Node source, int insertIndex) {
         TypeDeclaration typeDecl = (TypeDeclaration) this.astNode;
         Window owner = source.getScene() == null ? null : source.getScene().getWindow();
 
@@ -191,7 +196,7 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
                 .withProject(com.botmaker.studio.project.params.BotRecords.scan(context.getConfig(),
                         context.getState(), com.botmaker.studio.plugin.PluginHost.grammar()))
                 .showAndWait().ifPresent(draft ->
-                context.getCodeEditor().addFunctionToClass(typeDecl, draft, bodyDeclarations.size()));
+                context.getCodeEditor().addFunctionToClass(typeDecl, draft, insertIndex));
     }
 
     private Region createClassMemberSeparator(CodeEditorService context, int insertIndex) {

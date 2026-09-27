@@ -275,8 +275,11 @@ public final class ManagedHolders {
         return SourceVersion.isKeyword(name) ? name + "Value" : name;
     }
 
-    /** The last segment of a plugin id, lower-cased, or null when it is no package name. */
-    static String segment(String pluginId) {
+    /**
+     * The last segment of a plugin id, lower-cased, or null when it is no package name — the folder under
+     * {@code plugins/} a plugin's files are in, which {@code PluginFiles} reads back.
+     */
+    public static String segment(String pluginId) {
         if (pluginId == null) return null;
         String last = pluginId.substring(pluginId.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
         return SourceVersion.isIdentifier(last) && !SourceVersion.isKeyword(last) ? last : null;

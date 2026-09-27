@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
@@ -59,9 +60,19 @@ class ExplorerModelTest {
         assertEquals(ExplorerModel.Kind.ENTRY_POINT, ExplorerModel.kindOf(main, "class MyBot {}", main));
         assertEquals(ExplorerModel.Kind.PARAMETERS,
                 ExplorerModel.kindOf(pkg.resolve("Parameters.java"), "@Param(min = 1) static int x = 2;", main));
+        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Sdk"));
         assertEquals(ExplorerModel.Kind.PLUGIN_FILE,
-                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main),
+                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main, sdk),
                 "a plugin's file is that before it is anything else");
+        assertEquals(ExplorerModel.Kind.PARAMETERS,
+                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Mine.java"), "@Param int x;", main, sdk),
+                "a file the user put beside it is theirs: no loaded plugin declares it");
+        assertEquals(ExplorerModel.Kind.PARAMETERS,
+                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main, List.of()),
+                "with its plugin not loaded, it is an ordinary file");
+        assertEquals(ExplorerModel.Kind.JAVA,
+                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/deep/Sdk.java"), "class Sdk {}", main, sdk),
+                "exactly one package below plugins, as HostPluginValues writes one");
         assertEquals(ExplorerModel.Kind.JAVA, ExplorerModel.kindOf(pkg.resolve("Moves.java"), "class Moves {}", main));
         assertEquals(ExplorerModel.Kind.LIBRARY,
                 ExplorerModel.kindOf(Path.of("/p/src/main/java/com/botmaker/library/Lib.java"), "", main));
@@ -69,8 +80,6 @@ class ExplorerModelTest {
         assertEquals(ExplorerModel.Kind.DATA,
                 ExplorerModel.kindOf(Path.of("/r/botmaker-project.properties"), null, main));
         assertEquals(ExplorerModel.Kind.OTHER, ExplorerModel.kindOf(Path.of("/r/notes"), null, main));
-        assertFalse(ExplorerModel.isPluginFile(pkg.resolve("plugins/sdk/deep/Util.java")),
-                "exactly one package below plugins, as HostPluginValues writes one");
     }
 
     @Test

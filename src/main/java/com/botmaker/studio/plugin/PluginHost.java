@@ -135,6 +135,10 @@ public final class PluginHost {
     /** Memoised the same way. See {@link #managedValues()}. */
     private static volatile List<ManagedValue> managedValues = mergeManagedValues(BUNDLED);
 
+    /** The holder files the bound plugins declare, rebuilt on the same bind. See {@link #pluginFiles()}. */
+    private static volatile List<com.botmaker.studio.project.PluginFiles.Holder> pluginFiles =
+            com.botmaker.studio.project.PluginFiles.holdersOf(BUNDLED);
+
     /** What the last {@link #bind} could not load. See {@link #failures()}. */
     private static volatile List<PluginLoader.PluginFailure> failures = List.of();
 
@@ -277,6 +281,7 @@ public final class PluginHost {
         ownedToolbarItems = mergeOwnedToolbarItems(bound);
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
+        pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
         catalog = null;
         if (previous != null) previous.close();
     }
@@ -543,6 +548,15 @@ public final class PluginHost {
      */
     public static List<ManagedValue> managedValues() {
         return managedValues;
+    }
+
+    /**
+     * The files the bound plugins own in a bot — each {@code plugins/<segment>/<Holder>.java} a plugin's
+     * managed values name — which {@code LockResolver} locks on the canvas and the explorer marks. Empty with
+     * no project, so no file is a plugin's.
+     */
+    public static List<com.botmaker.studio.project.PluginFiles.Holder> pluginFiles() {
+        return pluginFiles;
     }
 
     /** Every plugin's entries, a throwing or malformed one costing only itself. */
