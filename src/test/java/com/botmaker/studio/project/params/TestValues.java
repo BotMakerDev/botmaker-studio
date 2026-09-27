@@ -1,10 +1,8 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import javafx.scene.Node;
 
 import java.lang.reflect.Type;
 import java.time.Duration;
@@ -67,9 +65,7 @@ public final class TestValues {
             } catch (NoSuchMethodException e) {
                 throw new AssertionError(e);
             }
-        }
-        @Override public Node editor(ValueContext ctx) { return null; }
-    };
+        }    };
 
     /** {@code Span.of(label, length)}, a component type nothing declares on its own. */
     public static final ComponentType<Span> SPAN = new ComponentType<>() {
@@ -93,16 +89,12 @@ public final class TestValues {
     public static final Type SPAN_FORM = Span.class;
 
     /** A JDK literal type: nothing to take apart, and no editor either — these tests draw nothing. */
-    private record Leaf<T>(Class<T> type, T fresh) implements PluginType<T> {
-        @Override public Node editor(ValueContext ctx) { return null; }
-    }
+    private record Leaf<T>(Class<T> type, T fresh) implements PluginType<T> {    }
 
     /** {@code Duration.ofMillis(long)}. */
     public static final class DurationType implements PluginType<Duration>, ComponentType<Duration> {
         @Override public Class<Duration> type() { return Duration.class; }
-        @Override public Duration fresh() { return Duration.ZERO; }
-        @Override public Node editor(ValueContext ctx) { return null; }
-        @Override public java.lang.reflect.Executable factory() { return method(Duration.class, "ofMillis", long.class); }
+        @Override public Duration fresh() { return Duration.ZERO; }        @Override public java.lang.reflect.Executable factory() { return method(Duration.class, "ofMillis", long.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
         @Override public List<Object> components(Duration value) { return List.of(value.toMillis()); }
         @Override public Duration build(List<Object> parts) {

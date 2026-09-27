@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.plugin.api.value.EditableType;
 import com.botmaker.plugin.api.value.PluginType;
 import javafx.scene.Node;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -34,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class PluginCompositionTest {
 
-    /** One declaration of {@code type}, doing nothing a composition would call. */
+    /** One declaration of {@code type} its plugin draws, doing nothing a composition would call. */
     private static <T> PluginType<T> declared(Class<T> type) {
-        return new PluginType<>() {
+        return new EditableType<>() {
             @Override public Class<T> type() { return type; }
             @Override public T fresh() { return null; }
             @Override public Node editor(ValueContext ctx) { return null; }
@@ -151,5 +152,20 @@ class PluginCompositionTest {
 
         assertEquals(1, editors.size());
         assertEquals("com.example.chat", editors.getFirst().pluginId());
+    }
+
+    /** A plain PluginType says its owner does not draw it (6f): the host makes no owner editor of it. */
+    @Test
+    void aPlainTypeGetsNoOwnerEditor() {
+        PluginType<Channel> plain = new PluginType<>() {
+            @Override public Class<Channel> type() { return Channel.class; }
+            @Override public Channel fresh() { return null; }
+        };
+        StudioPlugin plugin = new StudioPlugin() {
+            @Override public String id() { return "com.example.chat"; }
+            @Override public List<PluginType<?>> types() { return List.of(plain); }
+        };
+
+        assertEquals(List.of(), PluginHost.mergeOwnedSlotEditors(List.of(plugin)));
     }
 }

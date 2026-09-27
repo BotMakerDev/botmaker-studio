@@ -4,13 +4,11 @@ import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.record.Gesture;
 import com.botmaker.plugin.api.record.RecordedValue;
-import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.Recordings;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
-import javafx.scene.Node;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -73,9 +71,7 @@ class RecordingWriterTest {
             } catch (NoSuchMethodException e) {
                 throw new AssertionError(e);
             }
-        }
-        @Override public Node editor(ValueContext ctx) { return null; }
-    };
+        }    };
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(WHERE_TYPE), List.of(THING_TYPE, DURATION_TYPE, CHORD_TYPE));
 

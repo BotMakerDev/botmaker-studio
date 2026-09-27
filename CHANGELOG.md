@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- **Only a type its plugin draws gets that plugin's editor** (contract 0.3.0, `EditableType`). A plain
+  `PluginType` is drawn by another plugin's editor for it, or shown as written until Studio's fallback lands.
+
 ## [1.1.11] — 2026-09-27
 
 ### Changed

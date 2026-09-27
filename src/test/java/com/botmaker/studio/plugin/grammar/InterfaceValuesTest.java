@@ -1,10 +1,8 @@
 package com.botmaker.studio.plugin.grammar;
 
-import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.project.params.TestValues;
-import javafx.scene.Node;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,9 +34,7 @@ class InterfaceValuesTest {
 
     static final class PlaceType implements PluginType<Place> {
         @Override public Class<Place> type() { return Place.class; }
-        @Override public Place fresh() { return new Here(); }
-        @Override public Node editor(ValueContext ctx) { return null; }
-    }
+        @Override public Place fresh() { return new Here(); }    }
 
     /** One call per implementation, each on the interface. */
     static <T extends Place> ComponentType<T> call(Class<T> type, java.lang.reflect.Method factory,

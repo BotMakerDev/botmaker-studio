@@ -1,10 +1,8 @@
 package com.botmaker.studio.plugin.grammar;
 
-import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.project.params.TestValues;
-import javafx.scene.Node;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
@@ -36,9 +34,7 @@ class ValueGrammarTest {
     /** {@code new java.awt.Color(r, g, b)} — the value that was rewritten on open, and the reason for all this. */
     static final class ColorType implements PluginType<Color>, ComponentType<Color> {
         @Override public Class<Color> type() { return Color.class; }
-        @Override public Color fresh() { return Color.WHITE; }
-        @Override public Node editor(ValueContext ctx) { return null; }
-        @Override public List<Class<?>> componentTypes() { return List.of(int.class, int.class, int.class); }
+        @Override public Color fresh() { return Color.WHITE; }        @Override public List<Class<?>> componentTypes() { return List.of(int.class, int.class, int.class); }
         @Override public List<Object> components(Color c) { return List.of(c.getRed(), c.getGreen(), c.getBlue()); }
         @Override public Color build(List<Object> parts) {
             return new Color((int) parts.get(0), (int) parts.get(1), (int) parts.get(2));
@@ -48,9 +44,7 @@ class ValueGrammarTest {
     /** {@code java.time.Duration.ofMillis(long)}. */
     static final class DurationType implements PluginType<Duration>, ComponentType<Duration> {
         @Override public Class<Duration> type() { return Duration.class; }
-        @Override public Duration fresh() { return Duration.ZERO; }
-        @Override public Node editor(ValueContext ctx) { return null; }
-        @Override public Executable factory() { return TestValues.method(Duration.class, "ofMillis", long.class); }
+        @Override public Duration fresh() { return Duration.ZERO; }        @Override public Executable factory() { return TestValues.method(Duration.class, "ofMillis", long.class); }
         @Override public List<Class<?>> componentTypes() { return List.of(long.class); }
         @Override public List<Object> components(Duration d) { return List.of(d.toMillis()); }
         @Override public Duration build(List<Object> parts) { return Duration.ofMillis((long) parts.getFirst()); }
@@ -59,9 +53,7 @@ class ValueGrammarTest {
     /** An enum a plugin declares: nothing to take apart, written as its constant. */
     static final class UnitType implements PluginType<ChronoUnit> {
         @Override public Class<ChronoUnit> type() { return ChronoUnit.class; }
-        @Override public ChronoUnit fresh() { return ChronoUnit.SECONDS; }
-        @Override public Node editor(ValueContext ctx) { return null; }
-    }
+        @Override public ChronoUnit fresh() { return ChronoUnit.SECONDS; }    }
 
     /** A value the bot evaluates: declared, never taken apart, starting as a call. */
     record Source(String written) {
@@ -77,9 +69,7 @@ class ValueGrammarTest {
             } catch (NoSuchMethodException e) {
                 throw new AssertionError(e);
             }
-        }
-        @Override public Node editor(ValueContext ctx) { return null; }
-    }
+        }    }
 
     /** A flow in miniature: parts written as calls inside one call, one of them a name kept as source. */
     public record Step(String body, String name, List<String> outcomes) {}
@@ -259,9 +249,7 @@ class ValueGrammarTest {
                 } catch (NoSuchMethodException e) {
                     throw new AssertionError(e);
                 }
-            }
-            @Override public Node editor(ValueContext ctx) { return null; }
-        };
+            }        };
         ValueGrammar grammar = ValueGrammar.of(List.of(takesAnArgument), List.of());
 
         assertTrue(grammar.freshInitializer(Source.class).isEmpty());

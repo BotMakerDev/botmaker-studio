@@ -9,6 +9,7 @@ import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.plugin.api.value.EditableType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginLoader;
@@ -405,9 +406,10 @@ public final class PluginHost {
 
     /**
      * Each plugin's {@link StudioPlugin#slotEditors()} first — the editors chosen by the call, and overrides
-     * of somebody else's type, which are narrower matches — and then one editor per type it declares, drawn
-     * by {@link PluginType#editor}. A declared type is named once, in its {@code PluginType}, so this is
-     * where it becomes an editor rather than the plugin listing it a second time.
+     * of somebody else's type, which are narrower matches — and then one editor per type it declares
+     * <em>and draws</em>, an {@link EditableType}. A declared type is named once, in its {@code PluginType}, so
+     * this is where it becomes an editor rather than the plugin listing it a second time. A plain
+     * {@code PluginType} (2026-09-27) is drawn by another plugin's {@code forType} or the host's fallback.
      */
     static List<OwnedEditor> mergeOwnedSlotEditors(List<StudioPlugin> set) {
         List<OwnedEditor> merged = new ArrayList<>();
@@ -422,10 +424,11 @@ public final class PluginHost {
             List<PluginType<?>> types = quietly(plugin, "declare types", plugin::types);
             if (types == null) continue;
             for (PluginType<?> type : types) {
-                Class<?> cls = type == null ? null : quietly(plugin, "name a type", type::type);
+                if (!(type instanceof EditableType<?> drawn)) continue;   // a plain type: somebody else draws it
+                Class<?> cls = quietly(plugin, "name a type", drawn::type);
                 if (cls == null) continue;
                 merged.add(new OwnedEditor(plugin.id(), name,
-                        SlotEditor.forType(cls, type::editor, type::preview)));
+                        SlotEditor.forType(cls, drawn::editor, drawn::preview)));
             }
         }
         return List.copyOf(merged);
