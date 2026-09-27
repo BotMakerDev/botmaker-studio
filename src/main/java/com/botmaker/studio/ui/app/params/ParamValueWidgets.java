@@ -27,6 +27,7 @@ import javafx.scene.layout.VBox;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -114,6 +115,16 @@ public final class ParamValueWidgets {
         return widget;
     }
 
+    /**
+     * The editor for one value of {@code form} outside the Parameters window — the canvas's container
+     * popover (picker 6e2) — seeded from {@code written}, with the same rows, grid and cells a row gets.
+     */
+    public static ValueEditors.Editor valueEditor(Type form, Optional<SourceNode> written, ProjectConfig config,
+                                                  BotRecords records) {
+        return editor(PluginHost.grammar(), form, written, records == null ? BotRecords.none() : records,
+                ValueEditors.Context.of(config));
+    }
+
     /** The same widget, pinned to one width — what a list of rows wants, and a form does not. */
     public static Node buildFixedWidth(String group, ParameterRow row, Type form, ProjectConfig config,
                                        List<ValueEditor> sink) {
@@ -193,7 +204,13 @@ public final class ParamValueWidgets {
         if (container == ValueContainer.LIST) {
             return arguments.getLast() == String.class
                     ? textLines(grammar, form, written)
-                    : listRows(grammar, form, arguments.getLast(), written, records, ctx);
+                    : listRows(grammar, form, arguments.getLast(), written, records, ctx, false);
+        }
+        if (container == ValueContainer.SET) {
+            return listRows(grammar, form, arguments.getLast(), written, records, ctx, true);
+        }
+        if (container == ValueContainer.DEQUE) {
+            return dequeRows(grammar, form, written, records, ctx);
         }
         if (container == ValueContainer.MAP) {
             return mapGrid(grammar, form, arguments.get(0), arguments.get(1), written, records, ctx);
@@ -304,50 +321,124 @@ public final class ParamValueWidgets {
         return written.map(node -> ValueWire.partsOrNone(form, node)).orElse(List.of());
     }
 
-    /** A list of anything but text: a growable column of the element's own editor. */
+    /**
+     * A list of anything but text, or a set: a growable column of the element's own editor, each row with
+     * ↑/↓ to reorder, ⧉ to duplicate and ✕ to remove.
+     *
+     * <p>A set ({@code distinct}) refuses a repeated element when it is read back, keeping the first:
+     * {@code Set.of} throws on one, so writing it would be a bot that stops at start-up. Its ⧉ is left out for
+     * the same reason — the copy could only ever be refused.
+     */
     private static ValueEditors.Editor listRows(ValueGrammar grammar, Type form, Type element,
                                                 Optional<SourceNode> written, BotRecords records,
-                                                ValueEditors.Context ctx) {
+                                                ValueEditors.Context ctx, boolean distinct) {
         List<ValueEditors.Editor> editors = new ArrayList<>();
-        VBox column = composite();
-        Button add = new Button("Add");
-        Runnable[] rebuild = new Runnable[1];
-
-        // The rows are rebuilt from the editors' own current state rather than from the row: this widget
-        // outlives several adds and removes before anything is flushed back, so the row it was built from is
-        // stale from the first click.
-        rebuild[0] = () -> {
-            column.getChildren().clear();
-            for (int i = 0; i < editors.size(); i++) {
-                ValueEditors.Editor editor = editors.get(i);
-                int at = i;
-                Button remove = new Button("✕");
-                remove.getStyleClass().add("row-icon-button");
-                remove.setOnAction(e -> {
-                    editors.remove(at);
-                    rebuild[0].run();
-                });
-                HBox line = new HBox(6, editor.node(), remove);
-                line.setAlignment(Pos.CENTER_LEFT);
-                HBox.setHgrow(editor.node(), Priority.ALWAYS);
-                column.getChildren().add(line);
-            }
-            if (editors.isEmpty()) column.getChildren().add(hint("Nothing in this list yet."));
-            column.getChildren().add(add);
-        };
-
         for (ValueGrammar.Part part : parts(form, written)) {
             editors.add(editor(grammar, part.form(), Optional.of(part.written()), records, ctx));
         }
+        Node column = growable(editors, distinct ? "Nothing in this set yet." : "Nothing in this list yet.",
+                () -> editor(grammar, element, Optional.empty(), records, ctx),
+                distinct ? null : original -> editor(grammar, element,
+                        original.read().get().map(JavaValue::written), records, ctx),
+                editor -> List.of(editor.node()));
+
+        return new ValueEditors.Editor(column, () -> {
+            List<JavaValue> values = new ArrayList<>();
+            for (ValueEditors.Editor editor : editors) {
+                Optional<JavaValue> value = editor.read().get();
+                if (value.isEmpty()) continue;
+                if (distinct && values.stream().anyMatch(value.get()::sameJava)) continue;
+                values.add(value.get());
+            }
+            return ValueWire.compose(form, values);
+        });
+    }
+
+    /**
+     * A stack or a queue ({@code Deque}): the list it wraps, drawn as {@link #listRows}, and composed back
+     * inside {@code new ArrayDeque<>(…)}. The top of a stack and the head of a queue are the first row.
+     */
+    private static ValueEditors.Editor dequeRows(ValueGrammar grammar, Type form, Optional<SourceNode> written,
+                                                 BotRecords records, ValueEditors.Context ctx) {
+        Type listForm = ValueTypes.container(form)
+                .map(container -> container.partTypes(ValueTypes.arguments(form), 1).getFirst())
+                .orElse(ValueTypes.NONE);
+        Optional<SourceNode> inner = parts(form, written).stream().findFirst().map(ValueGrammar.Part::written);
+        List<Type> arguments = ValueTypes.arguments(form);
+        Type element = arguments.isEmpty() ? ValueTypes.NONE : arguments.getFirst();
+        ValueEditors.Editor list = element == String.class
+                ? textLines(grammar, listForm, inner)
+                : listRows(grammar, listForm, element, inner, records, ctx, false);
+        Label order = hint("First row: the top of a stack, the head of a queue.");
+        return new ValueEditors.Editor(new VBox(4, order, list.node()),
+                () -> list.read().get().flatMap(value -> ValueWire.compose(form, List.of(value))));
+    }
+
+    /**
+     * The shared row machinery of a list, a set and a map: each row is {@code cells(item)} followed by ↑, ↓,
+     * ⧉ (when {@code copy} is not {@code null}) and ✕, and an Add at the foot.
+     *
+     * <p>The rows are rebuilt from {@code items} itself rather than from the row the window was opened on:
+     * this widget outlives several adds, moves and removes before anything is flushed back, so the row it was
+     * built from is stale from the first click. {@code copy} seeds the duplicate from what the original reads
+     * back now, so an edit not yet written is copied too.
+     */
+    private static <T> Node growable(List<T> items, String empty, java.util.function.Supplier<T> fresh,
+                                     java.util.function.UnaryOperator<T> copy,
+                                     java.util.function.Function<T, List<Node>> cells) {
+        boolean duplicable = copy != null;
+        VBox column = composite();
+        Button add = new Button("Add");
+        Runnable[] rebuild = new Runnable[1];
+        rebuild[0] = () -> {
+            column.getChildren().clear();
+            for (int i = 0; i < items.size(); i++) {
+                T item = items.get(i);
+                int at = i;
+                HBox line = new HBox(6);
+                line.getChildren().addAll(cells.apply(item));
+                Button up = rowButton("↑", "Move up", () -> {
+                    Collections.swap(items, at, at - 1);
+                    rebuild[0].run();
+                });
+                up.setDisable(at == 0);
+                Button down = rowButton("↓", "Move down", () -> {
+                    Collections.swap(items, at, at + 1);
+                    rebuild[0].run();
+                });
+                down.setDisable(at == items.size() - 1);
+                line.getChildren().addAll(up, down);
+                if (duplicable) {
+                    line.getChildren().add(rowButton("⧉", "Duplicate", () -> {
+                        items.add(at + 1, copy.apply(item));
+                        rebuild[0].run();
+                    }));
+                }
+                line.getChildren().add(rowButton("✕", "Remove", () -> {
+                    items.remove(at);
+                    rebuild[0].run();
+                }));
+                line.setAlignment(Pos.CENTER_LEFT);
+                for (Node cell : cells.apply(item)) HBox.setHgrow(cell, Priority.ALWAYS);
+                column.getChildren().add(line);
+            }
+            if (items.isEmpty()) column.getChildren().add(hint(empty));
+            column.getChildren().add(add);
+        };
         add.setOnAction(e -> {
-            editors.add(editor(grammar, element, Optional.empty(), records, ctx));
+            items.add(fresh.get());
             rebuild[0].run();
         });
         rebuild[0].run();
+        return column;
+    }
 
-        return new ValueEditors.Editor(column, () -> ValueWire.compose(form, editors.stream()
-                .flatMap(editor -> editor.read().get().stream())
-                .toList()));
+    private static Button rowButton(String glyph, String tip, Runnable action) {
+        Button button = new Button(glyph);
+        button.getStyleClass().add("row-icon-button");
+        button.setTooltip(new Tooltip(tip));
+        button.setOnAction(e -> action.run());
+        return button;
     }
 
     /**
@@ -375,39 +466,17 @@ public final class ParamValueWidgets {
                 editor(grammar, valueType, entry.value(), records, ctx));
 
         List<Cell> cells = new ArrayList<>();
-        VBox column = composite();
-        Button add = new Button("Add");
-        Runnable[] rebuild = new Runnable[1];
-
-        rebuild[0] = () -> {
-            column.getChildren().clear();
-            for (int i = 0; i < cells.size(); i++) {
-                Cell cell = cells.get(i);
-                int at = i;
-                Button remove = new Button("✕");
-                remove.getStyleClass().add("row-icon-button");
-                remove.setOnAction(e -> {
-                    cells.remove(at);
-                    rebuild[0].run();
-                });
-                HBox line = new HBox(6, cell.key().node(), new Label("→"), cell.value().node(), remove);
-                line.setAlignment(Pos.CENTER_LEFT);
-                HBox.setHgrow(cell.key().node(), Priority.ALWAYS);
-                HBox.setHgrow(cell.value().node(), Priority.ALWAYS);
-                column.getChildren().add(line);
-            }
-            if (cells.isEmpty()) column.getChildren().add(hint("Nothing in this map yet."));
-            column.getChildren().add(add);
-        };
-
-        // The watcher is wired once per cell, where the cell is made: the rows are rebuilt on every add and
-        // remove, so wiring it there would stack one listener per rebuild on the same field.
+        // The watcher is wired once per cell, where the cell is made: the rows are rebuilt on every add, move
+        // and remove, so wiring it there would stack one listener per rebuild on the same field.
         for (Entry entry : entries) cells.add(watched(cells, cellOf.cell(entry)));
-        add.setOnAction(e -> {
-            cells.add(watched(cells, cellOf.cell(new Entry(Optional.empty(), Optional.empty()))));
-            rebuild[0].run();
-        });
-        rebuild[0].run();
+        // ⧉ copies the entry as it reads back now; the copy's key is then marked as a repeat until changed,
+        // which is the point of duplicating an entry — keep the value, give it a new key.
+        Node column = growable(cells, "Nothing in this map yet.",
+                () -> watched(cells, cellOf.cell(new Entry(Optional.empty(), Optional.empty()))),
+                original -> watched(cells, cellOf.cell(new Entry(
+                        original.key().read().get().map(JavaValue::written),
+                        original.value().read().get().map(JavaValue::written)))),
+                cell -> List.of(cell.key().node(), new Label("→"), cell.value().node()));
 
         return new ValueEditors.Editor(column, () -> {
             List<JavaValue> pairs = new ArrayList<>();

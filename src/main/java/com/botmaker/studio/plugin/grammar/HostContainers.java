@@ -1,13 +1,18 @@
 package com.botmaker.studio.plugin.grammar;
 
 import java.lang.reflect.Type;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-/** The three containers the host seeds, so a project with no plugins installed still has a list and a map. */
+/** The containers the host seeds, so a project with no plugins installed still has a list, a map, a set and a deque. */
 final class HostContainers {
 
     private HostContainers() {
@@ -105,6 +110,100 @@ final class HostContainers {
         @Override
         public List<Type> partTypes(List<Type> arguments, int parts) {
             return Collections.nCopies(parts, ValueTypes.of(ValueContainer.ENTRY, arguments));
+        }
+    }
+
+    /** {@code Set.of(e₁, …)}, built back as an ordered set so a file is never rewritten reshuffled. */
+    static final class SetContainer implements ValueContainer<Set<?>> {
+
+        private static final Factory OF = Factory.method(Set.class, "of", Object[].class);
+
+        @Override
+        public Class<?> type() {
+            return Set.class;
+        }
+
+        @Override
+        public int arity() {
+            return 1;
+        }
+
+        @Override
+        public Factory factory() {
+            return OF;
+        }
+
+        @Override
+        public String label() {
+            return "Set of…";
+        }
+
+        @Override
+        public List<Object> parts(Set<?> value) {
+            return value == null ? List.of() : List.copyOf(value);
+        }
+
+        @Override
+        public Set<?> build(List<Object> parts) {
+            return parts == null ? Set.of() : Collections.unmodifiableSet(new LinkedHashSet<>(parts));
+        }
+
+        @Override
+        public List<Type> partTypes(List<Type> arguments, int parts) {
+            return Collections.nCopies(parts, arguments.isEmpty() ? ValueTypes.NONE : arguments.getFirst());
+        }
+    }
+
+    /** {@code new ArrayDeque<>(List.of(e₁, …))}: one part, the list it wraps. */
+    static final class DequeContainer implements ValueContainer<Deque<?>> {
+
+        private static final Factory NEW = constructor();
+
+        private static Factory constructor() {
+            try {
+                return new Factory(ArrayDeque.class.getConstructor(Collection.class));
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("new ArrayDeque(Collection) is gone", e);
+            }
+        }
+
+        @Override
+        public Class<?> type() {
+            return Deque.class;
+        }
+
+        @Override
+        public int arity() {
+            return 1;
+        }
+
+        @Override
+        public Factory factory() {
+            return NEW;
+        }
+
+        @Override
+        public String label() {
+            return "Stack / queue of…";
+        }
+
+        @Override
+        public List<Object> parts(Deque<?> value) {
+            return List.of(value == null ? List.of() : List.copyOf(value));
+        }
+
+        @Override
+        public Deque<?> build(List<Object> parts) {
+            ArrayDeque<Object> out = new ArrayDeque<>();
+            if (parts != null && !parts.isEmpty() && parts.getFirst() instanceof Collection<?> elements) {
+                out.addAll(elements);
+            }
+            return out;
+        }
+
+        @Override
+        public List<Type> partTypes(List<Type> arguments, int parts) {
+            return Collections.nCopies(parts, ValueTypes.of(ValueContainer.LIST, arguments));
         }
     }
 

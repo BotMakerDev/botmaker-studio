@@ -72,13 +72,13 @@ final class ValueWriter {
         List<Object> parts = container.get().partsOf(value);
         List<Type> partTypes = container.get().partTypes(ValueTypes.arguments(type), parts.size());
         if (partTypes.size() != parts.size()) return Optional.empty();
-        MethodInvocation call = factoryCall(container.get().factory(), names);
+        ContainerCall call = containerCall(container.get().factory(), names);
         for (int i = 0; i < parts.size(); i++) {
             Optional<Expression> part = type(partTypes.get(i), parts.get(i), names);
             if (part.isEmpty()) return Optional.empty();
-            arguments(call).add(part.get());
+            call.arguments().add(part.get());
         }
-        return Optional.of(call);
+        return Optional.of(call.node());
     }
 
     /**
@@ -109,13 +109,13 @@ final class ValueWriter {
         if (value instanceof Enum<?> constant) return constant(constant.getDeclaringClass(), value, names);
         for (ValueContainer<?> container : ValueContainer.ALL) {
             if (!container.type().isInstance(value)) continue;
-            MethodInvocation call = factoryCall(container.factory(), names);
+            ContainerCall call = containerCall(container.factory(), names);
             for (Object part : container.partsOf(value)) {
                 Optional<Expression> written = any(part, names);
                 if (written.isEmpty()) return Optional.empty();
-                arguments(call).add(written.get());
+                call.arguments().add(written.get());
             }
-            return Optional.of(call);
+            return Optional.of(call.node());
         }
         ComponentType<?> exact = grammar.canonical(value.getClass());
         if (exact != null) return call(exact, value, names);
@@ -184,12 +184,12 @@ final class ValueWriter {
             return Optional.empty();
         }
         Names names = new Names(false);
-        MethodInvocation call = factoryCall(container.get().factory(), names);
+        ContainerCall call = containerCall(container.get().factory(), names);
         for (JavaValue part : parts) {
-            arguments(call).add(part.copyInto(names.ast));
+            call.arguments().add(part.copyInto(names.ast));
             names.addAll(part.imports());
         }
-        return Optional.of(names.value(call));
+        return Optional.of(names.value(call.node()));
     }
 
     // ---- a fresh value -----------------------------------------------------------------------------------
@@ -238,6 +238,26 @@ final class ValueWriter {
     }
 
     // ---- plumbing ----------------------------------------------------------------------------------------
+
+    /** A container's call and the argument list its parts go into. */
+    private record ContainerCall(Expression node, List<Expression> arguments) {
+    }
+
+    /**
+     * {@code Owner.factory()} for a container, or {@code new Owner<>()} for the one written with a constructor
+     * ({@code Deque}) — the diamond, since the target type gives the element type and spelling it again would
+     * be one more thing to keep in step with the declaration.
+     */
+    @SuppressWarnings("unchecked")
+    private static ContainerCall containerCall(Factory factory, Names names) {
+        if (factory.kind() == Factory.Kind.CONSTRUCTOR) {
+            ClassInstanceCreation creation = names.ast.newClassInstanceCreation();
+            creation.setType(names.ast.newParameterizedType(names.ast.newSimpleType(names.of(factory.owner()))));
+            return new ContainerCall(creation, creation.arguments());
+        }
+        MethodInvocation call = factoryCall(factory, names);
+        return new ContainerCall(call, arguments(call));
+    }
 
     private static MethodInvocation factoryCall(Factory factory, Names names) {
         MethodInvocation call = names.ast.newMethodInvocation();

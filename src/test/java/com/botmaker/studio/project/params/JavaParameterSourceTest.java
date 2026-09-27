@@ -197,11 +197,25 @@ class JavaParameterSourceTest {
     void anUnregisteredContainerIsAnUnknownLeafRatherThanAGuess() {
         JavaParameter parameter = read(wrap("""
                     @Param
-                    public static java.util.Set<String> tags = java.util.Set.of("a");
+                    public static java.util.TreeSet<String> tags = new java.util.TreeSet<>();
                 """)).getFirst();
 
         assertFalse(parameter.editable());
-        assertEquals("java.util.Set<String>", ValueTypes.sourceName(parameter.form()));
+        assertEquals("java.util.TreeSet<String>", ValueTypes.sourceName(parameter.form()));
+    }
+
+    /** A set and a deque are host containers since 2026-09-27 (picker 6e2), so their rows are editable. */
+    @Test
+    void aSetAndADequeAreEditable() {
+        List<JavaParameter> parameters = read(wrap("""
+                    @Param
+                    public static java.util.Set<String> tags = java.util.Set.of("a");
+                    @Param
+                    public static java.util.Deque<Integer> steps = new java.util.ArrayDeque<>(java.util.List.of(1, 2));
+                """));
+
+        assertTrue(parameters.get(0).editable());
+        assertTrue(parameters.get(1).editable());
     }
 
     /** A hand-written spelling of a container this grammar did not write is kept, not replaced. */

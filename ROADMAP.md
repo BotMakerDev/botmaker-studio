@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker phase 6f, Studio's half: every value gets a picker.** `PluginHost` makes an
+- **2026-09-27 (latest) — Picker phase 6e2: collections.** `ValueContainer.SET` (`Set.of`, built as an ordered
+  set) and `DEQUE` (`new ArrayDeque<>(List.of(…))`, the one constructor-written container: `ValueWriter.containerCall`,
+  `ExpressionReader` reads a `ClassInstanceCreation`). `ParamValueWidgets.growable`: ↑/↓/⧉/✕ rows for list, set
+  and map; `dequeRows` wraps the list. Canvas: `pickers/ContainerPicker` (FALLBACKS, before the enum) — a pill over
+  `ParamValueWidgets.valueEditor` in a popover; the slot type from `ValueTypeResolver.ofBinding`.
+- **2026-09-27 — Picker phase 6f, Studio's half: every value gets a picker.** `PluginHost` makes an
   owner editor only of an `EditableType` (contract 0.3.0). `ui/app/params/FallbackShape` (pure) +
   `ShapeFallbackView` draw a value no plugin draws — enum dropdown, JDK literal field, a declared call as one row
   per part (depth ≤ 4), else kept with Reset — in `ValueEditors.editorFor` and `optionDisplay`.

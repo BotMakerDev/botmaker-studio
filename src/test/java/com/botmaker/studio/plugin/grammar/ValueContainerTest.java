@@ -104,9 +104,11 @@ class ValueContainerTest {
 
     @Test
     void somethingNoContainerIsIsAnOrdinaryAbsence() {
-        // A Set, a leaf, an unknown spelling. Empty rather than a throw: the host then shows the field's
-        // source read-only, which is what it already does for an unknown leaf.
-        assertFalse(ValueTypes.container(new ValueTypes.Parameterized(java.util.Set.class, List.of(TEXT))).isPresent());
+        // A TreeSet (a Set is a container since 2026-09-27; a concrete class is not), a leaf, an unknown
+        // spelling. Empty rather than a throw: the host then shows the field's source read-only, which is what
+        // it already does for an unknown leaf.
+        assertFalse(ValueTypes.container(
+                new ValueTypes.Parameterized(java.util.TreeSet.class, List.of(TEXT))).isPresent());
         assertFalse(ValueTypes.container(TEXT).isPresent());
         assertFalse(ValueTypes.container(ValueTypes.NONE).isPresent());
     }

@@ -69,6 +69,10 @@ public final class PickerRegistry {
             // The JDK types are plugin-basics' to draw since 2026-09-27 (LocalTime, LocalDate, DayOfWeek and
             // Month left then); Color, Rect, Point and Size left earlier for the same reason.
 
+            // A List, Map, Set or Deque written as its own call: one pill opening the Parameters rows. The
+            // containers are the host's grammar, so no plugin draws them.
+            ContainerPicker.asSpecialType(),
+
             // Enum fallback (re-resolves name-only SDK types through the project/library index).
             EnumPicker.asSpecialType()
     );

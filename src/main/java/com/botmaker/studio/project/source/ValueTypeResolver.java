@@ -82,6 +82,33 @@ public final class ValueTypeResolver {
     }
 
     /**
+     * The type a binding alone means as a value's type — what a slot on the canvas has, where nothing is
+     * written but the binding of the expression or of the parameter it fills (picker 6e2). The same answers
+     * as {@link #of} for a written type: a container over its arguments, a class the grammar names, and
+     * {@link ValueTypes.Unknown} for everything else.
+     */
+    public static java.lang.reflect.Type ofBinding(ValueGrammar grammar, ITypeBinding binding) {
+        if (binding == null || binding.isRecovered()) return ValueTypes.NONE;
+        if (binding.isArray() || binding.isWildcardType() || binding.isTypeVariable() || binding.isCapture()) {
+            return new ValueTypes.Unknown(binding.getName());
+        }
+        String raw = binding.getErasure().getQualifiedName();
+        if (binding.isParameterizedType()) {
+            ITypeBinding[] typeArguments = binding.getTypeArguments();
+            for (ValueContainer<?> container : ValueContainer.ALL) {
+                if (!JavaNames.canonical(container.type()).equals(raw)) continue;
+                if (container.arity() != typeArguments.length) return new ValueTypes.Unknown(binding.getName());
+                List<java.lang.reflect.Type> arguments = new ArrayList<>();
+                for (ITypeBinding argument : typeArguments) arguments.add(ofBinding(grammar, argument));
+                return ValueTypes.of(container, arguments);
+            }
+            return new ValueTypes.Unknown(binding.getName());
+        }
+        return grammar.named(raw).<java.lang.reflect.Type>map(cls -> cls)
+                .orElse(new ValueTypes.Unknown(binding.getName()));
+    }
+
+    /**
      * The canonical name a written type means, from its binding or, without one, from the names the grammar
      * and the bot declare — or empty.
      */

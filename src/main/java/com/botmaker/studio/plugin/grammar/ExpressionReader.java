@@ -76,9 +76,13 @@ final class ExpressionReader {
     Optional<List<ValueGrammar.Part>> parts(Type type, SourceNode node) {
         Optional<ValueContainer<?>> container = ValueTypes.container(type);
         if (container.isEmpty() || node == null || node.node() == null) return Optional.empty();
-        if (!(unwrap(node.node()) instanceof MethodInvocation call)) return Optional.empty();
-        if (!container.get().factory().matches(call, false)) return Optional.empty();
-        List<Expression> arguments = arguments(call);
+        List<Expression> arguments = switch (unwrap(node.node())) {
+            case MethodInvocation call when container.get().factory().matches(call, false) -> arguments(call);
+            case ClassInstanceCreation creation when container.get().factory().matches(creation) ->
+                    arguments(creation);
+            case null, default -> null;
+        };
+        if (arguments == null) return Optional.empty();
         List<Type> types = container.get().partTypes(ValueTypes.arguments(type), arguments.size());
         if (types.size() != arguments.size()) return Optional.empty();
         List<ValueGrammar.Part> parts = new ArrayList<>(arguments.size());
@@ -142,6 +146,12 @@ final class ExpressionReader {
 
     private Optional<Object> construct(SourceNode node, Class<?> expected) {
         ClassInstanceCreation creation = (ClassInstanceCreation) node.node();
+        for (ValueContainer<?> container : grammar.containers()) {
+            if ((expected == null || expected.isAssignableFrom(container.type()))
+                    && container.factory().matches(creation)) {
+                return containerValue(container, arguments(creation), node);
+            }
+        }
         for (Call call : calls) {
             if (!assignable(expected, call) || !call.factory().matches(creation)) continue;
             Optional<Object> built = build(call, List.of(), arguments(creation), node);

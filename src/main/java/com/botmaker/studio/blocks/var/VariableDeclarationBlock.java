@@ -82,7 +82,13 @@ public class VariableDeclarationBlock extends AbstractStatementBlock {
     private Node initializerNode(CodeEditorService context) {
         if (initializer == null) return emptyInitializer(context, varType);
 
-        if (initializer instanceof ListBlock) return initializer.getUINode(context);
+        if (initializer instanceof ListBlock) {
+            // A List.of(…) of a declared container type is the container pill (picker 6e2); any other list
+            // shape, and a locked one, keeps the row of element blocks, which renders itself inert.
+            Node pill = isReadOnly() ? null
+                    : PickerRegistry.pickerNodeFor(PickerContext.of(context, ValueSlot.of(initializer), varType));
+            return pill != null ? pill : initializer.getUINode(context);
+        }
         if (initializer.getAstNode() instanceof ArrayInitializer) return createListDisplay(context);
 
         // Route the initializer through the same specialized pickers used for call arguments, keyed on

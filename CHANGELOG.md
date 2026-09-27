@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Sets and stacks/queues.** A `Set<T>` (written `Set.of(…)`) and a `Deque<T>` (written
+  `new ArrayDeque<>(List.of(…))`) are values like a list: wrap a type in them in the type chooser, edit them as
+  rows. A set drops a repeated element rather than write one `Set.of` would refuse.
+- **List, set and map rows move and copy.** Each row has ↑/↓ and ⧉ (duplicate) beside ✕.
+- **A list, map, set or deque on the canvas is one pill** — "List · 3 items" — that opens the same rows in a
+  popover; Apply writes it back, Cancel and Escape write nothing. A variable or another call there is left as
+  written.
 - **A value no plugin draws still gets a picker.** In the Parameters window and a Choices row, an enum is a
   dropdown, a number or text a field, a declared call one row per part (each drawn by its own picker), and
   anything else its source with **Reset** when a fresh value is known. Untouched, it writes nothing; an

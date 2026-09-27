@@ -112,6 +112,35 @@ class ValueTypeResolverTest {
                 """, bot));
     }
 
+    /**
+     * A slot on the canvas has a binding and no written type (picker 6e2): the binding reads as the same value
+     * type the written declaration would, containers nested, a set and a deque included.
+     */
+    @Test
+    void aBindingAloneReadsAsTheWrittenTypeWould() {
+        CompilationUnit unit = BOUND.parse(null, """
+                package com.example.bot;
+                import java.time.*;
+                import java.util.*;
+                class P {
+                    static Map<String, List<Duration>> plan;
+                    static Set<Integer> ids;
+                    static Deque<Duration> waits;
+                    static Duration one;
+                }
+                """);
+        unit.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(FieldDeclaration field) {
+                Type written = ValueTypeResolver.of(TestValues.GRAMMAR, field.getType(), 0, Set.of());
+                assertEquals(written, ValueTypeResolver.ofBinding(TestValues.GRAMMAR, field.getType().resolveBinding()),
+                        field.toString());
+                return false;
+            }
+        });
+        assertEquals(ValueTypes.NONE, ValueTypeResolver.ofBinding(TestValues.GRAMMAR, null));
+    }
+
     @Test
     void anArrayOrAWildcardIsUnknownAndKeepsItsSpelling() {
         assertEquals(new ValueTypes.Unknown("int[]"), fieldType(BotParser.SYNTAX, "class P { static int[] xs; }"));

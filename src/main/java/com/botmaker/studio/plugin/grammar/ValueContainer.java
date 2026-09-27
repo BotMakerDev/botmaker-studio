@@ -6,7 +6,7 @@ import java.util.List;
  * A composite the host itself takes apart and puts back — {@code List<E>}, {@code Map<K, V>} and the
  * {@code Map.Entry} a map is written out of.
  *
- * <p><b>Three, and closed, since 2026-09-22.</b> This was the contract's open container vocabulary, which a
+ * <p><b>Closed since 2026-09-22</b> — three then, five since 2026-09-27 ({@code Set}, {@code Deque}). This was the contract's open container vocabulary, which a
  * plugin registered into a {@code ValueCatalog}. A plugin's composite is a {@code ComponentType} now — the
  * same idea with the wire encoding removed — and what is left here is only what the <em>host</em> seeds so a
  * project with no plugin installed still has a list and a map. They differ from a {@code ComponentType} in
@@ -43,8 +43,21 @@ public interface ValueContainer<C> {
     /** {@code java.util.Map.Entry<K, V>} — {@code Map.entry(k, v)}. What a {@link #MAP}'s parts are. */
     ValueContainer<java.util.Map.Entry<?, ?>> ENTRY = new HostContainers.EntryContainer();
 
-    /** All three, in the order a picker offers to wrap a form in them. */
-    List<ValueContainer<?>> ALL = List.of(LIST, MAP, ENTRY);
+    /**
+     * {@code java.util.Set<E>} — {@code Set.of(e₁, …)} (2026-09-27). Built back in the order written, since
+     * {@code Set.of} specifies none; {@code Set.of} throws on a repeated element, so an editor refuses one.
+     */
+    ValueContainer<java.util.Set<?>> SET = new HostContainers.SetContainer();
+
+    /**
+     * {@code java.util.Deque<E>}, a stack or a queue — {@code new ArrayDeque<>(List.of(e₁, …))} (2026-09-27).
+     * The one container written with a constructor, and its one part is the {@code List<E>} it wraps: the JDK
+     * has no varargs factory for a deque, and a list inside is the spelling a person would write.
+     */
+    ValueContainer<java.util.Deque<?>> DEQUE = new HostContainers.DequeContainer();
+
+    /** Every container, in the order a picker offers to wrap a form in them. */
+    List<ValueContainer<?>> ALL = List.of(LIST, MAP, SET, DEQUE, ENTRY);
 
     /** The class this container is. */
     Class<?> type();
