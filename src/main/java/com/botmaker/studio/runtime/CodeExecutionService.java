@@ -139,7 +139,7 @@ public class CodeExecutionService {
                 // Run the compiled main class directly:
                 // java [bot options] [session hand-off] -cp <classes:deps> <mainClass>
                 List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
-                command.addAll(BotJvm.OPTIONS);
+                command.addAll(BotJvm.options(state.getSettings()));
                 command.addAll(sessionHandoffArguments());
                 // entryClassName(), not mainClassName(): the entry class is named after the project only in a
                 // project Studio created and the user has not renamed. One made from a published template

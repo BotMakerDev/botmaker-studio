@@ -16,7 +16,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
-import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -26,7 +25,6 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
 
 public class ToolbarManager {
 
@@ -52,20 +50,6 @@ public class ToolbarManager {
 
     /** Turns the reader-mode preview on and off, and what it is when the bar is built. */
     private Runnable onPreviewAsUser;
-    /** Persists the debug-output toggle to the project; wired by {@link UIManager}. */
-    private Consumer<Boolean> onToggleDebugOutput;
-    /** The debug-output toggle's initial (persisted) state — read by {@link UIManager} before building the bar. */
-    /**
-     * The debug toggle's current position — seeded from the project and <b>kept</b>, not merely seeded.
-     *
-     * <p>It held only the initial value until 2026-09-05, which was true while this bar was built exactly
-     * once per window. It is rebuilt now whenever the project's plugins change, and a seed-only field would
-     * put the toggle back where the project opened while the persisted value is wherever the user last left
-     * it — the button and the setting silently disagreeing.
-     */
-    private boolean debugOutputOn = true;
-    /** Opens the Input &amp; Clicks dialog over the project's settings; wired by {@link UIManager}. */
-    private Runnable onConfigureInput;
     /** Opens the program-shape overlay authoring editor; wired by {@link UIManager}. */
     private Runnable onOverlayEditor;
     /** Rebuilds the bar in place after a group is hidden or shown; wired by {@link UIManager}. */
@@ -144,24 +128,6 @@ public class ToolbarManager {
         this.onProjectSettings = callback;
     }
 
-    /**
-     * Wires the debug-output toggle: {@code initial} is the project's persisted {@code debug} state (shown as the
-     * toggle's starting position) and {@code onToggle} persists each change. Call before {@link #createCaptureGroup()}.
-     */
-    public void setOnToggleDebugOutput(boolean initial, Consumer<Boolean> onToggle) {
-        this.debugOutputOn = initial;
-        this.onToggleDebugOutput = onToggle;
-    }
-
-    /**
-     * Sets the callback that opens the Input &amp; Clicks dialog. It replaced a {@code 🖱 Game} toggle that
-     * carried the real-input flag alone: the button now has no state of its own to seed, because the values
-     * live in the project's own settings and the dialog reads them when it opens.
-     */
-    public void setOnConfigureInput(Runnable callback) {
-        this.onConfigureInput = callback;
-    }
-
     /** Sets the callback invoked when the toolbar's Overlay Editor button is clicked. */
     public void setOnOverlayEditor(Runnable callback) {
         this.onOverlayEditor = callback;
@@ -212,7 +178,7 @@ public class ToolbarManager {
         // and the pickers ask PluginHost when they are opened, so they were always live, and this bar was
         // why installing a plugin needed a restart before its buttons appeared. So nothing here may consume
         // state that only exists the first time: every callback is a field set by StudioActions on this same
-        // instance, and debugOutputOn is kept current rather than being a seed (see its javadoc).
+        // instance.
         //
         // Studio's own items, spelled the way a plugin would have to spell them. Going through the same
         // record and the same builder is the point rather than a tidiness: an item built by a second path is
@@ -249,23 +215,9 @@ public class ToolbarManager {
         // any other plugin's. It is the case this surface was added for: a whole feature behind one button,
         // where the host owns the bar and the plugin owns everything the press opens.
 
-        ToggleButton debugOutputButton = new ToggleButton(debugOutputText(debugOutputOn));
-        debugOutputButton.getStyleClass().add("toolbar-btn");
-        debugOutputButton.setSelected(debugOutputOn);
-        debugOutputButton.setTooltip(new Tooltip(
-                "Toggle the bot's debug output ([Bot]/[Game]/[Target]/[Activity] + vision traces). Saved with the project."));
-        debugOutputButton.setOnAction(e -> {
-            boolean on = debugOutputButton.isSelected();
-            debugOutputOn = on;
-            debugOutputButton.setText(debugOutputText(on));
-            if (onToggleDebugOutput != null) onToggleDebugOutput.accept(on);
-        });
-        // Not a ToolbarItem, and deliberately: it is a ToggleButton with two equal-width states, and there is
-        // no toggle kind in the contract because no plugin item needs one yet. Adding one for the host's own
-        // button would be designing a surface against its only implementor, which is the mistake the Assets
-        // and SourceChoice reversal of 2026-08-27 recorded. Debug also stays Studio's for now — "how a bot is
-        // debugged" is a plugin's answer to give, and there is no second plugin to give one.
-        placed.add(new Placed(ToolbarGroup.RUN, 20, "debug-output", debugOutputButton, null));
+        // 🐞 Debug output stood here at RUN/20 until 2026-09-27, toggling the `debug` key of
+        // botmaker-project.properties. It is the `debug` of the bot's @Managed("settings") value now, edited in
+        // the SDK plugin's ⚙ Bot Settings — "how a bot is debugged" was always that plugin's answer to give.
 
         // The same action as View ▸ Preview as user, not a second thing that sounds like it. This used to be
         // a "Reader mode" toggle that hid the editor's controls in place — a third rendering of the project
@@ -275,23 +227,9 @@ public class ToolbarManager {
                         + "switches and values you chose to expose. Its header brings you back.",
                 ToolbarGroup.RUN, 30, c -> run(onPreviewAsUser)));
 
-        Button inputConfigButton = new Button("🖱 Input");
-        inputConfigButton.getStyleClass().add("toolbar-btn");
-        inputConfigButton.setTooltip(new Tooltip(
-                "Configure how the bot clicks and looks: click delays, match confidence, and whether to drive "
-                        + "the real mouse and keyboard.\n\n"
-                        + "Turn real input on when the target is a game. Games ignore the quiet background "
-                        + "clicks BotMaker sends by default, so it drives the real mouse and keyboard instead — "
-                        + "the pointer moves to each click and returns, and the game window is raised.\n\n"
-                        + "The settings are saved with your project, so they travel with the code and apply "
-                        + "when the bot runs outside the Studio."));
-        inputConfigButton.setOnAction(e -> {
-            if (onConfigureInput != null) onConfigureInput.run();
-        });
-        // The one tooltip too long to read as a record argument. It stays a hand-built button until the
-        // action itself moves, at which point the sentence moves with it — a five-paragraph explanation of
-        // how a bot clicks belongs to whoever owns the clicking.
-        placed.add(new Placed(ToolbarGroup.TOOLS, 10, "input", inputConfigButton, null));
+        // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
+        // botmaker-project.properties. The action moved and the sentence moved with it, as this comment said
+        // it would: the settings are the SDK's @Managed("settings") value, and ⚙ Bot Settings is that plugin's.
 
         // ✂ Templates stood here at TOOLS/20 until 2026-08-31 and is the SDK plugin's ✂ Capture Templates
         // now, merged into this same slot. It is the second whole feature to leave through this surface, and
@@ -482,16 +420,6 @@ public class ToolbarManager {
         return new HostActionContext(
                 () -> settings == null ? null : settings.projectConfig(),
                 () -> "");
-    }
-
-    /**
-     * The debug-output toggle's label for a given state. The two states are deliberately the <em>same
-     * length</em> (a filled vs hollow dot, not "on"/"off"): an unequal pair changes the button's width on
-     * click, which re-wraps the bar and — because a wrapped row raises the scene root's minimum height —
-     * used to grow the whole window. See the min-size clamps in {@code UIManager.createScene()}.
-     */
-    private static String debugOutputText(boolean on) {
-        return on ? "🐞 Debug ●" : "🐞 Debug ○";
     }
 
     /**

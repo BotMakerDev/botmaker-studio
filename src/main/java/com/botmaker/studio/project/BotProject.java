@@ -278,7 +278,7 @@ public class BotProject {
         // The bot, as a plugin is allowed to see it. After CodeExecutionService, since that is what owns the
         // process; cleared in close(), so a plugin between projects reaches Runs.NONE rather than a channel
         // into the project the user just left.
-        HostRuns.install(eventBus, codeExec);
+        HostRuns.install(eventBus, codeExec, projectSettingsService);
 
         // The bot's own sources, as a plugin is allowed to rewrite them. Same lifetime and same reason: a
         // plugin renaming something it owns between projects must find nothing rather than repoint the code

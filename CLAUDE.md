@@ -65,6 +65,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > The explorer is a folded folder tree over `ui/app/ExplorerModel` since the same day, not the flat list
 > described below.
 
+> **No `botmaker-project.properties` since 2026-09-27.** Studio writes, reads, repairs and migrates none of it
+> (`SchemaFile` is `SETTINGS` alone): a bot's tuning is the SDK's `@Managed("settings")` value, edited in that
+> plugin's ⚙ Bot Settings (Studio's `BotSettings`, `SessionSetting`, `BotSettingsDialog`, the 🐞 Debug toggle and
+> 🖱 Input are deleted); what this machine launches is a **run property** — `Runs.property/setProperty`, kept in
+> `StudioProjectSettings.runProperties` (git-excluded) and passed to every run and debug JVM as `-D` by
+> `BotJvm.options`; what the bot was tested on is the Publish sheet's checkboxes, into the gallery entry only.
+
 > **The centre column is `ui/app/CenterTabs` since 2026-09-27**: the canvas's tab, never closed, plus one tab
 > per thing opened only to be read — a file through `ui/app/viewers/ResourceViewers` (picture, JSON tree,
 > properties table, text; view only, parsed by `Image`/Jackson/`Properties`, never by hand), or a library class
@@ -870,8 +877,8 @@ point of it.**
     that a `GoHome.run` renamed to `goHome` did not leave the bot silently uncompilable. Both needed a
     canonical text, and the premise underneath them — that a file can be partly BotMaker's — is exactly what
     was given up.
-  - **`ProjectRepair` keeps everything that is not source**: `pom.xml`, `botmaker-project.properties`,
-    `settings.json`, `activities.json` and the placeholder image. `looksLikeGameBot` is now the entry point's
+  - **`ProjectRepair` keeps everything that is not source**: `pom.xml` and `settings.json` (since 2026-09-27;
+    `botmaker-project.properties`, `activities.json` and the placeholder image went one by one). `looksLikeGameBot` is now the entry point's
     own text alone (`Bot.start` / `Bot.supervise`), the file-presence fallback having had no list to check.
   - **`ActivityService` was `activities.json` and nothing else, and is deleted (2026-09-11).** Adding an
     activity creates no file, renaming one moves nothing, deleting one leaves whatever the user wrote where

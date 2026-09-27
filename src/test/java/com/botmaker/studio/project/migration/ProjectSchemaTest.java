@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.migration;
 
-import com.botmaker.shared.config.ProjectProperties;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,7 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,7 +40,8 @@ class ProjectSchemaTest {
     }
 
     private static Path properties(ProjectConfig config) {
-        return SchemaFile.PROPERTIES.in(config.resourcesRoot());
+        // Retired from the ledger on 2026-09-27; an old project keeps its file, which nothing reads or stamps.
+        return config.resourcesRoot().resolve("botmaker-project.properties");
     }
 
     // --- reading the marker ---------------------------------------------------------------------------
@@ -60,10 +59,8 @@ class ProjectSchemaTest {
     void aFileWithoutTheKeyIsVersionZero(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Files.writeString(settings(config), "{}");
-        Files.writeString(properties(config), ProjectProperties.KEY_DEBUG + "=true\n");
 
         assertEquals(OptionalInt.of(0), SchemaFile.SETTINGS.versionIn(config.studioRoot()));
-        assertEquals(OptionalInt.of(0), SchemaFile.PROPERTIES.versionIn(config.resourcesRoot()));
     }
 
     // --- where the settings live ---------------------------------------------------------------------
@@ -72,8 +69,6 @@ class ProjectSchemaTest {
     void theSettingsLiveOutsideTheResourcesSoNoJarCarriesThem(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         assertEquals(config.projectPath().resolve(".botmaker"), SchemaFile.SETTINGS.dirOf(config));
-        assertEquals(config.resourcesRoot(), SchemaFile.PROPERTIES.dirOf(config),
-                "the properties are the bot's, read off its classpath, so they stay");
     }
 
     @Test
@@ -142,21 +137,14 @@ class ProjectSchemaTest {
     void migratingStampsEveryFileThatIsPresent(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Files.writeString(settings(config), "{}");
-        Files.writeString(properties(config), ProjectProperties.KEY_DEBUG + "=true\n");
+        Files.writeString(properties(config), "debug=true\n");
 
         ProjectSchema.migrate(config, ignored -> { });
 
         assertEquals(OptionalInt.of(SchemaFile.SETTINGS.current()),
                 SchemaFile.SETTINGS.versionIn(config.studioRoot()));
-        assertEquals(OptionalInt.of(SchemaFile.PROPERTIES.current()),
-                SchemaFile.PROPERTIES.versionIn(config.resourcesRoot()));
-
-        Properties props = new Properties();
-        try (var in = Files.newInputStream(properties(config))) {
-            props.load(in);
-        }
-        assertEquals("true", props.getProperty(ProjectProperties.KEY_DEBUG),
-                "stamping the file must not lose what was already in it");
+        assertEquals("debug=true\n", Files.readString(properties(config)),
+                "an old project's properties file is not the ledger's any more, and is left exactly as it is");
     }
 
     /**
@@ -207,7 +195,6 @@ class ProjectSchemaTest {
     void aSecondOpenRunsNothingAndReportsNothing(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Files.writeString(settings(config), "{}");
-        Files.writeString(properties(config), ProjectProperties.KEY_DEBUG + "=true\n");
 
         ProjectSchema.migrate(config, ignored -> { });
         String settingsAfterFirst = Files.readString(settings(config));
@@ -244,19 +231,19 @@ class ProjectSchemaTest {
         assertTrue(refusal.getMessage().contains("update Studio"), "and say the way out");
     }
 
+    /** The retired file claims nothing about this Studio any more, whatever version it says it is. */
     @Test
-    void aPropertiesFileFromTheFutureIsRefusedToo(@TempDir Path root) throws IOException {
+    void anOldPropertiesFileIsNeverAReasonToRefuse(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Files.writeString(properties(config), ProjectProperties.KEY_SCHEMA_VERSION + "=42\n");
+        Files.writeString(properties(config), "project.schemaVersion=42\n");
 
-        assertThrows(ProjectSchemaTooNew.class, () -> ProjectSchema.check(config));
+        ProjectSchema.check(config);
     }
 
     @Test
     void anOrdinaryProjectIsNotRefused(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         StudioProjectSettings.empty().write(config.studioRoot());
-        Files.writeString(properties(config), ProjectProperties.KEY_DEBUG + "=true\n");
 
         ProjectSchema.check(config);
     }

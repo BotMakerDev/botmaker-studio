@@ -1,6 +1,10 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.studio.project.StudioProjectSettings;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The options every JVM Studio starts a bot in takes, in one place because there are two such JVMs — the
@@ -20,6 +24,26 @@ public final class BotJvm {
      * thing its author sees in the output pane, so it is granted rather than explained.
      */
     public static final List<String> OPTIONS = List.of("--enable-native-access=ALL-UNNAMED");
+
+    /**
+     * {@link #OPTIONS}, then {@code -D<name>=<value>} for each of this checkout's run properties
+     * ({@code StudioProjectSettings.runProperties}, set by a plugin through {@code Runs.setProperty}) — what this
+     * machine starts the bot with, such as the SDK's {@code botmaker.launch.target} (2026-09-27). One argument
+     * per property, so a value with spaces reaches the bot whole; a blank name is skipped.
+     */
+    public static List<String> options(StudioProjectSettings settings) {
+        return options(settings == null ? Map.of() : settings.runProperties());
+    }
+
+    static List<String> options(Map<String, String> runProperties) {
+        List<String> out = new ArrayList<>(OPTIONS);
+        if (runProperties != null) {
+            runProperties.forEach((name, value) -> {
+                if (name != null && !name.isBlank() && value != null) out.add("-D" + name.trim() + "=" + value);
+            });
+        }
+        return List.copyOf(out);
+    }
 
     private BotJvm() {
     }

@@ -4,9 +4,9 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.TemplateProject;
 import com.botmaker.studio.project.launch.SupportedTargets;
+import com.botmaker.shared.launch.LaunchKind;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.services.MavenService;
@@ -30,6 +30,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
@@ -52,9 +53,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -98,7 +101,13 @@ public final class PublishSheet {
     private final Host host;
     private final String projectName;
     private final Path projectDir;
-    private final SupportedTargets launchTargets;
+    /**
+     * What the author tested the bot on, one box per launch kind — written into the gallery entry and nowhere
+     * else (2026-09-27; it was a {@code launch.supported} key in {@code botmaker-project.properties} that nothing
+     * wrote). A re-publish starts from what the listing says, until the author ticks a box themselves.
+     */
+    private final Map<LaunchKind, CheckBox> targetBoxes = new EnumMap<>(LaunchKind.class);
+    private boolean targetsTouched;
 
     private final VBox root = new VBox(8);
     private GitHubAccountBar accountBar;
@@ -157,7 +166,6 @@ public final class PublishSheet {
         this.host = host;
         this.projectName = config.projectName();
         this.projectDir = config.projectPath();
-        this.launchTargets = ProjectCreator.readSupportedTargets(config.resourcesRoot());
         build();
     }
 
@@ -248,10 +256,16 @@ public final class PublishSheet {
         tagsField.setPromptText("Comma-separated, e.g. clicker, farming");
         tagsField.textProperty().addListener((o, was, now) -> refreshAll());
         targetsLabel.setWrapText(true);
-        targetsLabel.setText(launchTargets.declared()
-                ? launchTargets.describe()
-                : "Not declared, which reads as \"the author never said\". It is the "
-                        + SupportedTargets.KEY + " key in botmaker-project.properties.");
+        targetsLabel.setText("None ticked reads as \"the author never said\".");
+        targetsLabel.getStyleClass().add("gallery-card-note");
+        for (LaunchKind launch : SupportedTargets.selectable()) {
+            CheckBox box = new CheckBox(launch.displayName());
+            box.setOnAction(e -> targetsTouched = true);
+            targetBoxes.put(launch, box);
+        }
+        FlowPane targets = new FlowPane(10, 4);
+        targets.getChildren().addAll(targetBoxes.values());
+        VBox targetsCell = new VBox(4, targets, targetsLabel);
         requiresLabel.setWrapText(true);
 
         GridPane details = new GridPane();
@@ -261,7 +275,7 @@ public final class PublishSheet {
         details.addRow(1, new Label("Description:"), descriptionField);
         details.addRow(2, new Label("Tags:"), tagsField);
         details.add(tagChips, 1, 3);
-        details.addRow(4, new Label("Tested on:"), targetsLabel);
+        details.addRow(4, new Label("Tested on:"), targetsCell);
         details.addRow(5, new Label("Requires:"), requiresLabel);
         GridPane.setHgrow(repoField, Priority.ALWAYS);
 
@@ -574,6 +588,10 @@ public final class PublishSheet {
                     tagsField.setText(String.join(", ", currentListing.tags().stream()
                             .filter(t -> !GalleryEntry.TEMPLATE_TAG.equalsIgnoreCase(t)).toList()));
                 }
+                if (!targetsTouched) {
+                    SupportedTargets listed = currentListing.launchTargets();
+                    targetBoxes.forEach((kind, box) -> box.setSelected(listed.kinds().contains(kind)));
+                }
             }
             renderTier();
             refreshAll();
@@ -700,7 +718,13 @@ public final class PublishSheet {
 
     private PublishRequest request(List<String> tags) {
         return new PublishRequest(projectDir, projectName, repoName(), descriptionField.getText(), currentVersion(),
-                tags, launchTargets, requires, true);
+                tags, testedOn(), requires, true);
+    }
+
+    /** The ticked launch kinds; none ticked is undeclared. */
+    private SupportedTargets testedOn() {
+        return SupportedTargets.of(targetBoxes.entrySet().stream()
+                .filter(e -> e.getValue().isSelected()).map(Map.Entry::getKey).toList());
     }
 
     /** The typed tags, with {@code template} added for a template and taken out for a bot. */

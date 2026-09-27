@@ -21,6 +21,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The bot's settings moved into its own Java.** Delays, match confidence, real input, debug output and the
+  private display are edited in the SDK's **⚙ Bot Settings** and written into `Sdk.settings()`; Studio's
+  🖱 Input window and 🐞 Debug toggle are gone, and Studio no longer writes a `botmaker-project.properties` (an
+  old one is left alone). What this computer launches for a bot stays on this computer and is passed to each
+  run. The Publish sheet's **Tested on** is a row of checkboxes, filled in from your existing listing.
 - **Go to Definition on a library shows the whole class as blocks.** The class opens in a tab beside the
   canvas, locked, with the member you asked for open and highlighted and every other function folded (open
   one to see its code). A library with no sources shows its signatures, each saying "No source for this

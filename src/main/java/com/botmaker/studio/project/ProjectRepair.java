@@ -1,6 +1,5 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.shared.config.ProjectProperties;
 import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.services.MavenService;
 import org.eclipse.jdt.core.dom.AST;
@@ -158,24 +157,20 @@ public final class ProjectRepair {
     /**
      * Everything that is missing and recoverable, in a stable order. Empty when the project is intact.
      *
-     * <p>{@code template} says which scaffold the project is supposed to have; a null template falls back to
-     * {@link #looksLikeGameBot}.
+     * <p>{@code template} is the one the project records, or null; {@code settings.json} is restored only when
+     * it is known.
      *
      * <p><b>A plugin's file is not listed here, and since 2026-09-11 that includes {@code activities.json}
      * (which used to be the third parameter).</b> Recovery can only restore what it can write honestly, and
      * the only copy of a plugin's data the editor ever held was a parse it no longer keeps — so a recovered
      * {@code activities.json} would be an empty file with the user's values silently replaced by defaults,
      * which is worse than the missing file it replaced. What is listed is what Studio itself writes:
-     * {@code pom.xml}, {@code botmaker-project.properties}, {@code settings.json} and the placeholder image.
+     * {@code pom.xml} and {@code settings.json}.
      */
     public static List<Missing> findMissing(ProjectConfig config, ProjectTemplate template) {
         List<Missing> missing = new ArrayList<>();
         Path mainDir = config.mainSourceFile().getParent();
         if (mainDir == null) return missing;
-
-        ProjectTemplate resolved = template != null
-                ? template
-                : (looksLikeGameBot(config) ? ProjectTemplate.GAME_BOT : ProjectTemplate.EMPTY);
 
         // No .java is reported and none is restored. BotMaker writes a project's source once, when the
         // project is created, and never reads or rewrites it — so there is no list of files a project "must"
@@ -186,7 +181,7 @@ public final class ProjectRepair {
         // generator's own claimed list with Regeneration.restore behind each entry, then the seed plan. Each
         // was a better answer to a question that has stopped being asked.
 
-        missing.addAll(missingResources(config, template, resolved));
+        missing.addAll(missingResources(config, template));
 
         // activities.json was restored here, from the parse the editor held in ProjectState. Both the parse
         // and the restore are gone — see the note on this method. Activities.java, Parameters.java,
@@ -212,8 +207,7 @@ public final class ProjectRepair {
      * known</em> ({@code recorded} non-null): rebuilding it from a {@link #looksLikeGameBot} guess would write
      * that guess down as a recorded fact, which is worse than leaving the file absent and guessing again.
      */
-    private static List<Missing> missingResources(ProjectConfig config, ProjectTemplate recorded,
-                                                  ProjectTemplate resolved) {
+    private static List<Missing> missingResources(ProjectConfig config, ProjectTemplate recorded) {
         List<Missing> missing = new ArrayList<>();
         Path pom = config.projectPath().resolve("pom.xml");
         if (!Files.exists(pom)) {
@@ -238,13 +232,8 @@ public final class ProjectRepair {
                         : "build file (no BotMaker SDK — this project's code names none)"));
         }
 
-        Path properties = config.resourcesRoot().resolve(ProjectProperties.FILE_NAME);
-        if (!Files.exists(properties)) {
-            BotSettings defaults = resolved == ProjectTemplate.GAME_BOT
-                    ? BotSettings.GAME_DEFAULTS : BotSettings.DEFAULTS;
-            missing.add(new Missing(properties, target -> BotSettings.write(config.resourcesRoot(), defaults),
-                    "project properties"));
-        }
+        // botmaker-project.properties was a row here until 2026-09-27. Nothing reads it any more — a bot's
+        // settings are its @Managed("settings") value — so its absence is not something to repair.
 
         Path settings = config.studioRoot().resolve(StudioProjectSettings.FILE_NAME);
         if (recorded != null && !Files.exists(settings)) {

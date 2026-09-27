@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.migration;
 
-import com.botmaker.studio.project.BotSettings;
 import com.botmaker.studio.project.ProjectConfig;
 
 import java.io.IOException;
@@ -133,24 +132,14 @@ public final class SchemaMigrations {
         return found;
     }
 
-    /**
-     * <b>0 → 1 stood here and is a no-op since 2026-09-02.</b> It moved a bot's runtime tuning out of a
-     * generated {@code BotSettings.java} — click delays, vision confidence, real input, the retry count —
-     * by matching one plugin's facade calls with regexes over the user's own source. That is not a schema
-     * migration the editor can own: it knew what a {@code ClickConfig} was, and the editor does not.
-     *
-     * <p>The step is kept as a no-op rather than removed so the version numbering does not shift under
-     * projects that already record themselves as being at 1. A project still at 0 is simply moved to 1 with
-     * nothing rewritten; if it carries a generated {@code BotSettings.java}, that file stays and will not
-     * compile against a current SDK.
-     */
-    private static final List<SchemaMigration> PROPERTIES_STEPS = List.of(ctx -> null);
+    // PROPERTIES_STEPS stood here until 2026-09-27: one no-op step for botmaker-project.properties, whose 0 → 1
+    // had moved a generated BotSettings.java into that file by regex until 2026-09-02. The file itself left the
+    // ledger on 2026-09-27 — a bot's settings are its @Managed("settings") value — so its steps went with it.
 
     /** The ordered steps for {@code file}. Index <i>i</i> migrates version <i>i</i> to <i>i+1</i>. */
     public static List<SchemaMigration> stepsFor(SchemaFile file) {
         return switch (file) {
             case SETTINGS -> SETTINGS_STEPS;
-            case PROPERTIES -> PROPERTIES_STEPS;
         };
     }
 

@@ -128,20 +128,9 @@ class ProjectCreatorTest {
                 "an older project has no template recorded; callers fall back to the heuristic");
     }
 
-    @Test
-    void sessionIsolatedDefaultsToTrueAndRoundTrips(@TempDir Path root) throws IOException {
-        ProjectConfig config = ProjectConfig.forProject("MyBot", root);
-        Path resources = config.resourcesRoot();
-
-        // No file yet → the default-on state (matching the SDK's SessionBootstrap default).
-        assertTrue(ProjectCreator.readSessionIsolated(resources), "isolation defaults on when unset");
-
-        ProjectCreator.writeSessionIsolated(resources, false);
-        assertFalse(ProjectCreator.readSessionIsolated(resources), "an explicit opt-out reads back as off");
-
-        ProjectCreator.writeSessionIsolated(resources, true);
-        assertTrue(ProjectCreator.readSessionIsolated(resources), "toggling back on reads as on");
-    }
+    // sessionIsolatedDefaultsToTrueAndRoundTrips stood here until 2026-09-27, over the session.isolated key of
+    // botmaker-project.properties. Isolation is the SDK's BotSettings.session(…) in the bot's own Java; its
+    // default and round trip are tested there.
 
     // theSpecCarriesTheFullPackage went on 2026-09-01 with ProjectSpecs. It held that the *whole* package
     // (com.mybot) crossed to the SDK where ProjectConfig.packageName() is the last segment alone (mybot) —

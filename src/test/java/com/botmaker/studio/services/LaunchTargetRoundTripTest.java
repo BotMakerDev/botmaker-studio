@@ -2,7 +2,9 @@ package com.botmaker.studio.services;
 
 import com.botmaker.shared.launch.LaunchKind;
 import com.botmaker.shared.launch.LaunchSpec;
-import com.botmaker.studio.project.ProjectCreator;
+import com.botmaker.studio.project.ProjectTemplate;
+import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.studio.runtime.BotJvm;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,9 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Gates <b>SV10</b> (parse {@code launch.target} through {@link LaunchKind} instead of re-splitting the string)
  * and, through it, SU6.
  *
- * <p>The spec is the one value that crosses every boundary this project has: Studio writes it to
- * {@code botmaker-project.properties}, the file survives on disk between sessions, the SDK reads it at bot
- * startup, and Studio reads it back to seed the editor. Nothing tested any leg of that. The property that has
+ * <p>The spec is the one value that crosses every boundary this project has: the SDK plugin writes it as this
+ * checkout's run property ({@code .botmaker/settings.json} since 2026-09-27), the file survives on disk between
+ * sessions, every run starts with it as {@code -Dbotmaker.launch.target}, and the plugin reads it back. Nothing tested any leg of that. The property that has
  * to hold is not "parse works" but <b>write(read(x)) == x for every kind</b> — because a spec that survives
  * three legs and is mangled on the fourth is a bot that launches the wrong thing, or nothing, with no error.
  *
@@ -48,10 +50,16 @@ class LaunchTargetRoundTripTest {
                 "emu-app:com.example.game@MuMuPlayer-12.0-1");
     }
 
-    /** Writes {@code spec} into a fresh project resources dir and reads it straight back. */
-    private static String writeThenRead(Path resources, String spec) throws IOException {
-        ProjectCreator.writeLaunchTarget(resources, spec);
-        return ProjectCreator.readLaunchTarget(resources);
+    /** The run property the SDK plugin sets and the SDK's {@code Target} reads. */
+    private static final String KEY = "botmaker.launch.target";
+
+    /**
+     * Writes {@code spec} as this checkout's run property into a fresh {@code .botmaker} dir and reads it straight
+     * back — the legs since 2026-09-27, when it left {@code botmaker-project.properties}.
+     */
+    private static String writeThenRead(Path studioDir, String spec) throws IOException {
+        StudioProjectSettings.read(studioDir).withRunProperty(KEY, spec).write(studioDir);
+        return StudioProjectSettings.read(studioDir).runProperties().get(KEY);
     }
 
     // ---- The round trip ----
@@ -110,34 +118,38 @@ class LaunchTargetRoundTripTest {
     // ---- Clearing it ----
 
     /**
-     * A null spec removes the key rather than writing an empty one, and the other project properties survive
-     * — the write is a read-modify-write of a shared file shared with the capturing plugin, so "clear the
-     * target" must not clear a key it did not write.
-     *
-     * <p>It used to seed that other key here, with {@code ProjectCreator.writeCaptureProperties}, and assert
-     * the capture resolution survived. Both of those went to the plugin on 2026-09-01; what is asserted now
-     * is the property this file's own writer owns, which is the half this test was ever able to prove.
+     * A null spec removes the property rather than writing an empty one, and the rest of the settings survive —
+     * the file is the editor's whole state for this checkout, so "clear the target" must not clear anything
+     * else in it.
      */
     @Test
-    void clearingTheTargetRemovesTheKeyAndLeavesTheOtherPropertiesAlone(@TempDir Path dir) throws IOException {
-        Path resources = dir.resolve("resources");
-        ProjectCreator.writeLaunchTarget(resources, "steam:570");
-        assertEquals("steam:570", ProjectCreator.readLaunchTarget(resources));
+    void clearingTheTargetRemovesThePropertyAndLeavesTheSettingsAlone(@TempDir Path dir) throws IOException {
+        StudioProjectSettings.empty().withTemplate(ProjectTemplate.GAME_BOT).write(dir);
+        assertEquals("steam:570", writeThenRead(dir, "steam:570"));
 
-        ProjectCreator.writeLaunchTarget(resources, null);
+        assertNull(writeThenRead(dir, null), "the property must be gone, not blank");
 
-        assertNull(ProjectCreator.readLaunchTarget(resources), "the key must be gone, not blank");
-
-        String file = Files.readString(resources.resolve(
-                com.botmaker.shared.config.ProjectProperties.FILE_NAME));
-        assertFalse(file.contains(com.botmaker.shared.config.ProjectProperties.KEY_LAUNCH_TARGET),
-                "an empty key left behind reads as a configured-but-blank target: " + file);
+        assertEquals(ProjectTemplate.GAME_BOT, StudioProjectSettings.read(dir).template());
+        assertFalse(Files.readString(dir.resolve(StudioProjectSettings.FILE_NAME)).contains(KEY),
+                "an empty property left behind reads as a configured-but-blank target");
     }
 
     /** No file yet is "no target configured", not a crash — {@code QuickLaunch} asks before anything exists. */
     @Test
     void readingBeforeAnythingIsWrittenIsNotAnError(@TempDir Path dir) {
-        assertNull(ProjectCreator.readLaunchTarget(dir.resolve("never-created")));
+        assertNull(StudioProjectSettings.read(dir.resolve("never-created")).runProperties().get(KEY));
+    }
+
+    /**
+     * The last leg: every run of the bot starts with it as a system property, one argument, whole — a
+     * {@code cli:} spec has spaces in it.
+     */
+    @Test
+    void theRunStartsWithItAsASystemProperty() {
+        String spec = "cli:/usr/bin/wine game.exe --windowed";
+        List<String> options = BotJvm.options(StudioProjectSettings.empty().withRunProperty(KEY, spec));
+        assertTrue(options.contains("-D" + KEY + "=" + spec), options.toString());
+        assertTrue(options.containsAll(BotJvm.OPTIONS), "the JVM's own options still come first");
     }
 
     // ---- The unreadable spec ----
@@ -189,27 +201,9 @@ class LaunchTargetRoundTripTest {
                         "an app inside an emulator is on no host process table"));
     }
 
-    /**
-     * The capture source travels the same four legs as the launch target, and the pilot now routes on it — so
-     * it needs the same round trip. The emulator form is the one with a consumer that parses it back
-     * ({@link com.botmaker.shared.config.ProjectProperties#emulatorInstanceOf}); the rest are carried raw.
-     */
-    @Test
-    void theCaptureSourceSurvivesAWriteReadRoundTrip(@TempDir Path dir) throws IOException {
-        assertNull(ProjectCreator.readCaptureSource(dir), "no file yet is unset, not a failure");
-
-        ProjectCreator.writeCaptureSource(dir, "emulator:Waydroid");
-        assertEquals("emulator:Waydroid", ProjectCreator.readCaptureSource(dir));
-
-        // Writing the launch target beside it must not disturb it — they share one file.
-        ProjectCreator.writeLaunchTarget(dir, "emu-app:com.example.game@Waydroid");
-        assertEquals("emulator:Waydroid", ProjectCreator.readCaptureSource(dir));
-        assertEquals("emu-app:com.example.game@Waydroid", ProjectCreator.readLaunchTarget(dir));
-
-        ProjectCreator.writeCaptureSource(dir, null);
-        assertNull(ProjectCreator.readCaptureSource(dir), "a cleared source reads back as unset");
-        assertNotNull(ProjectCreator.readLaunchTarget(dir), "clearing one key must not clear the other");
-    }
+    // theCaptureSourceSurvivesAWriteReadRoundTrip stood here until 2026-09-27, over the capture.source key of
+    // botmaker-project.properties. The capture source is the expression Sdk.captureSource() returns, and that
+    // file is read by nothing.
 
     /** The {@code @} split keeps package dots and takes the <em>last</em> separator. */
     @Test

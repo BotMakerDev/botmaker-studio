@@ -1,8 +1,5 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.shared.config.ProjectProperties;
-import com.botmaker.studio.project.launch.SupportedTargets;
-import com.botmaker.studio.project.migration.SchemaFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.services.MavenService;
 
@@ -103,13 +100,9 @@ public class ProjectCreator {
             System.out.println("2. Generating settings...");
             seedSettings(cfg, template);
 
-            // 5b. Seed the runtime tuning — delays, confidence, real input, and background isolation (a private
-            //     :N display). A game bot starts with real input on; that is the whole difference between
-            //     GAME_DEFAULTS and DEFAULTS, and it used to be the difference between the two generated
-            //     BotSettings.java files. Written explicitly rather than left to the absent-key defaults so the
-            //     dialogs show a concrete state and the SDK and Studio agree from the first run.
-            BotSettings.write(cfg.resourcesRoot(),
-                    template == ProjectTemplate.GAME_BOT ? BotSettings.GAME_DEFAULTS : BotSettings.DEFAULTS);
+            // 5b. The runtime tuning was seeded here into botmaker-project.properties until 2026-09-27. It is
+            //     the SDK's @Managed("settings") value now, in the bot's own Sdk.java, which the template ships
+            //     and the host writes whole when a project has none; a project with no SDK has nothing to tune.
 
             // 6. Initialize local project history (linear VCS) with an initial commit.
             new ProjectVcs(projectPath).init();
@@ -274,209 +267,11 @@ public class ProjectCreator {
                 .write(cfg.studioRoot());
     }
 
-    /**
-     * Writes/updates the {@code launch.target} key in {@code botmaker-project.properties} — the spec the SDK's
-     * {@code Bot.start} start-up step ({@code Target.startIfNotRunning()}) launches at runtime. Accepts a spec
-     * in the SDK's {@code LaunchTarget} form ({@code steam:<id>} / {@code epic:<name>} / {@code exe:<path>} /
-     * {@code emu-app:<pkg>@<instance>}); a null/blank {@code spec} removes the key (no configured target).
-     * Preserves the other properties (capture resolution/source) already in the file.
-     */
-    public static void writeLaunchTarget(Path resourcesDir, String spec) throws IOException {
-        writeProjectKey(resourcesDir, ProjectProperties.KEY_LAUNCH_TARGET,
-                spec == null || spec.isBlank() ? null : spec.trim());
-    }
-
-    // readCaptureSize was here until 2026-09-01. Its javadoc named QuickLaunch as the caller that needed the
-    // size a background session's nested display is created at — and QuickLaunch is the plugin's now, asking
-    // shared's ProjectFile.captureSize directly. Nothing in the editor was left calling it.
-
-    /**
-     * One key's trimmed value from {@code botmaker-project.properties}, or {@code null} when the key, the file
-     * or the directory is absent (or the read fails). The single load path behind every {@code read…} below —
-     * they were four copies of this same eight lines, each free to disagree about what a missing file means.
-     *
-     * <p>Those eight lines are shared's now ({@link com.botmaker.shared.config.ProjectFile}), because the
-     * editor is no longer the only thing that holds a project directory: a plugin serving one asks the same
-     * questions of the same file, and shared already owns the keys and the classpath-side reader beside it.
-     */
-    private static String readKey(Path resourcesDir, String key) {
-        return com.botmaker.shared.config.ProjectFile.value(resourcesDir, key);
-    }
-
-    /**
-     * The current {@code launch.target} spec from {@code botmaker-project.properties}, or {@code null} when the
-     * key (or the file) is absent. The inverse of {@link #writeLaunchTarget} — used to seed the Launch Target
-     * editor with what's already configured.
-     */
-    public static String readLaunchTarget(Path resourcesDir) {
-        return readKey(resourcesDir, ProjectProperties.KEY_LAUNCH_TARGET);
-    }
-
-    /**
-     * The current {@code capture.source} spec, or {@code null} when unset. The inverse of
-     * {@link #writeCaptureSource}, in the SDK's grammar ({@code desktop}, {@code monitor:<i>},
-     * {@code window:<t>}, {@code emulator:<instance>}).
-     *
-     * <p>Read by the remote pilot, which routes its preview and its Interact gestures at whatever this names —
-     * so that when the bot is looking at an emulator, so is the phone. Recognise the emulator form with
-     * {@link ProjectProperties#emulatorInstanceOf}, never by re-spelling the prefix.
-     */
-    public static String readCaptureSource(Path resourcesDir) {
-        return readKey(resourcesDir, ProjectProperties.KEY_CAPTURE_SOURCE);
-    }
-
-    /**
-     * Writes/updates the {@code capture.source} key in {@code botmaker-project.properties} — the default
-     * {@code CaptureSource} the generated bot's no-argument vision/click/OCR calls target (read by the SDK's
-     * {@code ProjectDefaults}/{@code Source}). Accepts a spec in the SDK's form, e.g. {@code emulator:<instance>}
-     * for an Android emulator instance; a null/blank {@code spec} removes the key. Preserves the other
-     * properties (capture resolution / launch target) already in the file.
-     */
-    public static void writeCaptureSource(Path resourcesDir, String spec) throws IOException {
-        writeProjectKey(resourcesDir, ProjectProperties.KEY_CAPTURE_SOURCE,
-                spec == null || spec.isBlank() ? null : spec.trim());
-    }
-
-    /**
-     * Writes/updates the {@code debug} key in {@code botmaker-project.properties} — the initial state of the
-     * generated bot's global debug-output switch (the SDK's {@code api.Debug}, which all {@code [Bot]}/
-     * {@code [Game]}/{@code [Target]}/{@code [Activity]} and vision traces consult). {@code true}/{@code false};
-     * a {@code null} removes the key (bot falls back to its default, on). Preserves the other properties.
-     */
-    public static void writeDebug(Path resourcesDir, Boolean enabled) throws IOException {
-        writeProjectKey(resourcesDir, ProjectProperties.KEY_DEBUG,
-                enabled == null ? null : Boolean.toString(enabled));
-    }
-
-    /**
-     * The current {@code debug} setting from {@code botmaker-project.properties}: {@code true} unless the key is
-     * explicitly {@code false}/{@code 0}/{@code no}/{@code off}. The inverse of {@link #writeDebug} — mirrors the
-     * SDK's default-on semantics ({@code api.Debug}) so the Studio toggle shows the state the bot will run with.
-     */
-    public static boolean readDebug(Path resourcesDir) {
-        Path file = resourcesDir.resolve(ProjectProperties.FILE_NAME);
-        if (!Files.exists(file)) return true;
-        java.util.Properties props = new java.util.Properties();
-        try (var in = Files.newInputStream(file)) {
-            props.load(in);
-        } catch (IOException e) {
-            return true;
-        }
-        String spec = props.getProperty(ProjectProperties.KEY_DEBUG);
-        if (spec == null || spec.isBlank()) return true;
-        return switch (spec.trim().toLowerCase()) {
-            case "false", "0", "no", "off" -> false;
-            default -> true;
-        };
-    }
-
-    /**
-     * Writes the {@code session.isolated} key in {@code botmaker-project.properties} — whether the bot (and the
-     * Studio Launch buttons) run the game in a private nested display ({@code :N}) instead of the real
-     * {@code :0} desktop. Always writes a definite {@code true}/{@code false} (the toggle is a deliberate
-     * choice, not a tri-state like {@code launch.target}). The SDK's {@code SessionBootstrap} reads the same key.
-     */
-    public static void writeSessionIsolated(Path resourcesDir, boolean isolated) throws IOException {
-        writeProjectKey(resourcesDir, ProjectProperties.KEY_SESSION_ISOLATED, Boolean.toString(isolated));
-    }
-
-    /**
-     * Writes the {@code session.backend} key — which nested display hosts an isolated run
-     * ({@code gamescope}/{@code xephyr}), or removes the key for the SDK's kind-driven choice. Studio's own
-     * Launch buttons read this file (Studio doesn't depend on the SDK), which is why the dialog persists here as
-     * well as into the generated source.
-     *
-     * <p>A blank/{@code auto} backend <b>removes</b> the key rather than writing the string {@code "auto"}:
-     * absent is what the SDK reads as "choose by kind", and it is the state a project that never pinned a
-     * backend is in — writing a value for it would make "never chose" and "chose automatic" different bytes.
-     */
-    public static void writeSessionBackend(Path resourcesDir, String backendId) throws IOException {
-        boolean auto = backendId == null || backendId.isBlank() || "auto".equalsIgnoreCase(backendId.trim());
-        writeProjectKey(resourcesDir, ProjectProperties.KEY_SESSION_BACKEND, auto ? null : backendId.trim());
-    }
-
-    /** The current {@code session.backend} value, or {@code null} when unset (the kind-driven default). */
-    public static String readSessionBackend(Path resourcesDir) {
-        Path file = resourcesDir.resolve(ProjectProperties.FILE_NAME);
-        if (!Files.exists(file)) return null;
-        java.util.Properties props = new java.util.Properties();
-        try (var in = Files.newInputStream(file)) {
-            props.load(in);
-        } catch (IOException e) {
-            return null;
-        }
-        String spec = props.getProperty(ProjectProperties.KEY_SESSION_BACKEND);
-        return spec == null || spec.isBlank() ? null : spec.trim();
-    }
-
-    /**
-     * Writes/updates the {@code launch.supported} key — the launch kinds the <em>author</em> declares the bot
-     * works on. Unlike {@link #writeLaunchTarget}, this is not about this machine: it is the fact that travels
-     * with a published bot, so whoever installs it knows whether their platform is one the bot was built for.
-     * An undeclared ({@link SupportedTargets#any()}) set removes the key rather than writing an empty value —
-     * absent is what "the author never said" reads as everywhere else in this file.
-     */
-    public static void writeSupportedTargets(Path resourcesDir, SupportedTargets supported) throws IOException {
-        writeProjectKey(resourcesDir, SupportedTargets.KEY, supported == null ? null : supported.spec());
-    }
-
-    /** The declared {@code launch.supported} set, or {@link SupportedTargets#any()} when the key is absent. */
-    public static SupportedTargets readSupportedTargets(Path resourcesDir) {
-        return SupportedTargets.parse(readKey(resourcesDir, SupportedTargets.KEY));
-    }
-
-    /**
-     * Sets (or, for a {@code null} value, removes) one key in {@code botmaker-project.properties}, preserving
-     * every other key. The load-modify-store dance was copied per key; one copy is enough.
-     */
-    private static void writeProjectKey(Path resourcesDir, String key, String value) throws IOException {
-        writeProjectKeys(resourcesDir, java.util.Collections.singletonMap(key, value));
-    }
-
-    /**
-     * Sets (or, for a {@code null} value, removes) several keys at once, preserving every other key. One
-     * load-modify-store for the lot — {@link BotSettings#write} sets nine of them, and writing them one at a
-     * time would reparse and rewrite the file nine times.
-     *
-     * <p><b>Every write of this file goes through here</b>, which is what lets it be the one place that
-     * records {@link SchemaFile#PROPERTIES}'s version. Four callers used to keep their own copy of the
-     * load-modify-store, and a stamp in one copy is a stamp three writes can silently drop.
-     */
-    static void writeProjectKeys(Path resourcesDir, java.util.Map<String, String> values) throws IOException {
-        Files.createDirectories(resourcesDir);
-        Path file = resourcesDir.resolve(ProjectProperties.FILE_NAME);
-        java.util.Properties props = readProjectProperties(resourcesDir);
-        for (java.util.Map.Entry<String, String> e : values.entrySet()) {
-            if (e.getValue() == null) {
-                props.remove(e.getKey());
-            } else {
-                props.setProperty(e.getKey(), e.getValue());
-            }
-        }
-        SchemaFile.PROPERTIES.stamp(props);
-        try (var out = Files.newOutputStream(file)) {
-            props.store(out, "BotMaker project defaults");
-        }
-    }
-
-    /**
-     * The project's {@code botmaker-project.properties}, or an empty set when it is absent or unreadable —
-     * every caller here treats a missing key as its own default, so an unreadable file is the same as an empty
-     * one rather than an error.
-     */
-    static java.util.Properties readProjectProperties(Path resourcesDir) {
-        return com.botmaker.shared.config.ProjectFile.read(resourcesDir);
-    }
-
-    /**
-     * The current {@code session.isolated} setting: {@code true} unless the key is explicitly
-     * {@code false}/{@code 0}/{@code no}/{@code off} (matching {@link ProjectProperties#sessionIsolated()} and
-     * the SDK's default-on isolation). The inverse of {@link #writeSessionIsolated} — used to seed the Launch
-     * Target dialog's "Run in background" toggle and to gate the Studio Launch buttons' background path.
-     */
-    public static boolean readSessionIsolated(Path resourcesDir) {
-        return com.botmaker.shared.config.ProjectFile.sessionIsolated(resourcesDir);
-    }
+    // Every read and write of botmaker-project.properties stood here until 2026-09-27 — writeLaunchTarget,
+    // readCaptureSource, writeDebug, the session keys, launch.supported and the load-modify-store under them.
+    // Nothing reads that file any more: a bot's tuning is its @Managed("settings") value, what it launches is
+    // this machine's run property (StudioProjectSettings.runProperties), and what it was tested on is the
+    // gallery entry's. An old project keeps its file untouched.
 
     public boolean projectExists(String projectName) {
         Path projectPath = PROJECTS_ROOT.resolve(projectName);

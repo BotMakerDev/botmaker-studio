@@ -6,7 +6,6 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.docs.StudioAction;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
@@ -31,7 +30,6 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.stage.Stage;
 
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -133,11 +131,13 @@ final class StudioActions {
         // Nothing to wire for the capture targets: that button is the SDK plugin's item, and its dialog is
         // the plugin's too. The shell supplies the bar it is placed on and nothing else.
         //
-        // Nor for the launch target, since 2026-09-01: the 🚀 button and its dialog went together, so there
-        // is no control left to seed with the current target and no manage callback to answer. The key
-        // itself stays in botmaker-project.properties, written by whoever installs a published bot.
-        toolbar.setOnToggleDebugOutput(ProjectCreator.readDebug(config.resourcesRoot()), this::writeDebug);
-        toolbar.setOnConfigureInput(() -> new BotSettingsDialog(primaryStage, config, null).show());
+        // Nor for the launch target, since 2026-09-01: the 🚀 button and its dialog went together. What this
+        // machine launches is a run property now (StudioProjectSettings.runProperties), set by the SDK
+        // plugin's emulator picker through Runs.setProperty.
+        //
+        // The Debug output toggle and 🖱 Input & Clicks stood here until 2026-09-27. Both edited
+        // botmaker-project.properties; the bot's settings are the SDK's @Managed("settings") value now, and
+        // ⚙ Bot Settings, the SDK plugin's item, edits them — debug output included.
         // ✂ Capture Templates stood here until 2026-08-31 and is the SDK plugin's item now, placed by the
         // same merge as the pilot's. Everything behind it — the capture target, the size to snap to, the
         // picture folder it writes into — is that plugin's, so there is nothing left for the shell to wire.
@@ -279,14 +279,6 @@ final class StudioActions {
     // item): the overlay asks which window to draw over. That is a better answer than the dialog it lost,
     // because the dialog arranged a *launch* while the question is which of the windows already open the
     // user means — and a window opened by hand was never reachable through it at all.
-
-    private void writeDebug(boolean on) {
-        try {
-            ProjectCreator.writeDebug(config.resourcesRoot(), on);
-        } catch (IOException ex) {
-            System.err.println("Failed to save debug setting: " + ex.getMessage());
-        }
-    }
 
     /**
      * Opens the program-shape overlay authoring editor (compact clickable block tree + insertion cursor).

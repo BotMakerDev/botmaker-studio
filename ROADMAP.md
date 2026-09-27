@@ -6,7 +6,14 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Resource viewers; a library class as locked blocks.** `ui/app/CenterTabs` puts the
+- **2026-09-27 (latest) — No `botmaker-project.properties`; run properties; tested-on in the gallery.** Deleted
+  `project/BotSettings`, `SessionSetting`, `ui/app/BotSettingsDialog`, every properties read/write in
+  `ProjectCreator`, the repair row, `SchemaFile.PROPERTIES` and its steps, the 🐞 Debug toggle and 🖱 Input
+  (the SDK's ⚙ Bot Settings edits its `@Managed("settings")` value). `HostRuns.property/setProperty` keep a
+  plugin's run properties in `StudioProjectSettings.runProperties`; `BotJvm.options(settings)` passes them to the
+  run and debug JVMs as `-D`. The Publish sheet's "Tested on" is one checkbox per `LaunchKind`, pre-filled from
+  the listing; `SupportedTargets.KEY` is gone.
+- **2026-09-27 — Resource viewers; a library class as locked blocks.** `ui/app/CenterTabs` puts the
   canvas in a tab (never closed, strip hidden while alone) with one closable tab per thing opened beside it; a
   landed-on block (`BlockHighlightEvent`) brings the canvas back. `ui/app/viewers/ResourceViewers`: pictures
   (`Image`, lifted out of `DiffCards` as `thumbnail`), JSON (Jackson tree → `TreeView`), `.properties`

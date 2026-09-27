@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.Runs;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.studio.services.ProjectSettingsService;
 
 import java.util.List;
 import java.util.OptionalLong;
@@ -47,6 +48,8 @@ public final class HostRuns implements Runs {
 
     private final EventBus eventBus;
     private final CodeExecutionService execution;
+    /** Where the run properties live — the checkout's own {@code .botmaker/settings.json}. */
+    private final ProjectSettingsService settings;
 
     /** Plugin listeners, held here rather than on the bus, which cannot unsubscribe. */
     private final List<Consumer<Boolean>> stateListeners = new CopyOnWriteArrayList<>();
@@ -54,9 +57,10 @@ public final class HostRuns implements Runs {
 
     private volatile boolean running;
 
-    private HostRuns(EventBus eventBus, CodeExecutionService execution) {
+    private HostRuns(EventBus eventBus, CodeExecutionService execution, ProjectSettingsService settings) {
         this.eventBus = eventBus;
         this.execution = execution;
+        this.settings = settings;
         // false: these must not be marshalled onto the FX thread. A plugin is told in the contract that the
         // thread is not promised and that it must hop for UI itself, and a pilot pushing a frame has no
         // business queueing behind the editor's rendering.
@@ -67,12 +71,13 @@ public final class HostRuns implements Runs {
     }
 
     /** Makes this project's bot the one a plugin reaches, replacing whatever was installed before. */
-    public static synchronized void install(EventBus eventBus, CodeExecutionService execution) {
+    public static synchronized void install(EventBus eventBus, CodeExecutionService execution,
+                                            ProjectSettingsService settings) {
         if (eventBus == null || execution == null) {
             clear();
             return;
         }
-        current = new HostRuns(eventBus, execution);
+        current = new HostRuns(eventBus, execution, settings);
     }
 
     /** No project: a plugin asking now gets {@link Runs#NONE}. */
@@ -111,6 +116,24 @@ public final class HostRuns implements Runs {
     @Override
     public OptionalLong pid() {
         return execution.runningBotPid();
+    }
+
+    /** This checkout's run property {@code name}, kept in {@code .botmaker/settings.json}; null when unset. */
+    @Override
+    public String property(String name) {
+        if (settings == null || name == null) return null;
+        return settings.current().runProperties().get(name);
+    }
+
+    /**
+     * Sets it for every later run — {@code BotJvm.options} passes each as {@code -D}. Written at once rather than
+     * through the asynchronous update, so a plugin that sets a property and reads it back in the same breath (the
+     * emulator picker, then the setup checklist) sees what it wrote.
+     */
+    @Override
+    public void setProperty(String name, String value) {
+        if (settings == null || name == null || name.isBlank()) return;
+        settings.saveNow(settings.current().withRunProperty(name.trim(), value));
     }
 
     @Override

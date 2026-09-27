@@ -66,10 +66,9 @@ public final class ProjectSchema {
      * per step applied, for the status bar; empty when the project was already current.
      *
      * <p>A file that is <b>not on disk</b> counts as version 0 and its steps run anyway — the "absent means 0"
-     * rule applies to the whole file as much as to the key inside it. A very old project may have no
-     * {@code botmaker-project.properties} at all and still carry the generated {@code BotSettings.java} that
-     * the 0 → 1 step exists to absorb; skipping it because the destination file is missing would strand
-     * exactly the project the step was written for. What <em>is</em> conditional is the stamp: nothing is
+     * rule applies to the whole file as much as to the key inside it: a step may move data <em>into</em> a file
+     * that does not exist yet, and skipping it because the destination is missing would strand exactly the
+     * project the step was written for. What <em>is</em> conditional is the stamp: nothing is
      * created merely to hold a number (see {@link SchemaFile#stampIfPresent}), so a project with no such file
      * is offered its steps again on the next open — which is why every step has to be safe to re-run.
      *

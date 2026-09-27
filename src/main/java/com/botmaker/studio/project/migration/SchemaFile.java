@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.migration;
 
-import com.botmaker.shared.config.ProjectProperties;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,43 +10,30 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.OptionalInt;
-import java.util.Properties;
 
 /**
  * A project data file that carries a schema version, and the two operations a version needs: reading the one
  * on disk, and stamping the current one.
  *
- * <p><b>Two files, and the third left on 2026-09-11.</b> {@link #PROPERTIES} is a <em>runtime contract</em> —
- * its keys are declared in {@code botmaker-shared} and the SDK parses them inside the running bot;
- * {@link #SETTINGS} is <em>editor state</em> the bot never opens. Each changes at its own pace, and a version
- * per file lets it: bumping one does not oblige the other to claim it changed.
+ * <p><b>One file, since 2026-09-27.</b> {@code PROPERTIES} — {@code botmaker-project.properties}, the runtime
+ * contract the SDK parsed inside the bot — went when nothing read it any more: a bot's tuning is its
+ * {@code @Managed("settings")} value in its own Java, and what it launches is this machine's run property. An
+ * old project keeps its file; nothing reads, writes or migrates it. {@code ACTIVITIES} went on 2026-09-11,
+ * because {@code activities.json} was the SDK plugin's format and a host ledger over it would have been a
+ * second writer. <b>Only a file this editor writes is listed here</b>, and {@link #SETTINGS} is the one left.
  *
- * <p>{@code ACTIVITIES} was the third and held the <em>model</em>. It is gone because a schema ledger is a
- * claim to own a file's shape, and {@code activities.json} is the SDK plugin's: the plugin reads and writes
- * it through its own {@code Authoring}, carrying its own stamp. A host that went on migrating and stamping
- * that file would be a second writer of it, which is the hazard the whole move exists to remove — and the
- * host version number would be a number about somebody else's format. <b>Only a file this editor writes is
- * listed here.</b>
- *
- * <p><b>Absent means 0.</b> Every project that exists today predates the marker, so a missing version is not
- * an error and not "unknown" — it is the oldest shape, and the migration steps from 0 are exactly the ones
- * written to bring that shape forward. This is the whole reason the numbering starts where it does.
+ * <p><b>Absent means 0.</b> Every project that predates the marker has none, so a missing version is not an
+ * error and not "unknown" — it is the oldest shape, and the migration steps from 0 are exactly the ones
+ * written to bring that shape forward.
  *
  * <p><b>The current version is not written down twice.</b> {@link #current()} is the number of migration steps
  * {@link SchemaMigrations} holds for this file — step <i>i</i> takes version <i>i</i> to <i>i+1</i>, so "how
- * new is this shape" and "how many steps reach it" are the same number by construction. Adding a step bumps
- * the version; there is no constant to forget to bump beside it.
+ * new is this shape" and "how many steps reach it" are the same number by construction.
  */
 public enum SchemaFile {
 
     /** {@code .botmaker/settings.json} — per-project editor state (favourites, overlay position, layout). */
-    SETTINGS(StudioProjectSettings.FILE_NAME, Format.JSON, "editor settings"),
-
-    /** {@code botmaker-project.properties} — the runtime contract the SDK reads inside the bot. */
-    PROPERTIES(ProjectProperties.FILE_NAME, Format.PROPERTIES, "project properties");
-
-    /** How the version is spelled inside the file. */
-    private enum Format { JSON, PROPERTIES }
+    SETTINGS(StudioProjectSettings.FILE_NAME, "editor settings");
 
     /** The JSON member holding the version. Written first, so it is the first line a human reads. */
     public static final String JSON_FIELD = "schemaVersion";
@@ -55,12 +41,10 @@ public enum SchemaFile {
     private static final ObjectMapper MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     private final String fileName;
-    private final Format format;
     private final String description;
 
-    SchemaFile(String fileName, Format format, String description) {
+    SchemaFile(String fileName, String description) {
         this.fileName = fileName;
-        this.format = format;
         this.description = description;
     }
 
@@ -69,15 +53,12 @@ public enum SchemaFile {
         return fileName;
     }
 
-    /**
-     * The directory this file lives in: the project's {@code .botmaker} for {@link #SETTINGS} (since
-     * 2026-09-26), its {@code src/main/resources} for {@link #PROPERTIES}, which the bot reads off its classpath.
-     */
+    /** The directory this file lives in: the project's {@code .botmaker} (since 2026-09-26). */
     public Path dirOf(ProjectConfig config) {
-        return this == SETTINGS ? config.studioRoot() : config.resourcesRoot();
+        return config.studioRoot();
     }
 
-    /** A short human phrase for a refusal message ("activity model", …). */
+    /** A short human phrase for a refusal message. */
     public String description() {
         return description;
     }
@@ -87,9 +68,9 @@ public enum SchemaFile {
         return SchemaMigrations.stepsFor(this).size();
     }
 
-    /** This file inside {@code resourcesDir} — the directory {@link #dirOf} names for it. */
-    public Path in(Path resourcesDir) {
-        return resourcesDir.resolve(fileName);
+    /** This file inside {@code dir} — the directory {@link #dirOf} names for it. */
+    public Path in(Path dir) {
+        return dir.resolve(fileName);
     }
 
     /**
@@ -98,25 +79,15 @@ public enum SchemaFile {
      * <p>Present-but-unstamped reads as {@code 0} — that is the "absent means 0" rule and it is deliberately
      * <em>not</em> the same as "no file". A file that does not exist has no shape to migrate, so the caller
      * skips it rather than stamping one it never wrote. An unparseable file also reads as empty: a migration
-     * pass is not the place to discover a hand-edit is broken, and every reader here already falls back to
-     * defaults on a bad parse.
+     * pass is not the place to discover a hand-edit is broken.
      */
-    public OptionalInt versionIn(Path resourcesDir) {
-        Path file = in(resourcesDir);
+    public OptionalInt versionIn(Path dir) {
+        Path file = in(dir);
         if (!Files.exists(file)) return OptionalInt.empty();
         try {
-            return switch (format) {
-                case JSON -> {
-                    var node = MAPPER.readTree(file.toFile());
-                    var value = node == null ? null : node.get(JSON_FIELD);
-                    yield OptionalInt.of(value != null && value.isInt() ? value.asInt() : 0);
-                }
-                case PROPERTIES -> {
-                    Properties props = new Properties();
-                    try (var in = Files.newInputStream(file)) { props.load(in); }
-                    yield OptionalInt.of(parse(props.getProperty(ProjectProperties.KEY_SCHEMA_VERSION)));
-                }
-            };
+            var node = MAPPER.readTree(file.toFile());
+            var value = node == null ? null : node.get(JSON_FIELD);
+            return OptionalInt.of(value != null && value.isInt() ? value.asInt() : 0);
         } catch (Exception e) {
             return OptionalInt.empty();
         }
@@ -124,28 +95,16 @@ public enum SchemaFile {
 
     /**
      * Records {@link #current()} in the file, leaving everything else in it alone. Does nothing when the file
-     * is absent — see {@link #versionIn}; the next ordinary write stamps it, because every writer of these
-     * three files goes through {@link #stamped} or {@link #stamp}.
+     * is absent — see {@link #versionIn}; the next ordinary write stamps it, because every writer of the file
+     * goes through {@link #stamped}.
      */
-    public void stampIfPresent(Path resourcesDir) throws IOException {
-        Path file = in(resourcesDir);
+    public void stampIfPresent(Path dir) throws IOException {
+        Path file = in(dir);
         if (!Files.exists(file)) return;
-        switch (format) {
-            case JSON -> {
-                var read = MAPPER.readTree(file.toFile());
-                ObjectNode body = read instanceof ObjectNode o ? o : MAPPER.createObjectNode();
-                body.remove(JSON_FIELD);
-                MAPPER.writeValue(file.toFile(), stamped(body));
-            }
-            case PROPERTIES -> {
-                Properties props = new Properties();
-                try (var in = Files.newInputStream(file)) { props.load(in); }
-                stamp(props);
-                try (var out = Files.newOutputStream(file)) {
-                    props.store(out, "BotMaker project defaults");
-                }
-            }
-        }
+        var read = MAPPER.readTree(file.toFile());
+        ObjectNode body = read instanceof ObjectNode o ? o : MAPPER.createObjectNode();
+        body.remove(JSON_FIELD);
+        MAPPER.writeValue(file.toFile(), stamped(body));
     }
 
     /**
@@ -161,19 +120,5 @@ public enum SchemaFile {
         out.put(JSON_FIELD, current());
         out.setAll(body);
         return out;
-    }
-
-    /** Sets this file's current version on {@code props} — the properties-file half of {@link #stamped}. */
-    public void stamp(Properties props) {
-        props.setProperty(ProjectProperties.KEY_SCHEMA_VERSION, Integer.toString(current()));
-    }
-
-    private static int parse(String raw) {
-        if (raw == null || raw.isBlank()) return 0;
-        try {
-            return Integer.parseInt(raw.trim());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }

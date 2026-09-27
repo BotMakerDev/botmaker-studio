@@ -44,13 +44,9 @@ import java.util.stream.Collectors;
  */
 public record SupportedTargets(Set<LaunchKind> kinds) {
 
-    /**
-     * The {@code botmaker-project.properties} key this is persisted under — deliberately <em>not</em> in
-     * shared's {@code ProjectProperties} with the rest of the file's keys, because no bot ever reads it. It is
-     * written by the publish dialog and read by Studio's launch-target dialog, both of which live here;
-     * putting it in shared would buy nothing and cost an ordered shared release.
-     */
-    public static final String KEY = "launch.supported";
+    // KEY = "launch.supported" stood here until 2026-09-27, the botmaker-project.properties key this was
+    // persisted under. Nothing ever wrote it; the set lives in the gallery entry alone now — ticked in the
+    // Publish sheet, pre-filled from the listing on a re-publish.
 
     public SupportedTargets {
         Set<LaunchKind> clean = EnumSet.noneOf(LaunchKind.class);
