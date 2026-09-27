@@ -201,7 +201,7 @@ class ExpressionBlocksTest {
 
         SimpleName name = ((VariableDeclarationFragment)
                 ((VariableDeclarationExpression) resource).fragments().getFirst()).getName();
-        f.editor.renameScopedVariable(name, "reader");
+        f.editor.renameLocal(name, "reader");
         assertNotNull(f.lastCode);
         assertParses(f.lastCode);
         assertTrue(f.lastCode.contains("var reader = new java.io.StringReader") && f.lastCode.contains("reader.read()"),
@@ -260,7 +260,7 @@ class ExpressionBlocksTest {
         });
         SingleVariableDeclaration variable = (SingleVariableDeclaration)
                 ((TypePattern) checks[0].getPattern()).getPatternVariable();
-        f.editor.renamePatternVariable(variable.getName(), "text");
+        f.editor.renameLocal(variable.getName(), "text");
         assertNotNull(f.lastCode);
         assertParses(f.lastCode);
         assertTrue(f.lastCode.contains("o instanceof String text)") && f.lastCode.contains("println(text)"),

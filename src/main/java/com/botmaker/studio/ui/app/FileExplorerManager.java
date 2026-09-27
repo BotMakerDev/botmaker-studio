@@ -4,12 +4,13 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
+import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.TypeRename;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * The Project Files explorer: a filter, the file tree, and a collapsible <b>Structure</b> section for the open
@@ -437,23 +439,30 @@ public class FileExplorerManager {
         String newName = dialog.showAndWait().map(String::strip).orElse("");
         if (newName.isEmpty() || newName.equals(oldName)) return;
 
-        Map<Path, String> sources = new LinkedHashMap<>();
-        BotSources.scan(config, state, sources::put);
         Path target = file.resolveSibling(newName.replaceFirst("\\.java$", "") + ".java");
         Set<Path> existing = Files.exists(target) ? Set.of(target) : Set.of();
-        BotParser parser = BotParser.of(state);
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
         ProjectState.Snapshot before = state.snapshot();
         status("Renaming " + oldName + "…");
         Thread worker = new Thread(() -> {
-            TypeRename.Result result = TypeRename.plan(file, newName, sources, existing, parser);
-            if (result instanceof TypeRename.Result.Plan) {
+            Refactor.Outcome outcome = TypeRename.plan(index.get(), file, newName, existing);
+            if (outcome instanceof Refactor.Planned) {
                 Checkpoints.take(config.projectPath(), before, VersionOrigin.SAFETY,
                         "Before renaming " + oldName + " to " + newName);
             }
             Platform.runLater(() -> {
-                switch (result) {
-                    case TypeRename.Result.Refused refused -> status("Not renamed: " + refused.reason());
-                    case TypeRename.Result.Plan plan -> apply(plan, oldName);
+                switch (outcome) {
+                    case Refactor.Refused refused -> {
+                        status("");
+                        RefusalDialog.show(fileTree.getScene() == null ? null : fileTree.getScene().getWindow(),
+                                oldName + " wasn't renamed", refused, Refactors.reveal(codeEditorService),
+                                fix -> {
+                                    Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY,
+                                            "Before: " + fix.summary());
+                                    apply(fix);
+                                });
+                    }
+                    case Refactor.Planned plan -> apply(plan);
                 }
             });
         }, "explorer-rename");
@@ -461,15 +470,17 @@ public class FileExplorerManager {
         worker.start();
     }
 
-    private void apply(TypeRename.Result.Plan plan, String oldName) {
+    /** Writes a rename's plan to the buffers and the disk, moving the file with its class. FX thread. */
+    private void apply(Refactor.Planned plan) {
         Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
         try {
             for (Map.Entry<Path, String> rewrite : plan.rewrites().entrySet()) {
                 Path path = rewrite.getKey();
-                if (path.equals(plan.from())) {
-                    Files.writeString(plan.to(), rewrite.getValue());
-                    Files.delete(plan.from());
-                    state.removeFile(plan.from());
+                Path to = plan.moves().get(path);
+                if (to != null) {
+                    Files.writeString(to, rewrite.getValue());
+                    Files.delete(path);
+                    state.removeFile(path);
                     continue;
                 }
                 state.getFile(path).ifPresent(buffer -> buffer.setContent(rewrite.getValue()));
@@ -481,14 +492,14 @@ public class FileExplorerManager {
             refreshTree();
             return;
         }
-        // The open file is re-drawn from its (possibly rewritten) buffer; the renamed one opens under its name.
-        if (plan.from().equals(active)) codeEditorService.switchToFile(plan.to());
-        else if (active != null && plan.rewrites().containsKey(active)) codeEditorService.switchToFile(active);
+        // The open file is re-drawn from its (possibly rewritten) buffer; a moved one opens under its new name.
+        Path movedTo = active == null ? null : plan.moves().get(active.toAbsolutePath().normalize());
+        if (movedTo != null) codeEditorService.switchToFile(movedTo);
+        else if (active != null && plan.rewrites().containsKey(active.toAbsolutePath().normalize())) {
+            codeEditorService.switchToFile(active);
+        }
         refreshTree();
-        int others = plan.rewrites().size() - 1;
-        status("Renamed " + oldName + " to " + plan.to().getFileName().toString().replaceFirst("\\.java$", "")
-                + (others == 0 ? "." : " and its uses in " + others + (others == 1 ? " other file." : " other files."))
-                + " Versions has a safety copy from before.");
+        status(plan.summary() + ". Versions has a safety copy from before.");
     }
 
     private void status(String message) {

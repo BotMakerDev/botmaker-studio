@@ -1,6 +1,7 @@
 package com.botmaker.studio.blocks.var;
 
 import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.blocks.expr.ListBlock;
@@ -99,15 +100,20 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
         return typeLabel;
     }
 
-    /** The name, renamed in place: a field's fragment carries the only spelling there is. */
+    /**
+     * The name, renamed in place — and everywhere the bot reads the field, through {@link Refactors}. It
+     * renamed the declaration alone until 2026-09-27, so a field anything used could not be renamed at all.
+     */
     private Node nameFieldNode(CodeEditorService context) {
-        return TextFieldComponents.createVariableName(variableName, !isReadOnly(), newName -> {
+        Node[] field = new Node[1];
+        field[0] = TextFieldComponents.createVariableName(variableName, !isReadOnly(), newName -> {
             FieldDeclaration fieldDecl = (FieldDeclaration) this.astNode;
             VariableDeclarationFragment fragment = (VariableDeclarationFragment) fieldDecl.fragments().getFirst();
             if (!newName.equals(variableName) && !newName.isEmpty()) {
-                context.getCodeEditor().replaceSimpleName(fragment.getName(), newName);
+                Refactors.rename(context, field[0], fragment.getName(), newName);
             }
         });
+        return field[0];
     }
 
     private Button setValueButton(CodeEditorService context) {

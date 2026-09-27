@@ -3,8 +3,9 @@ package com.botmaker.studio.project.params;
 import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.value.Visibility;
+import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
-import com.botmaker.studio.parser.guard.CompileGuard;
+import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -12,10 +13,33 @@ import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
+import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.Assignment;
+import org.eclipse.jdt.core.dom.BodyDeclaration;
+import org.eclipse.jdt.core.dom.BooleanLiteral;
+import org.eclipse.jdt.core.dom.CharacterLiteral;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.FieldAccess;
+import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.ImportDeclaration;
+import org.eclipse.jdt.core.dom.Name;
+import org.eclipse.jdt.core.dom.NodeFinder;
+import org.eclipse.jdt.core.dom.NullLiteral;
+import org.eclipse.jdt.core.dom.NumberLiteral;
+import org.eclipse.jdt.core.dom.PostfixExpression;
+import org.eclipse.jdt.core.dom.PrefixExpression;
+import org.eclipse.jdt.core.dom.QualifiedName;
+import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.Statement;
+import org.eclipse.jdt.core.dom.StringLiteral;
+import org.eclipse.jdt.core.dom.TextBlock;
+import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
-import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -174,33 +198,31 @@ public final class JavaParameters {
      */
     public static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                   ParameterRow wanted, Type wantedForm, ValueGrammar grammar) {
-        return declare(config, state, parameter, wanted, wantedForm, grammar, guardParser(config, state));
+        return declare(config, state, parameter, wanted, wantedForm, grammar, guarded(state));
     }
 
     /**
-     * The same, held to the compile guard {@code guard} parses with — null for none.
+     * The same, held to the compile check when {@code guarded}.
      *
      * <p><b>All or nothing, and never a bot that stops compiling</b> (2026-09-27). The declaration is several
      * edits in a row; a refusal part-way puts every file back as it was. And an edit that compiles in its own
      * file can break another — {@code Parameters.j} retyped to {@code String} breaks {@code int x =
-     * Parameters.j} in {@code Base.java} — so every file that spells the name is compiled before and after,
-     * and a new error anywhere puts everything back. An error a file already had never refuses.
+     * Parameters.j} in {@code Base.java} — so the whole bot is compiled before and after ({@link BotIndex}),
+     * and a new error anywhere puts everything back. An error the bot already had never refuses.
      */
     static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter, ParameterRow wanted,
-                           Type wantedForm, ValueGrammar grammar, BotParser guard) {
+                           Type wantedForm, ValueGrammar grammar, boolean guarded) {
         if (parameter == null || wanted == null) return gone(parameter);
-        Map<Path, String> before = Usages.sources(config, state);
-        Map<Path, List<CompileGuard.Problem>> errors = guard == null ? Map.of()
-                : CompileGuard.errorsIn(guard, spelling(before, parameter.name()));
+        BotIndex was = BotIndex.of(config, state);
         Outcome outcome = apply(config, state, parameter, wanted, wantedForm, grammar);
         if (outcome instanceof Outcome.Refused) {
-            putBack(config, state, before);
+            putBack(config, state, was.sources());
             return outcome;
         }
-        if (guard == null) return outcome;
-        Optional<String> broke = CompileGuard.firstIntroduced(guard, errors, Usages.sources(config, state));
+        if (!guarded) return outcome;
+        Optional<String> broke = was.firstNewError(BotIndex.of(config, state));
         if (broke.isEmpty()) return outcome;
-        putBack(config, state, before);
+        putBack(config, state, was.sources());
         return new Outcome.Refused("That would stop the bot compiling, so nothing was changed: " + broke.get());
     }
 
@@ -333,12 +355,18 @@ public final class JavaParameters {
      */
     public static Outcome remove(ProjectConfig config, ProjectState state, JavaParameter parameter) {
         if (parameter == null) return gone(null);
-        Optional<List<Usages.Usage>> uses = uses(config, state, parameter);
+        BotIndex index = BotIndex.of(config, state);
+        int start = fieldStart(index, parameter);
+        Optional<List<Usages.Usage>> uses = start < 0 ? Optional.empty()
+                : Refactor.uses(index, parameter.file(), start);
         if (uses.isEmpty()) {
             return new Outcome.Refused(parameter.qualified() + " could not be resolved, so whether anything "
                     + "still uses it cannot be told. Nothing was removed.");
         }
-        if (!uses.get().isEmpty()) return new Outcome.Refused(stillUsed(parameter, uses.get()), uses.get());
+        if (!uses.get().isEmpty()) {
+            return new Outcome.Refused(stillUsed(parameter, uses.get()), uses.get(),
+                    inlined(index, parameter, start, uses.get().size()).stream().toList());
+        }
         return rewrite(config, state, parameter.file(),
                 source -> JavaParameterEdits.remove(source, parameter.className(), parameter.name()))
                 ? new Outcome.Removed() : gone(parameter);
@@ -351,6 +379,111 @@ public final class JavaParameters {
         return parameter.qualified() + " is still used " + uses.size() + (uses.size() == 1 ? " time" : " times")
                 + ", in " + String.join(", ", where) + (uses.size() > where.size() ? ", …" : "")
                 + ". Remove " + (uses.size() == 1 ? "that use" : "those uses") + " first.";
+    }
+
+    /**
+     * The fix a refused remove offers when the parameter's value is a constant: every use replaced by that
+     * value, a static import of it dropped, and the declaration removed — one plan, compiled as the whole bot
+     * before it is offered. Nothing is offered when the value is a computation (each use would run it anew),
+     * when a use writes the field, or when the copy would not compile where it lands (a constant needing an
+     * import that file lacks).
+     */
+    private static Optional<Refactor.Fix> inlined(BotIndex index, JavaParameter parameter, int start, int count) {
+        Path file = parameter.file().toAbsolutePath().normalize();
+        Refactor.Planned plan = index.read(units -> {
+            CompilationUnit declaring = units.get(file);
+            if (declaring == null
+                    || !(NodeFinder.perform(declaring, start, 0) instanceof SimpleName name)
+                    || !(name.getParent() instanceof VariableDeclarationFragment fragment)
+                    || !(fragment.getParent() instanceof FieldDeclaration field)
+                    || !isConstant(fragment.getInitializer())) {
+                return null;
+            }
+            String key = Usages.keyOf(fragment.resolveBinding());
+            if (key == null) return null;
+            Map<Path, String> rewrites = new LinkedHashMap<>();
+            for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
+                String text = index.sources().get(entry.getKey());
+                if (!text.contains(parameter.name())) continue;
+                ASTRewrite rewriter = ASTRewrite.create(entry.getValue().getAST());
+                for (Usages.Usage use : Usages.in(entry.getKey(), text, entry.getValue(), key)) {
+                    if (use.declaration()) continue;
+                    ASTNode at = NodeFinder.perform(entry.getValue(), use.start(), 0);
+                    if (!(at instanceof SimpleName used)) return null;
+                    if (!inline(rewriter, used, fragment.getInitializer())) return null;
+                }
+                if (entry.getKey().equals(file)) {
+                    rewriter.remove(field.fragments().size() == 1 ? field : fragment, null);
+                }
+                String rewritten = AstRewriteHelper.applyRewrite(rewriter, text);
+                if (!rewritten.equals(text)) rewrites.put(entry.getKey(), rewritten);
+            }
+            return new Refactor.Planned("Replaced " + parameter.qualified() + " with its value and removed it",
+                    rewrites);
+        });
+        if (plan == null) return Optional.empty();
+        String value = initializerOf(index, file, start);
+        return Refactor.checked(index, plan, "Replacing " + parameter.qualified() + " with its value")
+                instanceof Refactor.Planned checked
+                ? Optional.of(new Refactor.Fix("Replace " + (count == 1 ? "the use" : "the " + count + " uses")
+                        + " with " + value + " and remove it", checked))
+                : Optional.empty();
+    }
+
+    /** A value that is the same wherever it is written: a literal, a negative number, a named constant. */
+    private static boolean isConstant(Expression value) {
+        return switch (value) {
+            case NumberLiteral ignored -> true;
+            case StringLiteral ignored -> true;
+            case TextBlock ignored -> true;
+            case CharacterLiteral ignored -> true;
+            case BooleanLiteral ignored -> true;
+            case NullLiteral ignored -> true;
+            case Name ignored -> true;
+            case PrefixExpression prefix -> prefix.getOperator() == PrefixExpression.Operator.MINUS
+                    && prefix.getOperand() instanceof NumberLiteral;
+            case null, default -> false;
+        };
+    }
+
+    /**
+     * Records, in {@code rewriter}, what one use of the field becomes: a static import of it is dropped, and a
+     * read — {@code j}, {@code Parameters.j}, {@code this.j} — is replaced by a copy of {@code value}. False for
+     * a use that writes the field, which a value cannot stand in for.
+     */
+    private static boolean inline(ASTRewrite rewriter, SimpleName used, Expression value) {
+        for (ASTNode n = used; n != null; n = n.getParent()) {
+            if (n instanceof ImportDeclaration imported) {
+                rewriter.remove(imported, null);
+                return true;
+            }
+            if (n instanceof Statement || n instanceof BodyDeclaration) break;
+        }
+        ASTNode read = used.getParent() instanceof QualifiedName qualified && qualified.getName() == used ? qualified
+                : used.getParent() instanceof FieldAccess access && access.getName() == used ? access : used;
+        ASTNode parent = read.getParent();
+        boolean written = parent instanceof Assignment assignment && assignment.getLeftHandSide() == read
+                || parent instanceof PostfixExpression
+                || parent instanceof PrefixExpression prefix
+                && (prefix.getOperator() == PrefixExpression.Operator.INCREMENT
+                || prefix.getOperator() == PrefixExpression.Operator.DECREMENT);
+        if (written) return false;
+        rewriter.replace(read, ASTNode.copySubtree(read.getAST(), value), null);
+        return true;
+    }
+
+    private static String initializerOf(BotIndex index, Path file, int start) {
+        return index.read(units -> NodeFinder.perform(units.get(file), start, 0) instanceof SimpleName name
+                && name.getParent() instanceof VariableDeclarationFragment fragment
+                && fragment.getInitializer() != null ? fragment.getInitializer().toString() : "");
+    }
+
+    /**
+     * Writes a plan a refusal offered — every file it rewrites, buffer and disk. What the window does with a
+     * fix the user picked.
+     */
+    public static void write(ProjectConfig config, ProjectState state, Refactor.Planned plan) {
+        BotSources.forEach(config, state, (file, source) -> plan.rewrites().get(file));
     }
 
     /**
@@ -392,20 +525,15 @@ public final class JavaParameters {
     public static Optional<List<Usages.Usage>> uses(ProjectConfig config, ProjectState state,
                                                     JavaParameter parameter) {
         if (config == null || parameter == null) return Optional.empty();
-        Map<Path, String> sources = Usages.sources(config, state);
-        BotParser parser = BotParser.of(config, state);
-        String key = fieldKey(sources, parser, parameter);
-        if (key == null) return Optional.empty();
-        return Optional.of(Usages.across(sources, parser, key, parameter.name()).stream()
-                .filter(use -> !use.declaration()).toList());
+        BotIndex index = BotIndex.of(config, state);
+        int start = fieldStart(index, parameter);
+        return start < 0 ? Optional.empty() : Refactor.uses(index, parameter.file(), start);
     }
 
-    /** The binding key of {@code parameter}'s field, read off its own file, or null when it cannot be. */
-    private static String fieldKey(Map<Path, String> sources, BotParser parser, JavaParameter parameter) {
+    /** Where {@code parameter}'s name is declared in its file as the index read it, or -1. */
+    private static int fieldStart(BotIndex index, JavaParameter parameter) {
         Path file = parameter.file().toAbsolutePath().normalize();
-        String source = sources.get(file);
-        if (source == null) return null;
-        return Usages.fieldKey(parser.parse(file, source), parameter.className(), parameter.name());
+        return index.read(units -> Usages.fieldStart(units.get(file), parameter.className(), parameter.name()));
     }
 
     /** What an edit through this class did. */
@@ -418,17 +546,25 @@ public final class JavaParameters {
         record Removed() implements Outcome {}
 
         /**
-         * Nothing was written, and the sentence that says why.
+         * Nothing was written, and the sentence that says why — {@link Refactor.Refused}'s shape, so the window
+         * shows it through the one refusal dialog.
          *
-         * @param uses where the bot still uses the field, when that is the reason — for the window to offer
+         * @param uses  where the bot still uses the field, when that is the reason — for the window to offer
+         * @param fixes what could be done instead, each a checked plan ({@link #write})
          */
-        record Refused(String reason, List<Usages.Usage> uses) implements Outcome {
+        record Refused(String reason, List<Usages.Usage> uses, List<Refactor.Fix> fixes) implements Outcome {
             public Refused {
                 uses = List.copyOf(uses);
+                fixes = List.copyOf(fixes);
             }
 
             public Refused(String reason) {
-                this(reason, List.of());
+                this(reason, List.of(), List.of());
+            }
+
+            /** As the refusal every refactor shows. */
+            public Refactor.Refused asRefactor() {
+                return new Refactor.Refused(reason, uses, fixes);
             }
         }
 
@@ -444,15 +580,6 @@ public final class JavaParameters {
                 : "“" + parameter.name() + "” could not be found. It may have been changed in the meantime.");
     }
 
-    /** The files of {@code sources} that spell {@code name} — the only ones an edit to it can break. */
-    private static Map<Path, String> spelling(Map<Path, String> sources, String name) {
-        Map<Path, String> out = new LinkedHashMap<>();
-        sources.forEach((file, source) -> {
-            if (source.contains(name)) out.put(file, source);
-        });
-        return out;
-    }
-
     /** Puts every file that differs from {@code before} back, buffer and disk. */
     private static void putBack(ProjectConfig config, ProjectState state, Map<Path, String> before) {
         BotSources.forEach(config, state, (file, source) -> {
@@ -462,12 +589,12 @@ public final class JavaParameters {
     }
 
     /**
-     * The parser {@link #declare} compiles with to hold an edit to the guard, or null for none: only with a
-     * resolved classpath. Without one every type a plugin declares reads as unknown, so a retype to one would
-     * refuse — the same condition {@code CodeEditor.wouldNotCompile} applies to a canvas edit.
+     * Whether {@link #declare} holds an edit to the compile check: only with a resolved classpath. Without one
+     * every type a plugin declares reads as unknown, so a retype to one would refuse — the same condition
+     * {@code CodeEditor.wouldNotCompile} applies to a canvas edit.
      */
-    private static BotParser guardParser(ProjectConfig config, ProjectState state) {
-        return state == null || state.getResolvedClasspath().isEmpty() ? null : BotParser.of(config, state);
+    private static boolean guarded(ProjectState state) {
+        return state != null && !state.getResolvedClasspath().isEmpty();
     }
 
     // ---- the single-field edits ---------------------------------------------------------------------
@@ -484,43 +611,28 @@ public final class JavaParameters {
     }
 
     /**
-     * Renames a parameter and repoints every reference to it, in every file.
-     *
-     * <p>Project-wide because a bot reads {@code Parameters.restBetween} wherever it likes: a rename that
-     * touched only the declaring file would leave the bot not compiling, which is the one outcome an editor
-     * must never produce from a rename. What is renamed is exactly what {@link Usages} binds to the field —
-     * the declaration, {@code Parameters.x}, a static import, a bare {@code x} inside the class — and a local
-     * variable of the same name is left alone, as is a comment. A field that cannot be resolved is not
-     * renamed at all rather than renamed by guess.
+     * Renames a parameter and repoints every reference to it, in every file — {@link Refactor#rename}, the
+     * one way a name changes, which renames exactly what binds to the field (the declaration,
+     * {@code Parameters.x}, a static import, a bare {@code x} inside the class) and refuses a rename that
+     * would not compile. A field that cannot be resolved is not renamed at all rather than renamed by guess.
      *
      * @return why nothing was renamed, or empty when it was
      */
     private static Optional<String> rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                            String newName) {
-        if (!SourceVersion.isIdentifier(newName) || SourceVersion.isKeyword(newName)) {
-            return Optional.of("“" + newName + "” is not a name Java accepts.");
-        }
-        Map<Path, String> sources = Usages.sources(config, state);
-        BotParser parser = BotParser.of(config, state);
-        String key = fieldKey(sources, parser, parameter);
-        if (key == null) {
+        BotIndex index = BotIndex.of(config, state);
+        int start = fieldStart(index, parameter);
+        if (start < 0) {
             return Optional.of(parameter.qualified() + " could not be resolved, so the places that use it "
                     + "cannot be found. Nothing was renamed.");
         }
-        Map<Path, List<Integer>> starts = new LinkedHashMap<>();
-        for (Usages.Usage use : Usages.across(sources, parser, key, parameter.name())) {
-            starts.computeIfAbsent(use.file(), f -> new ArrayList<>()).add(use.start());
-        }
-        boolean[] declared = {false};
-        BotSources.forEach(config, state, (file, source) -> {
-            List<Integer> at = starts.get(file);
-            if (at == null || !source.equals(sources.get(file))) return null;
-            String rewritten = Usages.renamed(source, at, parameter.name(), newName);
-            if (file.equals(parameter.file().toAbsolutePath().normalize())) declared[0] = true;
-            return rewritten.equals(source) ? null : rewritten;
-        });
-        return declared[0] ? Optional.empty()
-                : Optional.of(parameter.qualified() + "'s declaration could not be found. Nothing was renamed.");
+        return switch (Refactor.rename(index, parameter.file(), start, newName)) {
+            case Refactor.Refused refused -> Optional.of(refused.reason());
+            case Refactor.Planned plan -> {
+                write(config, state, plan);
+                yield Optional.empty();
+            }
+        };
     }
 
     /** Changes a parameter's type, resetting its value to that type's default. */

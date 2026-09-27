@@ -95,7 +95,7 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
                     .custom("catch-name" + i, () -> TextFieldComponents.createVariableName(
                             clause.getException().getName().getIdentifier(), !isReadOnly(),
                             newName -> context.getCodeEditor()
-                                    .renameScopedVariable(clause.getException().getName(), newName)))
+                                    .renameLocal(clause.getException().getName(), newName)))
                     .custom("catch-spacer" + i, BlockUIComponents::createSpacer)
                     .picker("catch-delete" + i, () -> isReadOnly() ? null : BlockUIComponents.createDeleteButton(
                             () -> context.getCodeEditor().deleteCatchClause(tryStmt, index)))

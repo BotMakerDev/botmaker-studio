@@ -78,7 +78,7 @@ public class ForBlock extends AbstractStatementBlock implements BlockWithChildre
             if (variable != null && variable.getAstNode() instanceof SimpleName) {
                 // Rename the declaration AND its references in the loop body — a plain replaceSimpleName renames
                 // only the declaration, leaving the body on the old name so the code stops compiling.
-                context.getCodeEditor().renameForEachVariable((SimpleName) variable.getAstNode(), newName);
+                context.getCodeEditor().renameLocal((SimpleName) variable.getAstNode(), newName);
             }
         });
     }

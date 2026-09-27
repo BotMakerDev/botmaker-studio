@@ -1,14 +1,26 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.MethodReferences;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.control.Alert;
 import javafx.stage.Window;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
@@ -50,7 +62,16 @@ public final class SignatureEdits {
                              FunctionDraft before, FunctionDraft after) {
         MethodReferences.Result references = MethodReferences.find(context.getState(), method);
         if (references.isRefusal()) {
-            explainRefused(owner, method, references.refusal());
+            explainRefused(context, owner, method, references.refusal(), List.of(), List.of());
+            return;
+        }
+        List<Usages.Usage> byReference = references.calls().stream()
+                .filter(MethodReferences.CallSite::isReference).map(MethodReferences.CallSite::usage).toList();
+        if (!byReference.isEmpty() && !SignatureMigration.sameShape(before, after)) {
+            explainRefused(context, owner, method, "It is passed by reference — " + byReference.getFirst().text()
+                    + " — and a reference names a function without calling it, so there are no arguments to "
+                    + "change with it. Renaming it is fine; to change its inputs or what it gives back, change "
+                    + "or remove the reference first.", byReference, List.of());
             return;
         }
         SignatureMigration.Plan plan = SignatureMigration.of(before, after, method, references.calls());
@@ -91,34 +112,81 @@ public final class SignatureEdits {
     public static void delete(CodeEditorService context, Window owner, MethodDeclaration method) {
         MethodReferences.Result references = MethodReferences.find(context.getState(), method);
         if (references.isRefusal()) {
-            explainRefused(owner, method, references.refusal());
+            explainRefused(context, owner, method, references.refusal(), List.of(), List.of());
             return;
         }
         if (!references.calls().isEmpty()) {
-            explainRefused(owner, method, stillUsed(method, references));
+            List<RefusalDialog.Choice> fixes = new ArrayList<>();
+            withCalls(context, method, references).ifPresent(plan -> fixes.add(new RefusalDialog.Choice(
+                    "Delete it and its " + countOf(references.calls().size(), "call"),
+                    () -> context.getCodeEditor().applyRefactor(plan, method))));
+            explainRefused(context, owner, method, stillUsed(method, references), references.usages(), fixes);
             return;
         }
         context.getCodeEditor().deleteMethod(method);
     }
 
-    /** Why a delete cannot happen yet: the count, and where to go and undo it. */
+    /** Why a delete cannot happen yet: the count, and what would let it through. */
     private static String stillUsed(MethodDeclaration method, MethodReferences.Result references) {
         int count = references.calls().size();
         String what = method.isConstructor() ? "It is still built" : "It is still called";
         return what + " " + count + (count == 1 ? " time" : " times") + ", in "
                 + String.join(", ", references.fileNames())
-                + ".\n\nRemove " + (count == 1 ? "that use" : "those uses") + " first and this will delete "
+                + ". Remove " + (count == 1 ? "that use" : "those uses") + " first and this will delete "
                 + "cleanly. Nothing has changed.";
     }
 
-    /** Why the change could not be made, naming the file that has to be fixed first. */
-    public static void explainRefused(Window owner, MethodDeclaration method, String because) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.initOwner(owner);
-        alert.setTitle("This change can't be made yet");
-        alert.setHeaderText(method.getName().getIdentifier() + " wasn't changed");
-        alert.setContentText(because);
-        alert.showAndWait();
+    /**
+     * The function deleted together with every call to it — offered only when each call stands as a line of
+     * its own, so removing the line is the whole of the call's consequence. A call whose value is used, or a
+     * reference, has nothing honest to become, and then there is no such fix. Compiled as the whole bot
+     * first ({@link Refactor#checked}); a plan that would break anything is not offered.
+     */
+    private static Optional<Refactor.Planned> withCalls(CodeEditorService context, MethodDeclaration method,
+                                                        MethodReferences.Result references) {
+        if (references.calls().stream().anyMatch(site -> site.isReference() || !site.isStatement())) {
+            return Optional.empty();
+        }
+        ProjectState state = context.getState();
+        Path active = state.getActiveFile() == null ? null
+                : state.getActiveFile().getPath().toAbsolutePath().normalize();
+        Map<CompilationUnit, ASTRewrite> rewriters = new LinkedHashMap<>();
+        Map<CompilationUnit, Path> files = new LinkedHashMap<>();
+        CompilationUnit declaring = (CompilationUnit) method.getRoot();
+        files.put(declaring, active);
+        rewriters.computeIfAbsent(declaring, unit -> ASTRewrite.create(unit.getAST())).remove(method, null);
+        for (MethodReferences.CallSite site : references.calls()) {
+            files.putIfAbsent(site.unit(), site.file().getPath().toAbsolutePath().normalize());
+            rewriters.computeIfAbsent(site.unit(), unit -> ASTRewrite.create(unit.getAST()))
+                    .remove(site.node().getParent(), null);
+        }
+        Map<Path, String> rewrites = new LinkedHashMap<>();
+        for (Map.Entry<CompilationUnit, ASTRewrite> entry : rewriters.entrySet()) {
+            Path file = files.get(entry.getKey());
+            String before = file.equals(active) ? state.getCurrentCode()
+                    : state.getFile(file).map(f -> f.getContent()).orElse(null);
+            if (before == null) return Optional.empty();
+            rewrites.put(file, AstRewriteHelper.applyRewrite(entry.getValue(), before));
+        }
+        String name = method.getName().getIdentifier();
+        Refactor.Planned plan = new Refactor.Planned("Deleted " + name + " and its "
+                + countOf(references.calls().size(), "call"), rewrites);
+        return Refactor.checked(BotIndex.of(state), plan, "Deleting " + name + " with its calls")
+                instanceof Refactor.Planned checked ? Optional.of(checked) : Optional.empty();
+    }
+
+    private static String countOf(int count, String what) {
+        return count + " " + what + (count == 1 ? "" : "s");
+    }
+
+    /**
+     * Why the change could not be made, where the function is still used, and what can be done instead —
+     * through the one refusal window every refactor uses.
+     */
+    public static void explainRefused(CodeEditorService context, Window owner, MethodDeclaration method,
+                                      String because, List<Usages.Usage> uses, List<RefusalDialog.Choice> fixes) {
+        RefusalDialog.show(owner, method.getName().getIdentifier() + " wasn't changed", because, uses, fixes,
+                Refactors.reveal(context));
     }
 
     /** Says which part of the signature the editor cannot describe, and where to change it instead. */

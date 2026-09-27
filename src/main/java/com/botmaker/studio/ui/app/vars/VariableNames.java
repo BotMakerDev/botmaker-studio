@@ -9,7 +9,7 @@ import java.util.Set;
  * <p>It lives apart from the screen because the answer is a pure string question and the screen is a JavaFX
  * dialog: the rules are worth testing without a display. It is also the <em>only</em> guard left — the declare
  * block no longer renames in place, so every rename now arrives through
- * {@link com.botmaker.studio.parser.CodeEditor#renameLocalVariable}, which rewrites the use sites and would
+ * {@link com.botmaker.studio.parser.CodeEditor#renameLocal}, which rewrites the use sites and would
  * happily rewrite them to {@code class} or to a name already taken. A rename that doesn't compile is worse
  * than a refused one: the editor's own re-parse fails, and the canvas the user was working on empties.
  */

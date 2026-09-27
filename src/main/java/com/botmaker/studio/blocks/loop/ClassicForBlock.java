@@ -25,7 +25,7 @@ import java.util.List;
  * The three-part {@code for}: {@code for int i from ⟨0⟩ while ⟨i < 10⟩ each time ⟨i++⟩}, then the body.
  *
  * <p>The common shape — one counter declared in the first part — is drawn as a name and a start value, the
- * name renamed with its uses inside the loop ({@code CodeEditor.renameScopedVariable}). Anything else in the
+ * name renamed with its uses inside the loop ({@code CodeEditor.renameLocal}). Anything else in the
  * first part ({@code i = 0, j = n}, or nothing) is drawn as the expressions it is. A missing condition reads
  * {@code forever}, which is what {@code for (;;)} means.
  */
@@ -122,7 +122,7 @@ public class ClassicForBlock extends AbstractStatementBlock implements BlockWith
 
     private Node nameField(SimpleName name, CodeEditorService context) {
         return TextFieldComponents.createVariableName(name.getIdentifier(), !isReadOnly(),
-                newName -> context.getCodeEditor().renameScopedVariable(name, newName));
+                newName -> context.getCodeEditor().renameLocal(name, newName));
     }
 
     @Override

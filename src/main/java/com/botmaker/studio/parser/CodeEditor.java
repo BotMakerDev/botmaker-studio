@@ -4,6 +4,8 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.ExpressionCatalog;
@@ -54,6 +56,7 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -749,6 +752,61 @@ public class CodeEditor {
     }
 
     /**
+     * Writes a {@link Refactor} plan — a rename, a fix a refusal offered — as <b>one step</b>: the open file
+     * through the guarded write, every other file it rewrites riding along in the same history entry, so ↶
+     * puts all of them back.
+     *
+     * <p>The plan was compiled as the whole bot before it got here ({@code BotIndex.with}), so this only
+     * carries it out, and in the order {@link #applyFunctionSignature} uses for the same reason: the other
+     * files are held in memory until the open one has been published. A plan that moves a file is the
+     * explorer's to write, not the canvas's, and is refused here.
+     *
+     * @param target the node the gesture was on, for the lock and the refusal journal
+     * @return whether it was written
+     */
+    public boolean applyRefactor(Refactor.Planned plan, ASTNode target) {
+        if (plan == null || !plan.moves().isEmpty()) return false;
+        if (!canModify(target, EditKind.SIGNATURE)) return false;
+        ProjectFile active = state.getActiveFile();
+        Path activePath = active == null || active.getPath() == null ? null
+                : active.getPath().toAbsolutePath().normalize();
+
+        List<CallMigrator.Rewritten> others = new ArrayList<>();
+        for (Map.Entry<Path, String> rewrite : plan.rewrites().entrySet()) {
+            if (rewrite.getKey().equals(activePath)) continue;
+            ProjectFile file = state.getFile(rewrite.getKey()).orElse(null);
+            if (file == null) file = new ProjectFile(rewrite.getKey(), read(rewrite.getKey()));
+            others.add(new CallMigrator.Rewritten(file, rewrite.getValue()));
+        }
+        if (!others.isEmpty()) ReviewMarker.snapshot(config, "Before: " + plan.summary());
+
+        List<CoreApplicationEvents.FileEdit> alsoChanged = others.stream()
+                .map(each -> new CoreApplicationEvents.FileEdit(
+                        each.file().getPath(), each.file().getContent(), each.newSource()))
+                .toList();
+        String newCode = plan.rewrites().getOrDefault(activePath, getCurrentCode());
+        if (!triggerUpdate(newCode, false, target, EditKind.SIGNATURE, alsoChanged)) return false;
+        try {
+            CallMigrator.commit(others);
+        } catch (IOException e) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
+                    "The change was made here, but " + e.getMessage() + " couldn't be saved."));
+            return false;
+        }
+        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(plan.summary() + "."));
+        return true;
+    }
+
+    /** A file the editor does not hold, as it is on disk — empty when unreadable, which the rewrite replaces. */
+    private static String read(Path file) {
+        try {
+            return java.nio.file.Files.readString(file);
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /**
      * Puts the function {@code signature} ({@link com.botmaker.studio.project.vcs.BlockDiff#signature}) back as
      * {@code versionSource} has it — over the live one, or where it used to sit when the file no longer has it
      * ({@code docs/refactor/39-versions.md} §6). One ↶ like any edit, and an {@link #edit}, not an
@@ -789,10 +847,6 @@ public class CodeEditor {
     // is the whole defect this round is closing. The header controls now build a FunctionDraft and go through
     // applyFunctionSignature below, so there is one write path and it is the one that scans.
 
-    public void renameMethod(MethodDeclaration method, String newName) {
-        edit(method, EditKind.SIGNATURE, false, (cu, code) -> MethodHandler.renameMethod(cu, code, method, newName));
-    }
-
     public void moveBodyDeclaration(BodyDeclaration decl, TypeDeclaration targetType, int index) {
         edit(targetType, EditKind.SIGNATURE, true, (cu, code) -> MethodHandler.moveBodyDeclaration(cu, code, decl, targetType, index));
     }
@@ -815,9 +869,8 @@ public class CodeEditor {
         insert(toReplace, EditKind.BODY, false, (cu, code) -> EnumManipulationHandler.replaceWithEnumConstant(ctx(cu), code, toReplace, scope, fieldName));
     }
 
-    public void renameEnum(EnumDeclaration enumNode, String newName) {
-        edit(enumNode, EditKind.SIGNATURE, false, (cu, code) -> EnumManipulationHandler.renameEnum(cu, code, enumNode, newName));
-    }
+    // renameEnum, renameEnumConstant and renameMethod renamed the declaration and nothing else. A rename is
+    // Refactor's now — every use in the bot, by binding, compiled first — written through applyRefactor.
 
     public void addEnumConstant(EnumDeclaration enumNode, String constantName) {
         edit(enumNode, EditKind.SIGNATURE, false, (cu, code) -> EnumManipulationHandler.addEnumConstant(cu, code, enumNode, constantName));
@@ -825,10 +878,6 @@ public class CodeEditor {
 
     public void deleteEnumConstant(EnumDeclaration enumNode, int index) {
         edit(enumNode, EditKind.SIGNATURE, false, (cu, code) -> EnumManipulationHandler.deleteEnumConstant(cu, code, enumNode, index));
-    }
-
-    public void renameEnumConstant(EnumDeclaration enumNode, int index, String newName) {
-        edit(enumNode, EditKind.SIGNATURE, false, (cu, code) -> EnumManipulationHandler.renameEnumConstant(cu, code, enumNode, index, newName));
     }
 
     public void addEnumToClass(TypeDeclaration typeDecl, String enumName, int index) {
@@ -1159,13 +1208,16 @@ public class CodeEditor {
     }
 
     /**
-     * Renames a local variable declaration together with every reference to it in the same method — the
-     * Variables screen's rename. {@link #replaceSimpleName} renames the declaration alone, which is right for
-     * the name chip on a declare block a user has only just dropped and wrong for a variable already used.
+     * Renames a local variable — a declared local, a lambda's, a loop's, a {@code catch}'s or a pattern's
+     * variable, a method's parameter from its own body — together with every use of it in its scope
+     * ({@link Usages#local}). One entry point since 2026-09-27; there were five, each walking its own scope its
+     * own way. {@link #replaceSimpleName} changes which variable a use names, and is not a rename.
      */
-    public void renameLocalVariable(SimpleName declName, String newName) {
+    public void renameLocal(SimpleName declName, String newName) {
+        if (declName == null || newName == null || newName.isBlank()
+                || newName.strip().equals(declName.getIdentifier())) return;
         edit(declName, EditKind.BODY, false,
-                (cu, code) -> AstRewriteHelper.renameLocalVariable(cu, code, declName, newName));
+                (cu, code) -> AstRewriteHelper.renameLocal(code, declName, newName.strip()));
     }
 
     /**
@@ -1185,22 +1237,6 @@ public class CodeEditor {
         if (statement == null) return null;
         ctx.rewriter().getListRewrite(body, Block.STATEMENTS_PROPERTY).insertFirst(statement, null);
         return ctx.applyTo(originalCode);
-    }
-
-    /**
-     * Renames a lambda parameter (the name chip on {@code LambdaCallBlock}), carrying its references in the
-     * lambda body along — same reason as {@link #renameForEachVariable}.
-     */
-    public void renameLambdaParameter(SimpleName toRename, String newName) {
-        edit(toRename, EditKind.BODY, false, (cu, code) -> AstRewriteHelper.renameLambdaParameter(cu, code, toRename, newName));
-    }
-
-    /**
-     * Renames an enhanced-for loop variable, updating its references in the loop body too so the code still
-     * compiles. Plain {@link #replaceSimpleName} renames only the declaration, which broke compilation.
-     */
-    public void renameForEachVariable(SimpleName toRename, String newName) {
-        edit(toRename, EditKind.BODY, false, (cu, code) -> AstRewriteHelper.renameForEachVariable(cu, code, toRename, newName));
     }
 
     // =================================================================================
@@ -1489,40 +1525,6 @@ public class CodeEditor {
     }
 
     /**
-     * Renames a variable scoped to one statement — a {@code catch} parameter, a classic {@code for}'s index —
-     * with its references inside that statement only. See {@link AstRewriteHelper#renameWithinScope}.
-     */
-    public void renameScopedVariable(SimpleName declName, String newName) {
-        if (declName == null || newName == null || newName.isBlank()
-                || newName.equals(declName.getIdentifier())) return;
-        ASTNode scope = declName.getParent();
-        while (scope != null && !(scope instanceof CatchClause) && !(scope instanceof ForStatement)
-                && !(scope instanceof TryStatement)) {
-            scope = scope.getParent();
-        }
-        ASTNode found = scope;
-        edit(declName, EditKind.BODY, false,
-                (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
-    }
-
-    /**
-     * Renames the variable an {@code instanceof} pattern declares ({@code o instanceof Point p}). Its scope is
-     * decided by flow — {@code if (!(o instanceof Point p)) return;} puts {@code p} in scope for the rest of
-     * the block — so the rename covers the block the check sits in, matched by binding where there is one.
-     */
-    public void renamePatternVariable(SimpleName declName, String newName) {
-        if (declName == null || newName == null || newName.isBlank()
-                || newName.equals(declName.getIdentifier())) return;
-        ASTNode scope = declName.getParent();
-        while (scope != null && !(scope instanceof Block) && !(scope instanceof LambdaExpression)) {
-            scope = scope.getParent();
-        }
-        ASTNode found = scope;
-        edit(declName, EditKind.BODY, false,
-                (cu, code) -> AstRewriteHelper.renameWithinScope(cu, code, declName, newName.strip(), found));
-    }
-
-    /**
      * Makes a cast, a type check, a class literal, a declaration or an array creation name {@code typeText};
      * refused, with javac's reason, when that would add a compile error.
      */
@@ -1754,8 +1756,7 @@ public class CodeEditor {
         if (decl.fragments().size() != 1
                 || !(decl.fragments().getFirst() instanceof VariableDeclarationFragment fragment)) return null;
         ASTRewrite rewriter = ctx.rewriter();
-        List<SimpleName> uses = AstRewriteHelper.referencesWithin(AstRewriteHelper.enclosingMethod(decl),
-                fragment.getName());
+        List<SimpleName> uses = AstRewriteHelper.referencesWithin(fragment.getName());
 
         if (fix instanceof UseFix.Rename rename) {
             for (SimpleName use : uses) {

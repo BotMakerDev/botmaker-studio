@@ -213,7 +213,7 @@ class StatementBlocksTest {
                 try { } catch (RuntimeException e) { System.out.println(e); }"""));
         TryStatement first = (TryStatement) f.body("run").getStatements().getFirst().getAstNode();
         CatchClause clause = (CatchClause) first.catchClauses().getFirst();
-        f.editor.renameScopedVariable(clause.getException().getName(), "problem");
+        f.editor.renameLocal(clause.getException().getName(), "problem");
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("catch (IllegalStateException problem) { System.out.println(problem); }")
                 || f.lastCode.contains("System.out.println(problem)"), f.lastCode);
@@ -229,7 +229,7 @@ class StatementBlocksTest {
         ForStatement loop = (ForStatement) f.body("run").getStatements().getFirst().getAstNode();
         VariableDeclarationFragment counter = ClassicForBlock.counter(loop);
         assertNotNull(counter);
-        f.editor.renameScopedVariable(counter.getName(), "round");
+        f.editor.renameLocal(counter.getName(), "round");
         assertNotNull(f.lastCode);
         assertParses(f.lastCode);
         assertTrue(f.lastCode.contains("for (int round = 0; round < 3; round++)"), f.lastCode);

@@ -368,7 +368,7 @@ public class MethodHandler {
         }
         String newName = target.name().trim();
         if (!param.getName().getIdentifier().equals(newName)) {
-            AstRewriteHelper.renameWithinMethod(ctx.rewriter(), method, param.getName(), newName);
+            AstRewriteHelper.renameLocal(ctx.rewriter(), param.getName(), newName);
         }
     }
 
@@ -398,7 +398,7 @@ public class MethodHandler {
                 moved.setName(ast.newSimpleName(newName));
                 // The copy carries the new name; the body still spells the old one, and that is a rewrite of
                 // its own — the moved declaration is a new node, so renaming *it* would reach nothing else.
-                AstRewriteHelper.renameWithinMethod(rewriter, method, origin.getName(), newName);
+                AstRewriteHelper.renameLocal(rewriter, origin.getName(), newName);
             }
             listRewrite.insertLast(moved, null);
         }
@@ -508,10 +508,6 @@ public class MethodHandler {
         return AstRewriteHelper.removeNode(cu, originalCode, method);
     }
 
-    public static String renameMethod(CompilationUnit cu, String originalCode, MethodDeclaration method, String newName) {
-        return AstRewriteHelper.renameSimpleName(cu, originalCode, method.getName(), newName);
-    }
-
     public static String moveBodyDeclaration(CompilationUnit cu, String originalCode, BodyDeclaration declToMove,
                                       TypeDeclaration targetType, int targetIndex) {
         AST ast = cu.getAST();
@@ -612,8 +608,10 @@ public class MethodHandler {
                                         MethodDeclaration method, int index, String newName) {
         List<?> params = method.parameters();
         if (index >= 0 && index < params.size()) {
+            // With its uses in the body — renaming the declaration alone left the body reading a name that no
+            // longer existed, whatever CodeEditor.renameMethodParameter's documentation promised.
             SingleVariableDeclaration param = (SingleVariableDeclaration) params.get(index);
-            return AstRewriteHelper.renameSimpleName(cu, originalCode, param.getName(), newName);
+            return AstRewriteHelper.renameLocal(originalCode, param.getName(), newName);
         }
         return originalCode;
     }

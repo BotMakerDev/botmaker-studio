@@ -188,7 +188,7 @@ class JavaParametersTest {
 
         JavaParameter entry = only(config);
         JavaParameters.Outcome outcome = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
-                TestValues.GRAMMAR, new BotParser(List.of(), config.sourceRoot()));
+                TestValues.GRAMMAR, true);
 
         JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class, outcome);
         assertTrue(refused.reason().contains("Bot.java"), refused.reason());
@@ -363,6 +363,56 @@ class JavaParametersTest {
         JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class, outcome);
         assertTrue(refused.reason().contains("Bot.java:4"), refused.reason());
         assertEquals(1, JavaParameters.scan(config, null, TestValues.GRAMMAR).size());
+    }
+
+    /**
+     * The one fix a refused remove can vouch for: a constant is the same wherever it is written, so each read
+     * becomes the value and the field goes — as one plan, compiled first.
+     */
+    @Test
+    void aConstantParameterStillUsedOffersToBeReplacedByItsValue(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        write(config, "Bot.java", """
+                package com.refbot;
+
+                public class Bot {
+                    int tries() { return Parameters.maxAttempts; }
+                }
+                """);
+
+        JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class,
+                JavaParameters.remove(config, null, only(config)));
+
+        assertEquals(1, refused.fixes().size(), "10 compiles wherever maxAttempts was read");
+        assertEquals("Replace the use with 10 and remove it", refused.fixes().getFirst().label());
+        JavaParameters.write(config, null, refused.fixes().getFirst().plan());
+        assertTrue(Files.readString(config.mainPackageDir().resolve("Bot.java")).contains("return 10;"));
+        assertTrue(JavaParameters.scan(config, null, TestValues.GRAMMAR).isEmpty(), "and the field is gone");
+    }
+
+    @Test
+    void aParameterTheBotWritesOffersNoReplacement(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int maxAttempts = 10;
+                """));
+        write(config, "Bot.java", """
+                package com.refbot;
+
+                public class Bot {
+                    void reset() { Parameters.maxAttempts = 3; }
+                }
+                """);
+
+        JavaParameters.Outcome.Refused refused = assertInstanceOf(JavaParameters.Outcome.Refused.class,
+                JavaParameters.remove(config, null, only(config)));
+
+        assertTrue(refused.fixes().isEmpty(), "10 = 3 is not Java, so nothing is offered");
     }
 
     @Test

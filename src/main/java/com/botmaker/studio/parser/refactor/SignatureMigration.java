@@ -219,6 +219,12 @@ public final class SignatureMigration {
 
         int leftAlone = 0;
         for (CallSite site : sites) {
+            if (site.isReference()) {
+                // Only a rename reaches here with a reference (SignatureEdits refuses any other change of shape),
+                // and a reference carries no arguments to plan.
+                calls.add(new CallChange.Rewrite(site, newName, List.of()));
+                continue;
+            }
             if (returnChanged && !site.isStatement() && !slotAccepts(site, after.returnType())) {
                 calls.add(new CallChange.ValueReplaced(site, before.returnType()));
             } else {
@@ -243,6 +249,25 @@ public final class SignatureMigration {
                 + (leftAlone == 1 ? "accepts" : "accept") + " the new type and " + (leftAlone == 1 ? "is" : "are")
                 + " left as written");
         return new Plan(List.copyOf(calls), rescued(before, after, declaration), List.copyOf(changes), fate);
+    }
+
+    /**
+     * Whether {@code after} is {@code before} with at most a new name — the same result type and the same
+     * parameters in the same order. The one change a method reference ({@code Collect::body}) can follow: it
+     * passes no arguments, so anything else would leave it naming a method of the wrong shape.
+     */
+    public static boolean sameShape(FunctionDraft before, FunctionDraft after) {
+        if (!typeText(before.returnType()).equals(typeText(after.returnType()))) return false;
+        if (before.parameters().size() != after.parameters().size()) return false;
+        for (int i = 0; i < after.parameters().size(); i++) {
+            FunctionDraft.Parameter now = after.parameters().get(i);
+            if (now.isNew() || now.origin() != i) return false;
+            if (!now.type().isKept()
+                    && !typeText(before.parameters().get(i).type()).equals(typeText(now.type()))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // --- the return at the end of the body -----------------------------------------------------------------
@@ -329,7 +354,7 @@ public final class SignatureMigration {
             if (isKept(after, i) || i >= declaration.parameters().size()) continue;
             SingleVariableDeclaration removed =
                     (SingleVariableDeclaration) declaration.parameters().get(i);
-            if (AstRewriteHelper.referencesWithin(declaration, removed.getName()).isEmpty()) continue;
+            if (AstRewriteHelper.referencesWithin(removed.getName()).isEmpty()) continue;
             rescued.add(new RescuedParameter(removed.getName().getIdentifier(),
                     before.parameters().get(i).type()));
         }

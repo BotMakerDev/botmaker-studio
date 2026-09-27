@@ -8,13 +8,16 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
@@ -25,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -162,6 +166,11 @@ class CodeEditorLockTest {
             throw new AssertionError("no method " + name);
         }
 
+        /** A rename of {@code method}, written the way the canvas writes every rename. */
+        void rename(String method, String newName) {
+            renamed(editor, state, method(method), newName);
+        }
+
         /** The {@link BodyBlock} for {@code name}'s body, found the way CodeEditorService finds it: by AST node. */
         BodyBlock body(String name) {
             var target = method(name).getBody();
@@ -243,7 +252,7 @@ class CodeEditorLockTest {
         // Renaming only the declaration left the body on the old name, so the file stopped compiling.
         Fixture f = new Fixture(CONFIG.activitiesPackageDir().resolve("Mining.java"), ACTIVITY_WITH_FOREACH);
         var loop = (org.eclipse.jdt.core.dom.EnhancedForStatement) f.method("run").getBody().statements().getFirst();
-        f.editor.renameForEachVariable(loop.getParameter().getName(), "element");
+        f.editor.renameLocal(loop.getParameter().getName(), "element");
 
         assertNotNull(f.lastCode, "renaming a loop variable in an editable run() body is allowed");
         assertTrue(f.lastCode.contains("String element :"), "declaration should be renamed:\n" + f.lastCode);
@@ -265,7 +274,7 @@ class CodeEditorLockTest {
         assertNotNull(body.lastCode, "the body is the user's now");
 
         Fixture rename = flowDriver();
-        rename.editor.renameMethod(rename.method("run"), "tick");
+        rename.rename("run", "tick");
         assertNotNull(rename.lastCode, "so is the signature");
 
         Fixture structure = flowDriver();
@@ -277,7 +286,7 @@ class CodeEditorLockTest {
     @Test
     void anActivitysRunCanBeRenamedNow() {
         Fixture f = activity();
-        f.editor.renameMethod(f.method("run"), "execute");
+        f.rename("run", "execute");
         assertNotNull(f.lastCode, "an activity's body is reached by name from Activities.define, not by class");
     }
 
@@ -300,7 +309,7 @@ class CodeEditorLockTest {
     @Test
     void readingRefusesTheSignatureAndTheClassHeaderToo() {
         Fixture rename = reading();
-        rename.editor.renameMethod(rename.method("run"), "tick");
+        rename.rename("run", "tick");
         rename.assertRefused("renaming a method in a bot open for reading");
 
         Fixture structure = reading();
@@ -346,7 +355,7 @@ class CodeEditorLockTest {
     @Test
     void theEntryPointsMainSignatureIsRefused() {
         Fixture rename = new Fixture(CONFIG.mainSourceFile(), ENTRY_POINT);
-        rename.editor.renameMethod(rename.method("main"), "start");
+        rename.rename("main", "start");
         rename.assertRefused("renaming main()");
 
         Fixture delete = new Fixture(CONFIG.mainSourceFile(), ENTRY_POINT);
@@ -390,7 +399,7 @@ class CodeEditorLockTest {
     @Test
     void mainIsProtectedWhereverTheUserPutsIt() {
         Fixture f = new Fixture(CONFIG.mainSourceFile().getParent().resolve("Renamed.java"), ENTRY_POINT);
-        f.editor.renameMethod(f.method("main"), "start");
+        f.rename("main", "start");
         f.assertRefused("renaming main() in a renamed entry point");
     }
 
@@ -419,8 +428,22 @@ class CodeEditorLockTest {
 
         CodeEditor editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
         TypeDeclaration type = (TypeDeclaration) result.root().getAstNode();
-        editor.renameMethod(type.getMethods()[0], "renamed");
+        renamed(editor, state, type.getMethods()[0], "renamed");
 
         assertNotNull(last[0], "a null config means no project to protect, not a locked one");
+    }
+
+    /**
+     * Renames {@code method} through {@code CodeEditor.applyRefactor}, the write every canvas rename takes — the
+     * lock under test is on that write. {@code CodeEditor.renameMethod} renamed the declaration alone and is
+     * gone (2026-09-27).
+     */
+    private static void renamed(CodeEditor editor, ProjectState state, MethodDeclaration method, String newName) {
+        String code = state.getCurrentCode();
+        String renamed = AstRewriteHelper.renameSimpleName((CompilationUnit) method.getRoot(), code,
+                method.getName(), newName);
+        Path file = state.getActiveFile().getPath().toAbsolutePath().normalize();
+        editor.applyRefactor(new Refactor.Planned("Renamed " + method.getName() + " to " + newName,
+                Map.of(file, renamed)), method);
     }
 }

@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The <b>Usages</b> bottom tab (2026-09-26): <i>Navigate ▸ Find Usages</i> on the selected block lists every
@@ -92,10 +93,9 @@ final class UsagesPanel {
             return;
         }
         summary.setText("Searching for " + name + "…");
-        Map<Path, String> sources = Usages.sources(config, state);
-        BotParser parser = BotParser.of(config, state);
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
         Thread worker = new Thread(() -> {
-            List<Usages.Usage> found = Usages.across(sources, parser, key, name);
+            List<Usages.Usage> found = Usages.across(index.get(), key, name);
             Platform.runLater(() -> {
                 if (id == search) show(name, found);
             });

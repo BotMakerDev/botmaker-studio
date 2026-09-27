@@ -62,7 +62,7 @@ public class LambdaBlock extends AbstractExpressionBlock implements BlockWithChi
                 spec.label("type" + i, () -> SentenceLayoutBuilder.labelNode(typed.getType().toString()));
             }
             spec.custom("param" + i, () -> TextFieldComponents.createVariableName(name.getIdentifier(),
-                    !isReadOnly(), newName -> context.getCodeEditor().renameLambdaParameter(name, newName)));
+                    !isReadOnly(), newName -> context.getCodeEditor().renameLocal(name, newName)));
         }
         spec.label("arrow", () -> SentenceLayoutBuilder.keywordNode("→"));
         if (blockBody != null) {

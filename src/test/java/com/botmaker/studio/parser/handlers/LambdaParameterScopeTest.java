@@ -101,7 +101,7 @@ class LambdaParameterScopeTest {
         SimpleName declared = LambdaCallHandler.lambdaParamName(callNamed(cu, "whileFindAny"));
         assertNotNull(declared);
 
-        String result = AstRewriteHelper.renameLambdaParameter(cu, POPUP_LOOP, declared, "popups");
+        String result = AstRewriteHelper.renameLocal(POPUP_LOOP, declared, "popups");
 
         assertTrue(result.contains("popups -> {"), "the declaration must be renamed: " + result);
         assertTrue(result.contains("popups.has(mail)") && result.contains("popups.get(mail)"),
@@ -126,7 +126,7 @@ class LambdaParameterScopeTest {
         CompilationUnit cu = parse(source);
         SimpleName declared = LambdaCallHandler.lambdaParamName(callNamed(cu, "whileFindAny"));
 
-        String result = AstRewriteHelper.renameLambdaParameter(cu, source, declared, "popups");
+        String result = AstRewriteHelper.renameLocal(source, declared, "popups");
 
         assertTrue(result.contains("popups -> {"), "the declaration is still renamed: " + result);
         assertTrue(result.contains("other.found()"), "a method call is not a variable reference: " + result);
@@ -152,7 +152,7 @@ class LambdaParameterScopeTest {
         CompilationUnit cu = parse(source);
         SimpleName declared = LambdaCallHandler.lambdaParamName(callNamed(cu, "whileFindAny"));
 
-        String result = AstRewriteHelper.renameLambdaParameter(cu, source, declared, "popups");
+        String result = AstRewriteHelper.renameLocal(source, declared, "popups");
 
         assertTrue(result.contains("popups -> {"), "the outer declaration is renamed: " + result);
         assertTrue(result.contains("popups.best()"), "the outer body's reference follows: " + result);

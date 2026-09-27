@@ -401,7 +401,7 @@ public final class EditVariableDialog {
 
     /**
      * Renames, or says why not — in red under the field, with the field put back to the name the file actually
-     * has. The rewrite is {@code renameLocalVariable}, which carries the use sites with it; that is the whole
+     * has. The rewrite is {@code renameLocal}, which carries the use sites with it; that is the whole
      * reason renaming moved off the block, where it rewrote the declaration alone and left the uses behind.
      */
     private void rename() {
@@ -423,7 +423,7 @@ public final class EditVariableDialog {
         if (wanted.equals(current)) return;
         renamedFrom = current;
         variableName = wanted;
-        context.getCodeEditor().renameLocalVariable(local.name(), wanted);
+        context.getCodeEditor().renameLocal(local.name(), wanted);
     }
 
     /** Every name {@code method} already binds: its parameters and each local it declares, at any depth. */

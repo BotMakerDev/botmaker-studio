@@ -5,7 +5,6 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.parser.refactor.MethodReferences;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectConfig;
@@ -90,7 +89,9 @@ class SignatureMigrationApplyTest {
         state.setCurrentCode(BOT);
         state.setSourcePath(dir);
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
-        state.setCompilationUnit(SourceParser.parse(BOT));
+        // Bound, as the canvas parses the open file: the calls are found by binding since 2026-09-27.
+        state.setCompilationUnit(ProjectAnalyzer.createCompilationUnit(state.getResolvedClasspath(), BOT, dir,
+                botPath.toString()));
 
         EventBus bus = new EventBus(false);
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> {

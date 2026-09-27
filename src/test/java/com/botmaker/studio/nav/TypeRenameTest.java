@@ -1,10 +1,9 @@
 package com.botmaker.studio.nav;
 
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.studio.project.source.BotIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,15 +54,14 @@ class TypeRenameTest {
             """;
 
     @Test
-    void theClassItsConstructorAndEveryUseAreRenamedAndNothingElse(@TempDir Path root) throws Exception {
-        Map<Path, String> sources = project(root);
+    void theClassItsConstructorAndEveryUseAreRenamedAndNothingElse(@TempDir Path root) {
         Path helper = root.resolve("com/mybot/Helper.java");
 
-        TypeRename.Result result = TypeRename.plan(helper, "Maths", sources, Set.of(), parser(root));
+        Refactor.Outcome result = TypeRename.plan(index(root), helper, "Maths", Set.of());
 
-        TypeRename.Result.Plan plan = assertInstanceOf(TypeRename.Result.Plan.class, result);
-        assertEquals(root.resolve("com/mybot/Maths.java"), plan.to());
-        assertEquals(List.of(helper, root.resolve("com/mybot/Bot.java")), List.copyOf(plan.rewrites().keySet()),
+        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class, result);
+        assertEquals(Map.of(helper, root.resolve("com/mybot/Maths.java")), plan.moves());
+        assertEquals(Set.of(helper, root.resolve("com/mybot/Bot.java")), plan.rewrites().keySet(),
                 "Stuff's own nested Helper is another class, so its file is untouched");
         String renamed = plan.rewrites().get(helper);
         assertTrue(renamed.contains("public class Maths {"), renamed);
@@ -77,44 +75,30 @@ class TypeRenameTest {
     }
 
     @Test
-    void aNameThatIsNotAClassNameOrIsTakenIsRefused(@TempDir Path root) throws Exception {
-        Map<Path, String> sources = project(root);
+    void aNameThatIsNotAClassNameOrIsTakenIsRefused(@TempDir Path root) {
+        BotIndex index = index(root);
         Path helper = root.resolve("com/mybot/Helper.java");
 
-        assertInstanceOf(TypeRename.Result.Refused.class,
-                TypeRename.plan(helper, "not a name", sources, Set.of(), parser(root)));
-        assertInstanceOf(TypeRename.Result.Refused.class,
-                TypeRename.plan(helper, "class", sources, Set.of(), parser(root)));
-        TypeRename.Result taken = TypeRename.plan(helper, "Bot", sources, Set.of(), parser(root));
-        assertEquals("Bot.java already exists.", ((TypeRename.Result.Refused) taken).reason());
-        assertInstanceOf(TypeRename.Result.Refused.class,
-                TypeRename.plan(helper, "Helper", sources, Set.of(), parser(root)));
+        assertInstanceOf(Refactor.Refused.class, TypeRename.plan(index, helper, "not a name", Set.of()));
+        assertInstanceOf(Refactor.Refused.class, TypeRename.plan(index, helper, "class", Set.of()));
+        Refactor.Outcome taken = TypeRename.plan(index, helper, "Bot", Set.of());
+        assertEquals("Bot.java already exists.", ((Refactor.Refused) taken).reason());
+        assertInstanceOf(Refactor.Refused.class, TypeRename.plan(index, helper, "Helper", Set.of()));
     }
 
     @Test
-    void withoutBindingsNothingIsGuessed(@TempDir Path root) throws Exception {
-        Map<Path, String> sources = project(root);
-        TypeRename.Result result = TypeRename.plan(root.resolve("com/mybot/Helper.java"), "Maths", sources,
-                Set.of(), BotParser.SYNTAX);
-        assertInstanceOf(TypeRename.Result.Refused.class, result);
+    void aFileOnDiskTheBotDoesNotListIsNotOverwritten(@TempDir Path root) {
+        Path helper = root.resolve("com/mybot/Helper.java");
+        Refactor.Outcome result = TypeRename.plan(index(root), helper, "Maths",
+                Set.of(root.resolve("com/mybot/Maths.java")));
+        assertEquals("Maths.java already exists.", assertInstanceOf(Refactor.Refused.class, result).reason());
     }
 
-    private static Map<Path, String> project(Path root) throws Exception {
+    private static BotIndex index(Path root) {
         Map<Path, String> sources = new LinkedHashMap<>();
-        for (var entry : Map.of("com/mybot/Helper.java", HELPER, "com/mybot/Bot.java", BOT,
-                "com/mybot/other/Stuff.java", OTHER).entrySet()) {
-            Path file = root.resolve(entry.getKey());
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, entry.getValue());
-        }
-        // In a fixed order, so the plan's order can be asserted.
-        for (String name : List.of("com/mybot/Helper.java", "com/mybot/Bot.java", "com/mybot/other/Stuff.java")) {
-            sources.put(root.resolve(name), Files.readString(root.resolve(name)));
-        }
-        return sources;
-    }
-
-    private static BotParser parser(Path root) {
-        return new BotParser(List.of(), root);
+        sources.put(root.resolve("com/mybot/Helper.java"), HELPER);
+        sources.put(root.resolve("com/mybot/Bot.java"), BOT);
+        sources.put(root.resolve("com/mybot/other/Stuff.java"), OTHER);
+        return BotIndex.over(sources, List.of(), root);
     }
 }

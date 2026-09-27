@@ -4,6 +4,7 @@ import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
@@ -80,11 +81,16 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
                     label.getStyleClass().add("block-chip");
                     return label;
                 })
-                .custom("name", () -> TextFieldComponents.createVariableName(enumName, !isReadOnly(), newName -> {
-                    if (!newName.equals(enumName) && !newName.isEmpty()) {
-                        context.getCodeEditor().renameEnum(enumDeclaration, newName);
-                    }
-                }))
+                .custom("name", () -> {
+                    // Renamed with every use of it in the bot (Refactors), not the declaration alone.
+                    Node[] field = new Node[1];
+                    field[0] = TextFieldComponents.createVariableName(enumName, !isReadOnly(), newName -> {
+                        if (!newName.equals(enumName) && !newName.isEmpty()) {
+                            Refactors.rename(context, field[0], enumDeclaration.getName(), newName);
+                        }
+                    });
+                    return field[0];
+                })
                 // Null on a locked enum, and every renderer skips a null: an activity's generated Outcome enum
                 // is edited on the flow canvas, so offering "+ Add Value" here was an invitation the write
                 // layer refuses.
@@ -137,8 +143,10 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
                 constField.focusedProperty().addListener((obs, oldVal, newVal) -> {
                     if (!newVal) {
                         String val = constField.getText();
-                        if (!val.equals(constant) && !val.isEmpty()) {
-                            context.getCodeEditor().renameEnumConstant(enumDeclaration, index, val);
+                        if (!val.equals(constant) && !val.isEmpty()
+                                && enumDeclaration.enumConstants().get(index)
+                                        instanceof EnumConstantDeclaration declared) {
+                            Refactors.rename(context, constField, declared.getName(), val);
                         }
                     }
                 });

@@ -45,6 +45,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > `enclosingMethodName`, `className`/`methodName` on `PickerContext` and `TypeRef.simpleName/qualifiedName`
 > below as gone. `HostValueContext.typeName()` is the *Edit with* key the canvas also uses.
 
+> **Every name in the bot is found, renamed and refused one way since 2026-09-27** (umbrella
+> `docs/refactor/36-bound-values.md`, *Names in the bot*). `project/source/BotIndex` is the whole bot parsed
+> once over the buffers; `nav/Usages` is the only "where is this used" (`across` by binding key, `local` for a
+> local variable); `nav/Refactor.rename` is the only rename of a field, method, type, enum or constant, and a
+> plan that would not compile is refused; `ui/app/RefusalDialog` is the only refusal window. Read
+> `project/managed/MethodReferences`' and `parser/refactor/MethodReferences`' "syntax only, no bindings"
+> below as history for the second: it finds calls and `Collect::body` references by binding now. Never add a
+> rename that walks names by spelling, and never refuse an edit through a bare status line or `Alert`.
+
 > **`settings.json` is `<project>/.botmaker/settings.json` since 2026-09-26** (`ProjectConfig.studioRoot()`,
 > `SchemaFile.dirOf`). Every mention below of it "in `src/main/resources`" is the old place: an old project's
 > file is moved once, first thing on open (`StudioProjectSettings.moveOutOfResources`, from

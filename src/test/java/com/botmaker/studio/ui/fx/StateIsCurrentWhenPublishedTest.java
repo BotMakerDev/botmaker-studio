@@ -57,7 +57,7 @@ class StateIsCurrentWhenPublishedTest extends FxHeadlessTest {
                 e -> asSeenByAListener.add(fixture.state.getCompilationUnit()
                         .map(CompilationUnit::toString).orElse("")), false);
 
-        fixture.editor.renameLocalVariable(declarationName(fixture), "tries");
+        fixture.editor.renameLocal(declarationName(fixture), "tries");
 
         assertEquals(1, asSeenByAListener.size(), "one write, one event");
         assertTrue(asSeenByAListener.getFirst().contains("tries"),

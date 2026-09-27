@@ -53,7 +53,7 @@ public class VariableDeclarationBlock extends AbstractStatementBlock {
      * <p>Name and type are <em>shown</em> here and changed elsewhere, which is why neither is a slot. Both
      * used to be editable in place, and the inline rename went through {@code replaceSimpleName} on the
      * declaration alone — every use site kept the old name, so renaming a variable on its own block is how a
-     * file stops compiling. The Variables screen rewrites the uses with it ({@code renameLocalVariable}) and
+     * file stops compiling. The Variables screen rewrites the uses with it ({@code renameLocal}) and
      * is the {@code ✎} at the end.
      *
      * <p>The starting value is the one {@code EXPRESSION_SLOT}, and it is the reason this block was worth

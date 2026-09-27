@@ -252,42 +252,15 @@ class MethodSignatureTest {
         assertTrue(result.contains("public void caller()"), "its neighbour stays");
     }
 
-    @Test
-    void renamingAMethodRenamesItsDeclaration() {
-        Env e = env();
-        String result = MethodHandler.renameMethod(e.cu(), SOURCE, method(e.cu(), "scale"), "amplify");
-
-        assertTrue(result.contains("public int amplify(int factor)"), result);
-    }
-
-    // ---- What is broken: a rename that stops at the declaration ----
+    // renamingAMethodRenamesItsDeclaration and B16's renamingAMethodAlsoRenamesItsCallSites went with
+    // MethodHandler.renameMethod (2026-09-27): a method is renamed with every call by Refactor.rename, or through
+    // the signature migration, and RefactorTest holds that.
 
     /**
-     * <b>B16.</b> {@code renameMethod} calls {@code renameSimpleName} on the declaration's name node only, so
-     * every call site keeps the old name and the file stops compiling — from one rename in the editor, with no
-     * warning. This is the defect {@code renameForEachVariable} was written to fix for loop variables; the same
-     * primitive is still used raw here.
+     * <b>B16, one level down</b> — fixed 2026-09-27. Renaming a parameter rewrote the declaration and left every
+     * use of it in the body bound to a name that no longer existed; it goes through {@code Usages.local} now.
      */
     @Test
-    @Disabled("B16 is unfixed: verified red on this commit — renaming a method leaves its call sites on the "
-            + "old name. Delete this line in Phase 4 with the fix.")
-    void renamingAMethodAlsoRenamesItsCallSites() {
-        Env e = env();
-        String result = MethodHandler.renameMethod(e.cu(), SOURCE, method(e.cu(), "scale"), "amplify");
-
-        assertEquals(0, occurrences(result, "scale"),
-                "the old method name survives at " + occurrences(result, "scale") + " site(s); the project no "
-                        + "longer compiles:\n" + result);
-        assertTrue(result.contains("amplify(3)"), "the call must follow the declaration: " + result);
-    }
-
-    /**
-     * <b>B16, same shape one level down.</b> Renaming a parameter rewrites the declaration and leaves every use
-     * of it in the body bound to a name that no longer exists.
-     */
-    @Test
-    @Disabled("B16 as above — a renamed parameter's body references are left dangling. Delete this line in "
-            + "Phase 4 with the fix.")
     void renamingAParameterAlsoRenamesItsUsesInTheBody() {
         Env e = env();
         String result = MethodHandler.renameMethodParameter(e.cu(), SOURCE, method(e.cu(), "scale"), 0, "multiplier");

@@ -438,9 +438,17 @@ public final class CallMigrator {
                     && !renameStaticImport(ctx, name.getIdentifier(), rewrite.newName())) {
                 return false;
             }
+            // A bare call is the same story when the method is statically imported, which a bound finder
+            // now reports rather than refusing as unsure. Inside the declaring class, or inherited, there is
+            // no import and nothing to rename but the call.
+            if (site.node() instanceof MethodInvocation call && call.getExpression() == null) {
+                renameStaticImport(ctx, name.getIdentifier(), rewrite.newName());
+            }
             ctx.rewriter().set(name, SimpleName.IDENTIFIER_PROPERTY, rewrite.newName(), null);
         }
-        if (unchanged(site, rewrite.arguments())) return true;
+        // A reference names the method and passes nothing: its name is all a rename has to follow, and a
+        // change of shape was refused before a plan was made (SignatureEdits).
+        if (site.isReference() || unchanged(site, rewrite.arguments())) return true;
 
         ListRewrite arguments = ctx.rewriter().getListRewrite(site.node(), site.argumentsProperty());
         List<?> current = site.arguments();

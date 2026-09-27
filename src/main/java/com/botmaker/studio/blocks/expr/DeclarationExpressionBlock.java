@@ -63,7 +63,7 @@ public class DeclarationExpressionBlock extends AbstractExpressionBlock implemen
             if (i > 0) spec.label("and" + i, () -> SentenceLayoutBuilder.keywordNode("and"));
             spec.custom("name" + i, () -> TextFieldComponents.createVariableName(
                     fragment.getName().getIdentifier(), !isReadOnly(),
-                    name -> context.getCodeEditor().renameScopedVariable(fragment.getName(), name)));
+                    name -> context.getCodeEditor().renameLocal(fragment.getName(), name)));
             ExpressionBlock initializer = initializers.get(fragment);
             if (initializer != null) {
                 spec.label("eq" + i, () -> SentenceLayoutBuilder.keywordNode("="));

@@ -10,13 +10,15 @@ import com.botmaker.studio.parser.refactor.MethodReferences;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -72,20 +74,32 @@ class MethodMigrationTest {
             """;
 
     private ProjectState state;
+    private Path root;
     private Path botPath;
     private Path goHomePath;
 
+    /**
+     * The two files under a real source root, and the open one parsed with bindings as the editor parses it:
+     * the finder answers by binding since 2026-09-27, so a syntax-only tree would find nothing it can be sure
+     * of.
+     */
     @BeforeEach
-    void setUp() {
+    void setUp(@TempDir Path root) {
+        this.root = root;
         state = new ProjectState();
-        botPath = Paths.get("Bot.java").toAbsolutePath();
-        goHomePath = Paths.get("GoHome.java").toAbsolutePath();
+        botPath = root.resolve("test/Bot.java");
+        goHomePath = root.resolve("test/GoHome.java");
         state.addFile(new ProjectFile(botPath, BOT));
         state.addFile(new ProjectFile(goHomePath, GO_HOME));
         state.setActiveFile(botPath);
-        state.setSourcePath(Paths.get("src", "main", "java").toAbsolutePath());
+        state.setSourcePath(root);
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
-        state.setCompilationUnit(SourceParser.parse(BOT));
+        state.setCompilationUnit(live(BOT));
+    }
+
+    /** {@code source} as the open file's tree, bound against the project the way the canvas parses it. */
+    private CompilationUnit live(String source) {
+        return ProjectAnalyzer.createCompilationUnit(state.getResolvedClasspath(), source, root, botPath.toString());
     }
 
     /** Points GoHome at different source — the other file is the one every interesting case lives in. */
@@ -210,6 +224,49 @@ class MethodMigrationTest {
 
         assertFalse(found.isRefusal(), "a class that declares its own is calling its own: " + found.refusal());
         assertEquals(List.of("Bot"), found.fileNames());
+    }
+
+    /**
+     * {@code Bot::body} is how the flow names an activity. The syntax finder never saw a reference, so a
+     * rename left the flow naming a method that no longer existed; it is a site now, and it follows a rename —
+     * and only a rename, since a reference passes no arguments a changed shape could be carried to.
+     */
+    @Test
+    void aMethodReferenceIsFoundAndFollowsARenameOnly() {
+        String withBody = """
+                package test;
+
+                public class Bot {
+                    public static void body(int tries) {
+                    }
+                }
+                """;
+        state.addFile(new ProjectFile(botPath, withBody));
+        state.setCompilationUnit(live(withBody));
+        otherFile("""
+                package test;
+
+                public class GoHome {
+                    java.util.function.IntConsumer flow = Bot::body;
+                }
+                """);
+        MethodDeclaration body = ((TypeDeclaration) state.getCompilationUnit().orElseThrow().types().getFirst())
+                .getMethods()[0];
+
+        MethodReferences.Result found = MethodReferences.find(state, body);
+
+        assertFalse(found.isRefusal(), "a bound reference is certain: " + found.refusal());
+        assertEquals(1, found.calls().size());
+        assertTrue(found.calls().getFirst().isReference());
+        FunctionDraft before = MethodSignatures.draftOf(body).orElseThrow();
+        FunctionDraft renamed = new FunctionDraft("work", before.returnType(), before.parameters());
+        assertTrue(SignatureMigration.sameShape(before, renamed));
+        SignatureMigration.CallChange change =
+                SignatureMigration.of(before, renamed, body, found.calls()).calls().getFirst();
+        assertEquals("work", assertInstanceOf(SignatureMigration.CallChange.Rewrite.class, change).newName());
+        FunctionDraft widened = new FunctionDraft("body", before.returnType(), List.of(
+                before.parameters().getFirst(), added("more", BotType.WHOLE_NUMBER)));
+        assertFalse(SignatureMigration.sameShape(before, widened), "an added input a reference cannot pass");
     }
 
     // --- what the change does to them ----------------------------------------------------------------------
@@ -377,7 +434,7 @@ class MethodMigrationTest {
                 }
                 """;
         state.addFile(new ProjectFile(botPath, withConstructor));
-        state.setCompilationUnit(SourceParser.parse(withConstructor));
+        state.setCompilationUnit(live(withConstructor));
         otherFile("""
                 package test;
 
@@ -409,7 +466,7 @@ class MethodMigrationTest {
                 }
                 """;
         state.addFile(new ProjectFile(botPath, withConstructor));
-        state.setCompilationUnit(SourceParser.parse(withConstructor));
+        state.setCompilationUnit(live(withConstructor));
         otherFile("""
                 package test;
 

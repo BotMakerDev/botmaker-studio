@@ -82,7 +82,7 @@ public final class LambdaCallHandler {
     // applyRewrite catches, so the edit appeared to do nothing at all rather than to fail. And a body carried
     // across must move by createCopyTarget, not copySubtree: the first moves the original source text, the
     // second re-prints it and reformats statements the user never touched.
-    // AstRewriteHelper.renameLambdaParameter is the surviving path for a pure rename, and it carries the
+    // AstRewriteHelper.renameLocal is the surviving path for a pure rename, and it carries the
     // body's references, which switchVariant deliberately did not.
 
 

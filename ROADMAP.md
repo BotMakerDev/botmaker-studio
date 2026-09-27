@@ -6,7 +6,16 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — A parameter's uses are found by binding, and an edit never breaks the bot.**
+- **2026-09-27 (latest) — One refactor system: index, finder, rename, refusal.** `project/source/BotIndex`
+  batch-parses the buffers (scratch tree, cached by content; `with`/`firstNewError` judge an edit before it
+  is written). `nav/Refactor.rename` renames fields, methods (with `Collect::body`), types (file moves),
+  enums and constants by binding and refuses a plan that breaks the build, offering a free name.
+  `parser/refactor/MethodReferences` finds calls by binding. Five local renamers → `CodeEditor.renameLocal`
+  over `Usages.local`; B16 (a renamed parameter's body uses) fixed. `ui/app/RefusalDialog` is every refusal
+  (uses as links, checked fixes: delete with calls, replace a `@Param` with its constant).
+  `CodeEditor.applyRefactor` writes a plan as one ↶. `renameMethod`/`renameEnum`/`renameEnumConstant` and
+  the field block's declaration-only rename deleted.
+- **2026-09-27 — A parameter's uses are found by binding, and an edit never breaks the bot.**
   `nav/Usages.across/inProject/fieldKey/renamed` is the one "where is this used" (Usages tab, `TypeRename`,
   Parameters). `JavaParameters.remove` refuses while the bot uses the field (lists file:line, *Show where ▾*
   opens the block), rename rewrites exactly the bound names, and `declare` is all-or-nothing under

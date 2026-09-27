@@ -93,4 +93,16 @@ public final class SourceParser {
         }
         return null;
     }
+
+    /**
+     * True when {@code cu} has an error in JDT's <em>syntax</em> category — the one question to ask of a tree
+     * parsed <b>with</b> bindings, where {@link #hasSyntaxErrors} would also count a type error such as a
+     * static call to an instance method, which leaves a perfectly readable file.
+     */
+    public static boolean doesNotParse(CompilationUnit cu) {
+        for (IProblem problem : cu.getProblems()) {
+            if (problem.isError() && (problem.getID() & IProblem.Syntax) != 0) return true;
+        }
+        return false;
+    }
 }

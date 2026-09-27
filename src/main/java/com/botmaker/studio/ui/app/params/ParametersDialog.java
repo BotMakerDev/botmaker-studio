@@ -19,6 +19,7 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.VariableRailModel;
 import com.botmaker.studio.state.SnapshotHistory;
+import com.botmaker.studio.ui.app.RefusalDialog;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets.ValueEditor;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
@@ -35,13 +36,10 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
-import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
@@ -137,8 +135,7 @@ public final class ParametersDialog {
     private final Button moveHere = new Button("Move parameters here…");
     private final VBox paramColumn = new VBox(10);
     private final Label statusLabel = new Label();
-    /** Beside the status line while it names uses: each one, to go to. */
-    private final Hyperlink usesLink = new Hyperlink("Show where ▾");
+    /** Lands on a use a refusal lists, after this window closes; null lists them as plain text. */
     private final Consumer<Usages.Usage> reveal;
 
     // The (group, row) pair was a record of this class until 2026-09-17, then ParameterSurface.Entry, and
@@ -716,15 +713,15 @@ public final class ParametersDialog {
     /**
      * Removes a field's declaration — or, while the bot still uses it, says where and removes nothing.
      *
-     * <p>The uses are not rewritten: what one should become is a judgement — a literal, another parameter, a
-     * deleted line — so they are the user's to change first, exactly as a function still called cannot be
-     * deleted. A removal that left them behind was a bot that stopped compiling (2026-09-27).
+     * <p>The uses are not rewritten behind the user's back: what one should become is a judgement — a
+     * literal, another parameter, a deleted line — so they are the user's to change, exactly as a function
+     * still called cannot be deleted. What the refusal may offer is the one rewrite that is no judgement at
+     * all, the parameter's own constant written where it was read (2026-09-27).
      */
     private void removeParameter(JavaParameter entry) {
         change("removing " + entry.row().name(), () -> {
             if (JavaParameters.remove(config, state, entry) instanceof JavaParameters.Outcome.Refused refused) {
-                error(refused.reason());
-                offerUses(refused.uses());
+                refuse(entry.row().name() + " wasn't removed", refused);
                 return;
             }
             error("");
@@ -1318,7 +1315,9 @@ public final class ParametersDialog {
         ParameterRow wanted = change.apply(held.row());
         JavaParameters.Outcome outcome = JavaParameters.declare(config, state, held, wanted,
                 newForm == null ? held.form() : newForm);
-        if (outcome instanceof JavaParameters.Outcome.Refused refused) error(refused.reason());
+        if (outcome instanceof JavaParameters.Outcome.Refused refused) {
+            refuse(held.row().name() + " wasn't changed", refused);
+        }
         reload();
         rebuildRail();
         return outcome.stored().isPresent();
@@ -1475,11 +1474,9 @@ public final class ParametersDialog {
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         statusLabel.setWrapText(true);
-        usesLink.setVisible(false);
-        usesLink.managedProperty().bind(usesLink.visibleProperty());
         HBox bar = new HBox(10, undoButton(), redoButton(),
                 new Separator(javafx.geometry.Orientation.VERTICAL),
-                statusLabel, usesLink, spacer, close);
+                statusLabel, spacer, close);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10));
         return bar;
@@ -1516,28 +1513,23 @@ public final class ParametersDialog {
 
     private void error(String message) {
         statusLabel.setText(message);
-        usesLink.setVisible(false);
     }
 
     /**
-     * Shows {@link #usesLink} for {@code uses}: a menu of each, file, line and the line's text, where picking
-     * one closes this window and opens the block. Hidden again by the next status line.
+     * Shows a refused edit through the one refusal window ({@link RefusalDialog}): why, each use as a link
+     * that closes this window and opens the block, and the fix the refusal offers, written as one step here.
      */
-    private void offerUses(List<Usages.Usage> uses) {
-        if (reveal == null || uses.isEmpty()) return;
-        usesLink.setVisible(true);
-        usesLink.setOnAction(e -> {
-            ContextMenu menu = new ContextMenu();
-            for (Usages.Usage use : uses) {
-                MenuItem item = new MenuItem(use.file().getFileName() + ":" + use.line() + "   " + use.text());
-                item.setOnAction(pick -> {
-                    commitPending("the value you typed");
-                    stage.close();
-                    reveal.accept(use);
-                });
-                menu.getItems().add(item);
-            }
-            menu.show(usesLink, javafx.geometry.Side.TOP, 0, 0);
-        });
+    private void refuse(String title, JavaParameters.Outcome.Refused refused) {
+        error("");
+        Consumer<Usages.Usage> land = reveal == null ? null : use -> {
+            commitPending("the value you typed");
+            stage.close();
+            reveal.accept(use);
+        };
+        RefusalDialog.show(stage, title, refused.asRefactor(), land, plan -> change(plan.summary(), () -> {
+            JavaParameters.write(config, state, plan);
+            reload();
+            rebuildRail();
+        }));
     }
 }

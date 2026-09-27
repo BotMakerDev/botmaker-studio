@@ -71,7 +71,7 @@ public final class DeleteVariableDialog {
             return;
         }
         MethodDeclaration method = AstRewriteHelper.enclosingMethod(decl);
-        List<SimpleName> uses = AstRewriteHelper.referencesWithin(method, fragment.getName());
+        List<SimpleName> uses = AstRewriteHelper.referencesWithin(fragment.getName());
         if (uses.isEmpty()) {
             context.getCodeEditor().deleteStatement(decl);
             return;

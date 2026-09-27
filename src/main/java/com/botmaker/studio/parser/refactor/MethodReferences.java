@@ -1,8 +1,10 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -10,21 +12,24 @@ import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.ChildListPropertyDescriptor;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.ConstructorInvocation;
+import org.eclipse.jdt.core.dom.CreationReference;
 import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ExpressionMethodReference;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
-import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.IMethodBinding;
+import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.MethodReference;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SimpleType;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.ThisExpression;
-import org.eclipse.jdt.core.dom.Type;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
-import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
-import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
+import org.eclipse.jdt.core.dom.SuperConstructorInvocation;
+import org.eclipse.jdt.core.dom.SuperMethodInvocation;
+import org.eclipse.jdt.core.dom.SuperMethodReference;
+import org.eclipse.jdt.core.dom.TypeMethodReference;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -39,24 +44,25 @@ import java.util.Set;
  * to a name that no longer exists, in files the user was not even looking at. There was no helper anywhere
  * that answered "where is this called from"; this is it.
  *
- * <h2>Certain, other, or refuse</h2>
+ * <h2>By binding (2026-09-27)</h2>
  *
- * <p>Bindings are not available: the point of this is to run on a project mid-edit, and half the files are not
- * on any classpath the editor owns. So every call is judged from source alone and lands in one of three
- * buckets — it <b>is</b> this method, it is <b>demonstrably not</b> (a same-named method of the calling class,
- * a receiver whose declared type is another class), or it <b>cannot be told</b>. The third one is not a
- * skipped call, it is a {@linkplain Result#refusal refusal}: silently migrating three of four call sites is
- * strictly worse than migrating none and saying which file could not be read.
+ * <p>It judged every call from source alone until then — same name, same number of arguments, a receiver
+ * whose declared type could be read off the file — and refused whatever that could not settle, because
+ * "bindings are not available". They are: the whole bot is parsed as one ({@link BotIndex}), and a call is
+ * this method exactly when javac would say so ({@link Usages#keyOf}). The finder that guessed also never saw
+ * a <b>method reference</b>: {@code Collect::body} in the flow is how an activity is named, and renaming
+ * {@code body} left the flow pointing at nothing. A reference is found like a call now, and carried along by a
+ * rename; a change of shape it cannot follow is refused by {@code SignatureEdits}, naming it.
  *
- * <p>A file that does not parse is the same answer for the same reason.
+ * <p>What is left of "cannot tell" is a call whose binding javac could not resolve at all — a receiver of an
+ * unknown type — with this method's name and arity. It still refuses, for the old reason: silently migrating
+ * three of four call sites is strictly worse than migrating none and saying which file could not be read. A
+ * file that does not parse is the same answer.
  *
  * <h2>Constructors count as calls</h2>
  *
- * <p>A constructor's calls are {@code new GoHome(…)}, not {@code goHome(…)}, and this used to visit
- * {@link MethodInvocation} only — so a constructor scanned as having <b>zero</b> call sites no matter how many
- * times its class was instantiated. That is worse than not scanning at all: "nothing calls this" is the answer
- * that lets a delete through, so the one guard the constructor controls rely on would have waved every
- * instantiation past. {@link ClassInstanceCreation} is now visited under the same three-way verdict.
+ * <p>A constructor's calls are {@code new GoHome(…)} and {@code GoHome::new}. A {@code this(…)} or
+ * {@code super(…)} call is a statement no call change can describe, so one refuses.
  */
 public final class MethodReferences {
 
@@ -65,40 +71,39 @@ public final class MethodReferences {
     /**
      * One call to the method, and the file and parse it was found in.
      *
-     * <p>{@code node} is a {@link MethodInvocation} for {@code goHome(…)} and a {@link ClassInstanceCreation}
-     * for {@code new GoHome(…)}. The two are one type here because everything downstream —
-     * {@link SignatureMigration}'s per-argument plan, {@link CallMigrator}'s rewrite — asks a call the same
-     * three questions regardless of which it is: what are your arguments, which property holds them, and is
-     * anything consuming what you produce. So they are asked *here*, once, rather than each reader
-     * re-discovering that a creation has no name to rename.
+     * <p>{@code node} is a {@link MethodInvocation} for {@code goHome(…)}, a {@link ClassInstanceCreation} for
+     * {@code new GoHome(…)}, and a {@link MethodReference} for {@code GoHome::go}. They are one type here
+     * because everything downstream — {@link SignatureMigration}'s per-argument plan, {@link CallMigrator}'s
+     * rewrite — asks a call the same questions regardless of which it is: what are your arguments, which
+     * property holds them, and is anything consuming what you produce. A reference answers "no arguments",
+     * and {@link #isReference()} says why.
      *
      * <p>Since 2026-08 a site may also be a <b>field reference</b> — {@code Key.ENTER} (a
      * {@link org.eclipse.jdt.core.dom.QualifiedName}) or the bare {@link SimpleName} of a statically-imported
      * constant or a {@code case} label. A constant is API too, so an SDK migration has to be able to rename or
-     * move one, and the alternative — a second site type with its own copy of "which file, which parse" —
-     * would have meant every consumer switching on which kind it held. Instead a field simply answers "no
-     * arguments" to the argument questions, which is true.
+     * move one. A field simply answers "no arguments" to the argument questions, which is true.
      */
     public record CallSite(ProjectFile file, CompilationUnit unit, Expression node) {
 
-        /** The arguments as written, in order — empty for a field reference, which has no argument list. */
+        /** The arguments as written, in order — empty for a field or a method reference. */
         public List<?> arguments() {
             return switch (node) {
                 case ClassInstanceCreation creation -> creation.arguments();
                 case MethodInvocation call -> call.arguments();
+                case SuperMethodInvocation call -> call.arguments();
                 default -> List.of();
             };
         }
 
         /**
-         * Which child list {@link #arguments()} is, for a {@code ListRewrite} over it — null for a field
-         * reference. Never reached for one: an empty argument list is only ever rewritten to itself, which
-         * {@code CallMigrator} short-circuits before asking.
+         * Which child list {@link #arguments()} is, for a {@code ListRewrite} over it — null for a field or a
+         * method reference, whose argument list is never rewritten.
          */
         public ChildListPropertyDescriptor argumentsProperty() {
             return switch (node) {
                 case ClassInstanceCreation ignored -> ClassInstanceCreation.ARGUMENTS_PROPERTY;
                 case MethodInvocation ignored -> MethodInvocation.ARGUMENTS_PROPERTY;
+                case SuperMethodInvocation ignored -> SuperMethodInvocation.ARGUMENTS_PROPERTY;
                 default -> null;
             };
         }
@@ -110,6 +115,10 @@ public final class MethodReferences {
         public SimpleName nameNode() {
             return switch (node) {
                 case MethodInvocation call -> call.getName();
+                case SuperMethodInvocation call -> call.getName();
+                case ExpressionMethodReference reference -> reference.getName();
+                case TypeMethodReference reference -> reference.getName();
+                case SuperMethodReference reference -> reference.getName();
                 case QualifiedName qualified -> qualified.getName();
                 case SimpleName bare -> bare;
                 default -> null;
@@ -151,6 +160,24 @@ public final class MethodReferences {
         public boolean isStatement() {
             return node.getParent() instanceof ExpressionStatement;
         }
+
+        /**
+         * True for {@code Collect::body}: the method is named, not called, so there are no arguments to carry
+         * — only its name follows a rename, and any other change of shape is one a reference cannot follow.
+         */
+        public boolean isReference() {
+            return node instanceof MethodReference;
+        }
+
+        /** Where it is, for a list the user can click through. */
+        public Usages.Usage usage() {
+            int start = node.getStartPosition();
+            int line = unit.getLineNumber(start);
+            String source = file.getContent() == null ? "" : file.getContent();
+            String[] lines = source.split("\n", -1);
+            String text = line >= 1 && line <= lines.length ? lines[line - 1].trim() : "";
+            return new Usages.Usage(file.getPath(), start, line, enclosingMethodName(node), text, false);
+        }
     }
 
     /**
@@ -183,6 +210,11 @@ public final class MethodReferences {
             for (CallSite site : calls) names.add(site.className());
             return List.copyOf(names);
         }
+
+        /** Every call as a place to go, in the order they were found. */
+        public List<Usages.Usage> usages() {
+            return calls.stream().map(CallSite::usage).toList();
+        }
     }
 
     /**
@@ -190,200 +222,193 @@ public final class MethodReferences {
      *
      * <p>The declaring file is read from the live AST the declaration itself belongs to, never re-parsed: the
      * caller goes on to rewrite that file through the editor's own guarded write, which holds the same tree,
-     * and two parses of one file are two sets of nodes that only look alike.
+     * and two parses of one file are two sets of nodes that only look alike. Every other file is the
+     * {@link BotIndex}'s unit for it.
      */
     public static Result find(ProjectState state, MethodDeclaration declaration) {
         List<CallSite> calls = new ArrayList<>();
         List<String> unreadable = new ArrayList<>();
         List<String> uncertain = new ArrayList<>();
         if (state == null || declaration == null) return new Result(calls, unreadable, uncertain);
-
-        String name = declaration.getName().getIdentifier();
-        int arity = declaration.parameters().size();
         String owner = declaringClassOf(declaration);
         if (owner == null) return new Result(calls, unreadable, uncertain);
-        Set<String> projectClasses = new LinkedHashSet<>();
-        for (ProjectFile file : state.getAllFiles()) projectClasses.add(file.getClassName());
+        IMethodBinding binding = declaration.resolveBinding();
+        String key = binding == null ? null : Usages.keyOf(binding);
+        if (key == null) {
+            uncertain.add(owner);
+            return new Result(calls, unreadable, uncertain);
+        }
 
         CompilationUnit live = (CompilationUnit) declaration.getRoot();
-        for (ProjectFile file : state.getAllFiles()) {
-            CompilationUnit unit;
-            if (file == state.getActiveFile()) {
-                unit = live;
-            } else {
-                String source = file.getContent();
-                if (source == null) continue;
-                unit = SourceParser.parse(source);
-                if (SourceParser.hasSyntaxErrors(unit)) {
-                    unreadable.add(file.getClassName());
-                    continue;
+        BotIndex index = BotIndex.of(state);
+        Shape shape = new Shape(key, Usages.keyOf(binding.getDeclaringClass()), declaration.getName().getIdentifier(),
+                declaration.parameters().size(), declaration.isConstructor());
+        index.read(units -> {
+            for (ProjectFile file : state.getAllFiles()) {
+                CompilationUnit unit;
+                if (file == state.getActiveFile()) {
+                    unit = live;
+                } else {
+                    if (file.getContent() == null || file.getPath() == null) continue;
+                    unit = units.get(file.getPath().toAbsolutePath().normalize());
+                    if (unit == null) continue;
+                    if (SourceParser.doesNotParse(unit)) {
+                        unreadable.add(file.getClassName());
+                        continue;
+                    }
                 }
+                scan(file, unit, shape, calls, uncertain);
             }
-            scan(file, unit, name, arity, owner, declaration.isConstructor(), projectClasses, calls, uncertain);
-        }
+            return null;
+        });
         return new Result(calls, unreadable, uncertain);
     }
 
     // --- one file ------------------------------------------------------------------------------------------
 
-    private enum Verdict { MATCH, OTHER, UNCERTAIN }
+    /**
+     * What a call to the method is: its binding key, the key of the class declaring it, and the name and arity
+     * a call javac could not bind has.
+     */
+    private record Shape(String key, String ownerKey, String name, int arity, boolean constructor) {
 
-    private static void scan(ProjectFile file, CompilationUnit unit, String name, int arity, String owner,
-                             boolean constructor, Set<String> projectClasses, List<CallSite> calls,
+        boolean is(IMethodBinding binding) {
+            return binding != null && key.equals(Usages.keyOf(binding));
+        }
+
+        /**
+         * Whether a receiver of type {@code type} could be the declaring class — it is, or it extends or
+         * implements it. A receiver whose type javac could only recover (an unresolved name) extends nothing
+         * the bot declares, so a call on it is somebody else's method.
+         */
+        boolean couldOwn(ITypeBinding type) {
+            if (type == null) return true;
+            Set<String> seen = new LinkedHashSet<>();
+            List<ITypeBinding> todo = new ArrayList<>(List.of(type));
+            while (!todo.isEmpty()) {
+                ITypeBinding next = todo.removeLast();
+                String k = Usages.keyOf(next);
+                if (k == null || !seen.add(k)) continue;
+                if (k.equals(ownerKey)) return true;
+                if (next.getSuperclass() != null) todo.add(next.getSuperclass());
+                todo.addAll(List.of(next.getInterfaces()));
+            }
+            return false;
+        }
+    }
+
+    private static void scan(ProjectFile file, CompilationUnit unit, Shape shape, List<CallSite> calls,
                              List<String> uncertain) {
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodInvocation call) {
-                if (constructor) return true;
-                if (!call.getName().getIdentifier().equals(name)) return true;
-                // A different number of arguments is a different method — Java's own rule, and the one that
-                // keeps an overload out of a rename that was never about it.
-                if (call.arguments().size() != arity) return true;
-                record(call, verdictFor(call, owner, projectClasses));
+                if (shape.constructor()) return true;
+                ITypeBinding receiver = call.getExpression() == null ? null
+                        : call.getExpression().resolveTypeBinding();
+                judge(call, call.resolveMethodBinding(), call.getName().getIdentifier(), call.arguments().size(),
+                        receiver);
+                return true;
+            }
+
+            @Override
+            public boolean visit(SuperMethodInvocation call) {
+                if (shape.constructor()) return true;
+                judge(call, call.resolveMethodBinding(), call.getName().getIdentifier(), call.arguments().size(),
+                        null);
                 return true;
             }
 
             @Override
             public boolean visit(ClassInstanceCreation creation) {
-                if (!constructor) return true;
-                if (creation.arguments().size() != arity) return true;
-                record(creation, verdictForCreation(creation, owner));
+                if (!shape.constructor()) return true;
+                judge(creation, creation.resolveConstructorBinding(), null, creation.arguments().size(),
+                        creation.getType().resolveBinding());
                 return true;
             }
 
-            private void record(Expression node, Verdict verdict) {
-                switch (verdict) {
-                    case MATCH -> calls.add(new CallSite(file, unit, node));
-                    case UNCERTAIN -> {
-                        if (!uncertain.contains(file.getClassName())) uncertain.add(file.getClassName());
-                    }
-                    case OTHER -> { }
-                }
-            }
-        });
-    }
-
-    /**
-     * Whether this {@code new …(…)} of the right arity is an instantiation of the class being edited.
-     *
-     * <p>Only a bare {@link SimpleType} naming the class is certain. Anything else that <em>ends</em> in the
-     * same name — {@code new com.other.GoHome(…)}, {@code new GoHome<String>(…)} — could be that class or
-     * another one entirely, and telling them apart needs the imports resolved, which is exactly what this class
-     * cannot do. That is a refusal, per the rule above: an answer this cannot be sure of is not a skipped call.
-     *
-     * <p>{@code new GoHome(…) { … }} — an anonymous subclass — still runs the constructor and still passes it
-     * these arguments, so it is a MATCH like any other.
-     */
-    private static Verdict verdictForCreation(ClassInstanceCreation creation, String owner) {
-        Type created = creation.getType();
-        if (created instanceof SimpleType simple && simple.getName() instanceof SimpleName name) {
-            return owner.equals(name.getIdentifier()) ? Verdict.MATCH : Verdict.OTHER;
-        }
-        String text = created.toString();
-        String last = text.substring(text.lastIndexOf('.') + 1).replaceAll("<.*", "").trim();
-        return owner.equals(last) ? Verdict.UNCERTAIN : Verdict.OTHER;
-    }
-
-    /** Whether this same-named, same-arity call is the one being edited. */
-    private static Verdict verdictFor(MethodInvocation call, String owner, Set<String> projectClasses) {
-        Expression scope = call.getExpression();
-        if (scope == null || scope instanceof ThisExpression) {
-            String enclosing = enclosingClassOf(call);
-            if (owner.equals(enclosing)) return Verdict.MATCH;
-            // Some other class calls a bare name that happens to match. If that class declares one itself, it
-            // is calling its own; otherwise it is inherited or statically imported, and this cannot say which.
-            return declaresSameName(call, call.getName().getIdentifier(), call.arguments().size())
-                    ? Verdict.OTHER : Verdict.UNCERTAIN;
-        }
-        if (!(scope instanceof SimpleName receiver)) {
-            // `something().clickAt(…)`, `this.helper.clickAt(…)` — the receiver's type is a question only a
-            // compiler can answer.
-            return Verdict.UNCERTAIN;
-        }
-        String text = receiver.getIdentifier();
-        if (owner.equals(text)) return Verdict.MATCH;
-        if (projectClasses.contains(text)) return Verdict.OTHER;
-
-        // A variable receiver: it is our method only if the variable is declared as our class.
-        String declared = declaredTypeOf(call, text);
-        if (declared == null) return Verdict.UNCERTAIN;
-        return owner.equals(declared) ? Verdict.MATCH : Verdict.OTHER;
-    }
-
-    /** True when the type {@code node} sits in declares a method of this name and arity itself. */
-    private static boolean declaresSameName(ASTNode node, String name, int arity) {
-        for (ASTNode n = node; n != null; n = n.getParent()) {
-            if (!(n instanceof TypeDeclaration type)) continue;
-            for (MethodDeclaration method : type.getMethods()) {
-                if (method.getName().getIdentifier().equals(name) && method.parameters().size() == arity) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * The type {@code variable} is declared with, as the file writes it — searching outwards from {@code node}
-     * through the enclosing method's parameters and locals and then the class's fields. Null when no
-     * declaration is in sight, which is a reason to refuse rather than to assume.
-     */
-    private static String declaredTypeOf(ASTNode node, String variable) {
-        for (ASTNode n = node; n != null; n = n.getParent()) {
-            if (n instanceof MethodDeclaration method) {
-                for (Object parameter : method.parameters()) {
-                    SingleVariableDeclaration p = (SingleVariableDeclaration) parameter;
-                    if (p.getName().getIdentifier().equals(variable)) return p.getType().toString();
-                }
-                String local = localTypeOf(method, variable);
-                if (local != null) return local;
-            }
-            if (n instanceof TypeDeclaration type) {
-                for (FieldDeclaration field : type.getFields()) {
-                    for (Object fragment : field.fragments()) {
-                        if (((VariableDeclarationFragment) fragment).getName().getIdentifier().equals(variable)) {
-                            return field.getType().toString();
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    /** The declared type of a local named {@code variable} anywhere in {@code method}'s body, or null. */
-    private static String localTypeOf(MethodDeclaration method, String variable) {
-        if (method.getBody() == null) return null;
-        String[] found = new String[1];
-        method.getBody().accept(new ASTVisitor() {
             @Override
-            public boolean visit(VariableDeclarationStatement statement) {
-                for (Object fragment : statement.fragments()) {
-                    if (((VariableDeclarationFragment) fragment).getName().getIdentifier().equals(variable)
-                            && found[0] == null) {
-                        found[0] = typeText(statement.getType());
-                    }
+            public boolean visit(ExpressionMethodReference reference) {
+                return reference(reference, reference.getName().getIdentifier());
+            }
+
+            @Override
+            public boolean visit(TypeMethodReference reference) {
+                return reference(reference, reference.getName().getIdentifier());
+            }
+
+            @Override
+            public boolean visit(SuperMethodReference reference) {
+                return reference(reference, reference.getName().getIdentifier());
+            }
+
+            @Override
+            public boolean visit(CreationReference reference) {
+                if (shape.constructor() && shape.is(reference.resolveMethodBinding())) {
+                    calls.add(new CallSite(file, unit, reference));
                 }
                 return true;
             }
-        });
-        return found[0];
-    }
 
-    private static String typeText(Type type) {
-        return type == null ? null : type.toString();
+            @Override
+            public boolean visit(ConstructorInvocation call) {
+                if (shape.constructor() && shape.is(call.resolveConstructorBinding())) unsure();
+                return true;
+            }
+
+            @Override
+            public boolean visit(SuperConstructorInvocation call) {
+                if (shape.constructor() && shape.is(call.resolveConstructorBinding())) unsure();
+                return true;
+            }
+
+            private boolean reference(MethodReference reference, String name) {
+                if (shape.constructor()) return true;
+                IMethodBinding bound = reference.resolveMethodBinding();
+                if (shape.is(bound)) {
+                    calls.add(new CallSite(file, unit, reference));
+                } else if (bound == null && name.equals(shape.name())) {
+                    unsure();
+                }
+                return true;
+            }
+
+            /**
+             * This method when javac binds it here; "cannot tell" when javac bound nothing, the call has this
+             * method's name and arity, and its receiver could be the declaring class; anything else is another
+             * method.
+             */
+            private void judge(Expression call, IMethodBinding bound, String name, int arity,
+                               ITypeBinding receiver) {
+                // A recovered binding names the nearest method even for a call of the wrong arity, which does
+                // not compile against this one and is not one of its calls.
+                if (shape.is(bound) && (arity == shape.arity() || bound.isVarargs())) {
+                    calls.add(new CallSite(file, unit, call));
+                } else if (bound == null && arity == shape.arity()
+                        && (name == null || name.equals(shape.name())) && shape.couldOwn(receiver)) {
+                    unsure();
+                }
+            }
+
+            private void unsure() {
+                if (!uncertain.contains(file.getClassName())) uncertain.add(file.getClassName());
+            }
+        });
     }
 
     /** The name of the class {@code declaration} belongs to. */
     public static String declaringClassOf(MethodDeclaration declaration) {
-        return enclosingClassOf(declaration);
-    }
-
-    private static String enclosingClassOf(ASTNode node) {
-        for (ASTNode n = node; n != null; n = n.getParent()) {
+        for (ASTNode n = declaration; n != null; n = n.getParent()) {
             if (n instanceof AbstractTypeDeclaration type) return type.getName().getIdentifier();
         }
         return null;
+    }
+
+    private static String enclosingMethodName(ASTNode node) {
+        for (ASTNode n = node.getParent(); n != null; n = n.getParent()) {
+            if (n instanceof MethodDeclaration method) return method.getName().getIdentifier();
+            if (n instanceof AbstractTypeDeclaration type) return type.getName().getIdentifier();
+        }
+        return "";
     }
 
     /** The statement a call stands in, for a caller that has to remove or replace the whole line. */

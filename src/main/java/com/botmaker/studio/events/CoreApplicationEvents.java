@@ -40,6 +40,12 @@ public class CoreApplicationEvents {
     /** One file another file's edit also rewrote: what it said, and what it says now. */
     public record FileEdit(java.nio.file.Path path, String previousContent, String newContent) {}
 
+    /**
+     * Asks the window to open {@code file} and land on the block at {@code offset} — what a use listed in a
+     * refusal ({@code RefusalDialog}) does when clicked, from a block that has no handle on the navigation.
+     */
+    public record RevealRequestedEvent(java.nio.file.Path file, int offset) implements ApplicationEvent {}
+
     public record DiagnosticsUpdatedEvent(List<Diagnostic> diagnostics) implements ApplicationEvent {
         public DiagnosticsUpdatedEvent {
             diagnostics = diagnostics != null ? List.copyOf(diagnostics) : List.of();

@@ -68,9 +68,6 @@ public class EnumManipulationHandler {
     public static String deleteEnumFromClass(CompilationUnit cu, String originalCode, EnumDeclaration enumDecl) {
         return AstRewriteHelper.removeNode(cu, originalCode, enumDecl);
     }
-    public static String renameEnum(CompilationUnit cu, String originalCode, EnumDeclaration enumNode, String newName) {
-        return AstRewriteHelper.renameSimpleName(cu, originalCode, enumNode.getName(), newName);
-    }
     public static String addEnumConstant(CompilationUnit cu, String originalCode, EnumDeclaration enumNode, String constantName) {
         AST ast = cu.getAST();
         ASTRewrite rewriter = ASTRewrite.create(ast);
@@ -88,13 +85,5 @@ public class EnumManipulationHandler {
             listRewrite.remove((ASTNode) constants.get(index), null);
         }
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
-    }
-    public static String renameEnumConstant(CompilationUnit cu, String originalCode, EnumDeclaration enumNode, int index, String newName) {
-        List<?> constants = enumNode.enumConstants();
-        if (index >= 0 && index < constants.size()) {
-            EnumConstantDeclaration constDecl = (EnumConstantDeclaration) constants.get(index);
-            return AstRewriteHelper.renameSimpleName(cu, originalCode, constDecl.getName(), newName);
-        }
-        return originalCode;
     }
 }
