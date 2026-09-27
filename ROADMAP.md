@@ -6,7 +6,12 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 2, phase 5: live values while debugging.** `ui/app/LiveValues` puts a
+- **2026-09-27 (latest) — Picker feedback 3, phase 1: chooser clicks, switch fill, choices over Range.**
+  `TypeChooser` rebuilds rows only on a search (a pick moves the highlight), double-click commits, Done leads;
+  `.value-switch` fills from `-bm-switch-*` tokens (`SwitchStyleTest`); `ChoiceMode.declare` drops the range
+  with choices; `TypeCatalog` leaves `freshCall` types out of VALUE; `StudioWindow.fitInto` pulls a restored
+  window on screen — `ParameterChoicesTest` failed on a saved geometry hanging past a 1280 px screen.
+- **2026-09-27 — Picker feedback 2, phase 5: live values while debugging.** `ui/app/LiveValues` puts a
   chip on each declaration, assignment and name block while paused (top bot frame, open file only);
   `services/debug/LiveScope` decides which names are live with no binding; `ValueSummary` words a value by its
   field names. `DebugSnapshot.Variable.size` counts JDK collections; bot frames read two levels.

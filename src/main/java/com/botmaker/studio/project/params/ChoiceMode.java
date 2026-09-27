@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.parameters.ParameterRow;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -86,6 +87,19 @@ public enum ChoiceMode {
         if (base instanceof Class<?> cls && cls.isEnum()) return List.of(NONE);
         if (base == boolean.class || base == Boolean.class) return List.of(NONE, MANY);
         return List.of(NONE, ONE, MANY);
+    }
+
+    /**
+     * {@code row} declared with {@code options}. Choices are the limit on what can be picked, so declaring any
+     * drops the range: a bound hidden under a set of choices would still clamp a value nobody can see why
+     * (feedback 3, 2026-09-27). No choices keeps the range.
+     */
+    public static ParameterRow declare(ParameterRow row, List<String> options) {
+        ParameterRow.Builder next = row.toBuilder().options(options);
+        if (options != null && !options.isEmpty()) {
+            next.bounds(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+        }
+        return next.build();
     }
 
     /**

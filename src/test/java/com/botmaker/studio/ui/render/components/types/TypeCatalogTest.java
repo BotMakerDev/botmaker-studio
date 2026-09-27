@@ -65,6 +65,24 @@ class TypeCatalogTest {
                 catalog.groups().get(1).entries().getFirst().type());
     }
 
+    /**
+     * A type whose fresh value is a call the bot evaluates — a vision result — has no value to write down
+     * before the bot runs, so a parameter of it could never be filled in (feedback 3, 2026-09-27). A local
+     * can still hold one.
+     */
+    @Test
+    void aValueLeavesOutATypeOnlyARunningBotFills() {
+        List<PluginHost.OwnedType> plugins = List.of(
+                new PluginHost.OwnedType("sdk", "SDK", TestValues.Body.class),
+                new PluginHost.OwnedType("sdk", "SDK", Duration.class));
+
+        TypeCatalog value = TypeCatalog.of(TypeCatalog.Purpose.VALUE, TestValues.GRAMMAR, plugins, List.of());
+        TypeCatalog local = TypeCatalog.of(TypeCatalog.Purpose.DECLARATION, TestValues.GRAMMAR, plugins, List.of());
+
+        assertEquals(List.of("Duration"), labels(value.groups().getLast()));
+        assertEquals(List.of("Duration", "TestValues.Body"), labels(local.groups().getLast()));
+    }
+
     @Test
     void searchMatchesNameOrHintAndDropsEmptyGroups() {
         TypeCatalog catalog = TypeCatalog.of(TypeCatalog.Purpose.DECLARATION, TestValues.GRAMMAR, PLUGINS, PROJECT);

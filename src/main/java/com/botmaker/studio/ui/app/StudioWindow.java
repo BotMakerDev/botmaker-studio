@@ -143,11 +143,16 @@ public final class StudioWindow {
 
     private void restoreGeometry() {
         ProjectPreferences.WindowState saved = ProjectPreferences.loadDialogState(key);
-        if (saved != null && onScreen(saved)) {
-            stage.setX(saved.getX());
-            stage.setY(saved.getY());
-            stage.setWidth(saved.getWidth());
-            stage.setHeight(saved.getHeight());
+        Rectangle2D screen = saved == null ? null : screenOf(saved);
+        if (screen != null) {
+            // Whole, on the screen it overlaps: a window saved on a wide monitor would otherwise open with its
+            // right half — and the buttons there — past the edge of a smaller one.
+            Rectangle2D fitted = fitInto(new Rectangle2D(saved.getX(), saved.getY(), saved.getWidth(),
+                    saved.getHeight()), screen);
+            stage.setX(fitted.getMinX());
+            stage.setY(fitted.getMinY());
+            stage.setWidth(fitted.getWidth());
+            stage.setHeight(fitted.getHeight());
             if (saved.isMaximized()) stage.setMaximized(true);
             return;
         }
@@ -164,17 +169,26 @@ public final class StudioWindow {
         stage.setY(owner.getY() + (owner.getHeight() - stage.getHeight()) / 2);
     }
 
-    /** True if enough of {@code state} lands on a screen the user actually has attached. */
-    private static boolean onScreen(ProjectPreferences.WindowState state) {
+    /** The visual bounds of the first attached screen enough of {@code state} lands on, or null for none. */
+    private static Rectangle2D screenOf(ProjectPreferences.WindowState state) {
         for (Screen screen : Screen.getScreens()) {
             Rectangle2D b = screen.getVisualBounds();
             boolean overlaps = state.getX() + state.getWidth() - ON_SCREEN_MARGIN > b.getMinX()
                     && state.getX() + ON_SCREEN_MARGIN < b.getMaxX()
                     && state.getY() + state.getHeight() - ON_SCREEN_MARGIN > b.getMinY()
                     && state.getY() + ON_SCREEN_MARGIN < b.getMaxY();
-            if (overlaps) return true;
+            if (overlaps) return b;
         }
-        return false;
+        return null;
+    }
+
+    /** {@code window} moved, and shrunk when it must be, to lie wholly inside {@code screen}. Pure. */
+    static Rectangle2D fitInto(Rectangle2D window, Rectangle2D screen) {
+        double width = Math.min(window.getWidth(), screen.getWidth());
+        double height = Math.min(window.getHeight(), screen.getHeight());
+        double x = Math.max(screen.getMinX(), Math.min(window.getMinX(), screen.getMaxX() - width));
+        double y = Math.max(screen.getMinY(), Math.min(window.getMinY(), screen.getMaxY() - height));
+        return new Rectangle2D(x, y, width, height);
     }
 
     private void rememberGeometry() {

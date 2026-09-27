@@ -617,7 +617,8 @@ public final class ParametersDialog {
             row++;
         }
 
-        if (mine && leaf != null && isNumber(grammar, leaf)) {
+        // Under choices the choices are the limit, so a range there would be a second one nobody can see.
+        if (mine && mode == ChoiceMode.NONE && leaf != null && isNumber(grammar, leaf)) {
             grid.add(new Label("Range"), 0, row);
             grid.add(buildBoundsEditor(entry), 1, row);
             row++;
@@ -769,7 +770,7 @@ public final class ParametersDialog {
 
         change("how " + row.name() + " is picked", () -> {
             boolean retyped = !form.equals(entry.form());
-            if (!declare(entry, current -> current.toBuilder().options(options).build(), retyped ? form : null)) {
+            if (!declare(entry, current -> ChoiceMode.declare(current, options), retyped ? form : null)) {
                 error("“" + row.name() + "” could not be changed.");
                 return;
             }
@@ -809,7 +810,7 @@ public final class ParametersDialog {
         List<String> options = kept == ChoiceMode.NONE ? List.of()
                 : !surviving.isEmpty() ? surviving
                 : firstChoice(grammar, base).map(List::of).orElse(List.of());
-        edit(entry, "the type", current -> current.toBuilder().options(options).build(), null, form);
+        edit(entry, "the type", current -> ChoiceMode.declare(current, options), null, form);
     }
 
     /**
@@ -892,8 +893,7 @@ public final class ParametersDialog {
             updated.add(typed);
             replaceOptions(entry, updated);
         };
-        add.setOnAction(e -> addOption.run());
-        if (fresh.node() instanceof TextField field) {
+        add.setOnAction(e -> addOption.run());        if (fresh.node() instanceof TextField field) {
             field.setPromptText("new choice");
             // Chained, never replaced: the editor's own Enter is what hands the typed text to its value, and
             // without it Enter added the empty value read before that commit — nothing was declared, and the
@@ -1178,7 +1178,7 @@ public final class ParametersDialog {
 
     private void replaceOptions(JavaParameter entry, List<String> options) {
         error("");
-        edit(entry, "the choices", current -> current.toBuilder().options(options).build());
+        edit(entry, "the choices", current -> ChoiceMode.declare(current, options));
     }
 
     /**

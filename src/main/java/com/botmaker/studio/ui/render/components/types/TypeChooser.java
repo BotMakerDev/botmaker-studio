@@ -4,7 +4,6 @@ import com.botmaker.studio.palette.TypeNames;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
-import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -19,6 +18,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -41,8 +42,8 @@ import java.util.function.Supplier;
  * not throw away a list just asked for.
  *
  * <p><b>The menu stays open while the type is put together (2026-09-27)</b> — wrap, pick a leaf, unwrap — and
- * shows the type so far in its header. It is committed once, when the menu closes (Done, Enter in the search
- * field, or a click outside); Escape closes it with nothing changed. One commit rather than one per click
+ * shows the type so far in its header. It is committed once, when the menu closes (Done, a double-click on a
+ * type, Enter in the search field, or a click outside); Escape closes it with nothing changed. One commit rather than one per click
  * because a caller may rebuild the row this button sits in on a change, and a menu left open over a replaced
  * row goes nowhere.
  *
@@ -93,7 +94,8 @@ public final class TypeChooser extends Button {
 
     // ---- the menu -------------------------------------------------------------------------------------------
 
-    private void open() {
+    /** Opens the menu under the button; answers it, so a test can drive the rows. */
+    ContextMenu open() {
         TypeCatalog offered = catalog.get();
         ContextMenu menu = new ContextMenu();
         menu.getStyleClass().add("type-chooser-menu");
@@ -101,9 +103,9 @@ public final class TypeChooser extends Button {
         ObjectProperty<Type> draft = new SimpleObjectProperty<>(type.get());
         boolean[] cancelled = {false};
 
-        menu.getItems().add(headerRow(menu, draft));
         TextField search = new TextField();
         search.setPromptText("Search types");
+        menu.getItems().add(headerRow(menu, draft, search));
         CustomMenuItem searchItem = new CustomMenuItem(search);
         searchItem.setHideOnClick(false);
         menu.getItems().add(searchItem);
@@ -111,9 +113,13 @@ public final class TypeChooser extends Button {
 
         int body = menu.getItems().size();
         List<TypeCatalog.Entry> shown = new ArrayList<>();
+        List<CustomMenuItem> rows = new ArrayList<>();
+        // Rebuilt only when the search changes. A pick keeps every row and moves the highlight: rows replaced
+        // under the pointer have seen no mouse-enter, so the next click on one only armed it (feedback 3).
         Runnable rebuild = () -> {
             menu.getItems().remove(body, menu.getItems().size());
             shown.clear();
+            rows.clear();
             List<TypeCatalog.Group> groups = offered.filter(search.getText());
             if (groups.isEmpty()) {
                 MenuItem none = new MenuItem("No type matches");
@@ -126,16 +132,17 @@ public final class TypeChooser extends Button {
                 header.getStyleClass().add("block-section-header");
                 menu.getItems().add(header);
                 for (TypeCatalog.Entry entry : group.entries()) {
-                    menu.getItems().add(entryItem(entry, draft));
+                    CustomMenuItem row = entryItem(menu, entry, draft);
+                    menu.getItems().add(row);
+                    rows.add(row);
                     shown.add(entry);
                 }
             }
+            highlight(rows, shown, draft.get());
         };
         rebuild.run();
         search.textProperty().addListener((o, was, now) -> rebuild.run());
-        // The current leaf's highlight follows the draft — after the click that changed it has finished, since
-        // the rebuild removes the very item being clicked.
-        draft.addListener((o, was, now) -> Platform.runLater(rebuild));
+        draft.addListener((o, was, now) -> highlight(rows, shown, now));
         // Enter in the search field takes the first match and closes: typing "poi" and Enter is the whole gesture.
         search.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER && !shown.isEmpty()) {
@@ -152,20 +159,25 @@ public final class TypeChooser extends Button {
         });
         menu.setOnShown(e -> search.requestFocus());
         menu.show(this, Side.BOTTOM, 0, 0);
+        return menu;
     }
 
-    /** The type so far, and <i>Done</i>. */
-    private MenuItem headerRow(ContextMenu menu, ObjectProperty<Type> draft) {
+    /**
+     * <i>Done</i>, then the type so far. Done leads, full size and as tall as the search field under it: at the
+     * far end of the row, small, it was a long way from the list it closes (feedback 3).
+     */
+    private MenuItem headerRow(ContextMenu menu, ObjectProperty<Type> draft, TextField search) {
+        Button done = new Button("Done");
+        done.getStyleClass().add("type-chooser-done");
+        done.setDefaultButton(true);
+        done.setMinWidth(80);
+        done.prefHeightProperty().bind(search.heightProperty());
+        done.setOnAction(e -> menu.hide());
         Label now = new Label();
         now.getStyleClass().add("type-chooser-name");
         now.textProperty().bind(Bindings.createStringBinding(
                 () -> draft.get() == null ? "No type yet" : label(draft.get()), draft));
-        Region gap = new Region();
-        HBox.setHgrow(gap, Priority.ALWAYS);
-        Button done = new Button("Done");
-        done.getStyleClass().add("type-chooser-wrap");
-        done.setOnAction(e -> menu.hide());
-        HBox row = new HBox(8, now, gap, done);
+        HBox row = new HBox(8, done, now);
         row.setAlignment(Pos.CENTER_LEFT);
         CustomMenuItem item = new CustomMenuItem(row);
         item.setHideOnClick(false);
@@ -173,7 +185,19 @@ public final class TypeChooser extends Button {
         return item;
     }
 
-    private MenuItem entryItem(TypeCatalog.Entry entry, ObjectProperty<Type> draft) {
+    /** The row of the draft's innermost type carries the highlight; every other row loses it. */
+    private static void highlight(List<CustomMenuItem> rows, List<TypeCatalog.Entry> shown, Type draft) {
+        Type leaf = innermost(draft);
+        for (int i = 0; i < rows.size(); i++) {
+            List<String> classes = rows.get(i).getStyleClass();
+            boolean current = shown.get(i).type().equals(leaf);
+            if (current && !classes.contains("type-chooser-current")) classes.add("type-chooser-current");
+            if (!current) classes.remove("type-chooser-current");
+        }
+    }
+
+    /** One type: a click picks it and keeps the menu open, a double-click picks it and closes. */
+    private CustomMenuItem entryItem(ContextMenu menu, TypeCatalog.Entry entry, ObjectProperty<Type> draft) {
         Label name = new Label(entry.label());
         name.getStyleClass().add("type-chooser-name");
         Label hint = new Label(entry.hint());
@@ -185,8 +209,12 @@ public final class TypeChooser extends Button {
         row.setMinWidth(220);
         CustomMenuItem item = new CustomMenuItem(row);
         item.setHideOnClick(false);
-        if (entry.type().equals(innermost(draft.get()))) item.getStyleClass().add("type-chooser-current");
         item.setOnAction(e -> draft.set(withLeaf(draft.get(), entry.type())));
+        row.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+            if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 2) return;
+            draft.set(withLeaf(draft.get(), entry.type()));
+            menu.hide();
+        });
         return item;
     }
 

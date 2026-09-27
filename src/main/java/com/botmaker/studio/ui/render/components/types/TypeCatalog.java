@@ -34,7 +34,7 @@ public final class TypeCatalog {
     public enum Purpose {
         /**
          * A value somebody edits in the Parameters window: only a type a picker can write — one a plugin
-         * declares — or a record the bot declares.
+         * declares — or a record the bot declares. Never a type only a running bot fills (a vision result).
          */
         VALUE,
         /** A variable or a function input: anything Java can declare, so every class the bot declares too. */
@@ -100,6 +100,7 @@ public final class TypeCatalog {
         Map<String, String> names = new LinkedHashMap<>();
         for (PluginHost.OwnedType owned : plugins) {
             Class<?> cls = owned.type();
+            if (purpose == Purpose.VALUE && onlyARunningBotFills(grammar, cls)) continue;
             if (!listed.add(cls)) continue;
             names.putIfAbsent(owned.pluginId(), owned.pluginName());
             byPlugin.computeIfAbsent(owned.pluginId(), id -> new ArrayList<>())
@@ -139,6 +140,14 @@ public final class TypeCatalog {
                 .sorted(Comparator.comparing(Entry::label, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         out.add(new Group(title, sorted));
+    }
+
+    /**
+     * Whether a value of {@code cls} only exists once the bot runs — its declaration starts it as a call the bot
+     * evaluates ({@code freshCall()}), like a vision result. A parameter of it could never be filled in.
+     */
+    private static boolean onlyARunningBotFills(ValueGrammar grammar, Class<?> cls) {
+        return grammar.type(cls).map(type -> type.freshCall() != null).orElse(false);
     }
 
     private static String packageOf(Class<?> cls) {

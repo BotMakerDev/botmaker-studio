@@ -16,6 +16,10 @@
     /* Accents */
     -bm-primary: #3498db;
     -bm-danger: #e74c3c;
+    /* The on/off switch's own fills, white-lettered: 5.6:1 and 5.1:1. The other themes inherit them. */
+    -bm-switch-off-bg: #c62828;
+    -bm-switch-on-bg: #2e7d32;
+    -bm-switch-text: #ffffff;
     -bm-accent: #1abc9c;
     -bm-accent-dark: #16a085;
     -bm-muted: #7f8c8d;
@@ -2818,19 +2822,44 @@
     -fx-font-size: 0.9em;
 }
 
-/* An on/off switch (the toolkit's Styles.SWITCH): the state in its colour as well as its word — red Off, green
-   On — over the theme's own danger and ok tokens, so each theme keeps the contrast it already tuned. */
-.value-switch {
+/* Done leads the header at full size (feedback 3): it closes the list, so it sits where the eye starts. */
+.type-chooser-menu .type-chooser-done {
     -fx-font-weight: bold;
-    -fx-text-fill: -bm-danger;
-    -fx-border-color: -bm-danger;
-    -fx-border-radius: 3;
-    -fx-background-radius: 3;
+    -fx-padding: 2 14 2 14;
 }
 
-.value-switch:selected {
-    -fx-text-fill: -bm-severity-ok-text;
-    -fx-border-color: -bm-severity-ok-text;
+/* An on/off switch (the toolkit's Styles.SWITCH): the state in its colour as well as its word, filled solid red
+   Off and green On whatever it sits in (feedback 3, 2026-09-27) — it coloured only its word and border, so its
+   fill was the block's and a switch on a purple block read purple. Its own tokens, white-lettered. Also listed
+   under .block, so no rule a block gives its controls can outrank it. SwitchStyleTest measures it. */
+.value-switch,
+.block .value-switch {
+    -fx-font-weight: bold;
+    -fx-background-color: -bm-switch-off-bg;
+    -fx-background-insets: 0;
+    -fx-background-radius: 3;
+    -fx-border-color: transparent;
+    -fx-text-fill: -bm-switch-text;
+}
+
+.value-switch:hover,
+.block .value-switch:hover {
+    -fx-background-color: derive(-bm-switch-off-bg, -12%);
+}
+
+.value-switch:selected,
+.block .value-switch:selected {
+    -fx-background-color: -bm-switch-on-bg;
+}
+
+.value-switch:selected:hover,
+.block .value-switch:selected:hover {
+    -fx-background-color: derive(-bm-switch-on-bg, -12%);
+}
+
+.value-switch:armed,
+.block .value-switch:armed {
+    -fx-opacity: 0.9;
 }
 
 /*
@@ -3219,6 +3248,8 @@
     /* Accents */
     -bm-primary: #ffff00;
     -bm-danger: #ff4040;
+    -bm-switch-off-bg: #a00000;
+    -bm-switch-on-bg: #005a00;
     -bm-accent: #00ffff;
     -bm-accent-dark: #00cccc;
     -bm-muted: #ffffff;

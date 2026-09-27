@@ -26,6 +26,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A type in the chooser is picked on the first click**, every time; a double-click picks it and closes the
+  menu, and **Done** leads the header at full size.
+- **An on/off switch is filled red when Off and green when On**, whatever block it sits in; it took the
+  block's colour before.
+- **Choices replace a Range.** Declaring choices on a number drops its range and hides the Range row: the
+  choices are the limit.
+- **Parameters offers no type only a running bot fills** (the vision results); a variable can still hold one.
+- **A remembered window opens wholly on screen.** One saved on a wider monitor opened with its right side,
+  and the buttons there, past the edge.
 - **A Range limits the number.** A parameter's `@Param(min, max)` is handed to its editor, and a value written
   outside it is written at the nearest end.
 - **The type chooser stays open** while a type is put together: wrap, pick, unwrap, then Done, Enter or a

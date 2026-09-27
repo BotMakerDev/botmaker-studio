@@ -65,4 +65,23 @@ class ChoiceModeTest {
                 ChoiceMode.kept(GRAMMAR, ValueTypes.listOf(Integer.class), List.of("1", "5")));
         assertEquals(List.of("5"), ChoiceMode.kept(GRAMMAR, int.class, List.of("\"a\"", "5")));
     }
+
+    /**
+     * A range limits what can be typed, and a set of choices is already the limit — so choices declared on a
+     * ranged number drop the range, rather than leaving a bound nobody can see any more (feedback 3).
+     */
+    @Test
+    void choicesDropTheRangeAndNoChoicesKeepIt() {
+        com.botmaker.plugin.api.parameters.ParameterRow ranged =
+                com.botmaker.plugin.api.parameters.ParameterRow.named("speed", "int").bounds(0, 10).build();
+
+        var picked = ChoiceMode.declare(ranged, List.of("1", "5"));
+        assertEquals(List.of("1", "5"), picked.options());
+        assertEquals(Double.NEGATIVE_INFINITY, picked.min());
+        assertEquals(Double.POSITIVE_INFINITY, picked.max());
+
+        var free = ChoiceMode.declare(ranged, List.of());
+        assertEquals(0.0, free.min());
+        assertEquals(10.0, free.max());
+    }
 }
