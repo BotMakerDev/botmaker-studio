@@ -6,7 +6,13 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Canvas fixes: plugin files locked, add buttons where they are, gutter breakpoints.**
+- **2026-09-27 (latest) — Parameters: categories you can make, inside their class.** The rail is All, then
+  a heading per `@Param` class (section) with General and that class's categories under it
+  (`VariableRailModel.Filed`/`rowsOf(filed, sections, added)`/`categoriesIn`), so "Timing" in two classes is two
+  rows. *+ New category…* is back (lists an empty category in its section until something is filed there);
+  a card's category box is an editable `ComboBox` again (type a name + Enter). Dropping onto the rail only
+  refiles within the parameter's own class; picking a section points the add row at that class.
+- **2026-09-27 — Canvas fixes: plugin files locked, add buttons where they are, gutter breakpoints.**
   `project/PluginFiles` (holders a loaded plugin declares, `plugins/<segment>/<Holder>.java`, memoised per bind
   as `PluginHost.pluginFiles()`) is what `LockResolver.managed()` locks whole (badge `<Plugin> plugin - Read
   Only`) and what the explorer's plugin icon means; `ExplorerModel.isPluginFile`'s folder guess is gone.

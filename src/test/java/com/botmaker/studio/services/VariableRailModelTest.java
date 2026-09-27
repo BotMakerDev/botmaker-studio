@@ -1,119 +1,103 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.plugin.api.parameters.ParameterRow;
+import com.botmaker.studio.services.VariableRailModel.Filed;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The Parameters dialog's rail, which is a decision rather than a widget: which buckets exist, what each holds,
  * and — the one that matters — that no parameter can end up in none of them.
  *
- * <p>The categories came from the picture library's {@code TagCatalog} until 2026-09-02, then from a
- * {@code ParameterGroup} a plugin declared, and since 2026-09-22 from the rows themselves — a
- * {@code @Param(category = …)} is free text, so the only categories that exist are the ones something is
- * filed under. The two headings the rail used to draw over the tags — <i>Activity categories</i>,
- * <i>Custom categories</i> — went with the first of those splits.
- *
- * <p>The fixture is {@link ParameterRow}s since 2026-09-10, which is what every reader of this model hands it
- * now that the Runner renders rows too.
+ * <p>Since 2026-09-27 the rail is grouped by section, the class that declares the field, with that class's
+ * categories inside it; the categories came from the rows themselves since 2026-09-22, a
+ * {@code @Param(category = …)} being free text.
  */
 class VariableRailModelTest {
 
-    private static List<String> categories() {
-        return VariableRailModel.categoriesOf(rows());
+    private static Filed row(String section, String name, String category) {
+        return new Filed(section, ParameterRow.named(name, "int").category(category).build());
     }
 
-    /** The type is the Java one the field writes; the rail never looks at it. */
-    private static ParameterRow row(String name, String typeName, String category) {
-        return ParameterRow.named(name, typeName).category(category).build();
-    }
-
-    private static List<ParameterRow> rows() {
+    private static List<Filed> rows() {
         return List.of(
-                row("RETRIES", "int", "Mining"),
-                row("ORE", "String", "Mining"),
-                row("BAIT", "String", "Fishing"),
-                row("DEBUG", "boolean", ""),
-                row("GAP", "Duration", "Timing"));
+                row("Parameters", "RETRIES", "Mining"),
+                row("Parameters", "ORE", "Mining"),
+                row("Parameters", "DEBUG", ""),
+                row("Collect", "BAIT", "Timing"),
+                row("Parameters", "GAP", "Timing"));
     }
 
     @Test
-    void theRailIsAllThenCategoriesThenEachDeclaredCategory() {
-        List<VariableRailModel.Row> rail = VariableRailModel.rowsOf(rows(), categories());
+    void theRailIsAllThenEachSectionWithItsGeneralAndCategories() {
+        List<VariableRailModel.Row> rail =
+                VariableRailModel.rowsOf(rows(), List.of("Parameters", "Collect"), Map.of());
 
-        assertEquals(List.of("All variables (5)", "#Categories", "General (1)",
-                        "Mining (2)", "Fishing (1)", "Timing (1)"),
-                rail.stream().map(VariableRailModelTest::render).toList());
+        assertEquals(List.of("All variables (5)",
+                        "#Parameters", "Parameters/General (1)", "Parameters/Mining (2)", "Parameters/Timing (1)",
+                        "#Collect", "Collect/General (0)", "Collect/Timing (1)"),
+                rail.stream().map(VariableRailModelTest::render).toList(),
+                "a category two classes use is one row in each, holding that class's fields");
+    }
+
+    /** A category made in the window exists, empty, in the section it was made in, until something fills it. */
+    @Test
+    void aCategoryJustCreatedIsListedInItsSectionEmpty() {
+        List<VariableRailModel.Row> rail = VariableRailModel.rowsOf(rows(), List.of("Parameters", "Collect"),
+                Map.of("Collect", List.of("Vision", "timing")));
+
+        assertEquals(List.of("All variables (5)",
+                        "#Parameters", "Parameters/General (1)", "Parameters/Mining (2)", "Parameters/Timing (1)",
+                        "#Collect", "Collect/General (0)", "Collect/Timing (1)", "Collect/Vision (0)"),
+                rail.stream().map(VariableRailModelTest::render).toList(),
+                "a new one the section already uses, however it is spelled, is not listed twice");
+    }
+
+    /** Both kinds of section row exist with nothing in them: a bucket you cannot select is one you cannot fill. */
+    @Test
+    void anEmptyProjectOffersAllAndItsOneSectionsGeneral() {
+        assertEquals(List.of("All variables (0)", "#Parameters", "Parameters/General (0)"),
+                VariableRailModel.rowsOf(List.of(), List.of("Parameters"), Map.of()).stream()
+                        .map(VariableRailModelTest::render).toList());
     }
 
     @Test
-    void theCategoriesOfSeveralClassesMergeInDeclarationOrderWithoutDuplicates() {
-        // Two classes may both file a field under "Timing"; the rail is one list, so it is listed once.
-        List<ParameterRow> overlapping = List.of(
-                row("A", "TEXT", "Timing"), row("B", "TEXT", "Vision"),
-                row("C", "TEXT", "timing"), row("D", "TEXT", "Webhooks"), row("E", "TEXT", ""));
+    void everyParameterIsReachableFromExactlyOneSectionRow() {
+        List<Filed> rows = rows();
+        List<VariableRailModel.Row> rail = VariableRailModel.rowsOf(rows, List.of("Parameters", "Collect"), Map.of());
 
-        assertEquals(List.of("Timing", "Vision", "Webhooks"), VariableRailModel.categoriesOf(overlapping),
-                "first spelling wins, it wins case-insensitively, and the unfiled declare nothing");
-    }
-
-    /** Both computed rows exist even with nothing in them: a bucket you cannot select is one you cannot fill. */
-    @Test
-    void allAndGeneralAreOfferedByAnEmptyProject() {
-        List<VariableRailModel.Row> rail = VariableRailModel.rowsOf(List.of(), List.of());
-
-        assertEquals(List.of("All variables (0)", "#Categories", "General (0)"),
-                rail.stream().map(VariableRailModelTest::render).toList());
-    }
-
-    /**
-     * The forward-and-backward compatibility case: a parameter carries a category nothing declares any more —
-     * an older project's activity name, or a category the plugin dropped. It must still have a home, or a
-     * value would be invisible in the one dialog that edits it while still being read by the bot.
-     */
-    @Test
-    void aVariableFiledUnderAVanishedCategoryIsListedUnderGeneral() {
-        List<ParameterRow> rows = List.of(row("ORE", "TEXT", "Smelting"));
-
-        List<ParameterRow> general = VariableRailModel.rowsIn(rows, ParameterRow.GENERAL, categories());
-
-        assertEquals(List.of("ORE"), general.stream().map(ParameterRow::name).toList());
-        assertEquals(1, VariableRailModel.rowsIn(rows, VariableRailModel.ALL, categories()).size());
-    }
-
-    @Test
-    void everyVariableIsReachableFromExactlyOneTagRow() {
-        List<ParameterRow> rows = rows();
-        List<String> categories = categories();
-
-        for (ParameterRow v : rows) {
-            long homes = VariableRailModel.rowsOf(rows, categories).stream()
-                    .filter(r -> r instanceof VariableRailModel.TagRow t && !t.tag().equals(VariableRailModel.ALL))
-                    .map(r -> ((VariableRailModel.TagRow) r).tag())
-                    .filter(tag -> VariableRailModel.rowsIn(rows, tag, categories).contains(v))
+        for (Filed entry : rows) {
+            long homes = rail.stream()
+                    .filter(r -> r instanceof VariableRailModel.TagRow t && t.section() != null)
+                    .map(VariableRailModel.TagRow.class::cast)
+                    .filter(t -> VariableRailModel.rowsIn(rows, t.section(), t.tag()).contains(entry))
                     .count();
-            assertEquals(1, homes, v.name() + " should be listed under exactly one category");
+            assertEquals(1, homes, entry.row().name() + " should be listed under exactly one row");
         }
     }
 
     @Test
     void aCategoryIsMatchedHoweverItIsSpelled() {
-        List<ParameterRow> rows = List.of(row("RETRIES", "WHOLE_NUMBER", "mining"));
+        List<Filed> rows = List.of(row("Parameters", "RETRIES", "mining"));
 
-        assertTrue(VariableRailModel.rowsIn(rows, "Mining", categories()).contains(rows.getFirst()),
+        assertEquals(rows, VariableRailModel.rowsIn(rows, "Parameters", "Mining"),
                 "a category read out of the file is matched the way a user reads it");
-        assertTrue(VariableRailModel.isDeclared(categories(), "MINING"),
-                "and the declared-ness test agrees with the filter, or a variable would be in two rows");
+        assertEquals(List.of("Timing", "Vision"), VariableRailModel.categoriesOf(List.of(
+                        ParameterRow.named("A", "int").category("Timing").build(),
+                        ParameterRow.named("B", "int").category("Vision").build(),
+                        ParameterRow.named("C", "int").category("timing").build())),
+                "first spelling wins, case-insensitively");
     }
 
     private static String render(VariableRailModel.Row row) {
         return switch (row) {
             case VariableRailModel.Heading heading -> "#" + heading.text();
-            case VariableRailModel.TagRow tag -> tag.tag() + " (" + tag.count() + ")";
+            case VariableRailModel.TagRow tag -> (tag.section() == null ? "" : tag.section() + "/")
+                    + tag.tag() + " (" + tag.count() + ")";
         };
     }
 }

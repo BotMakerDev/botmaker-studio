@@ -32,6 +32,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
@@ -62,8 +63,10 @@ import javafx.util.Duration;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -89,13 +92,14 @@ import java.util.function.UnaryOperator;
  * <p><b>Nothing in this class knows what an activity is, or what a plugin's file looks like.</b> That was the
  * point of the 2026-09-10 rewrite and it still holds.
  *
- * <h2>One list, organised by category</h2>
+ * <h2>One list, organised by class and category</h2>
  *
  * <p>Every parameter belongs to the project. What the rail on the left offers is a <em>view</em> of that one
- * list — <i>All</i>, <i>General</i> for the unfiled, then every category in use: whatever the bot's own
- * {@code @Param}s say. A field's category is
- * free text, so the only way one exists is that something is filed under it. Filing a parameter under
- * "Timing" does not scope it to anything: a category only says where it is listed.
+ * list — <i>All</i>, then per section (the class declaring the fields, 2026-09-27) <i>General</i> for the
+ * unfiled and every category that class's {@code @Param}s use, plus any made with <i>+ New category…</i>. A
+ * field's category is free text, so a category exists because something is filed under it or was just made
+ * to be. Filing a parameter under "Timing" does not scope it to anything: a category only says where it is
+ * listed.
  *
  * <h2>Why it is not in the flow editor</h2>
  *
@@ -148,12 +152,20 @@ public final class ParametersDialog {
     /** Readers for the value widgets currently on screen; re-created whenever the column is rebuilt. */
     private final List<ValueEditor> valueEditors = new ArrayList<>();
 
-    /** Every category in use — whatever the bot's own fields say. */
-    private List<String> categories = List.of();
+    /**
+     * Categories made with <i>+ New category…</i> in this window, by section, that nothing may be filed under
+     * yet. The rest are whatever the bot's own fields say; these exist so a new one can be filled.
+     */
+    private final Map<String, List<String>> addedCategories = new LinkedHashMap<>();
 
     /** The records the bot declares, for a value cell over one of them. Re-read with the rows. */
     private BotRecords records = BotRecords.none();
+    /** The rail's selection: a section (class) and a tag in it, or no section and {@link VariableRailModel#ALL}. */
+    private String selectedSection;
     private String selectedTag = VariableRailModel.ALL;
+    private final Button newCategory = new Button("+ New category…");
+    /** The add row's class picker, when the bot has more than one {@code @Param} class; kept on the rail's section. */
+    private ComboBox<String> intoPicker;
 
     /**
      * Which class a newly added parameter is declared in — {@code Parameters} until the bot has a second
@@ -239,7 +251,6 @@ public final class ParametersDialog {
     private void reload() {
         rows.clear();
         rows.addAll(JavaParameters.scan(config, state));
-        categories = JavaParameters.categories(config, state);
         // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of
         // the bot's own records needs that record's components, and a per-cell scan would read every source
         // file once per row on screen.
@@ -271,12 +282,16 @@ public final class ParametersDialog {
                 });
             }
 
-            /** A drop lands only on a real tag row, and only from this dialog's own drag. */
+            /**
+             * A drop lands only on a tag row of the dragged parameter's own section, and only from this dialog's
+             * own drag: filing changes the category, never the class the field is declared in.
+             */
             private boolean acceptsDrop(DragEvent e) {
                 return getItem() instanceof VariableRailModel.TagRow tag
-                        && !VariableRailModel.ALL.equals(tag.tag())
+                        && tag.section() != null
                         && e.getGestureSource() != this
-                        && e.getDragboard().hasString();
+                        && e.getDragboard().hasString()
+                        && tag.section().equals(sectionOf(e.getDragboard().getString()));
             }
 
             @Override protected void updateItem(VariableRailModel.Row row, boolean empty) {
@@ -289,7 +304,7 @@ public final class ParametersDialog {
                 }
                 switch (row) {
                     case VariableRailModel.Heading heading -> {
-                        setText(heading.text());
+                        setText(heading.text() + ".java");
                         // A heading is a label that happens to live in a list, so it must not look or behave
                         // like a row you can land on — arrow-keying onto one would select nothing at all.
                         setDisable(true);
@@ -300,7 +315,8 @@ public final class ParametersDialog {
                         // it holds is cheaper than a heading alone at telling the two apart.
                         String label = ParameterRow.GENERAL.equals(tag.tag())
                                 ? tag.tag() + " (no category)" : tag.tag();
-                        setText(label + "  (" + tag.count() + ")");
+                        // A section's buckets sit indented under its heading, as a category is inside a class.
+                        setText((tag.section() == null ? "" : "   ") + label + "  (" + tag.count() + ")");
                         setDisable(false);
                     }
                 }
@@ -309,7 +325,15 @@ public final class ParametersDialog {
         rail.getSelectionModel().selectedItemProperty().addListener((o, was, is) -> {
             if (is instanceof VariableRailModel.TagRow tag) {
                 flushValues();
+                selectedSection = tag.section();
                 selectedTag = tag.tag();
+                // A new parameter goes where the user is looking: the section picked on the rail.
+                if (selectedSection != null) {
+                    selectedClass = selectedSection;
+                    if (intoPicker != null && intoPicker.getItems().contains(selectedSection)) {
+                        intoPicker.setValue(selectedSection);
+                    }
+                }
                 rebuildParams();
                 refreshRailActions();
             }
@@ -320,17 +344,72 @@ public final class ParametersDialog {
                 + "dragging them one at a time."));
         moveHere.setOnAction(e -> moveIntoSelected());
 
-        VBox column = new VBox(6, rail, moveHere);
+        newCategory.setMaxWidth(Double.MAX_VALUE);
+        newCategory.setOnAction(e -> createCategory());
+
+        VBox column = new VBox(6, rail, newCategory, moveHere);
         VBox.setVgrow(rail, Priority.ALWAYS);
         return column;
     }
 
-    /** Both rail buttons say what they act on, so neither is offered where it would mean nothing. */
+    /** Every rail button says what it acts on, so none is offered where it would mean nothing. */
     private void refreshRailActions() {
-        boolean real = !VariableRailModel.ALL.equals(selectedTag);
+        boolean real = selectedSection != null;
         moveHere.setText(real ? "Move parameters to “" + selectedTag + "”…"
                 : "Move parameters here…");
         moveHere.setDisable(!real);
+        String home = categoryHome();
+        newCategory.setDisable(home == null);
+        newCategory.setTooltip(new Tooltip(home == null
+                ? "Pick a class on the rail first: a category is listed inside the class its parameters are in."
+                : "A new category in " + home + ", to file parameters under."));
+    }
+
+    /** The section a new category goes in: the selected one, or the only one there is. */
+    private String categoryHome() {
+        if (selectedSection != null) return selectedSection;
+        List<String> sections = sections();
+        return sections.size() == 1 ? sections.getFirst() : null;
+    }
+
+    /**
+     * Asks for a category's name and lists it, empty, in its section — then it is filled like any other, by
+     * dragging parameters onto it, <i>Move parameters to…</i>, or a card's category box. It was here until the
+     * 2026-08 rail rewrite dropped it, which left typing into a card as the only way to make one.
+     */
+    private void createCategory() {
+        String section = categoryHome();
+        if (section == null) return;
+        TextInputDialog ask = new TextInputDialog();
+        ThemedWindows.apply(ask);
+        ask.initOwner(stage);
+        ask.setTitle("New category");
+        ask.setHeaderText("A category in " + section + ".java");
+        ask.setContentText("Name:");
+        String name = ask.showAndWait().map(String::strip).orElse("");
+        if (name.isEmpty()) return;
+        List<String> existing = VariableRailModel.categoriesIn(filed(), section, addedCategories.get(section));
+        if (ParameterRow.GENERAL.equalsIgnoreCase(name)
+                || existing.stream().anyMatch(category -> category.equalsIgnoreCase(name))) {
+            error("“" + name + "” is already a category in " + section + ".");
+            return;
+        }
+        addedCategories.computeIfAbsent(section, key -> new ArrayList<>()).add(name);
+        selectedSection = section;
+        selectedTag = name;
+        rebuildRail();
+        error("");
+    }
+
+    /** Every parameter with the section it is declared in — what the rail model reads. */
+    private List<VariableRailModel.Filed> filed() {
+        return rows.stream().map(entry -> new VariableRailModel.Filed(entry.className(), entry.row())).toList();
+    }
+
+    /** The class half of the {@code class\nname} pair a card's grip puts on the dragboard. */
+    private static String sectionOf(String dragged) {
+        int cut = dragged.indexOf('\n');
+        return cut < 0 ? JavaParameters.DEFAULT_CLASS : dragged.substring(0, cut);
     }
 
     /**
@@ -339,12 +418,13 @@ public final class ParametersDialog {
      * time, where every parameter in the project is somewhere else.
      */
     private void moveIntoSelected() {
-        if (VariableRailModel.ALL.equals(selectedTag)) return;
+        if (selectedSection == null) return;
         String home = ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
-        List<JavaParameter> inside = shown(selectedTag);
-        List<JavaParameter> outside = rows.stream().filter(entry -> !inside.contains(entry)).toList();
+        List<JavaParameter> inside = shown();
+        List<JavaParameter> outside = rows.stream()
+                .filter(entry -> entry.className().equals(selectedSection) && !inside.contains(entry)).toList();
         if (outside.isEmpty()) {
-            error("Every parameter is already filed under “" + selectedTag + "”.");
+            error("Every parameter of " + selectedSection + " is already filed under “" + selectedTag + "”.");
             return;
         }
         List<JavaParameter> chosen = pickParameters(outside);
@@ -395,15 +475,18 @@ public final class ParametersDialog {
 
     /** Redraws the rail (the counts move on every add, delete and re-tag) and keeps the selection. */
     private void rebuildRail() {
-        List<VariableRailModel.Row> railRows =
-                VariableRailModel.rowsOf(rows.stream().map(JavaParameter::row).toList(), categories);
+        List<VariableRailModel.Row> railRows = VariableRailModel.rowsOf(filed(), sections(), addedCategories);
         rail.getItems().setAll(railRows);
         VariableRailModel.Row keep = railRows.stream()
-                .filter(r -> r instanceof VariableRailModel.TagRow t && t.tag().equals(selectedTag))
+                .filter(r -> r instanceof VariableRailModel.TagRow t && t.tag().equalsIgnoreCase(selectedTag)
+                        && java.util.Objects.equals(t.section(), selectedSection))
                 .findFirst()
                 .orElse(railRows.isEmpty() ? null : railRows.getFirst());
         rail.getSelectionModel().select(keep);
-        if (keep instanceof VariableRailModel.TagRow tag) selectedTag = tag.tag();
+        if (keep instanceof VariableRailModel.TagRow tag) {
+            selectedSection = tag.section();
+            selectedTag = tag.tag();
+        }
         rebuildParams();
         refreshRailActions();
     }
@@ -427,11 +510,12 @@ public final class ParametersDialog {
         return true;
     }
 
-    /** The tags a parameter may be filed under: the declared ones, plus "no tag". */
-    private List<String> filingChoices() {
+    /** The categories a parameter may be filed under without typing one: its section's, plus "no category". */
+    private List<String> filingChoices(JavaParameter entry) {
         List<String> choices = new ArrayList<>();
         choices.add(ParameterRow.GENERAL);
-        choices.addAll(categories);
+        choices.addAll(VariableRailModel.categoriesIn(filed(), entry.className(),
+                addedCategories.get(entry.className())));
         return choices;
     }
 
@@ -450,8 +534,8 @@ public final class ParametersDialog {
         valueEditors.clear();
         paramColumn.getChildren().clear();
 
-        Label title = new Label(ParameterRow.GENERAL.equals(selectedTag)
-                ? selectedTag + " (no category)" : selectedTag);
+        String tag = ParameterRow.GENERAL.equals(selectedTag) ? selectedTag + " (no category)" : selectedTag;
+        Label title = new Label(selectedSection == null ? tag : selectedSection + " · " + tag);
         title.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
         Label explain = new Label("Every parameter belongs to the whole bot and is read from your code by "
                 + "name. A category only says where it is listed — never who may read it.");
@@ -459,8 +543,9 @@ public final class ParametersDialog {
         explain.getStyleClass().add("dialog-hint-text");
         paramColumn.getChildren().addAll(title, explain);
 
-        List<JavaParameter> visible = shown(selectedTag);
+        List<JavaParameter> visible = shown();
         for (String className : sections()) {
+            if (selectedSection != null && !selectedSection.equals(className)) continue;
             List<JavaParameter> mine =
                     visible.stream().filter(entry -> entry.className().equals(className)).toList();
             paramColumn.getChildren().add(sectionHeader(className, mine.isEmpty()));
@@ -469,10 +554,11 @@ public final class ParametersDialog {
     }
 
     /** The rows the rail's selected bucket holds, in section order. */
-    private List<JavaParameter> shown(String tag) {
-        List<ParameterRow> visible = VariableRailModel.rowsIn(
-                rows.stream().map(JavaParameter::row).toList(), tag, categories);
-        return rows.stream().filter(entry -> visible.contains(entry.row())).toList();
+    private List<JavaParameter> shown() {
+        List<VariableRailModel.Filed> visible = VariableRailModel.rowsIn(filed(), selectedSection, selectedTag);
+        return rows.stream()
+                .filter(entry -> visible.contains(new VariableRailModel.Filed(entry.className(), entry.row())))
+                .toList();
     }
 
     /**
@@ -896,16 +982,26 @@ public final class ParametersDialog {
         return grammar.initializer(leaf, value.get()).map(JavaValue::source).orElse("");
     }
 
-    /** Where this parameter is listed — one category or none, never several: a parameter has one home. */
+    /**
+     * Where this parameter is listed — one category or none, never several: a parameter has one home.
+     *
+     * <p><b>Editable again (2026-09-27)</b>: pick one of its section's categories, or type a new one and press
+     * Enter. It had become a closed list of the categories already in use, so a first category could only be
+     * made by hand in the Java.
+     */
     private Node buildTagPicker(JavaParameter entry) {
         ComboBox<String> picker = new ComboBox<>();
-        picker.getItems().setAll(filingChoices());
-        picker.setValue(VariableRailModel.isDeclared(categories, entry.row().category())
-                ? entry.row().category() : ParameterRow.GENERAL);
+        picker.setEditable(true);
+        picker.setPromptText(ParameterRow.GENERAL);
+        picker.getItems().setAll(filingChoices(entry));
+        String current = entry.row().category().isBlank() ? ParameterRow.GENERAL : entry.row().category();
+        picker.setValue(current);
+        picker.setTooltip(new Tooltip("Pick a category, or type a new one and press Enter."));
         picker.setOnAction(e -> {
-            String chosen = picker.getValue();
-            String home = ParameterRow.GENERAL.equals(chosen) ? "" : chosen;
-            edit(entry, "the category", current -> current.toBuilder().category(home).build());
+            String chosen = picker.getValue() == null ? "" : picker.getValue().strip();
+            String home = chosen.isEmpty() || ParameterRow.GENERAL.equalsIgnoreCase(chosen) ? "" : chosen;
+            if (home.equalsIgnoreCase(entry.row().category().strip())) return;
+            edit(entry, "the category", row -> row.toBuilder().category(home).build());
         });
         return picker;
     }
@@ -1216,8 +1312,10 @@ public final class ParametersDialog {
 
         HBox row = new HBox(6, new Label("New"), name, type, shown, add);
         List<String> classes = JavaParameters.classes(config, state);
+        intoPicker = null;
         if (classes.size() > 1) {
             ComboBox<String> into = new ComboBox<>();
+            intoPicker = into;
             into.getItems().setAll(classes);
             into.getSelectionModel().select(classes.contains(selectedClass) ? selectedClass
                     : classes.getFirst());
