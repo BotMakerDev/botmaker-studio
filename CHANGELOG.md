@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Local | UTC on a time parameter.** Beside a `LocalTime` or `OffsetTime` field's type, one click switches
+  between this computer's clock and a time at an offset from UTC, keeping the hours and minutes (07:30 stays
+  07:30). A value equal to a constant its type names is written as that constant: `ZoneOffset.UTC`.
 - **An enum is always picked from its constants.** A `DayOfWeek`, `Month` or any other enum parameter offers
   **One of** and **Any of**, never "Any value": with nothing written down it is one of every constant (a list
   of it, any number of them). Its choices are a strip of toggles, all on at first; every one on is written as

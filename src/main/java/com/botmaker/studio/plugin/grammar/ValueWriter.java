@@ -129,6 +129,8 @@ final class ValueWriter {
     private Optional<Expression> call(ComponentType<?> component, Object value, Names names) {
         Class<?> type = ValueGrammar.classOf(component);
         if (type == null || !type.isInstance(value)) return Optional.empty();
+        Optional<Expression> named = namedConstant(component, type, value, names);
+        if (named.isPresent()) return named;
         Optional<Factory> factory = Factory.of(component);
         if (factory.isEmpty() || factory.get().kind() == Factory.Kind.RECEIVER) return Optional.empty();
         List<Object> parts;
@@ -153,6 +155,38 @@ final class ValueWriter {
         arguments = arguments(invocation);
         if (!fill(arguments, declared, parts, names)) return Optional.empty();
         return Optional.of(invocation);
+    }
+
+    /**
+     * {@code value} as one of the constants its type names ({@code ComponentType.constants}) — {@code
+     * ZoneOffset.UTC} — or empty. Only a public static final field of {@code type} itself counts: the reader
+     * reads no other, so a written name must be one it reads back.
+     */
+    private static Optional<Expression> namedConstant(ComponentType<?> component, Class<?> type, Object value,
+                                                      Names names) {
+        List<java.lang.reflect.Field> constants;
+        try {
+            constants = component.constants();
+        } catch (RuntimeException | LinkageError e) {
+            return Optional.empty();
+        }
+        if (constants == null) return Optional.empty();
+        for (java.lang.reflect.Field field : constants) {
+            if (field == null || !field.getDeclaringClass().equals(type)) continue;
+            int modifiers = field.getModifiers();
+            if (!Modifier.isPublic(modifiers) || !Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers)) {
+                continue;
+            }
+            try {
+                if (value.equals(field.get(null))) {
+                    return Optional.of(names.ast.newQualifiedName(names.of(type),
+                            names.ast.newSimpleName(field.getName())));
+                }
+            } catch (IllegalAccessException | RuntimeException | LinkageError e) {
+                // A field that cannot be read names nothing.
+            }
+        }
+        return Optional.empty();
     }
 
     private boolean fill(List<Expression> into, List<Class<?>> declared, List<Object> parts, Names names) {

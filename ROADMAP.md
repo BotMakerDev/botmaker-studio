@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Picker feedback 3, phase 2: enums picked from their constants, typed parts.**
+- **2026-09-27 (latest) — Picker feedback 3, phase 3: Local | UTC.** `project/params/ClockSwitch` retypes
+  `LocalTime` ↔ `OffsetTime` and writes back the same clock reading (`ClockSwitchTest`, on a grammar declaring
+  the three JDK types like basics does); `ParametersDialog.clockBar` beside the type, NONE mode only.
+  `ValueWriter.namedConstant` writes a value equal to one of `ComponentType.constants()` as that field.
+- **2026-09-27 — Picker feedback 3, phase 2: enums picked from their constants, typed parts.**
   `ChoiceMode.offered` gives an enum ONE/MANY; `of` reads an enum (or a `List` of one) with no options as
   ONE (MANY) over every constant; `enumOptions`/`ticked` write every constant on as no options; `afterRetype`
   drops an unwritten every-constant on leaving the enum; `toggled` caps strips at 16. `ParametersDialog`'s

@@ -94,6 +94,30 @@ class ChainValuesTest {
                 GRAMMAR.initializer(FORM, read).map(JavaValue::source));
     }
 
+    /**
+     * A constant the type names ({@code ComponentType.constants}) is how a value equal to it is written; any
+     * other value still goes through the factory, and a type that names none keeps its factory for every value.
+     */
+    @Test
+    void aValueEqualToANamedConstantIsWrittenAsIt() throws NoSuchFieldException {
+        java.lang.reflect.Field soft = Tone.class.getField("SOFT");
+        ComponentType<Tone> named = new ComponentType<>() {
+            @Override public Class<Tone> type() { return Tone.class; }
+            @Override public List<Class<?>> componentTypes() { return TONE.componentTypes(); }
+            @Override public List<Object> components(Tone t) { return TONE.components(t); }
+            @Override public Tone build(List<Object> parts) { return TONE.build(parts); }
+            @Override public List<java.lang.reflect.Field> constants() { return List.of(soft); }
+        };
+        ValueGrammar grammar = ValueGrammar.of(List.of(), List.of(named));
+        String owner = JavaNames.canonical(Tone.class);
+
+        assertEquals(Optional.of(owner + ".SOFT"), grammar.initializer(FORM, new Tone(1, 0)).map(JavaValue::source));
+        assertEquals(Optional.of("new " + owner + "(2, 0)"),
+                grammar.initializer(FORM, new Tone(2, 0)).map(JavaValue::source));
+        assertEquals(Optional.of("new " + owner + "(1, 0)"),
+                GRAMMAR.initializer(FORM, new Tone(1, 0)).map(JavaValue::source), "named by nobody: the factory");
+    }
+
     @Test
     void aPartIsShownAsItWasWritten() {
         java.lang.reflect.Type list = ValueTypes.listOf(FORM);

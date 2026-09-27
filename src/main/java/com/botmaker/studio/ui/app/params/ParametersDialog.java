@@ -8,6 +8,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.ChoiceMode;
+import com.botmaker.studio.project.params.ClockSwitch;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.plugin.PluginHost;
@@ -592,6 +593,11 @@ public final class ParametersDialog {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox head = mine ? new HBox(8, grip, name, type, spacer, drop)
                 : new HBox(8, name, type, spacer);
+        if (mine && mode == ChoiceMode.NONE) {
+            ClockSwitch.other(entry.form()).filter(grammar::known)
+                    .ifPresent(other -> head.getChildren().add(head.getChildren().indexOf(type) + 1,
+                            clockBar(entry)));
+        }
         head.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(name, Priority.ALWAYS);
         grid.add(head, 0, 0, 2, 1);
@@ -740,6 +746,42 @@ public final class ParametersDialog {
             button.setOnAction(e -> {
                 button.setSelected(true);
                 if (mode != current) switchMode(entry, mode);
+            });
+            bar.getChildren().add(button);
+        }
+        return bar;
+    }
+
+    /**
+     * <b>Local | UTC</b> beside a time of day's type (feedback 3): the other one retypes the field between
+     * {@code LocalTime} and {@code OffsetTime} and keeps the clock reading ({@link ClockSwitch}). Styled as the
+     * mode bar, since it is the same kind of either-or.
+     */
+    private Node clockBar(JavaParameter entry) {
+        boolean local = entry.form() == java.time.LocalTime.class;
+        ToggleGroup group = new ToggleGroup();
+        HBox bar = new HBox();
+        bar.getStyleClass().add("choice-mode-bar");
+        String[][] sides = {{"Local", "This computer's clock, wherever the bot runs."},
+                {"UTC", "A time at an offset from UTC — the same moment everywhere, like a game's daily reset."}};
+        for (int i = 0; i < sides.length; i++) {
+            boolean isLocal = i == 0;
+            ToggleButton button = new ToggleButton(sides[i][0]);
+            button.setToggleGroup(group);
+            button.setSelected(isLocal == local);
+            button.getStyleClass().add(isLocal ? "choice-mode-first" : "choice-mode-last");
+            button.setTooltip(new Tooltip(sides[i][1] + " Switching keeps the hours and minutes."));
+            button.setOnAction(e -> {
+                button.setSelected(true);
+                if (isLocal == local) return;
+                change("the clock of " + entry.row().name(), () -> {
+                    JavaParameter held = find(entry.className(), entry.row().name());
+                    if (held == null || ClockSwitch.flip(config, state, held, PluginHost.grammar()).isEmpty()) {
+                        error("“" + entry.row().name() + "” could not be switched.");
+                    }
+                    reload();
+                    rebuildRail();
+                });
             });
             bar.getChildren().add(button);
         }
