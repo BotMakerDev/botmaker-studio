@@ -81,12 +81,13 @@ public final class ReviewMarker {
      * Marks, in {@code source}, every function that one of {@code lines} falls inside — the AST-free rewrite's
      * way in.
      *
-     * <p>A text rewrite (see {@code plugin/HostSources}) knows which lines it changed and nothing else, so the
+     * <p>A rewrite of names (a repoint, {@code project/managed/ManagedSets}) knows which lines it changed and
+     * holds no tree of its result, so the
      * function is worked out afterwards by asking each declaration whether it spans the line. That is the
      * whole reason this is separate from {@link ReviewMarks#mark}: everywhere else the node being changed is
      * in hand, and walking up from it is exact.
      *
-     * @param lines 1-based line numbers in {@code source}, as {@code Sources.Use} reports them
+     * @param lines 1-based line numbers in {@code source}, as {@code Usages.Usage} reports them
      * @return the marked source, or {@code source} unchanged when nothing could be marked
      */
     public static String markLines(String source, Collection<Integer> lines, String entry) {

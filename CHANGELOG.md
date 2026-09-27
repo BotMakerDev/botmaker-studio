@@ -21,6 +21,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A plugin renames, repoints and removes its own constants by binding.** The picture library's rename
+  used to be a find-and-replace over the bot's text; it goes through the same rename the canvas uses now, so
+  the declaration is renamed with its uses, a local of the same name is left alone, and a change that would
+  stop the bot compiling is refused. One Project History entry per change.
 - **Studio spells the style classes a plugin wears with the contract's `StyleClasses`.** Thirty-two files
   typed `"primary-button"`, `"block-chip"` and the rest by hand; they use the constants now, and
   `StyleClassesTest` fails when a constant names a class `blocks.css` does not define, so renaming one can no

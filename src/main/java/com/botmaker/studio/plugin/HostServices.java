@@ -108,11 +108,6 @@ public final class HostServices implements StudioServices {
         return HostRuns.live();
     }
 
-    @Override
-    public com.botmaker.plugin.api.Sources sources() {
-        return HostSources.live();
-    }
-
     /**
      * The open project's {@code @Managed} values, or {@link PluginValues#NONE}
      * between projects.

@@ -5,17 +5,27 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.JavaManagedValues;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedMethod;
+import com.botmaker.studio.project.managed.ManagedSets;
+import com.botmaker.studio.project.params.JavaParameterEdits;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.BotSources;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,8 +40,12 @@ import java.util.Optional;
  * own value through {@link ValueContext}, the same interface a slot on the canvas and a row in the
  * Parameters window are edited through, so no second way to edit a value exists.
  *
- * <p><b>Installed per project, static, one at a time</b>, exactly as {@link HostSources} and
- * {@link HostRuns} are and for the same reason: {@link HostServices} is built ad hoc from a
+ * <p><b>An open set</b> ({@code Pictures}) is {@link ManagedSets}' — planned there by binding and compiled as
+ * the whole bot, written here after one Project History snapshot. That replaced {@code HostSources}, the
+ * token find-and-replace that was the last text rewrite a plugin could ask for (2026-09-28).
+ *
+ * <p><b>Installed per project, static, one at a time</b>, exactly as {@link HostRuns} is and for the same
+ * reason: {@link HostServices} is built ad hoc from a
  * {@code ProjectConfig} at call sites with no {@link ProjectState} in scope, and Studio holds one open
  * project. Between projects a plugin asking gets {@link PluginValues#NONE}, so a window left open over a
  * project the user has since left reads nothing rather than writing into the next one.
@@ -53,21 +67,29 @@ public final class HostPluginValues implements PluginValues {
     private final ProjectConfig config;
     private final ProjectState state;
     private final StudioServices services;
+    private final EventBus eventBus;
 
-    private HostPluginValues(ProjectConfig config, ProjectState state, StudioServices services) {
+    private HostPluginValues(ProjectConfig config, ProjectState state, StudioServices services,
+                             EventBus eventBus) {
         this.config = config;
         this.state = state;
         this.services = services;
+        this.eventBus = eventBus;
     }
 
-    /** Makes this project's values the ones a plugin reaches, replacing whatever was installed before. */
+    /**
+     * Makes this project's values the ones a plugin reaches, replacing whatever was installed before.
+     *
+     * <p>{@code eventBus} may be null — it is only how the editor is told to redraw a file rewritten underneath
+     * it, and a headless caller has no editor to redraw.
+     */
     public static synchronized void install(ProjectConfig config, ProjectState state,
-                                            StudioServices services) {
+                                            StudioServices services, EventBus eventBus) {
         if (config == null || state == null) {
             clear();
             return;
         }
-        current = new HostPluginValues(config, state, services);
+        current = new HostPluginValues(config, state, services, eventBus);
     }
 
     /** No project: a plugin asking now gets {@link PluginValues#NONE}. */
@@ -202,5 +224,118 @@ public final class HostPluginValues implements PluginValues {
 
     private void snapshot() {
         Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, HISTORY_LABEL);
+    }
+
+    // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────
+
+    @Override
+    public List<String> members(String id) {
+        return ManagedSets.members(index(), id, PluginHost.grammar()).stream().map(ManagedSets.Member::name).toList();
+    }
+
+    /**
+     * The constant's initialiser as a value. No {@code @Managed} constants are offered to the context: a
+     * value equal to one would be written as that constant, and a constant's own initialiser naming itself
+     * does not compile.
+     */
+    @Override
+    public Optional<ValueContext> open(String id, String member) {
+        return ManagedSets.member(index(), id, member, PluginHost.grammar())
+                .map(found -> HostValueContext.of(found.form(), found.initializer(), services,
+                        expression -> writeInitializer(found, expression)));
+    }
+
+    @Override
+    public Optional<String> add(String id, String member, Object value) {
+        if (value == null) return Optional.of("No value was given for " + member + ".");
+        Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
+        Optional<JavaValue> initializer = PluginHost.grammar().spellAny(value);
+        if (initializer.isEmpty()) {
+            return Optional.of("No plugin in this project declares " + type.getSimpleName() + ", so "
+                    + member + " cannot be written.");
+        }
+        return apply(ManagedSets.add(index(), id, member, type, initializer.get()));
+    }
+
+    @Override
+    public List<Use> uses(String id, String member) {
+        BotIndex index = index();
+        return ManagedSets.member(index, id, member, PluginHost.grammar())
+                .map(found -> ManagedSets.uses(index, found).stream()
+                        .map(use -> new Use(use.file(), use.line(), use.text())).toList())
+                .orElse(List.of());
+    }
+
+    @Override
+    public Optional<String> rename(String id, String member, String newName) {
+        BotIndex index = index();
+        Optional<ManagedSets.Member> found = ManagedSets.member(index, id, member, PluginHost.grammar());
+        if (found.isEmpty()) return Optional.of(missing(id, member));
+        return apply(Refactor.rename(index, found.get().file(), found.get().start(), newName));
+    }
+
+    /** The mark is written only where the bot compiles {@code @Refactor}; elsewhere the repoint goes unmarked. */
+    @Override
+    public Optional<String> repoint(String id, String member, String replacement, String note) {
+        BotIndex index = index();
+        Optional<ManagedSets.Member> from = ManagedSets.member(index, id, member, PluginHost.grammar());
+        Optional<ManagedSets.Member> to = ManagedSets.member(index, id, replacement, PluginHost.grammar());
+        if (from.isEmpty()) return Optional.of(missing(id, member));
+        if (to.isEmpty()) return Optional.of(missing(id, replacement));
+        return apply(ManagedSets.repoint(index, from.get(), to.get(),
+                ReviewMarker.available(state) ? note : null));
+    }
+
+    @Override
+    public Optional<String> remove(String id, String member) {
+        BotIndex index = index();
+        Optional<ManagedSets.Member> found = ManagedSets.member(index, id, member, PluginHost.grammar());
+        if (found.isEmpty()) return Optional.of(missing(id, member));
+        return apply(ManagedSets.remove(index, found.get()));
+    }
+
+    private BotIndex index() {
+        return BotIndex.of(config, state);
+    }
+
+    private static String missing(String id, String member) {
+        return "The project has no " + member + " in the class marked @Managed(\"" + id + "\").";
+    }
+
+    /**
+     * A plan written as one step in Project History: the snapshot first, then every file it rewrites, buffer
+     * and disk, then the open file redrawn when it was one of them. Not the canvas's ↶ — a plugin's window
+     * is not on the canvas, and the holder it changes is locked there.
+     */
+    private Optional<String> apply(Refactor.Outcome outcome) {
+        return switch (outcome) {
+            case Refactor.Refused refused -> Optional.of(refused.reason());
+            case Refactor.Planned plan -> {
+                Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, "Before: " + plan.summary());
+                BotSources.forEach(config, state, (file, source) -> plan.rewrites().get(file));
+                redraw(plan.rewrites().keySet());
+                yield Optional.empty();
+            }
+        };
+    }
+
+    private void writeInitializer(ManagedSets.Member member, JavaValue expression) {
+        snapshot();
+        Path file = member.file().toAbsolutePath().normalize();
+        BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
+                ? JavaParameterEdits.setValue(source, member.className(), member.name(), expression) : null);
+        redraw(java.util.Set.of(file));
+    }
+
+    /**
+     * Tells the editor to re-render the file it shows when a write here changed it underneath — the buffer
+     * really changed, so a stale view is the only thing wrong, which is the kind of bug that reads as data loss.
+     */
+    private void redraw(java.util.Collection<Path> changed) {
+        if (eventBus == null) return;
+        ProjectFile active = state.getActiveFile();
+        if (active == null || active.getPath() == null
+                || !changed.contains(active.getPath().toAbsolutePath().normalize())) return;
+        eventBus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(active.getContent()));
     }
 }

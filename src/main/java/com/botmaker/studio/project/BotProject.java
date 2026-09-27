@@ -6,7 +6,6 @@ import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
-import com.botmaker.studio.plugin.HostSources;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
@@ -280,15 +279,11 @@ public class BotProject {
         // into the project the user just left.
         HostRuns.install(eventBus, codeExec, projectSettingsService);
 
-        // The bot's own sources, as a plugin is allowed to rewrite them. Same lifetime and same reason: a
-        // plugin renaming something it owns between projects must find nothing rather than repoint the code
-        // of the project the user just left.
-        HostSources.install(config, state, eventBus);
-
         // The plugin's own values, which live in the bot's Java beside everything else here. Same lifetime
-        // for the same reason, and the services handed over are this project's: a value written through a
-        // window left open over the project the user just left would land in the wrong file.
-        HostPluginValues.install(config, state, HostServices.forProject(config));
+        // for the same reason, and the services handed over are this project's: a value written or a
+        // constant renamed through a window left open over the project the user just left would land in the
+        // wrong file.
+        HostPluginValues.install(config, state, HostServices.forProject(config), eventBus);
 
         // Every bound plugin's @Managed holder the project lacks (Sdk.java, Pictures.java), written now so the
         // file is there before the explorer is first drawn. Never over a file; LibraryService does the same
@@ -350,7 +345,6 @@ public class BotProject {
         // URLClassLoader holds every jar it read, which on Windows makes the file unreplaceable.
         PluginHost.unbind();
         HostRuns.clear();
-        HostSources.clear();
         HostPluginValues.clear();
     }
 }

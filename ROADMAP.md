@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — style classes from the contract.** Thirty-two files spell `StyleClasses.X` instead
+- **2026-09-28 (latest) — a plugin's open set is changed by binding.** `project/managed/ManagedSets` (pure,
+  over `BotIndex`: members, uses, add, repoint, remove; rename is `Refactor.rename`) behind `HostPluginValues`'
+  new open-set operations, each one Project History snapshot plus a redraw of the open file. `HostSources`, its
+  token matcher and `HostServices.sources()` are deleted with the contract's `Sources`. `ManagedSetsTest`.
+- **2026-09-28 — style classes from the contract.** Thirty-two files spell `StyleClasses.X` instead
   of `"primary-button"` and friends; `ThemedWindows.UNTHEMED` is the contract's; `StyleClassesTest` holds
   `blocks.css` to every constant.
 - **2026-09-28 — typed `ManagedValue<?>`.** `ManagedHolders`, `PluginHost`, `PluginFiles`,

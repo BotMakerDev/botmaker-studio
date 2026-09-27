@@ -58,6 +58,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > as a JDT unit. Never add a rename that walks names by spelling, a second parse of the whole bot, or Java
 > joined as text, and never refuse an edit through a bare status line or `Alert`.
 
+> **`HostSources` and the contract's `Sources` are deleted (2026-09-28).** Every mention below of a token
+> needle, `HostSources` or `Sources.replace` is history. A plugin's open set (`@Managed` on a class —
+> `Pictures`) is changed through `HostPluginValues`' `members`/`open(id, member)`/`add`/`uses`/`rename`/
+> `repoint`/`remove`, planned by `project/managed/ManagedSets` over `BotIndex` (rename is `Refactor.rename`),
+> compiled as the whole bot, written after one Project History snapshot with the open file redrawn.
+
 > **`settings.json` is `<project>/.botmaker/settings.json` since 2026-09-26** (`ProjectConfig.studioRoot()`,
 > `SchemaFile.dirOf`). Every mention below of it "in `src/main/resources`" is the old place: an old project's
 > file is moved once, first thing on open (`StudioProjectSettings.moveOutOfResources`, from
