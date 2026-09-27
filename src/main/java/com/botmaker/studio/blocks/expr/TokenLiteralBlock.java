@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.services.CodeEditorService;
@@ -65,7 +66,7 @@ public class TokenLiteralBlock extends AbstractExpressionBlock {
         FieldSizing.fitToText(field);
         if (isReadOnly()) {
             field.setEditable(false);
-            field.getStyleClass().addAll("block-inset-field", "block-inset-field--flat");
+            field.getStyleClass().addAll(StyleClasses.INSET_FIELD, StyleClasses.INSET_FIELD_FLAT);
             field.setCursor(Cursor.DEFAULT);
         } else {
             field.focusedProperty().addListener((obs, was, focused) -> {

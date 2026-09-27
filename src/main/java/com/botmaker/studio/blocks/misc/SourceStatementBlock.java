@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.misc;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
@@ -85,7 +86,7 @@ public class SourceStatementBlock extends AbstractStatementBlock {
 
         if (!isReadOnly()) {
             Button edit = new Button("✎");
-            edit.getStyleClass().add("icon-button");
+            edit.getStyleClass().add(StyleClasses.ICON_BUTTON);
             Tooltip.install(edit, new Tooltip("Edit this statement as Java"));
             edit.setOnAction(e -> showEditor(row, context));
             row.getChildren().add(edit);

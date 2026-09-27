@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.assist.AiTool;
 import com.botmaker.studio.assist.McpConfig;
 import com.botmaker.studio.assist.McpEndpoint;
@@ -120,14 +121,14 @@ final class AssistantPane {
         allowShell.setOnAction(e -> updateOpen());
         allowShell.setTooltip(new Tooltip("A shell command can write files too, so it is off by default. Codex "
                 + "always runs in its read-only sandbox."));
-        status.getStyleClass().add("dialog-hint");
+        status.getStyleClass().add(StyleClasses.DIALOG_HINT);
         HBox bar = new HBox(8, new Label("AI tool"), tool, open, allowShell, status, spacer());
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("diagnostics-filter-bar");
 
         serve.setOnAction(e -> setServing(serve.isSelected()));
-        mcpStatus.getStyleClass().add("dialog-hint");
-        copySetup.getStyleClass().add("dialog-compact");
+        mcpStatus.getStyleClass().add(StyleClasses.DIALOG_HINT);
+        copySetup.getStyleClass().add(StyleClasses.DIALOG_COMPACT);
         copySetup.setTooltip(new Tooltip("For a terminal outside Studio. Other clients take the same URL and header."));
         copySetup.setOnAction(e -> {
             ClipboardContent content = new ClipboardContent();
@@ -144,7 +145,7 @@ final class AssistantPane {
         Label empty = new Label("Pick an AI tool and press Open. It runs here, logged in as you, and changes the bot "
                 + "only through Studio's MCP tools: every edit compiled first, each one undoable.");
         empty.setWrapText(true);
-        empty.getStyleClass().add("dialog-hint");
+        empty.getStyleClass().add(StyleClasses.DIALOG_HINT);
         placeholder = new StackPane(empty);
         root.setTop(new VBox(bar, mcpBar));
         root.setCenter(placeholder);

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.versions;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.SemVer;
@@ -196,7 +197,7 @@ public final class PublishSheet {
         root.setMinWidth(340);
 
         Label title = new Label("Publish " + projectName);
-        title.getStyleClass().add("dialog-subheading");
+        title.getStyleClass().add(StyleClasses.DIALOG_SUBHEADING);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Button close = new Button("✕");
@@ -347,7 +348,7 @@ public final class PublishSheet {
         hintLabel.getStyleClass().add("gallery-card-note");
         progress.setVisible(false);
         progress.setPrefSize(18, 18);
-        publishButton.getStyleClass().add("primary-button");
+        publishButton.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         publishButton.setOnAction(e -> doPublish());
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

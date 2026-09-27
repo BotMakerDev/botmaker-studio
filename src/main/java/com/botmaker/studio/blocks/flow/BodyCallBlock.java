@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -133,7 +134,7 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
     /** {@code Receiver} — the text the user's code holds, never a type this editor claims to know. */
     private Label receiverChip() {
         Label scope = new Label(receiver);
-        scope.getStyleClass().add("block-chip");
+        scope.getStyleClass().add(StyleClasses.CHIP);
         return scope;
     }
 

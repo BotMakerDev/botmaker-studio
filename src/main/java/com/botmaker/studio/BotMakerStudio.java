@@ -1,5 +1,6 @@
 package com.botmaker.studio;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.impl.NestedSession;
@@ -330,7 +331,7 @@ public class BotMakerStudio extends Application {
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
         // Not inline: `gray` is a literal, and a literal survives the theme switch that everything around it obeys.
-        statusLabel.getStyleClass().add("dialog-hint");
+        statusLabel.getStyleClass().add(StyleClasses.DIALOG_HINT);
 
         VBox box = new VBox(15, title, progressBar, statusLabel);
         box.setAlignment(Pos.CENTER);

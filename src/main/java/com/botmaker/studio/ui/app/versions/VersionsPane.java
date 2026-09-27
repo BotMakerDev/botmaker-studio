@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.versions;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -262,7 +263,7 @@ public final class VersionsPane {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         // The strip (39 §2): where the bot lives, left to right, and the one button that names where it goes.
-        mainAction.getStyleClass().add("primary-button");
+        mainAction.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         Region stripSpacer = new Region();
         HBox.setHgrow(stripSpacer, Priority.ALWAYS);
         account.getStyleClass().add("versions-account");
@@ -294,7 +295,7 @@ public final class VersionsPane {
         rename.setOnAction(e -> {
             if (shown instanceof Timeline.Version v) name(v.commit());
         });
-        detailTitle.getStyleClass().add("dialog-subheading");
+        detailTitle.getStyleClass().add(StyleClasses.DIALOG_SUBHEADING);
         detailTitle.setMinWidth(0);
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);

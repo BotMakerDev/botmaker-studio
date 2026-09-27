@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -108,7 +109,7 @@ public final class RefusalDialog {
         bar.getChildren().add(close);
         for (Choice choice : choices) {
             Button button = new Button(choice.label());
-            button.getStyleClass().add("primary-button");
+            button.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
             button.setOnAction(e -> {
                 stage.close();
                 choice.run().run();

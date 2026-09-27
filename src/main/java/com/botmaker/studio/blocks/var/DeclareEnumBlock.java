@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
@@ -78,7 +79,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
         return ComponentSpec.builder()
                 .custom("kind", () -> {
                     Label label = BlockUIComponents.createKeywordLabel("Enum");
-                    label.getStyleClass().add("block-chip");
+                    label.getStyleClass().add(StyleClasses.CHIP);
                     return label;
                 })
                 .custom("name", () -> {
@@ -137,7 +138,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
 
                 TextField constField = new TextField(constant);
                 constField.setPrefWidth(120);
-                constField.getStyleClass().add("block-inset-field");
+                constField.getStyleClass().add(StyleClasses.INSET_FIELD);
                 constField.setEditable(!isReadOnly());
 
                 constField.focusedProperty().addListener((obs, oldVal, newVal) -> {

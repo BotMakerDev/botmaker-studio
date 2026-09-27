@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.palette.SignatureTypes;
@@ -236,7 +237,7 @@ public final class AddFunctionDialog {
         Button cancel = new Button("Cancel");
         cancel.setOnAction(e -> stage.close());
 
-        confirmButton.getStyleClass().add("primary-button");
+        confirmButton.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(e -> {
             FunctionDraft draft = draft();

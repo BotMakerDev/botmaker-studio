@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.runner;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -212,7 +213,7 @@ public final class RunnerWindow implements ProjectWindow {
                     "Read how this bot works. Nothing is editable until you make it yours."));
             code.setOnAction(e -> onShowEditor.run());
             Button improve = new Button("Improve this bot");
-            improve.getStyleClass().add("primary-button");
+            improve.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
             improve.setOnAction(e -> switchToEditorMode());
             bar.getChildren().addAll(code, improve);
         }
@@ -369,7 +370,7 @@ public final class RunnerWindow implements ProjectWindow {
      */
     private Node categoryCard(String tag, List<JavaParameter> group) {
         Label heading = new Label(tag);
-        heading.getStyleClass().add("dialog-subheading");
+        heading.getStyleClass().add(StyleClasses.DIALOG_SUBHEADING);
         Label count = hint(group.size() == 1 ? "1 setting" : group.size() + " settings");
 
         HBox title = new HBox(8, heading, count);
@@ -433,7 +434,7 @@ public final class RunnerWindow implements ProjectWindow {
 
     private static Node section(String title, String hintText, Node content) {
         Label heading = new Label(title);
-        heading.getStyleClass().add("dialog-heading");
+        heading.getStyleClass().add(StyleClasses.DIALOG_HEADING);
         VBox box = new VBox(8, heading);
         if (hintText != null) box.getChildren().add(hint(hintText));
         box.getChildren().add(content);
@@ -454,7 +455,7 @@ public final class RunnerWindow implements ProjectWindow {
 
     private Node runBar() {
         runButton = new Button("▶ Run");
-        runButton.getStyleClass().add("primary-button");
+        runButton.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         runButton.setOnAction(e -> run());
 
         stopButton = new Button("⏹ Stop");

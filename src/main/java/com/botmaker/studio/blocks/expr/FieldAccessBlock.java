@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
@@ -45,10 +46,10 @@ public class FieldAccessBlock extends AbstractExpressionBlock {
         container.getStyleClass().add("field-access-block");
 
         Text qualifierText = new Text(qualifier);
-        qualifierText.getStyleClass().add("block-chip");
+        qualifierText.getStyleClass().add(StyleClasses.CHIP);
 
         Text fieldText = new Text(fieldName);
-        fieldText.getStyleClass().addAll("block-chip", "block-chip--plain");
+        fieldText.getStyleClass().addAll(StyleClasses.CHIP, StyleClasses.CHIP_PLAIN);
 
         container.getChildren().addAll(qualifierText, fieldText);
         applyUneditedClass(container);

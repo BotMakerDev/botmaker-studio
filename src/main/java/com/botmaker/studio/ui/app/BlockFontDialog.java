@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.ImportedFonts;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -157,7 +158,7 @@ final class BlockFontDialog {
         Button cancel = new Button("Cancel");
         cancel.setCancelButton(true);
         Button ok = new Button("Use Font");
-        ok.getStyleClass().add("primary-button");
+        ok.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         ok.setDefaultButton(true);
         ok.disableProperty().bind(chosen.isNull());
 

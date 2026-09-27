@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.layout;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.component.BlockComponent;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.components.SelectorComponents;
@@ -94,7 +95,7 @@ public class SentenceLayoutBuilder {
                                           com.botmaker.studio.types.ResolvedType expectedType) {
         if (expression == null) {
             Label placeholder = new Label("⟨expression⟩");
-            placeholder.getStyleClass().add("block-placeholder");
+            placeholder.getStyleClass().add(StyleClasses.PLACEHOLDER);
             BlockComponent.Kind.EXPRESSION_SLOT.stamp(placeholder);
             return placeholder;
         }

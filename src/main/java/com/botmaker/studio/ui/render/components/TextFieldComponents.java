@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components;
 
+import com.botmaker.plugin.api.StyleClasses;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
@@ -56,7 +57,7 @@ public class TextFieldComponents {
     public static Node createVariableName(String initialText, boolean editable, Consumer<String> onCommit) {
         if (!editable) {
             Label label = new Label(initialText == null ? "" : initialText);
-            label.getStyleClass().addAll("variable-name-field", "static-value-label");
+            label.getStyleClass().addAll("variable-name-field", StyleClasses.VALUE_LABEL);
             return label;
         }
         return createVariableNameField(initialText, onCommit);

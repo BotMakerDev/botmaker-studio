@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.components.FieldSizing;
@@ -59,7 +60,7 @@ public class LiteralBlock<T> extends AbstractExpressionBlock {
         // READ-ONLY LOGIC
         if (isReadOnly()) {
             textField.setEditable(false);
-            textField.getStyleClass().addAll("block-inset-field", "block-inset-field--flat");
+            textField.getStyleClass().addAll(StyleClasses.INSET_FIELD, StyleClasses.INSET_FIELD_FLAT);
             textField.setCursor(Cursor.DEFAULT);
         } else {
             textField.setCursor(Cursor.TEXT);

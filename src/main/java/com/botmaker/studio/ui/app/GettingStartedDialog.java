@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.docs.RuntimeDiagram;
 import com.botmaker.studio.docs.StudioAction;
 import com.botmaker.studio.docs.Workflow;
@@ -124,10 +125,10 @@ public final class GettingStartedDialog {
      */
     private VBox runtimeDiagram() {
         Label title = new Label(RuntimeDiagram.TITLE);
-        title.getStyleClass().add("dialog-heading");
+        title.getStyleClass().add(StyleClasses.DIALOG_HEADING);
         Label intro = new Label(RuntimeDiagram.INTRO);
         intro.setWrapText(true);
-        intro.getStyleClass().add("dialog-hint");
+        intro.getStyleClass().add(StyleClasses.DIALOG_HINT);
 
         VBox box = new VBox(4, title, intro);
         List<RuntimeDiagram.Node> chain = RuntimeDiagram.chain();
@@ -153,7 +154,7 @@ public final class GettingStartedDialog {
         title.getStyleClass().add("runtime-node-title");
         Label detail = new Label(node.detail());
         detail.setWrapText(true);
-        detail.getStyleClass().add("dialog-hint");
+        detail.getStyleClass().add(StyleClasses.DIALOG_HINT);
 
         VBox box = new VBox(2, title, detail);
         box.setMaxWidth(Double.MAX_VALUE);

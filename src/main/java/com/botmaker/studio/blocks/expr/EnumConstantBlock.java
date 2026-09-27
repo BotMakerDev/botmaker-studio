@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
@@ -36,7 +37,7 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
     @Override
     protected Node createUINode(CodeEditorService context) {
         Label typeLabel = new Label(enumTypeName);
-        typeLabel.getStyleClass().add("block-chip");
+        typeLabel.getStyleClass().add(StyleClasses.CHIP);
 
         // --- INTERACTIVITY START (editable blocks only) ---
         if (!isReadOnly()) {
@@ -79,8 +80,8 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
         Node constantNode = constantSelector;
         if (isReadOnly()) {
             Label constantLabel = new Label(constantName);
-            constantLabel.getStyleClass().add("static-value-label");
-            constantLabel.getStyleClass().add("block-chip");
+            constantLabel.getStyleClass().add(StyleClasses.VALUE_LABEL);
+            constantLabel.getStyleClass().add(StyleClasses.CHIP);
             constantNode = constantLabel;
         }
 

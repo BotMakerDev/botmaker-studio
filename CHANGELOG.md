@@ -21,6 +21,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Studio spells the style classes a plugin wears with the contract's `StyleClasses`.** Thirty-two files
+  typed `"primary-button"`, `"block-chip"` and the rest by hand; they use the constants now, and
+  `StyleClassesTest` fails when a constant names a class `blocks.css` does not define, so renaming one can no
+  longer leave a plugin's widgets unstyled in silence.
 - **The Parameters window's row type is Studio's own.** `ParameterRow` and `Visibility` left the plugin
   contract, which no plugin used them from; nothing changes on screen.
 

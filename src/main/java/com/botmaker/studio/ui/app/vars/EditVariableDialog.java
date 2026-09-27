@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -187,7 +188,7 @@ public final class EditVariableDialog {
         stage.setTitle("Edit Variable");
 
         Button done = new Button("Done");
-        done.getStyleClass().add("primary-button");
+        done.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         done.setDefaultButton(true);
         done.setOnAction(e -> stage.close());
         Region spacer = new Region();
@@ -370,7 +371,7 @@ public final class EditVariableDialog {
     private static Node sourceLabel(Local local) {
         Expression initializer = local.initializer();
         Label label = new Label(initializer == null ? "(nothing yet)" : initializer.toString());
-        label.getStyleClass().add("dialog-hint");
+        label.getStyleClass().add(StyleClasses.DIALOG_HINT);
         label.setWrapText(true);
         HBox.setHgrow(label, Priority.ALWAYS);
         return label;
@@ -515,7 +516,7 @@ public final class EditVariableDialog {
 
     private static Label hint(String text) {
         Label label = new Label(text);
-        label.getStyleClass().add("dialog-hint");
+        label.getStyleClass().add(StyleClasses.DIALOG_HINT);
         return label;
     }
 }

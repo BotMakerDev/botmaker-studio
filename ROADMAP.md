@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — typed `ManagedValue<?>`.** `ManagedHolders`, `PluginHost`, `PluginFiles`,
+- **2026-09-28 (latest) — style classes from the contract.** Thirty-two files spell `StyleClasses.X` instead
+  of `"primary-button"` and friends; `ThemedWindows.UNTHEMED` is the contract's; `StyleClassesTest` holds
+  `blocks.css` to every constant.
+- **2026-09-28 — typed `ManagedValue<?>`.** `ManagedHolders`, `PluginHost`, `PluginFiles`,
   `HostPluginValues` and `LockResolver` read the contract's typed record (`type()`, `isOpenSet()`).
 - **2026-09-28 — `ParameterRow` and `Visibility` are Studio's.** Moved from the contract into
   `project/params/` (no plugin used either); `HostActionContext`/`HostOverlayContext` lost the pin supplier and

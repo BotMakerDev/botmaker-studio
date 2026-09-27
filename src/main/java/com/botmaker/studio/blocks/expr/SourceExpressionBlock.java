@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
@@ -58,7 +59,7 @@ public class SourceExpressionBlock extends AbstractExpressionBlock {
         row.getChildren().add(text);
         if (!isReadOnly()) {
             Button edit = new Button("✎");
-            edit.getStyleClass().add("icon-button");
+            edit.getStyleClass().add(StyleClasses.ICON_BUTTON);
             Tooltip.install(edit, new Tooltip("Edit this value as Java"));
             edit.setOnAction(e -> showEditor(row, context));
             row.getChildren().add(edit);

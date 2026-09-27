@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -172,7 +173,7 @@ public class BranchChainBlock extends AbstractStatementBlock implements BlockWit
     /** {@code found} — says what the chain is over without claiming to know its type. */
     private Label subjectChip() {
         Label chip = new Label(subject.isBlank() ? "…" : subject);
-        chip.getStyleClass().addAll("block-chip", "branch-chain-subject");
+        chip.getStyleClass().addAll(StyleClasses.CHIP, "branch-chain-subject");
         chip.setTooltip(new Tooltip("Every branch below asks about this one value, as it was at this moment."));
         return chip;
     }

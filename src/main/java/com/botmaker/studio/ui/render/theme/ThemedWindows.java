@@ -43,9 +43,10 @@ public final class ThemedWindows {
     /**
      * The opt-out. A scene root carrying this class is skipped by {@link #install()} — for the deliberately
      * chrome-less transparent overlays (the capture surfaces, the overlay toolbars, the program overlay),
-     * which paint their own translucent body over a live game and must not be given the shell's chrome.
+     * which paint their own translucent body over a live game and must not be given the shell's chrome. The
+     * name is the contract's, so a plugin's surface opts out with the same class.
      */
-    public static final String UNTHEMED = "unthemed-window";
+    public static final String UNTHEMED = com.botmaker.plugin.api.StyleClasses.UNTHEMED;
 
     /** Guards {@link #install()} against a second call — the listeners it adds are process-lived. */
     private static boolean installed;

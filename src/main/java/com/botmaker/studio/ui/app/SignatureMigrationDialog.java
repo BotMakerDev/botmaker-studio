@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
@@ -63,7 +64,7 @@ public final class SignatureMigrationDialog {
 
         boolean[] applied = {false};
         Button apply = new Button("Apply");
-        apply.getStyleClass().add("primary-button");
+        apply.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         apply.setDefaultButton(true);
         apply.setOnAction(e -> {
             applied[0] = true;

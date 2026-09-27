@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
@@ -54,7 +55,7 @@ public final class DefineEnumDialog {
         Button cancel = new Button("Cancel");
         cancel.setCancelButton(true);
         Button ok = new Button("Insert");
-        ok.getStyleClass().add("primary-button");
+        ok.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         ok.setDefaultButton(true);
 
         EnumDraft[] result = {null};

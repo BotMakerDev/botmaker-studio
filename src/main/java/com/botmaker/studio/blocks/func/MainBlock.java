@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -42,7 +43,7 @@ public class MainBlock extends MethodDeclarationBlock {
             wrapper.getStyleClass().addAll("block-nested-wash", "block-nested-wash--highlight");
 
             Label mainBadge = new Label("⭐ Program Entry Point");
-            mainBadge.getStyleClass().addAll("block-caption", "block-caption--strong");
+            mainBadge.getStyleClass().addAll(StyleClasses.CAPTION, StyleClasses.CAPTION_STRONG);
             wrapper.getChildren().add(0, mainBadge);
 
             return wrapper;

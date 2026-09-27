@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.palette.TypeNames;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
@@ -84,7 +85,7 @@ public final class DeclareVariableDialog {
         Button cancel = new Button("Cancel");
         cancel.setCancelButton(true);
         Button ok = new Button("Declare");
-        ok.getStyleClass().add("primary-button");
+        ok.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         ok.setDefaultButton(true);
 
         Runnable validate = () -> {

@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
@@ -150,7 +151,7 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
         VBox container = new VBox(5);
 
         Label modifiersLabel = new Label((isPrivate ? "Private" : "Public") + (isStatic ? " Static" : "") + " Field");
-        modifiersLabel.getStyleClass().addAll("block-caption", "block-caption--strong");
+        modifiersLabel.getStyleClass().addAll(StyleClasses.CAPTION, StyleClasses.CAPTION_STRONG);
 
         HBox headerRow = new HBox(10);
         headerRow.setAlignment(Pos.CENTER_LEFT);

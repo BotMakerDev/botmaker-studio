@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.layout;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -32,7 +33,7 @@ public class HeaderLayoutBuilder {
 
     public HeaderLayoutBuilder withChangeButton(Runnable onClick) {
         Button btn = new Button("+");
-        btn.getStyleClass().add("icon-button");
+        btn.getStyleClass().add(StyleClasses.ICON_BUTTON);
         btn.setOnAction(e -> onClick.run());
         leftContent.add(btn);
         return this;

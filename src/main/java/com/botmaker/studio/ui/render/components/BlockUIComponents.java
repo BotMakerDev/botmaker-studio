@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components;
 
+import com.botmaker.plugin.api.StyleClasses;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Pos;
@@ -32,7 +33,7 @@ public final class BlockUIComponents {
      */
     public static Button createDeleteButton(Runnable onDelete) {
         Button btn = new Button("✕");
-        btn.getStyleClass().addAll("icon-button", "block-delete-button");
+        btn.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "block-delete-button");
         btn.setFocusTraversable(false);
         btn.setOnAction(e -> onDelete.run());
         HBox.setMargin(btn, new javafx.geometry.Insets(0, 6, 0, 4));
@@ -42,7 +43,7 @@ public final class BlockUIComponents {
 
     public static Button createAddButton(EventHandler<ActionEvent> handler) {
         Button btn = new Button("+");
-        btn.getStyleClass().addAll("icon-button", "expression-add-button");
+        btn.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "expression-add-button");
         btn.setOnAction(handler);
         return btn;
     }
@@ -53,7 +54,7 @@ public final class BlockUIComponents {
      */
     public static Button createChangeButton(EventHandler<ActionEvent> handler) {
         Button btn = new Button("▾");
-        btn.getStyleClass().addAll("icon-button", "expression-change-button");
+        btn.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "expression-change-button");
         btn.setOnAction(handler);
         javafx.scene.control.Tooltip.install(btn, new javafx.scene.control.Tooltip("Change this value"));
         return btn;
@@ -71,7 +72,7 @@ public final class BlockUIComponents {
 
     private static Button moveButton(String glyph, Runnable onMove) {
         Button btn = new Button(glyph);
-        btn.getStyleClass().addAll("icon-button", "list-move-button");
+        btn.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "list-move-button");
         btn.setOnAction(e -> onMove.run());
         return btn;
     }
@@ -104,7 +105,7 @@ public final class BlockUIComponents {
         // than overflow — so a deeply-nested argument is still fully visible.
         WrappingSentencePane argBox = new WrappingSentencePane(2, 2, 12);
         argBox.setAlignment(Pos.CENTER_LEFT);
-        argBox.getStyleClass().add("argument-pill");
+        argBox.getStyleClass().add(StyleClasses.PILL);
         if (leadingLabel != null) {
             argBox.getChildren().add(leadingLabel);
         }
@@ -124,7 +125,7 @@ public final class BlockUIComponents {
      */
     public static Button createInfoButton(String title, String body) {
         Button btn = new Button("?");
-        btn.getStyleClass().add("icon-button");
+        btn.getStyleClass().add(StyleClasses.ICON_BUTTON);
         btn.setTooltip(new Tooltip("Explain this method"));
 
         VBox content = new VBox(4);

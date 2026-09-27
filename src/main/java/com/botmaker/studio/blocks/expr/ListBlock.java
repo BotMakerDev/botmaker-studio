@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -107,12 +108,12 @@ public class ListBlock extends AbstractExpressionBlock {
         downButton.setDisable(index == elements.size() - 1);
 
         Button deleteButton = new Button("✕");
-        deleteButton.getStyleClass().addAll("icon-button", "list-delete-button");
+        deleteButton.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "list-delete-button");
         deleteButton.setOnAction(e -> deleteElement(index, context));
 
         if (!hasSpecialEditor) {
             Button changeButton = new Button("+");
-            changeButton.getStyleClass().addAll("icon-button", "list-change-button");
+            changeButton.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "list-change-button");
             changeButton.setOnAction(e -> showChangeElementMenu(changeButton, context, index, itemType));
             row.getChildren().add(changeButton);
         }

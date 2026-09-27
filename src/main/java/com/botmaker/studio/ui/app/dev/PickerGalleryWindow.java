@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.dev;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.params.Visibility;
@@ -132,7 +133,7 @@ public final class PickerGalleryWindow {
 
     private Node header() {
         Label title = new Label("Every editor, and what it hands back");
-        title.getStyleClass().add("dialog-heading");
+        title.getStyleClass().add(StyleClasses.DIALOG_HEADING);
         Label note = new Label(project == null
                 ? "No project open — the template and colour editors have nothing to resolve against."
                 : "Resolving templates and colours against " + project.projectName() + ".");

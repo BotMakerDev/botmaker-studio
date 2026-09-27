@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.params;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.params.Visibility;
@@ -1261,7 +1262,7 @@ public final class ParametersDialog {
         type.setType(String.class);
         type.setPrefWidth(180);
         Button add = new Button("Add parameter");
-        add.getStyleClass().add("primary-button");
+        add.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         // Ticked by default (2026-09-26): a parameter is most often added for the person running the bot, and
         // one that silently stayed editor-only was a setting the Runner never showed them.
         CheckBox shown = new CheckBox("Show to user");
@@ -1563,7 +1564,7 @@ public final class ParametersDialog {
         statusLabel.getStyleClass().add("dialog-error-text");
 
         Button close = new Button("Close");
-        close.getStyleClass().add("primary-button");
+        close.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
         close.setOnAction(e -> {
             commitPending("the value you typed");
             stage.close();

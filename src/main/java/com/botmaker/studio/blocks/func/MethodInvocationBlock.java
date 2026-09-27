@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
+import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.StatementBlock;
@@ -386,7 +387,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
      */
     private static Label staticValueLabel(String value) {
         Label label = new Label(value == null ? "" : value);
-        label.getStyleClass().add("static-value-label");
+        label.getStyleClass().add(StyleClasses.VALUE_LABEL);
         return label;
     }
 
@@ -792,7 +793,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
     private Node removeVarargsButton(CodeEditorService context, int varargsFrom, int index) {
         if (varargsFrom < 0 || index < varargsFrom || isReadOnly) return null;
         Button remove = new Button("✕");
-        remove.getStyleClass().add("icon-button");
+        remove.getStyleClass().add(StyleClasses.ICON_BUTTON);
         remove.setTooltip(new Tooltip("Remove this argument"));
         remove.setOnAction(e ->
                 context.getCodeEditor().deleteArgumentFromMethodInvocation((MethodInvocation) this.astNode, index));
@@ -809,7 +810,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         if (isReadOnly || plan.varargsFrom() < 0 || signature == null) return null;
         ResolvedType element = signature.paramTypes().get(signature.paramTypes().size() - 1);
         Button add = new Button("＋");
-        add.getStyleClass().addAll("icon-button", "expression-add-button");
+        add.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "expression-add-button");
         add.setTooltip(new Tooltip("Add another " + (element != null ? element.simpleName() : "argument")));
         add.setOnAction(e ->
                 context.getCodeEditor().addVarargsArgument((MethodInvocation) this.astNode, element));
