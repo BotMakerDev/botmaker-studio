@@ -50,6 +50,15 @@ class ProjectUpgradeFeedbackTest {
         assertTrue(why.startsWith("SDK, Basics are blocked"), why);
     }
 
+    /** A call nothing replaces is a guess either way, and the guess is the user's to make. */
+    @Test
+    void callsWaitingForAPickHoldApplyAndSayWhere() {
+        String why = ProjectUpgradeDialog.applyBlockedReason(1, List.of(), false, 2);
+
+        assertTrue(why.startsWith("2 calls have nothing that replaces it"), why);
+        assertTrue(why.contains("default value or is deleted"), why);
+    }
+
     /** Nothing in the way, nothing said: an enabled button needs no caption. */
     @Test
     void aPassThatCanRunHasNoSentenceAtAll() {

@@ -17,38 +17,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The read-back half of the review model: what a refactor wrote into the source, listed for the user, and
- * removed one entry at a time as they work through it.
+ * marked {@code done} as they work through it.
  *
  * <p>What is pinned here is that the <b>source is the truth</b>. Nothing caches the list, so every assertion
- * below is about what the files say — including the two that matter most: an entry marked reviewed is gone
- * from the file rather than from a list in memory, and the open buffer and the file on disk never disagree
- * about it.
+ * below is about what the files say — including the two that matter most: a function marked reviewed says
+ * {@code done = true} in the file rather than in a list in memory, and the open buffer and the file on disk
+ * never disagree about it.
  */
 class ReviewServiceTest {
 
+    private static final String IMPORT = "import com.botmaker.plugin.api.meta.Refactor;";
+
     @Test
-    void everyEntryOfEveryMarkedFunctionIsARow(@TempDir Path root) throws IOException {
+    void everyFunctionWithAnOpenMarkIsARow(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         write(config, "Miner.java", """
                 package com.refbot;
 
+                %s
+
                 class Miner {
-                    @NeedsReview({"the first thing", "the second thing"})
+                    @Refactor({"the first thing", "the second thing"})
                     void mine() {}
 
                     void rest() {}
 
-                    @NeedsReview("the third thing")
+                    @Refactor("the third thing")
                     void haul() {}
+
+                    @Refactor(value = "looked at already", done = true)
+                    void carry() {}
                 }
-                """);
+                """.formatted(IMPORT));
 
         List<ReviewService.Item> items = ReviewService.scan(config, null);
 
-        assertEquals(3, items.size(), items.toString());
-        assertEquals(List.of("mine", "mine", "haul"), items.stream().map(ReviewService.Item::function).toList());
-        assertEquals(List.of("the first thing", "the second thing", "the third thing"),
-                items.stream().map(ReviewService.Item::entry).toList());
+        assertEquals(List.of("mine", "haul"), items.stream().map(ReviewService.Item::function).toList(),
+                "a reviewed mark is a record, not a row");
+        assertEquals(List.of("the first thing", "the second thing"), items.getFirst().entries());
         assertTrue(items.getFirst().where().startsWith("Miner.java · mine()"), items.getFirst().where());
     }
 
@@ -60,103 +66,80 @@ class ReviewServiceTest {
         assertTrue(ReviewService.scan(config, null).isEmpty());
     }
 
+    /** Reviewed keeps the record: the entries and the import stay, and the row goes. */
     @Test
-    void markingOneReviewedLeavesTheOthers(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        write(config, "Miner.java", """
-                package com.refbot;
-
-                class Miner {
-                    @NeedsReview({"the first thing", "the second thing"})
-                    void mine() {}
-                }
-                """);
-
-        List<ReviewService.Item> items = ReviewService.scan(config, null);
-        assertTrue(ReviewService.markReviewed(config, null, items.getFirst()));
-
-        String source = Files.readString(config.sourceRoot().resolve("Miner.java"));
-        assertFalse(source.contains("the first thing"), source);
-        assertTrue(source.contains("the second thing"), source);
-        assertEquals(1, ReviewService.scan(config, null).size());
-    }
-
-    /** The last entry takes the annotation with it — and its import, so nothing is left naming a dead type. */
-    @Test
-    void markingTheLastOneReviewedClearsTheFunction(@TempDir Path root) throws IOException {
+    void markingReviewedSetsDoneAndKeepsTheRecord(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         write(config, "Miner.java", """
                 package com.refbot.activities;
 
-                import com.refbot.NeedsReview;
+                %s
 
                 class Miner {
-                    @NeedsReview("the only thing")
+                    @Refactor("the only thing")
                     void mine() {}
                 }
-                """);
+                """.formatted(IMPORT));
 
-        ReviewService.markReviewed(config, null, ReviewService.scan(config, null).getFirst());
+        assertTrue(ReviewService.markReviewed(config, null, ReviewService.scan(config, null).getFirst()));
 
         String source = Files.readString(config.sourceRoot().resolve("Miner.java"));
-        assertFalse(source.contains("@NeedsReview"), source);
-        assertFalse(source.contains("import com.refbot.NeedsReview;"), source);
-        assertTrue(source.contains("void mine()"), "the function itself stays:\n" + source);
+        assertTrue(source.contains("done = true") && source.contains("the only thing"), source);
+        assertTrue(source.contains(IMPORT), source);
         assertTrue(ReviewService.scan(config, null).isEmpty());
     }
 
-    /**
-     * Two functions of the same name in one file: the entry text is what identifies a row, so the mark that
-     * carries it is the one stripped.
-     */
+    /** Two functions of the same name in one file: the entries identify which mark a row is. */
     @Test
-    void theEntryIdentifiesTheMarkRatherThanTheFunctionName(@TempDir Path root) throws IOException {
+    void theEntriesIdentifyTheMarkRatherThanTheFunctionName(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         write(config, "Miner.java", """
                 package com.refbot;
 
+                %s
+
                 class Miner {
-                    @NeedsReview("about the one with no inputs")
+                    @Refactor("about the one with no inputs")
                     void mine() {}
 
-                    @NeedsReview("about the one with a depth")
+                    @Refactor("about the one with a depth")
                     void mine(int depth) {}
                 }
-                """);
+                """.formatted(IMPORT));
 
-        ReviewService.Item second = ReviewService.scan(config, null).get(1);
-        ReviewService.markReviewed(config, null, second);
+        ReviewService.markReviewed(config, null, ReviewService.scan(config, null).get(1));
 
-        String source = Files.readString(config.sourceRoot().resolve("Miner.java"));
-        assertTrue(source.contains("about the one with no inputs"), source);
-        assertFalse(source.contains("about the one with a depth"), source);
+        List<ReviewService.Item> left = ReviewService.scan(config, null);
+        assertEquals(1, left.size(), left.toString());
+        assertEquals(List.of("about the one with no inputs"), left.getFirst().entries());
     }
 
     /**
-     * The user may have reverted the change through Project History, or edited the mark away by hand, since
-     * the list was drawn. That is a re-scan, not an error.
+     * The user may have reverted the change through Versions, or edited the mark away by hand, since the list
+     * was drawn. That is a re-scan, not an error.
      */
     @Test
-    void anEntryThatIsNoLongerThereChangesNothing(@TempDir Path root) throws IOException {
+    void aMarkThatIsNoLongerThereChangesNothing(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Path file = write(config, "Miner.java", "class Miner { void mine() {} }\n");
 
         assertFalse(ReviewService.markReviewed(config, null,
-                new ReviewService.Item(file, "mine", 1, "something that was never written")));
+                new ReviewService.Item(file, "mine", 1, List.of("something that was never written"))));
     }
 
     /** Same rule as every rewrite in Studio: the buffer is the truth, and the disk is kept equal to it. */
     @Test
-    void theOpenBufferIsStrippedTogetherWithTheFile(@TempDir Path root) throws IOException {
+    void theOpenBufferIsMarkedTogetherWithTheFile(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Path file = write(config, "Miner.java", "class Miner { void mine() {} }\n");
         ProjectState state = new ProjectState();
         ProjectFile open = new ProjectFile(file, """
+                %s
                 class Miner {
-                    @NeedsReview("look at this")
+                    @Refactor("look at this")
                     void mine() {}
                 }
-                """);
+                """.formatted(IMPORT));
         state.addFile(open);
 
         List<ReviewService.Item> items = ReviewService.scan(config, state);
@@ -164,7 +147,7 @@ class ReviewServiceTest {
 
         ReviewService.markReviewed(config, state, items.getFirst());
 
-        assertFalse(open.getContent().contains("@NeedsReview"), open.getContent());
+        assertTrue(open.getContent().contains("done = true"), open.getContent());
         assertEquals(open.getContent(), Files.readString(file));
     }
 

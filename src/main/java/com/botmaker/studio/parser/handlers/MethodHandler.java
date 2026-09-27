@@ -189,16 +189,16 @@ public class MethodHandler {
      */
     public static String applyFunctionSignature(EditContext ctx, String originalCode, MethodDeclaration method,
                                                 FunctionDraft draft, SignatureMigration.Plan plan) {
-        return applyFunctionSignature(ctx, originalCode, method, draft, plan, null);
+        return applyFunctionSignature(ctx, originalCode, method, draft, plan, false);
     }
 
     /**
-     * The same, recording on this function and on the functions that call it what the change left needing a
-     * look. A null {@code markerPackage} turns that off.
+     * The same, recording on this function and on the functions that call it what the change guessed, when
+     * {@code marks}.
      */
     public static String applyFunctionSignature(EditContext ctx, String originalCode, MethodDeclaration method,
                                                 FunctionDraft draft, SignatureMigration.Plan plan,
-                                                String markerPackage) {
+                                                boolean marks) {
         ASTRewrite rewriter = ctx.rewriter();
 
         String newName = draft.name().trim();
@@ -210,12 +210,10 @@ public class MethodHandler {
         applyParameters(ctx, method, draft.parameters());
         if (plan != null) {
             rescueRemovedParameters(ctx, method, plan.rescued());
-            CallMigrator.applyIn(ctx, plan, markerPackage);
+            CallMigrator.applyIn(ctx, plan, marks);
             // Last, so the mark merges with anything CallMigrator has already put on this same function —
             // a function that calls itself is the ordinary case here, not a curiosity.
-            if (markerPackage != null) {
-                ReviewMarks.mark(ctx, method, markerPackage, ownEntries(draft, plan));
-            }
+            if (marks) ReviewMarks.mark(ctx, method, ownEntries(draft, plan));
         }
 
         return ctx.applyTo(originalCode);

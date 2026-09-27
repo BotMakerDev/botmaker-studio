@@ -704,21 +704,64 @@
 }
 
 /*
- * "⚑ 2 to review" beside the function's name — the one annotation the block editor renders, and since the
- * lock badge went with the generated files it described, the only badge in a method header. It borrows the
- * warning severity token rather than the accent: this is the same "look at this" the Errors tab means, one
- * step down in urgency.
+ * A declaration's annotations, one pill each, in a row above its header (blocks/misc/AnnotationRow). Plain
+ * pills are the user's and carry a ×; the host's (@Param, @Managed) are outlined in the muted token and have
+ * none. "⚑ @Refactor · 2 to review" borrows the warning severity token rather than the accent — the same
+ * "look at this" the Errors tab means, one step down in urgency — and dims once reviewed (:done).
  */
-.method-review-badge {
+.annotation-row {
+    -fx-padding: 0 0 4 0;
+}
+
+.annotation-pill {
     -fx-font-size: 11px;
-    -fx-font-weight: bold;
-    -fx-padding: 2 8 2 8;
+    -fx-padding: 1 6 1 8;
+    -fx-spacing: 4;
     -fx-background-radius: 8px;
-    -fx-text-fill: -bm-severity-warning-text;
     -fx-background-color: -bm-band;
-    -fx-border-color: -bm-severity-warning;
+    -fx-border-color: derive(-bm-muted, 20%);
     -fx-border-radius: 8px;
     -fx-border-width: 1px;
+}
+
+.annotation-pill > .label {
+    -fx-font-family: monospace;
+    -fx-text-overrun: ellipsis;
+}
+
+.annotation-pill--host {
+    -fx-border-color: -bm-muted;
+    -fx-border-style: segments(3, 3);
+}
+
+.annotation-pill--refactor {
+    -fx-border-color: -bm-severity-warning;
+}
+
+.annotation-pill--refactor > .label {
+    -fx-font-weight: bold;
+    -fx-text-fill: -bm-severity-warning-text;
+}
+
+.annotation-pill--refactor:done {
+    -fx-opacity: 0.55;
+    -fx-border-color: derive(-bm-muted, 20%);
+}
+
+.annotation-pill--refactor:done > .label {
+    -fx-font-weight: normal;
+    -fx-text-fill: -bm-muted;
+}
+
+.annotation-pill-remove {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 2;
+    -fx-font-size: 11px;
+    -fx-cursor: hand;
+}
+
+.annotation-pill-remove:hover {
+    -fx-text-fill: -bm-severity-warning;
 }
 
 /*

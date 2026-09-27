@@ -134,7 +134,7 @@ class DeleteVariableTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void needsReviewIsMarkedWhereUsesBecameDefaults() {
+    void aRefactorIsMarkedWhereUsesBecameDefaults() {
         open("""
                 package test;
 
@@ -148,8 +148,9 @@ class DeleteVariableTest {
 
         fx.editor.deleteVariable(declaration("run", "attempts"), UseFix.DEFAULT);
 
-        assertTrue(fx.lastCode.contains("@NeedsReview"),
-                "a use that became a zero is not a complete repair:\n" + fx.lastCode);
+        assertTrue(fx.lastCode.contains("@Refactor(")
+                        && fx.lastCode.contains("import com.botmaker.plugin.api.meta.Refactor;"),
+                "a use that became a zero is a guess:\n" + fx.lastCode);
         // Escaped, because the name is quoted inside a string literal in the annotation.
         assertTrue(fx.lastCode.contains("\\\"attempts\\\""),
                 "the mark says which variable went:\n" + fx.lastCode);
@@ -171,7 +172,7 @@ class DeleteVariableTest {
 
         fx.editor.deleteVariable(declaration("run", "attempts"), new UseFix.Rename("kept"));
 
-        assertFalse(fx.lastCode.contains("@NeedsReview"),
+        assertFalse(fx.lastCode.contains("@Refactor"),
                 "the body still reads a real value, so there is nothing to look at:\n" + fx.lastCode);
     }
 
@@ -190,8 +191,29 @@ class DeleteVariableTest {
 
         fx.editor.deleteVariable(declaration("run", "attempts"), UseFix.DEFAULT);
 
-        assertFalse(fx.lastCode.contains("@NeedsReview"),
+        assertFalse(fx.lastCode.contains("@Refactor"),
                 "no use was defaulted, so nothing changed meaning:\n" + fx.lastCode);
+    }
+
+    @Test
+    void aBotThatCannotCompileTheMarkGetsTheDeleteUnmarked() {
+        open("""
+                package test;
+
+                public class Subject {
+                    public void run() {
+                        int attempts = 3;
+                        BotMaker.print(attempts);
+                    }
+                }
+                """);
+        fx.state.setResolvedClasspath(List.of());
+
+        fx.editor.deleteVariable(declaration("run", "attempts"), UseFix.DEFAULT);
+
+        assertFalse(fx.lastCode.contains("attempts"), fx.lastCode);
+        assertFalse(fx.lastCode.contains("Refactor"),
+                "no contract on the classpath, so a mark would not compile:\n" + fx.lastCode);
     }
 
     @Test

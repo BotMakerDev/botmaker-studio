@@ -243,9 +243,9 @@ class SignatureMigrationApplyTest {
     void aRenameIsACompleteRepairAndIsMarkedNowhere() throws IOException {
         migrateWithProject(new FunctionDraft("tapAt", BotType.Choice.of(BotType.YES_NO), before().parameters()));
 
-        assertFalse(lastCode.contains("@NeedsReview"),
+        assertFalse(lastCode.contains("@Refactor"),
                 "every call afterwards does exactly what it did before:\n" + lastCode);
-        assertFalse(goHomeOnDisk().contains("@NeedsReview"), goHomeOnDisk());
+        assertFalse(goHomeOnDisk().contains("@Refactor"), goHomeOnDisk());
     }
 
     @Test
@@ -254,12 +254,12 @@ class SignatureMigrationApplyTest {
                 List.of(param("x", BotType.WHOLE_NUMBER, 0), param("tries", BotType.WHOLE_NUMBER, 1),
                         added("label", BotType.TEXT))));
 
-        assertTrue(lastCode.contains("@NeedsReview"), "run() calls it twice with a placeholder:\n" + lastCode);
+        assertTrue(lastCode.contains("@Refactor"), "run() calls it twice with a placeholder:\n" + lastCode);
         assertTrue(lastCode.contains("gained an input"), lastCode);
-        assertTrue(goHomeOnDisk().contains("@NeedsReview"),
+        assertTrue(goHomeOnDisk().contains("@Refactor"),
                 "so does go(), in the file the user never opened:\n" + goHomeOnDisk());
-        assertTrue(goHomeOnDisk().contains("import com.mybot.NeedsReview;"),
-                "and it is imported there, since that file is not in the bot's own package:\n" + goHomeOnDisk());
+        assertTrue(goHomeOnDisk().contains("import com.botmaker.plugin.api.meta.Refactor;"),
+                "and the contract's annotation is imported there:\n" + goHomeOnDisk());
     }
 
     @Test
@@ -279,7 +279,7 @@ class SignatureMigrationApplyTest {
         migrateWithProject(new FunctionDraft("clickAt", BotType.Choice.of(BotType.YES_NO),
                 List.of(param("x", BotType.WHOLE_NUMBER, 0))));
 
-        assertFalse(goHomeOnDisk().contains("@NeedsReview"),
+        assertFalse(goHomeOnDisk().contains("@Refactor"),
                 "dropping a 6 the user watched being dropped is not a review row:\n" + goHomeOnDisk());
     }
 
@@ -290,19 +290,18 @@ class SignatureMigrationApplyTest {
 
         assertTrue(lastCode.contains("boolean ok = false;"), lastCode);
         assertTrue(lastCode.contains("no longer fits here"), lastCode);
-        assertFalse(goHomeOnDisk().contains("@NeedsReview"),
+        assertFalse(goHomeOnDisk().contains("@Refactor"),
                 "GoHome's call stands as its own line and consumed nothing:\n" + goHomeOnDisk());
     }
 
     @Test
-    void theMarkerAnnotationIsWrittenIntoTheBotOnce() throws IOException {
+    void nothingIsGeneratedIntoTheBot() throws IOException {
         ProjectConfig config = ProjectConfig.forProject("MyBot", dir.resolve("projects"));
         migrateWithProject(new FunctionDraft("clickAt", BotType.Choice.of(BotType.YES_NO),
                 List.of(param("x", BotType.WHOLE_NUMBER, 0), param("tries", BotType.WHOLE_NUMBER, 1),
                         added("label", BotType.TEXT))));
 
-        Path marker = config.mainPackageDir().resolve("NeedsReview.java");
-        assertTrue(Files.exists(marker), "the marks reference an annotation that has to exist");
-        assertTrue(Files.readString(marker).contains("RetentionPolicy.SOURCE"), Files.readString(marker));
+        assertFalse(Files.exists(config.mainPackageDir().resolve("NeedsReview.java")),
+                "the marks name the contract's @Refactor, which the classpath already has");
     }
 }

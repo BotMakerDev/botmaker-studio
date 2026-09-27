@@ -5,6 +5,7 @@ import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.blocks.expr.ListBlock;
+import com.botmaker.studio.blocks.misc.AnnotationRow;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.ValueSlot;
@@ -164,6 +165,8 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
             headerRow.getChildren().add(deleteBtn);
         }
 
+        Node annotations = AnnotationRow.of((FieldDeclaration) astNode, context, !isReadOnly());
+        if (annotations != null) container.getChildren().add(annotations);
         container.getChildren().addAll(headerRow, renderSpec(context));
         return container;
     }

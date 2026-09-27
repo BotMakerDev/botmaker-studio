@@ -1,6 +1,7 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
+import com.botmaker.studio.blocks.misc.AnnotationRow;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
@@ -110,6 +111,8 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
 
         container.getStyleClass().add("class-block");
 
+        Node annotations = AnnotationRow.of((TypeDeclaration) astNode, context, !isReadOnly());
+        if (annotations != null) container.getChildren().add(annotations);
         container.getChildren().add(createHeader());
 
         // A read-only class is inert: no "Add Function", no drop targets between members, no drag-to-reorder.

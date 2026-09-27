@@ -5,6 +5,7 @@ import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 
@@ -18,28 +19,26 @@ import java.util.List;
  * <h2>Why a scan, and not a list something kept</h2>
  *
  * <p>The marks are written into the code ({@link ReviewMarks}) precisely so that nothing has to keep a list:
- * an edit that moves a function moves its mark, deleting the function deletes it, and a revert through Project
- * History takes the marks out with the change they describe. The price of that is that the list has to be
+ * an edit that moves a function moves its mark, deleting the function deletes it, and a revert through
+ * Versions takes the marks out with the change they describe. The price of that is that the list has to be
  * <em>derived</em> — every reader of it re-reads the sources. That is cheap (a bot is tens of files) and it
- * cannot go stale, which a cached list demonstrably would: four different refactors write marks, and two of
- * them do it outside the editor entirely.
+ * cannot go stale.
  *
- * <p>So there is exactly one rule here: <b>the source is the truth</b>. {@link #scan} parses it, and
- * {@link #markReviewed} writes back through the same {@link BotSources} walk the template rewrites use, so the
- * open buffer and the file on disk never disagree.
+ * <p>So there is exactly one rule here: <b>the source is the truth</b>. {@link #scan} lists each function
+ * whose {@code @Refactor} is not {@code done}, and {@link #markReviewed} sets {@code done = true} through the
+ * same {@link BotSources} walk the template rewrites use, so the open buffer and the file on disk never
+ * disagree. A reviewed mark stays in the code as the record; the user deletes it when they no longer want it.
  */
 public final class ReviewService {
 
     private ReviewService() {}
 
     /**
-     * One thing to look at: an entry from one function's mark.
+     * One function to look at, with everything its open mark says.
      *
-     * <p>{@code line} is where the function starts, not where the change is — a mark names the enclosing
-     * function, which is the unit the user reviews and the unit the canvas can scroll to. The entry text is
-     * the identity: two entries on one function are two rows, and marking one reviewed leaves the other.
+     * <p>{@code line} is where the function starts — the unit the user reviews and the canvas scrolls to.
      */
-    public record Item(Path file, String function, int line, String entry) {
+    public record Item(Path file, String function, int line, List<String> entries) {
 
         /** {@code "Miner.java · mine()"} — the row's own heading. */
         public String where() {
@@ -47,20 +46,20 @@ public final class ReviewService {
         }
     }
 
-    /** Every review entry in the project, in file then source order. */
+    /** Every function with an open mark in the project, in file then source order. */
     public static List<Item> scan(ProjectConfig config, ProjectState state) {
         List<Item> items = new ArrayList<>();
         if (config == null) return items;
         BotSources.forEach(config, state, (file, source) -> {
             // Cheap reject before parsing: most files carry no mark at all, and parsing is the expensive half.
             if (!source.contains(ReviewMarks.ANNOTATION)) return null;
-            CompilationUnit unit = SourceParser.parse(source);
+            CompilationUnit unit = BotParser.syntax(source);
             if (unit == null) return null;
             for (MethodDeclaration method : ReviewMarks.markedIn(unit)) {
+                List<String> open = ReviewMarks.openEntriesOf(method);
+                if (open.isEmpty()) continue;
                 int line = unit.getLineNumber(method.getStartPosition());
-                for (String entry : ReviewMarks.entriesOf(method)) {
-                    items.add(new Item(file, method.getName().getIdentifier(), Math.max(line, 1), entry));
-                }
+                items.add(new Item(file, method.getName().getIdentifier(), Math.max(line, 1), open));
             }
             return null;   // reading only
         });
@@ -68,27 +67,25 @@ public final class ReviewService {
     }
 
     /**
-     * Removes {@code item}'s entry from the function it marks — the "I have looked at this" gesture — and
-     * answers whether anything changed. The last entry removed takes the annotation with it, and the import
-     * once the file holds no marks at all ({@link ReviewMarks#strip}).
+     * Sets {@code done = true} on {@code item}'s mark — the "I have looked at this" gesture — and answers
+     * whether anything changed.
      *
-     * <p>A file that no longer holds the entry is not an error: the user may have edited the mark away by
-     * hand, or reverted the change through Project History since the list was drawn. It answers false and the
-     * caller re-scans, which is what it would do anyway.
+     * <p>A file that no longer holds the mark is not an error: the user may have edited it away by hand, or
+     * reverted the change since the list was drawn. It answers false and the caller re-scans.
      */
     public static boolean markReviewed(ProjectConfig config, ProjectState state, Item item) {
         if (config == null || item == null) return false;
-        boolean[] stripped = {false};
+        boolean[] reviewed = {false};
         BotSources.forEach(config, state, (file, source) -> {
-            if (stripped[0] || !file.equals(item.file())) return null;
-            CompilationUnit unit = SourceParser.parse(source);
+            if (reviewed[0] || !file.equals(item.file())) return null;
+            CompilationUnit unit = BotParser.syntax(source);
             if (unit == null || SourceParser.hasSyntaxErrors(unit)) return null;
 
             MethodDeclaration target = null;
             for (MethodDeclaration method : ReviewMarks.markedIn(unit)) {
-                if (!method.getName().getIdentifier().equals(item.function())) continue;
-                // The entry, not the name: two overloads can both be marked, and only one of them carries this.
-                if (ReviewMarks.entriesOf(method).contains(item.entry())) {
+                // The entries, not the name alone: two overloads can both be marked.
+                if (method.getName().getIdentifier().equals(item.function())
+                        && ReviewMarks.openEntriesOf(method).equals(item.entries())) {
                     target = method;
                     break;
                 }
@@ -96,13 +93,13 @@ public final class ReviewService {
             if (target == null) return null;
 
             EditContext ctx = EditContext.of(unit, null, null);
-            if (!ReviewMarks.strip(ctx, target, item.entry())) return null;
+            if (!ReviewMarks.markReviewed(ctx, target)) return null;
             String rewritten = ctx.applyTo(source);
             // Same rule as every other rewrite in Studio: a result that does not parse is not written.
-            if (rewritten == null || SourceParser.hasSyntaxErrors(SourceParser.parse(rewritten))) return null;
-            stripped[0] = true;
+            if (rewritten == null || SourceParser.hasSyntaxErrors(BotParser.syntax(rewritten))) return null;
+            reviewed[0] = true;
             return rewritten;
         });
-        return stripped[0];
+        return reviewed[0];
     }
 }

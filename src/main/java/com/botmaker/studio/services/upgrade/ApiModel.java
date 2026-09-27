@@ -67,7 +67,7 @@ final class ApiModel {
     // it. The SDK keeps its own names as deprecated shims pointing there, which is what @ReplacedBy is for.
     //
     // The accepted cost: a bot upgrading off a pre-2026-08-27 SDK jar sees its redirects as unpaired breaks
-    // rather than as pointers, so the repair marks @NeedsReview instead of rewriting the call. Scaffolding
+    // rather than as pointers, so the repair marks @Refactor instead of rewriting the call. Scaffolding
     // was already dead — Studio has generated no scaffold since 2026-08-25.
 
     /** A constructor has no name of its own; this is how the pointer grammar spells one. */

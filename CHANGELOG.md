@@ -14,6 +14,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A refactor that guesses says so with `@Refactor`, and you pick every guess.** Where an upgrade, a
+  signature change or a plugin's rewrite puts a value you did not choose, the function is marked with the
+  plugin contract's `@Refactor`; *Mark Reviewed* keeps it as `done = true`. Studio no longer writes a
+  `NeedsReview.java` into your bot. In the upgrade window a call nothing replaces starts unanswered, and
+  Apply waits until you choose a default value or deleting the line. Deleting a variable that is still used
+  is refused with its uses listed and buttons to point them at another variable or put a default in.
+- **Annotations show on the canvas.** Each one is a pill above its function, field or class. `@Param` and
+  `@Managed` are read-only there; the others have a × that removes them.
 - **A value its type's factory would lose part of is written as the chain that keeps it.** A held combo is
   written `Combo.of(Key.CTRL, Key.S).held(Duration.ofMillis(200))`; before, the hold was dropped on write. Only
   a chain a plugin declares, one link deep; every other value is written as before.

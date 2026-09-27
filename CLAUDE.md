@@ -714,6 +714,20 @@ point of it.**
     where a fixpoint loop would run forever. Each file is then swept **members first, types second, with a
     re-parse between**: a removed member of a renamed type is otherwise two `ASTRewrite` edits on one node,
     which it cannot express.
+  - **Since 2026-09-27 the mark is the contract's `@Refactor(value, done)`, and the bullets below that say
+    `@NeedsReview` are its history.** `ReviewMarks` reads it through `BotAnnotation.REFACTOR` (binding, else
+    the file's import) and writes it with the contract import; nothing is generated into the bot
+    (`ensureFile`, `annotationSource`, `ReviewMarker.prepare` are gone). `ReviewMarker.available(state)` —
+    the resolved classpath carries `Refactor.class` (`ContractDependency.onClasspath(cp, type)`) — decides
+    whether a guessing edit marks; without it the edit is made unmarked. Every **guess** marks, whoever made
+    it: an upgrade's default, a signature change's new argument or rescued parameter, a `Sources.replace`
+    with a note, a deleted variable's uses defaulted. Reviewing sets `done = true` and keeps the entries
+    (`ReviewService.Item` is one function, its open entries); a new guess reopens a reviewed mark. Deleting a
+    used variable refuses through `RefusalDialog` (uses as links; fixes: *Use `other` instead*, *Replace with
+    `default`*). The upgrade window pre-fills no guess (`Report.guesses()`, and a split's site with nothing
+    that fits): `ReportView.unpicked()` holds Apply, `ProjectUpgrade.waitingSites` refuses a pass with one
+    unanswered. The badge became `blocks/misc/AnnotationRow`: every annotation as a pill above a method,
+    field or class header, `@Param`/`@Managed` read-only, the rest removable (`CodeEditor.removeAnnotation`).
   - **The record of an incomplete repair is `@NeedsReview` in the bot's own source
     (`parser/refactor/ReviewMarks`).** Not a sidecar under `.botmaker/`: the diff cannot answer this later —
     once the pom is bumped the old jar is gone and re-diffing the project finds nothing — and an annotation

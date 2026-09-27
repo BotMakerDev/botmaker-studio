@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,6 +120,25 @@ class PluginRemovalTest {
         assertTrue(report.canMigrate(), "the removal is repairable, so it may be made");
     }
 
+    /** Every call a removal defaults or deletes is a guess, asked per site with nothing chosen for the user. */
+    @Test
+    void everyCallOfARemovedPluginWaitsForAPick(@TempDir Path tmp) throws IOException {
+        Report report = removalOver(tmp, """
+                package com.mybot;
+                public class Subject {
+                    public void run() {
+                        Mouse.click();
+                        int n = Mouse.count();
+                    }
+                }
+                """);
+
+        assertEquals(List.of("Mouse.click", "Mouse.count"),
+                report.guesses().stream().map(PluginUpgradeService.Choice::display).toList());
+        assertTrue(report.guesses().stream().allMatch(g -> g.candidates().isEmpty()), report.guesses().toString());
+        assertEquals(2, ProjectUpgrade.waitingSites(report).size(), "one site each, both unanswered");
+    }
+
     @Test
     void aTypeTheBotWritesDownRefusesTheRemoval(@TempDir Path tmp) throws IOException {
         Report report = removalOver(tmp, """
@@ -157,7 +177,7 @@ class PluginRemovalTest {
         assertFalse(rewritten.contains("Mouse.click()"), "a statement call is deleted outright");
         assertFalse(rewritten.contains("Mouse.count()"), "a value call is replaced by a literal");
         assertTrue(rewritten.contains("int n = 0"), () -> "the value should be defaulted:\n" + rewritten);
-        assertTrue(rewritten.contains("NeedsReview"), "the function that lost a call is marked");
+        assertTrue(rewritten.contains("@Refactor"), "the function that lost a call is marked");
     }
 
     @Test

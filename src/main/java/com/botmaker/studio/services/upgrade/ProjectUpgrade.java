@@ -2,8 +2,10 @@ package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -200,7 +202,27 @@ public final class ProjectUpgrade {
                     + " and nothing in that release takes its place, so this bot writes a type name that "
                     + "would no longer exist. Change those uses by hand first. Nothing has been changed.");
         }
+        long unanswered = waitingSites(report).stream().filter(site -> !row.picks().containsKey(site)).count();
+        if (unanswered > 0) {
+            throw new IllegalStateException(unanswered + (unanswered == 1 ? " call" : " calls") + " in this bot "
+                    + "would lose what " + what + " no longer offers, and nothing replaces "
+                    + (unanswered == 1 ? "it" : "them") + ". Check " + row.upgrades().displayName() + " and "
+                    + "choose what each becomes. Nothing has been changed.");
+        }
         return report;
+    }
+
+    /**
+     * The sites whose repair is a guess — every site of a {@link Report#guesses()}, and a split's site with
+     * nothing that fits — which a pass will not default on its own (2026-09-27).
+     */
+    static List<CallSite> waitingSites(Report report) {
+        List<CallSite> out = new ArrayList<>();
+        for (Choice choice : report.guesses()) for (Site site : choice.sites()) out.add(site.site());
+        for (Choice choice : report.splits()) {
+            for (Site site : choice.sites()) if (site.candidates().isEmpty()) out.add(site.site());
+        }
+        return out;
     }
 
     private static String snapshotMessage(List<Row> rows) {

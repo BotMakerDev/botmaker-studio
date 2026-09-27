@@ -225,8 +225,8 @@ public record ProjectConfig(
     // activityRegistrySourceFile() and flowDriverSourceFile() went on 2026-09-21, both with no caller in
     // main. They named ActivityRegistry.java and FlowDriver.java, the two files the old generator wrote to
     // hold the flow: a bot runs from the flow value in its own plugins/sdk/Sdk.java now, and nothing
-    // generates either file. needsReviewSourceFile() went with them, also uncalled — parser.refactor
-    // .ReviewMarker resolves that file itself, on demand, being the only thing that writes it.
+    // generates either file. needsReviewSourceFile() went with them, also uncalled; since 2026-09-27 nothing
+    // writes NeedsReview.java at all — a review mark is the contract's @Refactor.
 
     /** {@code src/main/java/com/<pkg>} — the package the bot's own classes are written into. */
     public Path mainPackageDir() {

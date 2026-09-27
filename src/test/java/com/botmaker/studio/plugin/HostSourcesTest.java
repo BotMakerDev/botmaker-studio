@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.Sources;
+import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
@@ -158,22 +159,36 @@ class HostSourcesTest {
     @Test
     void aReviewNoteMarksTheEnclosingFunctionAndNullDoesNot(@TempDir Path root) throws IOException {
         ProjectConfig marked = project(root.resolve("a"), Map.of("Subject.java", source(use("Templates.ORE"))));
+        HostSources.install(marked, withContract(), null);
         HostSources.live().replace(Map.of("Templates.ORE", "Templates.GOLD"), null, "points somewhere else now");
         String withNote = Files.readString(marked.mainPackageDir().resolve("Subject.java"));
 
         ProjectConfig plain = project(root.resolve("b"), Map.of("Subject.java", source(use("Templates.ORE"))));
+        HostSources.install(plain, withContract(), null);
         HostSources.live().replace(Map.of("Templates.ORE", "Templates.GOLD"), null, null);
         String withoutNote = Files.readString(plain.mainPackageDir().resolve("Subject.java"));
 
+        ProjectConfig bare = project(root.resolve("c"), Map.of("Subject.java", source(use("Templates.ORE"))));
+        HostSources.live().replace(Map.of("Templates.ORE", "Templates.GOLD"), null, "points somewhere else now");
+        String noContract = Files.readString(bare.mainPackageDir().resolve("Subject.java"));
+
         assertAll(
-                () -> assertTrue(withNote.contains("NeedsReview"),
+                () -> assertTrue(withNote.contains("@Refactor(\"points somewhere else now\")"),
                         "a rewrite that changes what the bot does says so: " + withNote),
-                () -> assertTrue(Files.exists(marked.mainPackageDir().resolve("NeedsReview.java")),
-                        "and the annotation it names is declared, or the mark is a compile error"),
-                () -> assertFalse(withoutNote.contains("NeedsReview"),
+                () -> assertTrue(withNote.contains("import com.botmaker.plugin.api.meta.Refactor;"), withNote),
+                () -> assertFalse(withoutNote.contains("Refactor"),
                         "a rename is lossless and must not cry wolf: " + withoutNote),
-                () -> assertFalse(Files.exists(plain.mainPackageDir().resolve("NeedsReview.java")),
-                        "and an unmarked rewrite adds no file to the project"));
+                () -> assertTrue(noContract.contains("Templates.GOLD") && !noContract.contains("Refactor"),
+                        "a bot that cannot compile the mark gets the change unmarked: " + noContract),
+                () -> assertFalse(Files.exists(marked.mainPackageDir().resolve("NeedsReview.java")),
+                        "nothing is generated into the bot any more"));
+    }
+
+    /** A project whose resolved classpath carries the contract, as a bot on the SDK's does. */
+    private static ProjectState withContract() {
+        ProjectState state = new ProjectState();
+        state.setResolvedClasspath(List.of(TestSupport.contractOnClasspath()));
+        return state;
     }
 
     /**

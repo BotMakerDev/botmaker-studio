@@ -354,6 +354,43 @@ final class UpgradeDiff {
     }
 
     /**
+     * The calls whose repair is a <b>guess</b> — nothing takes their place where they stand, so each becomes a
+     * default value or, as a statement, may be deleted — grouped by member, every site with no candidate
+     * (2026-09-27). The user answers each one; nothing is pre-filled.
+     *
+     * <p>A split member is not here: {@link #splits} already asks about every one of its calls. A removal
+     * ({@code removing}) makes every call a guess, since there is no jar to redirect to.
+     */
+    static List<Choice> guesses(Map<String, ApiClass> before, Map<String, ApiClass> after,
+                                Uses uses, Pairing pairing, boolean removing) {
+        Map<String, List<Call>> byMember = new LinkedHashMap<>();
+        for (Call call : uses.calls()) {
+            ApiClass then = before.get(call.type());
+            if (then == null || !declares(then, call.isField(), call.member())) continue;
+            if (!removing) {
+                ApiClass now = pairing.pairedTo(then, after);
+                // A removed type refuses the upgrade outright; a call that still resolves is no break.
+                if (now == null || offers(now, call.member(), call.argCount())) continue;
+                List<Candidate> candidates = redirectsFor(then, now, call, after, pairing);
+                if (candidates.size() >= 2 || !fittingAt(candidates, call).isEmpty()) continue;
+            }
+            byMember.computeIfAbsent(call.type() + "#" + call.member() + "#" + call.argCount(),
+                    k -> new ArrayList<>()).add(call);
+        }
+
+        List<Choice> out = new ArrayList<>();
+        byMember.values().forEach(calls -> {
+            Call first = calls.getFirst();
+            List<Site> sites = calls.stream()
+                    .map(call -> new Site(call.site(), List.of(), call.statement()))
+                    .sorted(Comparator.comparing(s -> s.site().toString()))
+                    .toList();
+            out.add(new Choice(first.type(), first.member(), first.argCount(), List.of(), "", sites));
+        });
+        return out.stream().sorted(Comparator.comparing(Choice::display)).toList();
+    }
+
+    /**
      * Records what became of {@code then} as a type, at one site — true when it is <b>gone</b>, which is the
      * caller's cue that there is nothing further to say about that site.
      *

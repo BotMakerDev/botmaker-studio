@@ -1,17 +1,17 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.helpers.SourceParser;
-import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.ContractDependency;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -20,22 +20,20 @@ import java.util.Set;
 
 /**
  * The three things a refactor has to do around a {@linkplain ReviewMarks review mark} that are about the
- * <em>project</em> rather than about one syntax tree: make sure the annotation exists, snapshot the project
- * before touching files the user is not looking at, and — for a rewrite done in text rather than in an AST —
- * mark the functions a set of changed lines fall inside.
+ * <em>project</em> rather than about one syntax tree: ask whether the bot can compile a mark, snapshot the
+ * project before touching files the user is not looking at, and — for a rewrite done in text rather than in
+ * an AST — mark the functions a set of changed lines fall inside.
  *
  * <p>{@link ReviewMarks} deliberately knows nothing of any of this. It edits one tree through one
  * {@link EditContext}, which is what makes it testable without a project on disk; everything that needs a
  * {@link ProjectConfig} lives here instead.
  *
- * <h2>Why {@link #prepare} may answer null, and why that is not a failure</h2>
+ * <h2>Why {@link #available} may answer false, and why that is not a failure</h2>
  *
- * <p>A mark is a reference to a generated annotation. If that annotation cannot be written, a mark would not
- * compile — so the choice is between refusing the refactor and doing it unmarked, and unmarked is plainly the
- * better of the two: the user asked for the rename, not for the bookkeeping. {@code prepare} therefore returns
- * the package to import <em>or null</em>, and every marking path treats null as "do the change, record
- * nothing". It has to be called <b>before</b> the change is written, so the answer is known while refusing is
- * still cheap.
+ * <p>A mark is a reference to the contract's {@code @Refactor}. On a classpath without it — a bot naming no
+ * plugin, or one whose contract predates the annotation — a mark would not compile, so the choice is between
+ * refusing the refactor and doing it unmarked, and unmarked is plainly the better of the two: the user asked
+ * for the change, not for the bookkeeping, and the dialog that made it already showed what it guessed.
  *
  * <h2>Why the snapshot is best-effort</h2>
  *
@@ -50,20 +48,11 @@ public final class ReviewMarker {
     private ReviewMarker() {}
 
     /**
-     * Makes sure the bot has a {@code NeedsReview} annotation to be marked with, and answers the package to
-     * import it from — or null when there is nowhere to write one, in which case the caller does its change
-     * and records nothing.
+     * Whether the bot compiles {@code @Refactor} — its resolved classpath carries the class. False means the
+     * caller does its change and records nothing.
      */
-    public static String prepare(ProjectConfig config) {
-        if (config == null || config.mainPackageDir() == null) return null;
-        try {
-            ReviewMarks.ensureFile(config.mainPackageDir(), config.mainPackage());
-            return config.mainPackage();
-        } catch (IOException e) {
-            System.err.println("Couldn't write the review marker, so this change won't be recorded: "
-                    + e.getMessage());
-            return null;
-        }
+    public static boolean available(ProjectState state) {
+        return state != null && ContractDependency.onClasspath(state.getResolvedClasspath(), Refactor.class);
     }
 
     /**
@@ -100,9 +89,8 @@ public final class ReviewMarker {
      * @param lines 1-based line numbers in {@code source}, as {@code Sources.Use} reports them
      * @return the marked source, or {@code source} unchanged when nothing could be marked
      */
-    public static String markLines(String source, Collection<Integer> lines, String markerPackage,
-                                   String entry) {
-        if (source == null || lines == null || lines.isEmpty() || markerPackage == null) return source;
+    public static String markLines(String source, Collection<Integer> lines, String entry) {
+        if (source == null || lines == null || lines.isEmpty()) return source;
         CompilationUnit unit = SourceParser.parse(source);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) return source;
 
@@ -118,7 +106,7 @@ public final class ReviewMarker {
         if (enclosing.isEmpty()) return source;
 
         EditContext ctx = EditContext.of(unit, null, null);
-        for (MethodDeclaration method : enclosing) ReviewMarks.mark(ctx, method, markerPackage, List.of(entry));
+        for (MethodDeclaration method : enclosing) ReviewMarks.mark(ctx, method, List.of(entry));
         String marked = ctx.applyTo(source);
         // A mark that does not parse is worth less than no mark at all: the file the user has to review is the
         // one they now cannot open. Same rule the migration runner applies to its own rewrites.

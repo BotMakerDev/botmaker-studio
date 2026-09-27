@@ -52,7 +52,7 @@ import java.util.Set;
  *
  * <p>That leaves the bot compiling and, in places, wrong — deliberately. So the other half of the bargain is
  * written in the same rewrite: every function that got a default, lost a call, or had one redirected into a
- * different shape is annotated {@code @NeedsReview} ({@link ReviewMarks}), naming what happened to it. The
+ * different shape is annotated {@code @Refactor} ({@link ReviewMarks}), naming what happened to it. The
  * mark lands with the repair or not at all — a migration refused halfway leaves neither.
  *
  * <p><b>A rename is not marked.</b> {@code ImageClicker.click} becoming {@code IClicker.click} is a complete
@@ -358,20 +358,19 @@ public final class ApiMigrationRunner {
      * @param generated   the files that may not, scanned only so a repair that would have touched one is caught
      * @param apiTypes    every class simple name of the library being migrated, for {@link ApiReferences}
      * @param fieldOwners constant name → the types of that library declaring it, likewise
-     * @param markerPackage the bot's own package, holding the generated {@code NeedsReview} — null to skip
-     *                      marking altogether, which only a test that is asserting about the code wants
+     * @param marks       whether to write {@code @Refactor} on what it guessed — {@link ReviewMarker#available}
+     *                    for the project, false for a bot that cannot compile it
      */
     public static Outcome run(Repairs repairs, List<ProjectFile> editable, List<ProjectFile> generated,
                               Set<String> apiTypes, Map<String, List<String>> fieldOwners,
-                              String markerPackage, ProjectAnalyzer analyzer, ProjectState state) {
-        return run(repairs, Choices.NONE, editable, generated, apiTypes, fieldOwners, markerPackage,
-                analyzer, state);
+                              boolean marks, ProjectAnalyzer analyzer, ProjectState state) {
+        return run(repairs, Choices.NONE, editable, generated, apiTypes, fieldOwners, marks, analyzer, state);
     }
 
     /** As above, with the per-site decisions a split asked the user for. See {@link Choices}. */
     public static Outcome run(Repairs repairs, Choices choices, List<ProjectFile> editable,
                               List<ProjectFile> generated, Set<String> apiTypes,
-                              Map<String, List<String>> fieldOwners, String markerPackage,
+                              Map<String, List<String>> fieldOwners, boolean marks,
                               ProjectAnalyzer analyzer, ProjectState state) {
         String blocked = scaffoldingInTheWay(generated, repairs, apiTypes, fieldOwners);
         if (blocked != null) return Outcome.refused(blocked);
@@ -382,7 +381,7 @@ public final class ApiMigrationRunner {
             if (original == null) continue;
 
             Applied members = rewriteMembers(file, original, repairs, choices, apiTypes, fieldOwners,
-                    markerPackage, analyzer, state);
+                    marks, analyzer, state);
             if (members.refusal() != null) return Outcome.refused(members.refusal());
             String afterMembers = members.text() == null ? original : members.text();
 
@@ -415,7 +414,7 @@ public final class ApiMigrationRunner {
      */
     private static Applied rewriteMembers(ProjectFile file, String text, Repairs repairs, Choices choices,
                                           Set<String> apiTypes, Map<String, List<String>> fieldOwners,
-                                          String markerPackage, ProjectAnalyzer analyzer, ProjectState state) {
+                                          boolean marking, ProjectAnalyzer analyzer, ProjectState state) {
         CompilationUnit unit = SourceParser.parse(text);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) {
             return Applied.refused("\"" + file.getClassName() + "\" does not parse, so it could not be "
@@ -515,10 +514,7 @@ public final class ApiMigrationRunner {
                     + "that cannot be repaired from the source alone — most often a constant used as a case "
                     + "label, whose type the source never names. Nothing has been changed.");
         }
-        if (markerPackage != null) {
-            marks.forEach((method, entries) ->
-                    ReviewMarks.mark(ctx, method, markerPackage, List.copyOf(entries)));
-        }
+        if (marking) marks.forEach((method, entries) -> ReviewMarks.mark(ctx, method, List.copyOf(entries)));
         return finish(ctx, file, text);
     }
 

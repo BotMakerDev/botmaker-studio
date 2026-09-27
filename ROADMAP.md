@@ -6,7 +6,15 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-27 (latest) — Parameters: categories you can make, inside their class.** The rail is All, then
+- **2026-09-27 (latest) — `@Refactor` marks every guess; annotations on the canvas.** The review mark is the
+  contract's `@Refactor(value, done)` (studio-api 0.3.0, unreleased), read by `BotAnnotation.REFACTOR`, written
+  only where the classpath carries it (`ReviewMarker.available`); `NeedsReview.java` is no longer generated.
+  Every guessing edit marks — upgrade default, signature change, plugin rewrite with a note, deleted variable's
+  uses defaulted; *Mark Reviewed* sets `done = true`. A used variable's ✕ refuses through `RefusalDialog`
+  (fixes: another variable, or the default). The upgrade window pre-fills no guess (`Report.guesses()`,
+  `ReportView.unpicked()`, `ProjectUpgrade.waitingSites`). `blocks/misc/AnnotationRow` draws each annotation as
+  a pill above method, field and class headers (`CodeEditor.removeAnnotation`).
+- **2026-09-27 — Parameters: categories you can make, inside their class.** The rail is All, then
   a heading per `@Param` class (section) with General and that class's categories under it
   (`VariableRailModel.Filed`/`rowsOf(filed, sections, added)`/`categoriesIn`), so "Timing" in two classes is two
   rows. *+ New category…* is back (lists an empty category in its section until something is filed there);

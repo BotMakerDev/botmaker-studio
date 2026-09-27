@@ -20,10 +20,11 @@ import java.util.function.Consumer;
  * The <b>Review</b> bottom tab: everything BotMaker changed for the user and could not finish on its own.
  *
  * <p>This is the half of the promise the marks exist for. A refactor that rewrites files the user is not
- * looking at — an SDK upgrade, a signature edit, a template repoint — leaves {@code @NeedsReview} entries
+ * looking at and guesses — an SDK upgrade, a signature edit, a template repoint — leaves {@code @Refactor}
  * behind ({@code parser/refactor/ReviewMarks}); without somewhere to see them the user would have to open
- * every file in the bot to find out what happened. Here each entry is one row: what changed, where, and a
- * click that takes them to it.
+ * every file in the bot to find out what happened. Here each function with an open mark is one row: where,
+ * what the refactor guessed, and a click that takes them to it. <i>Mark Reviewed</i> sets
+ * {@code done = true}, which keeps the record in the code and drops the row.
  *
  * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}, and the tab
  * refreshes when it is opened. Four different code paths write marks, two of them without the editor
@@ -90,8 +91,8 @@ final class ReviewPanel {
     }
 
     /**
-     * Strips the selected entry and re-scans. Re-scanning rather than removing the row is deliberate: the
-     * strip rewrote a file, and the file is the truth.
+     * Marks the selected function's refactor done and re-scans. Re-scanning rather than removing the row is
+     * deliberate: that rewrote a file, and the file is the truth.
      */
     private void markSelectedReviewed() {
         ReviewService.Item selected = list.getSelectionModel().getSelectedItem();
@@ -129,7 +130,7 @@ final class ReviewPanel {
         Label where = new Label(item.where());
         where.getStyleClass().add("review-cell-where");
 
-        Label what = new Label(item.entry());
+        Label what = new Label(String.join("\n", item.entries()));
         what.getStyleClass().add("review-cell-what");
         what.setWrapText(true);
 

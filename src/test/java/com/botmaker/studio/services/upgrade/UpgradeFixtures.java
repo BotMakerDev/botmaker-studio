@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.upgrade;
 
+import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.project.ProjectConfig;
@@ -159,6 +160,8 @@ final class UpgradeFixtures {
         Files.createDirectories(project.resolve("src/main/java/com/mybot"));
 
         ProjectState state = new ProjectState();
+        // A bot on the SDK compiles the contract, and with it the @Refactor an upgrade marks guesses with.
+        state.setResolvedClasspath(List.of(TestSupport.contractOnClasspath()));
         int n = 0;
         for (String source : sources) {
             Path file = project.resolve("src/main/java/com/mybot/Subject" + (n == 0 ? "" : n) + ".java");

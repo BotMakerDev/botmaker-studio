@@ -4,7 +4,7 @@ import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.blocks.misc.AnnotationRow;
 import com.botmaker.studio.ui.app.AddFunctionDialog;
 import com.botmaker.studio.ui.app.SignatureEdits;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -99,28 +99,6 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         if (body == null || body.isReadOnly()) return root;
         Node header = root.lookup(".block-header");
         return header != null ? header : root;
-    }
-
-    /**
-     * The "BotMaker changed this and could not finish" badge, or null for a function carrying no mark.
-     *
-     * <p>Read from this block's own {@code @NeedsReview} annotation rather than pushed in by the converter:
-     * the annotation is on the very {@link MethodDeclaration} this block was built from, so the count cannot
-     * drift from the source, and a mark stripped in the Review tab disappears from the header on the next
-     * render with nothing to keep in step.
-     *
-     * <p>The block editor renders no annotations at all — this is the one it makes visible, because a mark
-     * nobody sees while looking straight at the function is a mark that does not do its job. The entries
-     * themselves are the tooltip: the header has room for a count, not for three sentences.
-     */
-    private Node reviewBadge() {
-        List<String> entries = ReviewMarks.entriesOf((MethodDeclaration) this.astNode);
-        if (entries.isEmpty()) return null;
-
-        Label badge = new Label(entries.size() == 1 ? "⚑ 1 to review" : "⚑ " + entries.size() + " to review");
-        badge.getStyleClass().add("method-review-badge");
-        badge.setTooltip(new Tooltip(String.join("\n\n", entries)));
-        return badge;
     }
 
     /** The declared method's name — mirrors {@code MethodInvocationBlock.getMethodName()} on the call side. */
@@ -225,9 +203,6 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         // padding happened to be, which is a hit target of about ten pixels.
         if (canEditSignature()) topRowBuilder.addNode(editSignatureButton(context));
 
-        Node reviewBadge = reviewBadge();
-        if (reviewBadge != null) topRowBuilder.addNode(reviewBadge);
-
         topRowBuilder.addNode(BlockUIComponents.createSpacer())
                 .addNode(returnsLabel).addNode(returnTypeLabel);
 
@@ -261,6 +236,8 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
         HBox paramRow = paramRowBuilder.build();
 
         headerBox.getChildren().addAll(topRow, paramRow);
+        Node annotations = AnnotationRow.of(declaration, context, !isReadOnly());
+        if (annotations != null) container.getChildren().add(annotations);
         container.getChildren().add(headerBox);
 
         if (!isCollapsed) {

@@ -50,6 +50,19 @@ public final class TestSupport {
                 "the SDK plugin is not on this classpath — Studio does not depend on botmaker-sdk (2026-09-02)");
     }
 
+    /**
+     * The contract jar (or class directory) this test runs against, as one resolved-classpath entry — what a bot
+     * on the SDK has, and what a host checks before it writes {@code @Refactor}.
+     */
+    public static String contractOnClasspath() {
+        try {
+            return Path.of(com.botmaker.plugin.api.meta.Refactor.class.getProtectionDomain().getCodeSource()
+                    .getLocation().toURI()).toString();
+        } catch (java.net.URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public static List<String> findJavaFiles(Path root) throws IOException {
         try (Stream<Path> paths = Files.walk(root)) {
             return paths

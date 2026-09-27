@@ -108,10 +108,9 @@ public final class HostSources implements Sources {
         if (compiled.isEmpty()) return List.of();
 
         snapshot(historyLabel);
-        // Before the walk, because it writes a file: a mark naming an annotation the project does not declare
-        // is a bot that stops compiling, which is a worse outcome than the rewrite going unrecorded. Null when
-        // there is nowhere to write one, which markLines reads as "record nothing".
-        String markerPackage = reviewNote == null ? null : ReviewMarker.prepare(config);
+        // A mark naming an annotation the classpath does not carry is a bot that stops compiling, which is a
+        // worse outcome than the rewrite going unrecorded.
+        boolean marking = reviewNote != null && ReviewMarker.available(state);
 
         List<Path> changed = new ArrayList<>();
         BotSources.forEach(config, state, (file, source) -> {
@@ -129,8 +128,8 @@ public final class HostSources implements Sources {
             if (touched.isEmpty()) return null;
             changed.add(file);
             String rewritten = String.join("\n", lines);
-            if (reviewNote == null || !ReviewMarker.marksSurvive(config, state, file)) return rewritten;
-            return ReviewMarker.markLines(rewritten, touched, markerPackage, reviewNote);
+            if (!marking || !ReviewMarker.marksSurvive(config, state, file)) return rewritten;
+            return ReviewMarker.markLines(rewritten, touched, reviewNote);
         });
         if (!changed.isEmpty()) redrawActiveFile();
         return List.copyOf(changed);

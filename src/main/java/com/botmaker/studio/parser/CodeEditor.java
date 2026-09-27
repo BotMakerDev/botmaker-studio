@@ -45,6 +45,7 @@ import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -699,12 +700,12 @@ public class CodeEditor {
         CompilationUnit cu = getCompilationUnit();
         if (cu == null) return;
 
-        // Both before a single character moves. The snapshot is the only undo for the *other* files that
-        // survives the session, and the marker has to exist before anything references it.
+        // Before a single character moves: the snapshot is the only undo for the *other* files that survives
+        // the session. What the plan guessed is marked @Refactor where the bot compiles it.
         if (touchesOtherFiles(plan, cu)) {
             ReviewMarker.snapshot(config, "Before changing \"" + method.getName().getIdentifier() + "\"");
         }
-        String marker = ReviewMarker.prepare(config);
+        boolean marker = ReviewMarker.available(state);
 
         List<CallMigrator.Rewritten> others =
                 CallMigrator.rewriteOthers(plan, cu, analyzer, state, config, marker);
@@ -923,6 +924,23 @@ public class CodeEditor {
             ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
             ImportManager.removeImport(cu, rewriter, qualifiedName);
             return AstRewriteHelper.applyRewrite(rewriter, code);
+        });
+    }
+
+    /**
+     * Removes {@code annotation} from the declaration it sits on — the ✕ on an annotation pill. A
+     * {@code @Refactor} takes its import with it once it was the file's last ({@link ReviewMarks#remove}).
+     */
+    public void removeAnnotation(BodyDeclaration owner, Annotation annotation) {
+        if (owner == null || annotation == null || annotation.getParent() != owner) return;
+        edit(owner, EditKind.SIGNATURE, false, (cu, code) -> {
+            EditContext ctx = ctx(cu);
+            if (owner instanceof MethodDeclaration method && BotAnnotation.REFACTOR.marks(annotation)) {
+                ReviewMarks.remove(ctx, method);
+            } else {
+                ctx.rewriter().getListRewrite(owner, owner.getModifiersProperty()).remove(annotation, null);
+            }
+            return ctx.applyTo(code);
         });
     }
 
@@ -1308,8 +1326,9 @@ public class CodeEditor {
      *
      * <p>{@link #deleteStatement} on a declaration removes the line and leaves every {@code attempts} in the
      * method pointing at a name that no longer exists — a file that does not compile, from one press of a ✕.
-     * What the uses become is {@link UseFix}, asked once and applied to all; a variable with no uses never
-     * reaches here, since {@code deleteStatement} is already the right answer for it.
+     * What the uses become is {@link UseFix}, one of the fixes the refusal offers
+     * ({@code DeleteVariableDialog}); a variable with no uses never reaches here, since {@code deleteStatement}
+     * is already the right answer for it. A default is a guess and marks the function {@code @Refactor}.
      *
      * <p>One write, not two: the uses and the declaration go in a single {@code ASTRewrite}, so the undo is one
      * step and the intermediate state — uses rewritten, declaration still there, or worse the reverse — never
@@ -1319,7 +1338,7 @@ public class CodeEditor {
         if (decl == null || fix == null || !canDelete(decl)) return;
         // Renaming the uses to another variable is a complete repair — the body goes on reading a real value,
         // and nothing is left to check. Defaulting them is not, so only that one is recorded.
-        String marker = fix instanceof UseFix.Rename ? null : ReviewMarker.prepare(config);
+        boolean marker = !(fix instanceof UseFix.Rename) && ReviewMarker.available(state);
         edit(decl, EditKind.BODY, false, (cu, code) -> deleteVariable(ctx(cu), code, decl, fix, marker));
     }
 
@@ -1752,7 +1771,7 @@ public class CodeEditor {
      * refuses rather than half-doing it.
      */
     private static String deleteVariable(EditContext ctx, String originalCode,
-                                         VariableDeclarationStatement decl, UseFix fix, String markerPackage) {
+                                         VariableDeclarationStatement decl, UseFix fix, boolean marks) {
         if (decl.fragments().size() != 1
                 || !(decl.fragments().getFirst() instanceof VariableDeclarationFragment fragment)) return null;
         ASTRewrite rewriter = ctx.rewriter();
@@ -1782,9 +1801,9 @@ public class CodeEditor {
         }
 
         rewriter.remove(decl, null);
-        if (markerPackage != null && !uses.isEmpty()) {
+        if (marks && !uses.isEmpty()) {
             String name = fragment.getName().getIdentifier();
-            ReviewMarks.mark(ctx, AstRewriteHelper.enclosingMethod(decl), markerPackage,
+            ReviewMarks.mark(ctx, AstRewriteHelper.enclosingMethod(decl),
                     List.of("the variable \"" + name + "\" was deleted, and the "
                             + uses.size() + (uses.size() == 1 ? " place" : " places")
                             + " that read it now read a default value instead."));

@@ -1,12 +1,14 @@
 package com.botmaker.studio.project.source;
 
 import com.botmaker.plugin.api.managed.Managed;
+import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
 import com.botmaker.studio.plugin.grammar.SourceNames;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
+import org.eclipse.jdt.core.dom.BooleanLiteral;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.IAnnotationBinding;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
@@ -22,6 +24,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,14 +50,18 @@ import java.util.Set;
 public enum BotAnnotation {
 
     PARAM(Param.class, "com.botmaker.plugin.basics.params.Param"),
-    MANAGED(Managed.class, "com.botmaker.plugin.basics.managed.Managed");
+    MANAGED(Managed.class, "com.botmaker.plugin.basics.managed.Managed"),
+    /** A refactor that guessed, on a bot's function (2026-09-27). No earlier name: it began in the contract. */
+    REFACTOR(Refactor.class);
 
     private final Class<? extends java.lang.annotation.Annotation> type;
     private final Set<String> names;
 
-    BotAnnotation(Class<? extends java.lang.annotation.Annotation> type, String before) {
+    BotAnnotation(Class<? extends java.lang.annotation.Annotation> type, String... before) {
         this.type = type;
-        this.names = Set.of(type.getCanonicalName(), before);
+        Set<String> names = new LinkedHashSet<>(List.of(before));
+        names.add(type.getCanonicalName());
+        this.names = Set.copyOf(names);
     }
 
     /** The contract's annotation class. */
@@ -89,7 +96,7 @@ public enum BotAnnotation {
     }
 
     /**
-     * The annotation's members — a {@code String} or a {@code Double} for a single value, a
+     * The annotation's members — a {@code String}, a {@code Double} or a {@code Boolean} for a single value, a
      * {@code List<String>} for an array — with what could not be read left out.
      *
      * <p>From the binding where there is one, so {@code category = SOME_CONSTANT} reads as the constant's
@@ -101,24 +108,24 @@ public enum BotAnnotation {
         if (resolved(annotation) != null) return members(binding);
         Map<String, Object> out = new LinkedHashMap<>();
         if (annotation instanceof SingleMemberAnnotation single) {
-            constant(single.getValue()).ifPresent(v -> out.put("value", v));
+            member(single.getValue()).ifPresent(v -> out.put("value", v));
         } else if (annotation instanceof NormalAnnotation normal) {
             for (Object each : normal.values()) {
                 MemberValuePair pair = (MemberValuePair) each;
-                String name = pair.getName().getIdentifier();
-                if (pair.getValue() instanceof ArrayInitializer array) {
-                    List<String> items = new ArrayList<>();
-                    for (Object element : array.expressions()) {
-                        constant((Expression) element).filter(String.class::isInstance)
-                                .ifPresent(v -> items.add((String) v));
-                    }
-                    out.put(name, List.copyOf(items));
-                } else {
-                    constant(pair.getValue()).ifPresent(v -> out.put(name, v));
-                }
+                member(pair.getValue()).ifPresent(v -> out.put(pair.getName().getIdentifier(), v));
             }
         }
         return out;
+    }
+
+    /** One member's value as the source spells it: an array of strings, or a single constant. */
+    private Optional<Object> member(Expression value) {
+        if (!(value instanceof ArrayInitializer array)) return constant(value);
+        List<String> items = new ArrayList<>();
+        for (Object element : array.expressions()) {
+            constant((Expression) element).filter(String.class::isInstance).ifPresent(v -> items.add((String) v));
+        }
+        return Optional.of(List.copyOf(items));
     }
 
     private static Map<String, Object> members(IAnnotationBinding binding) {
@@ -129,7 +136,7 @@ public enum BotAnnotation {
                 List<String> items = new ArrayList<>();
                 for (Object item : array) if (item instanceof String text) items.add(text);
                 out.put(pair.getName(), List.copyOf(items));
-            } else if (value instanceof String || value instanceof Number) {
+            } else if (value instanceof String || value instanceof Number || value instanceof Boolean) {
                 out.put(pair.getName(), normal(value));
             }
         }
@@ -140,6 +147,7 @@ public enum BotAnnotation {
     private Optional<Object> constant(Expression expression) {
         return switch (expression) {
             case StringLiteral literal -> Optional.of(literal.getLiteralValue());
+            case BooleanLiteral literal -> Optional.of(literal.booleanValue());
             case QualifiedName qualified when names.stream()
                     .anyMatch(name -> SourceNames.refersTo(qualified.getQualifier(), name)) ->
                     ownConstant(qualified.getName().getIdentifier());

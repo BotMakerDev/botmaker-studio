@@ -1,27 +1,18 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.UseFix;
 import com.botmaker.studio.parser.factories.InitializerFactory;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.ui.render.theme.ThemedWindows;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.RadioButton;
-import javafx.scene.control.ToggleGroup;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
+import com.botmaker.studio.ui.app.Refactors;
+import com.botmaker.studio.ui.app.RefusalDialog;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.SimpleName;
@@ -29,37 +20,34 @@ import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * What happens to a variable's uses when the variable goes — asked once, applied to all.
+ * Deleting a variable something still reads: <b>refused, with where and what instead</b> (2026-09-27).
  *
- * <p>The ✕ on a declare block used to remove the line and nothing else, so deleting {@code int attempts = 0}
- * that three lines later read {@code attempts} produced a file that does not compile. This screen is the
- * missing question, and it is only shown when there is one to ask: an unused variable still deletes with one
- * press and no dialog.
+ * <p>The ✕ on a declare block used to remove the line and nothing else, which left a file that does not
+ * compile; then this was its own window asking what the uses should become. It is now the refusal every
+ * refactor uses ({@link RefusalDialog}): the delete does not happen, each use is a link to its block, and the
+ * ways through are buttons — point the uses at another variable of the same type (an exact repair), or put
+ * the type's default where each was (a guess, so the function is marked {@code @Refactor}). An unused
+ * variable still deletes with one press and no window.
  *
- * <p>Two answers, because there are only two that don't invent work: put the type's default where each use was,
- * or point them at another variable of the same type. "Create a new variable" was considered and left out — it
- * is the delete you were about to do, undone, with a rename on top. Cancel is the third button, not a third
- * answer.
+ * <h2>Syntactic candidates, like the screen next door</h2>
  *
- * <h2>Syntactic, like the screen next door</h2>
- *
- * <p>The candidate list is gathered by walking the method, not from {@code VariableScopeVisitor}: that reads
- * {@code IVariableBinding}s, which a file mid-edit routinely doesn't have, and a delete dialog whose "point
- * them somewhere" option empties itself whenever the project has an error would be useless exactly when it is
- * most wanted. Same reasoning as {@link EditVariableDialog}, which resolves its variable the same way.
+ * <p>The other variables are gathered by walking the method, not from {@code VariableScopeVisitor}: that reads
+ * {@code IVariableBinding}s, which a file mid-edit routinely doesn't have. Same reasoning as
+ * {@link EditVariableDialog}.
  */
 public final class DeleteVariableDialog {
 
     private DeleteVariableDialog() {}
 
     /**
-     * Deletes {@code decl}, asking about its uses first when it has any.
+     * Deletes {@code decl}, or refuses while anything reads it and offers the fixes.
      *
      * @param decl the declaration behind the ✕ that was pressed
      */
@@ -76,84 +64,49 @@ public final class DeleteVariableDialog {
             context.getCodeEditor().deleteStatement(decl);
             return;
         }
-        ask(context, owner, decl, fragment, method, uses)
-                .ifPresent(fix -> context.getCodeEditor().deleteVariable(decl, fix));
-    }
 
-    // --- The window --------------------------------------------------------------------------------------
-
-    private static java.util.Optional<UseFix> ask(CodeEditorService context, Window owner,
-                                                  VariableDeclarationStatement decl,
-                                                  VariableDeclarationFragment fragment,
-                                                  MethodDeclaration method, List<SimpleName> uses) {
         String name = fragment.getName().getIdentifier();
+        List<RefusalDialog.Choice> fixes = new ArrayList<>();
+        for (String other : sameTypedInScope(method, decl, fragment, uses)) {
+            fixes.add(new RefusalDialog.Choice("Use " + other + " instead",
+                    () -> context.getCodeEditor().deleteVariable(decl, new UseFix.Rename(other))));
+        }
         ResolvedType type = ProjectAnalyzer.resolveType(decl.getType());
-        String defaultValue = defaultValueSource(context, decl, type);
-        List<String> candidates = sameTypedInScope(method, decl, fragment, uses);
+        fixes.add(new RefusalDialog.Choice("Replace with " + defaultValueSource(context, decl, type),
+                () -> context.getCodeEditor().deleteVariable(decl, UseFix.DEFAULT)));
 
-        Stage stage = new Stage();
-        stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Delete Variable");
-
-        Label headline = new Label(useCountLine(name, uses.size(), method));
-        headline.getStyleClass().add("dialog-headline");
-        headline.setWrapText(true);
-
-        ToggleGroup choice = new ToggleGroup();
-        RadioButton useDefault = new RadioButton("Replace those uses with a default value — " + defaultValue);
-        useDefault.setToggleGroup(choice);
-        useDefault.setSelected(true);
-
-        RadioButton usePointer = new RadioButton("Point them at another variable");
-        usePointer.setToggleGroup(choice);
-        ComboBox<String> other = new ComboBox<>();
-        other.getItems().setAll(candidates);
-        if (!candidates.isEmpty()) other.getSelectionModel().selectFirst();
-        // Disabled rather than absent when nothing qualifies: the screen keeps its shape, and "there is no other
-        // variable of this type here" is itself the answer to why the option can't be taken.
-        usePointer.setDisable(candidates.isEmpty());
-        other.setDisable(true);
-        other.disableProperty().bind(usePointer.selectedProperty().not());
-        HBox pointerRow = new HBox(10, usePointer, other);
-        pointerRow.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(other, Priority.ALWAYS);
-
-        UseFix[] result = new UseFix[1];
-        Button delete = new Button("Delete");
-        delete.getStyleClass().add("primary-button");
-        delete.setDefaultButton(true);
-        delete.setOnAction(e -> {
-            result[0] = usePointer.isSelected() && other.getValue() != null
-                    ? new UseFix.Rename(other.getValue())
-                    : UseFix.DEFAULT;
-            stage.close();
-        });
-        Button cancel = new Button("Cancel");
-        cancel.setCancelButton(true);
-        cancel.setOnAction(e -> stage.close());
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, spacer, cancel, delete);
-        bar.setAlignment(Pos.CENTER_RIGHT);
-
-        VBox root = new VBox(14, headline, useDefault, pointerRow, bar);
-        root.setPadding(new Insets(18));
-        stage.setScene(ThemedWindows.scene(root, 520, 240));
-        stage.setMinWidth(460);
-        stage.setMinHeight(220);
-        stage.showAndWait();
-        return java.util.Optional.ofNullable(result[0]);
+        RefusalDialog.show(owner, name + " wasn't deleted", stillRead(name, uses.size(), method),
+                usagesOf(context, uses), fixes, Refactors.reveal(context));
     }
 
-    private static String useCountLine(String name, int count, MethodDeclaration method) {
+    private static String stillRead(String name, int count, MethodDeclaration method) {
         String where = method == null ? "" : " in " + method.getName().getIdentifier() + "()";
-        return "\"" + name + "\" is used " + count + (count == 1 ? " time" : " times") + where + ".";
+        return "\"" + name + "\" is still used " + count + (count == 1 ? " time" : " times") + where
+                + ". Remove " + (count == 1 ? "that use" : "those uses") + " first, or point "
+                + (count == 1 ? "it" : "them") + " somewhere else below. A default value is a guess, so the "
+                + "function is marked for review. Nothing has changed.";
+    }
+
+    /** The uses as the refusal lists them: each a link to its block in the open file. */
+    private static List<Usages.Usage> usagesOf(CodeEditorService context, List<SimpleName> uses) {
+        ProjectFile active = context.getState().getActiveFile();
+        Path file = active == null ? null : active.getPath();
+        String[] lines = context.getState().getCurrentCode() == null ? new String[0]
+                : context.getState().getCurrentCode().split("\n", -1);
+        List<Usages.Usage> out = new ArrayList<>();
+        for (SimpleName use : uses) {
+            CompilationUnit unit = (CompilationUnit) use.getRoot();
+            int line = unit.getLineNumber(use.getStartPosition());
+            MethodDeclaration method = AstRewriteHelper.enclosingMethod(use);
+            out.add(new Usages.Usage(file, use.getStartPosition(), line,
+                    method == null ? "" : method.getName().getIdentifier(),
+                    line >= 1 && line <= lines.length ? lines[line - 1].trim() : use.getIdentifier(), false));
+        }
+        return out;
     }
 
     /**
-     * The default as it will be written, so the option can show it rather than describe it.
+     * The default as it will be written, so the button can show it rather than describe it.
      *
      * <p>Built with the same factory the rewrite uses, on the live AST but with no rewriter of its own — this is
      * a node made to be printed and thrown away, never applied.

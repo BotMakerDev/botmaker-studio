@@ -190,7 +190,7 @@ class SplitPointerTest {
                 Map.of());
         assertTrue(rewritten.contains("String s = \"\";"),
                 "the default value of the type it used to return stands in:\n" + rewritten);
-        assertTrue(rewritten.contains("@NeedsReview"), "and the site is marked:\n" + rewritten);
+        assertTrue(rewritten.contains("@Refactor"), "and the site is marked:\n" + rewritten);
     }
 
     @Test
@@ -383,7 +383,7 @@ class SplitPointerTest {
         String rewritten = rewriteOver(tmp, before, after, STORED_TEXT_BOT, picks);
         assertTrue(rewritten.contains("String s = \"\";"), rewritten);
         assertFalse(rewritten.contains("Text.line()"), "the candidate was declined: " + rewritten);
-        assertTrue(rewritten.contains("@NeedsReview"), "a default always marks the function: " + rewritten);
+        assertTrue(rewritten.contains("@Refactor"), "a default always marks the function: " + rewritten);
     }
 
     /**

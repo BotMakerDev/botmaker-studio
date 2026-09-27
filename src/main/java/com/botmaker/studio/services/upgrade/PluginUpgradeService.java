@@ -4,7 +4,7 @@ import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.ApiReferences;
 import com.botmaker.studio.parser.refactor.CallMigrator;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -360,8 +360,8 @@ public final class PluginUpgradeService {
      * split is not a new <em>verdict</em> about the member (it is still deprecated, or still gone), so
      * folding it in would change what {@link Report#canMigrate()} and {@link Report#canModernise()} mean.
      *
-     * <p>Nothing is required of the user: every site arrives answered with the author's preferred candidate,
-     * so a dialog closed without a click migrates exactly as it would have before splits existed.
+     * <p>A site where a candidate fits arrives answered with the author's preferred one. A site where none
+     * fits — and every site of a {@link Report#guesses() guess} — waits for the user's pick (2026-09-27).
      */
     public record Choice(String type, String member, int argCount, List<Candidate> candidates,
                          String note, List<Site> sites) {
@@ -378,7 +378,7 @@ public final class PluginUpgradeService {
      * the candidate: a call standing as a statement discards its result, so every candidate fits, while one
      * whose value is used admits only those whose return type still sits where the old one did. The
      * <b>first</b> is the preselection. An <b>empty</b> list is not a new outcome — it is today's default
-     * value plus {@code @NeedsReview}, and the dialog says so rather than offering an empty menu.
+     * value plus {@code @Refactor}, and the dialog says so rather than offering an empty menu.
      */
     public record Site(CallSite site, List<Candidate> candidates, boolean statement) {}
 
@@ -477,7 +477,9 @@ public final class PluginUpgradeService {
      *
      * <p>{@code splits} are the members that became two — see {@link Choice}. They sit beside the two verdict
      * lists rather than inside them, deliberately: a split member is already reported there as deprecated or
-     * as a break, and this is the question that goes with it, not a third kind of finding.
+     * as a break, and this is the question that goes with it, not a third kind of finding. {@code guesses}
+     * are the same question for a call nothing replaces (2026-09-27): a default value or a deleted line, which
+     * the user picks per site with nothing pre-filled.
      *
      * <p>{@code operation} is which of the four questions this report answers. Every one of them runs the
      * same diff over the same two jars, so nothing downstream branches on it — it exists because the
@@ -491,6 +493,7 @@ public final class PluginUpgradeService {
                          List<Deprecation> deprecated,
                          List<Break> breaks,
                          List<Choice> splits,
+                         List<Choice> guesses,
                          List<String> scaffolding,
                          List<String> problems) {
 
@@ -552,7 +555,7 @@ public final class PluginUpgradeService {
 
         static Report unavailable(String from, String to, Operation operation, String problem) {
             return new Report(from, to, operation, List.of(), Map.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(problem));
+                    List.of(), List.of(), List.of(problem));
         }
 
         /**
@@ -733,6 +736,7 @@ public final class PluginUpgradeService {
                 List.of(), Map.of(), List.of(),
                 UpgradeDiff.breaks(before, after, uses, pairing, true),
                 List.of(),
+                UpgradeDiff.guesses(before, after, uses, pairing, true),
                 List.of(),
                 List.copyOf(problems));
     }
@@ -774,6 +778,7 @@ public final class PluginUpgradeService {
                 deprecated,
                 breaks,
                 UpgradeDiff.splits(before, after, uses, pairing),
+                UpgradeDiff.guesses(before, after, uses, pairing, false),
                 UpgradeDiff.scaffolding(before, deprecated, breaks),
                 List.copyOf(problems));
     }
@@ -896,7 +901,6 @@ public final class PluginUpgradeService {
         if (outcome == null) return 0;                      // nothing named it
         if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
         try {
-            ReviewMarks.ensureFile(config.mainPackageDir(), config.mainPackage());
             CallMigrator.commit(outcome.files());
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
@@ -950,10 +954,6 @@ public final class PluginUpgradeService {
         if (outcome == null) return 0;                      // nothing needed repairing
         if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
         try {
-            // The annotation the rewritten files now reference. Written before them, so the project never
-            // exists in a state where a mark names a type that isn't there — and only when the migration has
-            // already agreed to write something, so a refused upgrade adds no file at all.
-            ReviewMarks.ensureFile(config.mainPackageDir(), config.mainPackage());
             CallMigrator.commit(outcome.files());
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
@@ -1053,7 +1053,7 @@ public final class PluginUpgradeService {
         }
 
         return ApiMigrationRunner.run(repairs, choicesFor(before, after, uses, pairing, picks),
-                editable, generated, known, fieldOwners, config.mainPackage(), null, state);
+                editable, generated, known, fieldOwners, ReviewMarker.available(state), null, state);
     }
 
     /**

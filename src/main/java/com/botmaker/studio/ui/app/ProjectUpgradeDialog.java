@@ -151,6 +151,7 @@ public final class ProjectUpgradeDialog {
         progress.setVisible(true);
         applyButton.setDisable(true);
         applyButton.setOnAction(e -> runApply());
+        reportView.onPicked(this::refreshApply);
 
         table.setHgap(10);
         table.setVgap(6);
@@ -293,6 +294,8 @@ public final class ProjectUpgradeDialog {
         private final Label verdict = new Label();
 
         private Report report;
+        /** A removal report on screen that waits for picks; the next Remove… confirms it instead of re-checking. */
+        private Report pendingRemoval;
         /** True while {@link #loadVersions} is filling the combo box, so seeding checks nothing. */
         private boolean seeding = true;
         private boolean checking;
@@ -316,6 +319,7 @@ public final class ProjectUpgradeDialog {
             // re-runs, and the seeding pass is exempt so opening the window fires nothing.
             versions.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
                 report = null;
+                pendingRemoval = null;
                 chip("", "none");
                 refreshApply();
                 if (!seeding && isMoving()) runCheck();
@@ -323,7 +327,10 @@ public final class ProjectUpgradeDialog {
 
             check.setOnAction(e -> runCheck());
             check.setDisable(true);
-            remove.setOnAction(e -> runRemovalCheck());
+            remove.setOnAction(e -> {
+                if (pendingRemoval != null && showing == this) confirmRemoval(pendingRemoval);
+                else runRemovalCheck();
+            });
             verdict.setWrapText(true);
         }
 
@@ -368,6 +375,7 @@ public final class ProjectUpgradeDialog {
         void runCheck() {
             String target = versions.getValue();
             if (target == null || target.isBlank()) return;
+            pendingRemoval = null;
             check.setDisable(true);
             checking = true;
             chip("checking…", "checking");
@@ -468,6 +476,12 @@ public final class ProjectUpgradeDialog {
                         + "report below lists every place. Change those first.").showAndWait();
                 return;
             }
+            if (reportView.unpicked() > 0) {
+                pendingRemoval = r;
+                status(unpickedReason(reportView.unpicked()) + " Then press Remove… again.");
+                return;
+            }
+            pendingRemoval = null;
 
             String what = r.breaks().isEmpty()
                     ? "This bot calls nothing in it, so only the pom changes."
@@ -573,9 +587,11 @@ public final class ProjectUpgradeDialog {
         int moving = (int) rows.stream().filter(Row::isMoving).count();
         List<String> blocked = rows.stream().filter(Row::isBlocked).map(r -> r.plugin.displayName()).toList();
         boolean checking = rows.stream().anyMatch(r -> r.checking);
-        applyButton.setDisable(moving == 0 || !blocked.isEmpty() || checking);
+        // Only the report on screen can have sites waiting, and only a moving row's report counts.
+        int unpicked = showing != null && showing.report != null && showing.isMoving() ? reportView.unpicked() : 0;
+        applyButton.setDisable(moving == 0 || !blocked.isEmpty() || checking || unpicked > 0);
 
-        String why = applyBlockedReason(moving, blocked, checking);
+        String why = applyBlockedReason(moving, blocked, checking, unpicked);
         whyDisabled.setText(why);
         whyDisabled.setVisible(!why.isEmpty());
         whyDisabled.setManaged(!why.isEmpty());
@@ -589,6 +605,11 @@ public final class ProjectUpgradeDialog {
      * is the only part they can act on.
      */
     static String applyBlockedReason(int movingRows, List<String> blockedRows, boolean checking) {
+        return applyBlockedReason(movingRows, blockedRows, checking, 0);
+    }
+
+    /** As above, with the calls in the report below still waiting for a pick. */
+    static String applyBlockedReason(int movingRows, List<String> blockedRows, boolean checking, int unpicked) {
         if (movingRows == 0) {
             return "Pick a version different from the installed one on at least one row.";
         }
@@ -598,7 +619,14 @@ public final class ProjectUpgradeDialog {
                     + " blocked: the report below says what to change by hand. Setting that row back to its "
                     + "installed version lets the others move.";
         }
+        if (unpicked > 0) return unpickedReason(unpicked);
         return "";
+    }
+
+    /** Why a repair waits: a call with nothing that fits is a guess either way, and the guess is the user's. */
+    static String unpickedReason(int unpicked) {
+        return unpicked + (unpicked == 1 ? " call has" : " calls have") + " nothing that replaces it: choose in "
+                + "the report below whether each becomes a default value or is deleted.";
     }
 
     private void runApply() {

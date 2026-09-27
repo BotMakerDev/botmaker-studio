@@ -74,24 +74,24 @@ public final class CallMigrator {
      * shuffles at sites it just found. Only an SDK migration produces a change that can be refused.
      */
     public static boolean applyIn(EditContext ctx, SignatureMigration.Plan plan) {
-        return applyIn(ctx, plan, null);
+        return applyIn(ctx, plan, false);
     }
 
     /**
      * The same, recording a {@linkplain ReviewMarks review mark} on the function around every call the change
-     * leaves needing a look — see {@link #reviewEntries}. A null {@code markerPackage} turns that off, which
-     * is what a caller with nowhere to write the annotation passes.
+     * leaves needing a look — see {@link #reviewEntries} — when {@code marking}, which is
+     * {@link ReviewMarker#available} for a caller in a project.
      */
-    public static boolean applyIn(EditContext ctx, SignatureMigration.Plan plan, String markerPackage) {
+    public static boolean applyIn(EditContext ctx, SignatureMigration.Plan plan, boolean marking) {
         if (plan == null) return true;
         boolean applied = true;
         Map<MethodDeclaration, Set<String>> marks = new LinkedHashMap<>();
         for (CallChange change : plan.calls()) {
             if (change.site().unit() != ctx.cu()) continue;
             applied &= apply(ctx, change);
-            if (markerPackage != null) note(marks, change);
+            if (marking) note(marks, change);
         }
-        marks.forEach((method, entries) -> ReviewMarks.mark(ctx, method, markerPackage, List.copyOf(entries)));
+        marks.forEach((method, entries) -> ReviewMarks.mark(ctx, method, List.copyOf(entries)));
         return applied;
     }
 
@@ -104,7 +104,7 @@ public final class CallMigrator {
      */
     public static List<Rewritten> rewriteOthers(SignatureMigration.Plan plan, CompilationUnit active,
                                                 ProjectAnalyzer analyzer, ProjectState state) {
-        return rewriteOthers(plan, active, analyzer, state, null, null);
+        return rewriteOthers(plan, active, analyzer, state, null, false);
     }
 
     /**
@@ -115,7 +115,7 @@ public final class CallMigrator {
      */
     public static List<Rewritten> rewriteOthers(SignatureMigration.Plan plan, CompilationUnit active,
                                                 ProjectAnalyzer analyzer, ProjectState state,
-                                                ProjectConfig config, String markerPackage) {
+                                                ProjectConfig config, boolean marks) {
         Map<CompilationUnit, List<CallChange>> byUnit = new LinkedHashMap<>();
         for (CallChange change : plan.calls()) {
             if (change.site().unit() == active) continue;
@@ -128,15 +128,13 @@ public final class CallMigrator {
             EditContext ctx = EditContext.of(entry.getKey(), analyzer, state);
             // A change this cannot express — a constant moved to another class with no type written at the
             // call site to retarget — refuses the migration whole, exactly as an unparseable result does.
-            boolean marking = markerPackage != null
-                    && ReviewMarker.marksSurvive(config, state, file.getPath());
-            Map<MethodDeclaration, Set<String>> marks = new LinkedHashMap<>();
+            boolean marking = marks && ReviewMarker.marksSurvive(config, state, file.getPath());
+            Map<MethodDeclaration, Set<String>> noted = new LinkedHashMap<>();
             for (CallChange change : entry.getValue()) {
                 if (!apply(ctx, change)) return null;
-                if (marking) note(marks, change);
+                if (marking) note(noted, change);
             }
-            marks.forEach((method, entries) ->
-                    ReviewMarks.mark(ctx, method, markerPackage, List.copyOf(entries)));
+            noted.forEach((method, entries) -> ReviewMarks.mark(ctx, method, List.copyOf(entries)));
 
             String source = ctx.applyTo(file.getContent());
             if (source == null) return null;

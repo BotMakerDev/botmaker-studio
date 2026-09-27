@@ -20,8 +20,10 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * One upgrade report, laid out — the body of {@link com.botmaker.studio.ui.app.ProjectUpgradeDialog}.
@@ -34,9 +36,9 @@ import java.util.Map;
  * this class is what outlived it, and an upgrade and a removal are the same layout in two modes.
  *
  * <p>It <b>collects one thing</b> rather than only displaying: {@link #picks()} is what the user asked for at
- * each call site — a {@link Decision}, filled in as each card is built. So the map is complete before the
- * user has touched anything, and closing the window without a click produces exactly the upgrade an empty map
- * would.
+ * each call site — a {@link Decision}. A site with a fitting candidate is pre-filled with it, a checked
+ * redirect; a site with none is a guess either way (a default value or a deleted line), so it starts empty
+ * and counts in {@link #unpicked()} until the user answers it (2026-09-27).
  *
  * <p>The menu at a site offers what can be written there and nothing else: the candidates that fit,
  * <b>Default it out</b> always, and <b>Discard this call</b> only where the call stands as a statement —
@@ -70,9 +72,22 @@ public final class ReportView {
 
     private final VBox box = new VBox(14);
     private final Map<CallSite, Decision> picks = new LinkedHashMap<>();
+    /** The sites with nothing that fits, whose answer the user has not given yet. */
+    private final Set<CallSite> unpicked = new LinkedHashSet<>();
+    private Runnable onPicked = () -> {};
 
     public ReportView() {
         box.setPadding(new Insets(4, 2, 4, 2));
+    }
+
+    /** How many sites still wait for the user's pick; the window keeps its apply off until none do. */
+    public int unpicked() {
+        return unpicked.size();
+    }
+
+    /** Called when a site that was waiting gets its answer, so the window can re-ask {@link #unpicked()}. */
+    public void onPicked(Runnable action) {
+        this.onPicked = action == null ? () -> {} : action;
     }
 
     /** The node to put in a scroll pane. */
@@ -88,6 +103,7 @@ public final class ReportView {
     /** One line in place of a report: before the first check, and after a failed one. */
     public void placeholder(String text) {
         picks.clear();
+        unpicked.clear();
         box.getChildren().setAll(new Label(text));
     }
 
@@ -95,6 +111,7 @@ public final class ReportView {
     public void render(Report r, Mode mode) {
         box.getChildren().clear();
         picks.clear();
+        unpicked.clear();
 
         if (r.isIncomplete()) {
             box.getChildren().add(section("⚠ What this check could not determine", r.problems()));
@@ -182,6 +199,9 @@ public final class ReportView {
 
         // Last, because it is the only thing here addressed *to* the user.
         for (Choice choice : r.splits()) box.getChildren().add(splitCard(choice));
+        if (r.unrepairable().isEmpty()) {
+            for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
+        }
 
         if (!r.repairable().isEmpty()) {
             box.getChildren().add(repairCard(r));
@@ -197,9 +217,8 @@ public final class ReportView {
      * <em>as written</em> — the line number alone cannot tell those two apart, which is exactly the
      * distinction being asked about.
      *
-     * <p><b>Nothing is required.</b> Every combo arrives on the author's preferred candidate, and a site
-     * where none of the candidates fits gets no combo at all: that is today's default value and review mark,
-     * and offering an empty menu would imply a choice that does not exist.
+     * <p>A site where a candidate fits arrives on the author's preferred one. A site where none fits is a
+     * guess either way and arrives empty, like every row of a {@link #guessCard}.
      *
      * <p>Modernise does not render these — it takes the preferred candidate everywhere. Moving off a
      * deprecation is not a change the user came here to make, and it is the one path where declining to
@@ -223,6 +242,25 @@ public final class ReportView {
         why.getStyleClass().add("sdk-upgrade-empty");
         card.getChildren().add(why);
 
+        for (Site site : choice.sites()) card.getChildren().add(siteRow(site));
+        card.getStyleClass().add("sdk-upgrade-card");
+        return card;
+    }
+
+    /**
+     * A member nothing replaces, and a row per call of it with no answer chosen (2026-09-27): a default value
+     * or a deleted line is a guess either way, so the user makes it, and the window's apply waits for all of
+     * them ({@link #unpicked()}).
+     */
+    private Node guessCard(Choice choice) {
+        Label heading = new Label(choice.display() + " has nothing that replaces it — choose per call");
+        heading.setStyle("-fx-font-weight: bold;");
+        Label why = new Label("A default value keeps the bot compiling and marks the function @Refactor for "
+                + "review; deleting the line is offered where the call stands on its own.");
+        why.setWrapText(true);
+        why.getStyleClass().add("sdk-upgrade-empty");
+
+        VBox card = new VBox(6, heading, why);
         for (Site site : choice.sites()) card.getChildren().add(siteRow(site));
         card.getStyleClass().add("sdk-upgrade-card");
         return card;
@@ -261,11 +299,21 @@ public final class ReportView {
             values.add(Decision.DISCARD);
         }
 
-        combo.getSelectionModel().select(0);
-        picks.put(site.site(), values.getFirst());
+        // A fitting candidate is a checked redirect and is pre-filled. A site with none is a guess whichever way
+        // it goes — a default value or a deleted line — so the user makes it (2026-09-27): it starts empty,
+        // and the window's apply stays off until every such site has an answer (unpicked()).
+        if (site.candidates().isEmpty()) {
+            combo.setPromptText("Choose what this call becomes…");
+            unpicked.add(site.site());
+        } else {
+            combo.getSelectionModel().select(0);
+            picks.put(site.site(), values.getFirst());
+        }
         combo.getSelectionModel().selectedIndexProperty().addListener((o, was, now) -> {
             int index = now.intValue();
-            if (index >= 0 && index < values.size()) picks.put(site.site(), values.get(index));
+            if (index < 0 || index >= values.size()) return;
+            picks.put(site.site(), values.get(index));
+            if (unpicked.remove(site.site())) onPicked.run();
         });
         row.getChildren().add(combo);
         return row;
@@ -307,6 +355,8 @@ public final class ReportView {
                 for (var site : b.sites()) byHand.add("        " + site);
             }
             box.getChildren().add(section("Why this removal is refused", byHand));
+        } else {
+            for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
         }
 
         Label note = new Label(!r.unrepairable().isEmpty()

@@ -6,32 +6,31 @@ import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The review marker, on its own: writing one, merging into one that is there, reading it back, and taking
- * entries off it again.
+ * The review marker, on its own: writing the contract's {@code @Refactor}, merging into one that is there,
+ * reading it back, marking it reviewed and removing it.
  *
  * <p>Every test that writes asserts the result <b>parses</b>. An annotation is one of the few edits that can
  * be recorded happily by {@code ASTRewrite} and still land in a position Java does not allow — before the
  * javadoc, after {@code public} — so "it compiles" is the assertion that matters, not "the text is there".
  *
- * <p>The round trip (write, re-parse, read back what was written) is tested rather than assumed, because the
- * two halves have separate reasons to be wrong: writing picks a form (a bare string for one entry, a braced
- * array for several) and reading has to accept every form a person might have left behind.
+ * <p>The units here have no bindings, so the annotation is recognised the way javac would without a
+ * classpath: through the file's import of {@code com.botmaker.plugin.api.meta.Refactor}. A {@code Refactor}
+ * nothing imports is someone else's.
  */
 class ReviewMarksTest {
+
+    private static final String IMPORT = "import com.botmaker.plugin.api.meta.Refactor;\n";
 
     // -------------------------------------------------------------------------
     // Harness
@@ -67,10 +66,9 @@ class ReviewMarksTest {
         return found.get();
     }
 
-    /** The entries {@code source} says {@code method} carries, read back through a fresh parse. */
-    private static List<String> entriesIn(String source, String method) {
-        CompilationUnit unit = SourceParser.parse(source);
-        return ReviewMarks.entriesOf(methodNamed(unit, method));
+    /** What {@code source} says {@code method}'s mark is, read back through a fresh parse. */
+    private static ReviewMarks.Mark markIn(String source, String method) {
+        return ReviewMarks.markOn(methodNamed(SourceParser.parse(source), method));
     }
 
     private static final String PLAIN = """
@@ -87,52 +85,46 @@ class ReviewMarksTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void aFunctionWithNoMarkGainsOne() {
-        String source = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("look at this")));
+    void aFunctionWithNoMarkGainsOneAndTheImport() {
+        String source = edit(PLAIN, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("look at this")));
 
-        assertTrue(source.contains("@NeedsReview(\"look at this\")"), source);
-        assertEquals(List.of("look at this"), entriesIn(source, "run"));
+        assertTrue(source.contains("@Refactor(\"look at this\")"), source);
+        assertTrue(source.contains(IMPORT.strip()), source);
+        assertEquals(new ReviewMarks.Mark(List.of("look at this"), false), markIn(source, "run"));
     }
 
     @Test
     void severalEntriesAreWrittenAsAnArrayAndReadBackInOrder() {
         String source = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("first", "second")));
+                (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("first", "second")));
 
         assertTrue(source.contains("{"), source);
-        assertEquals(List.of("first", "second"), entriesIn(source, "run"));
+        assertEquals(List.of("first", "second"), markIn(source, "run").entries());
     }
 
     @Test
     void aSecondRefactorMergesIntoTheMarkAlreadyThereRatherThanAddingAnother() {
-        String once = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("first")));
-        String twice = edit(once, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("second")));
+        String once = edit(PLAIN, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("first")));
+        String twice = edit(once, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("second")));
 
-        assertEquals(1, twice.split("@NeedsReview", -1).length - 1,
-                "Java allows a method one of these:\n" + twice);
-        assertEquals(List.of("first", "second"), entriesIn(twice, "run"));
+        assertEquals(1, twice.split("@Refactor", -1).length - 1, "Java allows a method one of these:\n" + twice);
+        assertEquals(List.of("first", "second"), markIn(twice, "run").entries());
     }
 
     @Test
-    void thesSameEntryTwiceIsStillOneEntry() {
-        String once = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("the same thing")));
-        String twice = edit(once, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("the same thing")));
+    void theSameEntryTwiceIsStillOneEntry() {
+        String once = edit(PLAIN, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("same")));
+        String twice = edit(once, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("same")));
 
-        assertEquals(List.of("the same thing"), entriesIn(twice, "run"));
+        assertEquals(List.of("same"), markIn(twice, "run").entries());
     }
 
     @Test
     void quotesAndBackslashesInAnEntrySurviveTheRoundTrip() {
         String entry = "Vision.find(\"a\\b\") is gone";
-        String source = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of(entry)));
+        String source = edit(PLAIN, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of(entry)));
 
-        assertEquals(List.of(entry), entriesIn(source, "run"));
+        assertEquals(List.of(entry), markIn(source, "run").entries());
     }
 
     @Test
@@ -145,20 +137,34 @@ class ReviewMarksTest {
                         int x = 1;
                     }
                 }
-                """, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of("entry")));
+                """, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("entry")));
 
         int javadoc = source.indexOf("Does the thing");
-        int mark = source.indexOf("@NeedsReview");
+        int mark = source.indexOf("@Refactor");
         int modifiers = source.indexOf("public static");
         assertTrue(javadoc < mark && mark < modifiers, "wrong order:\n" + source);
     }
 
     @Test
     void anEmptyListOfEntriesMarksNothingAtAll() {
-        String source = edit(PLAIN, "run",
-                (ctx, method) -> ReviewMarks.mark(ctx, method, "com.mybot", List.of()));
+        String source = edit(PLAIN, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of()));
 
-        assertFalse(source.contains("@NeedsReview"), source);
+        assertFalse(source.contains("Refactor"), source);
+    }
+
+    @Test
+    void aNewGuessReopensAReviewedMark() {
+        String reviewed = """
+                package com.mybot;
+                %s
+                class Bot {
+                    @Refactor(value = "old", done = true)
+                    void run() {}
+                }
+                """.formatted(IMPORT);
+        String source = edit(reviewed, "run", (ctx, method) -> ReviewMarks.mark(ctx, method, List.of("new")));
+
+        assertEquals(new ReviewMarks.Mark(List.of("old", "new"), false), markIn(source, "run"));
     }
 
     // -------------------------------------------------------------------------
@@ -169,85 +175,103 @@ class ReviewMarksTest {
     void aHandWrittenNormalAnnotationReadsBackToo() {
         String source = """
                 package com.mybot;
+                %s
                 class Bot {
-                    @NeedsReview(value = {"one", "two"})
+                    @Refactor(value = {"one", "two"}, done = false)
+                    void run() {}
+                }
+                """.formatted(IMPORT);
+        assertEquals(new ReviewMarks.Mark(List.of("one", "two"), false), markIn(source, "run"));
+    }
+
+    @Test
+    void aRefactorNothingImportsIsNotTheContracts() {
+        String source = """
+                package com.mybot;
+                class Bot {
+                    @Refactor("someone else's")
                     void run() {}
                 }
                 """;
-        assertEquals(List.of("one", "two"), entriesIn(source, "run"));
+        assertNull(markIn(source, "run"));
     }
 
     @Test
-    void anUnmarkedFunctionHasNoEntriesRatherThanAnEmptyMark() {
-        assertEquals(List.of(), entriesIn(PLAIN, "run"));
-        assertFalse(ReviewMarks.anyIn(SourceParser.parse(PLAIN)));
+    void anUnmarkedFunctionHasNoMarkAndNoOpenEntries() {
+        assertNull(markIn(PLAIN, "run"));
+        assertEquals(List.of(), ReviewMarks.openEntriesOf(methodNamed(SourceParser.parse(PLAIN), "run")));
     }
 
     @Test
-    void everyMarkedFunctionInAFileIsFoundInSourceOrder() {
+    void everyMarkedFunctionInAFileIsFoundInSourceOrderReviewedOrNot() {
         CompilationUnit unit = SourceParser.parse("""
                 package com.mybot;
+                %s
                 class Bot {
-                    @NeedsReview("a")
+                    @Refactor("a")
                     void first() {}
                     void second() {}
-                    @NeedsReview("b")
+                    @Refactor(value = "b", done = true)
                     void third() {}
                 }
-                """);
-        List<MethodDeclaration> marked = ReviewMarks.markedIn(unit);
+                """.formatted(IMPORT));
 
         assertEquals(List.of("first", "third"),
-                marked.stream().map(m -> m.getName().getIdentifier()).toList());
+                ReviewMarks.markedIn(unit).stream().map(m -> m.getName().getIdentifier()).toList());
+        assertEquals(List.of(), ReviewMarks.openEntriesOf(methodNamed(unit, "third")),
+                "a reviewed mark has nothing open");
     }
 
     // -------------------------------------------------------------------------
-    // Reviewing it away
+    // Reviewing and removing
     // -------------------------------------------------------------------------
 
     @Test
-    void strippingOneOfSeveralEntriesLeavesTheRest() {
+    void markingReviewedKeepsTheRecordAndSaysDone() {
         String marked = """
                 package com.mybot;
+                %s
                 class Bot {
-                    @NeedsReview({"first", "second"})
+                    @Refactor({"first", "second"})
                     void run() {}
                 }
-                """;
-        String source = edit(marked, "run", (ctx, method) -> ReviewMarks.strip(ctx, method, "first"));
+                """.formatted(IMPORT);
+        String source = edit(marked, "run", ReviewMarks::markReviewed);
 
-        assertEquals(List.of("second"), entriesIn(source, "run"));
+        assertEquals(new ReviewMarks.Mark(List.of("first", "second"), true), markIn(source, "run"));
+        assertTrue(source.contains("done = true"), source);
+        assertTrue(source.contains(IMPORT.strip()), "the record still names the annotation:\n" + source);
     }
 
     @Test
-    void strippingTheLastEntryTakesTheAnnotationWithIt() {
-        String marked = """
+    void markingReviewedTwiceChangesNothingAndSaysSo() {
+        CompilationUnit unit = SourceParser.parse("""
                 package com.mybot;
+                %s
                 class Bot {
-                    @NeedsReview("only")
+                    @Refactor(value = "x", done = true)
                     void run() {}
                 }
-                """;
-        String source = edit(marked, "run", (ctx, method) -> ReviewMarks.strip(ctx, method, "only"));
+                """.formatted(IMPORT));
+        EditContext ctx = EditContext.of(unit, null, null);
 
-        assertFalse(source.contains("@NeedsReview"), "an empty mark is not a mark:\n" + source);
+        assertFalse(ReviewMarks.markReviewed(ctx, methodNamed(unit, "run")));
     }
 
     @Test
-    void theLastMarkInAFileTakesTheImportWithItToo() {
+    void removingTheLastMarkTakesTheImportWithIt() {
         String marked = """
                 package com.mybot.activities;
 
-                import com.mybot.NeedsReview;
-
+                %s
                 class Mining {
-                    @NeedsReview("only")
+                    @Refactor("only")
                     void run() {}
                 }
-                """;
-        String source = edit(marked, "run", (ctx, method) -> ReviewMarks.strip(ctx, method, "only"));
+                """.formatted(IMPORT);
+        String source = edit(marked, "run", ReviewMarks::remove);
 
-        assertFalse(source.contains("NeedsReview"), source);
+        assertFalse(source.contains("Refactor"), source);
     }
 
     @Test
@@ -255,66 +279,26 @@ class ReviewMarksTest {
         String marked = """
                 package com.mybot.activities;
 
-                import com.mybot.NeedsReview;
-
+                %s
                 class Mining {
-                    @NeedsReview("mine")
+                    @Refactor("mine")
                     void first() {}
-                    @NeedsReview("keep")
+                    @Refactor("keep")
                     void second() {}
                 }
-                """;
-        String source = edit(marked, "first", (ctx, method) -> ReviewMarks.strip(ctx, method, "mine"));
+                """.formatted(IMPORT);
+        String source = edit(marked, "first", ReviewMarks::remove);
 
-        assertTrue(source.contains("import com.mybot.NeedsReview;"), source);
-        assertEquals(List.of("keep"), entriesIn(source, "second"));
+        assertTrue(source.contains(IMPORT.strip()), source);
+        assertEquals(List.of("keep"), markIn(source, "second").entries());
     }
 
     @Test
-    void strippingSomethingThatIsNotThereChangesNothingAndSaysSo() {
+    void removingSomethingThatIsNotThereChangesNothingAndSaysSo() {
         CompilationUnit unit = SourceParser.parse(PLAIN);
         EditContext ctx = EditContext.of(unit, null, null);
 
-        assertFalse(ReviewMarks.strip(ctx, methodNamed(unit, "run"), "never written"));
+        assertFalse(ReviewMarks.remove(ctx, methodNamed(unit, "run")));
         assertEquals(PLAIN, ctx.applyTo(PLAIN));
-    }
-
-    @Test
-    void stripAllTakesEveryEntryAtOnce() {
-        String marked = """
-                package com.mybot;
-                class Bot {
-                    @NeedsReview({"first", "second"})
-                    void run() {}
-                }
-                """;
-        String source = edit(marked, "run", (ctx, method) -> ReviewMarks.stripAll(ctx, method));
-
-        assertFalse(source.contains("@NeedsReview"), source);
-    }
-
-    // -------------------------------------------------------------------------
-    // The generated annotation itself
-    // -------------------------------------------------------------------------
-
-    @Test
-    void theGeneratedAnnotationCompilesAndSaysWhatItIsFor() {
-        String source = ReviewMarks.annotationSource("com.mybot");
-
-        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(source)), source);
-        assertTrue(source.contains("package com.mybot;"), source);
-        assertTrue(source.contains("RetentionPolicy.SOURCE"), "never reaches the running bot:\n" + source);
-        assertTrue(source.contains("String[] value();"), source);
-    }
-
-    @Test
-    void theFileIsWrittenOnceAndNeverOverwritten(@TempDir Path dir) throws IOException {
-        Path pkg = dir.resolve("com").resolve("mybot");
-
-        assertTrue(ReviewMarks.ensureFile(pkg, "com.mybot"));
-        Files.writeString(pkg.resolve("NeedsReview.java"), "// the user's now\n");
-
-        assertFalse(ReviewMarks.ensureFile(pkg, "com.mybot"), "it exists, so it is not Studio's to replace");
-        assertEquals("// the user's now\n", Files.readString(pkg.resolve("NeedsReview.java")));
     }
 }

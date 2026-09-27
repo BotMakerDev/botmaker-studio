@@ -43,18 +43,31 @@ public final class ContractDependency {
 
     /** Whether any entry of {@code classpath} — a jar or a class directory — carries {@code @Param}. */
     public static boolean onClasspath(List<String> classpath) {
+        return carries(classpath, PARAM_CLASS);
+    }
+
+    /**
+     * Whether any entry of {@code classpath} carries the contract class {@code type} — asked for one the
+     * contract gained later than {@code @Param}, which a bot on an older contract has the jar but not the class
+     * of ({@code @Refactor}, 2026-09-27).
+     */
+    public static boolean onClasspath(List<String> classpath, Class<?> type) {
+        return carries(classpath, type.getName().replace('.', '/') + ".class");
+    }
+
+    private static boolean carries(List<String> classpath, String classFile) {
         if (classpath == null) return false;
         for (String entry : classpath) {
-            if (carries(Path.of(entry))) return true;
+            if (carries(Path.of(entry), classFile)) return true;
         }
         return false;
     }
 
-    private static boolean carries(Path entry) {
-        if (Files.isDirectory(entry)) return Files.isRegularFile(entry.resolve(PARAM_CLASS));
+    private static boolean carries(Path entry, String classFile) {
+        if (Files.isDirectory(entry)) return Files.isRegularFile(entry.resolve(classFile));
         if (!Files.isRegularFile(entry)) return false;
         try (JarFile jar = new JarFile(entry.toFile())) {
-            return jar.getEntry(PARAM_CLASS) != null;
+            return jar.getEntry(classFile) != null;
         } catch (IOException e) {
             return false;
         }
