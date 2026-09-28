@@ -6,7 +6,9 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — a plugin's open set is changed by binding.** `project/managed/ManagedSets` (pure,
+- **2026-09-28 (latest) — slot editors by contract steps.** `PluginHost` wraps a type's own editor with
+  `SlotEditor.forType(cls).draw(…)`; `ParameterChoicesTest`'s fixture migrated. No behaviour change.
+- **2026-09-28 — a plugin's open set is changed by binding.** `project/managed/ManagedSets` (pure,
   over `BotIndex`: members, uses, add, repoint, remove; rename is `Refactor.rename`) behind `HostPluginValues`'
   new open-set operations, each one Project History snapshot plus a redraw of the open file. `HostSources`, its
   token matcher and `HostServices.sources()` are deleted with the contract's `Sources`. `ManagedSetsTest`.

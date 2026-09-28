@@ -64,7 +64,7 @@ public record PickerContext(CodeEditorService context, ValueSlot arg, ResolvedTy
 
     // isEmulatorNameArg and isEmulatorMethod went on 2026-08-31 with the picker they selected. The same four
     // calls are matched by
-    // the SDK's CallSites.EMULATOR_NAME now, through the toolkit's own call-site matcher — which is where a
+    // the SDK now, through the @EmulatorName on their parameter (SlotEditor.onParameter) — which is where a
     // predicate about somebody else's API belonged all along.
 
     // The Time facade has no entry here: every one of its arguments is a java.time type (LocalTime, DayOfWeek,

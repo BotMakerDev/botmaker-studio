@@ -433,7 +433,7 @@ public final class PluginHost {
                 Class<?> cls = quietly(plugin, "name a type", drawn::type);
                 if (cls == null) continue;
                 merged.add(new OwnedEditor(plugin.id(), name,
-                        SlotEditor.forType(cls, drawn::editor, drawn::preview)));
+                        SlotEditor.forType(cls).draw(() -> drawn::editor, () -> drawn::preview)));
             }
         }
         return List.copyOf(merged);

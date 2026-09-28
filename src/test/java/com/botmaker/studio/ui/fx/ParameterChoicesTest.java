@@ -55,7 +55,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
                 @Override public String id() { return "fixture.text"; }
 
                 @Override public List<SlotEditor> slotEditors() {
-                    return List.of(SlotEditor.forType(String.class, ctx -> {
+                    return List.of(SlotEditor.forType(String.class).draw(() -> ctx -> {
                         TextField field = new TextField(ctx.value(String.class).orElse(""));
                         field.setOnAction(e -> ctx.set(field.getText()));
                         field.focusedProperty().addListener((o, had, has) -> {
