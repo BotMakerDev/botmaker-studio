@@ -1,7 +1,6 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
-import com.botmaker.plugin.api.toolbar.EnabledWhen;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -107,15 +106,14 @@ class ToolbarMergeTest {
         assertEquals(List.of("kept"), ids(merged));
     }
 
-    /** A malformed item is dropped rather than crashing the merge or drawing a button that does nothing. */
+    /**
+     * A null item is dropped rather than crashing the merge. An item with no label or no press cannot be built
+     * at all since the steps became the only way to make one.
+     */
     @Test
-    void an_item_with_no_label_or_no_action_is_dropped() {
+    void a_null_item_is_dropped() {
         List<ToolbarItem> offered = new ArrayList<>();
         offered.add(null);
-        offered.add(new ToolbarItem("no-label", null, null, null, ToolbarGroup.RUN, 1,
-                EnabledWhen.ALWAYS, c -> { }));
-        offered.add(new ToolbarItem("no-action", () -> "x", null, null, ToolbarGroup.RUN, 2,
-                EnabledWhen.ALWAYS, null));
         offered.add(item("fine", ToolbarGroup.RUN, 3));
 
         assertEquals(List.of("fine"), ids(PluginHost.mergeToolbarItems(List.of(new Fake("a", offered)))));

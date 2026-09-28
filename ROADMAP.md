@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — API docs skip a plugin that catalogues nothing.** `ApiDocsService.holdsAny`: a
+- **2026-09-28 (latest) — a plugin built for a newer Studio is refused at load.** `PluginHost.bind` goes
+  through plugin-host's `PluginLoader`, which now reads each plugin jar's contract links (`ContractLinks`) and
+  reports *built for a newer Studio: needs …* in `failures()` (Manage Plugins shows it). `ToolbarItem` is a
+  class built only by its steps, so `ToolbarMergeTest` drops the no-label/no-action case nothing can build.
+- **2026-09-28 — API docs skip a plugin that catalogues nothing.** `ApiDocsService.holdsAny`: a
   plugin jar with no class in a catalogued package (basics) has its sources neither resolved nor reported
   missing, which printed `Could not resolve artifact …basics…:sources` on every open. `ApiDocsServiceTest`.
 - **2026-09-28 — docs and menus name no plugin.** `ApiDocs`/`ApiDocsParser`/`ApiDocsService` read
