@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — slot editors by contract steps.** `PluginHost` wraps a type's own editor with
+- **2026-09-28 (latest) — toolbar items by contract steps.** `ToolbarManager`'s four own items and
+  `ToolbarMergeTest`'s fixture use `ToolbarItem.id(…)…onPress(…)`; `ToolbarItem.of` is gone. No behaviour
+  change.
+- **2026-09-28 — slot editors by contract steps.** `PluginHost` wraps a type's own editor with
   `SlotEditor.forType(cls).draw(…)`; `ParameterChoicesTest`'s fixture migrated. No behaviour change.
 - **2026-09-28 — a plugin's open set is changed by binding.** `project/managed/ManagedSets` (pure,
   over `BotIndex`: members, uses, add, repoint, remove; rename is `Refactor.rename`) behind `HostPluginValues`'

@@ -43,7 +43,7 @@ class ToolbarMergeTest {
     }
 
     private static ToolbarItem item(String id, ToolbarGroup group, int order) {
-        return ToolbarItem.of(id, id, null, group, order, c -> { });
+        return ToolbarItem.id(id).label(id).tooltip(id).in(group, order).onPress(() -> c -> { });
     }
 
     private static List<String> ids(List<ToolbarItem> items) {

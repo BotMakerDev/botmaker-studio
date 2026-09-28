@@ -192,9 +192,10 @@ public class ToolbarManager {
         // now, placed by the same merge as the pilot's and the capture items'. Every row of that checklist
         // reads a file the plugin owns, so there is nothing left for the shell to wire.
 
-        place(placed, ctx, ToolbarItem.of("settings", "⚙ Settings",
-                "Project settings: the standard resolution templates are authored at, and favourite methods",
-                ToolbarGroup.PROJECT, 20, c -> run(onProjectSettings)));
+        place(placed, ctx, ToolbarItem.id("settings").label("⚙ Settings")
+                .tooltip("Project settings: the standard resolution templates are authored at, and favourite methods")
+                .in(ToolbarGroup.PROJECT, 20)
+                .onPress(() -> c -> run(onProjectSettings)));
 
         // 🎯 Capture Targets stood here at PROJECT/30 until 2026-08-31 and is the SDK plugin's item now,
         // placed by the same merge as any other plugin's. The list it manages is capture.json, which is the
@@ -207,9 +208,10 @@ public class ToolbarManager {
         // the one thing on this bar that does not reduce to data the contract already carries: a parameter
         // is a ParameterRow, and the window over those stayed here.
 
-        place(placed, ctx, ToolbarItem.of("parameters", "🎚 Parameters",
-                "The project's variables: every value the bot reads, with its tag and its editor",
-                ToolbarGroup.AUTHORING, 20, c -> run(onParameters)));
+        place(placed, ctx, ToolbarItem.id("parameters").label("🎚 Parameters")
+                .tooltip("The project's variables: every value the bot reads, with its tag and its editor")
+                .in(ToolbarGroup.AUTHORING, 20)
+                .onPress(() -> c -> run(onParameters)));
 
         // 🎮 Pilot stood here until 2026-08-30 and is the SDK plugin's item now, placed by the same merge as
         // any other plugin's. It is the case this surface was added for: a whole feature behind one button,
@@ -222,10 +224,11 @@ public class ToolbarManager {
         // The same action as View ▸ Preview as user, not a second thing that sounds like it. This used to be
         // a "Reader mode" toggle that hid the editor's controls in place — a third rendering of the project
         // that answered "what does a user see?" with something no user ever sees. The Runner is the answer.
-        place(placed, ctx, ToolbarItem.of("preview", "👁 Preview",
-                "Open this bot the way someone who only runs it sees it — the Runner window, with the "
-                        + "switches and values you chose to expose. Its header brings you back.",
-                ToolbarGroup.RUN, 30, c -> run(onPreviewAsUser)));
+        place(placed, ctx, ToolbarItem.id("preview").label("👁 Preview")
+                .tooltip("Open this bot the way someone who only runs it sees it — the Runner window, with the "
+                        + "switches and values you chose to expose. Its header brings you back.")
+                .in(ToolbarGroup.RUN, 30)
+                .onPress(() -> c -> run(onPreviewAsUser)));
 
         // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
         // botmaker-project.properties. The action moved and the sentence moved with it, as this comment said
@@ -236,9 +239,10 @@ public class ToolbarManager {
         // the clearest case for it: the host owns the bar, the plugin owns the capture target it reads, the
         // pixels it grabs and the picture folder it writes.
 
-        place(placed, ctx, ToolbarItem.of("overlay", "⧉ Overlay",
-                "Build the bot over the running game: a compact block tree on top of the target window",
-                ToolbarGroup.TOOLS, 30, c -> run(onOverlayEditor)));
+        place(placed, ctx, ToolbarItem.id("overlay").label("⧉ Overlay")
+                .tooltip("Build the bot over the running game: a compact block tree on top of the target window")
+                .in(ToolbarGroup.TOOLS, 30)
+                .onPress(() -> c -> run(onOverlayEditor)));
 
         // ⏺ Record stood here at order 40 and opened the overlay straight into recording. It is the SDK
         // plugin's ⏺ Record Macro since 2026-09-02 and arrives as a ToolbarItem like any other plugin's:
