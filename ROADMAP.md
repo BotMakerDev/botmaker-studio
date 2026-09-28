@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — `NumberFieldsDialog` deleted.** Its javadoc said it goes when the last of Studio's
+- **2026-09-28 (latest) — `.game-picker-*` rules deleted from `blocks.css`.** Their one user, the SDK
+  plugin's `GameLibraryPickerDialog`, was never reached and is deleted; the launch-id pills use the toolkit's
+  gallery.
+- **2026-09-28 — `NumberFieldsDialog` deleted.** Its javadoc said it goes when the last of Studio's
   own pickers calling it does; none was left. The plugin toolkit's audit the same day found it while fixing the
   comment that pointed at the toolkit's (also deleted) `Modals.numbers`.
 - **2026-09-28 — a plugin built for a newer Studio is refused at load.** `PluginHost.bind` goes
