@@ -69,7 +69,7 @@ class PaletteCompilesTest {
                 Paths.get("Subject.java").toAbsolutePath(),
                 List.of(System.getProperty("java.class.path").split(File.pathSeparator)),
                 Paths.get("src", "main", "java").toAbsolutePath(),
-                ProjectTemplate.EMPTY, null, null, null,
+                ProjectTemplate.EMPTY, null, null,
                 RefusalJournal.in(Path.of(System.getProperty("java.io.tmpdir"), "botmaker-test-refusals")),
                 ValueGrammar.empty());
     }

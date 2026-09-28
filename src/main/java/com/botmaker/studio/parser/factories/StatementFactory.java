@@ -6,8 +6,8 @@ import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.Initializer;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
+import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
@@ -332,7 +332,7 @@ public class StatementFactory {
             // fewest arguments (the simplest starting point). Seed a default value per parameter (a
             // CaptureSource slot gets the project-default target — see InitializerFactory). When no overload
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
-            List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer(), ctx.surface());
+            List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer());
             if (params != null) {
                 for (ResolvedType p : params) {
                     mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
@@ -350,8 +350,7 @@ public class StatementFactory {
      * the method resolves at all (an unknown method) — callers then use a single empty slot.
      */
     private static List<ResolvedType> defaultOverloadParams(BlockType.LibraryCall l, ProjectState state,
-                                                            ProjectAnalyzer analyzer,
-                                                            SdkSurfaceService surface) {
+                                                            ProjectAnalyzer analyzer) {
         if (analyzer == null) return null;
         List<MethodSignature> sigs = analyzer.getMethods(l.facade().getSimpleName(), true).stream()
                 .filter(s -> s.name().equals(l.method()))
@@ -360,7 +359,7 @@ public class StatementFactory {
         // A fresh insert has no current overload to protect, so the offered set applies without exception:
         // the menu proposed this name because some overload is offered, and that is the one to create.
         // fewestParams over the unfiltered list would happily land the user on a hidden shape.
-        if (surface != null) sigs = surface.retainOffered(l.facade().getSimpleName(), l.method(), sigs, null);
+        sigs = PaletteCuration.current().retainOffered(l.facade().getSimpleName(), l.method(), sigs, null);
         String favKey = (state != null && state.getSettings() != null)
                 ? state.getSettings().favoriteSignature(l.facade().getSimpleName() + "#" + l.method()) : null;
         // A favorite pinned before the facade was curated may name an overload that is no longer offered;

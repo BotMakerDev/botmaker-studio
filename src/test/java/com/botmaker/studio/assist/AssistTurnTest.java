@@ -41,7 +41,7 @@ class AssistTurnTest {
                 Paths.get("Subject.java").toAbsolutePath(),
                 List.of(System.getProperty("java.class.path").split(File.pathSeparator)),
                 Paths.get("src", "main", "java").toAbsolutePath(),
-                ProjectTemplate.GAME_BOT, null, null, null,
+                ProjectTemplate.GAME_BOT, null, null,
                 RefusalJournal.in(Path.of(System.getProperty("java.io.tmpdir"), "botmaker-test-refusals")),
                 ValueGrammar.empty());
     }

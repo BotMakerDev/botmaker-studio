@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — toolbar items by contract steps.** `ToolbarManager`'s four own items and
+- **2026-09-28 (latest) — `SdkSurfaceService` deleted.** Curation (`@Hidden`) is `plugin/PaletteCuration`,
+  facades are `PluginHost`'s, `@Deprecated` is `ProjectAnalyzer.isMemberDeprecated`; the parameter threaded
+  through `CodeEditor`, `EditContext`, `StudioContext`, the menus and `AssistWorkspace` is gone.
+  `PaletteCurationTest`, `MemberDeprecationTest`. No behaviour change.
+- **2026-09-28 — toolbar items by contract steps.** `ToolbarManager`'s four own items and
   `ToolbarMergeTest`'s fixture use `ToolbarItem.id(…)…onPress(…)`; `ToolbarItem.of` is gone. No behaviour
   change.
 - **2026-09-28 — slot editors by contract steps.** `PluginHost` wraps a type's own editor with

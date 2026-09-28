@@ -57,7 +57,7 @@ class FileExplorerTest extends FxHeadlessTest {
         StudioContext ctx = new StudioContext(config, fixture.state, bus, new DiagnosticsManager(),
                 new BlockDragAndDropManager(bus), new ProjectAnalyzer(new TypeSummaryManager(Set.of()), fixture.state),
                 new LibraryService(config, fixture.state, new TypeSummaryManager(Set.of()), bus),
-                new ProjectSettingsService(config, fixture.state, bus), null, fixture.context(), null);
+                new ProjectSettingsService(config, fixture.state, bus), fixture.context(), null);
         AtomicReference<FileExplorerManager> explorer = new AtomicReference<>();
         interact(() -> {
             explorer.set(new FileExplorerManager(ctx));

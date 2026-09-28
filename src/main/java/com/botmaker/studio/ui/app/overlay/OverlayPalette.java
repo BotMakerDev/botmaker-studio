@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.util.MethodSignature;
@@ -60,10 +61,9 @@ final class OverlayPalette {
     /** The bar itself: a caption over the wrapping row of facade chips and the ＋ Add block button. */
     VBox node() {
         FlowPane chips = new FlowPane(6, 6);
-        // This project's SDK, not Studio's: a chip for a facade the bot's jar doesn't have would open onto
-        // "(SDK not indexed yet)" — a message about the wrong thing entirely — and offer a call that cannot
-        // compile. Falls back to the full set when the surface is unknown (see CodeEditorService).
-        for (FacadeEntry facade : context.sdkMenuFacades()) {
+        // The facades the plugins bound to this project catalogue — loaded from the bot's own jars, so no chip
+        // offers a class those jars lack.
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
             chips.getChildren().add(facadeMenuButton(facade));
         }
         Button addBlock = new Button("＋ Add block");

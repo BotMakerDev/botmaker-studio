@@ -281,7 +281,7 @@ class StatementMenuTest extends FxHeadlessTest {
                 new com.botmaker.studio.project.ProjectState());
         AtomicReference<BlockType> picked = new AtomicReference<>();
 
-        ContextMenu menu = StatementMenu.create(analyzer, null, main.getBody(), picked::set);
+        ContextMenu menu = StatementMenu.create(analyzer, main.getBody(), picked::set);
 
         Menu call = allMenus(menu.getItems()).stream()
                 .filter(m -> BlockCatalog.FUNCTION_CALL.displayName().equals(m.getText()))

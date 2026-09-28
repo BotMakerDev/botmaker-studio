@@ -27,7 +27,7 @@ public final class SdkDocs {
      *
      * <p>{@code deprecated} is the <em>explanation</em> ("use {@code startIfNotRunning()} instead"), never the
      * fact. The fact comes from the {@code @Deprecated} annotation in bytecode, via
-     * {@code services/SdkSurfaceService}; that split is deliberate, because the two can disagree and only one
+     * {@code ProjectAnalyzer.isMemberDeprecated}; that split is deliberate, because the two can disagree and only one
      * of them is what the compiler will act on. A method annotated but undocumented still strikes through —
      * it just has nothing extra to say, and this stays {@code ""}.
      */

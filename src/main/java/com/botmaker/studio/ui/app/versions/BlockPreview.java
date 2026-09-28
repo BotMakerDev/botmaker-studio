@@ -58,7 +58,7 @@ final class BlockPreview {
         staged.setNodeToBlockMap(registry);
         staged.setCompilationUnit(result.cu());
         this.context = new CodeEditorService(config, staged, bus, converter, dnd, null,
-                new ProjectAnalyzer(null, staged), null, null);
+                new ProjectAnalyzer(null, staged), null);
         this.problems = result.problems();
         this.drawn = result.root() != null;
     }

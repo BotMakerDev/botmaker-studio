@@ -272,8 +272,8 @@ public class TypeSummaryManager {
         try {
             // Scan is intentionally not closed: ClassInfo objects are read for the manager's lifetime.
             // Annotation info is what makes @Deprecated readable (it is a RUNTIME-retained annotation, so it
-            // is in the class file — but ClassGraph does not record annotations unless asked). SdkSurfaceService
-            // reads it to strike deprecated SDK calls through; without this the flag is silently always false.
+            // is in the class file — but ClassGraph does not record annotations unless asked).
+            // ProjectAnalyzer.isMemberDeprecated reads it to strike deprecated calls through; without this the flag is silently always false.
             ScanResult scan = new ClassGraph()
                     .overrideClasspath(jar)
                     .enableMethodInfo()

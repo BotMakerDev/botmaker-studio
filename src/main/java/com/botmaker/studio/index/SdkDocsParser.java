@@ -108,7 +108,7 @@ public final class SdkDocsParser {
                     summary = renderFragments(tag.fragments());
                 } else if (TagElement.TAG_DEPRECATED.equals(tag.getTagName())) {
                     // The replacement sentence, not the fact — @Deprecated in bytecode is what marks a method
-                    // as going away (see services/SdkSurfaceService). This is only what to do about it, and
+                    // as going away (see ProjectAnalyzer.isMemberDeprecated). This is only what to do about it, and
                     // the API contract requires it to name the replacement (docs/refactor/21-api-compat.md).
                     deprecated = renderFragments(tag.fragments());
                 } else if (TagElement.TAG_PARAM.equals(tag.getTagName())) {

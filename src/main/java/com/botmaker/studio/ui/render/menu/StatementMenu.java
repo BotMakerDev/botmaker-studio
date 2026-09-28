@@ -5,10 +5,10 @@ import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
-import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.parser.StatementPlacement;
 import com.botmaker.studio.parser.factories.StatementFactory;
-import com.botmaker.studio.services.SdkSurfaceService;
+import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.util.MethodSignature;
 import javafx.scene.control.ContextMenu;
@@ -48,30 +48,27 @@ public final class StatementMenu {
      *                 in which case only the language blocks are shown.
      */
     public static ContextMenu create(ProjectAnalyzer analyzer, Consumer<BlockType> onSelection) {
-        return create(analyzer, null, null, onSelection);
+        return create(analyzer, null, onSelection);
     }
 
     /**
      * As {@link #create(ProjectAnalyzer, Consumer)}, but only offering blocks legal in {@code targetBody} — a
      * {@code break} isn't listed where there's no loop or switch to break out of, so an illegal insert can't be
-     * chosen in the first place. Pass {@code null} to offer everything.
-     *
-     * @param surface this project's SDK's curation ({@code @Palette}); {@code null} — headless, or no project
-     *                resolved — offers every method the analyzer finds, as an uncurated jar does.
+     * chosen in the first place. Pass {@code null} to offer everything. The methods offered are the ones the
+     * bound plugins' catalogs do not hide ({@link PaletteCuration}).
      */
-    public static ContextMenu create(ProjectAnalyzer analyzer, SdkSurfaceService surface,
-                                     org.eclipse.jdt.core.dom.ASTNode targetBody,
+    public static ContextMenu create(ProjectAnalyzer analyzer, org.eclipse.jdt.core.dom.ASTNode targetBody,
                                      Consumer<BlockType> onSelection) {
         Predicate<BlockType> allowed =
                 targetBody == null ? b -> true : b -> StatementPlacement.allows(b, targetBody);
         ContextMenu menu = MenuTracker.track(new ContextMenu());
         MenuBuilders.withSearch(menu, "Search blocks…",
-                (m, query) -> new Build(m, query, analyzer, surface, targetBody, allowed, onSelection).rebuild());
+                (m, query) -> new Build(m, query, analyzer, targetBody, allowed, onSelection).rebuild());
         return menu;
     }
 
     /** One build of the menu body, kept so a pin can rebuild it in place for the same query. */
-    private record Build(ContextMenu menu, String query, ProjectAnalyzer analyzer, SdkSurfaceService surface,
+    private record Build(ContextMenu menu, String query, ProjectAnalyzer analyzer,
                          org.eclipse.jdt.core.dom.ASTNode targetBody,
                          Predicate<BlockType> allowed, Consumer<BlockType> onSelection) {
         void rebuild() {
@@ -105,7 +102,7 @@ public final class StatementMenu {
             for (BlockType block : languageBlocks(allowed)) {
                 if (matches(block, q)) matches.add(statementItem(block, b, true));
             }
-            for (SdkCall call : sdkCalls(b.analyzer(), b.surface())) {
+            for (SdkCall call : sdkCalls(b.analyzer())) {
                 if (matches(call.block(), q)) matches.add(callItem(call, b, true));
             }
             // The bot's own functions, by name: searching "collect" finds collect(), not only "Call Function".
@@ -137,7 +134,6 @@ public final class StatementMenu {
             menu.getItems().add(new SeparatorMenuItem());
         }
         ProjectAnalyzer analyzer = b.analyzer();
-        SdkSurfaceService surface = b.surface();
 
         // What was inserted last, this session — the block a user reaches for again is usually one they just
         // used. Only entries legal here are shown, and only while the menu is not being searched.
@@ -157,9 +153,9 @@ public final class StatementMenu {
         //
         // PRESENCE is gated implicitly here and must stay so: sdkFacadeSubmenu returns null when the facade
         // resolves no methods, and the analyzer resolves against the bot's own jar — so a class its SDK
-        // doesn't have contributes nothing. Do not add an SdkSurfaceService *presence* filter; it would be a
-        // second answer to the same question, from the same jar. Do not "optimize away" the null return,
-        // which is the gate.
+        // doesn't have contributes nothing. Do not add a *presence* filter; it would be a second answer to the
+        // same question, from the same jar (SdkSurfaceService was one, and went on 2026-09-28). Do not
+        // "optimize away" the null return, which is the gate.
         //
         // CURATION is a different question and does need the explicit filter the served catalog supplies (see
         // facadeMethodNames). "Is this method here?" and "should we lead with it?" are not the same, and
@@ -170,7 +166,7 @@ public final class StatementMenu {
         // One submenu per plugin, named as the plugin names itself, so the menu grows by one row per plugin
         // rather than one per class it serves.
         Map<String, List<FacadeEntry>> byPlugin = new LinkedHashMap<>();
-        for (FacadeEntry facade : menuFacades(surface)) {
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
             byPlugin.computeIfAbsent(pluginName(facade), k -> new ArrayList<>()).add(facade);
         }
         List<Menu> plugins = new ArrayList<>();
@@ -247,7 +243,7 @@ public final class StatementMenu {
     private static Menu sdkFacadeSubmenu(FacadeEntry facade, Build b) {
         if (b.analyzer() == null) return null;
         Menu sub = new Menu(facade.simpleName());
-        for (String method : facadeMethodNames(facade, b.analyzer(), b.surface())) {
+        for (String method : facadeMethodNames(facade, b.analyzer())) {
             sub.getItems().add(callItem(new SdkCall(facade, sdkCall(facade, method, method)), b, false));
         }
         return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, MenuIcons.iconFor(facade));
@@ -262,7 +258,7 @@ public final class StatementMenu {
         if (facades.size() == 1) {
             FacadeEntry facade = facades.getFirst();
             if (b.analyzer() == null) return null;
-            for (String method : facadeMethodNames(facade, b.analyzer(), b.surface())) {
+            for (String method : facadeMethodNames(facade, b.analyzer())) {
                 plugin.getItems().add(callItem(
                         new SdkCall(facade, sdkCall(facade, method, facade.simpleName() + "." + method)), b, false));
             }
@@ -326,7 +322,7 @@ public final class StatementMenu {
         for (BlockType block : languageBlocks(b.allowed())) {
             if (block.id().equals(id)) return statementItem(block, b, false);
         }
-        for (SdkCall call : sdkCalls(b.analyzer(), b.surface())) {
+        for (SdkCall call : sdkCalls(b.analyzer())) {
             if (call.block().id().equals(id)) return callItem(call, b, false);
         }
         return null;
@@ -335,21 +331,12 @@ public final class StatementMenu {
     /** An SDK facade method as a statement block, paired with its facade so the search view can icon it. */
     private record SdkCall(FacadeEntry facade, BlockType block) {}
 
-    /**
-     * The facades to lead with: this project's served catalog ∩ its own jar, or — with no surface wired
-     * (headless, no project) — the bundled catalog's superset, which is the same answer Studio gave when it
-     * mirrored the SDK's class list by hand.
-     */
-    private static List<FacadeEntry> menuFacades(SdkSurfaceService surface) {
-        return surface == null ? PluginHost.menuFacades() : surface.menuFacades();
-    }
-
     /** Every SDK facade method as a flat list of class-qualified statement blocks, for the search view. */
-    private static List<SdkCall> sdkCalls(ProjectAnalyzer analyzer, SdkSurfaceService surface) {
+    private static List<SdkCall> sdkCalls(ProjectAnalyzer analyzer) {
         List<SdkCall> out = new ArrayList<>();
         if (analyzer == null) return out;
-        for (FacadeEntry facade : menuFacades(surface)) {
-            for (String method : facadeMethodNames(facade, analyzer, surface)) {
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
+            for (String method : facadeMethodNames(facade, analyzer)) {
                 out.add(new SdkCall(facade, sdkCall(facade, method, facade.simpleName() + "." + method)));
             }
         }
@@ -363,12 +350,12 @@ public final class StatementMenu {
      * <p>A name survives when the SDK offers at least one of its overloads. Which overload the insert then
      * creates is {@code StatementFactory}'s business, and it applies the same set.
      */
-    private static List<String> facadeMethodNames(FacadeEntry facade, ProjectAnalyzer analyzer,
-                                                  SdkSurfaceService surface) {
+    private static List<String> facadeMethodNames(FacadeEntry facade, ProjectAnalyzer analyzer) {
+        PaletteCuration curation = PaletteCuration.current();
         return analyzer.getMethods(facade.simpleName(), true).stream()
                 .map(MethodSignature::name)
                 .distinct()
-                .filter(name -> surface == null || surface.isOffered(facade.simpleName(), name))
+                .filter(name -> curation.isOffered(facade.simpleName(), name))
                 .sorted()
                 .collect(Collectors.toList());
     }

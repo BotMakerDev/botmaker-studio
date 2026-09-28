@@ -11,7 +11,6 @@ import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ContractDependency;
 import com.botmaker.studio.services.SdkDocsService;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.services.DebuggingService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
@@ -48,7 +47,6 @@ public class BotProject {
     private final ProjectAnalyzer projectAnalyzer;
     private final LibraryService libraryService;
     private final ProjectSettingsService projectSettingsService;
-    private final SdkSurfaceService sdkSurfaceService;
 
     // --- Lazy-initialized services ---
     private CodeEditorService codeEditorService;
@@ -63,8 +61,7 @@ public class BotProject {
                        BlockDragAndDropManager dragAndDropManager,
                        ProjectAnalyzer projectAnalyzer,
                        LibraryService libraryService,
-                       ProjectSettingsService projectSettingsService,
-                       SdkSurfaceService sdkSurfaceService) {
+                       ProjectSettingsService projectSettingsService) {
         this.config = config;
         this.state = state;
         this.eventBus = eventBus;
@@ -73,7 +70,6 @@ public class BotProject {
         this.projectAnalyzer = projectAnalyzer;
         this.libraryService = libraryService;
         this.projectSettingsService = projectSettingsService;
-        this.sdkSurfaceService = sdkSurfaceService;
     }
 
     // =========================================================================
@@ -181,13 +177,10 @@ public class BotProject {
         // 7b. Library management (pom.xml is the source of truth)
         LibraryService libraryService = new LibraryService(config, state, typeSummaryManager, eventBus);
 
-        // 7b-. What THIS bot's SDK actually contains — the palette is intersected with it, so a bot on an
-        //      older SDK is never offered a block its jar cannot compile. Reads the index built at step 6;
-        //      re-reads it on LibrariesChangedEvent, which is also when the SDK version can change.
-        SdkSurfaceService sdkSurfaceService = new SdkSurfaceService(config, typeSummaryManager, eventBus);
-        //      The Errors panel asks the same question the blocks do, through a predicate rather than a
-        //      dependency — validation/ stays free of Maven, jars and ClassGraph.
-        diagnosticsManager.setDeprecationProbe(sdkSurfaceService::isMemberDeprecated);
+        // 7b-. The Errors panel asks whether a call is @Deprecated the way the blocks do, off the index built
+        //      at step 6, through a predicate rather than a dependency — validation/ stays free of Maven, jars
+        //      and ClassGraph. (SdkSurfaceService answered it until 2026-09-28.)
+        diagnosticsManager.setDeprecationProbe(projectAnalyzer::isMemberDeprecated);
 
         // 7c. Activities used to be loaded here, into ProjectState, by an ActivityService that owned
         //     activities.json. Both are gone (2026-09-11): that file belongs to the plugin that defines
@@ -209,7 +202,7 @@ public class BotProject {
                 config, state, eventBus,
                 diagnosticsManager, dragAndDropManager,
                 projectAnalyzer, libraryService,
-                projectSettingsService, sdkSurfaceService
+                projectSettingsService
         );
         project.blockConverter = blockConverter;
 
@@ -261,7 +254,7 @@ public class BotProject {
         this.codeEditorService = new CodeEditorService(
                 config, state, eventBus, blockConverter,
                 dragAndDropManager, diagnosticsManager, projectAnalyzer,
-                sdkDocsService, sdkSurfaceService
+                sdkDocsService
         );
 
         // Execution (subscribes to compile/run/stop events in its constructor)
@@ -302,7 +295,7 @@ public class BotProject {
     public StudioContext context() {
         return new StudioContext(config, state, eventBus, diagnosticsManager, dragAndDropManager,
                 projectAnalyzer, libraryService, projectSettingsService,
-                sdkSurfaceService, codeEditorService, codeExecutionService);
+                codeEditorService, codeExecutionService);
     }
 
     public ProjectConfig getConfig() { return config; }
@@ -313,7 +306,6 @@ public class BotProject {
     public ProjectAnalyzer getProjectAnalyzer() { return projectAnalyzer; }
     public LibraryService getLibraryService() { return libraryService; }
     public ProjectSettingsService getProjectSettingsService() { return projectSettingsService; }
-    public SdkSurfaceService getSdkSurfaceService() { return sdkSurfaceService; }
     public CodeEditorService getCodeEditorService() { return codeEditorService; }
     public CodeExecutionService getCodeExecutionService() { return codeExecutionService; }
     public DebuggingService getDebuggingService() { return debuggingService; }

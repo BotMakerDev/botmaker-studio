@@ -240,7 +240,7 @@ final class ApiModel {
                             text(annotation(mi.getAnnotationInfo(), SINCE), "value"),
                             false));
             // A name counts as deprecated only when every overload carrying it is — same rule as
-            // SdkSurfaceService, and for the same reason: the user reads a name, not an overload.
+            // ProjectAnalyzer.isMemberDeprecated, and for the same reason: the user reads a name, not an overload.
             (mi.hasAnnotation(Deprecated.class.getName()) ? deprecatedNames : liveNames).add(name);
         }
         // Fields go through the same map and the same deprecation rule. Enum constants need no special

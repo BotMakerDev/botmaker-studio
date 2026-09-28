@@ -333,13 +333,12 @@ public class BlockDragAndDropManager {
 
     /** @param targetBody the body the "+" inserts into — blocks illegal there are left out of the menu */
     public void enableSeparatorClick(Pane separator, com.botmaker.studio.suggestions.ProjectAnalyzer analyzer,
-                                   com.botmaker.studio.services.SdkSurfaceService surface,
                                    ASTNode targetBody, Consumer<BlockType> onInsert) {
         Button plus = InsertionSeam.plusOf(separator);
         if (plus == null) return;
         // One menu for the seam's own "+" and for a body's gliding one: either is the anchor it hangs from.
         Consumer<Button> open = anchor -> {
-            ContextMenu menu = StatementMenu.create(analyzer, surface, targetBody, onInsert);
+            ContextMenu menu = StatementMenu.create(analyzer, targetBody, onInsert);
             // Stashed so a mouse-exit leaves the "+" up while its menu is open.
             anchor.setUserData(menu);
             menu.setOnHidden(ev -> {

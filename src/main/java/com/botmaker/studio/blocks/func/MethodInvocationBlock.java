@@ -5,6 +5,7 @@ import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
+import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.palette.SdkDocs;
 import com.botmaker.studio.services.CodeEditorService;
@@ -424,9 +425,9 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
             Collections.sort(staticClassItems);
             if (!staticClassItems.isEmpty()) { selectorItems.add("--- CLASSES ---"); selectorItems.addAll(staticClassItems); }
         } else {
-            // This bot's plugins, not Studio's — see CodeEditorService.sdkFacadeNames() — one section per plugin.
+            // This bot's plugins, not Studio's — the ones bound to the open project — one section per plugin.
             java.util.Map<String, List<String>> byPlugin = new java.util.TreeMap<>();
-            for (String facade : context.sdkFacadeNames()) {
+            for (String facade : PluginHost.facadeNames()) {
                 byPlugin.computeIfAbsent(PluginHost.pluginNameFor(facade).orElse("Plugins"), k -> new ArrayList<>())
                         .add(facade);
             }
@@ -513,10 +514,8 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         // The name this call is already on is kept whatever the SDK says, so switching scope back and forth
         // can never leave the block pointing at a method its own dropdown denies; and an uncurated jar, an
         // uncurated type or a headless edit is the identity function here.
-        if (context.getSdkSurface() != null) {
-            availableMethods = context.getSdkSurface()
-                    .retainOfferedNames(targetClassName, availableMethods, this.methodName);
-        }
+        availableMethods = PaletteCuration.current()
+                .retainOfferedNames(targetClassName, availableMethods, this.methodName);
 
         methodSelector.getItems().addAll(availableMethods);
     }
@@ -576,13 +575,12 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
      * be filtered, or a block sitting on an overload the SDK no longer proposes would stop rendering the
      * arguments it actually has. Curation is about what to propose; resolution is about what is there.
      *
-     * <p>An unindexed or uncurated SDK — and a headless {@code CodeEditorService} with no surface at all —
-     * offers everything, so this is the identity function everywhere except a curated facade.
+     * <p>A type no bound plugin catalogues offers everything, so this is the identity function everywhere
+     * except a curated facade.
      */
     private List<MethodSignature> offeredSignatures(CodeEditorService context, String className, String methodName) {
         List<MethodSignature> all = findSignatures(context, className, methodName);
-        if (context.getSdkSurface() == null) return all;
-        return context.getSdkSurface().retainOffered(className, methodName, all,
+        return PaletteCuration.current().retainOffered(className, methodName, all,
                 MethodSignature.bestForArgs(all, currentArgTypes()));
     }
 
@@ -908,7 +906,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
      * release of notice the API contract owes the user before the method goes
      * ({@code docs/refactor/21-api-compat.md}), and it is the only place they would ever see it.
      *
-     * <p>The <em>fact</em> comes from bytecode ({@code SdkSurfaceService}); the <em>replacement</em> from the
+     * <p>The <em>fact</em> comes from bytecode ({@code ProjectAnalyzer.isMemberDeprecated}); the <em>replacement</em> from the
      * {@code @deprecated} Javadoc of the bot's own sources jar ({@code SdkDocs}). Either can be missing — an
      * annotated method with no note still strikes through with a generic tooltip, and a note with no
      * annotation says nothing at all, because the compiler is what the user will ultimately answer to.
@@ -918,7 +916,8 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         if (fixedScopeName == null) return; // only SDK facade calls have a surface to check against
         String currentScope = scopeGetter.get();
         String targetType = (currentScope != null) ? resolveTargetType(currentScope, context) : fixedScopeName;
-        if (!context.isSdkMemberDeprecated(targetType, methodName)) return;
+        ProjectAnalyzer analyzer = context.getProjectAnalyzer();
+        if (analyzer == null || !analyzer.isMemberDeprecated(targetType, methodName)) return;
 
         methodNode.getStyleClass().add("deprecated-member");
         String note = context.getSdkDocs().overloads(targetType, methodName).stream()

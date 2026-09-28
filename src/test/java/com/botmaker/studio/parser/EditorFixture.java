@@ -108,7 +108,7 @@ public final class EditorFixture {
     public CodeEditorService context() {
         if (context == null) {
             context = new CodeEditorService(CONFIG, state, bus, converter, dragAndDrop,
-                    new DiagnosticsManager(), analyzer, new SdkDocsService(CONFIG, bus), null);
+                    new DiagnosticsManager(), analyzer, new SdkDocsService(CONFIG, bus));
         }
         return context;
     }

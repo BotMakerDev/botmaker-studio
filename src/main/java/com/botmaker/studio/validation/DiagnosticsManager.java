@@ -93,7 +93,7 @@ public class DiagnosticsManager {
 
     /**
      * Answers "is {@code className.method} deprecated in this project's SDK?". Injected by {@code BotProject}
-     * from {@code services/SdkSurfaceService} rather than depended on directly, so this package keeps knowing
+     * from {@code ProjectAnalyzer.isMemberDeprecated} rather than depended on directly, so this package keeps knowing
      * nothing about Maven, jars or ClassGraph — and so a headless test gets the null default, which reports
      * nothing.
      */

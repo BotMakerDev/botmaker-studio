@@ -17,7 +17,6 @@ import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ReviewService;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.ui.app.terminal.TerminalPane;
 import com.botmaker.studio.ui.app.versions.VersionsPane;

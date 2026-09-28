@@ -58,6 +58,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > as a JDT unit. Never add a rename that walks names by spelling, a second parse of the whole bot, or Java
 > joined as text, and never refuse an edit through a bare status line or `Alert`.
 
+> **`services/SdkSurfaceService` is deleted (2026-09-28).** Its presence half intersected the palette catalog
+> with the classes the type index found, which filtered nothing once the catalog came from the project's own
+> plugins, loaded from the same jars. Read every mention below as: the facades are `PluginHost.menuFacades()`
+> / `facadeNames()`; what a menu *offers* on a catalogued type (`@Hidden`, by member name) is
+> `plugin/PaletteCuration` (`isOffered`, `retainOffered`, `retainOfferedNames`, read from
+> `PluginHost.catalogFor()` at the point of use — no parameter is threaded any more); a member's
+> `@Deprecated` is `ProjectAnalyzer.isMemberDeprecated`. `CodeEditorService.sdkMenuFacades`/`sdkFacadeNames`/
+> `isSdkMemberDeprecated`/`getSdkSurface` are gone, and `sdkVersion`/`missingFacades` had no caller.
+
 > **`HostSources` and the contract's `Sources` are deleted (2026-09-28).** Every mention below of a token
 > needle, `HostSources` or `Sources.replace` is history. A plugin's open set (`@Managed` on a class —
 > `Pictures`) is changed through `HostPluginValues`' `members`/`open(id, member)`/`add`/`uses`/`rename`/

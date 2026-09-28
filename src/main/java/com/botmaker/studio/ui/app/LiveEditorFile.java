@@ -34,8 +34,7 @@ final class LiveEditorFile implements LiveFile {
         return onFx(() -> {
             if (ctx.state().getActiveFile() == null) return Optional.<AssistTurn>empty();
             AssistWorkspace workspace = AssistWorkspace.of(ctx.config(), ctx.state(),
-                    ctx.projectAnalyzer() == null ? null : ctx.projectAnalyzer().libraryIndex(),
-                    ctx.sdkSurfaceService());
+                    ctx.projectAnalyzer() == null ? null : ctx.projectAnalyzer().libraryIndex());
             return Optional.of(new AssistTurn(workspace, ctx.state().getCurrentCode()));
         });
     }

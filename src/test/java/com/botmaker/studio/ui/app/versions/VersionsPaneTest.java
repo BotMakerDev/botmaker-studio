@@ -56,7 +56,7 @@ class VersionsPaneTest extends FxHeadlessTest {
             state.addFile(new ProjectFile(file, "class MyBot {}"));
             state.setActiveFile(file);
             StudioContext ctx = new StudioContext(config, state, new EventBus(false), null, null, null, null,
-                    null, null, null, null);
+                    null, null, null);
             pane = new VersionsPane(stage, ctx, null, null);
             // Whatever this user last chose, the tests start from the default — and never write the choice.
             pane.display(VersionsView.SIMPLE);

@@ -75,9 +75,9 @@ public record MethodSignature(String name, List<ResolvedType> paramTypes, List<S
      * {@link MethodSignature} for it — the <em>other</em> vocabulary the same key has to be spelled in.
      *
      * <p>Two parts of Studio ask about the same overload from opposite ends. The menus and the blocks hold
-     * {@code MethodSignature}s, which {@code ProjectAnalyzer} builds from the ClassGraph index; {@code
-     * services/SdkSurfaceService} reads the index directly and never builds one, because it answers questions
-     * about members the user has not inserted. Both must agree on the string, or a curated overload is
+     * {@code MethodSignature}s, which {@code ProjectAnalyzer} builds from the ClassGraph index; a plugin's
+     * catalog names its members by {@code MemberId}, read in {@code plugin/PaletteCuration}, because it answers
+     * questions about members the user has not inserted. Both must agree on the string, or a curated overload is
      * annotated in the SDK and silently never offered — a failure with no symptom other than a missing menu
      * entry. So the derivation lives here once, beside the key it has to match, and
      * {@code SignatureKeyAgreementTest} asserts the two agree for every method in the SDK jar.

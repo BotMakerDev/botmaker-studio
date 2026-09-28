@@ -9,7 +9,6 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 
 import java.nio.file.Path;
@@ -26,7 +25,6 @@ import java.util.List;
  * live state is touched exactly once, when the turn commits.
  *
  * @param index   the library index a staged {@link ProjectAnalyzer} reads, or {@code null} in a test
- * @param surface this project's palette curation, or {@code null} to offer everything, as a headless edit does
  * @param journal where a refused rewrite is recorded, or {@code null} for the cache directory
  * @param grammar the value grammar a slot's value is read and written with
  */
@@ -37,7 +35,6 @@ public record AssistWorkspace(ProjectConfig config,
                               ProjectTemplate template,
                               StudioProjectSettings settings,
                               TypeSummaryManager index,
-                              SdkSurfaceService surface,
                               RefusalJournal journal,
                               ValueGrammar grammar) {
 
@@ -47,11 +44,10 @@ public record AssistWorkspace(ProjectConfig config,
     }
 
     /** The open project's active file. FX thread, as {@link ProjectState} is. */
-    public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index,
-                                     SdkSurfaceService surface) {
+    public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index) {
         ProjectFile active = state.getActiveFile();
         return new AssistWorkspace(config, active == null ? null : active.getPath(), state.getResolvedClasspath(),
-                state.getSourcePath(), state.getTemplate(), state.getSettings(), index, surface, null,
+                state.getSourcePath(), state.getTemplate(), state.getSettings(), index, null,
                 PluginHost.grammar());
     }
 

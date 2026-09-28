@@ -105,6 +105,27 @@ public class ProjectAnalyzer {
         return libraryIndex;
     }
 
+    /**
+     * True when {@code simpleName}'s class is {@code @Deprecated}, or every public overload named
+     * {@code member} is — read from bytecode, where the annotation is {@code RUNTIME}-retained, never from
+     * Javadoc. A name, not an overload: the menus collapse overloads to one entry, so striking it through
+     * where one overload is still good would be a lie about the code the user is looking at.
+     *
+     * <p>Never optimistic: an unknown class or member is not deprecated, so a degraded index strikes nothing
+     * through. It was {@code SdkSurfaceService.isMemberDeprecated} until 2026-09-28.
+     */
+    public boolean isMemberDeprecated(String simpleName, String member) {
+        if (libraryIndex == null || simpleName == null || member == null) return false;
+        ClassInfo type = libraryIndex.findBySimpleName(simpleName).orElse(null);
+        if (type == null) return false;
+        if (type.hasAnnotation(Deprecated.class.getName())) return true;
+        List<MethodInfo> overloads = type.getMethodInfo().stream()
+                .filter(m -> m.isPublic() && m.getName().equals(member))
+                .toList();
+        return !overloads.isEmpty()
+                && overloads.stream().allMatch(m -> m.hasAnnotation(Deprecated.class.getName()));
+    }
+
     // =========================================================================
     // 1. COMPILATION UNIT CREATION
     // =========================================================================

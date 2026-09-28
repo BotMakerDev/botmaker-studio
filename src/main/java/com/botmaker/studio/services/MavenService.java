@@ -94,8 +94,8 @@ public final class MavenService {
     // side has. Every pinned SDK therefore opens with no warning, and an incompatibility surfaces where it
     // always could, at compile time, naming the element.
     //
-    // Do not reinstate it as a palette floor either. The palette question is answered per element by
-    // SdkSurfaceService against the project's own jar, which is strictly better than a version comparison.
+    // Do not reinstate it as a palette floor either. The palette is what the project's own plugins
+    // catalogue, loaded from its own jars, which is strictly better than a version comparison.
     // release.sh's check_sdk_floor went with it.
 
     /**
@@ -931,8 +931,8 @@ public final class MavenService {
      * The same for <b>any</b> coordinate — what the project upgrade window resolves a plugin's two jars with.
      *
      * <p>The SDK-named entry points above are two-line delegations to this since 2026-09-15. They stay
-     * because their callers ask a different question: {@code SdkDocsService} and {@code SdkSurfaceService}
-     * are about the palette, not about an upgrade, and neither has a coordinate to hand.
+     * because their callers ask a different question: {@code SdkDocsService} is about the palette, not about
+     * an upgrade, and has no coordinate to hand.
      *
      * <p>The project's own pom is read for its {@code <repositories>} — JitPack is declared there — so a
      * version that has never been resolved on this machine downloads on demand. Best-effort throughout:

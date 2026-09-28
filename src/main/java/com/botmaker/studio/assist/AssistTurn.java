@@ -14,6 +14,7 @@ import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.parser.guard.CompileGuard;
+import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectState;
@@ -256,9 +257,7 @@ public final class AssistTurn {
             state.setCompilationUnit(cu);
             state.setNodeToBlockMap(registry);
             analyzer = workspace.analyzer(state);
-            editor = workspace.surface() != null
-                    ? new CodeEditor(workspace.config(), state, bus, analyzer, workspace.surface())
-                    : workspace.journal() != null
+            editor = workspace.journal() != null
                     ? new CodeEditor(workspace.config(), state, bus, analyzer, workspace.journal())
                     : new CodeEditor(workspace.config(), state, bus, analyzer);
         }
@@ -290,7 +289,7 @@ public final class AssistTurn {
     // ---- the palette's calls -----------------------------------------------------------------------------
 
     private List<FacadeEntry> facades() {
-        return workspace.surface() == null ? PluginHost.menuFacades() : workspace.surface().menuFacades();
+        return PluginHost.menuFacades();
     }
 
     /** The static overloads of {@code owner} the menu offers, in the menu's order. */
@@ -300,11 +299,10 @@ public final class AssistTurn {
         for (MethodSignature sig : analyzer.getMethods(owner, true)) {
             byName.computeIfAbsent(sig.name(), k -> new ArrayList<>()).add(sig);
         }
-        List<String> names = new ArrayList<>(byName.keySet());
-        if (workspace.surface() != null) names = workspace.surface().retainOfferedNames(owner, names, null);
+        PaletteCuration curation = PaletteCuration.current();
+        List<String> names = curation.retainOfferedNames(owner, new ArrayList<>(byName.keySet()), null);
         for (String name : names) {
-            List<MethodSignature> sigs = byName.get(name);
-            if (workspace.surface() != null) sigs = workspace.surface().retainOffered(owner, name, sigs, null);
+            List<MethodSignature> sigs = curation.retainOffered(owner, name, byName.get(name), null);
             out.addAll(sigs);
         }
         return out;

@@ -2,8 +2,9 @@ package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
+import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.services.SdkSurfaceService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.MethodSignature;
@@ -83,7 +84,7 @@ final class MenuBuilders {
 
     /**
      * Appends, at the top level of the expression menu, one submenu per {@linkplain
-     * CodeEditorService#sdkMenuFacades() served menu facade} listing its static members whose return type is
+     * PluginHost#menuFacades() served menu facade} listing its static members whose return type is
      * compatible with {@code expectedType} — the
      * expression-slot analogue of the statement menu's per-facade submenus. Void-only methods naturally drop
      * out (no return value fits an expression slot), and {@link #buildScopeMenu} returns {@code null} for a
@@ -91,9 +92,7 @@ final class MenuBuilders {
      *
      * <p><b>PRESENCE is gated implicitly by that null return</b> and must stay so: the analyzer resolves
      * against the jar the project pins, so a facade its version doesn't have has no members and no submenu.
-     * {@code services/SdkSurfaceService} exists for the surfaces where nothing enumerates members first (the
-     * chips, the class dropdowns) — adding a <em>presence</em> filter here would ask the same jar the same
-     * question twice.
+     * Adding a <em>presence</em> filter here would ask the same jar the same question twice.
      *
      * <p><b>CURATION is a different question and does need the explicit filter</b> that {@link #buildScopeMenu}
      * now applies. "Is this member here?" and "should we lead with it?" are not the same, and nothing
@@ -108,10 +107,9 @@ final class MenuBuilders {
         if (context == null) return;
         ProjectAnalyzer analyzer = context.getProjectAnalyzer();
         if (analyzer == null) return;
-        for (FacadeEntry facade : context.sdkMenuFacades()) {
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
             String name = facade.simpleName();
-            Menu sub = buildScopeMenu(name, name, name, true, expectedType, analyzer,
-                    context.getSdkSurface(), onSelect);
+            Menu sub = buildScopeMenu(name, name, name, true, expectedType, analyzer, onSelect);
             if (sub != null) menu.getItems().add(MenuIcons.decorate(sub, MenuIcons.iconFor(facade)));
         }
     }
@@ -122,10 +120,9 @@ final class MenuBuilders {
         if (context == null) return;
         ProjectAnalyzer analyzer = context.getProjectAnalyzer();
         if (analyzer == null) return;
-        for (FacadeEntry facade : context.sdkMenuFacades()) {
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
             String name = facade.simpleName();
-            Menu sub = buildScopeMenu(name, name, name, true, expectedType, analyzer,
-                    context.getSdkSurface(), onSelect);
+            Menu sub = buildScopeMenu(name, name, name, true, expectedType, analyzer, onSelect);
             if (sub == null) continue;
             List<MenuItem> leaves = new ArrayList<>();
             collectMenuLeaves(sub, leaves);
@@ -144,11 +141,10 @@ final class MenuBuilders {
      * a bare receiver-less field isn't offered here). Returns {@code null} when nothing is compatible, so the
      * caller can drop the whole scope/jar entry rather than show an empty submenu.
      *
-     * <p>{@code surface} curates the <b>methods</b> half: on a catalogued SDK type, only the overloads the
-     * served catalog names are listed, and a name whose every overload is hidden drops out entirely.
-     * {@code null} — a headless edit, an uncurated pin, a type that isn't the SDK's — offers everything, which
-     * is what every SDK released before 1.2.0 answers. This is the one place the expression menu and its
-     * search view both go through, so filtering here covers both.
+     * <p>{@link PaletteCuration} curates the <b>methods</b> half: on a catalogued type, only the overloads the
+     * bound plugins' catalogs offer are listed, and a name whose every overload is hidden drops out entirely.
+     * A type no catalog names offers everything. This is the one place the expression menu and its search
+     * view both go through, so filtering here covers both.
      *
      * <p>The <b>fields</b> half is deliberately never curated. A catalog names methods and constructors and
      * gains no field entries: the constant sets are small and closed ({@code BotSettings} 7,
@@ -159,7 +155,7 @@ final class MenuBuilders {
      */
     static Menu buildScopeMenu(String label, String scope, String typeName, boolean isStatic,
                                ResolvedType expectedType, ProjectAnalyzer analyzer,
-                               SdkSurfaceService surface, Consumer<Object> onSelect) {
+                               Consumer<Object> onSelect) {
         Menu scopeMenu = new Menu(label);
 
         // Methods (grouped by name; overloads nest one level).
@@ -168,10 +164,10 @@ final class MenuBuilders {
                 .collect(Collectors.groupingBy(MethodSignature::name));
         List<String> names = grouped.keySet().stream().sorted().collect(Collectors.toList());
         // Nothing is currently selected in a menu that is being built from scratch, hence keep = null.
-        if (surface != null) names = surface.retainOfferedNames(typeName, names, null);
+        PaletteCuration curation = PaletteCuration.current();
+        names = curation.retainOfferedNames(typeName, names, null);
         names.forEach(mName -> {
-            List<MethodSignature> sigs = grouped.get(mName);
-            if (surface != null) sigs = surface.retainOffered(typeName, mName, sigs, null);
+            List<MethodSignature> sigs = curation.retainOffered(typeName, mName, grouped.get(mName), null);
             if (sigs.size() == 1) {
                 MethodSignature sig = sigs.getFirst();
                 MenuItem item = new MenuItem(mName);
