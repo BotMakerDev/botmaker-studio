@@ -74,6 +74,9 @@ public final class ApiDocsService {
     private void load(Set<Path> jars, Set<String> packages) {
         ApiDocs merged = ApiDocs.EMPTY;
         for (Path jar : jars) {
+            // A plugin cataloguing nothing (basics: types and editors only) has no docs to show, so its
+            // sources are never asked for — nor reported missing, when it publishes none.
+            if (!holdsAny(jar, packages)) continue;
             try {
                 Optional<Path> sources = sourcesJarOf(jar);
                 if (sources.isPresent()) merged = merged.mergedWith(ApiDocsParser.fromSourcesJar(sources.get(), packages));
@@ -119,6 +122,23 @@ public final class ApiDocsService {
         String version = versionDir.getFileName().toString();
         if (groupId == null || artifactId == null) return Optional.empty();
         return MavenService.resolveArtifact(config.projectPath(), groupId, artifactId, "sources", version);
+    }
+
+    /** Whether {@code jar} has a class in one of {@code packages} or below — where its docs would come from. */
+    static boolean holdsAny(Path jar, Set<String> packages) {
+        if (packages.isEmpty()) return false;
+        List<String> prefixes = packages.stream().map(p -> p.replace('.', '/') + "/").toList();
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                if (!name.endsWith(".class")) continue;
+                for (String prefix : prefixes) if (name.startsWith(prefix)) return true;
+            }
+        } catch (IOException e) {
+            // An unreadable jar has nothing to document.
+        }
+        return false;
     }
 
     private static Optional<Properties> pomProperties(Path jar) {

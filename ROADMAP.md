@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — docs and menus name no plugin.** `ApiDocs`/`ApiDocsParser`/`ApiDocsService` read
+- **2026-09-28 (latest) — API docs skip a plugin that catalogues nothing.** `ApiDocsService.holdsAny`: a
+  plugin jar with no class in a catalogued package (basics) has its sources neither resolved nor reported
+  missing, which printed `Could not resolve artifact …basics…:sources` on every open. `ApiDocsServiceTest`.
+- **2026-09-28 — docs and menus name no plugin.** `ApiDocs`/`ApiDocsParser`/`ApiDocsService` read
   every bound plugin's sources jar, filtered to the catalogued packages (was the SDK's jar and
   `com/botmaker/sdk/api/`); menu `Sdk*` names are `Facade*`. `ApiDocsParserTest`.
 - **2026-09-28 — `SdkSurfaceService` deleted.** Curation (`@Hidden`) is `plugin/PaletteCuration`,
