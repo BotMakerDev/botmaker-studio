@@ -880,17 +880,8 @@ public final class MavenService {
                 : Optional.empty();
     }
 
-    /**
-     * Resolves the {@code sources} classifier jar for the BotMaker SDK version declared in the project's
-     * pom (downloading from JitPack if not already cached in {@code ~/.m2}), returning its local path.
-     * The Studio does not compile against the SDK, but the sources jar carries the API Javadoc that
-     * {@code index/SdkDocsParser} reads to describe methods/parameters (see {@code services/SdkDocsService}).
-     * Best-effort: returns empty when the pom is missing, <b>declares no SDK</b>, the artifact can't be
-     * resolved, or offline. May block on the network — call off the FX thread.
-     */
-    public static Optional<Path> resolveSdkSourcesJar(Path projectDir) {
-        return resolveSdkArtifact(projectDir, readSdkVersion(projectDir).orElse(""), "sources");
-    }
+    // resolveSdkSourcesJar stood here until 2026-09-28. The API docs read every bound plugin's sources jar
+    // now (services/ApiDocsService), through resolveArtifact below.
 
     /**
      * Resolves the SDK's own (classifier-less) jar for an <em>arbitrary</em> version — not necessarily the
@@ -931,8 +922,8 @@ public final class MavenService {
      * The same for <b>any</b> coordinate — what the project upgrade window resolves a plugin's two jars with.
      *
      * <p>The SDK-named entry points above are two-line delegations to this since 2026-09-15. They stay
-     * because their callers ask a different question: {@code SdkDocsService} is about the palette, not about
-     * an upgrade, and has no coordinate to hand.
+     * because their callers are about creating and repairing a project that names the SDK, not about an
+     * upgrade, and have no coordinate to hand.
      *
      * <p>The project's own pom is read for its {@code <repositories>} — JitPack is declared there — so a
      * version that has never been resolved on this machine downloads on demand. Best-effort throughout:

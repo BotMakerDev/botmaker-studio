@@ -67,6 +67,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > `@Deprecated` is `ProjectAnalyzer.isMemberDeprecated`. `CodeEditorService.sdkMenuFacades`/`sdkFacadeNames`/
 > `isSdkMemberDeprecated`/`getSdkSurface` are gone, and `sdkVersion`/`missingFacades` had no caller.
 
+> **Studio names no plugin in its menus or docs (2026-09-28).** `SdkDocs`/`SdkDocsParser`/`SdkDocsService` are
+> `palette/ApiDocs`/`index/ApiDocsParser`/`services/ApiDocsService` (`getApiDocs()`): the docs come from **every
+> bound plugin's** `sources` jar — found beside the jar the plugin's class was loaded from, else resolved by
+> the jar's `pom.properties` coordinate and its repository directory's version — restricted to
+> `PluginHost.cataloguedPackages()`, merged (first plugin wins a simple-name clash).
+> `MavenService.resolveSdkSourcesJar` is deleted. The menus' `SdkCall`/`sdkCalls`/`isSdkFacadeCall`/
+> `appendSdkFacadeExpressionSubmenus`/`collectSdkFacadeLeaves` are `FacadeCall`/`facadeCalls`/`isFacadeCall`/
+> `appendFacadeExpressionSubmenus`/`collectFacadeLeaves`. The SDK's coordinate constants
+> (`SDK_GROUP_ID`, `SDK_FALLBACK_VERSION`, `readSdkVersion`, …) stay: they create and repair projects that
+> name the SDK, and the release tooling edits `SDK_FALLBACK_VERSION` by name.
+
 > **`HostSources` and the contract's `Sources` are deleted (2026-09-28).** Every mention below of a token
 > needle, `HostSources` or `Sources.replace` is history. A plugin's open set (`@Managed` on a class —
 > `Pictures`) is changed through `HostPluginValues`' `members`/`open(id, member)`/`add`/`uses`/`rename`/

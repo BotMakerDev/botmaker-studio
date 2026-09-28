@@ -23,7 +23,7 @@ import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.types.SlotFit;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SdkDocs;
+import com.botmaker.studio.palette.ApiDocs;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.DropInfo;
 import com.botmaker.studio.ui.dnd.ExpressionDropInfo;
@@ -65,7 +65,7 @@ public class CodeEditorService {
     private final DiagnosticsManager diagnosticsManager;
     private final HistoryManager historyManager;
     private final ProjectAnalyzer projectAnalyzer;
-    private final SdkDocsService sdkDocsService;
+    private final ApiDocsService apiDocsService;
 
     /** Cache of the last rendered block-tree root, exposed via {@link #getRootBlock()} for the overlay editor. */
     private AbstractCodeBlock lastRootBlock;
@@ -86,7 +86,7 @@ public class CodeEditorService {
             BlockConverter blockConverter,
             BlockDragAndDropManager dragAndDropManager,
             DiagnosticsManager diagnosticsManager, ProjectAnalyzer projectAnalyzer,
-            SdkDocsService sdkDocsService) {
+            ApiDocsService apiDocsService) {
         this.config = config;
         this.state = state;
         this.eventBus = eventBus;
@@ -94,7 +94,7 @@ public class CodeEditorService {
         this.dragAndDropManager = dragAndDropManager;
         this.diagnosticsManager = diagnosticsManager;
         this.projectAnalyzer = projectAnalyzer;
-        this.sdkDocsService = sdkDocsService;
+        this.apiDocsService = apiDocsService;
         this.historyManager = new HistoryManager(this::restoreFiles);
         this.codeEditor = new CodeEditor(config, state, eventBus, projectAnalyzer);
         setupEventHandlers();
@@ -107,9 +107,9 @@ public class CodeEditorService {
     /** Current compile diagnostics — the overlay marks broken rows from these, as the main editor does. */
     public DiagnosticsManager getDiagnosticsManager() { return diagnosticsManager; }
 
-    /** SDK method documentation (summaries + param docs), parsed from the resolved SDK sources jar.
-     *  {@link SdkDocs#EMPTY} while loading or when no docs service is wired (headless tests). */
-    public SdkDocs getSdkDocs() { return sdkDocsService == null ? SdkDocs.EMPTY : sdkDocsService.current(); }
+    /** Plugin API documentation (summaries + param docs), parsed from each bound plugin's sources jar.
+     *  {@link ApiDocs#EMPTY} while loading or when no docs service is wired (headless tests). */
+    public ApiDocs getApiDocs() { return apiDocsService == null ? ApiDocs.EMPTY : apiDocsService.current(); }
 
     // The SDK surface stood here until 2026-09-28, with sdkMenuFacades, sdkFacadeNames and
     // isSdkMemberDeprecated in front of it. The facades are PluginHost's, what a menu offers is

@@ -121,7 +121,7 @@ public final class BlockUIComponents {
      * A small "?" explanation button that opens a click-dismissable popover ({@code title} in bold over a
      * word-wrapped {@code body}). Used for the "learn about it" SDK method help on
      * {@code MethodInvocationBlock} / {@code LambdaCallBlock}; domain-free — callers assemble the text from
-     * {@code palette.SdkDocs}.
+     * {@code palette.ApiDocs}.
      */
     public static Button createInfoButton(String title, String body) {
         Button btn = new Button("?");

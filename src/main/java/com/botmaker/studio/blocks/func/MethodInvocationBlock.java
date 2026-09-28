@@ -7,7 +7,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.palette.SdkDocs;
+import com.botmaker.studio.palette.ApiDocs;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.project.ProjectFile;
@@ -263,7 +263,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                             java.util.function.Supplier<String> scopeGetter, String currentFileClass) {}
 
     /** What one render resolved about this call's arguments — the overload and what it makes of the tail. */
-    private record ArgPlan(MethodSignature signature, String targetType, List<SdkDocs.Param> docParams,
+    private record ArgPlan(MethodSignature signature, String targetType, List<ApiDocs.Param> docParams,
                            int imageVarargsFrom, int varargsFrom, Node imageRow) {}
 
     /**
@@ -725,7 +725,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
 
         // SDK facade calls carry real parameter names + @param docs (from the sources jar); use them to label
         // the pills (e.g. findCompare(good, bad)) instead of the bare type. Empty for non-SDK calls.
-        List<SdkDocs.Param> docParams = sdkDocParams(context, targetType, currentSignature);
+        List<ApiDocs.Param> docParams = sdkDocParams(context, targetType, currentSignature);
 
         int imageVarargsStart = imageVarargsStart(currentSignature);
         // The row is resolved up front, because whether there is one decides how the whole argument list is
@@ -755,7 +755,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         if (paramType == null) paramType = ResolvedType.UNKNOWN;
 
         final ResolvedType finalParamType = paramType;
-        SdkDocs.Param doc = (index < plan.docParams().size()) ? plan.docParams().get(index) : null;
+        ApiDocs.Param doc = (index < plan.docParams().size()) ? plan.docParams().get(index) : null;
         String argName = (doc != null && doc.name() != null && !doc.name().isBlank()) ? doc.name() : null;
         String argDesc = (doc != null) ? doc.desc() : null;
 
@@ -888,11 +888,11 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
     }
 
     /** The documented parameters of the best-matching SDK overload for this call (empty for non-SDK calls). */
-    private List<SdkDocs.Param> sdkDocParams(CodeEditorService context, String targetType, MethodSignature sig) {
+    private List<ApiDocs.Param> sdkDocParams(CodeEditorService context, String targetType, MethodSignature sig) {
         if (fixedScopeName == null || sig == null) return List.of();
         List<String> typeNames = sig.paramTypes().stream().map(ResolvedType::simpleName).collect(Collectors.toList());
-        return context.getSdkDocs().lookup(targetType, methodName, typeNames)
-                .map(SdkDocs.Overload::params).orElse(List.of());
+        return context.getApiDocs().lookup(targetType, methodName, typeNames)
+                .map(ApiDocs.Overload::params).orElse(List.of());
     }
 
     /**
@@ -907,7 +907,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
      * ({@code docs/refactor/21-api-compat.md}), and it is the only place they would ever see it.
      *
      * <p>The <em>fact</em> comes from bytecode ({@code ProjectAnalyzer.isMemberDeprecated}); the <em>replacement</em> from the
-     * {@code @deprecated} Javadoc of the bot's own sources jar ({@code SdkDocs}). Either can be missing — an
+     * {@code @deprecated} Javadoc of the bot's own sources jar ({@code ApiDocs}). Either can be missing — an
      * annotated method with no note still strikes through with a generic tooltip, and a note with no
      * annotation says nothing at all, because the compiler is what the user will ultimately answer to.
      */
@@ -920,8 +920,8 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         if (analyzer == null || !analyzer.isMemberDeprecated(targetType, methodName)) return;
 
         methodNode.getStyleClass().add("deprecated-member");
-        String note = context.getSdkDocs().overloads(targetType, methodName).stream()
-                .map(SdkDocs.Overload::deprecated)
+        String note = context.getApiDocs().overloads(targetType, methodName).stream()
+                .map(ApiDocs.Overload::deprecated)
                 .filter(d -> d != null && !d.isBlank())
                 .findFirst()
                 .orElse("");
@@ -939,9 +939,9 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                 ? sig.paramTypes().stream().map(ResolvedType::simpleName).collect(Collectors.toList())
                 : List.of();
 
-        Optional<SdkDocs.Overload> overload = context.getSdkDocs().lookup(targetType, methodName, typeNames);
+        Optional<ApiDocs.Overload> overload = context.getApiDocs().lookup(targetType, methodName, typeNames);
         if (overload.isEmpty()) return null;
-        SdkDocs.Overload o = overload.get();
+        ApiDocs.Overload o = overload.get();
 
         StringBuilder body = new StringBuilder();
         // First, because it changes what the rest of the explanation is worth reading for.
@@ -952,7 +952,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
             if (body.length() > 0) body.append("\n\n");
             body.append(o.summary().trim());
         }
-        for (SdkDocs.Param p : o.params()) {
+        for (ApiDocs.Param p : o.params()) {
             if (p.desc() != null && !p.desc().isBlank()) {
                 if (body.length() > 0) body.append("\n\n");
                 body.append("• ").append(p.name()).append(" — ").append(p.desc().trim());

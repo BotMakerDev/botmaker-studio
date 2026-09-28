@@ -10,7 +10,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ContractDependency;
-import com.botmaker.studio.services.SdkDocsService;
+import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.services.DebuggingService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
@@ -247,14 +247,14 @@ public class BotProject {
                                     BlockDragAndDropManager dragAndDropManager,
                                     BlockConverter blockConverter) {
 
-        // SDK documentation (descriptions + param docs from the resolved SDK sources jar; loads in bg)
-        SdkDocsService sdkDocsService = new SdkDocsService(config, eventBus);
+        // Plugin API documentation (descriptions + param docs from each bound plugin's sources jar; loads in bg)
+        ApiDocsService apiDocsService = new ApiDocsService(config, eventBus);
 
         // Code Editor
         this.codeEditorService = new CodeEditorService(
                 config, state, eventBus, blockConverter,
                 dragAndDropManager, diagnosticsManager, projectAnalyzer,
-                sdkDocsService
+                apiDocsService
         );
 
         // Execution (subscribes to compile/run/stop events in its constructor)

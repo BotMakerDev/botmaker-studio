@@ -21,6 +21,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Every plugin's method help shows on its blocks**, not only the SDK's: the summary and parameter notes
+  come from each installed plugin's published sources, when it publishes them.
 - **A plugin renames, repoints and removes its own constants by binding.** The picture library's rename
   used to be a find-and-replace over the bot's text; it goes through the same rename the canvas uses now, so
   the declaration is renamed with its uses, a local of the same name is left alone, and a change that would

@@ -206,7 +206,7 @@ public final class ExpressionMenu {
 
         // Parity with the statement menu: lead with a submenu per SDK facade (in catalog order), each listing
         // that facade's static members whose return type fits this slot (buildScopeMenu drops empty facades).
-        MenuBuilders.appendSdkFacadeExpressionSubmenus(menu, expectedType, context, onSelect);
+        MenuBuilders.appendFacadeExpressionSubmenus(menu, expectedType, context, onSelect);
 
         // Default: the categorized view (declaration order of ExpressionCategory is the display order).
         Map<ExpressionCategory, List<ExpressionType>> grouped = available.stream()
@@ -258,7 +258,7 @@ public final class ExpressionMenu {
         }
         // Parity with the statement-menu search: flatten every SDK facade's slot-compatible members as
         // "Facade.member" leaves so they are reachable from the flat search list too.
-        MenuBuilders.collectSdkFacadeLeaves(expectedType, context, onSelect, leaves);
+        MenuBuilders.collectFacadeLeaves(expectedType, context, onSelect, leaves);
         return leaves;
     }
 

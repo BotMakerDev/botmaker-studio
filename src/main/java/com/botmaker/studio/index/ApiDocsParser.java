@@ -1,6 +1,6 @@
 package com.botmaker.studio.index;
 
-import com.botmaker.studio.palette.SdkDocs;
+import com.botmaker.studio.palette.ApiDocs;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
@@ -22,22 +22,28 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Builds an {@link SdkDocs} by parsing SDK {@code .java} sources with Eclipse JDT, pulling each public
- * method's Javadoc summary, real parameter names, and {@code @param} descriptions. The Studio does NOT
- * compile against the SDK, so the input is the resolved {@code botmaker-sdk:<version>:sources} jar
- * (see {@code services/SdkDocsService}); nothing here loads SDK classes.
+ * Builds an {@link ApiDocs} by parsing a plugin's {@code .java} sources with Eclipse JDT, pulling each public
+ * method's Javadoc summary, real parameter names, and {@code @param} descriptions. Studio compiles against no
+ * plugin, so the input is the plugin's resolved {@code sources} jar (see {@code services/ApiDocsService});
+ * nothing here loads a plugin's classes.
  */
-public final class SdkDocsParser {
+public final class ApiDocsParser {
 
-    private SdkDocsParser() {}
+    private ApiDocsParser() {}
 
-    /** Parse every {@code .java} entry under {@code com/botmaker/sdk/api/} in a sources jar. */
-    public static SdkDocs fromSourcesJar(Path sourcesJar) {
-        Map<String, Map<String, List<SdkDocs.Overload>>> docs = new LinkedHashMap<>();
+    /**
+     * Parses every {@code .java} entry in a sources jar whose package is one of {@code packages}, or below
+     * one — the packages the plugins catalogue, which carry the user-facing Javadoc worth showing. It was the
+     * literal {@code com/botmaker/sdk/api/} until 2026-09-28.
+     */
+    public static ApiDocs fromSourcesJar(Path sourcesJar, Set<String> packages) {
+        List<String> prefixes = packages.stream().map(p -> p.replace('.', '/') + "/").toList();
+        Map<String, Map<String, List<ApiDocs.Overload>>> docs = new LinkedHashMap<>();
         try (InputStream fis = java.nio.file.Files.newInputStream(sourcesJar);
              ZipInputStream zip = new ZipInputStream(fis)) {
             ZipEntry entry;
@@ -46,21 +52,20 @@ public final class SdkDocsParser {
                 if (entry.isDirectory() || !name.endsWith(".java")) {
                     continue;
                 }
-                // Only the public API surface carries user-facing Javadoc worth showing.
-                if (!name.contains("com/botmaker/sdk/api/")) {
+                if (prefixes.stream().noneMatch(name::startsWith)) {
                     continue;
                 }
                 String source = new String(zip.readAllBytes(), StandardCharsets.UTF_8);
                 parseSource(source, docs);
             }
         } catch (IOException e) {
-            System.err.println("SdkDocsParser: could not read sources jar " + sourcesJar + ": " + e.getMessage());
-            return SdkDocs.EMPTY;
+            System.err.println("ApiDocsParser: could not read sources jar " + sourcesJar + ": " + e.getMessage());
+            return ApiDocs.EMPTY;
         }
-        return new SdkDocs(docs);
+        return new ApiDocs(docs);
     }
 
-    private static void parseSource(String source, Map<String, Map<String, List<SdkDocs.Overload>>> docs) {
+    private static void parseSource(String source, Map<String, Map<String, List<ApiDocs.Overload>>> docs) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
         parser.setKind(ASTParser.K_COMPILATION_UNIT);
         parser.setSource(source.toCharArray());
@@ -97,7 +102,7 @@ public final class SdkDocsParser {
     }
 
     @SuppressWarnings("unchecked")
-    private static SdkDocs.Overload toOverload(MethodDeclaration node) {
+    private static ApiDocs.Overload toOverload(MethodDeclaration node) {
         Javadoc javadoc = node.getJavadoc();
         String summary = "";
         String deprecated = "";
@@ -120,13 +125,13 @@ public final class SdkDocsParser {
             }
         }
 
-        List<SdkDocs.Param> params = new ArrayList<>();
+        List<ApiDocs.Param> params = new ArrayList<>();
         for (SingleVariableDeclaration p : (List<SingleVariableDeclaration>) node.parameters()) {
             String pname = p.getName().getIdentifier();
             String type = p.getType().toString() + (p.isVarargs() ? "..." : "");
-            params.add(new SdkDocs.Param(pname, type, paramDocs.getOrDefault(pname, "")));
+            params.add(new ApiDocs.Param(pname, type, paramDocs.getOrDefault(pname, "")));
         }
-        return new SdkDocs.Overload(summary, params, deprecated);
+        return new ApiDocs.Overload(summary, params, deprecated);
     }
 
     /** Flatten Javadoc fragments (text + inline {@code}/{@link} tags) into a single collapsed line. */

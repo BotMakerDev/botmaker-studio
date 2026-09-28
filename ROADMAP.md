@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — `SdkSurfaceService` deleted.** Curation (`@Hidden`) is `plugin/PaletteCuration`,
+- **2026-09-28 (latest) — docs and menus name no plugin.** `ApiDocs`/`ApiDocsParser`/`ApiDocsService` read
+  every bound plugin's sources jar, filtered to the catalogued packages (was the SDK's jar and
+  `com/botmaker/sdk/api/`); menu `Sdk*` names are `Facade*`. `ApiDocsParserTest`.
+- **2026-09-28 — `SdkSurfaceService` deleted.** Curation (`@Hidden`) is `plugin/PaletteCuration`,
   facades are `PluginHost`'s, `@Deprecated` is `ProjectAnalyzer.isMemberDeprecated`; the parameter threaded
   through `CodeEditor`, `EditContext`, `StudioContext`, the menus and `AssistWorkspace` is gone.
   `PaletteCurationTest`, `MemberDeprecationTest`. No behaviour change.

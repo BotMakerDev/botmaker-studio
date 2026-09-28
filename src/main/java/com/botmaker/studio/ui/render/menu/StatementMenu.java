@@ -102,7 +102,7 @@ public final class StatementMenu {
             for (BlockType block : languageBlocks(allowed)) {
                 if (matches(block, q)) matches.add(statementItem(block, b, true));
             }
-            for (SdkCall call : sdkCalls(b.analyzer())) {
+            for (FacadeCall call : facadeCalls(b.analyzer())) {
                 if (matches(call.block(), q)) matches.add(callItem(call, b, true));
             }
             // The bot's own functions, by name: searching "collect" finds collect(), not only "Call Function".
@@ -151,7 +151,7 @@ public final class StatementMenu {
 
         // Default: one submenu per SDK facade class (in catalog order), enumerating that class's static methods.
         //
-        // PRESENCE is gated implicitly here and must stay so: sdkFacadeSubmenu returns null when the facade
+        // PRESENCE is gated implicitly here and must stay so: facadeSubmenu returns null when the facade
         // resolves no methods, and the analyzer resolves against the bot's own jar — so a class its SDK
         // doesn't have contributes nothing. Do not add a *presence* filter; it would be a second answer to the
         // same question, from the same jar (SdkSurfaceService was one, and went on 2026-09-28). Do not
@@ -222,12 +222,12 @@ public final class StatementMenu {
         // Declare Function is a class member: it has no statement form, and offered in a body it inserted nothing.
         return BlockCatalog.all().stream()
                 .filter(BlockType::isStatement)
-                .filter(b -> !isSdkFacadeCall(b))
+                .filter(b -> !isFacadeCall(b))
                 .filter(allowed)
                 .collect(Collectors.toList());
     }
 
-    private static boolean isSdkFacadeCall(BlockType block) {
+    private static boolean isFacadeCall(BlockType block) {
         return switch (block) {
             case BlockType.LibraryCall l -> PluginHost.isFacadeClass(l.facade().getSimpleName());
             case BlockType.LambdaCall l -> PluginHost.isFacadeClass(l.facade().getSimpleName());
@@ -240,11 +240,11 @@ public final class StatementMenu {
      * the default overload is chosen at insert time by {@code StatementFactory}). Returns {@code null} when the
      * analyzer is absent or the facade resolves no static methods (e.g. the SDK jar isn't on the classpath yet).
      */
-    private static Menu sdkFacadeSubmenu(FacadeEntry facade, Build b) {
+    private static Menu facadeSubmenu(FacadeEntry facade, Build b) {
         if (b.analyzer() == null) return null;
         Menu sub = new Menu(facade.simpleName());
         for (String method : facadeMethodNames(facade, b.analyzer())) {
-            sub.getItems().add(callItem(new SdkCall(facade, sdkCall(facade, method, method)), b, false));
+            sub.getItems().add(callItem(new FacadeCall(facade, facadeCall(facade, method, method)), b, false));
         }
         return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, MenuIcons.iconFor(facade));
     }
@@ -260,11 +260,11 @@ public final class StatementMenu {
             if (b.analyzer() == null) return null;
             for (String method : facadeMethodNames(facade, b.analyzer())) {
                 plugin.getItems().add(callItem(
-                        new SdkCall(facade, sdkCall(facade, method, facade.simpleName() + "." + method)), b, false));
+                        new FacadeCall(facade, facadeCall(facade, method, facade.simpleName() + "." + method)), b, false));
             }
         } else {
             for (FacadeEntry facade : facades) {
-                MenuBuilders.addIfNonNull(plugin.getItems(), sdkFacadeSubmenu(facade, b));
+                MenuBuilders.addIfNonNull(plugin.getItems(), facadeSubmenu(facade, b));
             }
         }
         return plugin.getItems().isEmpty() ? null : MenuIcons.decorate(plugin, MenuIcons.iconFor(facades.getFirst()));
@@ -276,7 +276,7 @@ public final class StatementMenu {
     }
 
     /** A plugin call's row: the facade's glyph, and the plugin that offers it when the list is a search. */
-    private static MenuItem callItem(SdkCall call, Build b, boolean inline) {
+    private static MenuItem callItem(FacadeCall call, Build b, boolean inline) {
         String from = PluginHost.pluginNameFor(call.facade().simpleName()).map(name -> " From " + name + ".")
                 .orElse("");
         String id = call.block().id();
@@ -322,22 +322,22 @@ public final class StatementMenu {
         for (BlockType block : languageBlocks(b.allowed())) {
             if (block.id().equals(id)) return statementItem(block, b, false);
         }
-        for (SdkCall call : sdkCalls(b.analyzer())) {
+        for (FacadeCall call : facadeCalls(b.analyzer())) {
             if (call.block().id().equals(id)) return callItem(call, b, false);
         }
         return null;
     }
 
-    /** An SDK facade method as a statement block, paired with its facade so the search view can icon it. */
-    private record SdkCall(FacadeEntry facade, BlockType block) {}
+    /** A plugin facade's method as a statement block, paired with its facade so the search view can icon it. */
+    private record FacadeCall(FacadeEntry facade, BlockType block) {}
 
-    /** Every SDK facade method as a flat list of class-qualified statement blocks, for the search view. */
-    private static List<SdkCall> sdkCalls(ProjectAnalyzer analyzer) {
-        List<SdkCall> out = new ArrayList<>();
+    /** Every facade method as a flat list of class-qualified statement blocks, for the search view. */
+    private static List<FacadeCall> facadeCalls(ProjectAnalyzer analyzer) {
+        List<FacadeCall> out = new ArrayList<>();
         if (analyzer == null) return out;
         for (FacadeEntry facade : PluginHost.menuFacades()) {
             for (String method : facadeMethodNames(facade, analyzer)) {
-                out.add(new SdkCall(facade, sdkCall(facade, method, facade.simpleName() + "." + method)));
+                out.add(new FacadeCall(facade, facadeCall(facade, method, facade.simpleName() + "." + method)));
             }
         }
         return out;
@@ -345,7 +345,7 @@ public final class StatementMenu {
 
     /**
      * Distinct static method names of {@code facade}, sorted — the entries of its statement submenu, and (via
-     * {@link #sdkCalls}) of the search view, so both are curated by this one method.
+     * {@link #facadeCalls}) of the search view, so both are curated by this one method.
      *
      * <p>A name survives when the SDK offers at least one of its overloads. Which overload the insert then
      * creates is {@code StatementFactory}'s business, and it applies the same set.
@@ -361,7 +361,7 @@ public final class StatementMenu {
     }
 
     /** A synthetic {@code facade.method(<defaults>)} statement block; args are seeded from the resolved overload. */
-    private static BlockType sdkCall(FacadeEntry facade, String method, String displayName) {
+    private static BlockType facadeCall(FacadeEntry facade, String method, String displayName) {
         return new BlockType.LibraryCall("SDK_" + facade.simpleName() + "_" + method, displayName,
                 BlockCategory.INPUT, facade.type(), method, List.of());
     }
@@ -418,7 +418,7 @@ public final class StatementMenu {
 
     private static MenuItem statementItem(BlockType block, Build b, boolean inline) {
         if (block instanceof BlockType.LibraryCall call && PluginHost.ownerOf(call.facade().getSimpleName()).isPresent()) {
-            return callItem(new SdkCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block), b, inline);
+            return callItem(new FacadeCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block), b, inline);
         }
         return pinnable(MenuRows.entry(MenuIcons.iconFor(block.category()), MenuRows.categoryClass(block.category()),
                 block.displayName(), PaletteDescriptions.of(block) + pinHint(block.id(), inline), inline,

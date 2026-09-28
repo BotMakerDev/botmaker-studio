@@ -5,20 +5,19 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * In-memory SDK method documentation: {@code class → method → [overloads]}, each overload carrying a
- * Javadoc summary and its ordered parameters (real names + {@code @param} text).
+ * In-memory API documentation of the bound plugins: {@code class → method → [overloads]}, each overload
+ * carrying a Javadoc summary and its ordered parameters (real names + {@code @param} text).
  *
- * <p>Studio compiles against the SDK for type identity only (the plugin catalog) — which cannot carry Javadoc,
- * since Javadoc is not in bytecode — and a bot may pin an older SDK than Studio's anyway. So the docs come
- * from the bot's own SDK: {@code index/SdkDocsParser} parses the resolved
- * {@code botmaker-sdk:<version>:sources} jar at runtime (via Eclipse JDT) into an instance of this
- * class, and {@code services/SdkDocsService} owns/caches it per project. This type is pure data +
+ * <p>Javadoc is not in bytecode, so the docs come from the plugins the bot resolves: {@code index/ApiDocsParser}
+ * parses each plugin's {@code sources} jar at runtime (via Eclipse JDT) into an instance of this class, and
+ * {@code services/ApiDocsService} merges and caches them per project. It was {@code SdkDocs}, over the SDK's
+ * jar alone, until 2026-09-28. This type is pure data +
  * lookup — no I/O — so it stays in the dependency-light {@code palette} package. {@link #EMPTY} is the
  * no-docs fallback (sources not resolved / offline).
  */
-public final class SdkDocs {
+public final class ApiDocs {
 
-    /** One parameter of an SDK method overload: its real name, declared type, and {@code @param} text. */
+    /** One parameter of a documented method overload: its real name, declared type, and {@code @param} text. */
     public record Param(String name, String type, String desc) {}
 
     /**
@@ -40,13 +39,25 @@ public final class SdkDocs {
     }
 
     /** No documentation available (sources jar unresolved / offline). */
-    public static final SdkDocs EMPTY = new SdkDocs(Map.of());
+    public static final ApiDocs EMPTY = new ApiDocs(Map.of());
 
     /** class simpleName → method name → overloads. */
     private final Map<String, Map<String, List<Overload>>> byClass;
 
-    public SdkDocs(Map<String, Map<String, List<Overload>>> byClass) {
+    public ApiDocs(Map<String, Map<String, List<Overload>>> byClass) {
         this.byClass = byClass;
+    }
+
+    /**
+     * These docs and {@code other}'s together. A class both describe keeps this one's entry: two plugins may
+     * not declare one class, so a clash is two classes of one simple name, and the first plugin's stays.
+     */
+    public ApiDocs mergedWith(ApiDocs other) {
+        if (other == null || other.byClass.isEmpty()) return this;
+        if (byClass.isEmpty()) return other;
+        Map<String, Map<String, List<Overload>>> merged = new java.util.LinkedHashMap<>(other.byClass);
+        merged.putAll(byClass);
+        return new ApiDocs(Map.copyOf(merged));
     }
 
     /** All overloads documented for {@code class.method} (empty if none). */

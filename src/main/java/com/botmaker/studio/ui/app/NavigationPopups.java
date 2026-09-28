@@ -5,7 +5,7 @@ import com.botmaker.studio.nav.LibrarySource;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Declaration;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
-import com.botmaker.studio.palette.SdkDocs;
+import com.botmaker.studio.palette.ApiDocs;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -214,9 +214,9 @@ final class NavigationPopups {
         if (binding.isEmpty()) return;
         String libraryDoc = null;
         if (binding.get() instanceof IMethodBinding m && m.getDeclaringClass() != null) {
-            SdkDocs docs = editor.getSdkDocs();
+            ApiDocs docs = editor.getApiDocs();
             libraryDoc = docs.overloads(m.getDeclaringClass().getErasure().getName(), m.getName()).stream()
-                    .map(SdkDocs.Overload::summary).filter(s -> s != null && !s.isBlank()).findFirst().orElse(null);
+                    .map(ApiDocs.Overload::summary).filter(s -> s != null && !s.isBlank()).findFirst().orElse(null);
         }
         SourceNavigation.Doc doc = SourceNavigation.docOf(binding.get(),
                 state.getCompilationUnit().orElse(null), libraryDoc);

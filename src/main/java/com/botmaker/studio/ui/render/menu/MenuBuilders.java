@@ -102,7 +102,7 @@ final class MenuBuilders {
      * everything for a year of curation. The rule that keeps the two apart: <b>filter what is OFFERED, never
      * what is RESOLVED</b> — blocks already in the file resolve through the analyzer, untouched.
      */
-    static void appendSdkFacadeExpressionSubmenus(ContextMenu menu, ResolvedType expectedType,
+    static void appendFacadeExpressionSubmenus(ContextMenu menu, ResolvedType expectedType,
                                                   CodeEditorService context, Consumer<Object> onSelect) {
         if (context == null) return;
         ProjectAnalyzer analyzer = context.getProjectAnalyzer();
@@ -115,7 +115,7 @@ final class MenuBuilders {
     }
 
     /** Flattens the SDK-facade expression submenus into "Facade.member" leaves for the flat search view. */
-    static void collectSdkFacadeLeaves(ResolvedType expectedType, CodeEditorService context,
+    static void collectFacadeLeaves(ResolvedType expectedType, CodeEditorService context,
                                        Consumer<Object> onSelect, List<MenuItem> out) {
         if (context == null) return;
         ProjectAnalyzer analyzer = context.getProjectAnalyzer();

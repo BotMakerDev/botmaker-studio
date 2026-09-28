@@ -7,7 +7,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.services.SdkDocsService;
+import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -102,13 +102,13 @@ public final class EditorFixture {
 
     /**
      * The {@link CodeEditorService} the UI layer is handed — every block's {@code getUINode} and every
-     * argument editor takes one. Built lazily because it opens an {@code SdkDocsService} loader thread that
+     * argument editor takes one. Built lazily because it opens an {@code ApiDocsService} loader thread that
      * the write-path tests have no use for.
      */
     public CodeEditorService context() {
         if (context == null) {
             context = new CodeEditorService(CONFIG, state, bus, converter, dragAndDrop,
-                    new DiagnosticsManager(), analyzer, new SdkDocsService(CONFIG, bus));
+                    new DiagnosticsManager(), analyzer, new ApiDocsService(CONFIG, bus));
         }
         return context;
     }
