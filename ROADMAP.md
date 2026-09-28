@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — a plugin built for a newer Studio is refused at load.** `PluginHost.bind` goes
+- **2026-09-28 (latest) — `NumberFieldsDialog` deleted.** Its javadoc said it goes when the last of Studio's
+  own pickers calling it does; none was left. The plugin toolkit's audit the same day found it while fixing the
+  comment that pointed at the toolkit's (also deleted) `Modals.numbers`.
+- **2026-09-28 — a plugin built for a newer Studio is refused at load.** `PluginHost.bind` goes
   through plugin-host's `PluginLoader`, which now reads each plugin jar's contract links (`ContractLinks`) and
   reports *built for a newer Studio: needs …* in `failures()` (Manage Plugins shows it). `ToolbarItem` is a
   class built only by its steps, so `ToolbarMergeTest` drops the no-label/no-action case nothing can build.
