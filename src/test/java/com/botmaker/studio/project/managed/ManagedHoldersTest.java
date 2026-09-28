@@ -26,10 +26,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ManagedHoldersTest {
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.of("greeting", "Sdk", String.class, null, "Mine."),
-            ManagedValue.of("rest-between", "Sdk", java.time.Duration.class, null, "Mine."),
-            ManagedValue.openSet("pictures", "Pictures", "Mine."),
-            ManagedValue.openOnly("opened-only", "Mine."));
+            ManagedValue.method("greeting").in("Sdk").holds(String.class, null).because("Mine."),
+            ManagedValue.method("rest-between").in("Sdk").holds(java.time.Duration.class, null).because("Mine."),
+            ManagedValue.openSet("pictures").in("Pictures").because("Mine."),
+            ManagedValue.method("opened-only").notCreated().because("Mine."));
 
     @TempDir
     Path dir;
