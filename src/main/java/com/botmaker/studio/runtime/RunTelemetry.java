@@ -68,7 +68,7 @@ public final class RunTelemetry {
     private static TraceLine traceLine(TelemetryEvent.Log log) {
         TelemetryEvent.Rect r = log.rect();
         return new TraceLine(Instant.ofEpochMilli(log.atMillis()), TraceLine.Level.fromId(log.level()),
-                log.source(), log.text(), log.count(), log.className(),
+                log.source(), log.text(), log.count(), log.writerClass(), log.writerMethod(), log.className(),
                 log.line() > 0 ? OptionalInt.of(log.line()) : OptionalInt.empty(),
                 r == null ? Optional.empty()
                         : Optional.of(new TraceLine.Region(r.x(), r.y(), r.width(), r.height())));

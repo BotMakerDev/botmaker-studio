@@ -36,7 +36,7 @@ class RunTelemetryTest {
         bus.subscribe(CoreApplicationEvents.TraceLineEvent.class, published::add);
         bus.subscribe(CoreApplicationEvents.TelemetryFrameEvent.class, published::add);
         byte[] log = frame(new TelemetryEvent.Log("warn", "Vision", "no ore", 3, 1_000L,
-                new TelemetryEvent.Rect(1, 2, 3, 4), "com.example.Collect", 14));
+                new TelemetryEvent.Rect(1, 2, 3, 4), "com.example.Collect", "body", "com.example.Collect", 14));
         byte[] click = frame(new TelemetryEvent.Click(new TelemetryEvent.Target(null, 0, 0, 0, 0), 5, 6, 1));
 
         RunTelemetry.publish(bus, log);
@@ -44,7 +44,8 @@ class RunTelemetryTest {
 
         TraceLine line = assertInstanceOf(CoreApplicationEvents.TraceLineEvent.class, published.get(0)).line();
         assertEquals(new TraceLine(Instant.ofEpochMilli(1_000L), TraceLine.Level.WARN, "Vision", "no ore", 3,
-                "com.example.Collect", OptionalInt.of(14), Optional.of(new TraceLine.Region(1, 2, 3, 4))), line);
+                "com.example.Collect", "body", "com.example.Collect", OptionalInt.of(14),
+                Optional.of(new TraceLine.Region(1, 2, 3, 4))), line);
         assertArrayEquals(click,
                 assertInstanceOf(CoreApplicationEvents.TelemetryFrameEvent.class, published.get(1)).frame());
         assertEquals(2, published.size(), "a debug line goes to the trace only, not to telemetry as well");
@@ -53,7 +54,7 @@ class RunTelemetryTest {
     @Test
     void aLineWithNoSourceLineSaysSoAndAnUnknownLevelIsKept() throws IOException {
         TraceLine line = RunTelemetry.traceLine(frame(new TelemetryEvent.Log("verbose", "", "hi", 1, 0L, null,
-                "", -1))).orElseThrow();
+                "", "", "", -1))).orElseThrow();
 
         assertEquals(TraceLine.Level.UNKNOWN, line.level());
         assertEquals(OptionalInt.empty(), line.line());

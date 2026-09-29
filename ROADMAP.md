@@ -6,7 +6,18 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-29 (latest) — the run trace in Studio (rework follow-ups, phase 8, `docs/refactor/40-run-trace.md`).**
+- **2026-09-29 (latest) — the Trace tab filters by writer (rework follow-ups, phase 8b).** The user asked for
+  "a very fine filter over the debug output: which class, which method".
+  - `TraceWriters` is the writer pane beside the list: a `CheckBoxTreeItem` tree of group → class → method. It
+    keeps the *hidden* keys (a class, or `class#method`), so a new writer always shows, and saves them in
+    `StudioProjectSettings.hiddenTraceWriters` (a new component; absent means empty). The keys are
+    display-only: the bot still writes every line, and the console and `onTrace` are unchanged.
+  - Groups: *This bot* when `RunTelemetry.sourceFile` finds the class, else the plugin whose jar holds it
+    (`PluginHost.pluginNameOwning`, which loads the class without initialising it), else *Libraries*.
+  - A row's right-click hides its method or class, or shows everything again.
+  - `CheckBoxTreeItem` does not recompute a parent when children are added, so `summarise` sets it. A mixed
+    parent is only marked indeterminate: setting its box would reset its children's.
+- **2026-09-29 — the run trace in Studio (rework follow-ups, phase 8, `docs/refactor/40-run-trace.md`).**
   - `runtime/RunTelemetry` starts both the Run's and the Debug's telemetry server. It is `TelemetryServer.relaying`,
     so Studio decodes no frame but a debug line.
   - A `Log` frame becomes a contract `TraceLine` (`TraceLineEvent`), and every other frame is relayed as its bytes

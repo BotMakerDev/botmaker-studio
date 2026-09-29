@@ -18,6 +18,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the time, what wrote the line (`[Vision]`, `[Mouse]`, your own class) and how many times it repeated. Filter
   by level, pick one source, or search. Clicking a line shows the block that wrote it. Each run starts with an
   empty tab, and the last 5,000 lines are kept.
+- **Choose whose debug lines the Trace tab shows, down to one method.** *Writers* opens a tree of everything
+  that wrote a line, grouped as *This bot*, each plugin by name, and *Libraries*. Unticking a class or a method
+  hides its lines. Right-clicking a line offers *Hide lines from Mouse.click()*, *Hide all lines from Mouse* and
+  *Show every writer*. What you hide is remembered for the project on this computer.
 - **🐞 Debug on the toolbar** (in the Run group) chooses whether runs on this computer print and trace their
   debug lines. Each press moves to the next choice: *bot* (the bot's own setting decides), *on*, then *off*. The
   choice is saved for this computer only and takes effect on the next run.

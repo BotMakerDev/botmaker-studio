@@ -450,7 +450,7 @@ public class UIManager implements ProjectWindow {
         debugPanel = new DebugPanel(eventBus, f -> navigation.revealLine(f.file(), f.line()));
         // A trace line lands the way a debug frame does: by its class's file and its line.
         if (tracePanel != null) tracePanel.dispose();
-        tracePanel = new TracePanel(eventBus, config.sourceRoot(), navigation::revealLine);
+        tracePanel = new TracePanel(eventBus, config.sourceRoot(), projectSettingsService, navigation::revealLine);
         // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
         new LiveValues(eventBus, state);
         navigation.wire(menuBarManager, binding -> {

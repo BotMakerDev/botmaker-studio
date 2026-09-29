@@ -107,7 +107,7 @@ class HostRunsTest {
             List<TraceLine> heard = new ArrayList<>();
             AutoCloseable handle = HostRuns.live().onTrace(heard::add);
             TraceLine line = new TraceLine(Instant.EPOCH, TraceLine.Level.WARN, "Game", "slow", 1,
-                    "com.example.Bot", OptionalInt.of(3), Optional.empty());
+                    "com.example.Bot", "run", "com.example.Bot", OptionalInt.of(3), Optional.empty());
 
             bus.publish(new CoreApplicationEvents.TraceLineEvent(line));
             handle.close();

@@ -3,18 +3,23 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.RunTelemetry;
+import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -69,12 +74,23 @@ final class TracePanel {
     private final Set<String> sources = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
     private final TextField search = new TextField();
     private final Label summary = new Label();
+    private final TraceWriters writers;
     private final List<EventBus.Subscription> subscriptions = new ArrayList<>();
     private final VBox node;
 
-    TracePanel(EventBus eventBus, Path sourceRoot, BiConsumer<Path, Integer> onReveal) {
+    TracePanel(EventBus eventBus, Path sourceRoot, ProjectSettingsService settings,
+               BiConsumer<Path, Integer> onReveal) {
         this.sourceRoot = sourceRoot;
         this.onReveal = onReveal;
+        this.writers = new TraceWriters(this::groupOf, hidden -> {
+            if (settings != null && settings.current() != null) {
+                settings.update(settings.current().withHiddenTraceWriters(hidden));
+            }
+            refilter();
+        });
+        if (settings != null && settings.current() != null) {
+            writers.load(settings.current().hiddenTraceWriters());
+        }
 
         HBox bar = new HBox(new Label("Show: "));
         for (TraceLine.Level level : List.of(TraceLine.Level.DEBUG, TraceLine.Level.INFO,
@@ -95,18 +111,32 @@ final class TracePanel {
         HBox.setHgrow(search, Priority.SOMETIMES);
         Button clear = new Button("Clear");
         clear.setOnAction(e -> clear());
+        ToggleButton writersToggle = new ToggleButton("Writers");
+        writersToggle.setTooltip(new Tooltip("Pick, class by class and method by method, whose lines are shown"));
         Region gap = new Region();
         HBox.setHgrow(gap, Priority.ALWAYS);
-        bar.getChildren().addAll(sourceFilter, search, gap, summary, clear);
+        bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, clear);
         bar.getStyleClass().add("diagnostics-filter-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
 
         list.setPlaceholder(new Label("Run the bot to see its trace. 🐞 Debug on the toolbar decides whether "
                 + "debug lines are written."));
         list.setCellFactory(v -> new TraceCell());
-        list.setOnMouseClicked(e -> reveal(list.getSelectionModel().getSelectedItem()));
-        VBox.setVgrow(list, Priority.ALWAYS);
-        node = new VBox(bar, list);
+        list.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY) reveal(list.getSelectionModel().getSelectedItem());
+        });
+        HBox.setHgrow(list, Priority.ALWAYS);
+        VBox writerPane = writers.node();
+        writerPane.setVisible(false);
+        writerPane.setManaged(false);
+        writersToggle.selectedProperty().addListener((o, was, now) -> {
+            if (now) writers.rebuild();
+            writerPane.setVisible(now);
+            writerPane.setManaged(now);
+        });
+        HBox body = new HBox(writerPane, list);
+        VBox.setVgrow(body, Priority.ALWAYS);
+        node = new VBox(bar, body);
         showSummary();
 
         subscriptions.add(eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> add(e.line()), true));
@@ -127,11 +157,13 @@ final class TracePanel {
     }
 
     /**
-     * Whether {@code line} survives the filter bar: its level is shown (a level this Studio does not know is
-     * always shown — hiding what nobody asked to hide is the worse failure), its source is the chosen one, and
-     * its source or text contains the search, ignoring case.
+     * Whether {@code line} survives the filter bar: its writer is not hidden ({@link TraceWriters#hides}), its
+     * level is shown (a level this Studio does not know is always shown — hiding what nobody asked to hide is the
+     * worse failure), its source is the chosen one, and its source or text contains the search, ignoring case.
      */
-    static boolean matches(TraceLine line, Set<TraceLine.Level> levels, String source, String search) {
+    static boolean matches(TraceLine line, Set<String> hiddenWriters, Set<TraceLine.Level> levels, String source,
+                           String search) {
+        if (TraceWriters.hides(hiddenWriters, line)) return false;
         if (line.level() != TraceLine.Level.UNKNOWN && !levels.contains(line.level())) return false;
         if (source != null && !source.isEmpty() && !source.equals(ALL_SOURCES)
                 && !source.equalsIgnoreCase(line.source())) return false;
@@ -172,7 +204,8 @@ final class TracePanel {
             sourceFilter.getItems().setAll(items);
             sourceFilter.setValue(chosen);
         }
-        if (matches(line, shownLevels(), sourceFilter.getValue(), search.getText())) {
+        writers.saw(line);
+        if (matches(line, writers.hidden(), shownLevels(), sourceFilter.getValue(), search.getText())) {
             shown.add(line);
             // Follow the run unless the user has picked a line to look at.
             if (list.getSelectionModel().isEmpty()) list.scrollTo(shown.size() - 1);
@@ -201,9 +234,10 @@ final class TracePanel {
 
     private void refilter() {
         Set<TraceLine.Level> levels = shownLevels();
+        Set<String> hidden = writers.hidden();
         String source = sourceFilter.getValue();
         String text = search.getText();
-        shown.setAll(all.stream().filter(l -> matches(l, levels, source, text)).toList());
+        shown.setAll(all.stream().filter(l -> matches(l, hidden, levels, source, text)).toList());
         showSummary();
     }
 
@@ -214,6 +248,30 @@ final class TracePanel {
 
     private void reveal(TraceLine line) {
         target(sourceRoot, line).ifPresent(at -> onReveal.accept(at.getKey(), at.getValue()));
+    }
+
+    /** Who ships {@code className}: this bot when its source is here, else the plugin whose jar holds it. */
+    private String groupOf(String className) {
+        if (RunTelemetry.sourceFile(sourceRoot, className).isPresent()) return TraceWriters.THIS_BOT;
+        return PluginHost.pluginNameOwning(className).orElse(TraceWriters.LIBRARIES);
+    }
+
+    /** A row's right-click: hide what wrote it, by method or by class, or show every writer again. */
+    private ContextMenu rowMenu(TraceLine line) {
+        ContextMenu menu = new ContextMenu();
+        if (!line.writerClass().isEmpty()) {
+            String name = TraceWriters.simpleName(line.writerClass());
+            MenuItem method = new MenuItem("Hide lines from " + name + "." + line.writerMethod() + "()");
+            method.setOnAction(e -> writers.hide(TraceWriters.key(line.writerClass(), line.writerMethod())));
+            MenuItem type = new MenuItem("Hide all lines from " + name);
+            type.setOnAction(e -> writers.hide(line.writerClass()));
+            menu.getItems().addAll(method, type);
+        }
+        MenuItem all = new MenuItem("Show every writer");
+        all.setDisable(writers.hidden().isEmpty());
+        all.setOnAction(e -> writers.showAll());
+        menu.getItems().add(all);
+        return menu;
     }
 
     /** A row coloured by its level; the tooltip says where it came from, or that it cannot be followed. */
@@ -227,9 +285,11 @@ final class TracePanel {
             if (empty || line == null) {
                 setText(null);
                 setTooltip(null);
+                setContextMenu(null);
                 return;
             }
             setText(render(line));
+            setContextMenu(rowMenu(line));
             getStyleClass().add(TRACE_CELL + "--" + (line.level() == TraceLine.Level.UNKNOWN
                     ? "other" : line.level().id()));
             Optional<Map.Entry<Path, Integer>> at = target(sourceRoot, line);

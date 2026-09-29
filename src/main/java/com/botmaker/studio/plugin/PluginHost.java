@@ -173,14 +173,30 @@ public final class PluginHost {
     public static Optional<String> pluginNameFor(String simpleName) {
         return ownerOf(simpleName)
                 .flatMap(facade -> pluginOwning(facade.type()))
-                .map(plugin -> {
-                    try {
-                        String name = plugin.displayName();
-                        return name == null || name.isBlank() ? plugin.id() : name;
-                    } catch (RuntimeException | LinkageError e) {
-                        return plugin.id();
-                    }
-                });
+                .map(PluginHost::nameOf);
+    }
+
+    /**
+     * The name a user reads for the bound plugin whose jar holds the class {@code binaryName}, or empty for a
+     * class no plugin ships or none can load (2026-09-29: the Trace tab groups the lines' writers by it). The
+     * class is looked up without being initialised, so asking runs none of its code.
+     */
+    public static Optional<String> pluginNameOwning(String binaryName) {
+        if (binaryName == null || binaryName.isBlank()) return Optional.empty();
+        try {
+            return pluginOwning(Class.forName(binaryName, false, classLoader())).map(PluginHost::nameOf);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return Optional.empty();
+        }
+    }
+
+    private static String nameOf(StudioPlugin plugin) {
+        try {
+            String name = plugin.displayName();
+            return name == null || name.isBlank() ? plugin.id() : name;
+        } catch (RuntimeException | LinkageError e) {
+            return plugin.id();
+        }
     }
 
     private static java.net.URL codeSource(Class<?> type) {
