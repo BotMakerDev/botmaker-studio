@@ -138,18 +138,18 @@ class TwoPluginCollisionTest {
     }
 
     /**
-     * The rewrite is refused too, and by the same problem list. {@code migrate} throws on the first problem
-     * exactly as it does for a file that does not parse — a report the user could not act on must not be
-     * followed by a button that writes anyway.
+     * The rewrite goes ahead without the clashing names (2026-09-29): a call written on {@code Point} cannot
+     * be attributed, so it is neither scanned nor rewritten, and nothing else is held back by it.
      */
     @Test
-    void theRewriteIsRefusedToo(@TempDir Path tmp) throws IOException {
+    void theRewriteLeavesTheClashingNamesAlone(@TempDir Path tmp) throws IOException {
         PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, clashesBetween(tmp), BOT);
         Path old = jarOf(tmp, SDK_PKG, "old", sdkJar(), Map.of());
         Path now = jarOf(tmp, SDK_PKG, "new", sdkJar(), Map.of());
 
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> service.migrate(old, now, "1.0.0", "2.0.0", false, true, Map.of()));
-        assertTrue(refused.getMessage().contains("Point"), refused::getMessage);
+        var outcome = service.migrate(old, now, "1.0.0", "2.0.0", false, true, Map.of());
+        assertTrue(outcome == null || outcome.files().stream()
+                        .noneMatch(f -> f.newSource().contains("Point") && !f.file().getContent().contains("Point")),
+                "nothing is rewritten onto a name two plugins declare");
     }
 }

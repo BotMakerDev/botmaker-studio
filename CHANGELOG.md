@@ -12,6 +12,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **A plugin upgrade or removal is never blocked.** Everything that used to refuse one is now repaired, or
+  left as written and marked `@Refactor` so the Review tab lists it. Studio says what it left when the upgrade
+  finishes. The cases:
+  - A class the new version no longer has: calls on it get a default value, and places that write the type
+    itself are left for you to change.
+  - A file that does not parse, or a `case` label whose enum cannot be told: that file is left as written and
+    the rest is repaired.
+  - A name two plugins both declare: it is left alone.
+  - A call nobody chose a replacement for: it gets a default value and a review mark.
+  - A check that could not read the project: the version still moves.
+
 ### Fixed
 
 - **A plugin that did not load now says so above the canvas.** It also says whether the plugin is older or

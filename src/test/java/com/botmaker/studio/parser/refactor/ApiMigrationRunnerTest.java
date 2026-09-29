@@ -98,7 +98,7 @@ class ApiMigrationRunnerTest {
 
     /** The new source of {@code file}, or null when the run left it untouched. */
     private static String textOf(Outcome outcome, ProjectFile file) {
-        assertNull(outcome.refusal(), "the migration was refused: " + outcome.refusal());
+        assertTrue(outcome.leftAsWritten().isEmpty(), "something was left as written: " + outcome.leftAsWritten());
         return outcome.files().stream()
                 .filter(rewritten -> rewritten.file() == file)
                 .map(CallMigrator.Rewritten::newSource)
@@ -382,8 +382,8 @@ class ApiMigrationRunnerTest {
         Outcome outcome = run(redirects(new Redirect("Key", "ENTER", ApiReferences.FIELD_READ,
                 PKG + ".Direction", "ENTER", List.of(), "Key", "Direction", true)), bot);
 
-        assertTrue(outcome.isRefusal(), "there is no receiver written here to point elsewhere");
-        assertTrue(outcome.files().isEmpty(), "a refusal writes nothing");
+        assertEquals(1, outcome.leftAsWritten().size(), "there is no receiver written here to point elsewhere");
+        assertTrue(outcome.files().isEmpty(), "the file it could not repair is left as written");
     }
 
     @Test
@@ -413,31 +413,34 @@ class ApiMigrationRunnerTest {
     void aRepairThatMatchesNothingInTheProjectChangesNoFile() {
         ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { void run() { Mouse.click(1, 2); } }\n");
         Outcome outcome = run(removals(new Removal("Vision", "find", 1, "boolean")), bot);
-        assertFalse(outcome.isRefusal());
+        assertTrue(outcome.leftAsWritten().isEmpty());
         assertTrue(outcome.files().isEmpty());
     }
 
     // -------------------------------------------------------------------------
-    // Refusals — nothing, or all of it
+    // Never refused (2026-09-29): what cannot be repaired is left as written, and said
     // -------------------------------------------------------------------------
 
     @Test
-    void aRemovedVoidMemberWithNoStatementToDeleteRefusesTheWholeMigration() {
+    void aRemovedVoidMemberWithNoStatementToDeleteIsLeftAsWrittenAndTheRestRepaired() {
         ProjectFile bot = file("Bot", """
                 package com.mybot;
                 class Bot {
                     Runnable r = () -> Mouse.click(1, 2);
+                    void run() { Mouse.click(3, 4); }
                 }
                 """);
         Outcome outcome = run(removals(new Removal("Mouse", "click", 2, "void")), bot);
-        // There is no value to write and no statement to remove; writing something that looks right and
-        // isn't is the one outcome worse than saying so.
-        assertTrue(outcome.isRefusal(), "a void call in a lambda body has nothing to stand in for it");
-        assertTrue(outcome.files().isEmpty(), "a refusal writes nothing");
+        // There is no value to write and no statement to remove in the lambda; writing something that looks
+        // right and isn't is worse than saying so. The line of its own is still deleted.
+        assertEquals(1, outcome.leftAsWritten().size(), outcome.leftAsWritten().toString());
+        String source = outcome.files().getFirst().newSource();
+        assertTrue(source.contains("() -> Mouse.click(1, 2)"), source);
+        assertFalse(source.contains("Mouse.click(3, 4)"), source);
     }
 
     @Test
-    void anAmbiguousCaseLabelStopsTheUpgradeRatherThanGuessingAnEnum() {
+    void anAmbiguousCaseLabelLeavesItsFileAsWrittenRatherThanGuessingAnEnum() {
         ProjectFile bot = file("Bot", """
                 package com.mybot;
                 class Bot {
@@ -452,42 +455,46 @@ class ApiMigrationRunnerTest {
         Map<String, List<String>> ambiguous = Map.of("UP", List.of("Direction", "Heading"));
         Outcome outcome = ApiMigrationRunner.run(removals(new Removal("Direction", "UP", -1, "Direction")),
                 List.of(bot), List.of(), API_TYPES, ambiguous, false, null, null);
-        assertTrue(outcome.isRefusal(), "which enum the label names cannot be told from the source");
+        assertEquals(1, outcome.leftAsWritten().size(), "which enum the label names cannot be told");
         assertTrue(outcome.files().isEmpty());
     }
 
     @Test
-    void aFileThatDoesNotParseStopsTheUpgradeAndNamesItself() {
+    void aFileThatDoesNotParseIsLeftAsWrittenAndNamedWhileTheRestIsRepaired() {
         ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { void run() { Mouse.click(1, 2); } }\n");
         ProjectFile broken = file("Broken", "package com.mybot;\nclass Broken { void run( {\n");
         Outcome outcome = run(removals(new Removal("Mouse", "click", 2, "void")), bot, broken);
-        assertTrue(outcome.isRefusal());
-        assertTrue(outcome.refusal().contains("Broken"), outcome.refusal());
-        assertTrue(outcome.files().isEmpty(), "not even the file that would have rewritten cleanly");
+        assertEquals(1, outcome.leftAsWritten().size());
+        assertTrue(outcome.leftAsWritten().getFirst().contains("Broken"), outcome.leftAsWritten().toString());
+        assertEquals(List.of(bot), outcome.files().stream().map(CallMigrator.Rewritten::file).toList(),
+                "the file that rewrites cleanly still does");
     }
 
     @Test
-    void aGeneratedFileUsingTheChangedMemberRefusesTheUpgradeRatherThanRewritingIt() {
+    void libraryFileUsingTheChangedMemberIsReportedAndNotRewritten() {
         ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { void run() { Mouse.click(1, 2); } }\n");
         ProjectFile driver = file("FlowDriver",
                 "package com.mybot;\nclass FlowDriver { void run() { Mouse.click(0, 0); } }\n");
         Outcome outcome = ApiMigrationRunner.run(removals(new Removal("Mouse", "click", 2, "void")),
                 List.of(bot), List.of(driver), API_TYPES, FIELD_OWNERS, false, null, null);
-        assertTrue(outcome.isRefusal(), "scaffolding is Studio's to write, not an upgrade's");
-        assertTrue(outcome.refusal().contains("FlowDriver"), outcome.refusal());
-        assertTrue(outcome.files().isEmpty());
+        assertEquals(1, outcome.leftAsWritten().size());
+        assertTrue(outcome.leftAsWritten().getFirst().contains("FlowDriver"), outcome.leftAsWritten().toString());
+        assertEquals(List.of(bot), outcome.files().stream().map(CallMigrator.Rewritten::file).toList());
     }
 
+    /** A type the target no longer has, written as a type, is left as written and listed. */
     @Test
-    void aGeneratedFileUsingARenamedTypeRefusesTooEvenThoughItWouldRewriteCleanly() {
-        ProjectFile bot = file("Bot", "package com.mybot;\nclass Bot { Object t = Tolerance.TIGHT; }\n");
-        ProjectFile templates = file("Templates",
-                "package com.mybot;\nclass Templates { Object t = Tolerance.TIGHT; }\n");
-        Outcome outcome = ApiMigrationRunner.run(
-                renames(new TypeRename(PKG + ".Tolerance", PKG + ".Precision")),
-                List.of(bot), List.of(templates), API_TYPES, FIELD_OWNERS, false, null, null);
-        assertTrue(outcome.isRefusal(), outcome.refusal());
-        assertTrue(outcome.refusal().contains("Templates"), outcome.refusal());
+    void aGoneTypeWrittenDownIsLeftAsWrittenAndListed() {
+        ProjectFile bot = file("Bot", """
+                package com.mybot;
+                class Bot {
+                    void run() { Tolerance t = null; }
+                }
+                """);
+        Outcome outcome = run(new ApiMigrationRunner.Repairs(List.of(), List.of(), List.of(), List.of(),
+                List.of("Tolerance")), bot);
+        assertEquals(1, outcome.leftAsWritten().size(), outcome.leftAsWritten().toString());
+        assertTrue(outcome.leftAsWritten().getFirst().contains("Tolerance"), outcome.leftAsWritten().toString());
     }
 
     // -------------------------------------------------------------------------

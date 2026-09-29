@@ -58,6 +58,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > as a JDT unit. Never add a rename that walks names by spelling, a second parse of the whole bot, or Java
 > joined as text, and never refuse an edit through a bare status line or `Alert`.
 
+> **A plugin upgrade or removal is never refused (2026-09-29, the maintainer's rule).** Read every "refuses",
+> "blocks the upgrade", "all-or-nothing" and "Nothing has been changed" below under `services/upgrade/` and
+> `ApiMigrationRunner` as history. `ApiMigrationRunner.Outcome` is `(files, leftAsWritten)`: a file it cannot
+> repair is left as written and named, and so is a single site (a removed `void` call in a one-line lambda).
+> Bundled library source is reported, never rewritten. `BreakKind.TYPE_REMOVED` is `Break.leavesWork()`: its
+> calls are defaulted, and each place writing the type is left, marked `@Refactor` and listed
+> (`Repairs.goneTypes`). `Report.leftForYou()` replaced `unrepairable()`, and `canMigrate()` is "there are
+> breaks". `problems()` (unparsed files, two plugins declaring a name, whose names are then left out) informs
+> and never stops. `ProjectUpgrade` defaults every unanswered waiting site (`withDefaults`), and says what was
+> left in `Result.leftForYou()`. `PluginUpgradeService.repairReporting`/`repairRemovalReporting` return
+> `Repaired(files, leftAsWritten)`. Apply is grey only when no row moves or a check is running.
+
 > **`services/SdkSurfaceService` is deleted (2026-09-28).** Its presence half intersected the palette catalog
 > with the classes the type index found, which filtered nothing once the catalog came from the project's own
 > plugins, loaded from the same jars. Read every mention below as: the facades are `PluginHost.menuFacades()`

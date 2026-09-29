@@ -268,9 +268,11 @@ public final class PluginUpgradeService {
     /** Why a call the bot makes would stop compiling on the target version. */
     public enum BreakKind {
         /**
-         * The class is gone from the target SDK and no pointer, at either end, names what took its place.
-         * <b>The one break that cannot be repaired</b>: a default value
-         * has nowhere to go in {@code ImageTemplate t = …;}, so the upgrade is refused rather than half-made.
+         * The class is gone from the target and no pointer, at either end, names what took its place. Calls on
+         * it get the default a removed member gets; a place that writes the type itself
+         * ({@code ImageTemplate t = …;}) has no value to stand in for it, so it is left as written and its
+         * function marked {@code @Refactor}. Until 2026-09-29 this refused the whole upgrade, which left a user
+         * with no way forward; the rule since is that an upgrade is never blocked.
          */
         TYPE_REMOVED,
         /**
@@ -310,9 +312,9 @@ public final class PluginUpgradeService {
             return CTOR.equals(member) ? "new " + type : type + "." + member;
         }
 
-        /** False for exactly one kind — see {@link BreakKind#TYPE_REMOVED}. */
-        public boolean isRepairable() {
-            return kind != BreakKind.TYPE_REMOVED;
+        /** Whether part of it is left for the user to finish — see {@link BreakKind#TYPE_REMOVED}. */
+        public boolean leavesWork() {
+            return kind == BreakKind.TYPE_REMOVED;
         }
     }
 
@@ -502,27 +504,25 @@ public final class PluginUpgradeService {
             return addedBySince.values().stream().flatMap(List::stream).toList();
         }
 
-        /** The breaks Studio will repair itself — a type rename, or a default value standing in. */
+        /** The breaks Studio repairs whole — a type rename, a redirect, or a default value standing in. */
         public List<Break> repairable() {
-            return breaks.stream().filter(Break::isRepairable).toList();
-        }
-
-        /** The breaks nothing can repair: a removed type with no pairing. See {@link BreakKind#TYPE_REMOVED}. */
-        public List<Break> unrepairable() {
-            return breaks.stream().filter(b -> !b.isRepairable()).toList();
+            return breaks.stream().filter(b -> !b.leavesWork()).toList();
         }
 
         /**
-         * Whether the upgrade may repair the source: the scan read everything, something needs repairing, and
-         * nothing in it is a removed type with no counterpart.
-         *
-         * <p>One unrepairable break disables the whole span rather than the file it sits in. The alternative
-         * — rewrite what we can and leave the rest — is the half-migration the whole design refuses: the user
-         * would be left with a project that is neither the old shape nor the new one, and no way to tell
-         * which call sites were touched.
+         * The breaks Studio repairs only in part: a removed type with no pairing, whose calls are defaulted and
+         * whose declarations are left as written and marked. See {@link BreakKind#TYPE_REMOVED}.
+         */
+        public List<Break> leftForYou() {
+            return breaks.stream().filter(Break::leavesWork).toList();
+        }
+
+        /**
+         * Whether there is anything to repair. Never a verdict on whether the upgrade may happen: since
+         * 2026-09-29 nothing refuses one. What the repair cannot do is left as written, marked, and reported.
          */
         public boolean canMigrate() {
-            return problems.isEmpty() && unrepairable().isEmpty() && !breaks.isEmpty();
+            return !breaks.isEmpty();
         }
 
         /** The deprecated members Studio can move off by itself — what "Modernise" would actually rewrite. */
@@ -536,7 +536,7 @@ public final class PluginUpgradeService {
          * compiles today and would go on compiling if the user closed the dialog.
          */
         public boolean canModernise() {
-            return problems.isEmpty() && !movable().isEmpty();
+            return !movable().isEmpty();
         }
 
         /** True when the scan ran cleanly and found nothing that would stop this bot compiling. */
@@ -696,9 +696,9 @@ public final class PluginUpgradeService {
      * <b>calls</b> is repairable: the call becomes a literal default or a deleted statement, the type name
      * goes with it, and the import line is dropped, so what is left compiles with no trace of the plugin. A
      * type the bot <b>holds</b> — a field, a parameter, a cast, a type argument — is
-     * {@link BreakKind#TYPE_REMOVED} and <b>refuses the removal</b>, naming the type and every place it is
-     * written. There is no value to stand in for a declaration, and inventing {@code Object} there would be
-     * the one outcome worse than a compile error.
+     * {@link BreakKind#TYPE_REMOVED}: there is no value to stand in for a declaration, and inventing
+     * {@code Object} there would be worse than a compile error, so each place is left as written, marked and
+     * listed. Until 2026-09-29 that refused the removal.
      *
      * <p><b>Blocking</b>, for the same reasons {@link #compare(String)} is.
      */
@@ -868,12 +868,12 @@ public final class PluginUpgradeService {
      * <p>{@code repairSources} is {@link Report#canMigrate()}, read the same way {@link #apply} reads it: a
      * removal whose report found nothing to repair still has a pom edit to make.
      */
-    public CompletableFuture<Integer> remove(List<UserLibrary> editorDependencies, boolean repairSources,
-                                             Map<CallSite, Decision> picks) {
+    public CompletableFuture<Repaired> remove(List<UserLibrary> editorDependencies, boolean repairSources,
+                                              Map<CallSite, Decision> picks) {
         return CompletableFuture
                 .supplyAsync(() -> {
                     snapshot("Before removing " + name());
-                    return repairSources ? repairRemoval(picks) : 0;
+                    return repairSources ? repairRemovalReporting(picks) : Repaired.NOTHING;
                 })
                 // The count survives the pom write: what the user is owed afterwards is how much of their own
                 // code changed, and only this pass knows it.
@@ -890,22 +890,46 @@ public final class PluginUpgradeService {
      * @return how many of the project's files were rewritten, as {@link #repair} does
      */
     public int repairRemoval(Map<CallSite, Decision> picks) {
+        return repairRemovalReporting(picks).files();
+    }
+
+    /**
+     * What a repair wrote, and what it left for the user: one sentence per file or place left as written.
+     *
+     * @param files         how many of the project's files were rewritten
+     * @param leftAsWritten what the repair could not do, each with its reason — never a reason it did nothing
+     */
+    public record Repaired(int files, List<String> leftAsWritten) {
+
+        public Repaired {
+            leftAsWritten = List.copyOf(leftAsWritten);
+        }
+
+        static final Repaired NOTHING = new Repaired(0, List.of());
+    }
+
+    /**
+     * {@link #repairRemoval}, keeping what was left as written. A jar that cannot be resolved again repairs
+     * nothing and says so; the removal still goes ahead, because what is taken out is a pom line.
+     */
+    public Repaired repairRemovalReporting(Map<CallSite, Decision> picks) {
         String version = currentVersion();
         Optional<Path> jar = resolve(version);
         if (jar.isEmpty()) {
-            throw new IllegalStateException("The " + name() + " jar could not be resolved again, so the "
-                    + "removal stopped before changing anything. Check the report and try once more.");
+            return new Repaired(0, List.of("The " + name() + " jar could not be resolved again, so this bot's "
+                    + "calls into it were not repaired."));
         }
+        return commit(migrateRemoval(jar.get(), picks));
+    }
 
-        ApiMigrationRunner.Outcome outcome = migrateRemoval(jar.get(), picks);
-        if (outcome == null) return 0;                      // nothing named it
-        if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
+    private static Repaired commit(ApiMigrationRunner.Outcome outcome) {
+        if (outcome == null) return Repaired.NOTHING;       // nothing named it
         try {
             CallMigrator.commit(outcome.files());
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
         }
-        return outcome.files().size();
+        return new Repaired(outcome.files().size(), outcome.leftAsWritten());
     }
 
     /**
@@ -941,24 +965,24 @@ public final class PluginUpgradeService {
      */
     public int repair(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
                       Map<CallSite, Decision> picks) {
+        return repairReporting(targetVersion, throughDeprecations, allowDefaults, picks).files();
+    }
+
+    /**
+     * {@link #repair}, keeping what was left as written. Jars that cannot be resolved again repair nothing and
+     * say so, rather than stopping the move: the version is the user's to change either way.
+     */
+    public Repaired repairReporting(String targetVersion, boolean throughDeprecations, boolean allowDefaults,
+                                    Map<CallSite, Decision> picks) {
         String from = currentVersion();
         Optional<Path> oldJar = resolve(from);
         Optional<Path> newJar = resolve(targetVersion);
         if (oldJar.isEmpty() || newJar.isEmpty()) {
-            throw new IllegalStateException("The " + name() + " jars could not be resolved again, so the "
-                    + "upgrade stopped before changing anything. Check the report and try once more.");
+            return new Repaired(0, List.of("The " + name() + " jars could not be resolved again, so this bot's "
+                    + "calls were not repaired for " + targetVersion + "."));
         }
-
-        ApiMigrationRunner.Outcome outcome = migrate(oldJar.get(), newJar.get(), from, targetVersion,
-                throughDeprecations, allowDefaults, picks);
-        if (outcome == null) return 0;                      // nothing needed repairing
-        if (outcome.isRefusal()) throw new IllegalStateException(outcome.refusal());
-        try {
-            CallMigrator.commit(outcome.files());
-        } catch (IOException e) {
-            throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
-        }
-        return outcome.files().size();
+        return commit(migrate(oldJar.get(), newJar.get(), from, targetVersion, throughDeprecations,
+                allowDefaults, picks));
     }
 
     /**
@@ -978,25 +1002,13 @@ public final class PluginUpgradeService {
         Map<String, ApiClass> after = ApiModel.snapshot(newJar);
         Set<String> known = new LinkedHashSet<>(before.keySet());
         known.addAll(after.keySet());
+        known.removeAll(ambiguous);
         Map<String, List<String>> fieldOwners = ApiModel.fieldOwners(before, after);
         Pairing pairing = Pairing.of(before, after, throughDeprecations);
 
+        // What the scan could not read is not a reason to write nothing (2026-09-29): the runner leaves each
+        // such file as written and says so, and repairs the rest.
         Uses uses = usesIn(known, fieldOwners, problems);
-        // The same all-or-nothing rule the report states: anything the scan could not answer — a file that
-        // does not parse, a bare constant name two types both declare — stops the rewrite before it writes.
-        if (!problems.isEmpty()) throw new IllegalStateException(problems.getFirst());
-
-        List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing);
-        Break refused = breaks.stream().filter(b -> !b.isRepairable()).findFirst().orElse(null);
-        if (refused != null) {
-            throw new IllegalStateException("\"" + refused.type() + "\" is gone from " + name() + " "
-                    + targetVersion
-                    + " and nothing in that release takes its place, so there is no value to stand in for it "
-                    + "where this bot writes the type itself. Change these by hand, then upgrade: "
-                    + String.join(", ", refused.sites().stream().map(CallSite::toString).toList())
-                    + ". Nothing has been changed.");
-        }
-
         return rewrite(before, after, uses, pairing, known, fieldOwners, allowDefaults, false, picks);
     }
 
@@ -1004,9 +1016,8 @@ public final class PluginUpgradeService {
      * The rewrite that takes this plugin <b>out</b> — the same pass with no target jar, so every call it
      * finds becomes a default value or a deleted statement and every import of one of its classes is dropped.
      *
-     * <p>It refuses on a held type before writing anything, exactly as {@link #removal()} predicted it
-     * would: the check runs twice on purpose, because the report the user read is a value and the files on
-     * disk may have moved under it.
+     * <p>A type the bot writes down (a held type) is left as written and marked, as an upgrade leaves one: the
+     * user asked for the plugin to go, and the places that still name it are listed for them.
      */
     ApiMigrationRunner.Outcome migrateRemoval(Path jar, Map<CallSite, Decision> picks) {
         List<String> problems = new ArrayList<>();
@@ -1014,24 +1025,11 @@ public final class PluginUpgradeService {
         Map<String, ApiClass> after = Map.of();
         Map<String, List<String>> fieldOwners = ApiModel.fieldOwners(before, after);
         Pairing pairing = Pairing.of(before, after, false);
+        Set<String> known = new LinkedHashSet<>(before.keySet());
+        known.removeAll(ambiguous);
 
-        Uses uses = usesIn(before.keySet(), fieldOwners, problems);
-        if (!problems.isEmpty()) throw new IllegalStateException(problems.getFirst());
-
-        List<Break> breaks = UpgradeDiff.breaks(before, after, uses, pairing, true);
-        Break refused = breaks.stream().filter(b -> !b.isRepairable()).findFirst().orElse(null);
-        if (refused != null) throw new IllegalStateException(removalRefusal(refused));
-
-        return rewrite(before, after, uses, pairing, before.keySet(), fieldOwners, true, true, picks);
-    }
-
-    /** Why a removal will not be made — the type the bot writes down, and every place it writes it. */
-    private String removalRefusal(Break refused) {
-        return "\"" + refused.type() + "\" comes from " + name() + ", and this bot writes the type itself "
-                + "rather than only calling it — so removing the plugin leaves nothing to put in its place. "
-                + "Change these by hand, then remove it: "
-                + String.join(", ", refused.sites().stream().map(CallSite::toString).toList())
-                + ". Nothing has been changed.";
+        Uses uses = usesIn(known, fieldOwners, problems);
+        return rewrite(before, after, uses, pairing, known, fieldOwners, true, true, picks);
     }
 
     /** The last third of both passes: what to write, over which files, through the shared runner. */
@@ -1078,6 +1076,7 @@ public final class PluginUpgradeService {
         Map<String, ApiMigrationRunner.TypeRename> types = new LinkedHashMap<>();
         Map<String, ApiMigrationRunner.Redirect> redirects = new LinkedHashMap<>();
         Map<String, ApiMigrationRunner.Removal> removals = new LinkedHashMap<>();
+        Set<String> goneTypes = new LinkedHashSet<>();
 
         // A type the bot only *writes* — `ImageTemplate t;`, a parameter, a type argument — is renamed on
         // the same evidence as one it calls. The rename itself was always file-wide and so always covered
@@ -1085,8 +1084,13 @@ public final class PluginUpgradeService {
         for (TypeUse use : uses.types()) {
             ApiClass then = before.get(use.type());
             if (then == null) continue;
-            ApiClass now = pairing.pairedTo(then, after);
-            if (now != null && !now.simpleName().equals(then.simpleName())) {
+            ApiClass now = removing ? null : pairing.pairedTo(then, after);
+            if (now == null) {
+                // Nothing to rename it to: the runner leaves each such place as written and marks it.
+                goneTypes.add(then.simpleName());
+                continue;
+            }
+            if (!now.simpleName().equals(then.simpleName())) {
                 types.putIfAbsent(then.simpleName(),
                         new ApiMigrationRunner.TypeRename(then.name(), now.name()));
             }
@@ -1107,7 +1111,16 @@ public final class PluginUpgradeService {
             }
 
             ApiClass now = pairing.pairedTo(then, after);
-            if (now == null) continue;                      // refused above; nothing to write
+            if (now == null) {
+                // The whole type is gone and nothing replaces it: the call gets the default a removed member
+                // gets (2026-09-29; this refused the upgrade before).
+                if (!allowDefaults) continue;
+                String removed = returnTypeOf(then, call);
+                removals.putIfAbsent(then.simpleName() + "#" + call.member() + "#" + call.argCount(),
+                        new ApiMigrationRunner.Removal(then.simpleName(), call.member(), call.argCount(),
+                                removed, returnTypeFqn(removed, after)));
+                continue;
+            }
             if (!now.simpleName().equals(then.simpleName())) {
                 types.putIfAbsent(then.simpleName(), new ApiMigrationRunner.TypeRename(
                         then.name(), now.name()));
@@ -1134,7 +1147,7 @@ public final class PluginUpgradeService {
                 ? before.values().stream().map(ApiClass::name).sorted().toList()
                 : List.of();
         return new ApiMigrationRunner.Repairs(List.copyOf(types.values()), List.copyOf(redirects.values()),
-                List.copyOf(removals.values()), dropped);
+                List.copyOf(removals.values()), dropped, List.copyOf(goneTypes));
     }
 
     /**
@@ -1226,14 +1239,12 @@ public final class PluginUpgradeService {
     /**
      * One pass over the bot's sources — the only part of the report that needs the project.
      *
-     * <p><b>A type name another installed plugin also declares is refused here, before anything is
-     * scanned.</b> Attribution is by the simple name the source writes, so {@code Point.of(…)} in a project
-     * holding two plugins that both declare a {@code Point} is genuinely unanswerable — and the answer is a
-     * line in {@code problems()}, which stops the whole report and the whole rewrite, rather than a guess.
-     * That is {@code MethodReferences}' own three-way verdict: one owner is a match, several is a problem,
-     * none is not a reference. Guessing would report a break in a class the bot never touched and then
-     * rewrite it there, which is the one outcome worse than a compile error. The refusal is the same
-     * all-or-nothing rule as a file that does not parse, one level up.
+     * <p><b>A type name another installed plugin also declares is left out of the scan.</b> Attribution is
+     * by the simple name the source writes, so {@code Point.of(…)} in a project holding two plugins that both
+     * declare a {@code Point} is genuinely unanswerable. Guessing would report a break in a class the bot never
+     * touched and then rewrite it there. So those names are not scanned or rewritten, and a line in
+     * {@code problems()} says so. Until 2026-09-29 that line stopped the whole report and rewrite; it no
+     * longer stops anything.
      */
     private Uses usesIn(Set<String> apiTypes, Map<String, List<String>> fieldOwners, List<String> problems) {
         List<Call> calls = new ArrayList<>();
@@ -1241,18 +1252,21 @@ public final class PluginUpgradeService {
 
         List<String> clashes = apiTypes.stream().filter(ambiguous::contains).sorted().toList();
         if (!clashes.isEmpty()) {
+            // Not a reason to stop (2026-09-29): those names are left out of the scan and the repair, and
+            // the rest of the plugin is checked as usual.
             problems.add("Another installed plugin also declares " + String.join(", ", clashes)
-                    + ", so a call written on that name cannot be attributed to either without bindings. "
-                    + "Change one project's spelling, or upgrade the plugins one at a time by removing the "
-                    + "other first.");
-            return new Uses(List.of(), List.of());
+                    + ", so calls written on " + (clashes.size() == 1 ? "that name" : "those names")
+                    + " cannot be told apart and are left as written. Check them by hand.");
+            apiTypes = apiTypes.stream().filter(name -> !ambiguous.contains(name))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         }
 
         for (ProjectFile file : state.getAllFiles()) {
             String path = relativePath(file.getPath());
             CompilationUnit cu = SourceParser.parse(file.getContent());
             if (cu == null || SourceParser.hasSyntaxErrors(cu)) {
-                problems.add(path + " does not parse, so its calls were not checked.");
+                problems.add(path + " does not parse, so its calls were not checked. It will be left as "
+                        + "written.");
                 continue;
             }
             ApiReferences.Scan scan = ApiReferences.in(file, cu, path, apiTypes, fieldOwners);

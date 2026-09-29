@@ -23,7 +23,7 @@ class ProjectUpgradeFeedbackTest {
 
     @Test
     void aWindowWhereNoRowMovedSaysToPickAVersion() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(0, List.of(), false);
+        String why = ProjectUpgradeDialog.applyBlockedReason(0, false, 0);
 
         assertTrue(why.contains("Pick a version"), why);
     }
@@ -32,37 +32,26 @@ class ProjectUpgradeFeedbackTest {
     @Test
     void aCheckStillRunningSaysSoRatherThanNamingAProblem() {
         assertEquals("A check is still running.",
-                ProjectUpgradeDialog.applyBlockedReason(1, List.of(), true));
+                ProjectUpgradeDialog.applyBlockedReason(1, true, 0));
     }
 
+    /**
+     * A call nothing replaces is a guess either way: the user is asked, and one left unanswered gets a default
+     * and a review mark rather than holding Apply (2026-09-29).
+     */
     @Test
-    void aBlockedRowIsNamedAndTheWayOutIsGiven() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(2, List.of("BotMaker SDK"), false);
-
-        assertTrue(why.startsWith("BotMaker SDK is blocked"), why);
-        assertTrue(why.contains("installed version"), "it says how to let the others move: " + why);
-    }
-
-    @Test
-    void twoBlockedRowsAreListedAndTheVerbAgrees() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(2, List.of("SDK", "Basics"), false);
-
-        assertTrue(why.startsWith("SDK, Basics are blocked"), why);
-    }
-
-    /** A call nothing replaces is a guess either way, and the guess is the user's to make. */
-    @Test
-    void callsWaitingForAPickHoldApplyAndSayWhere() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(1, List.of(), false, 2);
+    void callsWaitingForAPickAreSaidAndWhatHappensToThem() {
+        String why = ProjectUpgradeDialog.applyBlockedReason(1, false, 2);
 
         assertTrue(why.startsWith("2 calls have nothing that replaces it"), why);
         assertTrue(why.contains("default value or is deleted"), why);
+        assertTrue(why.contains("left unchosen gets a default value"), why);
     }
 
     /** Nothing in the way, nothing said: an enabled button needs no caption. */
     @Test
     void aPassThatCanRunHasNoSentenceAtAll() {
-        assertEquals("", ProjectUpgradeDialog.applyBlockedReason(1, List.of(), false));
+        assertEquals("", ProjectUpgradeDialog.applyBlockedReason(1, false, 0));
     }
 
     @Test

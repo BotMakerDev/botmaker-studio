@@ -238,7 +238,8 @@ final class UpgradeDiff {
      * <p>Removal is the one case where the two verdicts have to part company, and the reason is what the
      * repair can actually write. A type the bot merely <em>holds</em> — {@code ImageTemplate t;}, a
      * parameter, a cast — is {@link BreakKind#TYPE_REMOVED} either way: there is no value to stand in for a
-     * declaration, so the operation is refused and the user is told which type and where. A type the bot only
+     * declaration, so that place is left as written and marked, and the user is told which type and where. A
+     * type the bot only
      * <em>calls</em> is different: the type name at {@code Mouse.click()} disappears along with the call, so
      * the ordinary default-or-delete repair leaves a file that compiles with no mention of the plugin left in
      * it. An upgrade still reads such a call as {@code TYPE_REMOVED}, because there the class going missing
@@ -404,7 +405,8 @@ final class UpgradeDiff {
         ApiClass now = pairing.pairedTo(then, after);
         if (now == null) {
             record(found, sites, new Break(then.simpleName(), "", BreakKind.TYPE_REMOVED, "",
-                    "nothing — this one has to be changed by hand", List.of()), site);
+                    "calls on it get a default value; where the bot writes the type itself it is left as "
+                            + "written and marked for you to change", List.of()), site);
             return true;
         }
         // A type paired elsewhere while its own name survives in the target is not a break — the bot goes on

@@ -246,13 +246,13 @@ class PluginUpgradeServiceTest {
             """;
 
     @Test
-    void aBotThatOnlyHoldsARemovedTypeIsStillRefused(@TempDir Path tmp) throws IOException {
+    void aBotThatOnlyHoldsARemovedTypeIsToldWhereButNotBlocked(@TempDir Path tmp) throws IOException {
         Report r = reportFor(tmp, HOLDER);
 
         Break gone = brk(r, "Legacy").orElseThrow(
                 () -> new AssertionError("a type written but never called is still a break: " + r.breaks()));
         assertEquals(BreakKind.TYPE_REMOVED, gone.kind());
-        assertFalse(r.canMigrate(), "there is no value to stand in for a type in a declaration");
+        assertEquals(List.of(gone), r.leftForYou(), "there is no value to stand in for a type in a declaration");
         // The declaration, the parameter, the type argument, and the cast — which writes the name twice on
         // one line and is one place to look, since the sites are deduplicated.
         assertEquals(List.of(4, 5, 6, 8), gone.sites().stream().map(PluginUpgradeService.CallSite::line).toList(),
@@ -516,7 +516,7 @@ class PluginUpgradeServiceTest {
         Break renamed = brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertEquals(BreakKind.TYPE_RENAMED, renamed.kind(), r.breaks() + " " + r.problems());
         assertTrue(renamed.detail().contains("Modern"), renamed.detail());
-        assertTrue(renamed.isRepairable());
+        assertFalse(renamed.leavesWork());
         assertTrue(r.canMigrate(), "a paired rename is repairable: " + r.breaks() + " " + r.problems());
     }
 
@@ -632,16 +632,18 @@ class PluginUpgradeServiceTest {
     }
 
     @Test
-    void aRemovedTypeWithNoPointerIsTheOneBreakThatRefusesTheUpgrade(@TempDir Path tmp) throws IOException {
+    void aRemovedTypeWithNoPointerIsLeftForTheUserButDoesNotBlockTheUpgrade(@TempDir Path tmp)
+            throws IOException {
         // Absence of a pointer IS the signal. A default value has nowhere to go in `Legacy l = …;`, and
-        // Object would be silently wrong, so this is the one case the model cannot repair.
+        // Object would be silently wrong, so that place is left as written and marked. Since 2026-09-29 it no
+        // longer disables the span: an upgrade is never blocked.
         Report r = reportFor(tmp, BOT);
 
         Break gone = brk(r, "Legacy").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertEquals(BreakKind.TYPE_REMOVED, gone.kind());
-        assertFalse(gone.isRepairable());
-        assertFalse(r.canMigrate(), "one unpaired removed type disables the whole span");
-        assertEquals(List.of(gone), r.unrepairable());
+        assertTrue(gone.leavesWork());
+        assertTrue(r.canMigrate(), "the rest of the span is still repaired");
+        assertEquals(List.of(gone), r.leftForYou());
     }
 
     @Test
@@ -794,7 +796,7 @@ class PluginUpgradeServiceTest {
         // to choose from, the call defaults and the user is told — the same answer as no pointer at all.
         Break moved = brk(r, "Finder.find").orElseThrow(() -> new AssertionError(r.breaks().toString()));
         assertTrue(moved.repair().startsWith("replaced with null"), moved.repair());
-        assertTrue(moved.isRepairable());
+        assertFalse(moved.leavesWork());
     }
 
     // -------------------------------------------------------------------------

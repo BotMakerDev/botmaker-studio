@@ -77,7 +77,7 @@ class PluginRemovalTest {
         ApiMigrationRunner.Outcome outcome = service.migrateRemoval(
                 UpgradeFixtures.jarOf(tmp, "only", plugin(), Map.of()), Map.of());
         assertNotNull(outcome, "the removal had nothing to write");
-        assertFalse(outcome.isRefusal(), () -> "the removal refused: " + outcome.refusal());
+        assertTrue(outcome.leftAsWritten().isEmpty(), () -> "the removal left: " + outcome.leftAsWritten());
         return outcome.files().stream()
                 .filter(f -> f.file().getPath().toString().endsWith("Subject.java"))
                 .map(CallMigrator.Rewritten::newSource)
@@ -113,8 +113,8 @@ class PluginRemovalTest {
                 }
                 """);
 
-        assertTrue(report.unrepairable().isEmpty(),
-                () -> "a call has somewhere to go — it goes: " + report.unrepairable());
+        assertTrue(report.leftForYou().isEmpty(),
+                () -> "a call has somewhere to go — it goes: " + report.leftForYou());
         assertEquals(1, report.breaks().size());
         assertEquals(BreakKind.MEMBER_REMOVED, report.breaks().getFirst().kind());
         assertTrue(report.canMigrate(), "the removal is repairable, so it may be made");
@@ -140,7 +140,7 @@ class PluginRemovalTest {
     }
 
     @Test
-    void aTypeTheBotWritesDownRefusesTheRemoval(@TempDir Path tmp) throws IOException {
+    void aTypeTheBotWritesDownIsLeftForTheUserNotARefusal(@TempDir Path tmp) throws IOException {
         Report report = removalOver(tmp, """
                 package com.mybot;
                 public class Subject {
@@ -150,12 +150,31 @@ class PluginRemovalTest {
                 }
                 """);
 
-        Break refused = report.unrepairable().stream().findFirst().orElse(null);
-        assertNotNull(refused, "a declaration has no value to stand in for, so it must refuse");
-        assertEquals(BreakKind.TYPE_REMOVED, refused.kind());
-        assertEquals("ImageTemplate", refused.type());
-        assertFalse(refused.sites().isEmpty(), "the refusal has to name where the type is written");
-        assertFalse(report.canMigrate());
+        Break left = report.leftForYou().stream().findFirst().orElse(null);
+        assertNotNull(left, "a declaration has no value to stand in for, so it is the user's to change");
+        assertEquals(BreakKind.TYPE_REMOVED, left.kind());
+        assertEquals("ImageTemplate", left.type());
+        assertFalse(left.sites().isEmpty(), "the report has to name where the type is written");
+        assertTrue(report.canMigrate(), "the removal goes ahead (2026-09-29)");
+    }
+
+    /** The rewrite for it: the call is repaired, the declaration left as written and listed. */
+    @Test
+    void theRemovalRewriteListsTheDeclarationItLeaves(@TempDir Path tmp) throws IOException {
+        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, """
+                package com.mybot;
+                public class Subject {
+                    public void run() {
+                        ImageTemplate t = ImageTemplate.named("go");
+                    }
+                }
+                """);
+        ApiMigrationRunner.Outcome outcome = service.migrateRemoval(
+                UpgradeFixtures.jarOf(tmp, "only", plugin(), Map.of()), Map.of());
+
+        assertNotNull(outcome);
+        assertFalse(outcome.leftAsWritten().isEmpty(), "the declaration is listed");
+        assertTrue(outcome.leftAsWritten().getFirst().contains("ImageTemplate"), outcome.leftAsWritten().toString());
     }
 
     // -------------------------------------------------------------------------
@@ -210,22 +229,4 @@ class PluginRemovalTest {
                 () -> "an unused import of a removed plugin is still a compile error:\n" + rewritten);
     }
 
-    @Test
-    void theRefusalIsMadeAgainBeforeAnythingIsWritten(@TempDir Path tmp) throws IOException {
-        PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, """
-                package com.mybot;
-                public class Subject {
-                    public void run() {
-                        ImageTemplate t = ImageTemplate.named("go");
-                    }
-                }
-                """);
-        Path jar = UpgradeFixtures.jarOf(tmp, "only", plugin(), Map.of());
-
-        IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> service.migrateRemoval(jar, Map.of()));
-        assertTrue(refused.getMessage().contains("ImageTemplate"),
-                () -> "the refusal has to name the type: " + refused.getMessage());
-        assertTrue(refused.getMessage().contains("Nothing has been changed"));
-    }
 }

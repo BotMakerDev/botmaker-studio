@@ -7,6 +7,7 @@ import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import com.botmaker.studio.services.upgrade.ProjectUpgrade;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -463,30 +464,20 @@ public final class ProjectUpgradeDialog {
 
         /** The report is on screen; this is the question that follows it. */
         private void confirmRemoval(Report r) {
-            if (r.isIncomplete()) {
-                ThemedWindows.alert(Alert.AlertType.ERROR, "Some of this project could not be read, so what "
-                        + "removing " + plugin.displayName() + " would break cannot be told:\n\n"
-                        + r.problems().getFirst()).showAndWait();
-                return;
-            }
-            if (!r.unrepairable().isEmpty()) {
-                ThemedWindows.alert(Alert.AlertType.ERROR, "\"" + r.unrepairable().getFirst().type()
-                        + "\" is written down in this bot, not only called — so removing "
-                        + plugin.displayName() + " would leave a type name with nothing behind it. The "
-                        + "report below lists every place. Change those first.").showAndWait();
-                return;
-            }
-            if (reportView.unpicked() > 0) {
-                pendingRemoval = r;
-                status(unpickedReason(reportView.unpicked()) + " Then press Remove… again.");
-                return;
-            }
+            // Nothing here refuses since 2026-09-29: what could not be read, a type the bot writes down, and a
+            // call nobody chose for are each said, then left as written or defaulted and marked.
             pendingRemoval = null;
-
             String what = r.breaks().isEmpty()
                     ? "This bot calls nothing in it, so only the pom changes."
                     : r.breaks().size() + " call(s) will be replaced by a default value or deleted, and the "
                     + "functions they are in will be marked for review.";
+            if (!r.leftForYou().isEmpty()) {
+                what += "\n\n" + r.leftForYou().stream().map(Break::type).distinct().count()
+                        + " type(s) this bot writes down will be left as written and marked, for you to change: "
+                        + String.join(", ", r.leftForYou().stream().map(Break::type).distinct().toList()) + ".";
+            }
+            if (reportView.unpicked() > 0) what += "\n\n" + unpickedReason(reportView.unpicked());
+            if (r.isIncomplete()) what += "\n\nNot everything could be read: " + r.problems().getFirst();
             Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
                     "Remove " + plugin.displayName() + " from this project?\n\n" + what
                             + "\n\nA version of the project is saved first.");
@@ -501,7 +492,7 @@ public final class ProjectUpgradeDialog {
                     + plugin.displayName() + "…");
 
             upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks())
-                    .whenComplete((files, error) -> Platform.runLater(() -> {
+                    .whenComplete((repaired, error) -> Platform.runLater(() -> {
                         progress.setVisible(false);
                         remove.setDisable(false);
                         if (error != null) {
@@ -512,7 +503,8 @@ public final class ProjectUpgradeDialog {
                             return;
                         }
                         status("");
-                        showResult(removalSummary(plugin.displayName(), files, r.breaks().size()), files > 0);
+                        showResult(removalSummary(plugin.displayName(), repaired.files(), r.breaks().size(),
+                                repaired.leftAsWritten()), repaired.files() > 0);
                         // The table it was a row of is now wrong, and the clash set with it: one plugin
                         // fewer can make a name that was ambiguous answerable again.
                         progress.setVisible(true);
@@ -526,11 +518,6 @@ public final class ProjectUpgradeDialog {
             return target != null && !target.isBlank() && !target.equals(upgrades.currentVersion());
         }
 
-        /** True when the row has been checked and the pass would refuse it. */
-        boolean isBlocked() {
-            return report != null && (report.isIncomplete() || !report.unrepairable().isEmpty());
-        }
-
         ProjectUpgrade.Row asRow() {
             return new ProjectUpgrade.Row(upgrades, versions.getValue(), false,
                     showing == this ? reportView.picks() : Map.of());
@@ -538,15 +525,16 @@ public final class ProjectUpgradeDialog {
     }
 
     /**
-     * The row's one-line verdict.
-     *
-     * <p>Three states and no fourth, because the three are what the apply button does: nothing to do, work
-     * Studio will do, and work it refuses to do. A count is given where there is one — <i>2 repairable</i>
-     * says something <i>changes will be made</i> does not.
+     * The row's one-line verdict. None of them stops the move since 2026-09-29: <i>to finish by hand</i> and
+     * <i>partly checked</i> say what the user will be left with, not that the button refuses.
      */
     static String chipText(Report r) {
-        if (r.isIncomplete()) return "blocked — could not read";
-        if (!r.unrepairable().isEmpty()) return "blocked — " + r.unrepairable().size() + " to fix by hand";
+        if (!r.leftForYou().isEmpty()) {
+            return r.breaks().size() + " repairable, " + r.leftForYou().size() + " to finish by hand";
+        }
+        if (r.isIncomplete()) {
+            return r.breaks().isEmpty() ? "partly checked" : r.breaks().size() + " repairable, partly checked";
+        }
         if (r.breaks().isEmpty()) return "nothing breaks";
         return r.breaks().size() + " repairable";
     }
@@ -556,18 +544,26 @@ public final class ProjectUpgradeDialog {
      * operation that has no versions to name.
      */
     static String removalSummary(String plugin, int filesRewritten, int calls) {
+        return removalSummary(plugin, filesRewritten, calls, List.of());
+    }
+
+    /** As above, with what the repair left as written. */
+    static String removalSummary(String plugin, int filesRewritten, int calls, List<String> leftForYou) {
         String head = "Removed " + plugin + " from this project.";
-        if (filesRewritten == 0) return head + " This bot called nothing in it, so only the pom changed."
+        String left = leftForYou.isEmpty() ? "" : " " + leftForYou.size()
+                + (leftForYou.size() == 1 ? " thing was" : " things were") + " left for you to finish: "
+                + String.join(" ", leftForYou);
+        if (filesRewritten == 0) return head + " This bot called nothing in it, so only the pom changed." + left
                 + " The previous state is one restore away in the Versions tab.";
         return head + " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in "
                 + filesRewritten + " file" + (filesRewritten == 1 ? "" : "s")
-                + " — the functions they are in are marked for review."
+                + " — the functions they are in are marked for review." + left
                 + " The previous state is one restore away in the Versions tab.";
     }
 
-    /** The same three states as a style class, so the colour is the stylesheet's and not this file's. */
+    /** The states as a style class, so the colour is the stylesheet's and not this file's. */
     static String chipState(Report r) {
-        if (r.isIncomplete() || !r.unrepairable().isEmpty()) return "blocked";
+        if (!r.leftForYou().isEmpty() || r.isIncomplete()) return "partial";
         return r.breaks().isEmpty() ? "ok" : "repairable";
     }
 
@@ -576,57 +572,48 @@ public final class ProjectUpgradeDialog {
     // -------------------------------------------------------------------------
 
     /**
-     * Enabled when something is being asked for and nothing already checked would refuse.
-     *
-     * <p>A row nobody has checked does not disable it: {@link ProjectUpgrade} checks every row again before
-     * writing anything, so an unchecked row that turns out to be blocked refuses the pass with the project
-     * untouched. Requiring a Check per row would make the button read as broken on a project where every row
-     * is fine.
+     * Enabled whenever something is being asked for and no check is running. Nothing a check finds disables
+     * it since 2026-09-29 — an upgrade is never blocked. A call waiting for a pick is said beside the button,
+     * because pressing Apply gives it a default value and a review mark.
      */
     private void refreshApply() {
         int moving = (int) rows.stream().filter(Row::isMoving).count();
-        List<String> blocked = rows.stream().filter(Row::isBlocked).map(r -> r.plugin.displayName()).toList();
         boolean checking = rows.stream().anyMatch(r -> r.checking);
         // Only the report on screen can have sites waiting, and only a moving row's report counts.
         int unpicked = showing != null && showing.report != null && showing.isMoving() ? reportView.unpicked() : 0;
-        applyButton.setDisable(moving == 0 || !blocked.isEmpty() || checking || unpicked > 0);
+        applyButton.setDisable(moving == 0 || checking);
 
-        String why = applyBlockedReason(moving, blocked, checking, unpicked);
+        String why = applyBlockedReason(moving, checking, unpicked);
         whyDisabled.setText(why);
         whyDisabled.setVisible(!why.isEmpty());
         whyDisabled.setManaged(!why.isEmpty());
     }
 
     /**
-     * Why Apply is grey, or "" when it is not.
+     * What the line beside Apply says, or "" for nothing: why it is grey (no row moves, a check is running),
+     * or what pressing it will do to the calls still waiting for a pick.
      *
      * <p>A disabled button is a statement the user cannot read: they see that BotMaker will not do the thing
      * and are left to guess whether the window is broken. Each sentence names the <em>next action</em>, which
      * is the only part they can act on.
      */
-    static String applyBlockedReason(int movingRows, List<String> blockedRows, boolean checking) {
-        return applyBlockedReason(movingRows, blockedRows, checking, 0);
-    }
-
-    /** As above, with the calls in the report below still waiting for a pick. */
-    static String applyBlockedReason(int movingRows, List<String> blockedRows, boolean checking, int unpicked) {
+    static String applyBlockedReason(int movingRows, boolean checking, int unpicked) {
         if (movingRows == 0) {
             return "Pick a version different from the installed one on at least one row.";
         }
         if (checking) return "A check is still running.";
-        if (!blockedRows.isEmpty()) {
-            return String.join(", ", blockedRows) + (blockedRows.size() == 1 ? " is" : " are")
-                    + " blocked: the report below says what to change by hand. Setting that row back to its "
-                    + "installed version lets the others move.";
-        }
         if (unpicked > 0) return unpickedReason(unpicked);
         return "";
     }
 
-    /** Why a repair waits: a call with nothing that fits is a guess either way, and the guess is the user's. */
+    /**
+     * What happens to a call with nothing that fits: the user may choose, and one left unchosen gets a default
+     * value and a review mark rather than holding the upgrade.
+     */
     static String unpickedReason(int unpicked) {
-        return unpicked + (unpicked == 1 ? " call has" : " calls have") + " nothing that replaces it: choose in "
-                + "the report below whether each becomes a default value or is deleted.";
+        return unpicked + (unpicked == 1 ? " call has" : " calls have") + " nothing that replaces it. Choose in "
+                + "the report below whether each becomes a default value or is deleted; any left unchosen gets "
+                + "a default value and is marked for review.";
     }
 
     private void runApply() {

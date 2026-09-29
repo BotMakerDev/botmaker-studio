@@ -114,7 +114,8 @@ public final class ReportView {
         unpicked.clear();
 
         if (r.isIncomplete()) {
-            box.getChildren().add(section("⚠ What this check could not determine", r.problems()));
+            box.getChildren().add(section("⚠ What this check could not read — left as written, the rest goes "
+                    + "ahead", r.problems()));
         }
         // Above every cost section, and above the scaffolding warning, because it is the only thing here that
         // answers "why would I". Everything below it answers "what will this take", which is a question the
@@ -164,14 +165,9 @@ public final class ReportView {
                         ? "Nothing in the files that could be read."
                         : "Nothing — every call in this bot still exists on " + r.to() + "."));
 
-        if (!r.unrepairable().isEmpty()) {
-            List<String> byHand = new ArrayList<>();
-            for (Break b : r.unrepairable()) {
-                byHand.add(b.display() + " — no type in " + r.to() + " takes its place, and this bot writes "
-                        + "the name itself, so there is nothing to stand in for it.");
-                for (var site : b.sites()) byHand.add("        " + site);
-            }
-            box.getChildren().add(section("What you have to change yourself", byHand));
+        if (!r.leftForYou().isEmpty()) {
+            box.getChildren().add(section("What you finish yourself, after the upgrade", leftForYouLines(r,
+                    "no type in " + r.to() + " takes its place")));
         }
 
         List<String> deprecated = new ArrayList<>();
@@ -199,9 +195,7 @@ public final class ReportView {
 
         // Last, because it is the only thing here addressed *to* the user.
         for (Choice choice : r.splits()) box.getChildren().add(splitCard(choice));
-        if (r.unrepairable().isEmpty()) {
-            for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
-        }
+        for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
 
         if (!r.repairable().isEmpty()) {
             box.getChildren().add(repairCard(r));
@@ -300,8 +294,9 @@ public final class ReportView {
         }
 
         // A fitting candidate is a checked redirect and is pre-filled. A site with none is a guess whichever way
-        // it goes — a default value or a deleted line — so the user makes it (2026-09-27): it starts empty,
-        // and the window's apply stays off until every such site has an answer (unpicked()).
+        // it goes — a default value or a deleted line — so the user is asked (2026-09-27): it starts empty and
+        // counts in unpicked(). Since 2026-09-29 an unanswered one no longer holds Apply: it gets the default
+        // value and a review mark.
         if (site.candidates().isEmpty()) {
             combo.setPromptText("Choose what this call becomes…");
             unpicked.add(site.site());
@@ -332,9 +327,8 @@ public final class ReportView {
      *
      * <p>Two sections, and the split between them is the operation's one rule. Anything Studio can repair is
      * a call, and a call goes: a literal default where its value is used, a deleted line where it is not. A
-     * type the bot writes <b>down</b> is not repairable and refuses the removal outright, because a
-     * declaration has no value to stand in for — so that list is not a warning, it is the reason the button
-     * will not run.
+     * type the bot writes <b>down</b> has no value to stand in for it, so it is left as written and marked,
+     * and listed as what the user finishes. Until 2026-09-29 that list refused the removal.
      */
     private void renderRemoval(Report r) {
         List<String> going = new ArrayList<>();
@@ -347,26 +341,17 @@ public final class ReportView {
                         ? "Nothing in the files that could be read."
                         : "Nothing — this bot never calls this plugin, so removing it changes no source."));
 
-        if (!r.unrepairable().isEmpty()) {
-            List<String> byHand = new ArrayList<>();
-            for (Break b : r.unrepairable()) {
-                byHand.add(b.display() + " — this bot writes the type itself, and once the plugin is gone "
-                        + "there is no type to write. Change these, then remove it.");
-                for (var site : b.sites()) byHand.add("        " + site);
-            }
-            box.getChildren().add(section("Why this removal is refused", byHand));
-        } else {
-            for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
+        if (!r.leftForYou().isEmpty()) {
+            box.getChildren().add(section("What you finish yourself, after the removal", leftForYouLines(r,
+                    "once the plugin is gone there is no such type")));
         }
+        for (Choice guess : r.guesses()) box.getChildren().add(guessCard(guess));
 
-        Label note = new Label(!r.unrepairable().isEmpty()
-                ? "The plugin stays until every use above is gone from your source. Nothing has been changed."
-                : r.isIncomplete()
-                ? "Some of this project could not be read, so nothing will be rewritten."
-                : "Removing saves a version of your project first, so all of this is one restore "
+        Label note = new Label("Removing saves a version of your project first, so all of this is one restore "
                 + "away. Every call above is replaced by a default value or deleted, the import lines that "
                 + "name this plugin go with them, and each function that changed is marked for you to "
-                + "review.");
+                + "review." + (r.leftForYou().isEmpty() && !r.isIncomplete() ? ""
+                : " What could not be repaired is left as written and listed above."));
         note.setWrapText(true);
         note.getStyleClass().add("sdk-upgrade-card");
         box.getChildren().add(note);
@@ -402,8 +387,6 @@ public final class ReportView {
                 + "be moved cleanly is touched — a deprecated call still compiles, so it is left as it is "
                 + "rather than replaced by a default. Any function whose calls did not come through "
                 + "unchanged is marked for you to review."
-                : r.isIncomplete()
-                ? "Some of this project could not be read, so nothing will be rewritten."
                 : "There is nothing to do here.");
         note.setWrapText(true);
         note.getStyleClass().add("sdk-upgrade-empty");
@@ -453,10 +436,10 @@ public final class ReportView {
         VBox card = new VBox(6, heading, why);
         card.getChildren().add(section("", lines));
 
-        Label note = new Label(r.canMigrate()
-                ? "\"Snapshot, repair & switch\" below does all of it: your project is committed to Project "
-                + "History first, so the whole upgrade is one revert away."
-                : reasonApplyIsOff(r));
+        Label note = new Label("\"Snapshot, repair & switch\" below does all of it: your project is committed "
+                + "to Project History first, so the whole upgrade is one revert away."
+                + (r.leftForYou().isEmpty() && !r.isIncomplete() ? ""
+                : " What cannot be repaired is left as written, marked for review, and listed when it is done."));
         note.setWrapText(true);
         note.getStyleClass().add("sdk-upgrade-empty");
         card.getChildren().add(note);
@@ -466,16 +449,17 @@ public final class ReportView {
     }
 
     /**
-     * Why the whole span is off, not just the break that caused it. One unrepairable change disables the
-     * lot: rewriting some of the call sites and leaving the rest would produce a project in neither shape,
-     * with nothing telling the user which half was touched.
+     * The places a repair leaves as written: each removed type the bot writes down, and where. Its calls are
+     * repaired like any removal; a declaration has no value to stand in for it, so it is marked instead.
      */
-    public static String reasonApplyIsOff(Report r) {
-        if (r.isIncomplete()) {
-            return "Some of this project could not be read, so nothing will be rewritten automatically.";
+    private static List<String> leftForYouLines(Report r, String why) {
+        List<String> lines = new ArrayList<>();
+        for (Break b : r.leftForYou()) {
+            lines.add(b.display() + " — " + why + ". Calls on it get a default value; where this bot writes the "
+                    + "type itself it is left as written and its function marked for review.");
+            for (var site : b.sites()) lines.add("        " + site);
         }
-        return "A class this bot uses is gone with nothing to take its place, so none of these will be "
-                + "applied automatically. Change those uses by hand first.";
+        return lines;
     }
 
     /**

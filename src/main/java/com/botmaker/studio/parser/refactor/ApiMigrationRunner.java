@@ -53,7 +53,7 @@ import java.util.Set;
  * <p>That leaves the bot compiling and, in places, wrong — deliberately. So the other half of the bargain is
  * written in the same rewrite: every function that got a default, lost a call, or had one redirected into a
  * different shape is annotated {@code @Refactor} ({@link ReviewMarks}), naming what happened to it. The
- * mark lands with the repair or not at all — a migration refused halfway leaves neither.
+ * mark lands with the repair or not at all — a file left as written (below) gets neither.
  *
  * <p><b>A rename is not marked.</b> {@code ImageClicker.click} becoming {@code IClicker.click} is a complete
  * repair: the bot does afterwards exactly what it did before, so asking the user to look at it would bury the
@@ -72,22 +72,21 @@ import java.util.Set;
  * member sweep against the source the user actually has, then renaming what is left, needs no such
  * reconciliation: the sites that became defaults no longer name the type at all.
  *
- * <h2>Nothing, or all of it</h2>
+ * <h2>Never refused, and never silent (2026-09-29)</h2>
  *
- * <p>Every refusal — a file that stops parsing, a {@code case} label whose enum cannot be told, a {@code void}
- * call in a position with no statement to delete, a rewrite that produces text no compiler accepts — abandons
- * the <em>whole</em> migration with nothing written anywhere. The alternative is a project in neither shape,
- * with nothing telling the user which half was touched. Disk is only reached afterwards, by
- * {@code CallMigrator.commit}.
+ * <p>Until 2026-09-29 every obstacle — a file that stops parsing, a {@code case} label whose enum cannot be
+ * told, a {@code void} call in a position with no statement to delete, a rewrite that produces text no
+ * compiler accepts, a type the target no longer has — abandoned the <em>whole</em> migration. That turned one
+ * awkward line into a plugin the user could not upgrade at all, and the maintainer's rule since is that an
+ * upgrade is never blocked. So the unit of refusal shrank: a file the runner cannot repair is <b>left as
+ * written</b>, and so is a single site it cannot express, and each is reported in
+ * {@link Outcome#leftAsWritten()} with the reason. Every other file is repaired. Where a function is still
+ * there to hold it, the site is also marked {@code @Refactor}, so the Review tab lists it. A type the target
+ * no longer has is the same: calls on it get the default a removed member gets, and a place that writes the
+ * type itself ({@code ImageTemplate t;}) is left and marked, because no value can stand in for a declaration.
  *
- * <h2>Studio's own scaffolding is not rewritten</h2>
- *
- * <p>The generated entry point, {@code FlowDriver}, {@code ActivityRegistry}, {@code Activities} and
- * {@code Templates} are renderings of things the user has on screen, written by <em>this Studio</em> — so
- * rewriting them would be overwritten at the next regeneration, and regenerating them would reproduce the same
- * old-SDK code, since the templates that produce them live in the Studio build, not in the SDK. When a repair
- * would have touched a scaffold file, the migration is refused and says so: that upgrade needs a newer Studio,
- * not a cleverer rewrite.
+ * <p>Bundled library source ({@code FileRole.LIBRARY}) is still never rewritten. A repair that would have
+ * touched one is reported the same way, not refused.
  */
 public final class ApiMigrationRunner {
 
@@ -248,14 +247,20 @@ public final class ApiMigrationRunner {
      * once the member sweep has already erased every use.
      */
     public record Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals,
-                          List<String> droppedImports) {
+                          List<String> droppedImports, List<String> goneTypes) {
 
         public Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals) {
-            this(types, redirects, removals, List.of());
+            this(types, redirects, removals, List.of(), List.of());
+        }
+
+        public Repairs(List<TypeRename> types, List<Redirect> redirects, List<Removal> removals,
+                       List<String> droppedImports) {
+            this(types, redirects, removals, droppedImports, List.of());
         }
 
         public boolean isEmpty() {
-            return types.isEmpty() && redirects.isEmpty() && removals.isEmpty() && droppedImports.isEmpty();
+            return types.isEmpty() && redirects.isEmpty() && removals.isEmpty() && droppedImports.isEmpty()
+                    && goneTypes.isEmpty();
         }
     }
 
@@ -336,18 +341,14 @@ public final class ApiMigrationRunner {
     }
 
     /**
-     * What the run produced: the files to write, or the reason nothing will be. Never both — a refusal carries
-     * an empty file list precisely so a caller that ignores {@link #isRefusal()} writes nothing rather than
-     * half of it.
+     * What the run produced: the files to write, and one sentence per file or site it left as written, saying
+     * why. The second list is what the user finishes by hand, and is never a reason to write nothing.
      */
-    public record Outcome(List<CallMigrator.Rewritten> files, String refusal) {
+    public record Outcome(List<CallMigrator.Rewritten> files, List<String> leftAsWritten) {
 
-        public boolean isRefusal() {
-            return refusal != null;
-        }
-
-        static Outcome refused(String why) {
-            return new Outcome(List.of(), why);
+        public Outcome {
+            files = List.copyOf(files);
+            leftAsWritten = List.copyOf(leftAsWritten);
         }
     }
 
@@ -372,8 +373,7 @@ public final class ApiMigrationRunner {
                               List<ProjectFile> generated, Set<String> apiTypes,
                               Map<String, List<String>> fieldOwners, boolean marks,
                               ProjectAnalyzer analyzer, ProjectState state) {
-        String blocked = scaffoldingInTheWay(generated, repairs, apiTypes, fieldOwners);
-        if (blocked != null) return Outcome.refused(blocked);
+        List<String> left = new ArrayList<>(libraryInTheWay(generated, repairs, apiTypes, fieldOwners));
 
         List<CallMigrator.Rewritten> changed = new ArrayList<>();
         for (ProjectFile file : editable) {
@@ -381,29 +381,38 @@ public final class ApiMigrationRunner {
             if (original == null) continue;
 
             Applied members = rewriteMembers(file, original, repairs, choices, apiTypes, fieldOwners,
-                    marks, analyzer, state);
-            if (members.refusal() != null) return Outcome.refused(members.refusal());
+                    marks, analyzer, state, left);
+            if (members.skipped() != null) {
+                left.add(members.skipped());
+                continue;                                   // this file stays as written; the rest go on
+            }
             String afterMembers = members.text() == null ? original : members.text();
 
             Applied types = rewriteTypes(file, afterMembers, repairs, analyzer, state);
-            if (types.refusal() != null) return Outcome.refused(types.refusal());
+            if (types.skipped() != null) {
+                left.add(types.skipped());
+                continue;
+            }
             String finalText = types.text() == null ? afterMembers : types.text();
 
             if (!finalText.equals(original)) changed.add(new CallMigrator.Rewritten(file, finalText));
         }
-        return new Outcome(List.copyOf(changed), null);
+        return new Outcome(changed, left);
     }
 
     // --- one file, one sweep --------------------------------------------------------------------------------
 
-    /** The new text of a file after one sweep — {@code text} null when the sweep left it alone. */
-    private record Applied(String text, String refusal) {
+    /**
+     * The new text of a file after one sweep — {@code text} null when the sweep left it alone, {@code skipped}
+     * the sentence saying why the whole file is left as written.
+     */
+    private record Applied(String text, String skipped) {
 
         static Applied unchanged() {
             return new Applied(null, null);
         }
 
-        static Applied refused(String why) {
+        static Applied skipped(String why) {
             return new Applied(null, why);
         }
     }
@@ -414,19 +423,33 @@ public final class ApiMigrationRunner {
      */
     private static Applied rewriteMembers(ProjectFile file, String text, Repairs repairs, Choices choices,
                                           Set<String> apiTypes, Map<String, List<String>> fieldOwners,
-                                          boolean marking, ProjectAnalyzer analyzer, ProjectState state) {
+                                          boolean marking, ProjectAnalyzer analyzer, ProjectState state,
+                                          List<String> left) {
         CompilationUnit unit = SourceParser.parse(text);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) {
-            return Applied.refused("\"" + file.getClassName() + "\" does not parse, so it could not be "
-                    + "migrated. Fix that file first — nothing has been changed.");
+            return Applied.skipped("\"" + file.getClassName() + "\" does not parse, so it was left as written. "
+                    + "Fix it, then check its calls by hand.");
         }
         ApiReferences.Scan scan = ApiReferences.in(file, unit, file.getClassName(), apiTypes, fieldOwners);
-        if (!scan.problems().isEmpty()) return Applied.refused(scan.problems().getFirst());
+        if (!scan.problems().isEmpty()) {
+            return Applied.skipped(scan.problems().getFirst() + " \"" + file.getClassName()
+                    + "\" was left as written.");
+        }
 
         List<CallChange> changes = new ArrayList<>();
         // Insertion-ordered per function, and a set: two identical calls in one function are one thing to look
         // at, and the review list should say so once.
         Map<MethodDeclaration, Set<String>> marks = new LinkedHashMap<>();
+        // A type the target no longer has, written as a type: no value stands in for a declaration, so the place
+        // is left as written and its function marked. The calls on it are handled below like any removal.
+        for (ApiReferences.TypeUse use : ApiReferences.typeUses(file, unit, Set.copyOf(repairs.goneTypes()))) {
+            MethodDeclaration method = ReviewMarks.enclosingMethod(use.site().node());
+            String sentence = use.type() + " is gone from this BotMaker version and nothing replaces it — "
+                    + "this still names it, so change it by hand.";
+            if (method != null) marks.computeIfAbsent(method, m -> new LinkedHashSet<>()).add(sentence);
+            left.add("\"" + file.getClassName() + "\" line " + unit.getLineNumber(use.site().node()
+                    .getStartPosition()) + ": " + sentence);
+        }
         for (ApiReferences.Reference reference : scan.references()) {
             Action action = choices.at(file, reference);
             // Discard is the one action with no engine equivalent, so it is answered before anything is
@@ -450,10 +473,13 @@ public final class ApiMigrationRunner {
                     changes.add(new CallChange.CallDeleted(reference.site()));
                     note(marks, reference, removal.type(), removal.member(), "the call was removed");
                 } else if (removal.isVoid()) {
-                    return Applied.refused("The upgrade removed " + removal.type() + "." + removal.member()
-                            + ", which \"" + file.getClassName() + "\" uses somewhere that is not a line of "
-                            + "its own — most often the body of a one-line lambda. There is nothing to put "
-                            + "in its place, so nothing has been changed.");
+                    // Most often the body of a one-line lambda: there is no statement to delete and no value
+                    // to stand in, so this one site stays as written and the rest of the file is repaired.
+                    note(marks, reference, removal.type(), removal.member(), "it was left as written, because "
+                            + "nothing can take its place there — remove it by hand");
+                    left.add("\"" + file.getClassName() + "\": " + removal.type() + "." + removal.member()
+                            + " is gone and is used where nothing can take its place (most often a one-line "
+                            + "lambda), so that call was left as written.");
                 } else {
                     changes.add(new CallChange.ValueDefaulted(reference.site(), removal.returnType(),
                             removal.returnTypeFqn()));
@@ -504,15 +530,15 @@ public final class ApiMigrationRunner {
                         + "it, and the value it produced is now " + stood);
             }
         }
-        if (changes.isEmpty()) return Applied.unchanged();
+        if (changes.isEmpty() && (marks.isEmpty() || !marking)) return Applied.unchanged();
 
         EditContext ctx = EditContext.of(unit, analyzer, state);
         SignatureMigration.Plan plan =
                 new SignatureMigration.Plan(changes, List.of(), List.of(), ReturnFate.UNCHANGED);
-        if (!CallMigrator.applyIn(ctx, plan)) {
-            return Applied.refused("The upgrade moves something \"" + file.getClassName() + "\" uses in a way "
+        if (!changes.isEmpty() && !CallMigrator.applyIn(ctx, plan)) {
+            return Applied.skipped("The upgrade moves something \"" + file.getClassName() + "\" uses in a way "
                     + "that cannot be repaired from the source alone — most often a constant used as a case "
-                    + "label, whose type the source never names. Nothing has been changed.");
+                    + "label, whose type the source never names. That file was left as written.");
         }
         if (marking) marks.forEach((method, entries) -> ReviewMarks.mark(ctx, method, List.copyOf(entries)));
         return finish(ctx, file, text);
@@ -601,8 +627,8 @@ public final class ApiMigrationRunner {
                                         ProjectAnalyzer analyzer, ProjectState state) {
         CompilationUnit unit = SourceParser.parse(text);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) {
-            return Applied.refused("Repairing \"" + file.getClassName() + "\" produced source that does not "
-                    + "parse, so nothing has been changed.");
+            return Applied.skipped("Repairing \"" + file.getClassName() + "\" produced source that does not "
+                    + "parse, so that file was left as written.");
         }
         List<TypeRename> here = repairs.types().stream()
                 .filter(rename -> ApiReferences.mentions(unit, rename.from()))
@@ -630,62 +656,45 @@ public final class ApiMigrationRunner {
             rewritten = null;
         }
         if (rewritten == null || SourceParser.hasSyntaxErrors(SourceParser.parse(rewritten))) {
-            return Applied.refused("Repairing \"" + file.getClassName() + "\" for the new SDK produced source "
-                    + "that does not compile, so nothing has been changed.");
+            return Applied.skipped("Repairing \"" + file.getClassName() + "\" produced source that does not "
+                    + "parse, so that file was left as written.");
         }
         return rewritten.equals(text) ? Applied.unchanged() : new Applied(rewritten, null);
     }
 
     /**
-     * The reason a scaffold file blocks this migration, or null when none does.
-     *
-     * <p>A generated file is never <em>rewritten</em> by an upgrade — it is emitted, and a rewritten copy
-     * would be overwritten by the next regeneration anyway. So a repair that would have touched one stops the
-     * upgrade, and the sentence says which file and which element.
-     *
-     * <p>This is deliberately conservative, and it is conservative again: for two days it was preceded by a
-     * pre-flight verdict from the target jar ({@code ScaffoldCheck}), which let an upgrade through whenever
-     * the target could still carry what the generators write. That verdict was part of the two-author
-     * scaffold contract and went with it (2026-08-25).
-     *
-     * <p><b>The refusal is now stricter than the facts require, and that is knowingly left standing.</b>
-     * Since the generator became the <em>bot's own</em> SDK (inversion phase 2), {@code PluginUpgradeService}
-     * does re-render all five files after the pom has moved — against the new jar — so an upgrade blocked
-     * here would in fact have healed itself. Lifting the block needs the thing that was deleted: a way to ask
-     * the <em>target</em> jar, before the upgrade starts, whether it can still emit what it is about to be
-     * asked for. Letting it through without that trades a refusal for a project that does not compile, so it
-     * waits for the per-version catalog. Until then the sentence shown is the one it has always shown.
+     * One sentence per read-only file a repair would have touched — bundled library source, which is never
+     * rewritten. Until 2026-09-29 the first such file refused the whole migration; it is reported and left.
      */
-    private static String scaffoldingInTheWay(List<ProjectFile> generated, Repairs repairs,
-                                              Set<String> apiTypes, Map<String, List<String>> fieldOwners) {
+    private static List<String> libraryInTheWay(List<ProjectFile> generated, Repairs repairs,
+                                                Set<String> apiTypes, Map<String, List<String>> fieldOwners) {
+        List<String> left = new ArrayList<>();
         for (ProjectFile file : generated) {
             String text = file.getContent();
             if (text == null) continue;
             CompilationUnit unit = SourceParser.parse(text);
             if (unit == null || SourceParser.hasSyntaxErrors(unit)) continue;
 
+            String hit = null;
             for (TypeRename rename : repairs.types()) {
-                if (ApiReferences.mentions(unit, rename.from())) {
-                    return blocked(file, rename.from(), "");
+                if (ApiReferences.mentions(unit, rename.from())) hit = rename.from();
+            }
+            if (hit == null) {
+                for (ApiReferences.Reference reference
+                        : ApiReferences.in(file, unit, file.getClassName(), apiTypes, fieldOwners).references()) {
+                    if (repairs.removals().stream().anyMatch(r -> r.matches(reference))
+                            || repairs.redirects().stream().anyMatch(r -> r.matches(reference))) {
+                        hit = reference.type() + "." + reference.member();
+                        break;
+                    }
                 }
             }
-            List<ApiReferences.Reference> references =
-                    ApiReferences.in(file, unit, file.getClassName(), apiTypes, fieldOwners).references();
-            for (ApiReferences.Reference reference : references) {
-                if (repairs.removals().stream().anyMatch(r -> r.matches(reference))
-                        || repairs.redirects().stream().anyMatch(r -> r.matches(reference))) {
-                    return blocked(file, reference.type(), reference.member());
-                }
+            if (hit != null) {
+                left.add("\"" + file.getClassName() + "\" is library source, which is never rewritten, and it "
+                        + "uses " + hit + ", which this upgrade changes.");
             }
         }
-        return null;
-    }
-
-    private static String blocked(ProjectFile file, String type, String member) {
-        return "The new SDK changes " + type + (member.isBlank() ? "" : "." + member)
-                + ", which BotMaker's own generated file \"" + file.getClassName() + "\" uses. Generated "
-                + "files are never rewritten by an upgrade — update Studio itself so it generates code for "
-                + "this SDK. Nothing has been changed.";
+        return left;
     }
 
     private static String simpleNameOf(String qualifiedName) {

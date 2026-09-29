@@ -114,7 +114,7 @@ class SplitPointerTest {
                 UpgradeFixtures.jarOf(tmp, "old", before, Map.of()),
                 UpgradeFixtures.jarOf(tmp, "new", after, Map.of()), "1.0.0", "2.0.0", false, true, picks);
         assertNotNull(outcome, "the upgrade had nothing to repair, so there is no rewrite to read");
-        assertFalse(outcome.isRefusal(), () -> "the upgrade refused: " + outcome.refusal());
+        assertTrue(outcome.leftAsWritten().isEmpty(), () -> "the upgrade left: " + outcome.leftAsWritten());
         return outcome.files().stream()
                 .filter(f -> f.file().getPath().toString().endsWith("Subject.java"))
                 .map(CallMigrator.Rewritten::newSource)

@@ -1,6 +1,5 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
@@ -24,11 +23,10 @@ import java.util.concurrent.CompletableFuture;
  * <h2>The order, and why each step is where it is</h2>
  *
  * <ol>
- *   <li><b>Check every row first.</b> {@link PluginUpgradeService#compare} answers without writing, so a row
- *       that cannot be repaired — an unreadable file, a removed type the bot declares, two plugins claiming
- *       one simple name — refuses the whole pass while the project is still untouched and there is nothing to
- *       undo. This is the all-or-nothing rule {@code rewriteOthers} already enforces per file, read one level
- *       up.</li>
+ *   <li><b>Check every row first.</b> {@link PluginUpgradeService#compare} answers without writing. Nothing
+ *       it finds refuses the pass since 2026-09-29: an unreadable file, a removed type the bot declares, or
+ *       two plugins claiming one simple name each leave that part as written and say so in
+ *       {@link Result#leftForYou()}. The user's rule is that an upgrade is never blocked.</li>
  *   <li><b>One snapshot.</b> A commit per plugin would describe a state the user never asked to be in, and
  *       reverting it would undo one plugin's repair while leaving another's.</li>
  *   <li><b>One repair per row, committed to disk before the next row starts.</b> Each pass re-reads the
@@ -89,10 +87,15 @@ public final class ProjectUpgrade {
      * pass actually knows — {@code filesRewritten} is what was written, {@code callsRepaired} is what the
      * reports found — and nothing here is a report of what <em>would</em> happen.
      */
-    public record Result(List<Moved> moved, int filesRewritten, int callsRepaired) {
+    public record Result(List<Moved> moved, int filesRewritten, int callsRepaired, List<String> leftForYou) {
 
         public Result {
             moved = List.copyOf(moved);
+            leftForYou = List.copyOf(leftForYou);
+        }
+
+        public Result(List<Moved> moved, int filesRewritten, int callsRepaired) {
+            this(moved, filesRewritten, callsRepaired, List.of());
         }
 
         public static Result nothing() {
@@ -121,6 +124,10 @@ public final class ProjectUpgrade {
                         .append(callsRepaired == 1 ? "" : "s").append(" repaired in ")
                         .append(filesRewritten).append(" file").append(filesRewritten == 1 ? "" : "s")
                         .append(" — the functions they are in are marked for review.");
+            }
+            if (!leftForYou.isEmpty()) {
+                text.append(" ").append(leftForYou.size()).append(leftForYou.size() == 1 ? " thing was" : " things were")
+                        .append(" left for you to finish: ").append(String.join(" ", leftForYou));
             }
             return text + " The previous state is one restore away in the Versions tab.";
         }
@@ -152,12 +159,13 @@ public final class ProjectUpgrade {
                     // in a list keyed by position rather than by the row: two rows moving the same
                     // coordinate to the same version are equal as records and would collapse into one.
                     List<Report> checked = new ArrayList<>();
-                    for (Row row : moving) checked.add(refuseOrReport(row));
+                    for (Row row : moving) checked.add(report(row));
 
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
 
                     Map<String, String> versions = new LinkedHashMap<>();
                     List<Moved> moved = new ArrayList<>();
+                    List<String> left = new ArrayList<>();
                     int files = 0;
                     int calls = 0;
                     for (int i = 0; i < moving.size(); i++) {
@@ -166,15 +174,20 @@ public final class ProjectUpgrade {
                         // Read before the repair: the version the project is on is read off the pom, and the
                         // pom write below moves it.
                         String from = row.upgrades().currentVersion();
+                        // What the check could not read does not stop the move (2026-09-29); it is said back.
+                        report.problems().forEach(problem -> left.add(row.upgrades().displayName() + ": "
+                                + problem));
                         if (report.canMigrate() || (row.alsoModernise() && report.canModernise())) {
-                            files += row.upgrades()
-                                    .repair(row.targetVersion(), row.alsoModernise(), true, row.picks());
+                            PluginUpgradeService.Repaired repaired = row.upgrades().repairReporting(
+                                    row.targetVersion(), row.alsoModernise(), true, withDefaults(report, row));
+                            files += repaired.files();
+                            left.addAll(repaired.leftAsWritten());
                             calls += report.breaks().size();
                         }
                         moved.add(new Moved(row.upgrades().displayName(), from, row.targetVersion()));
                         versions.put(row.upgrades().coordinate(), row.targetVersion());
                     }
-                    return new Pass(versions, new Result(moved, files, calls));
+                    return new Pass(versions, new Result(moved, files, calls, left));
                 })
                 .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }
@@ -183,38 +196,29 @@ public final class ProjectUpgrade {
     private record Pass(Map<String, String> versions, Result result) {}
 
     /**
-     * That row's report, or an exception saying why the pass will not start.
-     *
-     * <p>The two refusals are the report's own verdicts, stated as the failure of the <em>pass</em> rather
-     * than of the row: one plugin that cannot be repaired stops every other plugin's move too, because the
-     * versions are written together and a half-written set is the state this class exists to prevent.
+     * That row's report. Nothing in it refuses the pass since 2026-09-29, when the rule became that an upgrade
+     * is never blocked: what the check could not read is said back in {@link Result#leftForYou()}, a removed
+     * type is repaired as far as a repair can go and the rest left and marked, and a guess nobody answered
+     * takes the default ({@link #withDefaults}).
      */
-    private static Report refuseOrReport(Row row) {
-        String what = row.upgrades().displayName() + " " + row.targetVersion();
-        Report report = row.upgrades().compare(row.targetVersion(), row.alsoModernise());
-        if (report.isIncomplete()) {
-            throw new IllegalStateException("The check for " + what + " could not be completed, so nothing "
-                    + "has been changed: " + report.problems().getFirst());
-        }
-        List<Break> refused = report.unrepairable();
-        if (!refused.isEmpty()) {
-            throw new IllegalStateException("\"" + refused.getFirst().type() + "\" is gone from " + what
-                    + " and nothing in that release takes its place, so this bot writes a type name that "
-                    + "would no longer exist. Change those uses by hand first. Nothing has been changed.");
-        }
-        long unanswered = waitingSites(report).stream().filter(site -> !row.picks().containsKey(site)).count();
-        if (unanswered > 0) {
-            throw new IllegalStateException(unanswered + (unanswered == 1 ? " call" : " calls") + " in this bot "
-                    + "would lose what " + what + " no longer offers, and nothing replaces "
-                    + (unanswered == 1 ? "it" : "them") + ". Check " + row.upgrades().displayName() + " and "
-                    + "choose what each becomes. Nothing has been changed.");
-        }
-        return report;
+    private static Report report(Row row) {
+        return row.upgrades().compare(row.targetVersion(), row.alsoModernise());
+    }
+
+    /**
+     * The row's picks, with every {@linkplain #waitingSites waiting site} the user did not answer set to a
+     * default value — the answer that compiles, and is marked {@code @Refactor} so the Review tab lists it.
+     * Until 2026-09-29 an unanswered site refused the pass.
+     */
+    static Map<CallSite, Decision> withDefaults(Report report, Row row) {
+        Map<CallSite, Decision> picks = new LinkedHashMap<>(row.picks());
+        for (CallSite site : waitingSites(report)) picks.putIfAbsent(site, Decision.DEFAULT);
+        return picks;
     }
 
     /**
      * The sites whose repair is a guess — every site of a {@link Report#guesses()}, and a split's site with
-     * nothing that fits — which a pass will not default on its own (2026-09-27).
+     * nothing that fits. The window asks about each, and one left unanswered is defaulted and marked.
      */
     static List<CallSite> waitingSites(Report report) {
         List<CallSite> out = new ArrayList<>();

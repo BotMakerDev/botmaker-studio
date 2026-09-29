@@ -66,34 +66,34 @@ class ProjectUpgradeTest {
             }
             """;
 
+    /**
+     * A row that cannot be checked still moves (2026-09-29): an upgrade is never blocked. The version is
+     * written, and what the check could not read is said back rather than stopping the pass.
+     */
     @Test
-    void aRowThatCannotBeCheckedRefusesThePassWithNothingWritten(@TempDir Path tmp) throws IOException {
+    void aRowThatCannotBeCheckedStillMovesAndSaysWhy(@TempDir Path tmp) throws Exception {
         PluginUpgradeService service = UpgradeFixtures.serviceOver(tmp, BOT);
         Recorder writer = new Recorder();
 
-        CompletableFuture<ProjectUpgrade.Result> pass =
-                ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(service, "2.0.0")), writer);
+        ProjectUpgrade.Result result =
+                ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(service, "2.0.0")), writer).get();
 
-        ExecutionException failed = assertThrows(ExecutionException.class, pass::get);
-        assertTrue(failed.getCause() instanceof IllegalStateException, failed::toString);
-        assertTrue(failed.getCause().getMessage().contains("nothing has been changed"),
-                failed.getCause()::getMessage);
-        assertEquals(0, writer.calls.get(), "the pom must not move when a row refuses");
+        assertEquals(1, writer.calls.get(), "the pom moves");
+        assertFalse(result.leftForYou().isEmpty(), "the unread check is said back");
+        assertTrue(result.summary().contains("left for you to finish"), result.summary());
     }
 
-    /**
-     * And the refusal is the <em>pass</em>'s, not the row's: one plugin that cannot be checked stops the
-     * plugin beside it too, because the versions are written together.
-     */
+    /** One row that cannot be checked does not stop the row beside it either: both move, in one write. */
     @Test
-    void oneBadRowStopsTheRowsBesideIt(@TempDir Path tmp) throws IOException {
+    void oneUncheckedRowDoesNotStopTheRowsBesideIt(@TempDir Path tmp) throws Exception {
         Recorder writer = new Recorder();
         List<ProjectUpgrade.Row> rows = List.of(
                 new ProjectUpgrade.Row(UpgradeFixtures.serviceOver(tmp.resolve("a"), BOT), "2.0.0"),
                 new ProjectUpgrade.Row(UpgradeFixtures.serviceOver(tmp.resolve("b"), BOT), "3.0.0"));
 
-        assertThrows(ExecutionException.class, () -> ProjectUpgrade.run(rows, writer).get());
-        assertEquals(0, writer.calls.get());
+        ProjectUpgrade.Result result = ProjectUpgrade.run(rows, writer).get();
+        assertEquals(1, writer.calls.get(), "one pom write for every row");
+        assertEquals(2, result.moved().size());
     }
 
     /**

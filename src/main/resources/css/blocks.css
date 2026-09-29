@@ -1537,7 +1537,8 @@
 /*
  * One upgrade row's state: checking, then what the check answered. Severity tokens rather than colours, so
  * the three states stay apart on both themes and mean the same thing here as everywhere else in the app —
- * "blocked" is the only one that is an error, and "repairable" is work Studio will do, not a problem.
+ * "blocked" is the only one that is an error (the check itself failed), "repairable" is work Studio will do,
+ * and "partial" is work it leaves for the user — neither of the last two stops an upgrade (2026-09-29).
  */
 .upgrade-chip {
     -fx-font-size: 11px;
@@ -1547,6 +1548,7 @@
 .upgrade-chip-checking { -fx-text-fill: -bm-muted; }
 .upgrade-chip-ok { -fx-text-fill: -bm-severity-ok-text; }
 .upgrade-chip-repairable { -fx-text-fill: -bm-severity-warning-text; }
+.upgrade-chip-partial { -fx-text-fill: -bm-severity-warning-text; -fx-underline: true; }
 .upgrade-chip-blocked { -fx-text-fill: -bm-severity-error-text; }
 
 /*
