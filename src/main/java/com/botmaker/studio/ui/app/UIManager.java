@@ -6,7 +6,9 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.PluginOwners;
+import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectOpenMigrations;
@@ -91,6 +93,8 @@ public class UIManager implements ProjectWindow {
     private final FileExplorerManager fileExplorerManager;
     /** Every menu/toolbar action, and the GitHub services that back the sharing ones. */
     private final StudioActions actions;
+    /** Asked by the canvas's did-not-load banner for what the last re-resolve could not download. */
+    private final LibraryService libraryService;
 
     // Theme management
     private Scene scene;
@@ -168,6 +172,7 @@ public class UIManager implements ProjectWindow {
         this.primaryStage = primaryStage;
         this.config = ctx.config();
         this.state = ctx.state();
+        this.libraryService = ctx.libraryService();
 
         // Editor settings — the project's own, not a second one over the same (config, state, eventBus). The
         // capture service takes none of them: it holds no capture target, so a pick over several monitors
@@ -425,7 +430,9 @@ public class UIManager implements ProjectWindow {
         // --- 3. Center: Code Canvas ---
         editorCanvas = new EditorCanvas(codeEditorService, eventBus, state.isReaderMode(),
                 config.projectName(), this::switchToEditorMode,
-                () -> PluginOwners.absent(config), actions::openManagePlugins);
+                () -> PluginOwners.absent(config), actions::openManagePlugins,
+                () -> EditorCanvas.loadProblemLines(PluginHost.failures(), libraryService.unresolved()),
+                actions::openProjectUpgrade);
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.

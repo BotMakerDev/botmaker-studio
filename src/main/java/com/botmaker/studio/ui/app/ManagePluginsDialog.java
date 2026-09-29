@@ -322,6 +322,13 @@ public final class ManagePluginsDialog {
                             new UserLibrary(plugin.groupId(), plugin.artifactId(), version),
                             plugin.editorLibraries()),
                     plugin.name() + " " + version + " installed.");
+        }).exceptionally(failure -> {
+            // A version lookup that fails (JitPack unreachable) used to leave the list disabled for good.
+            Platform.runLater(() -> {
+                busy(false);
+                error("Could not resolve a version for " + plugin.coordinate() + ": " + rootMessage(failure));
+            });
+            return null;
         });
     }
 

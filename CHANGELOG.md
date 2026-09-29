@@ -10,6 +10,22 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A plugin that did not load now says so above the canvas.** It also says whether the plugin is older or
+  newer than this Studio, and offers **Update plugins…**. Before, a project whose SDK was built for an older
+  Studio opened with an empty palette. The reason appeared only inside Manage Plugins, and it wrongly said
+  *newer*.
+- **Installing a plugin that cannot be downloaded no longer claims success.** Studio used to write the pom,
+  fail to resolve the jar and report *installed*, and the plugin never appeared. Now the pom is put back and
+  the dialog names the coordinate and the reason. Other dependencies that fail to download are listed in the
+  same banner.
+- **Plugin reloads no longer race.** An install and a background reload could overlap, and whichever finished
+  last decided which plugins the editor used. Reloads now run one at a time.
+- A version lookup that failed during install no longer leaves Manage Plugins disabled.
+
 ## [1.2.0] — 2026-09-29
 
 ### Added

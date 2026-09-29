@@ -65,7 +65,8 @@ class ZoomedCanvasFitsTest extends FxHeadlessTest {
         EditorFixture fixture = new EditorFixture(BlockGalleryTest.PROGRAM);
         EditorCanvas[] made = new EditorCanvas[1];
         onFx(() -> {
-            made[0] = new EditorCanvas(fixture.context(), fixture.bus(), false, "Gallery", () -> {}, List::of, () -> {});
+            made[0] = new EditorCanvas(fixture.context(), fixture.bus(), false, "Gallery", () -> {}, List::of, () -> {},
+                    List::of, () -> {});
             root.getChildren().setAll(made[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, made[0]::handleBlocksUpdate, false);
         });

@@ -81,7 +81,7 @@ class CanvasScrollTest extends FxHeadlessTest {
         EditorCanvas[] made = new EditorCanvas[1];
         onFx(() -> {
             made[0] = new EditorCanvas(fixture.context(), fixture.bus(),
-                    false, "Subject", () -> {}, List::of, () -> {});
+                    false, "Subject", () -> {}, List::of, () -> {}, List::of, () -> {});
             root.getChildren().setAll(made[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class,
                     made[0]::handleBlocksUpdate, false);

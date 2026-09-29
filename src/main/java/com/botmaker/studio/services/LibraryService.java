@@ -10,9 +10,16 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 
+import javafx.application.Platform;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Orchestrates changes to the project's user libraries. The {@code pom.xml} is the source of truth;
@@ -28,6 +35,15 @@ public final class LibraryService {
     private final ProjectState state;
     private final TypeSummaryManager typeIndex;
     private final EventBus eventBus;
+
+    /** Every resolve-and-bind runs here, one at a time and in the order asked; see {@link #bind}. */
+    private final ExecutorService rebinds = Executors.newSingleThreadExecutor(work -> {
+        Thread thread = new Thread(work, "library-rebind");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    private volatile List<String> unresolved = List.of();
 
     public LibraryService(ProjectConfig config,
                           ProjectState state,
@@ -69,27 +85,70 @@ public final class LibraryService {
      *                           transitive
      */
     public CompletableFuture<Void> installPlugin(UserLibrary plugin, List<UserLibrary> editorDependencies) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                MavenService.installPlugin(config.projectPath(), plugin, editorDependencies);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
-            }
-            rebind();
-        });
+        List<String> named = new ArrayList<>(List.of(plugin.groupId() + ":" + plugin.artifactId()));
+        editorDependencies.forEach(d -> named.add(d.groupId() + ":" + d.artifactId()));
+        return edit(() -> MavenService.installPlugin(config.projectPath(), plugin, editorDependencies), named);
     }
 
     /** Removes {@code groupId:artifactId} and its editor dependencies — the mirror of {@link #installPlugin}. */
     public CompletableFuture<Void> removePlugin(String groupId, String artifactId,
                                                 List<UserLibrary> editorDependencies) {
+        return edit(() -> MavenService.removePlugin(config.projectPath(), groupId, artifactId, editorDependencies),
+                List.of());
+    }
+
+    /** A pom write: what {@link #edit} runs before it re-resolves. */
+    @FunctionalInterface
+    private interface PomWrite {
+        void run() throws Exception;
+    }
+
+    /**
+     * Writes the pom, then re-resolves and re-binds — or, when a coordinate the write named cannot be
+     * resolved, puts the pom back as it was and fails, naming why.
+     *
+     * <p>The put-back is the install bug of 2026-09-29: a plugin whose tag JitPack had not built was written,
+     * resolved to nothing, and the dialog said <i>installed</i> while the plugin never appeared. A pom naming
+     * a jar nobody can download is a broken project, so the edit does not stand. A dependency that fails and
+     * that this write did not name is not this write's to refuse; it is reported with the rest.
+     *
+     * @param named {@code groupId:artifactId} of every coordinate the write declares or re-versions
+     */
+    private CompletableFuture<Void> edit(PomWrite write, List<String> named) {
         return CompletableFuture.runAsync(() -> {
+            Path pom = config.projectPath().resolve("pom.xml");
+            String before = readQuietly(pom);
             try {
-                MavenService.removePlugin(config.projectPath(), groupId, artifactId, editorDependencies);
+                write.run();
             } catch (Exception e) {
                 throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
             }
-            rebind();
-        });
+            MavenService.Resolution resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
+            List<String> refused = resolution.problems().stream()
+                    .filter(line -> named.stream().anyMatch(coordinate -> line.startsWith(coordinate + ":")))
+                    .toList();
+            if (!refused.isEmpty()) {
+                if (before != null) {
+                    try {
+                        Files.writeString(pom, before);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Could not download " + String.join("; ", refused)
+                                + ", and pom.xml could not be put back: " + e.getMessage(), e);
+                    }
+                }
+                throw new RuntimeException("Could not download " + String.join("; ", refused)
+                        + ". pom.xml is unchanged.");
+            }
+            bind(resolution);
+        }, rebinds);
+    }
+
+    private static String readQuietly(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -107,25 +166,64 @@ public final class LibraryService {
             System.err.println("Could not declare the plugin contract: " + e.getMessage());
             return false;
         }
-        CompletableFuture.runAsync(this::rebind);
+        CompletableFuture.runAsync(this::rebind, rebinds);
         return true;
     }
 
+    /** Re-resolve without a pom write, then {@link #bind}. */
+    private void rebind() {
+        bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
+    }
+
     /**
-     * Re-resolve, re-bind the plugins, re-index, announce — everything that follows a pom write.
+     * Re-bind the plugins, re-index, announce — everything that follows a resolve.
      *
      * <p>One copy, because three callers had grown it: a wrong answer here is a project whose editor is
      * bound to the classpath it had before the edit, which looks exactly like the edit not having happened.
+     *
+     * <p><b>Always on {@link #rebinds}, one at a time</b> (2026-09-29). An install and the background rebind
+     * {@link #ensureContract} starts could overlap, and the one that finished last — not the one that
+     * started last — decided which classpath the editor was bound to. The classpath itself is handed to
+     * {@link ProjectState} on the FX thread, which is the only thread that object is used on.
      */
-    private void rebind() {
-        List<String> classpath = MavenService.resolveClasspath(config.projectPath());
-        state.setResolvedClasspath(classpath);
+    private void bind(MavenService.Resolution resolution) {
+        List<String> classpath = resolution.jars();
+        onFx(() -> state.setResolvedClasspath(classpath));
         PluginHost.bind(classpath, HostServices.forProject(config));
         // A plugin just added brings its @Managed holders with it (2026-09-26): written from what the plugin
         // declares, never over a file, never into main. The explorer redraws on the event below.
         HostPluginValues.createMissing();
         typeIndex.refresh(classpath);
+        unresolved = resolution.problems();
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));
+    }
+
+    /** What the last re-resolve could not download, one {@code group:artifact:version — reason} per line. */
+    public List<String> unresolved() {
+        return unresolved;
+    }
+
+    /** Runs {@code work} on the FX thread, waiting for it; directly where there is no FX toolkit (a test). */
+    private static void onFx(Runnable work) {
+        if (Platform.isFxApplicationThread()) {
+            work.run();
+            return;
+        }
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        try {
+            Platform.runLater(() -> {
+                try {
+                    work.run();
+                    done.complete(null);
+                } catch (RuntimeException e) {
+                    done.completeExceptionally(e);
+                }
+            });
+        } catch (IllegalStateException toolkitNotRunning) {
+            work.run();
+            return;
+        }
+        done.join();
     }
 
     /**
@@ -147,17 +245,10 @@ public final class LibraryService {
      * future completes once the index is refreshed; it completes exceptionally if writing the pom fails.
      */
     public CompletableFuture<Void> updateLibraries(List<UserLibrary> userLibs, String sdkVersion) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                MavenService.writeUserLibraries(config.projectPath(), userLibs, sdkVersion);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
-            }
-
-            // The SDK pin may have just moved, so the plugins answering for this project have to move with
-            // it — a palette built from the previous jar would offer members the new one may not have.
-            rebind();
-        });
+        // The SDK pin may have just moved, so the plugins answering for this project have to move with it — a
+        // palette built from the previous jar would offer members the new one may not have.
+        return edit(() -> MavenService.writeUserLibraries(config.projectPath(), userLibs, sdkVersion),
+                userLibs.stream().map(l -> l.groupId() + ":" + l.artifactId()).toList());
     }
 
     /**
@@ -173,14 +264,8 @@ public final class LibraryService {
      * {@link MavenService#setDependencyVersions}.
      */
     public CompletableFuture<Void> updateVersions(Map<String, String> versionsByCoordinate) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                MavenService.setDependencyVersions(config.projectPath(), versionsByCoordinate);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
-            }
-            rebind();
-        });
+        return edit(() -> MavenService.setDependencyVersions(config.projectPath(), versionsByCoordinate),
+                List.copyOf(versionsByCoordinate.keySet()));
     }
 
     /**
@@ -199,6 +284,6 @@ public final class LibraryService {
      * listener that reacts to the palette moving has to react to this too.
      */
     public CompletableFuture<Void> reloadPlugins() {
-        return CompletableFuture.runAsync(this::rebind);
+        return CompletableFuture.runAsync(this::rebind, rebinds);
     }
 }

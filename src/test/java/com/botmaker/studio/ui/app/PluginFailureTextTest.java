@@ -58,4 +58,27 @@ class PluginFailureTextTest {
 
         assertTrue(text.contains("NoClassDefFoundError"), text);
     }
+
+    /** The canvas banner: each refused plugin as the loader says it, then each jar that did not download. */
+    @Test
+    void the_banner_lists_refused_plugins_then_failed_downloads() {
+        List<String> lines = EditorCanvas.loadProblemLines(
+                List.of(new PluginLoader.PluginFailure("a.One", new IllegalStateException("no display"))),
+                List.of("g:a:v1 — not found"));
+
+        assertEquals(List.of("a.One — no display", "could not download g:a:v1 — not found"), lines);
+    }
+
+    /**
+     * A contract class the host lacks is another Studio's plugin, not a jar to put back — the SDK built on a
+     * deleted contract type used to read <i>a plugin — com/…/ValueCatalog is not on the classpath</i>.
+     */
+    @Test
+    void a_missing_contract_class_reads_as_another_studios_plugin() {
+        String text = new PluginLoader.PluginFailure(null,
+                new NoClassDefFoundError("com/botmaker/plugin/api/value/ValueCatalog")).describe();
+
+        assertEquals("a plugin — built for a different Studio: it uses ValueCatalog, which this Studio has not got",
+                text);
+    }
 }

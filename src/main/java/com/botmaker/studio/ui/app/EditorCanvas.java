@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -37,6 +38,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -69,10 +71,14 @@ final class EditorCanvas {
      *                          every {@code LibrariesChangedEvent}, since installing the plugin is exactly
      *                          what the banner's button leads to
      * @param onManagePlugins   that banner's button — the registry browser, where the plugin is installed
+     * @param loadProblems      one line per plugin on the classpath that did not load, and per dependency
+     *                          that did not download — asked again on every {@code LibrariesChangedEvent}
+     * @param onUpdatePlugins   that banner's button — where a plugin built for another Studio is updated
      */
     EditorCanvas(CodeEditorService codeEditorService, EventBus eventBus,
                  boolean readerMode, String projectName, Runnable onSwitchToEditor,
-                 Supplier<List<String>> missingPlugins, Runnable onManagePlugins) {
+                 Supplier<List<String>> missingPlugins, Runnable onManagePlugins,
+                 Supplier<List<String>> loadProblems, Runnable onUpdatePlugins) {
         this.codeEditorService = codeEditorService;
         this.eventBus = eventBus;
 
@@ -123,8 +129,11 @@ final class EditorCanvas {
         // computed once, because the pom can grow the plugin while the project stays open — installing it is
         // the banner's own button, and a banner that outlived its cause would be the worst outcome.
         showMissingPlugins(missingPlugins.get(), onManagePlugins);
-        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class,
-                e -> showMissingPlugins(missingPlugins.get(), onManagePlugins), true);
+        showLoadProblems(loadProblems.get(), onUpdatePlugins);
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> {
+            showMissingPlugins(missingPlugins.get(), onManagePlugins);
+            showLoadProblems(loadProblems.get(), onUpdatePlugins);
+        }, true);
         followSubscription = eventBus.subscribe(CoreApplicationEvents.ExecutionFollowedEvent.class,
                 e -> follow(e.block()), true);
     }
@@ -215,6 +224,46 @@ final class EditorCanvas {
         banner.setAlignment(Pos.CENTER_LEFT);
         banner.getStyleClass().add("missing-plugin-banner");
         return banner;
+    }
+
+    /**
+     * The banner's lines: each plugin that did not load, as the loader describes it, then each dependency that
+     * did not download. Pure, so the wording is asserted without a scene.
+     */
+    static List<String> loadProblemLines(List<PluginLoader.PluginFailure> failures, List<String> unresolved) {
+        List<String> lines = new ArrayList<>();
+        failures.forEach(failure -> lines.add(failure.describe()));
+        unresolved.forEach(line -> lines.add("could not download " + line));
+        return lines;
+    }
+
+    /** Above the canvas whenever a plugin on the classpath did not load; null when every one did. */
+    private HBox loadProblemBanner;
+
+    /**
+     * The did-not-load banner (2026-09-29). Until then a plugin refused at load was said only inside Manage
+     * Plugins, so a project whose SDK was built for an older Studio opened with no palette and nothing on
+     * screen saying why — or that one button fixes it.
+     */
+    private void showLoadProblems(List<String> problems, Runnable onUpdatePlugins) {
+        if (loadProblemBanner != null) {
+            column.getChildren().remove(loadProblemBanner);
+            loadProblemBanner = null;
+        }
+        if (problems == null || problems.isEmpty()) return;
+        Label msg = new Label((problems.size() == 1 ? "A plugin did not load: "
+                : problems.size() + " plugins did not load: ") + String.join("; ", problems));
+        msg.setWrapText(true);
+        msg.setMinWidth(0);
+        HBox.setHgrow(msg, Priority.ALWAYS);
+        Button update = new Button("Update plugins…");
+        update.setMinWidth(Region.USE_PREF_SIZE);
+        update.setOnAction(e -> onUpdatePlugins.run());
+        loadProblemBanner = new HBox(10, msg, update);
+        loadProblemBanner.setAlignment(Pos.CENTER_LEFT);
+        loadProblemBanner.getStyleClass().add("missing-plugin-banner");
+        column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
+                loadProblemBanner);
     }
 
     VBox node() {

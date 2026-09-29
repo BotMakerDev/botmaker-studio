@@ -516,10 +516,38 @@ public final class MavenService {
      * marshal onto the FX thread.
      */
     public static List<String> resolveClasspath(Path projectDir, ProgressReporter progress) {
+        return resolve(projectDir, progress).jars();
+    }
+
+    /**
+     * What a resolve produced: the jars that resolved, and one line per dependency that did not.
+     *
+     * <p>The second half is why this exists (2026-09-29). Resolution was best-effort and said what failed on
+     * stderr alone, so a plugin installed at a tag JitPack had not built was written to the pom, resolved to
+     * nothing, and simply never appeared — the install reported success and the plugin was not there.
+     *
+     * @param problems {@code group:artifact:version — reason}, empty when everything resolved
+     */
+    public record Resolution(List<String> jars, List<String> problems) {
+
+        public Resolution {
+            jars = List.copyOf(jars);
+            problems = List.copyOf(problems);
+        }
+
+        /** Whether {@code groupId:artifactId} is among the dependencies that failed. */
+        public boolean failed(String groupId, String artifactId) {
+            String prefix = groupId + ":" + artifactId + ":";
+            return problems.stream().anyMatch(line -> line.startsWith(prefix));
+        }
+    }
+
+    /** {@link #resolveClasspath(Path, ProgressReporter)}, keeping what failed. */
+    public static Resolution resolve(Path projectDir, ProgressReporter progress) {
         Path pomPath = projectDir.resolve("pom.xml");
         if (!Files.exists(pomPath)) {
             System.err.println("No pom.xml found at " + pomPath);
-            return List.of();
+            return new Resolution(List.of(), List.of("pom.xml — not found"));
         }
 
         Model model;
@@ -527,7 +555,7 @@ public final class MavenService {
             model = new MavenXpp3Reader().read(in);
         } catch (Exception e) {
             System.err.println("Failed to read pom.xml: " + e.getMessage());
-            return List.of();
+            return new Resolution(List.of(), List.of("pom.xml — " + e.getMessage()));
         }
 
         RepositorySystem system = new RepositorySystemSupplier().get();
@@ -579,6 +607,7 @@ public final class MavenService {
 
         DependencyRequest dependencyRequest = new DependencyRequest(collectRequest, null);
         List<String> jars = new ArrayList<>();
+        List<String> problems = new ArrayList<>();
         try {
             DependencyResult result = system.resolveDependencies(session, dependencyRequest);
             collectJars(result.getArtifactResults(), jars);
@@ -586,9 +615,29 @@ public final class MavenService {
             System.err.println("Some dependencies failed to resolve: " + e.getMessage());
             if (e.getResult() != null) {
                 collectJars(e.getResult().getArtifactResults(), jars);
+                collectProblems(e.getResult().getArtifactResults(), problems);
             }
+            // A collection failure (a pom that is not there at all) has no artifact results to name.
+            if (problems.isEmpty()) problems.add(firstLine(e.getMessage()));
         }
-        return jars;
+        return new Resolution(jars, problems);
+    }
+
+    private static void collectProblems(List<ArtifactResult> results, List<String> out) {
+        if (results == null) return;
+        for (ArtifactResult ar : results) {
+            if (ar.isResolved() || ar.getRequest() == null || ar.getRequest().getArtifact() == null) continue;
+            Artifact a = ar.getRequest().getArtifact();
+            String reason = ar.getExceptions().isEmpty() ? "not found"
+                    : firstLine(ar.getExceptions().getFirst().getMessage());
+            out.add(a.getGroupId() + ":" + a.getArtifactId() + ":" + a.getVersion() + " — " + reason);
+        }
+    }
+
+    private static String firstLine(String message) {
+        if (message == null || message.isBlank()) return "could not be resolved";
+        int newline = message.indexOf('\n');
+        return newline < 0 ? message : message.substring(0, newline);
     }
 
     /**

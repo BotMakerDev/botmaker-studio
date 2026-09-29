@@ -83,7 +83,7 @@ class MethodSwitchTest extends FxHeadlessTest {
         EditorFixture fixture = new EditorFixture(SOURCE);
         onFx(() -> {
             EditorCanvas canvas = new EditorCanvas(fixture.context(), fixture.bus(), false, "Subject", () -> {},
-                    List::of, () -> {});
+                    List::of, () -> {}, List::of, () -> {});
             root.getChildren().setAll(canvas.node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class,
                     canvas::handleBlocksUpdate, false);
