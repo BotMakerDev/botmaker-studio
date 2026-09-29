@@ -304,7 +304,8 @@ public final class InstalledPluginsTab {
 
             name = new Label(plugin.displayName()
                     + (plugin.source() == InstalledPlugin.Source.LOCAL_BUILD ? "   (local build)" : ""));
-            installed = new Label(plugin.installed());
+            // Resolved: a template pins its SDK as ${botmaker.sdk.version}, and the pom's text is not a version.
+            installed = new Label(upgrades.currentVersion());
             installed.getStyleClass().add("sdk-upgrade-detail");
 
             versions.setPrefWidth(190);
@@ -341,7 +342,7 @@ public final class InstalledPluginsTab {
          */
         /** The version this row is seeded with: the registry's verified one, the local build, or the installed. */
         String recommended() {
-            return plugin.available().isBlank() ? plugin.installed() : plugin.available();
+            return plugin.available().isBlank() ? upgrades.currentVersion() : plugin.available();
         }
 
         /** <i>Update all</i> for this row: the recommended version, checked when that is a move. */
