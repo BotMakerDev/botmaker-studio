@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-29 (latest) — the Trace tab filters by writer (rework follow-ups, phase 8b).** The user asked for
+- **2026-09-29 (latest) — the trace's level ids held together (dashboard pass, phase 5).**
+  `RunTelemetryTest.everyLevelTheWireNamesIsALevelTheContractKnows`: shared's `TelemetryEvent.Log` level
+  strings each read as the contract's `TraceLine.Level`. Studio is the one module that sees both. Test only.
+- **2026-09-29 — the Trace tab filters by writer (rework follow-ups, phase 8b).** The user asked for
   "a very fine filter over the debug output: which class, which method".
   - `TraceWriters` is the writer pane beside the list: a `CheckBoxTreeItem` tree of group → class → method. It
     keeps the *hidden* keys (a class, or `class#method`), so a new writer always shows, and saves them in

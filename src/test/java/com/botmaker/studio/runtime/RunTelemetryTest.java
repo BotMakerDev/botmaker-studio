@@ -51,6 +51,19 @@ class RunTelemetryTest {
         assertEquals(2, published.size(), "a debug line goes to the trace only, not to telemetry as well");
     }
 
+    /**
+     * The level ids live twice, as the wire's strings in {@code botmaker-shared} (which cannot see the contract)
+     * and as the contract's {@link TraceLine.Level}; this is the one place both are in reach, so it holds them
+     * to each other.
+     */
+    @Test
+    void everyLevelTheWireNamesIsALevelTheContractKnows() {
+        assertEquals(TraceLine.Level.DEBUG, TraceLine.Level.fromId(TelemetryEvent.Log.DEBUG));
+        assertEquals(TraceLine.Level.INFO, TraceLine.Level.fromId(TelemetryEvent.Log.INFO));
+        assertEquals(TraceLine.Level.WARN, TraceLine.Level.fromId(TelemetryEvent.Log.WARN));
+        assertEquals(TraceLine.Level.ERROR, TraceLine.Level.fromId(TelemetryEvent.Log.ERROR));
+    }
+
     @Test
     void aLineWithNoSourceLineSaysSoAndAnUnknownLevelIsKept() throws IOException {
         TraceLine line = RunTelemetry.traceLine(frame(new TelemetryEvent.Log("verbose", "", "hi", 1, 0L, null,
