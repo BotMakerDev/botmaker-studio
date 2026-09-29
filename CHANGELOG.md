@@ -24,8 +24,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   - A name two plugins both declare: it is left alone.
   - A call nobody chose a replacement for: it gets a default value and a review mark.
   - A check that could not read the project: the version still moves.
+- **One window for plugins and libraries.** *Project ▸ Plugins & Libraries…* replaces Manage Libraries,
+  Manage Plugins, Reload Plugins and Upgrade…:
+  - **Installed** lists every plugin with its version. Update or remove it there, or press **Update all**.
+  - **Browse** installs from the registry or a local build.
+  - **Libraries** holds your other Maven dependencies. Plugins are no longer rows there, so a plugin's version
+    only moves through its checked upgrade.
+  - **Reload plugins** and the list of plugins that did not load sit at the top and bottom of the window.
+- **Manage Imports is gone.** Every block you add already imports what it needs.
 
 ### Fixed
+
+- **A plugin added outside Studio appears by itself.** A `pom.xml` edited by `mvn`, an IDE, a `git pull` or
+  a restore now reloads the plugins without pressing Reload.
 
 - **A plugin that did not load now says so above the canvas.** It also says whether the plugin is older or
   newer than this Studio, and offers **Update plugins…**. Before, a project whose SDK was built for an older

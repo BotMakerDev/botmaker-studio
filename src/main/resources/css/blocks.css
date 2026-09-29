@@ -285,13 +285,19 @@
 .zoom-badge .zoom-button:hover { -fx-background-color: -bm-divider; }
 .zoom-badge .zoom-button:disabled { -fx-opacity: 0.35; }
 
-/* Manage Plugins: a plugin another plugin brings, in place of an Install button that would be refused. */
+/* Plugins & Libraries ▸ Browse: a plugin another plugin brings, in place of an Install button that would be refused. */
 .plugin-provided-label {
     -fx-padding: 3 10 3 10;
     -fx-background-color: -bm-band;
     -fx-border-color: -bm-divider;
     -fx-background-radius: 10;
     -fx-border-radius: 10;
+    -fx-font-size: 11px;
+}
+
+/* Plugins & Libraries: the header line naming what did not load or download. */
+.plugins-load-problems {
+    -fx-text-fill: -bm-severity-error-text;
     -fx-font-size: 11px;
 }
 

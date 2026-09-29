@@ -30,9 +30,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
-import javafx.stage.Window;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,13 +37,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * <b>Project ▸ Upgrade…</b> — every plugin this project installs, with the version it is on and the version
- * it could be on.
+ * The <b>Installed</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — every plugin this project installs,
+ * with the version it is on and the version it could be on.
  *
- * <p>This is <b>Upgrade SDK…</b> generalised, and the generalisation is the point: plugin #1 got a checked
- * migration and every other plugin got a pom edit, which is exactly the privilege the plugin platform exists
- * to refuse. The SDK appears here as an ordinary row. Since 2026-09-19 it is the <b>only</b> door: the two
- * pre-chosen variants of it in the Project menu are gone.
+ * <p>This was the <b>Upgrade…</b> window until 2026-09-29, one of five Project-menu entries about the same
+ * pom; it is a tab of {@link PluginsWindow} now, beside Browse and Libraries. It is <b>Upgrade SDK…</b>
+ * generalised, and the generalisation is the point: plugin #1 got a checked migration and every other plugin
+ * got a pom edit, which is exactly the privilege the plugin platform exists to refuse. The SDK appears here
+ * as an ordinary row, and this is the only place any plugin's version is changed — Libraries holds plugin
+ * rows back and Browse offers no Remove, so no plugin moves without its report.
  *
  * <h2>Saying what it is doing</h2>
  *
@@ -71,35 +70,32 @@ import java.util.Set;
  * <p>Upgrade, downgrade, remove and install. The first two are the same control and the same engine run with
  * the jars in a different order. <b>Remove is the same report with no target jar at all</b> — every call into
  * the plugin becomes a default value or a deleted line, every import of it is dropped, and a type the bot
- * writes <em>down</em> refuses the removal by name, because a declaration has no value to stand in for. That
- * refusal is the maintainer's constraint working rather than a gap: no operation here may leave the project
- * with a compilation error.
+ * writes <em>down</em> is left as written, marked and listed, because a declaration has no value to stand in
+ * for. It refused the removal until 2026-09-29; nothing here refuses now.
  *
  * <p><b>Install is the one operation with no report</b>, and needs none: nothing is migrated by adding a
- * dependency. It stays {@link ManagePluginsDialog}'s — the catalogue, the descriptions and the editor
- * dependencies live there — and is reached from this window's own button, so a user deciding what this
- * project should run does it in one place.
+ * dependency. It is {@link BrowsePluginsTab}'s — the catalogue, the descriptions and the editor dependencies
+ * live there — and this tab's <i>Add a plugin…</i> switches to it.
  *
  * <h2>One pass, not one pass per row</h2>
  *
- * <p>Applying takes one snapshot, repairs each row in sequence and writes the pom once — and refuses the
- * whole pass if any row cannot be repaired. {@link ProjectUpgrade} owns that rule rather than this class,
- * because it is not a layout decision: a project sitting on plugin A's new version with plugin B's old source
- * compiles against neither.
+ * <p>Applying takes one snapshot, repairs each row in sequence and writes the pom once. {@link ProjectUpgrade}
+ * owns that rule rather than this class, because it is not a layout decision: a project sitting on plugin A's
+ * new version with plugin B's old source compiles against neither. Nothing a check finds refuses the pass
+ * (2026-09-29); what cannot be repaired is left as written, marked and listed.
  *
  * <h2>Two plugins, one simple name</h2>
  *
  * <p>Call sites are attributed by the simple type name the source writes, so two plugins declaring
  * {@code Point} make that call unanswerable. The set of clashing names is computed once, from the installed
- * jars, and handed to every service built here — which then refuses to report rather than guessing. See
+ * jars, and handed to every service built here — which leaves those names out rather than guessing. See
  * {@link InstalledPlugin#ambiguousAmong}.
  */
-public final class ProjectUpgradeDialog {
+public final class InstalledPluginsTab {
 
     /** The state cell's base style class; {@code CHIP + "-ok"} and friends carry the colour. */
     private static final String CHIP = "upgrade-chip";
 
-    private final Window owner;
     private final ProjectConfig config;
     private final ProjectState state;
     private final LibraryService libraryService;
@@ -119,35 +115,44 @@ public final class ProjectUpgradeDialog {
     private final Label resultText = new Label();
     private final Button openReview = new Button("Open Review tab");
 
-    private Stage stage;
+    private final Runnable onAddPlugin;
+    private final Runnable onOpenReview;
+    private final Runnable onChanged;
+    private final VBox root = new VBox(12);
     private Row showing;
-    private Runnable onOpenReview;
 
     /**
-     * How the result block raises the Review tab. The tab is the shell's, so the shell supplies the verb —
-     * a dialog that opened it itself would be a second implementation of the menu entry.
+     * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
+     * @param onOpenReview the result block's <i>Open Review tab</i>; the tab is the shell's, so the shell
+     *                     supplies the verb, and the window closes behind it
+     * @param onChanged    after a pass or a removal wrote the pom, so the window's other tabs read it again
      */
-    public void setOnOpenReview(Runnable openReviewTab) {
-        this.onOpenReview = openReviewTab;
-    }
-
-    public ProjectUpgradeDialog(Window owner, ProjectConfig config, ProjectState state,
-                                LibraryService libraryService, PluginRegistry registry,
-                                JitPackSearch jitpack) {
-        this.owner = owner;
+    InstalledPluginsTab(ProjectConfig config, ProjectState state, LibraryService libraryService,
+                        PluginRegistry registry, JitPackSearch jitpack,
+                        Runnable onAddPlugin, Runnable onOpenReview, Runnable onChanged) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
         this.registry = registry;
         this.jitpack = jitpack;
+        this.onAddPlugin = onAddPlugin;
+        this.onOpenReview = onOpenReview;
+        this.onChanged = onChanged;
+        build();
     }
 
-    public void show() {
-        stage = new Stage();
-        stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Upgrade");
+    /** The tab's content. */
+    Node node() {
+        return root;
+    }
 
+    /** Reads the rows again — the pom changed, or the plugins were reloaded. */
+    void reload() {
+        progress.setVisible(true);
+        load();
+    }
+
+    private void build() {
         progress.setPrefSize(18, 18);
         progress.setVisible(true);
         applyButton.setDisable(true);
@@ -174,41 +179,32 @@ public final class ProjectUpgradeDialog {
         whyDisabled.getStyleClass().add("sdk-upgrade-empty");
 
         resultText.setWrapText(true);
-        openReview.setOnAction(e -> {
-            if (onOpenReview != null) onOpenReview.run();
-            stage.close();
-        });
+        openReview.setOnAction(e -> onOpenReview.run());
         resultBox.getStyleClass().add("sdk-upgrade-card");
         resultBox.setVisible(false);
         resultBox.setManaged(false);
 
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(16));
+        root.setPadding(new Insets(12, 0, 0, 0));
         root.getChildren().addAll(new HBox(8, hint, progress), table, reportScroll, resultBox, statusLabel,
                 whyDisabled, buttonBar());
-
-        stage.setScene(ThemedWindows.scene(root, 760, 620));
-        stage.show();
         load();
     }
 
     private Node buttonBar() {
-        Button close = new Button("Close");
-        close.setCancelButton(true);
-        close.setOnAction(e -> stage.close());
-
         // Install has no report and needs none, so it is a door to the catalogue rather than a fifth control
         // here: the descriptions, the editor dependencies and the id check all already live there.
         Button add = new Button("Add a plugin…");
-        add.setOnAction(e -> {
-            stage.close();
-            new ManagePluginsDialog(owner, libraryService, registry, jitpack).show();
-        });
+        add.setOnAction(e -> onAddPlugin.run());
+
+        // Every row to the version the registry verified (or the local build), each checked as it moves —
+        // the one click the "Update plugins…" banner leads to.
+        Button updateAll = new Button("Update all");
+        updateAll.setOnAction(e -> rows.forEach(Row::selectRecommended));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(8, add, spacer, applyButton, close);
+        HBox bar = new HBox(8, add, spacer, updateAll, applyButton);
         bar.setAlignment(Pos.CENTER_RIGHT);
         return bar;
     }
@@ -343,9 +339,25 @@ public final class ProjectUpgradeDialog {
          * version JitPack can build, which is what makes a <b>downgrade</b> reachable: the versions below the
          * installed one are in the same menu as the ones above it.
          */
+        /** The version this row is seeded with: the registry's verified one, the local build, or the installed. */
+        String recommended() {
+            return plugin.available().isBlank() ? plugin.installed() : plugin.available();
+        }
+
+        /** <i>Update all</i> for this row: the recommended version, checked when that is a move. */
+        void selectRecommended() {
+            if (versions.isDisable()) return;
+            String seed = recommended();
+            if (!seed.equals(versions.getValue())) {
+                versions.getSelectionModel().select(seed);  // the listener checks it
+            } else if (isMoving() && report == null && !checking) {
+                runCheck();
+            }
+        }
+
         void loadVersions() {
             seeding = true;
-            String seed = plugin.available().isBlank() ? plugin.installed() : plugin.available();
+            String seed = recommended();
             versions.getItems().setAll(seed);
             versions.getSelectionModel().select(seed);
             versions.setDisable(false);
@@ -507,8 +519,8 @@ public final class ProjectUpgradeDialog {
                                 repaired.leftAsWritten()), repaired.files() > 0);
                         // The table it was a row of is now wrong, and the clash set with it: one plugin
                         // fewer can make a name that was ambiguous answerable again.
-                        progress.setVisible(true);
-                        load();
+                        reload();
+                        onChanged.run();
                     }));
         }
 
@@ -641,8 +653,8 @@ public final class ProjectUpgradeDialog {
                     showResult(result.summary(), result.touchedSources());
                     // The table is about versions that have just changed, so it is read again — the same
                     // reason a removal reloads it.
-                    progress.setVisible(true);
-                    load();
+                    reload();
+                    onChanged.run();
                 }));
     }
 

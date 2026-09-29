@@ -881,32 +881,15 @@ public class CodeEditor {
     // IMPORTS
     // =================================================================================
 
-    /** The fully-qualified names of the current file's imports (read-only; no edit). */
-    public List<String> getImports() {
-        return ImportManager.listImports(getCompilationUnit());
-    }
+    // getImports/addImport/removeImport stood here until 2026-09-29, for Project ▸ Manage Imports. Every edit
+    // that writes a type already imports it (EditContext.addImport), and an unused import compiles, so the
+    // window listed what nobody needed to touch; it is deleted with them.
 
     // repairSdkImports() stood here until 2026-09-02. It repointed a bot's `com.botmaker.sdk.api.*` and
     // `com.botmaker.shared.ocr.*` imports at wherever those classes had moved to, which is the editor
     // carrying one library's package-move history. A plugin that renames its own types says so with
     // @ReplacedBy, which the migration path already reads; a package move nobody declared is a compile
     // error in a line the user can read, which is the honest outcome.
-
-    public void addImport(String qualifiedName) {
-        edit(getCompilationUnit(), EditKind.SIGNATURE, false, (cu, code) -> {
-            ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
-            ImportManager.addImport(cu, rewriter, qualifiedName);
-            return AstRewriteHelper.applyRewrite(rewriter, code);
-        });
-    }
-
-    public void removeImport(String qualifiedName) {
-        edit(getCompilationUnit(), EditKind.SIGNATURE, false, (cu, code) -> {
-            ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
-            ImportManager.removeImport(cu, rewriter, qualifiedName);
-            return AstRewriteHelper.applyRewrite(rewriter, code);
-        });
-    }
 
     /**
      * Removes {@code annotation} from the declaration it sits on — the ✕ on an annotation pill. A

@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * One upgrade report, laid out — the body of {@link com.botmaker.studio.ui.app.ProjectUpgradeDialog}.
+ * One upgrade report, laid out — the body of {@link com.botmaker.studio.ui.app.InstalledPluginsTab}.
  *
  * <p>It was {@code SdkUpgradeDialog}'s own {@code render} until 2026-09-15, and it moved out for the reason
  * that dialog's javadoc already gave for sharing a class between its two modes: <b>every sentence here

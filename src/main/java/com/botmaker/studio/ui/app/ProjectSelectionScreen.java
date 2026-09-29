@@ -47,8 +47,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private final ProjectCreator projectCreator;
 
     // The JitPackSearch and the "latest" convenience option went with the SDK version combo on 2026-09-04:
-    // this screen no longer asks for any version, so it reaches no version index. ManageLibrariesDialog
-    // still has its own.
+    // this screen no longer asks for any version, so it reaches no version index. Plugins & Libraries has
+    // its own.
 
     private final GitHubClient gitHubClient = new GitHubClient();
     private final GitHubAuth gitHubAuth = new GitHubAuth();
@@ -539,7 +539,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // template brings its author's own pom, versions and libraries, and keeping it is the point of a
         // template being a real published bot. Neither shape has a question to ask, so the control, its
         // JitPack fetch, the local-build decoration and the show/hide listener that toggled it against the
-        // template row are all gone. A project's SDK version is Project ▸ Manage Libraries' business, which
+        // template row are all gone. A project's SDK version is Project ▸ Plugins & Libraries' business, which
         // is where every other version already lives.
 
         // The standard-resolution dropdown and its landscape/portrait toggle were here until 2026-09-01.
@@ -582,9 +582,9 @@ public class ProjectSelectionScreen implements ProjectWindow {
             TemplateChoice now = templateCombo.getValue();
             startNote.setText(now == null || now.isBlank()
                     ? "A plain Java project — a pom, a source folder and a main(). Add the BotMaker SDK, or "
-                            + "any other plugin, from Project ▸ Manage Plugins."
+                            + "any other plugin, from Project ▸ Plugins & Libraries."
                     : "This template brings its own SDK and libraries — change them later in "
-                            + "Project ▸ Manage Libraries.");
+                            + "Project ▸ Plugins & Libraries.");
         };
         templateCombo.valueProperty().addListener((o, was, now) -> describeChoice.run());
         describeChoice.run();
@@ -725,7 +725,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     // loadSdkVersions and decorateLocalBuilds were here until 2026-09-04, with the SDK version combo they
     // filled: a JitPack fetch, a "latest" convenience row and a cell factory badging ~/.m2 dev builds. New
     // Project asks for no SDK version now, so they had nothing to fill. MavenService.localSdkVersions()
-    // survives with one caller, ManageLibrariesDialog, which is where a project's SDK version is chosen.
+    // survives for VersionInfo; a project's SDK version is chosen in Plugins & Libraries ▸ Installed.
 
     /** Result of the create-project dialog. */
     private record CreateRequest(String projectName, TemplateChoice template) {}

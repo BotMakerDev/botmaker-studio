@@ -331,18 +331,6 @@ public class ImportManager {
     // path reads; a package move nobody declared is a compile error on a line the user can read, which is
     // the honest outcome and the one this method's own javadoc preferred for unrecognised names anyway.
 
-    /** The fully-qualified names of the current file's import declarations, in source order. */
-    public static List<String> listImports(CompilationUnit cu) {
-        if (cu == null) return List.of();
-        List<String> names = new java.util.ArrayList<>();
-        for (Object o : cu.imports()) {
-            ImportDeclaration imp = (ImportDeclaration) o;
-            String name = imp.getName().getFullyQualifiedName();
-            names.add(imp.isOnDemand() ? name + ".*" : name);
-        }
-        return names;
-    }
-
     /**
      * Internal method to add import declaration.
      */

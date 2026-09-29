@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **One window for the pom (2026-09-29).** *Manage Libraries*, *Manage Plugins*, *Reload Plugins* and
+> *Upgrade…* are **Project ▸ Plugins & Libraries…** (`ui/app/PluginsWindow`): tabs **Installed**
+> (`InstalledPluginsTab`, was `ProjectUpgradeDialog` — the only place a plugin's version moves or a plugin is
+> removed), **Browse** (`BrowsePluginsTab`, was `ManagePluginsDialog` — install only; an installed row sends
+> to Installed) and **Libraries** (`LibrariesTab`, was `ManageLibrariesDialog` — plugin rows held back, the
+> SDK pin untouched), with Reload and the did-not-load line in the window. **Manage Imports is deleted**
+> (every edit imports what it writes). `LibraryService.watchPom()` (`PomWatcher`) rebinds when `pom.xml`
+> changes outside Studio; it compares with the pom last bound, so Studio's own writes do not rebind twice.
+> Read the older names below through this.
+
 > **SDK 2.0.0 (2026-09-23) changed two things the dated sections below describe.** (1) The SDK's plugin half
 > is `com.botmaker.sdk.plugin.*` now: read `sdk.internal.plugin.X` below as `sdk.plugin.X`, with `capture`
 > split into `plugin.screen` and `plugin.source`, `templates` into `plugin.pictures`, `internal.authoring`

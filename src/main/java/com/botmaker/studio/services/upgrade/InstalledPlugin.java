@@ -82,7 +82,7 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
      * description and the editor dependencies; a local build carries a version and nothing else; an
      * unlisted plugin carries only its coordinate. A coordinate matching <b>both</b> the registry and a
      * local build is a {@code LOCAL_BUILD} row keeping the registry's editor dependencies, which is exactly
-     * what {@code ManagePluginsDialog.merge} already does and for the same reason: a developer's own build
+     * what {@code BrowsePluginsTab.merge} already does and for the same reason: a developer's own build
      * of a plugin needs what the published one needs.
      *
      * @param declared    what the pom declares — {@code LibraryService.declaredLibraries()}

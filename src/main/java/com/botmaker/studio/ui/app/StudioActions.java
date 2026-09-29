@@ -1,12 +1,10 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.docs.StudioAction;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.services.CodeEditorService;
@@ -19,18 +17,12 @@ import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
 import com.botmaker.studio.ui.app.overlay.ProgramShapeOverlay;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import com.botmaker.session.launch.BackgroundLauncher;
-import com.botmaker.studio.ui.render.theme.ThemedWindows;
-import javafx.application.Platform;
-import javafx.scene.control.Alert;
 import javafx.stage.Stage;
-
-import java.util.List;
 
 /**
  * Every top-level action the shell offers, built once and wired into the menu bar and the toolbar.
@@ -102,17 +94,13 @@ final class StudioActions {
         menuBar.setProjectPath(config.projectPath());
 
         // --- Project ---
-        menuBar.setOnManageLibraries(this::openManageLibraries);
-        menuBar.setOnManagePlugins(this::openManagePlugins);
-        menuBar.setOnReloadPlugins(this::reloadPlugins);
-        menuBar.setOnUpgradeProject(this::openProjectUpgrade);
-        // Nothing to wire for Upgrade SDK... or Modernise...: both entries are gone since 2026-09-19. The
-        // first was Upgrade... with the SDK's row pre-chosen, the second was the same report with no version
-        // change, and neither could do anything the general window cannot.
+        // Manage Libraries, Manage Plugins, Reload Plugins, Upgrade... and Manage Imports were five entries
+        // until 2026-09-29; the first four are the tabs and the header of one window now, and Manage Imports
+        // is deleted (every edit imports what it writes).
+        menuBar.setOnPlugins(() -> openPlugins(PluginsWindow.Section.INSTALLED));
         // Nothing to wire for Project Setup: that checklist is the SDK plugin's 📋 Project Setup item since
         // 2026-08-31. Every row of it reads a file the plugin owns, so the shell could only ever have shown
         // it by asking the plugin for the answers.
-        menuBar.setOnManageImports(this::openManageImports);
         // Nothing to wire for the Activity Flow: the graph editor is the SDK plugin's 🔀 Activity Flow item
         // since 2026-09-11. A flow's nodes, edges and outcomes are that plugin's vocabulary, so the shell
         // could only ever have drawn it by learning what a branch is — and the file it writes is the
@@ -187,70 +175,13 @@ final class StudioActions {
     }
 
     /**
-     * Public because the SDK-floor banner on the canvas offers it too, not only the Project menu — that
-     * banner exists precisely to send the user here, and routing it through the menu callback would mean the
-     * banner could silently stop working if the wiring changed.
+     * <b>Project ▸ Plugins &amp; Libraries…</b>, on {@code section}. The canvas banners open it too — a plugin
+     * missing goes to Browse, a plugin that did not load to Installed — so it takes the tab rather than each
+     * door having a method of its own.
      */
-    public void openManageLibraries() {
-        new ManageLibrariesDialog(primaryStage, libraryService, mavenCentralSearch, jitPackSearch).show();
-    }
-
-    /**
-     * The registry browser, which installs through the same {@link LibraryService} the dialog above uses —
-     * a plugin is an ordinary dependency, and the registry only answers where to find its coordinate.
-     */
-    void openManagePlugins() {
-        new ManagePluginsDialog(primaryStage, libraryService, pluginRegistry, jitPackSearch).show();
-    }
-
-    /**
-     * Re-resolves the project's classpath and re-binds its plugins, with the pom untouched.
-     *
-     * <p>This is the plugin author's inner loop: {@code mvn install} the plugin into {@code ~/.m2}, reload,
-     * see the change. The coordinate resolves to the same jar path either way, so nothing about the project
-     * has changed and there is nothing to write — what moved is the jar's bytes, and a fresh classloader is
-     * the whole of what it takes to see them.
-     *
-     * <p>Reported as an alert rather than silently: a reload that found the same plugins as before looks
-     * exactly like a reload that did nothing, and an author who forgot to run {@code mvn install} needs to
-     * be able to tell those apart.
-     */
-    void reloadPlugins() {
-        libraryService.reloadPlugins().whenComplete((ignored, failure) -> Platform.runLater(() -> {
-            if (failure != null) {
-                ThemedWindows.alert(Alert.AlertType.ERROR,
-                        "Could not reload plugins: " + failure.getMessage()).showAndWait();
-                return;
-            }
-            List<StudioPlugin> plugins = PluginHost.plugins();
-            StringBuilder names = new StringBuilder();
-            for (StudioPlugin plugin : plugins) {
-                names.append(names.isEmpty() ? "" : "\n").append("• ").append(plugin.displayName());
-            }
-            ThemedWindows.alert(Alert.AlertType.INFORMATION,
-                    plugins.size() + " plugin(s) loaded:\n" + names).showAndWait();
-        }));
-    }
-
-    /**
-     * Every plugin the project declares, in one table — one snapshot, one pom write. The SDK is a row in it
-     * like any other plugin, which is the whole point: a checked migration was plugin #1's privilege until
-     * 2026-09-15.
-     *
-     * <p><b>Upgrade SDK…</b> and <b>Modernise…</b> stood beside it until 2026-09-19 and are DELETED, not
-     * moved: both were this window with one row pre-chosen, and a menu that offers the general case plus two
-     * special cases of it teaches the user that the three do different things. The engine keeps
-     * {@code PluginUpgradeService.modernise()} — it is a service verb, and nothing in the UI calls it today.
-     */
-    void openProjectUpgrade() {
-        ProjectUpgradeDialog dialog = new ProjectUpgradeDialog(primaryStage, config, state, libraryService,
-                pluginRegistry, jitPackSearch);
-        dialog.setOnOpenReview(menuBar::reviewChanges);
-        dialog.show();
-    }
-
-    private void openManageImports() {
-        new ManageImportsDialog(primaryStage, codeEditorService).show();
+    void openPlugins(PluginsWindow.Section section) {
+        new PluginsWindow(primaryStage, config, state, libraryService, pluginRegistry, jitPackSearch,
+                mavenCentralSearch, menuBar::reviewChanges).show(section);
     }
 
     /**

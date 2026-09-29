@@ -430,9 +430,9 @@ public class UIManager implements ProjectWindow {
         // --- 3. Center: Code Canvas ---
         editorCanvas = new EditorCanvas(codeEditorService, eventBus, state.isReaderMode(),
                 config.projectName(), this::switchToEditorMode,
-                () -> PluginOwners.absent(config), actions::openManagePlugins,
+                () -> PluginOwners.absent(config), () -> actions.openPlugins(PluginsWindow.Section.BROWSE),
                 () -> EditorCanvas.loadProblemLines(PluginHost.failures(), libraryService.unresolved()),
-                actions::openProjectUpgrade);
+                () -> actions.openPlugins(PluginsWindow.Section.INSTALLED));
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.

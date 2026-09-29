@@ -4,15 +4,13 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
@@ -25,22 +23,27 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
-import javafx.stage.Window;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * Modal dialog for adding / removing the project's user libraries. Coordinates are entered in a single
- * {@code group:artifact[:version]} field with IntelliJ-style suggestions fetched live from Maven Central
- * ({@link MavenCentralSearch}); applying changes delegates to {@link LibraryService}, which rewrites the
- * pom, re-resolves the classpath and refreshes the type index off the FX thread.
+ * The <b>Libraries</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — the project's ordinary Maven
+ * dependencies. It was the <b>Manage Libraries</b> window until 2026-09-29. Coordinates are entered in a
+ * single {@code group:artifact[:version]} field with IntelliJ-style suggestions fetched live from Maven
+ * Central ({@link MavenCentralSearch}); applying delegates to {@link LibraryService}, which rewrites the pom,
+ * re-resolves the classpath and refreshes the type index off the FX thread.
+ *
+ * <p><b>Plugins are not rows here.</b> The SDK was a pinned row with an editable version, and any other
+ * plugin an ordinary one — so a plugin's version could move with a cell edit, past the report and the repair
+ * the Installed tab runs for exactly that change. A declared library whose jar is a plugin is held back,
+ * written again unchanged on Apply, and changed only in Installed.
  */
-public class ManageLibrariesDialog {
+final class LibrariesTab {
 
     private static final int SUGGESTION_LIMIT = 15;
     private static final int VERSION_LIMIT = 40;
@@ -48,62 +51,65 @@ public class ManageLibrariesDialog {
     /** Sentinel version that resolves to the newest concrete version at apply time (see {@link #resolveLatest}). */
     private static final String LATEST = "latest";
 
-    private final Window owner;
     private final LibraryService libraryService;
     private final MavenCentralSearch search;
     private final JitPackSearch jitpack;
+    private final Predicate<UserLibrary> isPlugin;
+    private final Runnable onChanged;
 
-    /** All rows incl. the pinned SDK row (always first); the SDK is identified by its coordinate. */
+    /** The rows shown: every user library that is not a plugin. */
     private final ObservableList<UserLibrary> libraries = FXCollections.observableArrayList();
+    /** The user libraries that are plugins: not shown, written back as they are. */
+    private List<UserLibrary> heldPlugins = List.of();
     private final TextField coordinateField = new TextField();
     private final ComboBox<String> versionCombo = new ComboBox<>();
     private final ContextMenu suggestions = new ContextMenu();
     private final PauseTransition debounce = new PauseTransition(Duration.millis(250));
     private final Label statusLabel = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
+    private final Button apply = new Button("Apply");
+    private final Button revert = new Button("Revert");
+    private final VBox root = new VBox(12);
 
-    private Stage stage;
-
-    public ManageLibrariesDialog(Window owner, LibraryService libraryService,
-                                 MavenCentralSearch search, JitPackSearch jitpack) {
-        this.owner = owner;
+    /**
+     * @param isPlugin whether a declared library's jar is a plugin ({@code InstalledPlugin.jarDeclaresPlugin});
+     *                 asked off the FX thread, since it may resolve the jar
+     * @param onChanged after Apply wrote the pom, so the window's other tabs read it again
+     */
+    LibrariesTab(LibraryService libraryService, MavenCentralSearch search, JitPackSearch jitpack,
+                 Predicate<UserLibrary> isPlugin, Runnable onChanged) {
         this.libraryService = libraryService;
         this.search = search;
         this.jitpack = jitpack;
-    }
+        this.isPlugin = isPlugin;
+        this.onChanged = onChanged;
 
-    /** True for the pinned BotMaker SDK row, which can be re-versioned but not removed. */
-    private static boolean isSdk(UserLibrary lib) {
-        return lib != null
-                && MavenService.SDK_GROUP_ID.equals(lib.groupId())
-                && MavenService.SDK_ARTIFACT_ID.equals(lib.artifactId());
-    }
-
-    public void show() {
-        stage = new Stage();
-        stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Manage Libraries");
-
-        // The pinned SDK row is first — WHEN THE POM DECLARES ONE. It was added unconditionally until
-        // 2026-09-05, versioned from currentSdkVersion(), which has answered "" for a pom naming no SDK
-        // since blank projects stopped pinning one (2026-09-04). So a blank project's Manage Libraries
-        // listed a botmaker-sdk it does not have, at no version, and offered to re-version it. Saving was
-        // harmless — writeUserLibraries treats a blank version as "pin nothing, add nothing" — which is
-        // exactly why nobody noticed: the dialog was the only thing that believed it.
-        String sdkVersion = libraryService.currentSdkVersion();
-        if (!sdkVersion.isBlank()) {
-            libraries.add(new UserLibrary(
-                    MavenService.SDK_GROUP_ID, MavenService.SDK_ARTIFACT_ID, sdkVersion));
-        }
-        libraries.addAll(libraryService.currentLibraries());
-
-        VBox root = new VBox(12);
-        root.setPadding(new Insets(16));
+        root.setPadding(new Insets(12, 0, 0, 0));
         root.getChildren().addAll(buildTable(), buildAddRow(), buildButtonBar());
+        reload();
+    }
 
-        stage.setScene(ThemedWindows.scene(root, 560, 460));
-        stage.show();
+    /** The tab's content. */
+    Node node() {
+        return root;
+    }
+
+    /** Reads the pom again, dropping any edit not applied — the Revert button, and after another tab wrote. */
+    void reload() {
+        statusLabel.setText("");
+        setBusy(true);
+        CompletableFuture.supplyAsync(() -> {
+            List<UserLibrary> declared = libraryService.currentLibraries();
+            return declared.stream().collect(Collectors.partitioningBy(isPlugin));
+        }).whenComplete((split, err) -> Platform.runLater(() -> {
+            setBusy(false);
+            if (err != null) {
+                error("Could not read this project's libraries: " + rootMessage(err));
+                return;
+            }
+            heldPlugins = List.copyOf(split.get(true));
+            libraries.setAll(split.get(false));
+        }));
     }
 
     // -------------------------------------------------------------------------
@@ -119,8 +125,7 @@ public class ManageLibrariesDialog {
         TableColumn<UserLibrary, String> groupCol = new TableColumn<>("Group");
         groupCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().groupId()));
         TableColumn<UserLibrary, String> artifactCol = new TableColumn<>("Artifact");
-        artifactCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(
-                c.getValue().artifactId() + (isSdk(c.getValue()) ? "  (SDK)" : "")));
+        artifactCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().artifactId()));
         TableColumn<UserLibrary, String> versionCol = new TableColumn<>("Version");
         versionCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().version()));
         versionCol.setCellFactory(col -> new VersionCell());
@@ -128,12 +133,11 @@ public class ManageLibrariesDialog {
 
         Button removeBtn = new Button("Remove");
         removeBtn.setDisable(true);
-        // Removable only when a non-SDK row is selected (the SDK is pinned).
         table.getSelectionModel().selectedItemProperty().addListener(
-                (obs, old, sel) -> removeBtn.setDisable(sel == null || isSdk(sel)));
+                (obs, old, sel) -> removeBtn.setDisable(sel == null));
         removeBtn.setOnAction(e -> {
             UserLibrary sel = table.getSelectionModel().getSelectedItem();
-            if (sel != null && !isSdk(sel)) libraries.remove(sel);
+            if (sel != null) libraries.remove(sel);
         });
 
         HBox tableButtons = new HBox(removeBtn);
@@ -141,12 +145,10 @@ public class ManageLibrariesDialog {
 
         Label heading = new Label("Project libraries");
         heading.setStyle("-fx-font-weight: bold;");
-        // "if this project has one" rather than a flat claim: a project that names no plugin has no SDK row
-        // at all, and a sentence about a row that is not on screen reads as a fault in the dialog.
-        Label hint = new Label("Double-click a version to change it. The BotMaker SDK, if this project has"
-                + " one, is pinned and cannot be removed here — use Manage Plugins.");
+        Label hint = new Label("Double-click a version to change it. Plugins are not listed here: their"
+                + " versions change in Installed, where the bot's calls into them are checked.");
         hint.setWrapText(true);
-        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        hint.getStyleClass().add("sdk-upgrade-empty");
         VBox box = new VBox(6, heading, table, hint, tableButtons);
         VBox.setVgrow(table, Priority.ALWAYS);
         return box;
@@ -154,7 +156,7 @@ public class ManageLibrariesDialog {
 
     /**
      * Editable version cell backed by a {@link ComboBox} that lazily loads available versions on edit —
-     * from JitPack for {@code com.github.*} coordinates (incl. the SDK), otherwise Maven Central. Committing
+     * from JitPack for {@code com.github.*} coordinates, otherwise Maven Central. Committing
      * replaces the immutable {@link UserLibrary} at this row with the chosen version.
      */
     private final class VersionCell extends javafx.scene.control.TableCell<UserLibrary, String> {
@@ -210,14 +212,9 @@ public class ManageLibrariesDialog {
             CompletableFuture<List<String>> future = lib.groupId().startsWith("com.github.")
                     ? jitpack.fetchVersions(lib.groupId(), lib.artifactId())
                     : search.fetchVersions(lib.groupId(), lib.artifactId(), VERSION_LIMIT);
-            boolean isSdk = MavenService.SDK_GROUP_ID.equals(lib.groupId())
-                    && MavenService.SDK_ARTIFACT_ID.equals(lib.artifactId());
-            List<String> localSdk = isSdk ? MavenService.localSdkVersions() : List.of();
             future.thenAccept(versions -> Platform.runLater(() -> {
                 loading = true;
-                List<String> items = new java.util.ArrayList<>(localSdk); // local dev builds first, if any
-                items.addAll(withLatest(versions));
-                combo.getItems().setAll(items);
+                combo.getItems().setAll(withLatest(versions));
                 if (current != null && !current.isBlank()) combo.setValue(current);
                 loading = false;
             }));
@@ -378,6 +375,10 @@ public class ManageLibrariesDialog {
             error(lib.groupArtifact() + " is already in the list.");
             return;
         }
+        if (heldPlugins.stream().anyMatch(l -> l.groupArtifact().equals(lib.groupArtifact()))) {
+            error(lib.groupArtifact() + " is a plugin this project installs; change it in Installed.");
+            return;
+        }
         libraries.add(lib);
         coordinateField.clear();
         versionCombo.getItems().clear();
@@ -385,32 +386,30 @@ public class ManageLibrariesDialog {
     }
 
     // -------------------------------------------------------------------------
-    // Apply / Cancel
+    // Apply / Revert
     // -------------------------------------------------------------------------
 
     private HBox buildButtonBar() {
         progress.setVisible(false);
         progress.setPrefSize(20, 20);
         statusLabel.setStyle("-fx-text-fill: #b00020;");
+        statusLabel.setWrapText(true);
 
-        Button cancel = new Button("Cancel");
-        cancel.setOnAction(e -> stage.close());
-
-        Button apply = new Button("Apply");
-        apply.setDefaultButton(true);
-        apply.setOnAction(e -> apply(apply, cancel));
+        // Revert, not Cancel: the window stays open over its other tabs, so dropping the edits is the verb.
+        revert.setOnAction(e -> reload());
+        apply.setOnAction(e -> apply());
 
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, progress, statusLabel, spacer, cancel, apply);
+        HBox bar = new HBox(10, progress, statusLabel, spacer, revert, apply);
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
     }
 
-    private void apply(Button apply, Button cancel) {
+    private void apply() {
         statusLabel.setStyle("-fx-text-fill: #b00020;");
         statusLabel.setText("");
-        setBusy(apply, cancel, true);
+        setBusy(true);
 
         // Resolve any "latest" versions to their concrete newest before writing the pom, so the pom stays
         // pinned to a real version. Each row resolves independently and off the FX thread.
@@ -431,37 +430,34 @@ public class ManageLibrariesDialog {
                             .orElse(null);
                     if (unresolved != null) {
                         Platform.runLater(() -> {
-                            setBusy(apply, cancel, false);
+                            setBusy(false);
                             error("Could not resolve a version for " + unresolved.groupArtifact() + ".");
                         });
                         return;
                     }
 
-                    String sdkVersion = libs.stream()
-                            .filter(ManageLibrariesDialog::isSdk)
-                            .map(UserLibrary::version)
-                            .findFirst()
-                            .orElse("");
-                    List<UserLibrary> userLibs = libs.stream()
-                            .filter(l -> !isSdk(l))
-                            .collect(Collectors.toList());
-
-                    libraryService.updateLibraries(userLibs, sdkVersion)
+                    // The plugins held back go back in as they were, and the SDK pin is left where it is:
+                    // neither is this tab's to move.
+                    List<UserLibrary> userLibs = new ArrayList<>(libs);
+                    userLibs.addAll(heldPlugins);
+                    libraryService.updateLibraries(userLibs, libraryService.currentSdkVersion())
                             .whenComplete((ok, err) -> Platform.runLater(() -> {
-                                setBusy(apply, cancel, false);
+                                setBusy(false);
                                 if (err != null) {
                                     error(rootMessage(err));
                                 } else {
-                                    stage.close();
+                                    statusLabel.setStyle("-fx-text-fill: gray;");
+                                    statusLabel.setText("Saved to pom.xml.");
+                                    onChanged.run();
                                 }
                             }));
                 });
     }
 
-    private void setBusy(Button apply, Button cancel, boolean busy) {
+    private void setBusy(boolean busy) {
         progress.setVisible(busy);
         apply.setDisable(busy);
-        cancel.setDisable(busy);
+        revert.setDisable(busy);
         coordinateField.setDisable(busy);
         versionCombo.setDisable(busy);
     }

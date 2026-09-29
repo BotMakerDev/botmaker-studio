@@ -124,7 +124,7 @@ GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles a
 - **Edit** — "Undo" (`Ctrl+Z` → `UndoRequestedEvent`), "Redo" (`Ctrl+Y` → `RedoRequestedEvent`);
   Cut/Copy/Paste are **disabled placeholders**.
 - **View** — Zoom In/Out/Reset = **disabled placeholders**.
-- **Project** — Manage Libraries…, Manage Imports…, Manage Activities…, Set Activity Values…,
+- **Project** — Plugins & Libraries… (Installed / Browse / Libraries tabs, Reload), Manage Activities…, Set Activity Values…,
   Resource Manager…, Browse Gallery…, Publish to Gallery…, Project Repository on GitHub (disabled until
   published).
 - **Help** — Studio/SDK on GitHub, "Check for Updates…" (`UpdateService`, modal progress `Stage`),
@@ -187,8 +187,7 @@ Two more searchable popup menus mirror the statement menu — the **expression "
 | Dialog | Title | Heavy dep |
 |---|---|---|
 | `GalleryDialog` | "Bot Gallery" (Browse/Installed tabs) | **network** |
-| `ManageLibrariesDialog` | "Manage Libraries" (`TableView` Group/Artifact/Version) | **JitPack/Maven network** on version load |
-| `ManageImportsDialog` | "Manage Imports" (list + autocomplete add) | network-free |
+| `PluginsWindow` | "Plugins & Libraries" (Installed / Browse / Libraries tabs) | **registry, JitPack/Maven network** |
 | `ManageActivitiesDialog` | "Manage Activities" (editable table) | network-free |
 | `SetActivityValuesDialog` | "Set Activity Values" (per-type widgets) | network-free |
 | `ManageCaptureTargetsDialog` | "Capture Targets" | **native** window enumeration |

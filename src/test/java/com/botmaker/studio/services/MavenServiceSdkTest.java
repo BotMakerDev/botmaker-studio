@@ -183,7 +183,7 @@ class MavenServiceSdkTest {
      * palette and one line on stderr. Nothing failed to compile at any point.
      *
      * <p>The list is the caller's now, out of the plugin's own registry entry, so this test hands it in the
-     * way {@code ManagePluginsDialog} does.
+     * way {@code BrowsePluginsTab} does.
      */
     @Test
     void installingAPluginDeclaresTheEditorDependenciesItWasGiven() throws Exception {

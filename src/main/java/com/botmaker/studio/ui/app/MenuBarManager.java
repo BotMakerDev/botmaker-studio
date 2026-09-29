@@ -37,11 +37,7 @@ public class MenuBarManager {
     private final MenuBar menuBar;
     private final Stage primaryStage;
     private Consumer<Void> onSelectProject;
-    private Runnable onManageLibraries;
-    private Runnable onManagePlugins;
-    private Runnable onReloadPlugins;
-    private Runnable onUpgradeProject;
-    private Runnable onManageImports;
+    private Runnable onPlugins;
     private Runnable onParameters;
     /** Kept so the entry can be renamed once the project's settings model is known. */
     private Runnable onRecoverProjectFiles;
@@ -228,42 +224,13 @@ public class MenuBarManager {
         // item now, and a menu is not a surface a plugin contributes to — a bar item is. The checklist reads
         // only files that plugin owns, so there is nothing here to open it with.
 
-        MenuItem manageLibrariesItem = new MenuItem("Manage Libraries...");
-        manageLibrariesItem.setOnAction(e -> {
-            if (onManageLibraries != null) onManageLibraries.run();
-        });
-
-        // Beside Manage Libraries because a plugin IS a library — the registry browser is only a way to find
-        // the coordinate, which is the one thing META-INF/services cannot tell anybody.
-        MenuItem managePluginsItem = new MenuItem("Manage Plugins...");
-        managePluginsItem.setOnAction(e -> {
-            if (onManagePlugins != null) onManagePlugins.run();
-        });
-
-        // The plugin author's loop: rebuild into ~/.m2, reload, see the change. Nothing about the project
-        // changes — the coordinate resolves to the same jar path — so this is deliberately not a library
-        // edit, and it is here rather than hidden behind a rebuild because the jar's bytes are the only
-        // thing that moved and nothing else would notice.
-        MenuItem reloadPluginsItem = new MenuItem("Reload Plugins");
-        reloadPluginsItem.setOnAction(e -> {
-            if (onReloadPlugins != null) onReloadPlugins.run();
-        });
-
-        // Beside Manage Libraries, not inside it: a version change is the one library edit that can stop the
-        // bot compiling, and that deserves a report rather than a cell edit. Every plugin the pom declares is
-        // a row, the SDK included.
-        //
-        // "Upgrade SDK..." and "Modernise..." stood under it until 2026-09-19 and are DELETED, not moved:
-        // the first was this window with the SDK's row pre-chosen, the second the same report with no version
-        // change. Three entries for one report made them read as three different operations.
-        MenuItem upgradeProjectItem = new MenuItem("Upgrade...");
-        upgradeProjectItem.setOnAction(e -> {
-            if (onUpgradeProject != null) onUpgradeProject.run();
-        });
-
-        MenuItem manageImportsItem = new MenuItem("Manage Imports...");
-        manageImportsItem.setOnAction(e -> {
-            if (onManageImports != null) onManageImports.run();
+        // One entry for everything the pom declares (2026-09-29). Manage Libraries, Manage Plugins, Reload
+        // Plugins and Upgrade... stood here as four windows over the same pom, each unaware of the others;
+        // they are PluginsWindow's tabs and header now. Manage Imports is deleted: every edit imports what it
+        // writes, and an unused import compiles.
+        MenuItem pluginsItem = new MenuItem("Plugins & Libraries...");
+        pluginsItem.setOnAction(e -> {
+            if (onPlugins != null) onPlugins.run();
         });
 
         // No Activity Flow entry since 2026-09-11: the graph editor is the SDK plugin's 🔀 Activity Flow
@@ -323,8 +290,7 @@ public class MenuBarManager {
         });
 
         projectMenu.getItems().addAll(
-                manageLibrariesItem, managePluginsItem, reloadPluginsItem, upgradeProjectItem,
-                manageImportsItem,
+                pluginsItem,
                 new SeparatorMenuItem(),
                 parametersItem,
                 new SeparatorMenuItem(),
@@ -783,26 +749,9 @@ public class MenuBarManager {
         this.onSelectProject = callback;
     }
 
-    /**
-     * Sets the callback for when "Manage Libraries..." is clicked
-     */
-    public void setOnManageLibraries(Runnable callback) {
-        this.onManageLibraries = callback;
-    }
-
-    /** Sets the callback for when "Manage Plugins..." is clicked — the registry browser. */
-    public void setOnManagePlugins(Runnable callback) {
-        this.onManagePlugins = callback;
-    }
-
-    /** Sets the callback for when "Reload Plugins" is clicked — re-resolve and re-bind, no pom write. */
-    public void setOnReloadPlugins(Runnable callback) {
-        this.onReloadPlugins = callback;
-    }
-
-    /** Sets the callback for "Upgrade..." — the same report, for every plugin the project declares. */
-    public void setOnUpgradeProject(Runnable callback) {
-        this.onUpgradeProject = callback;
+    /** Sets the callback for "Plugins & Libraries..." — installed plugins, the registry, libraries, reload. */
+    public void setOnPlugins(Runnable callback) {
+        this.onPlugins = callback;
     }
 
     /** Sets the callback for when "Review Changes" is clicked — raises the Review tab. */
@@ -817,13 +766,6 @@ public class MenuBarManager {
      */
     public void reviewChanges() {
         if (onReviewChanges != null) onReviewChanges.run();
-    }
-
-    /**
-     * Sets the callback for when "Manage Imports..." is clicked
-     */
-    public void setOnManageImports(Runnable callback) {
-        this.onManageImports = callback;
     }
 
     /** Sets the callback for when "Recover Project Files..." is clicked. */

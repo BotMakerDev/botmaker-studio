@@ -782,7 +782,7 @@ public final class MavenService {
      * and here that is this pom, because this pom is what names the plugin. What a plugin needs is a fact
      * about the plugin, though, and this method used to hold it as {@code if (isSdk(…))} over a list spelled
      * out in Studio's own source — the one privilege plugin #1 had, and exactly the privilege
-     * {@code ManagePluginsDialog}'s javadoc says a plugin platform must not grant. The list comes from the
+     * {@code BrowsePluginsTab}'s javadoc says a plugin platform must not grant. The list comes from the
      * caller now, out of the plugin's registry entry, and this method has no idea which plugin it is
      * installing.
      *

@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The sentence Manage Plugins says about plugins that did not load.
+ * The sentence Plugins &amp; Libraries says about plugins that did not load (Manage Plugins said it until
+ * 2026-09-29, inside one of five windows).
  *
  * <p><b>Why this is worth a test at all:</b> three incidents in this project's record end with the same
  * words — <i>an empty palette and one line on stderr</i>. The line was printed where nobody reads, and
@@ -24,12 +25,12 @@ class PluginFailureTextTest {
 
     @Test
     void everything_loading_says_nothing() {
-        assertEquals("", ManagePluginsDialog.failureText(List.of()));
+        assertEquals("", PluginsWindow.failureText(List.of()));
     }
 
     @Test
     void one_failure_names_the_plugin_and_the_cause() {
-        String text = ManagePluginsDialog.failureText(List.of(new PluginLoader.PluginFailure(
+        String text = PluginsWindow.failureText(List.of(new PluginLoader.PluginFailure(
                 "com.example.demo.ExamplePlugin",
                 new NoClassDefFoundError("com/botmaker/plugin/toolkit/AbstractStudioPlugin"))));
 
@@ -42,7 +43,7 @@ class PluginFailureTextTest {
 
     @Test
     void two_failures_are_counted_and_both_named() {
-        String text = ManagePluginsDialog.failureText(List.of(
+        String text = PluginsWindow.failureText(List.of(
                 new PluginLoader.PluginFailure("a.One", new IllegalStateException("no display")),
                 new PluginLoader.PluginFailure("b.Two", new IllegalStateException("no display"))));
 
@@ -53,7 +54,7 @@ class PluginFailureTextTest {
     /** A cause with no message still says something, because a blank line is a line nobody can act on. */
     @Test
     void a_cause_with_no_message_falls_back_to_its_type() {
-        String text = ManagePluginsDialog.failureText(
+        String text = PluginsWindow.failureText(
                 List.of(new PluginLoader.PluginFailure("a.One", new NoClassDefFoundError())));
 
         assertTrue(text.contains("NoClassDefFoundError"), text);

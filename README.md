@@ -217,14 +217,16 @@ The list shows what sits directly under `~/BotMakerProjects/`, plus the projects
 is opened with **Open Folder…**, and is listed from then on.
 
 **SDK types missing from autocomplete**
-Open **Project ▸ Manage Libraries…** and confirm the BotMaker SDK version is set; applying refreshes the type
-index. The SDK resolves from JitPack, so the first fetch of a version needs a network connection.
+Open **Project ▸ Plugins & Libraries…** and confirm the Installed tab lists the BotMaker SDK; **Reload
+plugins** refreshes the type index. The SDK resolves from JitPack, so the first fetch of a version needs a
+network connection.
 
 **A banner says the project's SDK is too old**
 The project still opens, and everything in it stays editable, buildable and runnable — but the files Studio
 generates are built from templates that only newer SDKs ship, so the Activity Flow cannot be saved until you
-run **Project ▸ Upgrade…** and move the SDK's row to a newer version. The upgrade repairs the calls that
-changed and leaves everything else you wrote untouched.
+open **Project ▸ Plugins & Libraries…** and move the SDK's row in the Installed tab to a newer version (or
+press **Update all**). The upgrade repairs the calls that changed, marks and lists what it could not, and
+leaves everything else you wrote untouched.
 
 ## Contributing
 

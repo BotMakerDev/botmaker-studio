@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Manage Plugins refusing to declare a plugin another plugin already brings.
+ * Plugins &amp; Libraries ▸ Browse refusing to declare a plugin another plugin already brings.
  *
  * <p>The rule is the umbrella's: a plugin-to-plugin dependency is an ordinary Maven dependency, and nothing
  * may declare the depended-on plugin <em>beside</em> the plugin that brings it — Maven's nearest-wins would
@@ -32,7 +32,7 @@ class PluginAlreadyProvidedTest {
 
     @Test
     void aPluginAnotherPluginBringsIsRefusedWithTheReason() {
-        String refusal = ManagePluginsDialog.alreadyProvided(BASICS,
+        String refusal = BrowsePluginsTab.alreadyProvided(BASICS,
                 List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "1.1.12")),
                 List.of("com.botmaker.sdk", "com.botmaker.basics"));
 
@@ -43,7 +43,7 @@ class PluginAlreadyProvidedTest {
 
     @Test
     void aPluginThePomAlreadyDeclaresIsNeverRefused() {
-        assertEquals("", ManagePluginsDialog.alreadyProvided(BASICS,
+        assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS,
                 List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-plugin-basics", "0.0.5")),
                 List.of("com.botmaker.sdk", "com.botmaker.basics")),
                 "re-installing is idempotent by coordinate and must stay possible");
@@ -51,7 +51,7 @@ class PluginAlreadyProvidedTest {
 
     @Test
     void aPluginNothingBringsInstallsNormally() {
-        assertEquals("", ManagePluginsDialog.alreadyProvided(BASICS, List.of(), List.of("com.botmaker.sdk")));
+        assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS, List.of(), List.of("com.botmaker.sdk")));
     }
 
     /** An entry with no id is every entry written before the registry had one; it is never refused. */
@@ -59,6 +59,6 @@ class PluginAlreadyProvidedTest {
     void anEntryWithNoIdIsNeverRefused() {
         PluginRegistry.Plugin anonymous = entry("", "Nameless", "g:a");
 
-        assertEquals("", ManagePluginsDialog.alreadyProvided(anonymous, List.of(), List.of("", "x")));
+        assertEquals("", BrowsePluginsTab.alreadyProvided(anonymous, List.of(), List.of("", "x")));
     }
 }

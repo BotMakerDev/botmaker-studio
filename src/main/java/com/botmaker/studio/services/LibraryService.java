@@ -45,6 +45,13 @@ public final class LibraryService {
 
     private volatile List<String> unresolved = List.of();
 
+    /**
+     * The pom text the editor is bound to, so {@link #pomChanged()} can tell an outside edit from a write this
+     * service already bound. Written only on {@link #rebinds}.
+     */
+    private String boundPom;
+    private PomWatcher pomWatcher;
+
     public LibraryService(ProjectConfig config,
                           ProjectState state,
                           TypeSummaryManager typeIndex,
@@ -116,13 +123,14 @@ public final class LibraryService {
      */
     private CompletableFuture<Void> edit(PomWrite write, List<String> named) {
         return CompletableFuture.runAsync(() -> {
-            Path pom = config.projectPath().resolve("pom.xml");
+            Path pom = pom();
             String before = readQuietly(pom);
             try {
                 write.run();
             } catch (Exception e) {
                 throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
             }
+            String after = readQuietly(pom);
             MavenService.Resolution resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
             List<String> refused = resolution.problems().stream()
                     .filter(line -> named.stream().anyMatch(coordinate -> line.startsWith(coordinate + ":")))
@@ -140,7 +148,41 @@ public final class LibraryService {
                         + ". pom.xml is unchanged.");
             }
             bind(resolution);
+            boundPom = after;
         }, rebinds);
+    }
+
+    private Path pom() {
+        return config.projectPath().resolve("pom.xml");
+    }
+
+    /**
+     * Rebinds whenever {@code pom.xml} changes on disk and the change is not one this service already bound —
+     * a plugin added from a terminal, an IDE or a pull appears without Reload. Stopped by {@link #close()}.
+     */
+    public void watchPom() {
+        CompletableFuture.runAsync(() -> boundPom = readQuietly(pom()), rebinds).join();
+        pomWatcher = PomWatcher.start(config.projectPath(), this::pomChanged);
+    }
+
+    /**
+     * What the watcher calls: re-resolves when the pom on disk is not the one bound. Queued behind any
+     * resolve already running, so a write of Studio's own is compared only once it is bound.
+     */
+    CompletableFuture<Boolean> pomChanged() {
+        return CompletableFuture.supplyAsync(() -> {
+            String now = readQuietly(pom());
+            if (now == null || now.equals(boundPom)) return false;
+            bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
+            boundPom = now;
+            return true;
+        }, rebinds);
+    }
+
+    /** Stops watching the pom. The project is closing. */
+    public void close() {
+        if (pomWatcher != null) pomWatcher.close();
+        pomWatcher = null;
     }
 
     private static String readQuietly(Path file) {
@@ -172,7 +214,9 @@ public final class LibraryService {
 
     /** Re-resolve without a pom write, then {@link #bind}. */
     private void rebind() {
+        String pom = readQuietly(pom());
         bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
+        boundPom = pom;
     }
 
     /**

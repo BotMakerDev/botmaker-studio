@@ -282,6 +282,9 @@ public class BotProject {
         // file is there before the explorer is first drawn. Never over a file; LibraryService does the same
         // after each rebind.
         HostPluginValues.createMissing();
+
+        // A pom edited outside Studio — mvn, an IDE, a pull, a restore — rebinds the plugins by itself.
+        libraryService.watchPom();
     }
 
     // =========================================================================
@@ -330,6 +333,8 @@ public class BotProject {
         if (codeExecutionService != null) {
             codeExecutionService.close();
         }
+        // Before unbind, so a pom written while the project closes rebinds nothing after it.
+        if (libraryService != null) libraryService.close();
         // Before unbind, which is what tells each plugin its project is over: a plugin releasing something
         // it started may well want to stop the bot on the way out, and a channel already cleared would
         // silently do nothing.

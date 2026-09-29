@@ -27,7 +27,7 @@ import java.util.Map;
  * project's {@code pom.xml} names no plugin — see {@code MavenService.BLANK_DEPENDENCIES} — so there is no
  * BotMaker API on its classpath to import even if this file wanted to. That is the platform rule reaching
  * project creation: the SDK is one plugin among any number, and choosing it is the user's to make, one step
- * away in <b>Project ▸ Manage Plugins</b>.
+ * away in <b>Project ▸ Plugins &amp; Libraries</b>.
  *
  * <p><b>Nothing here is a template in the old sense.</b> There are no holes, no fences and no manifest;
  * nothing parses this text back, nothing reconciles it, and no repair puts it back if it is deleted. It is
@@ -75,7 +75,7 @@ public final class StarterSources {
                  * again. Every line of it is yours — rename it, split it up, throw it away.
                  *
                  * <p>This is a plain Java project: it has a pom, a source folder and this main(). To make it
-                 * a bot, add the BotMaker SDK from <b>Project ▸ Manage Plugins</b> — it is a plugin like any
+                 * a bot, add the BotMaker SDK from <b>Project ▸ Plugins & Libraries</b> — it is a plugin like any
                  * other, and installing it brings the palette, the pictures, the capture tools and the rest.
                  * Or start from a published template instead, which arrives with all of that already pinned.
                  */

@@ -5,16 +5,15 @@ import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.plugin.api.StudioPlugin;
-import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
@@ -25,11 +24,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
-import javafx.stage.Window;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -38,15 +33,17 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * <b>Project ▸ Manage Plugins…</b> — the browser over the plugin registry, and the install button.
+ * The <b>Browse</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — the plugin registry, local builds, and
+ * the Install button. It was the <b>Manage Plugins</b> window until 2026-09-29.
  *
  * <p>Installing is deliberately not special: it adds an ordinary dependency through {@link LibraryService},
- * exactly as <b>Manage Libraries</b> does, so a plugin is on the project's classpath and
- * {@code PluginHost.bind} finds it through the same {@code ServiceLoader} pass that finds the SDK. A
- * bespoke install path would be a privilege the first-party plugin has and a third party's does not —
- * which is the back door the whole platform exists to close. The corollary is that <b>this dialog can be
- * undone from Manage Libraries</b>: a plugin is a row there like any other, which is where its version is
- * changed.
+ * so a plugin is on the project's classpath and {@code PluginHost.bind} finds it through the same
+ * {@code ServiceLoader} pass that finds the SDK. A bespoke install path would be a privilege the first-party
+ * plugin has and a third party's does not — which is the back door the whole platform exists to close.
+ *
+ * <p><b>An installed plugin offers no Remove here.</b> It did until 2026-09-29, as a bare pom edit beside the
+ * Installed tab's checked removal, so the same plugin could leave a project two ways and only one of them
+ * repaired the bot's calls into it. Its row sends the user to Installed instead.
  *
  * <p><b>The version installed is the registry's {@code verifiedVersion}, not the newest tag.</b> That is
  * the version the registry's gate actually loaded and checked; a newer tag may be one nothing has ever
@@ -56,12 +53,13 @@ import java.util.concurrent.CompletableFuture;
  * the empty list and nothing else changes, matching how {@code JitPackSearch} already treats a failure. A
  * catalog nobody can fetch must never stop somebody editing their bot.
  */
-public final class ManagePluginsDialog {
+final class BrowsePluginsTab {
 
-    private final Window owner;
     private final LibraryService libraryService;
     private final PluginRegistry registry;
     private final JitPackSearch jitpack;
+    private final Runnable onShowInstalled;
+    private final Runnable onChanged;
 
     private final ObservableList<PluginRegistry.Plugin> shown = FXCollections.observableArrayList();
     private final List<PluginRegistry.Plugin> all = new ArrayList<>();
@@ -69,15 +67,7 @@ public final class ManagePluginsDialog {
     private final Label statusLabel = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
     private final ListView<PluginRegistry.Plugin> list = new ListView<>(shown);
-
-    /**
-     * The line about plugins that did not load, refreshed after every pom write.
-     *
-     * <p>A field rather than a local since 2026-09-19: a clash is only discovered when the new classpath is
-     * bound, which happens <em>because</em> of a click in this window, so a label built once at construction
-     * shows the state before the thing the user just did.
-     */
-    private final Label failed = new Label();
+    private final VBox root;
 
     /**
      * Everything the project's pom declares, re-read after every change so the badges stay honest.
@@ -93,21 +83,17 @@ public final class ManagePluginsDialog {
     /** The coordinates a dev build in {@code ~/.m2} answers for, so a row can say where its version came from. */
     private final Set<String> localCoordinates = new HashSet<>();
 
-    private Stage stage;
-
-    public ManagePluginsDialog(Window owner, LibraryService libraryService, PluginRegistry registry,
-                               JitPackSearch jitpack) {
-        this.owner = owner;
+    /**
+     * @param onShowInstalled an installed row's <i>Manage…</i>: the window switches to Installed
+     * @param onChanged       after an install wrote the pom, so the window's other tabs read it again
+     */
+    BrowsePluginsTab(LibraryService libraryService, PluginRegistry registry, JitPackSearch jitpack,
+                     Runnable onShowInstalled, Runnable onChanged) {
         this.libraryService = libraryService;
         this.registry = registry;
         this.jitpack = jitpack;
-    }
-
-    public void show() {
-        stage = new Stage();
-        stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
-        stage.setTitle("Manage Plugins");
+        this.onShowInstalled = onShowInstalled;
+        this.onChanged = onChanged;
 
         installed = libraryService.declaredLibraries();
 
@@ -118,43 +104,32 @@ public final class ManagePluginsDialog {
         list.setPlaceholder(new Label("Loading…"));
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        Label hint = new Label("A plugin is an ordinary dependency: it is added to this project's pom, and"
-                + " its version can be changed in Manage Libraries.");
-        hint.setWrapText(true);
-        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
-
-        // Said plainly, in the dialog, because the registry's README says it and a user installing from
+        // Said plainly, in the window, because the registry's README says it and a user installing from
         // here never reads that: the checks ask whether a plugin WORKS, never whether it is safe.
         Label caveat = new Label("Registry plugins are curated and checked for loading, not reviewed for"
                 + " safety — a plugin runs with Studio's own permissions.");
         caveat.setWrapText(true);
-        caveat.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
-
-        // What the last bind could not load. Empty is the ordinary state and the row then takes no height:
-        // this is the one place a user can be told the difference between "this project pins no plugin" and
-        // "this project pins a plugin that is broken", which are the same empty palette and completely
-        // different problems. Three incidents in this project's record end with the words "an empty palette
-        // and one line on stderr"; this is where that line goes now.
-        failed.setWrapText(true);
-        failed.setStyle("-fx-font-size: 11px; -fx-text-fill: #b00020;");
-        showFailures();
+        caveat.getStyleClass().add("sdk-upgrade-empty");
 
         progress.setVisible(false);
         progress.setPrefSize(20, 20);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button close = new Button("Close");
-        close.setOnAction(e -> stage.close());
-        HBox bar = new HBox(10, progress, statusLabel, spacer, close);
+        HBox bar = new HBox(10, progress, statusLabel);
         bar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox root = new VBox(12, searchField, list, failed, hint, caveat, bar);
-        root.setPadding(new Insets(16));
-
-        stage.setScene(ThemedWindows.scene(root, 620, 520));
-        stage.show();
-
+        root = new VBox(12, searchField, list, caveat, bar);
+        root.setPadding(new Insets(12, 0, 0, 0));
         load();
+    }
+
+    /** The tab's content. */
+    Node node() {
+        return root;
+    }
+
+    /** Re-reads what the pom declares and redraws the badges — another tab or a reload changed it. */
+    void refreshInstalled() {
+        installed = libraryService.declaredLibraries();
+        list.refresh();
     }
 
     private void load() {
@@ -163,7 +138,7 @@ public final class ManagePluginsDialog {
         // all. Both halves are joined before anything is shown so the rows never re-order under the mouse.
         CompletableFuture<List<MavenService.LocalPluginBuild>> local =
                 CompletableFuture.supplyAsync(MavenService::localPluginBuilds);
-        registry.browse().thenCombine(local, (plugins, builds) -> merge(plugins, builds))
+        registry.browse().thenCombine(local, this::merge)
                 .thenAccept(rows -> Platform.runLater(() -> {
                     all.clear();
                     all.addAll(rows);
@@ -172,50 +147,6 @@ public final class ManagePluginsDialog {
                             ? "No plugins listed — the registry is empty or could not be reached."
                             : "No plugin matches that search."));
                 }));
-    }
-
-    /**
-     * The registry's entries, with what is built locally taking precedence over what is published.
-     *
-     * <p>A local build of a coordinate the registry also lists <b>replaces that entry's version</b> rather
-     * than adding a second row: two rows for one artifact would offer to install two versions of it, and a
-     * developer who has just built one wants the one they built. A local build nobody has published yet
-     * becomes a row of its own, at the top, because it is the row they came here for.
-     *
-     * <p>Only ever populated in a dev build — {@link MavenService#localPluginBuilds()} answers empty
-     * otherwise — so a released Studio shows exactly the registry and nothing else.
-     */
-    private static String failureText() {
-        return failureText(PluginHost.failures());
-    }
-
-    /** Puts what the last bind could not load on screen, and takes the row away when there is nothing. */
-    private void showFailures() {
-        failed.setText(failureText());
-        failed.setVisible(!failed.getText().isEmpty());
-        failed.setManaged(failed.isVisible());
-    }
-
-    /**
-     * The one line this dialog says about plugins that did not load, or {@code ""} when they all did.
-     *
-     * <p>Static and pure so it can be asserted without a scene — the split this repo already uses for
-     * {@code BlockTree} and {@code PluginRegistry.Plugin}. The failure list itself is
-     * {@code PluginLoader.PluginFailure}, so the sentence is built from what the loader actually caught
-     * rather than from a guess about what a user did.
-     *
-     * <p>It names the plugins rather than counting them: <i>2 plugins did not load</i> is a sentence nobody
-     * can act on, and the provider class is the only identity available — a plugin that would not construct
-     * never got to answer {@code id()}.
-     */
-    static String failureText(List<PluginLoader.PluginFailure> failures) {
-        if (failures.isEmpty()) return "";
-        String lead = failures.size() == 1
-                ? "A plugin on this project's classpath did not load: "
-                : failures.size() + " plugins on this project's classpath did not load: ";
-        return lead + failures.stream().map(PluginLoader.PluginFailure::describe)
-                .collect(java.util.stream.Collectors.joining("; "))
-                + ". Its features are absent from the editor; the project itself is unaffected.";
     }
 
     /** The ids of the plugins bound to the open project — whatever put them on its classpath. */
@@ -231,12 +162,12 @@ public final class ManagePluginsDialog {
      * by name. Maven's nearest-wins would then let this pom pin a version the plugin that depends on it was
      * never built against, and the failure that produces is a linkage error inside somebody else's plugin.
      *
-     * <p>Static and pure so it is asserted with no scene, like {@link #failureText(List)} beside it.
+     * <p>Static and pure so it is asserted with no scene.
      */
     static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
                                   List<String> boundIds) {
         // A coordinate the pom already declares is an ordinary re-install or version change, whatever else
-        // is bound: this dialog is idempotent by coordinate and must stay so.
+        // is bound: this tab is idempotent by coordinate and must stay so.
         if (plugin.isInstalledIn(declared)) return "";
         if (plugin.id().isBlank() || !boundIds.contains(plugin.id())) return "";
         String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
@@ -245,6 +176,17 @@ public final class ManagePluginsDialog {
                 + "against. Change the version of the plugin that brings it instead.";
     }
 
+    /**
+     * The registry's entries, with what is built locally taking precedence over what is published.
+     *
+     * <p>A local build of a coordinate the registry also lists <b>replaces that entry's version</b> rather
+     * than adding a second row: two rows for one artifact would offer to install two versions of it, and a
+     * developer who has just built one wants the one they built. A local build nobody has published yet
+     * becomes a row of its own, at the top, because it is the row they came here for.
+     *
+     * <p>Only ever populated in a dev build — {@link MavenService#localPluginBuilds()} answers empty
+     * otherwise — so a released Studio shows exactly the registry and nothing else.
+     */
     private List<PluginRegistry.Plugin> merge(List<PluginRegistry.Plugin> published,
                                               List<MavenService.LocalPluginBuild> builds) {
         localCoordinates.clear();
@@ -281,7 +223,7 @@ public final class ManagePluginsDialog {
     }
 
     // -------------------------------------------------------------------------
-    // Install / remove
+    // Install
     // -------------------------------------------------------------------------
 
     /**
@@ -289,15 +231,11 @@ public final class ManagePluginsDialog {
      *
      * <p>Idempotent by coordinate: re-installing replaces the entry rather than adding a second one, since
      * two versions of one artifact on a classpath is the state that produces the least diagnosable failure
-     * this platform has. That is enforced by {@code MavenService.installPlugin} editing the pom in place —
-     * it used to be attempted here, by rebuilding the user-library list, which could not see a plugin the
-     * pom classes as built in and so wrote the SDK twice.
+     * this platform has. That is enforced by {@code MavenService.installPlugin} editing the pom in place.
      *
      * <p>It is also where a plugin that needs something of the host gets it: the entry's
-     * {@code editorDependencies} are declared {@code provided} beside the plugin itself. Until 2026-09-06
-     * that was an {@code if (isSdk(…))} inside {@code MavenService} over a list written in Studio's source —
-     * the privilege this class's own javadoc says a plugin platform must not grant. The list is the
-     * registry's now, so a second plugin can have one.
+     * {@code editorDependencies} are declared {@code provided} beside the plugin itself. The list is the
+     * registry's, so any plugin can have one.
      */
     private void install(PluginRegistry.Plugin plugin) {
         if (!plugin.isInstallable()) {
@@ -332,21 +270,12 @@ public final class ManagePluginsDialog {
         });
     }
 
-    private void remove(PluginRegistry.Plugin plugin) {
-        busy(true);
-        apply(libraryService.removePlugin(plugin.groupId(), plugin.artifactId(),
-                        plugin.editorLibraries()),
-                plugin.name() + " removed.");
-    }
-
     /** Reports the outcome of a pom write, then re-reads what the pom now declares. */
     private void apply(CompletableFuture<Void> write, String done) {
         write.whenComplete((ok, err) -> Platform.runLater(() -> {
             busy(false);
-            installed = libraryService.declaredLibraries();
-            showFailures();
-            // The badges are per-row, so the rows are what have to be redrawn.
-            list.refresh();
+            refreshInstalled();
+            onChanged.run();
             if (err != null) {
                 error(rootMessage(err));
             } else {
@@ -417,7 +346,7 @@ public final class ManagePluginsDialog {
             }
             HBox.setHgrow(text, Priority.ALWAYS);
 
-            boolean here = plugin.isInstalledIn(installed);
+            Node action;
             // Brought by another plugin: nothing to install, and nothing this pom can remove. Saying
             // "Install" and then refusing the click is what this label replaces.
             String provided = alreadyProvided(plugin, installed, boundPluginIds());
@@ -425,20 +354,18 @@ public final class ManagePluginsDialog {
                 Label state = new Label("Included");
                 state.setTooltip(new Tooltip(provided));
                 state.getStyleClass().add("plugin-provided-label");
-                HBox row = new HBox(10, text, state);
-                row.setAlignment(Pos.CENTER_LEFT);
-                row.setPadding(new Insets(6, 2, 6, 2));
-                setGraphic(row);
-                return;
+                action = state;
+            } else if (plugin.isInstalledIn(installed)) {
+                Button manage = new Button("Installed — manage…");
+                manage.setTooltip(new Tooltip("Change its version or remove it in the Installed tab, where "
+                        + "the bot's calls into it are checked and repaired."));
+                manage.setOnAction(e -> onShowInstalled.run());
+                action = manage;
+            } else {
+                Button install = new Button("Install");
+                install.setOnAction(e -> install(plugin));
+                action = install;
             }
-            Button action = new Button(here ? "Remove" : "Install");
-            action.setOnAction(e -> {
-                if (here) {
-                    remove(plugin);
-                } else {
-                    install(plugin);
-                }
-            });
 
             HBox row = new HBox(10, text, action);
             row.setAlignment(Pos.CENTER_LEFT);

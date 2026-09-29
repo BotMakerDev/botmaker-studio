@@ -23,7 +23,7 @@ class ProjectUpgradeFeedbackTest {
 
     @Test
     void aWindowWhereNoRowMovedSaysToPickAVersion() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(0, false, 0);
+        String why = InstalledPluginsTab.applyBlockedReason(0, false, 0);
 
         assertTrue(why.contains("Pick a version"), why);
     }
@@ -32,7 +32,7 @@ class ProjectUpgradeFeedbackTest {
     @Test
     void aCheckStillRunningSaysSoRatherThanNamingAProblem() {
         assertEquals("A check is still running.",
-                ProjectUpgradeDialog.applyBlockedReason(1, true, 0));
+                InstalledPluginsTab.applyBlockedReason(1, true, 0));
     }
 
     /**
@@ -41,7 +41,7 @@ class ProjectUpgradeFeedbackTest {
      */
     @Test
     void callsWaitingForAPickAreSaidAndWhatHappensToThem() {
-        String why = ProjectUpgradeDialog.applyBlockedReason(1, false, 2);
+        String why = InstalledPluginsTab.applyBlockedReason(1, false, 2);
 
         assertTrue(why.startsWith("2 calls have nothing that replaces it"), why);
         assertTrue(why.contains("default value or is deleted"), why);
@@ -51,12 +51,12 @@ class ProjectUpgradeFeedbackTest {
     /** Nothing in the way, nothing said: an enabled button needs no caption. */
     @Test
     void aPassThatCanRunHasNoSentenceAtAll() {
-        assertEquals("", ProjectUpgradeDialog.applyBlockedReason(1, false, 0));
+        assertEquals("", InstalledPluginsTab.applyBlockedReason(1, false, 0));
     }
 
     @Test
     void aRemovalThatRewroteCodeSaysHowMuchAndWhereTheWayBackIs() {
-        String summary = ProjectUpgradeDialog.removalSummary("Basics", 2, 5);
+        String summary = InstalledPluginsTab.removalSummary("Basics", 2, 5);
 
         assertTrue(summary.startsWith("Removed Basics from this project."), summary);
         assertTrue(summary.contains("5 calls replaced or deleted in 2 files"), summary);
@@ -65,7 +65,7 @@ class ProjectUpgradeFeedbackTest {
 
     @Test
     void aRemovalThatTouchedNoCodeSaysOnlyThePomChanged() {
-        String summary = ProjectUpgradeDialog.removalSummary("Basics", 0, 0);
+        String summary = InstalledPluginsTab.removalSummary("Basics", 0, 0);
 
         assertTrue(summary.contains("only the pom changed"), summary);
     }
