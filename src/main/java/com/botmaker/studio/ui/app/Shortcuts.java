@@ -10,6 +10,9 @@ import javafx.scene.input.KeyCombination;
  * these keys.
  */
 enum Shortcuts {
+    FIND("find", "Find…", new KeyCodeCombination(KeyCode.F, KeyCombination.SHORTCUT_DOWN)),
+    FIND_IN_PROJECT("find-in-project", "Find in Project…",
+            new KeyCodeCombination(KeyCode.F, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_DOWN)),
     GO_TO_LINE("go-to-line", "Go to Line…",
             new KeyCodeCombination(KeyCode.G, KeyCombination.SHORTCUT_DOWN)),
     GO_TO_FILE("go-to-file", "Go to File…",

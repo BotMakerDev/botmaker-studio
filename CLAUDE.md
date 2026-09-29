@@ -12,6 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > changes outside Studio; it compares with the pom last bound, so Studio's own writes do not rebind twice.
 > Read the older names below through this.
 
+> **Find (2026-09-29).** Navigate ▸ Find… (Ctrl+F, `ui/app/FindBar`, floated over the canvas by
+> `EditorCanvas.overlay`) and Find in Project… (Ctrl+Shift+F, `NavigationPopups.findInProject`) search the
+> **source text** (`nav/TextSearch`, case-insensitive) and land on the block owning the offset
+> (`SourceNavigation.blockAtOffset`); matches are re-read on every step, since the bot may have been edited.
+
 > **SDK 2.0.0 (2026-09-23) changed two things the dated sections below describe.** (1) The SDK's plugin half
 > is `com.botmaker.sdk.plugin.*` now: read `sdk.internal.plugin.X` below as `sdk.plugin.X`, with `capture`
 > split into `plugin.screen` and `plugin.source`, `templates` into `plugin.pictures`, `internal.authoring`

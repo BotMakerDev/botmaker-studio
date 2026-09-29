@@ -113,7 +113,9 @@ public class MenuBarManager {
             });
             navigateItems.put(shortcut, item);
             menu.getItems().add(item);
-            if (shortcut == Shortcuts.FILE_STRUCTURE) menu.getItems().add(new SeparatorMenuItem());
+            if (shortcut == Shortcuts.FIND_IN_PROJECT || shortcut == Shortcuts.FILE_STRUCTURE) {
+                menu.getItems().add(new SeparatorMenuItem());
+            }
         }
         return menu;
     }

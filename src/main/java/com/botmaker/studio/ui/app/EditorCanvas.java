@@ -59,6 +59,8 @@ final class EditorCanvas {
     private final ZoomPane zoomPane;
     private final ScrollPane scrollPane;
     private final VBox column;
+    /** The scroll pane with what floats over it: the zoom badge, and the find bar while it is open. */
+    private final StackPane viewport;
 
     /** Above the canvas whenever the project holds data for a plugin that is not loaded; null when it does not. */
     private HBox missingPluginBanner;
@@ -113,7 +115,7 @@ final class EditorCanvas {
 
         // Reader mode: a full-colour, control-free view of someone else's bot. A single banner carries the
         // state; the blocks themselves render without any controls (LockResolver suppresses interaction).
-        StackPane viewport = new StackPane(scrollPane, zoomBadge());
+        this.viewport = new StackPane(scrollPane, zoomBadge());
         this.column = new VBox(viewport);
         VBox.setVgrow(viewport, Priority.ALWAYS);
         if (readerMode) {
@@ -326,6 +328,14 @@ final class EditorCanvas {
      * visible. Runs the scroll on the next pulse so the node's layout bounds are current.
      */
     void scrollToBlock(CodeBlock block) {
+        revealBlock(block, true);
+    }
+
+    /**
+     * {@link #scrollToBlock}, optionally leaving the keyboard where it is — the find bar steps through matches
+     * while its field keeps the focus, so Enter goes on meaning "next".
+     */
+    void revealBlock(CodeBlock block, boolean focus) {
         if (block == null) return;
         CodeBlock target = block.getHighlightTarget();
         eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(target));
@@ -341,8 +351,16 @@ final class EditorCanvas {
                 double vvalue = (nodeInContent.getMinY() - 20) / (contentH - viewportH);
                 scrollPane.setVvalue(Math.max(0, Math.min(1, vvalue)));
             }
-            node.requestFocus();
+            if (focus) node.requestFocus();
         });
+    }
+
+    /** Floats {@code bar} over the canvas's top-right corner, where IntelliJ's find bar sits; once. */
+    void overlay(Node bar) {
+        if (viewport.getChildren().contains(bar)) return;
+        StackPane.setAlignment(bar, Pos.TOP_RIGHT);
+        StackPane.setMargin(bar, new Insets(10, 24, 0, 0));
+        viewport.getChildren().add(bar);
     }
 
     // --- zoom ------------------------------------------------------------------------------------------------

@@ -5,9 +5,11 @@ import com.botmaker.studio.nav.LibrarySource;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Declaration;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
+import com.botmaker.studio.nav.TextSearch;
 import com.botmaker.studio.palette.ApiDocs;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.MavenService;
@@ -40,8 +42,8 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
- * The Navigate menu's popups (2026-09-26): Go to Line, Go to File, File Structure, Go to Declaration and Quick
- * Documentation. Each reads the open file's tree through {@link SourceNavigation} and lands on a block with
+ * The Navigate menu's popups (2026-09-26): Find and Find in Project (2026-09-29), Go to Line, Go to File, File
+ * Structure, Go to Declaration and Quick Documentation. Each reads the open file's tree through {@link SourceNavigation} and lands on a block with
  * {@link EditorCanvas#scrollToBlock}, which also selects it — so arriving somewhere looks the same as clicking
  * an error row. "The selected block" is the one the user last clicked ({@link ProjectState#getHighlightedBlock}).
  */
@@ -69,6 +71,12 @@ final class NavigationPopups {
      * block's binding to {@code findUsages} (the Usages tab).
      */
     void wire(MenuBarManager menuBar, Consumer<IBinding> findUsages) {
+        FindBar findBar = new FindBar(state, canvas);
+        menuBar.setOnNavigate(Shortcuts.FIND, () -> {
+            tabs.showCanvas();
+            findBar.open();
+        });
+        menuBar.setOnNavigate(Shortcuts.FIND_IN_PROJECT, this::findInProject);
         menuBar.setOnNavigate(Shortcuts.GO_TO_LINE, this::goToLine);
         menuBar.setOnNavigate(Shortcuts.GO_TO_FILE, this::goToFile);
         menuBar.setOnNavigate(Shortcuts.FILE_STRUCTURE, this::fileStructure);
@@ -134,6 +142,80 @@ final class NavigationPopups {
             canvas.scrollToBlock(block.get());
         });
         show(popup, field);
+    }
+
+    /** How many rows Find in Project lists before it says there are more. */
+    private static final int FIND_LIMIT = 500;
+
+    /**
+     * <b>Navigate ▸ Find in Project…</b> (Ctrl+Shift+F): every line of the bot's sources holding the text, as
+     * {@code File.java:12  the line}, narrowed as the user types. A row lands on the block owning the match,
+     * opening its file first — the same path a Find Usages row takes. The text searched is the project's as
+     * Studio holds it, so an edit not yet on disk is found.
+     */
+    void findInProject() {
+        List<TextSearch.Source> sources = state.getAllFiles().stream()
+                .filter(f -> f.getPath().toString().endsWith(".java"))
+                .sorted(Comparator.comparing(ProjectFile::getPath))
+                .map(f -> new TextSearch.Source(f.getPath(), f.getContent()))
+                .toList();
+        Path root = config.sourceRoot();
+        TextField field = new TextField();
+        field.setPromptText("Text to find in this bot");
+        Label note = new Label();
+        note.getStyleClass().add("nav-popup-note");
+        ListView<TextSearch.FileMatch> list = new ListView<>();
+        list.setPrefSize(640, 360);
+        list.getStyleClass().add("nav-popup-list");
+        list.setPlaceholder(new Label("Type to search every file of this bot."));
+        list.setCellFactory(v -> new ListCell<>() {
+            @Override
+            protected void updateItem(TextSearch.FileMatch item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.file().getFileName() + ":" + item.match().line()
+                        + "   " + item.match().lineText());
+                setTooltip(empty || item == null ? null
+                        : new javafx.scene.control.Tooltip(displayDir(root.relativize(item.file()))));
+            }
+        });
+        Popup popup = popup("Find in project", field, list, note);
+        Runnable pick = () -> {
+            TextSearch.FileMatch chosen = list.getSelectionModel().getSelectedItem();
+            if (chosen == null) return;
+            popup.hide();
+            revealOffset(chosen.file(), chosen.match().offset());
+        };
+        javafx.animation.PauseTransition settle = new javafx.animation.PauseTransition(javafx.util.Duration.millis(150));
+        settle.setOnFinished(e -> {
+            List<TextSearch.FileMatch> hits = TextSearch.inFiles(sources, field.getText(), FIND_LIMIT);
+            list.getItems().setAll(hits);
+            list.getSelectionModel().selectFirst();
+            note.setText(findNote(field.getText(), hits.size(), FIND_LIMIT));
+        });
+        field.textProperty().addListener((o, was, now) -> settle.playFromStart());
+        field.setOnKeyPressed(e -> {
+            int at = list.getSelectionModel().getSelectedIndex();
+            if (e.getCode() == KeyCode.DOWN) {
+                list.getSelectionModel().select(Math.min(at + 1, list.getItems().size() - 1));
+                list.scrollTo(list.getSelectionModel().getSelectedIndex());
+                e.consume();
+            } else if (e.getCode() == KeyCode.UP) {
+                list.getSelectionModel().select(Math.max(at - 1, 0));
+                list.scrollTo(list.getSelectionModel().getSelectedIndex());
+                e.consume();
+            }
+        });
+        field.setOnAction(e -> pick.run());
+        list.setOnMouseClicked(e -> pick.run());
+        show(popup, field);
+    }
+
+    /** The line under Find in Project's list: how many matches, and whether the list stopped short. */
+    static String findNote(String query, int shown, int limit) {
+        if (query == null || query.isEmpty()) return "";
+        if (shown == 0) return "No match in this bot.";
+        if (shown >= limit) return "The first " + limit + " matches — type more to narrow them.";
+        return shown + (shown == 1 ? " match" : " matches");
     }
 
     void goToFile() {

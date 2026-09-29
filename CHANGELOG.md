@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Find (Ctrl+F).** A bar over the canvas finds text in the open file — names, values, comments — and jumps
+  from block to block with Enter and Shift+Enter.
+- **Find in Project (Ctrl+Shift+F).** Lists every line of the bot holding the text; pick one to open its file
+  on that block.
+
 ### Changed
 
 - **A plugin upgrade or removal is never blocked.** Everything that used to refuse one is now repaired, or

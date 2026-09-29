@@ -2787,6 +2787,27 @@
     -fx-font-family: "JetBrains Mono", monospace;
 }
 
+/* Navigate ▸ Find: the popup surface, floating over the canvas's top-right corner. */
+.find-bar {
+    -fx-padding: 6 8 6 8;
+}
+
+.find-bar-count {
+    -fx-opacity: 0.8;
+    -fx-font-size: 11px;
+}
+
+.find-bar-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -bm-on-popup;
+    -fx-padding: 2 6 2 6;
+}
+
+.find-bar-button:hover {
+    -fx-background-color: -bm-popup-hover;
+    -fx-text-fill: -bm-on-popup-hover;
+}
+
 /* Go to Definition on a library member: its source (or outline), read-only, under a banner saying which. */
 .library-source-banner {
     -fx-padding: 8 12 8 12;
