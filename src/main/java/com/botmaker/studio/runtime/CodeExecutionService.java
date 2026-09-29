@@ -1,6 +1,5 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.shared.ipc.IpcEnv;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -327,26 +326,12 @@ public class CodeExecutionService {
     }
 
     /**
-     * Starts the loopback telemetry server (for the live window-preview panel) and passes its ephemeral port
-     * + a random session token to the bot via environment. Best-effort: if it fails to bind, the bot still
-     * runs, just without a preview (and the SDK opens no socket when the env vars are absent).
+     * Starts the loopback telemetry server (the Trace tab, and plugins' {@code Runs} listeners) and passes its
+     * port and a random token to the bot. Best-effort: if it fails to bind, the bot still runs, untraced.
      */
     private void startTelemetry(ProcessBuilder pb) {
         stopTelemetry();
-        try {
-            String token = java.util.UUID.randomUUID().toString();
-            TelemetryServer server = new TelemetryServer(token,
-                    feedback -> Platform.runLater(() ->
-                            eventBus.publish(new CoreApplicationEvents.ViewFeedbackEvent(feedback))),
-                    reason -> Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(
-                            "⚠ Live preview/overlays unavailable: the bot's SDK sends telemetry this Studio can't "
-                            + "read (" + reason + "). Pick a current SDK build in Project ▸ Manage Libraries and re-run.\n"))));
-            this.telemetryServer = server;
-            pb.environment().put(IpcEnv.PORT, String.valueOf(server.port()));
-            pb.environment().put(IpcEnv.TOKEN, token);
-        } catch (IOException e) {
-            System.err.println("Telemetry server failed to start: " + e.getMessage());
-        }
+        this.telemetryServer = RunTelemetry.start(eventBus, pb);
     }
 
     private void stopTelemetry() {

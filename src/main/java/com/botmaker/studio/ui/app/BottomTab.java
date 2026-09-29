@@ -14,6 +14,8 @@ enum BottomTab {
      * until 2026-09-25, which it never was.
      */
     RUN("Run"),
+    /** The running bot's debug lines, filtered and linked to their blocks — see {@link TracePanel} (2026-09-29). */
+    TRACE("Trace"),
     /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */
     TERMINAL("Terminal"),
     ERRORS("Errors"),

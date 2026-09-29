@@ -421,6 +421,26 @@
 .diagnostic-icon--info    { -fx-text-fill: -bm-severity-info; }
 
 /* ---------------------------------------------------------------------------
+ * Trace tab (TracePanel): the run's debug lines. The bar reuses
+ * .diagnostics-filter-bar and .severity-filter; the levels reuse the severity
+ * tokens, and a debug line is muted — it is the detail, not the news.
+ * --------------------------------------------------------------------------- */
+.trace-filter--debug { -fx-text-fill: -bm-muted; }
+.trace-filter--info  { -fx-text-fill: -bm-severity-info; }
+.trace-filter--warn  { -fx-text-fill: -bm-severity-warning; }
+.trace-filter--error { -fx-text-fill: -bm-severity-error; }
+
+.trace-cell {
+    -fx-font-family: "Consolas", "Menlo", monospace;
+    -fx-font-size: 12px;
+}
+
+.trace-cell--debug { -fx-text-fill: -bm-muted; }
+.trace-cell--info  { -fx-text-fill: -bm-severity-info-text; }
+.trace-cell--warn  { -fx-text-fill: -bm-severity-warning-text; }
+.trace-cell--error { -fx-text-fill: -bm-severity-error-text; }
+
+/* ---------------------------------------------------------------------------
  * Review tab (ReviewPanel): what a refactor changed and could not finish. The
  * bar reuses .diagnostics-filter-bar — it is the same band in the same place,
  * and a second token-identical rule is a second thing to keep in step.

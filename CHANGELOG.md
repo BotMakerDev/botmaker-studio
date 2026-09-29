@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A Trace tab next to Run** shows the running bot's debug lines, one row each, coloured by level. It shows
+  the time, what wrote the line (`[Vision]`, `[Mouse]`, your own class) and how many times it repeated. Filter
+  by level, pick one source, or search. Clicking a line shows the block that wrote it. Each run starts with an
+  empty tab, and the last 5,000 lines are kept.
+- **🐞 Debug on the toolbar** (in the Run group) chooses whether runs on this computer print and trace their
+  debug lines. Each press moves to the next choice: *bot* (the bot's own setting decides), *on*, then *off*. The
+  choice is saved for this computer only and takes effect on the next run.
 - **Pictures and data files open beside the canvas.** Clicking a `.png`, `.json`, `.properties`, `.txt`,
   `.yml`, `.xml`, `.csv` or `.md` file in Project Files opens it in a tab next to the canvas: a picture at its
   own size, JSON as a tree, a properties file as a table of keys and values, anything else as text. Viewing

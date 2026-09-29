@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.EnabledWhen;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
@@ -218,8 +219,15 @@ public class ToolbarManager {
         // where the host owns the bar and the plugin owns everything the press opens.
 
         // 🐞 Debug output stood here at RUN/20 until 2026-09-27, toggling the `debug` key of
-        // botmaker-project.properties. It is the `debug` of the bot's @Managed("settings") value now, edited in
-        // the SDK plugin's ⚙ Bot Settings — "how a bot is debugged" was always that plugin's answer to give.
+        // botmaker-project.properties, and came back on 2026-09-29 as the run property Runs.DEBUG_PROPERTY. What
+        // a bot does by default is still its own @Managed("settings") value; whether this machine's runs print
+        // and trace is a fact about running here, so it is a run property, and the host's to toggle
+        // (docs/refactor/40-run-trace.md).
+        place(placed, ctx, ToolbarItem.id("debug-output").label(() -> debugOutput().label())
+                .tooltip("Whether runs on this computer print and trace their debug lines: the bot's own "
+                        + "setting, always on, or always off. Takes effect on the next run.")
+                .in(ToolbarGroup.RUN, 20)
+                .onPress(() -> c -> cycleDebugOutput()));
 
         // The same action as View ▸ Preview as user, not a second thing that sounds like it. This used to be
         // a "Reader mode" toggle that hid the editor's controls in place — a third rendering of the project
@@ -394,6 +402,19 @@ public class ToolbarManager {
         Button button = ToolbarItems.button(item, ctx);
         into.add(new Placed(item.group(), item.order(), item.id(), button, item));
         return button;
+    }
+
+    /** This checkout's debug output choice, read from its run properties at every refresh. */
+    private DebugOutput debugOutput() {
+        if (settings == null || settings.current() == null) return DebugOutput.BOT;
+        return DebugOutput.fromProperty(settings.current().runProperties().get(Runs.DEBUG_PROPERTY));
+    }
+
+    /** Moves to the next choice; the settings write publishes the change that relabels the button. */
+    private void cycleDebugOutput() {
+        if (settings == null || settings.current() == null) return;
+        settings.update(settings.current()
+                .withRunProperty(Runs.DEBUG_PROPERTY, debugOutput().next().propertyValue()));
     }
 
     /** Runs a wired callback, or does nothing when the bar was built before that callback was set. */

@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.shared.ipc.IpcEnv;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.config.Constants;
@@ -11,6 +10,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.BotJvm;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.runtime.ConsoleBatcher;
+import com.botmaker.studio.runtime.RunTelemetry;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
@@ -487,23 +487,10 @@ public class DebuggingService {
 
     // --- process plumbing ------------------------------------------------------------------------------------
 
-    /** Starts the loopback telemetry server for the preview panel and passes port+token to the debuggee. */
+    /** Starts the loopback telemetry server (the Trace tab, plugins' listeners) and tells the debuggee. */
     private void startTelemetry(ProcessBuilder pb) {
         stopTelemetry();
-        try {
-            String token = java.util.UUID.randomUUID().toString();
-            TelemetryServer server = new TelemetryServer(token,
-                    feedback -> Platform.runLater(() ->
-                            eventBus.publish(new CoreApplicationEvents.ViewFeedbackEvent(feedback))),
-                    reason -> Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(
-                            "⚠ Live preview/overlays unavailable: the bot's SDK sends telemetry this Studio can't "
-                            + "read (" + reason + "). Pick a current SDK build in Project ▸ Manage Libraries and re-run.\n"))));
-            this.telemetryServer = server;
-            pb.environment().put(IpcEnv.PORT, String.valueOf(server.port()));
-            pb.environment().put(IpcEnv.TOKEN, token);
-        } catch (IOException e) {
-            System.err.println("Telemetry server failed to start: " + e.getMessage());
-        }
+        this.telemetryServer = RunTelemetry.start(eventBus, pb);
     }
 
     private void stopTelemetry() {

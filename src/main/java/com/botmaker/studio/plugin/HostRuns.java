@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.Runs;
+import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
@@ -33,13 +34,12 @@ import java.util.function.Consumer;
  * <em>that</em>. Registering per plugin listener directly on the bus would accumulate one dead handler per
  * project opened, which is the leak the handle exists to prevent.
  *
- * <p><b>Telemetry crosses as its own wire bytes, re-encoded.</b> Studio decoded the frame on the way in
- * ({@link com.botmaker.shared.ipc.TelemetryServer}) and holds a {@code TelemetryEvent}, which is a shared
- * type and therefore one the contract may not name — so the frame is written back out with
- * {@link com.botmaker.shared.ipc.TelemetryFrame} and the plugin decodes it with the same class. That is one
- * definition of the format rather than two, which a text rendering invented for the contract would not have
- * been: it would be owned by neither end and would drift from both. The re-encode costs a few hundred bytes
- * per event, and telemetry is a handful of events a second, not a video stream.
+ * <p><b>Telemetry crosses as the bytes it arrived as</b> (2026-09-29; decoded and re-encoded before). Studio
+ * does not read a match or a click — that is the runtime's vocabulary — so {@link
+ * com.botmaker.studio.runtime.RunTelemetry} relays each frame whole and the plugin decodes it with its own
+ * copy of the format. A debug line is the exception, because showing a log is a capability of any host: it
+ * arrives as a {@link TraceLine} and goes to {@link #onTrace} listeners only ({@code
+ * docs/refactor/40-run-trace.md}).
  */
 public final class HostRuns implements Runs {
 
@@ -54,6 +54,7 @@ public final class HostRuns implements Runs {
     /** Plugin listeners, held here rather than on the bus, which cannot unsubscribe. */
     private final List<Consumer<Boolean>> stateListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<byte[]>> telemetryListeners = new CopyOnWriteArrayList<>();
+    private final List<Consumer<TraceLine>> traceListeners = new CopyOnWriteArrayList<>();
 
     private volatile boolean running;
 
@@ -66,8 +67,8 @@ public final class HostRuns implements Runs {
         // business queueing behind the editor's rendering.
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> fireState(true), false);
         eventBus.subscribe(CoreApplicationEvents.ProgramStoppedEvent.class, e -> fireState(false), false);
-        eventBus.subscribe(CoreApplicationEvents.ViewFeedbackEvent.class,
-                e -> fireTelemetry(encode(e.feedback())), false);
+        eventBus.subscribe(CoreApplicationEvents.TelemetryFrameEvent.class, e -> fireTelemetry(e.frame()), false);
+        eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> fireTrace(e.line()), false);
     }
 
     /** Makes this project's bot the one a plugin reaches, replacing whatever was installed before. */
@@ -150,22 +151,11 @@ public final class HostRuns implements Runs {
         return () -> telemetryListeners.remove(listener);
     }
 
-    /**
-     * The event as one encoded frame, or null when it cannot be written.
-     *
-     * <p>Skipped rather than reported: an event that will not encode is a bug on this side, and the bot is
-     * running. Dropping one frame of telemetry costs a plugin one stale overlay; taking the run down over it
-     * would cost the user their session.
-     */
-    private static byte[] encode(com.botmaker.shared.ipc.TelemetryEvent event) {
-        if (event == null) return null;
-        var bytes = new java.io.ByteArrayOutputStream(256);
-        try (var out = new java.io.DataOutputStream(bytes)) {
-            com.botmaker.shared.ipc.TelemetryFrame.write(out, event);
-        } catch (java.io.IOException impossible) {
-            return null;   // a ByteArrayOutputStream does not fail; the checked type says otherwise
-        }
-        return bytes.toByteArray();
+    @Override
+    public AutoCloseable onTrace(Consumer<TraceLine> listener) {
+        if (listener == null) return () -> { };
+        traceListeners.add(listener);
+        return () -> traceListeners.remove(listener);
     }
 
     private void fireState(boolean nowRunning) {
@@ -175,10 +165,18 @@ public final class HostRuns implements Runs {
         }
     }
 
+    /** Each listener gets its own copy: a byte array is mutable, and one plugin must not edit another's frame. */
     private void fireTelemetry(byte[] frame) {
         if (frame == null) return;
         for (Consumer<byte[]> listener : telemetryListeners) {
-            deliver(() -> listener.accept(frame));
+            deliver(() -> listener.accept(frame.clone()));
+        }
+    }
+
+    private void fireTrace(TraceLine line) {
+        if (line == null) return;
+        for (Consumer<TraceLine> listener : traceListeners) {
+            deliver(() -> listener.accept(line));
         }
     }
 

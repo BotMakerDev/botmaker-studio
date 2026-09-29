@@ -6,7 +6,22 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-28 (latest) — `.game-picker-*` rules deleted from `blocks.css`.** Their one user, the SDK
+- **2026-09-29 (latest) — the run trace in Studio (rework follow-ups, phase 8, `docs/refactor/40-run-trace.md`).**
+  - `runtime/RunTelemetry` starts both the Run's and the Debug's telemetry server. It is `TelemetryServer.relaying`,
+    so Studio decodes no frame but a debug line.
+  - A `Log` frame becomes a contract `TraceLine` (`TraceLineEvent`), and every other frame is relayed as its bytes
+    (`TelemetryFrameEvent`, which replaced `ViewFeedbackEvent` and its decoded `TelemetryEvent`).
+  - `HostRuns` hands each telemetry listener its own copy of the bytes and implements `onTrace`. It no longer
+    re-encodes anything.
+  - The old "telemetry this Studio can't read" console warning is gone. Studio no longer decodes frames, so a
+    frame from a newer SDK reaches the plugin that can read it instead of being dropped here.
+  - `BottomTab.TRACE` / `TracePanel` has level toggles, a source box, search and a 5,000-line cap, and is cleared
+    at each run's start. A click reveals the line in the file of the line's `className`, through
+    `NavigationPopups.revealLine`, the way a debug frame lands. The filter (`TracePanel.matches`) is static and
+    tested headlessly.
+  - 🐞 Debug is back at RUN/20 as `DebugOutput` (bot → on → off), writing `Runs.DEBUG_PROPERTY` through
+    `settings.update` so the label refreshes.
+- **2026-09-28 — `.game-picker-*` rules deleted from `blocks.css`.** Their one user, the SDK
   plugin's `GameLibraryPickerDialog`, was never reached and is deleted; the launch-id pills use the toolkit's
   gallery.
 - **2026-09-28 — `NumberFieldsDialog` deleted.** Its javadoc said it goes when the last of Studio's

@@ -117,10 +117,17 @@ public class CoreApplicationEvents {
     public record OutputClearedEvent() implements ApplicationEvent {}
 
     /**
-     * A decoded telemetry frame from the running bot (a template match / click / search region), republished
-     * from the {@code com.botmaker.shared.ipc} server for the live window-preview panel to draw as an overlay.
+     * One telemetry frame from the running bot, as bytes Studio does not read (a match, a click: the runtime's
+     * vocabulary), relayed to plugins through {@code Runs.onTelemetry}. Was {@code ViewFeedbackEvent}, holding
+     * the decoded event, until 2026-09-29 ({@code docs/refactor/40-run-trace.md}). Published off the FX thread.
      */
-    public record ViewFeedbackEvent(com.botmaker.shared.ipc.TelemetryEvent feedback) implements ApplicationEvent {}
+    public record TelemetryFrameEvent(byte[] frame) implements ApplicationEvent {}
+
+    /**
+     * One line of the running bot's trace, read off its telemetry channel: the Trace tab shows it and
+     * {@code Runs.onTrace} relays it. Published off the FX thread.
+     */
+    public record TraceLineEvent(com.botmaker.plugin.api.TraceLine line) implements ApplicationEvent {}
 
     /**
      * Published when the running program signals it is blocking on stdin. {@code kind} is {@code null} when
