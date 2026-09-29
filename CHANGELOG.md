@@ -42,6 +42,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A maximized window stays maximized.** Opening a project, or going to the Run view and back, could drop
+  a maximized Studio to its smaller size, and Studio then remembered the smaller size for the next start.
+  The screen change no longer touches the window at all.
 - **A plugin added outside Studio appears by itself.** A `pom.xml` edited by `mvn`, an IDE, a `git pull` or
   a restore now reloads the plugins without pressing Reload.
 

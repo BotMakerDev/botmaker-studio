@@ -12,6 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > changes outside Studio; it compares with the pom last bound, so Studio's own writes do not rebind twice.
 > Read the older names below through this.
 
+> **The shell keeps one Scene (2026-09-29).** Every screen (selector, loading, editor, Runner) is shown by
+> `StudioWindow.showOnShell`, which swaps the built scene's **root** into the scene already showing — never
+> `setScene` after the first. A scene set on a maximized stage came up at the restored size, and the
+> maximize-flag toggle that re-filled it could leave KWin un-maximized (reproduced under a nested
+> `kwin_x11` with `GeometryTrace`, which `BOTMAKER_TRACE_GEOMETRY=1` turns on). Hang handlers on a screen's
+> root, not its scene.
+
 > **Find (2026-09-29).** Navigate ▸ Find… (Ctrl+F, `ui/app/FindBar`, floated over the canvas by
 > `EditorCanvas.overlay`) and Find in Project… (Ctrl+Shift+F, `NavigationPopups.findInProject`) search the
 > **source text** (`nav/TextSearch`, case-insensitive) and land on the block owning the offset

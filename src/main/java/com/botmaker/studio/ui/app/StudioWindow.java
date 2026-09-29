@@ -6,6 +6,7 @@ import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.Group;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Modality;
@@ -60,6 +61,36 @@ public final class StudioWindow {
      */
     public static boolean fillsScreen(Stage stage) {
         return stage != null && (stage.isMaximized() || stage.isFullScreen());
+    }
+
+    /**
+     * Shows the screen {@code built} carries on the shell's {@code stage} without moving or resizing it.
+     *
+     * <p><b>The shell keeps one {@link Scene} for its whole life; each screen swaps its root in
+     * (2026-09-29).</b> The shell changes screen several times in a session — project selector, loading
+     * screen, editor, Runner — and used to {@code setScene} each one. {@link GeometryTrace}, run under KWin,
+     * showed what that did to a maximized shell: JavaFX sizes a scene set on a shown stage from the window's
+     * <em>restored</em> size, so the editor's scene came up 1440×872 inside a 1600×972 frame (the border, black
+     * in the dark theme). The cure then was to drop the maximize flag and set it again in the same pulse to
+     * force a re-fill — and KWin, answering both requests asynchronously, could end on the un-maximize: the
+     * window "resized for no reason", and the drop was saved, so the next start opened small too. A root
+     * swapped into the scene already showing is laid out at the window's real size, so there is nothing to
+     * re-fill and no flag to touch.
+     *
+     * <p>A screen's scene is only its carrier: its root moves over, and so do its stylesheets. Anything a
+     * screen hangs on its <em>scene</em> would stay behind, so the screens hang it on their root.
+     */
+    public static void showOnShell(Stage stage, Scene built) {
+        Scene shown = stage.getScene();
+        if (shown == null) {
+            stage.setScene(built);
+            return;
+        }
+        Parent root = built.getRoot();
+        // A node belongs to one scene: take it out of the one it was built in before it moves.
+        built.setRoot(new Group());
+        shown.getStylesheets().setAll(built.getStylesheets());
+        shown.setRoot(root);
     }
 
     /** How long after the last move/resize the geometry is written. A drag is hundreds of events. */
@@ -133,6 +164,7 @@ public final class StudioWindow {
         // Unsized on purpose. A Scene built with a width and height resizes the Stage it is set on, which is
         // the wrong way round here: the stage already knows where it goes, from what the user last did.
         Scene scene = ThemedWindows.scene(content);
+        GeometryTrace.install(stage, key);
         stage.setScene(scene);
         if (minWidth > 0) stage.setMinWidth(minWidth);
         if (minHeight > 0) stage.setMinHeight(minHeight);

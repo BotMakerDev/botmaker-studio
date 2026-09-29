@@ -571,7 +571,9 @@ public class UIManager implements ProjectWindow {
         KeyCombination copyCombo = new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN);
         KeyCombination pasteCombo = new KeyCodeCombination(KeyCode.V, KeyCombination.SHORTCUT_DOWN);
 
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+        // On the root, not the scene: the shell keeps one scene and swaps roots into it (BotMakerStudio), so a
+        // filter on this scene would never see a key.
+        root.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getTarget() instanceof javafx.scene.control.TextInputControl) {
                 return;
             }

@@ -29,7 +29,6 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.image.Image;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -89,6 +88,8 @@ public class BotMakerStudio extends Application {
         sweep.setDaemon(true);
         sweep.start();
         applyAppIcons(primaryStage);
+        // Opt-in record of every move and resize of the shell and who made it (BOTMAKER_TRACE_GEOMETRY=1).
+        com.botmaker.studio.ui.app.GeometryTrace.install(primaryStage, "main");
         configureWindow(primaryStage);
         Path requested = requestedProject();
         Path toOpen = requested != null ? requested : ProjectPreferences.getLastOpened();
@@ -499,78 +500,9 @@ public class BotMakerStudio extends Application {
         });
     }
 
-    /**
-     * Puts {@code scene} on the shell's stage without letting it resize the window.
-     *
-     * <p>The shell swaps its whole scene several times in a normal session — project selector, loading
-     * screen, editor, Runner — and a {@link Scene} built with a size resizes the stage it is set on. That is
-     * the other half of "the window changes size when I open something": the geometry is restored around the
-     * swap so the window the user sized stays the size they made it. All four of those scenes are now built
-     * unsized, so this is the belt to that pair of braces rather than the only thing holding the window still.
-     *
-     * <p><b>Maximized is handled, not skipped.</b> It used to return early on a maximized stage — nothing to
-     * restore, since the window manager owns the geometry — which was true of the *window* and false of the
-     * *scene*: a sized scene kept its own size inside the maximized frame and the rest showed as a black
-     * border. The re-assert below is what closes that, and it costs nothing when the scene already fills.
-     *
-     * <p>And it is a re-assert, not a test. The first fix asked for the maximize again only
-     * {@code if (!stage.isMaximized())} — but the flag survives a scene swap, so that condition was false on
-     * exactly the path that breaks (editor → user view → editor, maximized throughout) and true only where
-     * nothing was wrong. A property that already holds the value fires no invalidation and re-runs no
-     * maximize, so the flag is dropped and set again in the same pulse to force one.
-     *
-     * <p>Fullscreen is the same window as far as this is concerned — see {@code StudioWindow.fillsScreen} —
-     * except that the re-assert has to be on the flag the user set: a fullscreen editor put back as a
-     * maximized one has still lost the state it was in.
-     */
-    private void setScenePreservingGeometry(Stage stage, Scene scene) {
-        boolean wasFullScreen = stage.isFullScreen();
-        boolean wasFilling = StudioWindow.fillsScreen(stage);
-        double x = stage.getX();
-        double y = stage.getY();
-        double w = stage.getWidth();
-        double h = stage.getHeight();
-        stage.setScene(scene);
-        if (wasFilling) {
-            // setScene on a filled stage leaves the flag on while the scene sits at its own size; taking the
-            // flag off and putting it back re-runs the fill, which is what makes the root fill the frame.
-            // Fullscreen gets the same treatment on its own flag — asserting maximize on it would leave the
-            // user in a window they never asked for.
-            if (wasFullScreen) {
-                stage.setFullScreen(false);
-                stage.setFullScreen(true);
-            } else {
-                stage.setMaximized(false);
-                stage.setMaximized(true);
-            }
-            fillStage(stage, scene);
-            requestSceneLayout(stage);
-            return;
-        }
-        if (Double.isNaN(w) || Double.isNaN(h) || w <= 0 || h <= 0) return;
-        if (stage.getWidth() != w) stage.setWidth(w);
-        if (stage.getHeight() != h) stage.setHeight(h);
-        if (stage.getX() != x) stage.setX(x);
-        if (stage.getY() != y) stage.setY(y);
-    }
-
-    /**
-     * The belt to the maximize re-assert: one pulse later, a root still laid out smaller than the scene it is
-     * in is resized to fill it.
-     *
-     * <p>This is the black border itself, measured rather than assumed — the gap the user sees is the stage's
-     * background showing where the root stopped. The root's min sizes are 0 ({@code UIManager.createScene}),
-     * so nothing here can push the window outwards; the only thing it can do is take up slack that a scene
-     * swap left behind.
-     */
-    private void fillStage(Stage stage, Scene scene) {
-        Platform.runLater(() -> {
-            if (stage.getScene() != scene || !(scene.getRoot() instanceof Region root)) return;
-            if (root.getWidth() < scene.getWidth() - 1 || root.getHeight() < scene.getHeight() - 1) {
-                root.resize(scene.getWidth(), scene.getHeight());
-                root.requestLayout();
-            }
-        });
+    /** Shows a screen on the shell without moving or resizing it — see {@link StudioWindow#showOnShell}. */
+    private void setScenePreservingGeometry(Stage stage, Scene built) {
+        StudioWindow.showOnShell(stage, built);
     }
 
     private void applyAppIcons(Stage stage) {
