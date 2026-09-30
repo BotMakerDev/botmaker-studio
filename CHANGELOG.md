@@ -28,6 +28,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   every class of a plugin's jar, and a plugin class its palette does not reach offers no members. Plugin
   classes are listed alphabetically.
 - A slot editor can ask which of the bot's methods it sits in (`Owner::method`), for the outcome picker.
+- The Workflow guide describes an activity body as `public static Outcome body()` returning
+  `Activities.outcome("…")` or `Activities.next()` (SDK 2.0.0).
 
 ## [1.2.1] — 2026-09-29
 

@@ -97,8 +97,9 @@ public final class Workflow {
                         + "wires those outcomes to whatever runs next. \"" + RuntimeDiagram.TITLE + "\" above "
                         + "is what that looks like at run time; it is worth reading before you draw a graph, "
                         + "because activities do not run top to bottom, once each.",
-                        "An activity is a method you write — a public static Outcome body(ActivityContext "
-                        + "ctx) — and the flow names it as a method reference, Collect::body. That is the "
+                        "An activity is a method you write — a public static Outcome body() that returns "
+                        + "Activities.outcome(\"…\") or Activities.next() — and the flow names it as a method "
+                        + "reference, Collect::body. That is the "
                         + "whole binding: rename or delete the method and the compiler says so, pointing at "
                         + "the flow, instead of a card that quietly stops doing anything. A card's label is "
                         + "a separate string on purpose, so renaming one never touches your code.",
