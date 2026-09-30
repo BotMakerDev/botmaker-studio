@@ -10,6 +10,17 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A plugin call from the statement menu no longer lands unresolved.** `Mouse ▸ click` and `Wait ▸ time`
+  wrote `new Point(0, 0)` and `Duration.ofSeconds(1)` without importing `Point` or `Duration`; each seeded
+  argument's type is now imported with the call.
+- **Set Variable asks which variable first.** It is a submenu of the variables in scope where the block goes;
+  it assigned the first one and let you change it afterwards, and with none in scope it inserted nothing.
+  With no variable it now says so.
+
 ## [1.2.1] — 2026-09-29
 
 ### Added

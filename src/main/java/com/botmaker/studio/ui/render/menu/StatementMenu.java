@@ -10,6 +10,7 @@ import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.MethodSignature;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Menu;
@@ -416,7 +417,35 @@ public final class StatementMenu {
                 BlockCatalog.FUNCTION_CALL.category(), method.getName(), key);
     }
 
+    /**
+     * "Set Variable ▸" and every variable visible where the block goes, so the variable is picked before the
+     * block is placed. It was one row that assigned whichever variable came first — the user picked the real one
+     * afterwards — and with none in scope wrote {@code ? = ?}, which drew nothing (2026-09-30). An empty submenu
+     * says why instead.
+     */
+    private static MenuItem setVariableMenu(Build b) {
+        BlockType assign = BlockCatalog.ASSIGNMENT;
+        Menu submenu = MenuIcons.decorate(new Menu(assign.displayName()), MenuIcons.iconFor(assign.category()));
+        for (var variable : b.analyzer().getVisibleVariables(b.targetBody(), ResolvedType.UNKNOWN)) {
+            BlockType.AssignTo to = new BlockType.AssignTo("SET_" + variable.name(), variable.name(),
+                    assign.category(), variable.name());
+            submenu.getItems().add(MenuRows.entry(MenuIcons.iconFor(to.category()),
+                    MenuRows.categoryClass(to.category()), variable.name(),
+                    "Give " + variable.name() + " (" + variable.typeName() + ") a new value.",
+                    false, () -> b.onSelection().accept(to)));
+        }
+        if (submenu.getItems().isEmpty()) {
+            submenu.getItems().add(MenuBuilders.disabledItem("No variable in scope — add one with Declare Variable"));
+        }
+        return submenu;
+    }
+
     private static MenuItem statementItem(BlockType block, Build b, boolean inline) {
+        // Every row that would insert Set Variable — its category, a search hit, a recent or pinned one — opens
+        // the picker instead, wherever there is a body to look into.
+        if (block == BlockCatalog.ASSIGNMENT && b.targetBody() != null && b.analyzer() != null) {
+            return setVariableMenu(b);
+        }
         if (block instanceof BlockType.LibraryCall call && PluginHost.ownerOf(call.facade().getSimpleName()).isPresent()) {
             return callItem(new FacadeCall(PluginHost.ownerOf(call.facade().getSimpleName()).get(), block), b, inline);
         }

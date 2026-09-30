@@ -39,7 +39,22 @@ public class StatementFactory {
             case BlockType.EnumDecl ignored -> createEnumDeclaration(ctx.ast(), context);
             case BlockType.MethodMember ignored -> null; // a method is a class member, not a body statement
             case BlockType.OwnCall call -> createOwnCall(ctx, context, call);
+            case BlockType.AssignTo assign -> createAssignTo(ctx, context, assign);
         };
+    }
+
+    /** The picked variable given its type's default; null when it is not visible here any more. */
+    private static Statement createAssignTo(EditContext ctx, ASTNode context, BlockType.AssignTo assign) {
+        ProjectAnalyzer.VariableOption target =
+                firstVisibleVariable(ctx.analyzer(), context, v -> v.name().equals(assign.variable()));
+        if (target == null) return null;
+        AST ast = ctx.ast();
+        Assignment assignment = ast.newAssignment();
+        assignment.setOperator(Assignment.Operator.ASSIGN);
+        assignment.setLeftHandSide(ast.newSimpleName(target.name()));
+        assignment.setRightHandSide(InitializerFactory.createDefaultInitializer(ctx, target.type()));
+        ctx.addImportForType(target.type());
+        return ast.newExpressionStatement(assignment);
     }
 
     /** The picked method, called with a default for each parameter; null when it is not callable here any more. */
@@ -334,8 +349,12 @@ public class StatementFactory {
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
             List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer());
             if (params != null) {
+                // Each seed names its type by simple name (`new Point(0, 0)`, `Duration.ofSeconds(1)`), so the
+                // parameter types are imported as the facade is — MethodHandler's rule; without it Mouse ▸ click
+                // landed reading "Point cannot be resolved" (2026-09-30).
                 for (ResolvedType p : params) {
                     mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
+                    ctx.addImportForType(p);
                 }
             } else {
                 mi.arguments().add(ast.newNullLiteral());

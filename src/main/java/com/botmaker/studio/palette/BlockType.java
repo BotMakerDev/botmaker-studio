@@ -16,7 +16,7 @@ import java.util.List;
 public sealed interface BlockType
         permits BlockType.ControlFlow, BlockType.VarDecl,
                 BlockType.LibraryCall, BlockType.LambdaCall, BlockType.EnumDecl, BlockType.MethodMember,
-                BlockType.OwnCall {
+                BlockType.OwnCall, BlockType.AssignTo {
 
     String id();
     String displayName();
@@ -140,6 +140,13 @@ public sealed interface BlockType
 
         @Override public boolean producesValue() { return true; }
     }
+
+    /**
+     * {@code variable = <default>} — what Set Variable's submenu lists, one entry per variable visible where the
+     * block goes, so the variable is picked before the block is placed (2026-09-30). Made per menu, never pinned or
+     * remembered, for {@link OwnCall}'s reason.
+     */
+    record AssignTo(String id, String displayName, BlockCategory category, String variable) implements BlockType {}
 
     /** A method declaration — only valid as a class member. */
     record MethodMember(String id, String displayName, BlockCategory category) implements BlockType {

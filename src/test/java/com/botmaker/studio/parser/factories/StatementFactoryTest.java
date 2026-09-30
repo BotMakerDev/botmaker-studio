@@ -300,6 +300,36 @@ class StatementFactoryTest {
     }
 
     /**
+     * Set Variable assigned whichever variable came first and the user picked the real one afterwards; the
+     * menu now picks first, and the factory writes that variable — or nothing once it has left scope.
+     */
+    @Test
+    void setVariableAssignsThePickedVariable() {
+        String host = """
+                package com.mybot;
+                public class Subject {
+                    public static void main(String[] args) {
+                        int count = 1;
+                        String label = "a";
+                    }
+                }
+                """;
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), host, TestSupport.SOURCE_ROOT);
+        MethodDeclaration main = ((TypeDeclaration) cu.types().getFirst()).getMethods()[0];
+        ProjectState state = new ProjectState();
+        ProjectAnalyzer analyzer = new ProjectAnalyzer(null, state);
+
+        Statement label = StatementFactory.createStatement(EditContext.of(cu, analyzer, state),
+                new BlockType.AssignTo("SET_label", "label", BlockCategory.VARIABLES, "label"), main.getBody());
+        assertEquals("label=\"\";", label.toString().replaceAll("\\s+", ""));
+
+        assertNull(StatementFactory.createStatement(EditContext.of(cu, analyzer, state),
+                new BlockType.AssignTo("SET_gone", "gone", BlockCategory.VARIABLES, "gone"), main.getBody()),
+                "a variable no longer in scope builds nothing");
+    }
+
+    /**
      * A method is a class member, not a body statement. The factory says so by returning {@code null} — the
      * one live null path through {@code CodeEditor.addStatement}, and the reason B11 has a third site.
      */
