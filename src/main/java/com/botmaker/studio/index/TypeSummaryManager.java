@@ -245,6 +245,13 @@ public class TypeSummaryManager {
                 .toList();
     }
 
+    /** Whether {@code type} was indexed out of one of {@code jars} (absolute, normalised paths). */
+    public static boolean isIn(ClassInfo type, java.util.Set<java.nio.file.Path> jars) {
+        if (jars.isEmpty()) return false;
+        java.io.File element = type.getClasspathElementFile();
+        return element != null && jars.contains(element.toPath().toAbsolutePath().normalize());
+    }
+
     /** Library classes exposing at least one public static method returning a value (Call-Function targets). */
     public List<ClassInfo> getStaticUtilityTypes() {
         ensureCaches();

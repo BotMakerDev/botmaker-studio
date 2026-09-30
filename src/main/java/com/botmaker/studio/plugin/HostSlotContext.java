@@ -180,6 +180,26 @@ public final class HostSlotContext implements SlotContext {
     }
 
     /**
+     * {@code Owner::method} for the method declaration around the slot's live node, the class being the
+     * nearest type declaration around that — the text a flow holds for an activity body. Empty outside any
+     * method (a field initialiser).
+     */
+    @Override
+    public Optional<String> enclosingMethodSource() {
+        org.eclipse.jdt.core.dom.ASTNode node = slot.node();
+        while (node != null && !(node instanceof org.eclipse.jdt.core.dom.MethodDeclaration)) {
+            node = node.getParent();
+        }
+        if (!(node instanceof org.eclipse.jdt.core.dom.MethodDeclaration method)) return Optional.empty();
+        org.eclipse.jdt.core.dom.ASTNode owner = method.getParent();
+        while (owner != null && !(owner instanceof org.eclipse.jdt.core.dom.AbstractTypeDeclaration)) {
+            owner = owner.getParent();
+        }
+        if (!(owner instanceof org.eclipse.jdt.core.dom.AbstractTypeDeclaration type)) return Optional.empty();
+        return Optional.of(type.getName().getIdentifier() + "::" + method.getName().getIdentifier());
+    }
+
+    /**
      * Another argument of this slot's call, read by the grammar exactly as {@link #value} reads this one — a
      * {@code @Managed} constant included. Asked, never captured: the invocation is found from the slot's live
      * node on every call. Empty for an index outside the call, a varargs position (several arguments are not

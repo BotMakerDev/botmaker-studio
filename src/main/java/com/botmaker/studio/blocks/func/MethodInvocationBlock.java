@@ -435,11 +435,14 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                 selectorItems.add("--- " + plugin.toUpperCase(java.util.Locale.ROOT) + " ---");
                 facades.stream().sorted().forEach(selectorItems::add);
             });
-            // Static-utility classes from the JDK and the classpath (same source as ExpressionMenu's "Library").
+            // Static-utility classes from the JDK and the classpath (same source as ExpressionMenu's "Library"),
+            // never a plugin's: its classes are offered through its catalogue or not at all.
             List<String> libraryClassItems = new ArrayList<>();
             if (context.getProjectAnalyzer().getLibraryIndex() != null) {
+                java.util.Set<java.nio.file.Path> pluginJars = PluginHost.pluginJars();
                 context.getProjectAnalyzer().getLibraryIndex().getStaticUtilityTypes().stream()
                         .filter(ci -> !PluginHost.isFacadeClass(ci.getSimpleName()))
+                        .filter(ci -> !com.botmaker.studio.index.TypeSummaryManager.isIn(ci, pluginJars))
                         .forEach(ci -> libraryClassItems.add(ci.getSimpleName()));
             }
             Collections.sort(libraryClassItems);

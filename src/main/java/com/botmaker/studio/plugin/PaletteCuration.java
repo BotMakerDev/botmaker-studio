@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  *
  * <p><b>Empty means "declined to curate", never "offers nothing".</b> With no catalog served — no plugin
  * bound, or one that catalogues nothing — every answer below is "all of them", and the menus widen rather than
- * empty.
+ * empty. With one served, a class from a plugin's jar that it does not catalogue offers nothing.
  */
 public final class PaletteCuration {
 
@@ -78,7 +78,7 @@ public final class PaletteCuration {
      */
     private Set<String> offeredSignatures(String typeName, String member) {
         Optional<FacadeEntry> entry = curatedType(typeName);
-        if (entry.isEmpty()) return null;
+        if (entry.isEmpty()) return unreached(typeName) ? Set.of() : null;
         return entry.get().overloads(member).stream()
                 .map(MemberEntry::id)
                 .map(MethodSignature::signatureKeyOf)
@@ -117,7 +117,17 @@ public final class PaletteCuration {
      * list makes the caller drop the whole submenu, which is a correct answer rather than a confusing one.
      */
     public List<String> retainOfferedNames(String typeName, List<String> names, String keep) {
-        if (names == null || curatedType(typeName).isEmpty()) return names;
+        if (names == null || curatedType(typeName).isEmpty() && !unreached(typeName)) return names;
         return names.stream().filter(n -> isOffered(typeName, n) || n.equals(keep)).toList();
+    }
+
+    /**
+     * A plugin's own class its catalogue does not reach — {@code Debug}, {@code BotSettings} — which offers
+     * nothing rather than everything (2026-09-30): no offered call hands one over, so nothing in the editor
+     * should propose it. Answerable only for a qualified name, since a bare one could be the user's own class.
+     */
+    private boolean unreached(String typeName) {
+        return !catalog.isEmpty() && typeName != null && typeName.indexOf('.') >= 0
+                && PluginHost.shipsInPlugin(typeName);
     }
 }

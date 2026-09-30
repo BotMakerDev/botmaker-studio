@@ -67,6 +67,13 @@ class HostSlotArgumentTest {
         assertTrue(slot(fixture, "format", 0, 0).argumentValue(1, Integer.class).isEmpty(), "varargs tail");
     }
 
+    /** The text a flow links an activity body by — what narrows the outcome picker (2026-09-30). */
+    @Test
+    void theEnclosingMethodIsItsFlowReference() {
+        assertEquals("Subject::run",
+                slot(new EditorFixture(SOURCE), "max", 0, 1).enclosingMethodSource().orElseThrow());
+    }
+
     @Test
     void theWrongTypeIsEmpty() {
         assertTrue(slot(new EditorFixture(SOURCE), "max", 0, 1).argumentValue(0, String.class).isEmpty());

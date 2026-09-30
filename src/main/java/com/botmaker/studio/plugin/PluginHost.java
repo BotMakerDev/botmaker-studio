@@ -830,14 +830,48 @@ public final class PluginHost {
     }
 
     /**
-     * Simple names of every facade, hidden ones included, in declaration order — for the class dropdowns,
-     * which stay {@code String}-valued on purpose: the scope they display can also be a class the user wrote,
-     * which no catalog entry can name.
+     * Simple names of the offered facades, alphabetically — for the class dropdowns, which stay
+     * {@code String}-valued on purpose: the scope they display can also be a class the user wrote, which no
+     * catalog entry can name. Offered only since 2026-09-30: the dropdown listed every catalogued type, value
+     * types and plumbing included, so {@code ActivityContext} and {@code Debug} sat beside {@code Mouse}.
      */
     public static List<String> facadeNames() {
-        return bundled().facades().stream()
+        return menuFacades().stream()
                 .map(FacadeEntry::simpleName)
                 .toList();
+    }
+
+    /**
+     * The jars and class directories the bound plugins were loaded from. A library class in one of them is
+     * a plugin's, reached through its catalogue or not at all — the library lists leave it out (2026-09-30:
+     * {@code Debug} and {@code BotSettings} came back through "Java &amp; Libraries" once the class dropdown
+     * stopped listing them).
+     */
+    public static Set<java.nio.file.Path> pluginJars() {
+        Set<java.nio.file.Path> jars = new LinkedHashSet<>();
+        for (StudioPlugin plugin : plugins) {
+            java.net.URL where = codeSource(plugin.getClass());
+            if (where == null) continue;
+            try {
+                jars.add(java.nio.file.Path.of(where.toURI()).toAbsolutePath().normalize());
+            } catch (java.net.URISyntaxException | IllegalArgumentException | java.nio.file.FileSystemNotFoundException e) {
+                // A plugin from somewhere that is not a file owns no library entry to hide.
+            }
+        }
+        return jars;
+    }
+
+    /**
+     * Whether the class {@code binaryName} ships in a bound plugin's jar. Looked up without being
+     * initialised; false for a name no plugin's loader can find.
+     */
+    public static boolean shipsInPlugin(String binaryName) {
+        if (binaryName == null || binaryName.indexOf('.') < 0) return false;
+        try {
+            return pluginOwning(Class.forName(binaryName, false, classLoader())).isPresent();
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
     }
 
     private static PaletteCatalog merge(List<StudioPlugin> set) {

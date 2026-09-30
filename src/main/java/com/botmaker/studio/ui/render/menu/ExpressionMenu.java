@@ -586,10 +586,13 @@ public final class ExpressionMenu {
         libMenu.getItems().clear();
 
         Map<String, List<ClassInfo>> byPackage = new TreeMap<>();
+        java.util.Set<java.nio.file.Path> pluginJars = PluginHost.pluginJars();
         for (ClassInfo ci : analyzer.getLibraryIndex().getStaticUtilityTypes()) {
-            // SDK facades are intentionally omitted — they're reached only through the curated Vision
-            // palette blocks, so there's a single access path (see BlockCatalog / MethodInvocationBlock).
+            // A plugin's classes are omitted, catalogued or not — they're reached only through its own
+            // palette, so there's a single access path (see StatementMenu / MethodInvocationBlock), and one
+            // it does not catalogue is not reached at all.
             if (PluginHost.isFacadeClass(ci.getSimpleName())) continue;
+            if (com.botmaker.studio.index.TypeSummaryManager.isIn(ci, pluginJars)) continue;
             byPackage.computeIfAbsent(ci.getPackageName() == null ? "" : ci.getPackageName(),
                     k -> new ArrayList<>()).add(ci);
         }

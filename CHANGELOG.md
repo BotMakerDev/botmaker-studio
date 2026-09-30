@@ -21,6 +21,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   it assigned the first one and let you change it afterwards, and with none in scope it inserted nothing.
   With no variable it now says so.
 
+### Changed
+
+- **The class dropdown lists only what a plugin offers.** `ActivityContext`, `Debug`, `Point` and every other
+  value or plumbing type left it; "Java & Libraries" and the expression menu's "Library (static)" leave out
+  every class of a plugin's jar, and a plugin class its palette does not reach offers no members. Plugin
+  classes are listed alphabetically.
+- A slot editor can ask which of the bot's methods it sits in (`Owner::method`), for the outcome picker.
+
 ## [1.2.1] — 2026-09-29
 
 ### Added
