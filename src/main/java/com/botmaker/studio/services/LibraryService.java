@@ -90,11 +90,18 @@ public final class LibraryService {
      * @param editorDependencies the plugin's own {@code editorDependencies}; empty for the plugins that need
      *                           nothing, which is every plugin whose dependencies are ordinary and therefore
      *                           transitive
+     * @return the declared plugins the install made redundant and removed ({@link MavenService#dropShadowedPlugins})
      */
-    public CompletableFuture<Void> installPlugin(UserLibrary plugin, List<UserLibrary> editorDependencies) {
+    public CompletableFuture<List<MavenService.Shadowed>> installPlugin(UserLibrary plugin,
+                                                                       List<UserLibrary> editorDependencies) {
         List<String> named = new ArrayList<>(List.of(plugin.groupId() + ":" + plugin.artifactId()));
         editorDependencies.forEach(d -> named.add(d.groupId() + ":" + d.artifactId()));
-        return edit(() -> MavenService.installPlugin(config.projectPath(), plugin, editorDependencies), named);
+        java.util.concurrent.atomic.AtomicReference<List<MavenService.Shadowed>> dropped =
+                new java.util.concurrent.atomic.AtomicReference<>(List.of());
+        return edit(() -> {
+            MavenService.installPlugin(config.projectPath(), plugin, editorDependencies);
+            dropped.set(MavenService.dropShadowedPlugins(config.projectPath()));
+        }, named).thenApply(done -> dropped.get());
     }
 
     /** Removes {@code groupId:artifactId} and its editor dependencies — the mirror of {@link #installPlugin}. */

@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **Installing a plugin that brings another plugin you already declare removes the redundant entry.** Adding
+  the SDK to a project made from the Base template left the template's own `botmaker-plugin-basics` entry in
+  the pom, which pinned a basics version the SDK was not built against. The entry is now removed, and the
+  status line says so.
+
 ## [1.2.2] — 2026-10-01
 
 ### Added

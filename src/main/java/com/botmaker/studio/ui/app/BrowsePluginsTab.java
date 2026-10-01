@@ -6,6 +6,7 @@ import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
@@ -56,8 +57,7 @@ import java.util.concurrent.CompletableFuture;
 final class BrowsePluginsTab {
 
     private final LibraryService libraryService;
-    private final PluginRegistry registry;
-    private final JitPackSearch jitpack;
+    private final PluginCatalog catalog;
     private final Runnable onShowInstalled;
     private final Runnable onChanged;
 
@@ -90,8 +90,7 @@ final class BrowsePluginsTab {
     BrowsePluginsTab(LibraryService libraryService, PluginRegistry registry, JitPackSearch jitpack,
                      Runnable onShowInstalled, Runnable onChanged) {
         this.libraryService = libraryService;
-        this.registry = registry;
-        this.jitpack = jitpack;
+        this.catalog = new PluginCatalog(registry, jitpack);
         this.onShowInstalled = onShowInstalled;
         this.onChanged = onChanged;
 
@@ -133,13 +132,11 @@ final class BrowsePluginsTab {
     }
 
     private void load() {
-        // The ~/.m2 scan opens jars, so it is not the FX thread's work; it is also the half that must not
-        // wait on the network, since a plugin author testing an unpublished build may have no registry at
-        // all. Both halves are joined before anything is shown so the rows never re-order under the mouse.
-        CompletableFuture<List<MavenService.LocalPluginBuild>> local =
-                CompletableFuture.supplyAsync(MavenService::localPluginBuilds);
-        registry.browse().thenCombine(local, this::merge)
-                .thenAccept(rows -> Platform.runLater(() -> {
+        catalog.rows()
+                .thenAccept(catalogRows -> Platform.runLater(() -> {
+                    List<PluginRegistry.Plugin> rows = catalogRows.plugins();
+                    localCoordinates.clear();
+                    localCoordinates.addAll(catalogRows.localCoordinates());
                     all.clear();
                     all.addAll(rows);
                     refilter(searchField.getText());
@@ -176,47 +173,8 @@ final class BrowsePluginsTab {
                 + "against. Change the version of the plugin that brings it instead.";
     }
 
-    /**
-     * The registry's entries, with what is built locally taking precedence over what is published.
-     *
-     * <p>A local build of a coordinate the registry also lists <b>replaces that entry's version</b> rather
-     * than adding a second row: two rows for one artifact would offer to install two versions of it, and a
-     * developer who has just built one wants the one they built. A local build nobody has published yet
-     * becomes a row of its own, at the top, because it is the row they came here for.
-     *
-     * <p>Only ever populated in a dev build — {@link MavenService#localPluginBuilds()} answers empty
-     * otherwise — so a released Studio shows exactly the registry and nothing else.
-     */
-    private List<PluginRegistry.Plugin> merge(List<PluginRegistry.Plugin> published,
-                                              List<MavenService.LocalPluginBuild> builds) {
-        localCoordinates.clear();
-        List<PluginRegistry.Plugin> rows = new ArrayList<>(published);
-        for (MavenService.LocalPluginBuild build : builds) {
-            localCoordinates.add(build.coordinate());
-            int at = -1;
-            for (int i = 0; i < rows.size(); i++) {
-                if (rows.get(i).coordinate().equals(build.coordinate())) at = i;
-            }
-            if (at >= 0) {
-                PluginRegistry.Plugin entry = rows.get(at);
-                // The version is the local build's; everything else is still the registry's, the editor
-                // dependencies included — a developer's own build of a plugin needs exactly what the
-                // published one does.
-                rows.set(at, new PluginRegistry.Plugin(entry.id(), entry.name(), entry.coordinate(),
-                        entry.repo(), entry.description(), entry.tags(), entry.minContractVersion(),
-                        entry.editorDependencies(), build.version(),
-                        entry.verifiedAt()));
-            } else {
-                // A local build the registry has never seen has no entry to read a list from, so installing
-                // it declares the plugin alone. That is the honest answer — nothing here can know what a
-                // jar's optional dependencies are — and the way out is `botmaker plugin publish`.
-                rows.add(0, new PluginRegistry.Plugin(build.coordinate(), build.artifactId(),
-                        build.coordinate(), "", "Built locally into ~/.m2 — not published.", List.of(), "",
-                        List.of(), build.version(), ""));
-            }
-        }
-        return rows;
-    }
+    // merge and version moved to sharing/PluginCatalog on 2026-10-01, so New Project offers the same rows at the
+    // same versions as this tab.
 
     private void refilter(String query) {
         shown.setAll(all.stream().filter(plugin -> plugin.matches(query)).toList());
@@ -248,7 +206,7 @@ final class BrowsePluginsTab {
             return;
         }
         busy(true);
-        version(plugin).thenAccept(version -> {
+        catalog.version(plugin).thenAccept(version -> {
             if (version == null || version.isBlank()) {
                 Platform.runLater(() -> {
                     busy(false);
@@ -271,8 +229,8 @@ final class BrowsePluginsTab {
     }
 
     /** Reports the outcome of a pom write, then re-reads what the pom now declares. */
-    private void apply(CompletableFuture<Void> write, String done) {
-        write.whenComplete((ok, err) -> Platform.runLater(() -> {
+    private void apply(CompletableFuture<List<MavenService.Shadowed>> write, String done) {
+        write.whenComplete((dropped, err) -> Platform.runLater(() -> {
             busy(false);
             refreshInstalled();
             onChanged.run();
@@ -280,17 +238,10 @@ final class BrowsePluginsTab {
                 error(rootMessage(err));
             } else {
                 statusLabel.setStyle("-fx-text-fill: gray;");
-                statusLabel.setText(done);
+                String removed = MavenService.Shadowed.sentence(dropped);
+                statusLabel.setText(removed.isEmpty() ? done : done + " " + removed);
             }
         }));
-    }
-
-    /** The verified version, or — only when the entry carries none — JitPack's newest. */
-    private CompletableFuture<String> version(PluginRegistry.Plugin plugin) {
-        if (!plugin.verifiedVersion().isBlank()) {
-            return CompletableFuture.completedFuture(plugin.verifiedVersion());
-        }
-        return jitpack.fetchLatestVersion(plugin.groupId(), plugin.artifactId());
     }
 
     private void busy(boolean busy) {

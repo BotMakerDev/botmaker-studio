@@ -559,16 +559,7 @@ public final class MavenService {
         }
 
         RepositorySystem system = new RepositorySystemSupplier().get();
-        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-        Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
-        session.setLocalRepositoryManager(
-                system.newLocalRepositoryManager(session, new LocalRepository(localRepo.toFile())));
-        // Expose the JVM's system properties (notably java.version) to the model builder so POMs whose
-        // effective model depends on JDK-activated profiles resolve correctly. Without this, bytedeco's
-        // javacpp-presets parent fails ("Failed to determine Java version for profile doclint-java8-disable"),
-        // the descriptor read is silently ignored, and the whole opencv subtree — including the opencv main
-        // jar that carries org.opencv.core.Mat — is dropped from the bot's runtime classpath.
-        session.setSystemProperties(System.getProperties());
+        DefaultRepositorySystemSession session = newSession(system);
         DownloadAggregator downloads = new DownloadAggregator();
         session.setTransferListener(new AbstractTransferListener() {
             @Override
@@ -621,6 +612,21 @@ public final class MavenService {
             if (problems.isEmpty()) problems.add(firstLine(e.getMessage()));
         }
         return new Resolution(jars, problems);
+    }
+
+    /** A resolver session over {@code ~/.m2}, the one every resolution here starts from. */
+    private static DefaultRepositorySystemSession newSession(RepositorySystem system) {
+        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+        Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
+        session.setLocalRepositoryManager(
+                system.newLocalRepositoryManager(session, new LocalRepository(localRepo.toFile())));
+        // Expose the JVM's system properties (notably java.version) to the model builder so POMs whose
+        // effective model depends on JDK-activated profiles resolve correctly. Without this, bytedeco's
+        // javacpp-presets parent fails ("Failed to determine Java version for profile doclint-java8-disable"),
+        // the descriptor read is silently ignored, and the whole opencv subtree — including the opencv main
+        // jar that carries org.opencv.core.Mat — is dropped from the bot's runtime classpath.
+        session.setSystemProperties(System.getProperties());
+        return session;
     }
 
     private static void collectProblems(List<ArtifactResult> results, List<String> out) {
@@ -824,6 +830,121 @@ public final class MavenService {
     }
 
     /**
+     * Removes from {@code projectDir/pom.xml} every declared plugin that another declared plugin already brings,
+     * and answers what was removed, each with the plugin that brings it.
+     *
+     * <p><b>Why a direct entry must go.</b> Maven's nearest-wins makes the pom's own entry beat the version the
+     * bringing plugin was built against, and the failure is a linkage error inside that plugin. A template that
+     * declares {@code botmaker-plugin-basics} gains the SDK, which brings basics itself, and the template's entry
+     * would then pin basics where the SDK never was. The umbrella states the rule; this applies it, for any
+     * plugin, after every install (2026-10-01).
+     *
+     * <p>Plugins only, told apart by the service file in their jar ({@link #declaresPlugin}): a library the bot
+     * pins on purpose is the user's to pin. Each declared plugin's tree is collected on its own, so Maven's
+     * conflict resolution over the whole pom (which keeps the direct entry and drops the deeper one) cannot hide
+     * the edge. Best-effort: a plugin whose tree cannot be collected brings nothing, so nothing is removed for it.
+     * May block on the network — call it off the FX thread.
+     */
+    public static List<Shadowed> dropShadowedPlugins(Path projectDir) throws IOException {
+        Model model = requireModel(projectDir);
+        List<Dependency> plugins = new ArrayList<>();
+        for (Dependency d : model.getDependencies()) {
+            String scope = d.getScope() == null ? "compile" : d.getScope();
+            if (!"compile".equals(scope) && !"runtime".equals(scope)) continue;
+            // A template pins its plugin as ${botmaker.basics.version}; a resolver handed the placeholder
+            // resolves nothing, and the plugin would never be seen.
+            resolveArtifact(model, d.getGroupId(), d.getArtifactId(), "", versionOf(model, d))
+                    .filter(MavenService::declaresPlugin).ifPresent(jar -> plugins.add(d));
+        }
+        if (plugins.size() < 2) return List.of();
+
+        RepositorySystem system = new RepositorySystemSupplier().get();
+        DefaultRepositorySystemSession session = newSession(system);
+        List<RemoteRepository> repositories = buildRemoteRepositories(model);
+        Map<String, Set<String>> brings = new LinkedHashMap<>();
+        for (Dependency plugin : plugins) {
+            Set<String> below = new java.util.HashSet<>();
+            CollectRequest request = new CollectRequest();
+            request.setRoot(new org.eclipse.aether.graph.Dependency(new DefaultArtifact(
+                    plugin.getGroupId(), plugin.getArtifactId(), "", "jar", versionOf(model, plugin)), "compile"));
+            request.setRepositories(repositories);
+            try {
+                collectBelow(system.collectDependencies(session, request).getRoot(), below, true);
+            } catch (org.eclipse.aether.collection.DependencyCollectionException e) {
+                if (e.getResult() != null && e.getResult().getRoot() != null) {
+                    collectBelow(e.getResult().getRoot(), below, true);
+                }
+            }
+            brings.put(coordinate(plugin), below);
+        }
+
+        List<Shadowed> removed = shadowed(brings);
+        if (removed.isEmpty()) return removed;
+        Set<String> gone = new java.util.HashSet<>();
+        for (Shadowed s : removed) gone.add(s.coordinate());
+        model.getDependencies().removeIf(d -> gone.contains(coordinate(d)));
+        writeModel(projectDir, model);
+        return removed;
+    }
+
+    /** A declared plugin {@link #dropShadowedPlugins} removed, and the declared plugin that brings it. */
+    public record Shadowed(String coordinate, String broughtBy) {
+
+        /** One sentence naming what was removed and why, or {@code ""} for nothing. */
+        public static String sentence(List<Shadowed> removed) {
+            if (removed == null || removed.isEmpty()) return "";
+            return removed.stream()
+                    .map(s -> artifact(s.coordinate()) + " is brought by " + artifact(s.broughtBy())
+                            + ", so its own entry was removed.")
+                    .collect(Collectors.joining(" "));
+        }
+
+        private static String artifact(String coordinate) {
+            return coordinate.substring(coordinate.indexOf(':') + 1);
+        }
+    }
+
+    /**
+     * Which of {@code brings}' keys another key brings: {@code brings} maps each declared plugin's
+     * {@code groupId:artifactId} to every coordinate in its own tree. Never removes both of two plugins that
+     * claim to bring each other, which no real pom can produce but a broken one might. Pure.
+     */
+    static List<Shadowed> shadowed(Map<String, Set<String>> brings) {
+        List<Shadowed> out = new ArrayList<>();
+        Set<String> removed = new java.util.HashSet<>();
+        for (String plugin : brings.keySet()) {
+            for (Map.Entry<String, Set<String>> other : brings.entrySet()) {
+                if (other.getKey().equals(plugin) || removed.contains(other.getKey())) continue;
+                if (other.getValue().contains(plugin)) {
+                    out.add(new Shadowed(plugin, other.getKey()));
+                    removed.add(plugin);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    private static void collectBelow(org.eclipse.aether.graph.DependencyNode node, Set<String> out, boolean root) {
+        if (node == null) return;
+        if (!root && node.getArtifact() != null) {
+            out.add(node.getArtifact().getGroupId() + ":" + node.getArtifact().getArtifactId());
+        }
+        for (org.eclipse.aether.graph.DependencyNode child : node.getChildren()) collectBelow(child, out, false);
+    }
+
+    /** {@code d}'s version, with a whole-{@code ${property}} pin read from the pom's properties. */
+    private static String versionOf(Model model, Dependency d) {
+        String v = d.getVersion();
+        if (v == null) return null;
+        return propertyOf(v).map(model.getProperties()::getProperty).orElse(v);
+    }
+
+    private static String coordinate(Dependency d) {
+        return d.getGroupId() + ":" + d.getArtifactId();
+    }
+
+    /**
      * Declares {@code library} at {@code compile} scope unless the pom already names its coordinate, and
      * answers whether it wrote. A declared version is never moved: that is Manage Libraries' question.
      */
@@ -998,11 +1119,7 @@ public final class MavenService {
         Artifact artifact = new DefaultArtifact(groupId, artifactId, classifier, "jar", version.trim());
 
         RepositorySystem system = new RepositorySystemSupplier().get();
-        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-        Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
-        session.setLocalRepositoryManager(
-                system.newLocalRepositoryManager(session, new LocalRepository(localRepo.toFile())));
-        session.setSystemProperties(System.getProperties());
+        DefaultRepositorySystemSession session = newSession(system);
 
         ArtifactRequest request = new ArtifactRequest();
         request.setArtifact(artifact);
