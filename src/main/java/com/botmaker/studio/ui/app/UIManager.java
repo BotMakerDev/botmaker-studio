@@ -17,6 +17,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ReviewService;
 import com.botmaker.studio.services.ScreenCaptureService;
@@ -317,16 +318,39 @@ public class UIManager implements ProjectWindow {
         eventBus.subscribe(CoreApplicationEvents.InputRequestedEvent.class, this::promptForInput, true);
     }
 
-    /** Shows a modal prompt when the running bot blocks on stdin, then sends the entered line to the program. */
+    /**
+     * Shows the running bot's question as a modal dialog shaped by what it asks for, then sends the answer back:
+     * a list for a choice, Yes and No buttons for a yes/no, a text field otherwise. Closing the dialog answers
+     * {@code null}, which the bot reads as a cancel. The bot checks the answer and asks again when it does not
+     * read, so a number is typed into a plain field here.
+     */
     private void promptForInput(CoreApplicationEvents.InputRequestedEvent event) {
-        TextInputDialog dialog = new TextInputDialog();
+        TelemetryEvent.Ask ask = event.ask();
+        String prompt = ask.prompt().isBlank() ? "Enter input:" : ask.prompt();
+        String answer = switch (ask.asked()) {
+            case CHOICE -> {
+                if (ask.choices().isEmpty()) yield null;
+                ChoiceDialog<String> dialog = new ChoiceDialog<>(ask.choices().getFirst(), ask.choices());
+                yield showInputDialog(dialog, prompt).orElse(null);
+            }
+            case YES_NO -> {
+                Alert dialog = new Alert(Alert.AlertType.CONFIRMATION, prompt, ButtonType.YES, ButtonType.NO);
+                yield showInputDialog(dialog, null)
+                        .map(button -> button == ButtonType.YES ? "true" : button == ButtonType.NO ? "false" : null)
+                        .orElse(null);
+            }
+            case TEXT, NUMBER, WHOLE, UNKNOWN -> showInputDialog(new TextInputDialog(), prompt).orElse(null);
+        };
+        eventBus.publish(new CoreApplicationEvents.InputAnsweredEvent(ask.id(), answer));
+    }
+
+    private <R> java.util.Optional<R> showInputDialog(Dialog<R> dialog, String prompt) {
         ThemedWindows.apply(dialog);
         dialog.initOwner(primaryStage);
         dialog.setTitle("Bot needs input");
-        dialog.setHeaderText("The bot is waiting for input");
-        dialog.setContentText(event.kind() == null ? "Enter input:" : event.kind().prompt());
-        dialog.showAndWait().ifPresent(value ->
-                eventBus.publish(new CoreApplicationEvents.SendInputEvent(value)));
+        dialog.setHeaderText("The bot is waiting for an answer");
+        if (prompt != null) dialog.setContentText(prompt);
+        return dialog.showAndWait();
     }
 
     @Override

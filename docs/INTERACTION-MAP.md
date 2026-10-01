@@ -155,8 +155,9 @@ on `ProgramStartedEvent`/`DebugSessionStartedEvent`, Errors on any error diagnos
 **Global shortcuts** (scene `KEY_PRESSED` filter, suppressed while focus is in a `TextInputControl`):
 `Ctrl/Cmd+C` → `CopyRequestedEvent`, `Ctrl/Cmd+V` → `PasteRequestedEvent`.
 
-**Bot input prompt:** `InputRequestedEvent` → modal `TextInputDialog` "Bot needs input" →
-`SendInputEvent`.
+**Bot input prompt:** a bot's `Ask` question (telemetry `Ask` frame) → `InputRequestedEvent` → modal
+"Bot needs input": a `ChoiceDialog` for a choice, Yes/No buttons for a yes/no, a `TextInputDialog` otherwise →
+`InputAnsweredEvent` (null on close) → the `Answer` frame back to the bot.
 
 ## F. In-block argument editors / pickers
 

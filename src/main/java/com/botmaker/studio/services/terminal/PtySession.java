@@ -22,8 +22,9 @@ import java.util.function.IntConsumer;
  * the PTY and interprets nothing, so a full-screen program ({@code vim}, {@code htop}, an AI TUI) draws exactly
  * as it would in a desktop terminal. It is the same shape as {@code botmaker-remote-server}'s {@code Terminal}.
  *
- * <p>The bot does <em>not</em> run here: its {@code BM-INPUT} prompts read stdin line by line over pipes, which
- * is why the Run tab and the Terminal tab are two tabs.
+ * <p>The bot does <em>not</em> run here: its output is lines on pipes for the Run tab, and its questions are
+ * dialogs over its telemetry socket ({@code Ask}, since 2026-10-01), which is why the Run tab and the Terminal
+ * tab are two tabs.
  *
  * <p>The reader is one daemon thread per session, blocked on the PTY. Output reaches {@code sink} on that
  * thread; {@code exited} is called once with the exit code, also on that thread.

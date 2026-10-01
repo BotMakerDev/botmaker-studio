@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A bot's question is a real dialog.** When a bot calls `Ask.choice(…)`, `Ask.yesNo(…)` or another `Ask`
+  question, Studio shows the prompt with a list of the choices, Yes and No buttons, or a text field, and sends
+  the answer back on the run's telemetry channel. Closing the dialog cancels the question. This replaces the
+  generic "The bot is waiting for input" box, which could not show what was asked. Needs the SDK release that
+  brings `Ask`; a bot on an older SDK that still calls `BotMaker.readLine()` gets no prompt.
+
 - **The Trace tab shows every call your bot makes into a plugin**, with no trace code in the plugin:
   `[ImageFinder] find(ORE) → Match[…]  12 ms`, or `threw …`. Studio starts each Run and Debug with a small
   agent that rewrites the bot's own calls into the plugins' offered classes as they load. A call repeated in a

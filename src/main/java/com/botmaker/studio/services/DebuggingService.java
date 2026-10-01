@@ -118,19 +118,8 @@ public class DebuggingService {
                 case CoreApplicationEvents.DebugStopRequestedEvent ignored -> stopDebugging();
             }
         }, false);
-        eventBus.subscribe(CoreApplicationEvents.SendInputEvent.class, e -> sendInput(e.text()), false);
-    }
-
-    /** Writes a line to the debuggee's stdin (used by the input popup) and echoes it to the console. */
-    public void sendInput(String line) {
-        Process process = currentProcess;
-        if (process == null || !process.isAlive()) return;
-        try {
-            java.io.OutputStream stdin = process.getOutputStream();
-            stdin.write((line + System.lineSeparator()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            stdin.flush();
-            Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(line + "\n")));
-        } catch (IOException ignored) {}
+        eventBus.subscribe(CoreApplicationEvents.InputAnsweredEvent.class,
+                e -> RunTelemetry.answer(telemetryServer, e.id(), e.value()), false);
     }
 
     /**
@@ -220,8 +209,8 @@ public class DebuggingService {
                 // fast the bot prints. One runLater per line is what froze the window under Follow.
                 ConsoleBatcher batcher = codeExecutionService.console();
                 this.console = batcher;
-                batcher.pump(currentProcess.getInputStream(), true, "debuggee-stdout");
-                batcher.pump(currentProcess.getErrorStream(), false, "debuggee-stderr");
+                batcher.pump(currentProcess.getInputStream(), "debuggee-stdout");
+                batcher.pump(currentProcess.getErrorStream(), "debuggee-stderr");
 
                 if (trace) startFollowTicker(id);
 

@@ -70,8 +70,8 @@ public sealed interface BlockType
 
     // ScannerRead — `<type> <varName> = BotMaker.readInt()` — went on 2026-09-01. It was a palette entry
     // whose whole content was one SDK facade's method name, which is a call the plugin owning that facade
-    // offers through the member menus like any other. InputKind survives it: the BM-INPUT marker it also
-    // carries is a running-bot protocol, not a palette entry.
+    // offers through the member menus like any other. InputKind and its BM-INPUT marker went on 2026-10-01:
+    // a bot asks with the SDK's Ask over its telemetry socket.
 
     /**
      * A static library call statement: {@code <facade>.<method>(args...)}.

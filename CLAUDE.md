@@ -1055,8 +1055,7 @@ resolves.) Studio lists locally installed SDK snapshots at the top of its versio
 
 Releases are cut with the umbrella's `../release.sh`; **the maintainer owns the JitPack publish.**
 
-The read-input blocks depend on a small SDK protocol: `BotMaker.readX()` prints a `BM-INPUT:<type>` marker (SOH-wrapped) to stdout before blocking on stdin. The Studio detects and strips that marker (`CodeExecutionService` for run, `DebuggingService` for debug), shows the modal input prompt, and writes the entered line back to the process's stdin via `SendInputEvent` → `sendInput(...)`. Changing the marker on either side without the other breaks input prompts.
-
+A bot asks its user a question with the SDK's `Ask` (since 2026-10-01; `BotMaker.readX()` and its `BM-INPUT` stdout marker are deleted). The question is a `TelemetryEvent.Ask` frame on the run's telemetry socket: `runtime/RunTelemetry.publish` turns it into `InputRequestedEvent` (never relayed to plugins), `UIManager.promptForInput` shows a list, Yes/No or a text field by kind, and `InputAnsweredEvent` then `RunTelemetry.answer` writes the `Answer` frame back through `TelemetryServer.reply` (`CodeExecutionService` for a run, `DebuggingService` for a debug session). The bot validates and re-asks; a closed dialog answers `null`, a cancel. Stdout and stderr are plain text to `ConsoleBatcher`.
 ## Architecture
 
 ### Project Lifecycle

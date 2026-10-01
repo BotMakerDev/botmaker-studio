@@ -27,9 +27,8 @@ import java.util.regex.Pattern;
  * the text.
  *
  * <p>It used to be the "Terminal" tab, a read-only {@code TextArea} built inline in {@link UIManager}. It was
- * never a terminal: the bot runs on pipes because the {@code BM-INPUT} stdin protocol
- * ({@link CoreApplicationEvents.InputRequestedEvent}) reads them line by line, so what arrives here is lines,
- * not a screen. The shell is a separate tab. Colour escapes a bot's logger writes are stripped, since a text
+ * never a terminal: the bot runs on pipes and asks its questions as dialogs
+ * ({@link CoreApplicationEvents.InputRequestedEvent}), so what arrives here is lines, not a screen. The shell is a separate tab. Colour escapes a bot's logger writes are stripped, since a text
  * area would print them as {@code [32m}.
  */
 final class RunConsole {

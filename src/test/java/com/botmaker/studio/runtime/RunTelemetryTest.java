@@ -21,6 +21,7 @@ import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
@@ -49,6 +50,21 @@ class RunTelemetryTest {
         assertArrayEquals(click,
                 assertInstanceOf(CoreApplicationEvents.TelemetryFrameEvent.class, published.get(1)).frame());
         assertEquals(2, published.size(), "a debug line goes to the trace only, not to telemetry as well");
+    }
+
+    /** A question is Studio's to answer: it becomes an input request and is never relayed to a plugin. */
+    @Test
+    void aQuestionBecomesAnInputRequestAndAnAnswerNeedsAConnectedBot() throws IOException {
+        EventBus bus = new EventBus();
+        List<Object> published = new ArrayList<>();
+        bus.subscribe(CoreApplicationEvents.InputRequestedEvent.class, published::add);
+        bus.subscribe(CoreApplicationEvents.TelemetryFrameEvent.class, published::add);
+        TelemetryEvent.Ask ask = new TelemetryEvent.Ask(3, "yes-no", "Sell?", List.of(), 9);
+
+        RunTelemetry.publish(bus, frame(ask));
+
+        assertEquals(List.of(new CoreApplicationEvents.InputRequestedEvent(ask)), published);
+        assertFalse(RunTelemetry.answer(null, 3, "true"), "no run, nowhere to send it");
     }
 
     /**

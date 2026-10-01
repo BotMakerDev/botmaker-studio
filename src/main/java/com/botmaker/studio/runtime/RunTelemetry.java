@@ -19,8 +19,9 @@ import java.util.UUID;
  * A run's telemetry channel, as Studio listens to it: the one place a Run and a Debug start the loopback server
  * and decide what each frame is ({@code docs/refactor/40-run-trace.md}).
  *
- * <p><b>Studio reads the debug lines and nothing else.</b> A line is a capability every host has (it shows a
- * log), so it becomes a contract {@link TraceLine}; every other frame is a match, a click or whatever a newer
+ * <p><b>Studio reads the debug lines and the bot's questions, and nothing else.</b> A line is a capability every
+ * host has (it shows a log), so it becomes a contract {@link TraceLine}; a question ({@code Ask}) is answered by
+ * Studio's own dialog and its {@link #answer} goes back on the same socket; every other frame is a match, a click or whatever a newer
  * runtime sends, which is the runtime's vocabulary, and crosses to plugins as the bytes it arrived as. Until
  * 2026-09-29 Studio decoded every frame, so it knew what a match was, and a frame from a newer SDK than
  * Studio's own shared build was dropped here before the plugin that could read it saw it.
@@ -55,9 +56,23 @@ public final class RunTelemetry {
     static void publish(EventBus eventBus, byte[] frame) {
         if (TelemetryFrame.isLog(frame)) {
             traceLine(frame).ifPresent(line -> eventBus.publish(new CoreApplicationEvents.TraceLineEvent(line)));
+            return;
+        }
+        Optional<TelemetryEvent.Ask> ask = TelemetryFrame.ask(frame);
+        if (ask.isPresent()) {
+            // A question is Studio's to answer (it draws the dialog), so it is read here and never relayed.
+            eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(ask.get()));
         } else {
             eventBus.publish(new CoreApplicationEvents.TelemetryFrameEvent(frame));
         }
+    }
+
+    /**
+     * Sends the user's answer to question {@code id} back to the bot on {@code server}; false when there is no
+     * run or no bot connected, so the answer is dropped.
+     */
+    public static boolean answer(TelemetryServer server, long id, String value) {
+        return server != null && server.reply(new TelemetryEvent.Answer(id, value));
     }
 
     /** The trace line {@code frame} carries, or empty when it is not one this Studio can read. */

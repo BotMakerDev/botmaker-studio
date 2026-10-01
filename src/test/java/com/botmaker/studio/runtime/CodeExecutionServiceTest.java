@@ -209,12 +209,12 @@ class CodeExecutionServiceTest extends FxHeadlessTest {
         assertFalse(h.service().isRunning());
     }
 
-    /** Input is only meaningful while a process is alive; before one exists it is dropped, not an NPE. */
+    /** An answer is only meaningful while a bot is connected; before one is, it is dropped, not an NPE. */
     @Test
-    void sendingInputWithNothingRunningIsDropped(@TempDir Path root) throws Exception {
+    void answeringWithNothingRunningIsDropped(@TempDir Path root) throws Exception {
         Harness h = harnessFor(root, PRINTS_AND_EXITS);
 
-        h.service().sendInput("42");
+        assertFalse(h.service().answer(1, "42"));
 
         assertEquals(List.of(), List.copyOf(h.output()),
                 "nothing is running, so nothing should be echoed to the console either");

@@ -14,8 +14,6 @@ import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -64,20 +62,17 @@ public class CodeExecutionService {
                 e -> runCode(state.snapshot()), false);
         eventBus.subscribe(CoreApplicationEvents.StopRunRequestedEvent.class,
                 e -> stopRunningProgram(), false);
-        eventBus.subscribe(CoreApplicationEvents.SendInputEvent.class,
-                e -> sendInput(e.text()), false);
+        eventBus.subscribe(CoreApplicationEvents.InputAnsweredEvent.class,
+                e -> answer(e.id(), e.value()), false);
     }
 
-    /** Writes a line to the running program's stdin (used by the input popup). Echoes it to the console too. */
-    public void sendInput(String line) {
-        Process process = currentRunningProcess;
-        if (process == null || !process.isAlive()) return;
-        try {
-            OutputStream stdin = process.getOutputStream();
-            stdin.write((line + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
-            stdin.flush();
-            Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(line + "\n")));
-        } catch (IOException ignored) {}
+    /**
+     * Sends the user's answer to the running bot's question {@code id} on the run's telemetry socket; false when no
+     * bot is connected. A debug session answers its own ({@code DebuggingService}), so at most one of the two holds
+     * a server.
+     */
+    public boolean answer(long id, String value) {
+        return RunTelemetry.answer(telemetryServer, id, value);
     }
 
     private void status(String message) {
@@ -153,9 +148,8 @@ public class CodeExecutionService {
 
                 ConsoleBatcher console = console();
                 activeConsole = console;
-                // Only stdout carries the BM-INPUT marker the SDK emits before blocking on a read.
-                console.pump(currentRunningProcess.getInputStream(), true, "bot-stdout");
-                console.pump(currentRunningProcess.getErrorStream(), false, "bot-stderr");
+                console.pump(currentRunningProcess.getInputStream(), "bot-stdout");
+                console.pump(currentRunningProcess.getErrorStream(), "bot-stderr");
 
                 int exitCode = currentRunningProcess.waitFor();
 
@@ -268,7 +262,7 @@ public class CodeExecutionService {
         Process process = pb.start();
 
         try (ConsoleBatcher console = console()) {
-            console.pump(process.getInputStream(), false, "javac-output");
+            console.pump(process.getInputStream(), "javac-output");
             int exitCode = process.waitFor();
             console.finish();
             return exitCode == 0;
@@ -280,9 +274,7 @@ public class CodeExecutionService {
      * three reach the console the same way.
      */
     public ConsoleBatcher console() {
-        return new ConsoleBatcher(
-                text -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text)),
-                kind -> eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(kind)));
+        return new ConsoleBatcher(text -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text)));
     }
 
     public void stopRunningProgram() {

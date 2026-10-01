@@ -130,13 +130,16 @@ public class CoreApplicationEvents {
     public record TraceLineEvent(com.botmaker.plugin.api.TraceLine line) implements ApplicationEvent {}
 
     /**
-     * Published when the running program signals it is blocking on stdin. {@code kind} is {@code null} when
-     * the {@code BM-INPUT} marker named a read this Studio does not know — a bot built against a newer SDK —
-     * in which case the prompt falls back to asking for plain text rather than not appearing at all.
+     * Published when the running bot asks its user a question over its telemetry socket ({@code Ask.choice(…)}),
+     * off the FX thread. A kind this Studio does not know ({@link com.botmaker.shared.ipc.TelemetryEvent.Ask.Kind#UNKNOWN},
+     * a bot built against a newer SDK) is asked as plain text rather than not at all.
      */
-    public record InputRequestedEvent(com.botmaker.studio.palette.InputKind kind) implements ApplicationEvent {}
-    /** Published by the UI to deliver a line of input to the running program's stdin. */
-    public record SendInputEvent(String text) implements ApplicationEvent {}
+    public record InputRequestedEvent(com.botmaker.shared.ipc.TelemetryEvent.Ask ask) implements ApplicationEvent {}
+    /**
+     * Published by the UI with the user's answer to the question {@code id}, sent back on the run's telemetry
+     * socket; {@code value} is null when they cancelled.
+     */
+    public record InputAnsweredEvent(long id, String value) implements ApplicationEvent {}
 
     // --- Execution lifecycle ---
 
