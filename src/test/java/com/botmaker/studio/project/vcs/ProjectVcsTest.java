@@ -255,6 +255,21 @@ class ProjectVcsTest {
         assertEquals("Push failed: timeout", ProjectVcs.explainRefusal("https://github.com/a/b.git", "Push failed: timeout"));
     }
 
+    /** The Versions tab shows a failure's deepest cause, so the explanation must be the deepest. */
+    @Test
+    void anExplainedRefusalIsTheMessageTheTabShows() {
+        String url = "https://github.com/BotMakerDev/botmaker-gamebot.git";
+        Exception jgit = new Exception(url + ": git-receive-pack not permitted on '" + url + "'");
+        Throwable shown = new RuntimeException("wrapped", ProjectVcs.pushFailure(url, jgit));
+        while (shown.getCause() != null) shown = shown.getCause();
+        assertTrue(shown.getMessage().startsWith("GitHub refused the push to BotMakerDev/botmaker-gamebot."),
+                shown.getMessage());
+
+        IOException other = ProjectVcs.pushFailure(url, new Exception("timeout"));
+        assertEquals("Push failed: timeout", other.getMessage());
+        assertTrue(other.getCause() != null, "an unexplained failure keeps its cause");
+    }
+
     /** {@code root/Project} with its repository moved to {@code root/modules/bot}, as git submodules lay it out. */
     static Path submoduleCheckout(Path root) throws IOException {
         Path project = root.resolve("Project");

@@ -902,8 +902,21 @@ public final class ProjectVcs {
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
-            throw new IOException(explainRefusal(url, "Push failed: " + e.getMessage()), e);
+            throw pushFailure(url, e);
         }
+    }
+
+    /**
+     * What a failed push throws. An explained refusal carries <b>no cause</b>: the Versions tab reports a
+     * failure's deepest cause ({@code ShareActions.rootMessage}), so with JGit's exception under it the
+     * explanation never reached the screen (2026-10-01). JGit's words go to the log instead.
+     */
+    static IOException pushFailure(String url, Exception e) {
+        String raw = "Push failed: " + e.getMessage();
+        String explained = explainRefusal(url, raw);
+        if (explained.equals(raw)) return new IOException(raw, e);
+        System.err.println(raw);
+        return new IOException(explained);
     }
 
     /**
