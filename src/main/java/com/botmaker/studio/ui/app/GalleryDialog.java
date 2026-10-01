@@ -386,10 +386,16 @@ public class GalleryDialog {
             setGraphic(row);
 
             // Resolve update availability off-thread.
+            // A bot whose author removed the repository has no original to merge an update from; it keeps
+            // running and keeps its own history, and the gallery's copy of its releases is what installs it.
+            // null: gone. An empty Optional: up to date.
             CompletableFuture
-                    .supplyAsync(() -> installer.checkForUpdate(bot.info().projectPath(), catalog.join()))
+                    .supplyAsync(() -> installer.authorGone(bot.info().projectPath()) ? null
+                            : installer.checkForUpdate(bot.info().projectPath(), catalog.join()))
                     .whenComplete((latest, err) -> Platform.runLater(() -> {
-                        if (err != null || latest == null || latest.isEmpty()) {
+                        if (err == null && latest == null) {
+                            status.setText("author removed the repository · no updates");
+                        } else if (err != null || latest.isEmpty()) {
                             status.setText("up to date");
                         } else {
                             status.setText("update available: " + latest.get());

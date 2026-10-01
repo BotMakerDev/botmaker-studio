@@ -3,6 +3,7 @@ package com.botmaker.studio.sharing;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
+import com.botmaker.shared.github.GitHubError;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -101,14 +102,36 @@ public final class GitHubGallery {
     /**
      * Resolves the latest release tag for {@code owner/repo} (the author's newest published version), or
      * {@code ""} if the repo has no releases / is unreachable. Used for "Update available" checks.
+     *
+     * <p>When the author's repository answers nothing, the newest copy the gallery keeps
+     * ({@link GalleryMirror}) — so a bot whose author deleted the repository still has a release to install.
      */
     public CompletableFuture<String> latestReleaseTag(String owner, String repo) {
         String url = GitHubConfig.API_BASE + "/repos/" + owner + "/" + repo + "/releases/latest";
-        return client.get(url, token()).thenApply(node -> {
-            if (node == null) return "";
-            JsonNode tag = node.get("tag_name");
-            return tag == null ? "" : tag.asText("");
+        return client.get(url, token()).thenCompose(node -> {
+            JsonNode tag = node == null ? null : node.get("tag_name");
+            if (tag != null && !tag.asText("").isEmpty()) return CompletableFuture.completedFuture(tag.asText());
+            return mirrorTags(owner, repo).thenApply(tags -> tags.isEmpty() ? "" : tags.getFirst());
         });
+    }
+
+    /** The tags the gallery keeps a copy of for {@code owner/repo}, newest first; empty when it keeps none. */
+    public CompletableFuture<List<String>> mirrorTags(String owner, String repo) {
+        return client.get(GalleryMirror.releaseApiUrl(), token())
+                .thenApply(release -> GalleryMirror.tagsIn(release, owner, repo));
+    }
+
+    /**
+     * Whether GitHub says {@code owner/repo} does not exist — a 404, never an unreachable network or a rate
+     * limit, which say nothing about the repository. What switches an install to the gallery's copy.
+     */
+    public CompletableFuture<Boolean> repositoryGone(String owner, String repo) {
+        return client.getOrFail(GitHubConfig.API_BASE + "/repos/" + owner + "/" + repo, token())
+                .handle((node, error) -> {
+                    if (error == null) return false;
+                    Throwable cause = error.getCause() == null ? error : error.getCause();
+                    return cause instanceof GitHubError gh && gh.status() == 404;
+                });
     }
 
     /**

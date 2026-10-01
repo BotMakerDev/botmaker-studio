@@ -24,6 +24,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   *Elsewhere* tag instead. *Newest first* reads when Studio last opened a project, or its folder's date when
   that is later, so the project you just opened is on top.
 
+### Added
+- A gallery bot whose author deleted its repository still installs, from the copy of its releases the gallery
+  keeps (the `mirror` release of `botmaker-gallery`). A template unpacks from the same copy, and the newest
+  release is read from it. The installed bot has its own history and no original to update from, and Browse
+  Bots says so: "author removed the repository · no updates".
+
 ### Removed
 - Local `~/.m2` builds of plugins and the SDK are no longer offered in Plugins & Libraries, Browse or New
   Project, and the `(local build)` labels are gone. Pin a local build in the pom by hand to try it.

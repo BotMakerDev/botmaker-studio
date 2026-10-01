@@ -59,14 +59,58 @@ public final class BotInstaller {
             throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
         try {
-            ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, dest, gallery.token());
+            String label = "Installed " + tag;
+            try {
+                ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, dest, gallery.token());
+            } catch (IOException cloneFailed) {
+                // Only a repository GitHub says is gone falls back: offline, the copy is out of reach too, and
+                // a clone that failed for any other reason is worth its own message.
+                if (!authorGone(entry.owner(), entry.repo())) throw cloneFailed;
+                deleteRecursively(dest);
+                installFromMirror(entry.owner(), entry.repo(), tag, dest);
+                label = "Installed " + tag + " from the gallery's copy — its author removed the repository";
+            }
             new BotSource(entry.owner(), entry.repo(), tag).write(dest);
-            new ProjectVcs(dest).checkpoint(VersionOrigin.INSTALL, "Installed " + tag);
+            new ProjectVcs(dest).checkpoint(VersionOrigin.INSTALL, label);
         } catch (IOException e) {
             deleteRecursively(dest);
             throw e;
         }
         return dest;
+    }
+
+    /**
+     * A bot whose repository is gone, unpacked from the gallery's copy into a history of its own. There is no
+     * {@code original} to merge an update from, so none is offered ({@link #authorGone(Path)}).
+     */
+    private void installFromMirror(String owner, String repo, String tag, Path dest) throws IOException {
+        byte[] zip;
+        try {
+            zip = client.getBytes(GalleryMirror.downloadUrl(owner, repo, tag), gallery.token()).join();
+        } catch (Exception e) {
+            throw new IOException("The repository " + owner + "/" + repo + " was removed by its author, and the "
+                    + "gallery keeps no copy of " + tag + ": " + rootMessage(e), e);
+        }
+        Files.createDirectories(dest);
+        unzipStrippingTopDir(zip, dest);
+        new ProjectVcs(dest).init();
+    }
+
+    /** Whether GitHub says {@code owner/repo} no longer exists. Blocking; false when GitHub cannot be asked. */
+    public boolean authorGone(String owner, String repo) {
+        try {
+            return gallery.repositoryGone(owner, repo).join();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the installed bot at {@code projectDir} lost its author's repository: it then still runs, and
+     * keeps its own history, but has no original to take an update from. Blocking.
+     */
+    public boolean authorGone(Path projectDir) {
+        return BotSource.read(projectDir).map(s -> authorGone(s.owner(), s.repo())).orElse(false);
     }
 
     /** The HTTPS address a bot is cloned from: plain, with no token in it. */
@@ -123,8 +167,14 @@ public final class BotInstaller {
         try {
             zip = client.getBytes(GitHubConfig.archiveUrl(owner, repo, tag), gallery.token()).join();
         } catch (Exception e) {
-            throw new IOException("Failed to download " + owner + "/" + repo + "@" + tag + ": "
-                    + rootMessage(e), e);
+            // The gallery's copy of the same archive (GalleryMirror), for a template whose repository is gone.
+            // The author's error is the one reported: it is the one the user can act on.
+            try {
+                zip = client.getBytes(GalleryMirror.downloadUrl(owner, repo, tag), gallery.token()).join();
+            } catch (Exception mirrorFailed) {
+                throw new IOException("Failed to download " + owner + "/" + repo + "@" + tag + ": "
+                        + rootMessage(e), e);
+            }
         }
         Files.createDirectories(dest);
         unzipStrippingTopDir(zip, dest);
