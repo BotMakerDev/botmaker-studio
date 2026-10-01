@@ -139,6 +139,14 @@ public final class ProjectVcs {
     }
 
     /**
+     * Whether this checkout's {@code .git} is a file pointing elsewhere — a submodule, or a worktree — whose
+     * history somebody else's tooling also writes. Studio takes no automatic version there ({@link Checkpoints}).
+     */
+    public boolean sharedRepository() {
+        return Files.isRegularFile(projectDir.resolve(".git"));
+    }
+
+    /**
      * The repository's own directory: {@code .git} itself, or the directory a {@code .git} file's
      * {@code gitdir:} line names (relative to the project). Null when there is neither.
      */
@@ -894,8 +902,27 @@ public final class ProjectVcs {
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
-            throw new IOException("Push failed: " + e.getMessage(), e);
+            throw new IOException(explainRefusal(url, "Push failed: " + e.getMessage()), e);
         }
+    }
+
+    /**
+     * {@code message}, or what a refused push means when GitHub refused it. JGit's words for GitHub's 403 are
+     * "git-receive-pack not permitted", and on an organization's repository the usual cause is not the account
+     * but the app: an organization with third-party access restrictions (GitHub's default) lets Studio's token
+     * read its public repositories and refuses every push until an owner grants Studio access (2026-10-01,
+     * BotMakerDev's gamebot). A terminal push over SSH still works, which is what made it look like a Studio bug.
+     */
+    static String explainRefusal(String url, String message) {
+        if (message == null || !message.contains("not permitted")) return message;
+        String where = SyncModel.slug(url).map(s -> s.owner() + "/" + s.repo()).orElse(url);
+        String owner = SyncModel.slug(url).map(SyncModel.Slug::owner).orElse("the owner");
+        return "GitHub refused the push to " + where + ". If " + owner + " is an organization, it has not "
+                + "granted BotMaker Studio access: an owner of " + owner + " approves it at https://github.com/"
+                + "organizations/" + owner + "/settings/oauth_application_policy (or you request it at "
+                + "https://github.com/settings/connections/applications/"
+                + com.botmaker.shared.github.GitHubConfig.OAUTH_CLIENT_ID + "). Otherwise your account cannot "
+                + "write to it.";
     }
 
     /** Fetches {@code remote}'s branches and tags. {@code token} may be null for a public repository. */
@@ -1175,19 +1202,31 @@ public final class ProjectVcs {
      * leaves this machine. The {@code .gitignore} is the user's (and, for a clone, the author's), and one
      * written before 2026-09-26 does not name the directory — so the rule goes where only this checkout sees
      * it rather than into a file that would then show up as a change of theirs.
+     *
+     * <p>{@code botmaker-project.properties} beside it since 2026-10-01: an older Studio wrote it and nothing
+     * reads it since 2026-09-27, so a copy left on disk was swept into the next automatic version (the gamebot
+     * template's, one push from its {@code main}). Excluding it deletes nothing and leaves a project that
+     * already tracks it as it is — git never un-tracks a file for an exclude line.
      */
     private void excludeStudioState() throws IOException {
         Path gitDir = gitDir();
         if (gitDir == null) return;
         Path info = gitDir.resolve("info");
         Path exclude = info.resolve("exclude");
-        String line = "/" + ProjectConfig.STUDIO_DIR + "/";
         String existing = Files.exists(exclude) ? Files.readString(exclude) : "";
-        if (existing.lines().anyMatch(l -> l.trim().equals(line))) return;
+        StringBuilder added = new StringBuilder();
+        for (String line : EXCLUDED) {
+            if (existing.lines().noneMatch(l -> l.trim().equals(line))) added.append(line).append(System.lineSeparator());
+        }
+        if (added.isEmpty()) return;
         Files.createDirectories(info);
         String separator = existing.isEmpty() || existing.endsWith("\n") ? "" : System.lineSeparator();
-        Files.writeString(exclude, existing + separator + line + System.lineSeparator());
+        Files.writeString(exclude, existing + separator + added);
     }
+
+    /** What {@link #excludeStudioState} keeps out of every version: Studio's state, and an old Studio's leftover. */
+    static final List<String> EXCLUDED = List.of("/" + ProjectConfig.STUDIO_DIR + "/",
+            "/src/main/resources/botmaker-project.properties");
 
     private void writeGitignore() throws IOException {
         Path gitignore = projectDir.resolve(".gitignore");

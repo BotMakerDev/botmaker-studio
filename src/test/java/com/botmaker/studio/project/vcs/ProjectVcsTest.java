@@ -215,6 +215,46 @@ class ProjectVcsTest {
                 "Studio's state is excluded in the real repository directory");
     }
 
+    /**
+     * In a submodule Studio takes no version nobody asked for: a "Run" version swept an old Studio's leftover
+     * files into the gamebot template's {@code main}, one push from published (2026-10-01).
+     */
+    @Test
+    void aSubmoduleGetsNoAutomaticVersionButKeepsSavedOnes(@TempDir Path root) throws IOException {
+        Path project = submoduleCheckout(root);
+        ProjectVcs vcs = new ProjectVcs(project);
+        Files.writeString(project.resolve("Bot.java"), "class Bot { int ran; }");
+
+        Checkpoints.take(project, VersionOrigin.AUTO, "Run");
+        assertEquals(1, vcs.history().size(), "no Run version in a submodule");
+
+        assertTrue(vcs.checkpoint(VersionOrigin.SAVE, "mine") != null, "a version the user saves is written");
+        assertEquals(2, vcs.history().size());
+    }
+
+    /** An old Studio's {@code botmaker-project.properties} left on disk stays out of every version. */
+    @Test
+    void anOldStudiosPropertiesFileIsNeverSweptIntoAVersion(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        ProjectVcs vcs = new ProjectVcs(dir);
+        vcs.init();
+        Path stale = dir.resolve("src/main/resources/botmaker-project.properties");
+        Files.createDirectories(stale.getParent());
+        Files.writeString(stale, "vision.confidence=0.8\n");
+
+        assertNull(vcs.checkpoint(VersionOrigin.AUTO, "Run"), "nothing else changed, so nothing to version");
+        assertTrue(Files.exists(stale), "excluded, never deleted");
+    }
+
+    @Test
+    void aPushRefusedByGitHubSaysWhoGrantsIt() {
+        String said = ProjectVcs.explainRefusal("https://github.com/BotMakerDev/botmaker-gamebot.git",
+                "Push failed: https://github.com/BotMakerDev/botmaker-gamebot.git: git-receive-pack not permitted");
+        assertTrue(said.startsWith("GitHub refused the push to BotMakerDev/botmaker-gamebot."), said);
+        assertTrue(said.contains("organizations/BotMakerDev/settings/oauth_application_policy"), said);
+        assertEquals("Push failed: timeout", ProjectVcs.explainRefusal("https://github.com/a/b.git", "Push failed: timeout"));
+    }
+
     /** {@code root/Project} with its repository moved to {@code root/modules/bot}, as git submodules lay it out. */
     static Path submoduleCheckout(Path root) throws IOException {
         Path project = root.resolve("Project");

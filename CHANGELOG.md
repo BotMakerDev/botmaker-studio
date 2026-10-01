@@ -35,6 +35,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Project, and the `(local build)` labels are gone. Pin a local build in the pom by hand to try it.
 
 ### Fixed
+- Studio takes no automatic version (before a run, a debug, an AI session, a rewrite) in a git submodule,
+  whose history is also the umbrella's releases. A "Run" version had swept an old Studio's leftover files
+  into the gamebot template, one push from its `main`. Versions you save, updates and upgrades are still
+  written there.
+- An old Studio's `src/main/resources/botmaker-project.properties`, which nothing reads since 2026-09-27, is
+  kept out of every version (`.git/info/exclude`); it is never deleted, and a project that tracks it keeps it.
+- A push GitHub refuses as "git-receive-pack not permitted" says what it usually means on an organization's
+  repository: the organization has not granted BotMaker Studio access, with where an owner approves it.
 - A project checked out as a git submodule (its `.git` is a file) has its history again. Studio read it as
   "no history" and *Publish* failed with "Creating directories for …/.git failed".
 - An SSH remote (`git@github.com:owner/repo`) counts as a GitHub repository, so a project cloned by hand reads

@@ -32,9 +32,19 @@ public final class Checkpoints {
         QUEUE.execute(() -> take(projectDir, snapshot, origin, label));
     }
 
+    /**
+     * Whether a version nobody asked for is taken here at all. Not in a submodule (2026-10-01): its history is
+     * also the umbrella's release history, and a "Run" version there swept an old Studio's leftover files into
+     * the template's {@code main}, one push from published. Versions the user starts — Save, an update, an
+     * upgrade — go through {@link #save} and {@code ProjectVcs.checkpoint} and are still written.
+     */
+    static boolean takesAutomatic(Path projectDir) {
+        return !new ProjectVcs(projectDir).sharedRepository();
+    }
+
     /** A version of the project as it is on disk. */
     public static synchronized void take(Path projectDir, VersionOrigin origin, String label) {
-        if (projectDir == null) return;
+        if (projectDir == null || !takesAutomatic(projectDir)) return;
         try {
             new ProjectVcs(projectDir).checkpoint(origin, label);
         } catch (Exception e) {
@@ -49,6 +59,15 @@ public final class Checkpoints {
     public static synchronized void take(Path projectDir, ProjectState.Snapshot snapshot, VersionOrigin origin,
                                          String label) {
         if (projectDir == null) return;
+        if (!takesAutomatic(projectDir)) {
+            // The edits still go to disk: a run reads them there.
+            try {
+                flush(snapshot);
+            } catch (Exception e) {
+                System.err.println("Couldn't write the sources (" + label + "): " + e.getMessage());
+            }
+            return;
+        }
         try {
             save(projectDir, snapshot, origin, label);
         } catch (Exception e) {
