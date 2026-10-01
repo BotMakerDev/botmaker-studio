@@ -97,7 +97,7 @@ class RecordingWriterTest {
             case "combo" -> new Class<?>[]{Key[].class};
             case "chord" -> new Class<?>[]{Chord.class};
             case "pause" -> new Class<?>[]{Duration.class};
-            case "awaitThing" -> new Class<?>[]{Thing.class, int.class};
+            case "awaitThing" -> new Class<?>[]{Thing.class, Duration.class};
             default -> throw new IllegalArgumentException(method);
         };
         return new Recordings.Writer(plugin, Pad.class.getMethod(method, types), gesture, rank, List.of(slots));
@@ -139,7 +139,7 @@ class RecordingWriterTest {
                 writer("combo", Gesture.COMBO, 0, new Recordings.Slot.Keys(Key.class, true)),
                 writer("pause", Gesture.PAUSE, 0, new Recordings.Slot.Parts(DURATION_TYPE, List.of(long.class))),
                 writer("awaitThing", Gesture.AWAIT, 0, new Recordings.Slot.Recorded(THING_AT),
-                        new Recordings.Slot.Number(int.class)));
+                        new Recordings.Slot.Parts(DURATION_TYPE, List.of(long.class))));
     }
 
     private static Gestures.Recognized click(int x, int y, long at) {
@@ -192,7 +192,8 @@ class RecordingWriterTest {
                 new Gestures.Recognized(Gesture.PAUSE, List.of(1200L), null, 0),
                 click(10, 20, 1200)));
 
-        assertEquals(List.of("Pad.awaitThing(new Thing(\"a.png\"), 6);", "Pad.clickThing(new Thing(\"a.png\"));"),
+        assertEquals(List.of("Pad.awaitThing(new Thing(\"a.png\"), Duration.ofMillis(6000L));",
+                        "Pad.clickThing(new Thing(\"a.png\"));"),
                 sources(out));
     }
 
@@ -289,7 +290,7 @@ final class Pad {
     public static void combo(Key... keys) {}
     public static void chord(Chord chord) {}
     public static void pause(Duration duration) {}
-    public static void awaitThing(Thing thing, int seconds) {}
+    public static void awaitThing(Thing thing, Duration timeout) {}
 }
 
 /** A picture: a value the host cannot read off the screen. */

@@ -71,7 +71,10 @@ public final class RecordingWriter {
         }
     }
 
-    /** Seconds an {@link Gesture#AWAIT} allows, per second the user actually waited, and at least. */
+    /**
+     * Seconds an {@link Gesture#AWAIT} allows, per second the user actually waited, and at least. The gesture
+     * carries them as milliseconds, the unit of {@link Gesture#PAUSE}, so a {@code Duration} timeout fills.
+     */
     private static final int AWAIT_FACTOR = 3;
     private static final int AWAIT_MIN_SECONDS = 5;
 
@@ -156,8 +159,8 @@ public final class RecordingWriter {
     private Optional<Statement> await(Gestures.Recognized pause, Gestures.Recognized next) {
         if (next.spot() == null) return Optional.empty();
         long millis = ((Number) pause.values().getFirst()).longValue();
-        int seconds = (int) Math.max(AWAIT_MIN_SECONDS, AWAIT_FACTOR * Math.ceil(millis / 1000.0));
-        return write(Gesture.AWAIT, List.of(seconds), next.spot());
+        long seconds = (long) Math.max(AWAIT_MIN_SECONDS, AWAIT_FACTOR * Math.ceil(millis / 1000.0));
+        return write(Gesture.AWAIT, List.of(seconds * 1000L), next.spot());
     }
 
     /**

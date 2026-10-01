@@ -25,6 +25,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **The run diagram describes today's entry point**: `main` calls `run(goHome, Sdk.class)`; it still named
   `Sdk.install()` and `Bot.start`, both gone from the SDK.
+- **A recorded wait before a click is a `Duration`.** The recorder hands the wait its timeout in
+  milliseconds, so `ImageWaiter.waitFor(Pictures.ORE, Duration.ofMillis(6000L))` is written; the SDK's
+  whole-seconds shape it used to fill is gone.
 - **A plugin call from the statement menu no longer lands unresolved.** `Mouse ▸ click` and `Wait ▸ time`
   wrote `new Point(0, 0)` and `Duration.ofSeconds(1)` without importing `Point` or `Duration`; each seeded
   argument's type is now imported with the call.
