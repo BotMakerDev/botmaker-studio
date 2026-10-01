@@ -440,9 +440,10 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
             List<String> libraryClassItems = new ArrayList<>();
             if (context.getProjectAnalyzer().getLibraryIndex() != null) {
                 java.util.Set<java.nio.file.Path> pluginJars = PluginHost.pluginJars();
-                context.getProjectAnalyzer().getLibraryIndex().getStaticUtilityTypes().stream()
+                var libraryIndex = context.getProjectAnalyzer().getLibraryIndex();
+                libraryIndex.getStaticUtilityTypes().stream()
                         .filter(ci -> !PluginHost.isFacadeClass(ci.getSimpleName()))
-                        .filter(ci -> !com.botmaker.studio.index.TypeSummaryManager.isIn(ci, pluginJars))
+                        .filter(ci -> !libraryIndex.isIn(ci, pluginJars))
                         .forEach(ci -> libraryClassItems.add(ci.getSimpleName()));
             }
             Collections.sort(libraryClassItems);

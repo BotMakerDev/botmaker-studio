@@ -35,6 +35,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Project, and the `(local build)` labels are gone. Pin a local build in the pom by hand to try it.
 
 ### Fixed
+- A project opened a second time drew its function-call blocks as nothing, logging "Classpath element is not
+  known for this classpath element" on every redraw. The library index is reloaded from its cache then, and
+  the class dropdown asked ClassGraph which jar each class came from, which a cached class cannot answer; the
+  index now keeps that itself.
 - Studio takes no automatic version (before a run, a debug, an AI session, a rewrite) in a git submodule,
   whose history is also the umbrella's releases. A "Run" version had swept an old Studio's leftover files
   into the gamebot template, one push from its `main`. Versions you save, updates and upgrades are still

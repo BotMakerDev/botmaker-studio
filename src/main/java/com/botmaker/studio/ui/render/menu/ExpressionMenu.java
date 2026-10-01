@@ -592,7 +592,7 @@ public final class ExpressionMenu {
             // palette, so there's a single access path (see StatementMenu / MethodInvocationBlock), and one
             // it does not catalogue is not reached at all.
             if (PluginHost.isFacadeClass(ci.getSimpleName())) continue;
-            if (com.botmaker.studio.index.TypeSummaryManager.isIn(ci, pluginJars)) continue;
+            if (analyzer.getLibraryIndex().isIn(ci, pluginJars)) continue;
             byPackage.computeIfAbsent(ci.getPackageName() == null ? "" : ci.getPackageName(),
                     k -> new ArrayList<>()).add(ci);
         }

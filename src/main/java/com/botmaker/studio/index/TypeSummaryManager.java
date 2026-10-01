@@ -69,6 +69,9 @@ public class TypeSummaryManager {
      */
     private final Map<String, List<ClassInfo>> index = new HashMap<>();
 
+    /** Normalised jar path → the names of its indexed classes: which jar a class came from, for {@link #isIn}. */
+    private final Map<Path, Set<String>> namesByJar = new HashMap<>();
+
     /** jar path → owning ScanResult, retained so the whole index can be re-serialized to JSON. */
     private final Map<String, ScanResult> scans = new HashMap<>();
 
@@ -205,6 +208,7 @@ public class TypeSummaryManager {
                 if (isCacheFresh(jar, cacheFile)) continue;
                 scans.remove(jar);
                 index.remove(jar);
+                namesByJar.remove(Path.of(jar).toAbsolutePath().normalize());
                 cachesDirty = true;
             }
 
@@ -245,11 +249,20 @@ public class TypeSummaryManager {
                 .toList();
     }
 
-    /** Whether {@code type} was indexed out of one of {@code jars} (absolute, normalised paths). */
-    public static boolean isIn(ClassInfo type, java.util.Set<java.nio.file.Path> jars) {
+    /**
+     * Whether {@code type} was indexed out of one of {@code jars} (absolute, normalised paths).
+     *
+     * <p>Answered from this index's own record of which jar each class came from, never from ClassGraph's
+     * {@code getClasspathElementFile}: a class re-hydrated from the JSON cache has no classpath element, and
+     * asking one throws — every call block's class dropdown did, on every project opened a second time
+     * (2026-10-01).
+     */
+    public boolean isIn(ClassInfo type, Set<Path> jars) {
         if (jars.isEmpty()) return false;
-        java.io.File element = type.getClasspathElementFile();
-        return element != null && jars.contains(element.toPath().toAbsolutePath().normalize());
+        for (Path jar : jars) {
+            if (namesByJar.getOrDefault(jar, Set.of()).contains(type.getName())) return true;
+        }
+        return false;
     }
 
     /** Library classes exposing at least one public static method returning a value (Call-Function targets). */
@@ -299,9 +312,12 @@ public class TypeSummaryManager {
     /** Records a scan and its non-anonymous classes under a jar path, then rebuilds the derived caches. */
     private void store(String jar, ScanResult scan) {
         scans.put(jar, scan);
-        index.put(jar, scan.getAllClasses().stream()
+        List<ClassInfo> classes = scan.getAllClasses().stream()
                 .filter(ci -> !ci.isAnonymousInnerClass())
-                .toList());
+                .toList();
+        index.put(jar, classes);
+        namesByJar.put(Path.of(jar).toAbsolutePath().normalize(),
+                classes.stream().map(ClassInfo::getName).collect(java.util.stream.Collectors.toSet()));
         cachesDirty = true;
     }
 
