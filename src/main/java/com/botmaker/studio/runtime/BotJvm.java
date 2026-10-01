@@ -1,10 +1,16 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.studio.runtime.agent.TracePlan;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The options every JVM Studio starts a bot in takes, in one place because there are two such JVMs — the
@@ -33,6 +39,27 @@ public final class BotJvm {
      */
     public static List<String> options(StudioProjectSettings settings) {
         return options(settings == null ? Map.of() : settings.runProperties());
+    }
+
+    /**
+     * {@code -javaagent:<jar>=<plan>}: the trace agent ({@code runtime.agent}, 2026-09-30), which writes a trace
+     * line for each call the bot's own classes ({@code config.compiledOutputPath()}) make into an offered class of
+     * the project's plugins, minus what the Trace tab hides ({@code hiddenTraceWriters}). The plan is a file
+     * beside the classes, rewritten every run. Empty when there is nothing to trace or the agent cannot be
+     * written: a run never fails over its trace.
+     */
+    public static List<String> traceAgent(ProjectConfig config, StudioProjectSettings settings) {
+        List<String> offered = PluginHost.menuFacades().stream().map(f -> f.type().getName()).toList();
+        if (config == null || offered.isEmpty()) return List.of();
+        try {
+            Path plan = config.compiledOutputPath().resolveSibling("botmaker-trace.properties");
+            new TracePlan(Set.of(config.compiledOutputPath()), Set.copyOf(offered),
+                    settings == null ? Set.of() : Set.copyOf(settings.hiddenTraceWriters())).write(plan);
+            return List.of("-javaagent:" + TraceAgentJar.path() + "=" + plan);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Runs this time without the call trace: " + e.getMessage());
+            return List.of();
+        }
     }
 
     static List<String> options(Map<String, String> runProperties) {

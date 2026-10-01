@@ -115,6 +115,22 @@ final class TraceWriters {
         rebuild();
     }
 
+    /**
+     * Lists the classes whose calls the run traces (the project's offered plugin classes, 2026-09-30) before any
+     * of them wrote a line, so one can be unticked ahead of a run. An unticked class is not traced at all from the
+     * next run on: Studio passes what is hidden to the trace agent.
+     */
+    void offer(Collection<String> classNames) {
+        boolean added = false;
+        for (String className : classNames) {
+            if (!seen.containsKey(className)) {
+                seen.put(className, new TreeSet<>());
+                added = true;
+            }
+        }
+        if (added && node.isVisible()) rebuild();
+    }
+
     /** Notes {@code line}'s writer; the tree grows only when the writer is new. */
     void saw(TraceLine line) {
         if (line.writerClass().isEmpty()) return;

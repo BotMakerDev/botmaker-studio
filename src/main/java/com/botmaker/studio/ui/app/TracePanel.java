@@ -112,7 +112,10 @@ final class TracePanel {
         Button clear = new Button("Clear");
         clear.setOnAction(e -> clear());
         ToggleButton writersToggle = new ToggleButton("Writers");
-        writersToggle.setTooltip(new Tooltip("Pick, class by class and method by method, whose lines are shown"));
+        writersToggle.setTooltip(new Tooltip("Pick, class by class and method by method, whose lines are shown. "
+                + "A plugin's calls are traced without it writing anything; one unticked here is not traced at "
+                + "all from the next run."));
+        writers.offer(traceable());
         Region gap = new Region();
         HBox.setHgrow(gap, Priority.ALWAYS);
         bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, clear);
@@ -140,8 +143,11 @@ final class TracePanel {
         showSummary();
 
         subscriptions.add(eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> add(e.line()), true));
-        // A run's trace is that run's: the next one starts on an empty tab.
-        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> clear(), true));
+        // A run's trace is that run's: the next one starts on an empty tab. The plugins may have changed since.
+        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> {
+            clear();
+            writers.offer(traceable());
+        }, true));
         subscriptions.add(eventBus.subscribe(CoreApplicationEvents.DebugSessionStartedEvent.class,
                 e -> clear(), true));
     }
@@ -248,6 +254,11 @@ final class TracePanel {
 
     private void reveal(TraceLine line) {
         target(sourceRoot, line).ifPresent(at -> onReveal.accept(at.getKey(), at.getValue()));
+    }
+
+    /** The classes a run traces calls into: the offered classes of the project's plugins ({@code BotJvm.traceAgent}). */
+    private static List<String> traceable() {
+        return PluginHost.menuFacades().stream().map(f -> f.type().getName()).toList();
     }
 
     /** Who ships {@code className}: this bot when its source is here, else the plugin whose jar holds it. */

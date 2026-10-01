@@ -210,6 +210,7 @@ public class DebuggingService {
                 // imread — resolve against the bot project, not Studio's working directory.
                 List<String> command = new ArrayList<>(List.of(javaExecutable));
                 command.addAll(BotJvm.options(state.getSettings()));
+                command.addAll(BotJvm.traceAgent(config, state.getSettings()));
                 command.addAll(List.of(debugAgent, "-cp", fullClassPath.toString(), className));
                 ProcessBuilder pb = new ProcessBuilder(command).directory(config.projectPath().toFile());
                 startTelemetry(pb);

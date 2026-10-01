@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **The Trace tab shows every call your bot makes into a plugin**, with no trace code in the plugin:
+  `[ImageFinder] find(ORE) → Match[…]  12 ms`, or `threw …`. Studio starts each Run and Debug with a small
+  agent that rewrites the bot's own calls into the plugins' offered classes as they load. A call repeated in a
+  loop is one line and a count. A plugin can leave a member out with the contract's `@Untraced`.
+- **Writers lists the traced classes before they write anything.** Untick a class or a method and its calls
+  are not traced at all from the next run.
+
 ### Fixed
 
 - **A plugin call from the statement menu no longer lands unresolved.** `Mouse ▸ click` and `Wait ▸ time`
