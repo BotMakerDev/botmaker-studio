@@ -49,8 +49,46 @@ import static com.botmaker.studio.config.Constants.PROJECTS_ROOT;
  */
 public class ProjectCreator {
 
+    private final Path root;
+    private final ShadowCheck shadows;
+
+    public ProjectCreator() {
+        this(PROJECTS_ROOT, MavenService::dropShadowedPlugins);
+    }
+
+    /** A creator over {@code root}; {@code shadows} stands in for the resolve, which reaches the network. */
+    ProjectCreator(Path root, ShadowCheck shadows) {
+        this.root = root;
+        this.shadows = shadows;
+    }
+
+    /**
+     * A plugin ticked in New Project (2026-10-01): its coordinate at the version to declare, and the
+     * {@code provided} entries its registry entry says the editor needs beside it. The version is resolved by
+     * the caller before anything is created, so a lookup that fails leaves nothing to delete.
+     */
+    public record PluginPick(UserLibrary plugin, List<UserLibrary> editorDependencies) {
+        public PluginPick {
+            editorDependencies = List.copyOf(editorDependencies);
+        }
+    }
+
+    /** {@link MavenService#dropShadowedPlugins}, as a seam. */
+    @FunctionalInterface
+    interface ShadowCheck {
+        List<MavenService.Shadowed> drop(Path projectDir) throws IOException;
+    }
+
     public void createProject(String projectName) throws IOException {
         createProject(projectName, ProjectTemplate.EMPTY);
+    }
+
+    public void createProject(String projectName, ProjectTemplate template) throws IOException {
+        createProject(projectName, template, List.of());
+    }
+
+    public void createFromTemplate(String projectName, TemplateUnpack unpack) throws IOException {
+        createFromTemplate(projectName, unpack, List.of());
     }
 
     /**
@@ -66,16 +104,22 @@ public class ProjectCreator {
      * <p><b>No capture resolution is chosen here (2026-09-01).</b> The size templates are captured at is
      * the capturing plugin's, seeded by its own toolbar item the first time a picture is taken; a project
      * is created without one and {@code capture.width}/{@code capture.height} stay absent until then.
+     *
+     * <p><b>{@code plugins} are the ones the user ticked (2026-10-01)</b>, declared before the first commit
+     * ({@link #installPlugins}). Their write is the one step that can fail after the directory exists, so a
+     * failure now deletes it — unless it was there before this call, in which case it is not ours to delete.
      */
-    public void createProject(String projectName, ProjectTemplate template) throws IOException {
+    public void createProject(String projectName, ProjectTemplate template, List<PluginPick> plugins)
+            throws IOException {
         validateProjectName(projectName);
 
-        ProjectConfig cfg = ProjectConfig.forProject(projectName, PROJECTS_ROOT);
+        ProjectConfig cfg = ProjectConfig.forProject(projectName, root);
         Path projectPath = cfg.projectPath();
 
         if (Files.exists(projectPath.resolve("pom.xml"))) {
             throw new IllegalArgumentException("Project '" + projectName + "' already exists");
         }
+        boolean existed = Files.exists(projectPath);
 
         System.out.println("------------------------------------------------");
         System.out.println("Creating Project: " + projectName);
@@ -94,6 +138,7 @@ public class ProjectCreator {
             //    hand.
             System.out.println("1. Creating the project...");
             writeProject(cfg, template, Map.of("pom.xml", MavenService.blankPomXml(cfg)));
+            installPlugins(projectPath, plugins, shadows);
 
             // 2. Seed settings.json (the chosen template). Studio's own file: no bot reads it, and it
             //    records what the editor chose rather than what the bot needs.
@@ -111,6 +156,7 @@ public class ProjectCreator {
             System.out.println("SUCCESS: Project created at " + projectPath);
             System.out.println("------------------------------------------------");
         } catch (Exception e) {
+            if (!existed) deleteRecursively(projectPath);
             System.err.println("!!! ERROR during project creation !!!");
             e.printStackTrace();
             throw new IOException("Failed to create project: " + e.getMessage(), e);
@@ -140,11 +186,13 @@ public class ProjectCreator {
      * @param unpack      downloads the release into the directory it is handed — {@code BotInstaller
      *                    ::unpackTemplate} bound to the chosen entry and tag, passed in so this class keeps
      *                    knowing nothing about GitHub
+     * @param plugins     the ones the user ticked beside the template's own, declared before the first commit
      */
-    public void createFromTemplate(String projectName, TemplateUnpack unpack) throws IOException {
+    public void createFromTemplate(String projectName, TemplateUnpack unpack, List<PluginPick> plugins)
+            throws IOException {
         validateProjectName(projectName);
 
-        ProjectConfig cfg = ProjectConfig.forProject(projectName, PROJECTS_ROOT);
+        ProjectConfig cfg = ProjectConfig.forProject(projectName, root);
         Path projectPath = cfg.projectPath();
         if (Files.exists(projectPath)) {
             throw new IllegalArgumentException("Project '" + projectName + "' already exists");
@@ -161,6 +209,7 @@ public class ProjectCreator {
 
             System.out.println("2. Making it yours...");
             TemplateProject.read(projectPath).renameInto(projectPath, "com." + cfg.packageName());
+            installPlugins(projectPath, plugins, shadows);
 
             System.out.println("3. Generating settings...");
             seedSettings(cfg, ProjectTemplate.FROM_TEMPLATE);
@@ -175,6 +224,34 @@ public class ProjectCreator {
             System.err.println("!!! ERROR during project creation !!!");
             throw new IOException("Failed to create project from the template: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Declares each ticked plugin, then removes any declared plugin another one now brings — the same two steps
+     * <i>Plugins &amp; Libraries ▸ Browse</i> takes, so a project made with the SDK ticked on Base has no direct
+     * basics entry, exactly as one that installed it afterwards.
+     *
+     * <p>A plugin the pom already declares is skipped: it is the template's own, pinned the way its author pinned
+     * it (often a {@code ${property}} its upgrade moves), and a pick has no business re-versioning it.
+     */
+    static List<MavenService.Shadowed> installPlugins(Path projectDir, List<PluginPick> plugins, ShadowCheck shadows)
+            throws IOException {
+        if (plugins.isEmpty()) return List.of();
+        List<UserLibrary> declared = MavenService.readDeclaredLibraries(projectDir);
+        boolean wrote = false;
+        for (PluginPick pick : plugins) {
+            UserLibrary plugin = pick.plugin();
+            boolean own = declared.stream().anyMatch(d -> d.groupId().equals(plugin.groupId())
+                    && d.artifactId().equals(plugin.artifactId()));
+            if (own) continue;
+            System.out.println("   + " + plugin.groupId() + ":" + plugin.artifactId() + ":" + plugin.version());
+            MavenService.installPlugin(projectDir, plugin, pick.editorDependencies());
+            wrote = true;
+        }
+        if (!wrote) return List.of();
+        List<MavenService.Shadowed> dropped = shadows.drop(projectDir);
+        if (!dropped.isEmpty()) System.out.println("   " + MavenService.Shadowed.sentence(dropped));
+        return dropped;
     }
 
     /** Downloads a chosen template release into {@code dest}. */
@@ -274,7 +351,7 @@ public class ProjectCreator {
     // gallery entry's. An old project keeps its file untouched.
 
     public boolean projectExists(String projectName) {
-        Path projectPath = PROJECTS_ROOT.resolve(projectName);
+        Path projectPath = root.resolve(projectName);
         return Files.exists(projectPath.resolve("pom.xml"));
     }
 

@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Pick plugins when you create a project, whatever you start from.** New Project lists the same plugins as
+  *Plugins & Libraries ▸ Browse*; tick any to have them in the project's first version. The chosen template's
+  own plugins are shown ticked and locked. With no network the list is empty and creating still works.
+
 ### Fixed
 
 - **Installing a plugin that brings another plugin you already declare removes the redundant entry.** Adding

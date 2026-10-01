@@ -7,12 +7,15 @@ import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectInfo;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.project.ProjectManager;
+import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.PluginCatalog;
+import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -47,8 +50,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private final ProjectCreator projectCreator;
 
     // The JitPackSearch and the "latest" convenience option went with the SDK version combo on 2026-09-04:
-    // this screen no longer asks for any version, so it reaches no version index. Plugins & Libraries has
-    // its own.
+    // this screen asks for no version. Since 2026-10-01 it reaches one again only through PluginCatalog, for
+    // a ticked plugin whose registry entry carries no verified version.
 
     private final GitHubClient gitHubClient = new GitHubClient();
     private final GitHubAuth gitHubAuth = new GitHubAuth();
@@ -578,16 +581,28 @@ public class ProjectSelectionScreen implements ProjectWindow {
         Label startNote = new Label();
         startNote.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         startNote.setWrapText(true);
+        // The plugins to add at creation (2026-10-01), for any starting point: the rows Plugins & Libraries ▸
+        // Browse offers, with the template's own ticked and locked.
+        NewProjectPlugins[] plugins = new NewProjectPlugins[1];
         Runnable describeChoice = () -> {
             TemplateChoice now = templateCombo.getValue();
-            startNote.setText(now == null || now.isBlank()
-                    ? "A plain Java project — a pom, a source folder and a main(). Add the BotMaker SDK, or "
-                            + "any other plugin, from Project ▸ Plugins & Libraries."
-                    : "This template brings its own SDK and libraries — change them later in "
-                            + "Project ▸ Plugins & Libraries.");
+            boolean blank = now == null || now.isBlank();
+            boolean extra = plugins[0] != null && !plugins[0].picked().isEmpty();
+            startNote.setText(blank
+                    ? (extra ? "A plain Java project — a pom, a source folder and a main() — with the plugins "
+                            + "ticked below."
+                            : "A plain Java project — a pom, a source folder and a main(). Tick a plugin below, "
+                            + "or add one later from Project ▸ Plugins & Libraries.")
+                    : (extra ? "This template brings its own plugins and libraries, and the ones ticked below "
+                            + "are added to them."
+                            : "This template brings its own plugins and libraries — change them later in "
+                            + "Project ▸ Plugins & Libraries."));
         };
-        templateCombo.valueProperty().addListener((o, was, now) -> describeChoice.run());
-        describeChoice.run();
+        plugins[0] = new NewProjectPlugins(
+                new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch()), describeChoice);
+        templateCombo.valueProperty().addListener((o, was, now) ->
+                plugins[0].lockFor(now == null ? null : now.entry()));
+        plugins[0].lockFor(templateCombo.getValue().entry());
 
         content.getChildren().addAll(
                 new Label("Project Name:"),
@@ -600,7 +615,9 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 new Label("Start from:"),
                 templateCombo,
                 showCommunity,
-                startNote
+                startNote,
+                new Label("Plugins:"),
+                plugins[0].node()
         );
 
         dialog.getDialogPane().setContent(content);
@@ -622,19 +639,12 @@ public class ProjectSelectionScreen implements ProjectWindow {
             if (dialogButton == createButtonType) {
                 TemplateChoice choice = templateCombo.getValue() == null
                         ? TemplateChoice.blank() : templateCombo.getValue();
-                return new CreateRequest(projectNameField.getText(), choice);
+                return new CreateRequest(projectNameField.getText(), choice, plugins[0].picked());
             }
             return null;
         });
 
-        Optional<CreateRequest> result = dialog.showAndWait();
-        result.ifPresent(req -> {
-            if (req.template().isBlank()) {
-                createProject(req.projectName());
-            } else {
-                createFromTemplate(req.projectName(), req.template().entry());
-            }
-        });
+        dialog.showAndWait().ifPresent(this::create);
     }
 
     /**
@@ -727,8 +737,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
     // Project asks for no SDK version now, so they had nothing to fill. MavenService.localSdkVersions()
     // survives for VersionInfo; a project's SDK version is chosen in Plugins & Libraries ▸ Installed.
 
-    /** Result of the create-project dialog. */
-    private record CreateRequest(String projectName, TemplateChoice template) {}
+    /** Result of the create-project dialog: {@code plugins} are the extra ticks, the template's own left out. */
+    private record CreateRequest(String projectName, TemplateChoice template, List<PluginRegistry.Plugin> plugins) {}
 
     private void showGallery() {
         GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
@@ -754,50 +764,57 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Creates the project and opens it.
+     * Creates the project and opens it — Studio's blank one, or {@code entry}'s release (the vetted one for a
+     * Vetted template, else the newest) made into {@code projectName} — with the ticked plugins declared.
      *
      * <p>It used to rebuild the list and select the new row, which left the user looking at a list of projects
      * having just said which one they wanted — and if the list was long or sorted by name, their new project
      * was somewhere off-screen. Creating a project <em>is</em> asking to work on it.
-     */
-    private void createProject(String projectName) {
-        try {
-            projectCreator.createProject(projectName, com.botmaker.studio.project.ProjectTemplate.EMPTY);
-            onProjectSelected.open(Constants.PROJECTS_ROOT.resolve(projectName), false, true);
-        } catch (Exception e) {
-            // No version is a failure here any more: the floor went on 2026-08-25 with Studio's generation,
-            // and so did the too-new probe with the scaffold contract the day before. Whatever refusal is
-            // left, ProjectCreator's own sentence says it better than a header could.
-            error("Could not create the project", e.getMessage());
-        }
-    }
-
-    /**
-     * Downloads {@code entry}'s release — the vetted one for a Vetted template, else the newest — and makes
-     * it {@code projectName}.
      *
-     * <p>The download and the unpack are the slow, failable part and they run off the FX thread; everything
-     * the user sees about a failure is one dialog, because there is nothing half-created to explain — a
-     * failed template creation deletes its own directory (see {@code ProjectCreator.createFromTemplate}).
+     * <p>Both shapes run off the FX thread since 2026-10-01: a ticked plugin's version may be a JitPack lookup,
+     * and the download, the unpack and the check for a plugin another one brings are slow and failable too.
+     * The versions are resolved before anything is created, so a lookup that fails leaves nothing behind;
+     * everything the user sees about a failure is one dialog, because a failed creation deletes its own
+     * directory (see {@code ProjectCreator}).
      */
-    private void createFromTemplate(String projectName, GalleryEntry entry) {
-        GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-        BotInstaller installer = new BotInstaller(gitHubClient, gallery);
+    private void create(CreateRequest req) {
+        String projectName = req.projectName();
+        GalleryEntry entry = req.template().entry();
+        PluginCatalog catalog = new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch());
         new Thread(() -> {
             try {
-                String tag = gallery.installTag(entry).join();
-                if (tag == null || tag.isBlank()) {
-                    throw new java.io.IOException(entry.name() + " has no published release yet, so there is "
-                            + "nothing to start from. Ask its author to cut one.");
+                List<ProjectCreator.PluginPick> picks = new ArrayList<>();
+                for (PluginRegistry.Plugin plugin : req.plugins()) {
+                    String version = catalog.version(plugin).exceptionally(failure -> null).join();
+                    if (version == null || version.isBlank()) {
+                        throw new java.io.IOException("Could not resolve a version for " + plugin.coordinate()
+                                + ". Untick it, or add it later from Project ▸ Plugins & Libraries.");
+                    }
+                    picks.add(new ProjectCreator.PluginPick(
+                            new UserLibrary(plugin.groupId(), plugin.artifactId(), version),
+                            plugin.editorLibraries()));
                 }
-                projectCreator.createFromTemplate(projectName,
-                        dest -> installer.unpackTemplate(entry, tag, dest));
+                if (entry == null) {
+                    projectCreator.createProject(projectName,
+                            com.botmaker.studio.project.ProjectTemplate.EMPTY, picks);
+                } else {
+                    GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
+                    BotInstaller installer = new BotInstaller(gitHubClient, gallery);
+                    String tag = gallery.installTag(entry).join();
+                    if (tag == null || tag.isBlank()) {
+                        throw new java.io.IOException(entry.name() + " has no published release yet, so there "
+                                + "is nothing to start from. Ask its author to cut one.");
+                    }
+                    projectCreator.createFromTemplate(projectName,
+                            dest -> installer.unpackTemplate(entry, tag, dest), picks);
+                }
                 Platform.runLater(() -> onProjectSelected.open(
                         Constants.PROJECTS_ROOT.resolve(projectName), false, true));
             } catch (Exception e) {
+                // ProjectCreator's own sentence says it better than a header could.
                 Platform.runLater(() -> error("Could not create the project", e.getMessage()));
             }
-        }, "template-create").start();
+        }, "project-create").start();
     }
 
     private void error(String header, String body) {

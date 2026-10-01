@@ -6,7 +6,10 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-09-29 (latest) — the trace's level ids held together (dashboard pass, phase 5).**
+- **2026-10-01 (latest) — New Project picks plugins (new-project plugins, phases 1–2).** `ui/app/NewProjectPlugins`
+  lists `sharing/PluginCatalog`'s rows, the template's `requires` locked; `ProjectCreator.installPlugins` declares
+  the picks before `ProjectVcs.init()` and runs `MavenService.dropShadowedPlugins`, which Browse runs too.
+- **2026-09-29 — the trace's level ids held together (dashboard pass, phase 5).**
   `RunTelemetryTest.everyLevelTheWireNamesIsALevelTheContractKnows`: shared's `TelemetryEvent.Log` level
   strings each read as the contract's `TraceLine.Level`. Studio is the one module that sees both. Test only.
 - **2026-09-29 — the Trace tab filters by writer (rework follow-ups, phase 8b).** The user asked for
