@@ -82,7 +82,7 @@ public final class PublishSheet {
          * Called on the FX thread when Publish is pressed; the returned task runs off it and saves the project
          * as the version {@code request} publishes, returning the repository the run pushes from.
          */
-        Callable<ProjectVcs> prepare(PublishRequest request, String login);
+        Callable<ProjectVcs> prepare(PublishRequest request, String repoOwner);
 
         /** The strip's model as last read — whose bot this is, and where its copy lives. */
         SyncModel model();
@@ -152,8 +152,14 @@ public final class PublishSheet {
 
     /** The repo's latest published release tag (""=none); each new version must be strictly greater. */
     private volatile String latestTag = "";
-    /** The signed-in login, once known: the preview's "by" line, and whose repository a publish makes. */
+    /** The signed-in login, once known: who submits the listing. */
     private volatile String login = "";
+    /**
+     * Whose repository a publish goes to, once known ({@link BotPublisher#ownerFor}): the login, or the owner of
+     * the project's copy when the login can push there — an organization's template. The preview's "by" line,
+     * the release looked up, the listing read. Blank until both are read.
+     */
+    private volatile String repoOwner = "";
     private volatile List<GalleryEntry.Requirement> requires = List.of();
     /** The gallery's listing of this repo, when it has one: its tier is what the preview shows. */
     private volatile GalleryEntry currentListing;
@@ -363,9 +369,17 @@ public final class PublishSheet {
 
     private void onAuthChanged() {
         login = "";
+        repoOwner = "";
         if (auth.isAuthenticated()) {
-            auth.login(client).thenAccept(name -> Platform.runLater(() -> {
-                login = name == null ? "" : name;
+            Optional<SyncModel.Slug> mine = host.model().mineSlug();
+            auth.login(client).thenApplyAsync(name -> {
+                String who = name == null ? "" : name;
+                boolean canPush = !who.isBlank() && mine.isPresent() && !mine.get().owner().equalsIgnoreCase(who)
+                        && publisher.canPush(mine.get().owner(), mine.get().repo());
+                return new String[]{who, who.isBlank() ? "" : BotPublisher.ownerFor(who, mine, canPush)};
+            }).thenAccept(read -> Platform.runLater(() -> {
+                login = read[0];
+                repoOwner = read[1];
                 lockToMyCopy();
                 refreshAll();
                 proposeVersion();
@@ -376,12 +390,12 @@ public final class PublishSheet {
     }
 
     /**
-     * When the project's {@code mine} is the user's own repository, that is the one a publish goes to, so the
-     * name is not the user's to type.
+     * When the project's {@code mine} is the repository a publish goes to — the user's own, or one they can push
+     * to — that is the one a publish goes to, so the name is not the user's to type.
      */
     private void lockToMyCopy() {
         Optional<SyncModel.Slug> mine = host.model().mineSlug();
-        boolean own = mine.isPresent() && mine.get().owner().equalsIgnoreCase(login);
+        boolean own = mine.isPresent() && mine.get().owner().equalsIgnoreCase(repoOwner);
         if (own) repoField.setText(mine.get().repo());
         repoField.setDisable(own || busy);
     }
@@ -404,7 +418,7 @@ public final class PublishSheet {
         GalleryEntry listing = currentListing;
         GalleryTier tier = listing != null ? listing.tier() : GalleryTier.COMMUNITY;
         String vetted = listing != null ? listing.vettedVersion() : "";
-        GalleryEntry preview = request(tags).preview(login, tier, vetted);
+        GalleryEntry preview = request(tags).preview(repoOwner.isBlank() ? login : repoOwner, tier, vetted);
         previewHolder.getChildren().setAll(GalleryCard.of(preview));
         previewNote.setText(listing != null && listing.isVetted()
                         ? "Vetted at " + vetted + ". People keep installing that release; this one is not vetted "
@@ -424,7 +438,7 @@ public final class PublishSheet {
         refreshListingButton.setDisable(busy || !signedIn);
         String version = currentVersion();
         String reason = !signedIn ? "Sign in to GitHub to publish."
-                : login.isBlank() ? "Reading your GitHub account…"
+                : repoOwner.isBlank() ? "Reading your GitHub account…"
                 : whoseProblem() != null ? whoseProblem()
                 : repoName().isBlank() ? "A repository name is required."
                 : templateProblem != null ? "Fix the template first, or publish it as a bot."
@@ -447,9 +461,10 @@ public final class PublishSheet {
                     + ". Use Suggest to author… to offer them your change.";
         }
         Optional<SyncModel.Slug> mine = model.mineSlug();
-        if (mine.isPresent() && !mine.get().owner().toLowerCase(Locale.ROOT).equals(login.toLowerCase(Locale.ROOT))) {
-            return "This project's copy is github.com/" + mine.get() + ", not on your account, and a publish goes "
-                    + "to your own.";
+        if (!repoOwner.isBlank() && mine.isPresent()
+                && !mine.get().owner().toLowerCase(Locale.ROOT).equals(repoOwner.toLowerCase(Locale.ROOT))) {
+            return "This project's copy is github.com/" + mine.get() + ", which your account cannot push to, and a "
+                    + "publish goes to your own.";
         }
         return null;
     }
@@ -513,11 +528,11 @@ public final class PublishSheet {
     private void proposeVersion() {
         if (!auth.isAuthenticated() || busy) return;
         String repo = repoName();
-        if (repo.isBlank()) return;
+        String name = repoOwner;
+        if (repo.isBlank() || name.isBlank()) return;
         CompletableFuture
                 .supplyAsync(() -> {
-                    String name = auth.login(client).join();
-                    String latest = name.isBlank() ? "" : gallery.latestReleaseTag(name, repo).join();
+                    String latest = gallery.latestReleaseTag(name, repo).join();
                     if (latest.isBlank()) {
                         // No GitHub release yet — fall back to local provenance (if any).
                         latest = BotSource.read(projectDir).map(BotSource::tag).filter(SemVer::isValid).orElse("");
@@ -567,12 +582,13 @@ public final class PublishSheet {
             return;
         }
         String repo = repoName();
-        if (repo.isBlank()) return;
+        String name = repoOwner;
+        if (repo.isBlank() || name.isBlank()) return;
         listingLabel.setText("Reading the gallery…");
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        return publisher.listingStatus(repo);
+                        return publisher.listingStatus(name, repo);
                     } catch (Exception ex) {
                         throw new RuntimeException(ex.getMessage(), ex);
                     }
@@ -584,7 +600,7 @@ public final class PublishSheet {
                         renderListing(status);
                     }
                 }));
-        gallery.browse().thenAccept(catalog -> auth.login(client).thenAccept(name -> Platform.runLater(() -> {
+        gallery.browse().thenAccept(catalog -> Platform.runLater(() -> {
             currentListing = GitHubGallery.find(catalog, name, repo).orElse(null);
             // A re-publish starts from what the gallery already says, so updating a release does not quietly
             // blank the description and tags the author wrote last time. Only into empty fields, never over
@@ -606,7 +622,7 @@ public final class PublishSheet {
             }
             renderTier();
             refreshAll();
-        })));
+        }));
     }
 
     // -------------------------------------------------------------------------
@@ -616,13 +632,14 @@ public final class PublishSheet {
     /** Saves the version being published (the {@link Host}'s part), then runs the steps from the first. */
     private void doPublish() {
         String problem = kindTemplate.isSelected() ? templateProblem() : null;
-        if (problem != null || whoseProblem() != null || login.isBlank()
+        String to = repoOwner;
+        if (problem != null || whoseProblem() != null || to.isBlank()
                 || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
             refreshAll();
             return;
         }
         PublishRequest request = request(effectiveTags());
-        Callable<ProjectVcs> save = host.prepare(request, login);
+        Callable<ProjectVcs> save = host.prepare(request, to);
         setBusy(true);
         statusLabel.setText("Saving " + request.version() + "…");
         CompletableFuture
@@ -640,7 +657,7 @@ public final class PublishSheet {
                         statusLabel.setText("Could not save the version to publish: " + ShareActions.rootMessage(err));
                         return;
                     }
-                    run = publisher.start(request, vcs);
+                    run = publisher.start(request, vcs, to);
                     resume();
                 }));
     }
@@ -681,7 +698,8 @@ public final class PublishSheet {
      */
     private void doUnpublish() {
         String repo = repoName();
-        if (repo.isBlank()) return;
+        String from = repoOwner;
+        if (repo.isBlank() || from.isBlank()) return;
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
                 "Remove “" + repo + "” from the gallery? Your GitHub repo and releases stay intact — "
                         + "this only delists it from discovery, through the same kind of pull request a listing is.",
@@ -696,7 +714,7 @@ public final class PublishSheet {
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        return publisher.unpublish(repo);
+                        return publisher.unpublish(from, repo);
                     } catch (Exception ex) {
                         throw new RuntimeException(ex.getMessage(), ex);
                     }

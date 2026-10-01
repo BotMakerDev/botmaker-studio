@@ -18,6 +18,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - An SSH remote (`git@github.com:owner/repo`) counts as a GitHub repository, so a project cloned by hand reads
   as published. A submodule's `origin` is copied to *My copy*, never renamed, so tools that push to `origin`
   keep working.
+- Publishing a project whose copy lives under an organization you can push to (the BotMakerDev templates)
+  publishes there: the last release, the listing and its Vetted tier are read under that owner, instead of
+  under your account, where the bot looked never published. Studio still creates repositories only on your
+  own account.
+- A provenance file naming the project's own repository (written by an earlier publish, or before the
+  repository moved to an organization) no longer links that repository as somebody else's original.
 
 ## [1.2.3] — 2026-10-01
 

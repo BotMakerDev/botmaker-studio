@@ -539,10 +539,10 @@ public final class VersionsPane {
          * project as a {@code PUBLISH} version. An unchanged project publishes the version it is at.
          */
         @Override
-        public java.util.concurrent.Callable<ProjectVcs> prepare(PublishRequest request, String login) {
+        public java.util.concurrent.Callable<ProjectVcs> prepare(PublishRequest request, String repoOwner) {
             ProjectState.Snapshot editor = ctx.state().snapshot();
             return () -> {
-                new BotSource(login, request.repoName(), request.version()).write(projectDir);
+                new BotSource(repoOwner, request.repoName(), request.version()).write(projectDir);
                 Checkpoints.save(projectDir, editor, VersionOrigin.PUBLISH, request.version() + " published");
                 return vcs();
             };
@@ -747,7 +747,10 @@ public final class VersionsPane {
         Optional<BotSource> source = BotSource.read(projectDir);
         String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
         String originalUrl = vcs.remoteUrl(Remote.ORIGINAL);
-        if (originalUrl == null && source.isPresent()) {
+        boolean ownRelease = source.isPresent() && SyncModel.ownProvenance(
+                new SyncModel.Slug(source.get().owner(), source.get().repo()),
+                SyncModel.slug(vcs.remoteUrl(Remote.MINE)), authorName);
+        if (originalUrl == null && source.isPresent() && !ownRelease) {
             originalUrl = BotInstaller.cloneUrl(source.get().owner(), source.get().repo());
             if (!attachTried && !updating) {
                 attachTried = true;

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -99,6 +100,23 @@ class SyncModelTest {
         assertEquals("alice/miner", SyncModel.slug("ssh://git@github.com/alice/miner.git").orElseThrow().toString());
         assertTrue(SyncModel.slug("file:///tmp/repo").isEmpty());
         assertTrue(SyncModel.slug(null).isEmpty());
+    }
+
+    /**
+     * The template's provenance still names the account it was published from before the repository moved to
+     * the organization; it is the project's own release, never an original to link (and so never "someone
+     * else's bot").
+     */
+    @Test
+    void ownProvenanceIsTheCopysRepositoryUnderItsOwnerOrTheUser() {
+        var mine = SyncModel.slug("git@github.com:BotMakerDev/botmaker-gamebot.git");
+        assertTrue(SyncModel.ownProvenance(new SyncModel.Slug("LiQiyeDev", "botmaker-gamebot"), mine, "LiQiyeDev"));
+        assertTrue(SyncModel.ownProvenance(new SyncModel.Slug("botmakerdev", "botmaker-gamebot"), mine, null));
+        assertFalse(SyncModel.ownProvenance(new SyncModel.Slug("alice", "botmaker-gamebot"), mine, "bob"),
+                "an author's bot of the same name is theirs");
+        assertFalse(SyncModel.ownProvenance(new SyncModel.Slug("LiQiyeDev", "other"), mine, "LiQiyeDev"));
+        assertFalse(SyncModel.ownProvenance(new SyncModel.Slug("LiQiyeDev", "botmaker-gamebot"),
+                java.util.Optional.empty(), "LiQiyeDev"), "no copy: an installed bot's provenance");
     }
 
     @Test

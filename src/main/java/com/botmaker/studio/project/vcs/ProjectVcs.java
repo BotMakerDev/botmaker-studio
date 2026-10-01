@@ -812,7 +812,10 @@ public final class ProjectVcs {
             String url = config.getString("remote", LEGACY_BACKUP, "url");
             if (url == null || url.isBlank() || remoteUrl(Remote.MINE) != null) return false;
             if (!shared) config.unsetSection("remote", LEGACY_BACKUP);
-            config.setString("remote", Remote.MINE.id(), "url", url);
+            // Studio pushes with the GitHub token, which only travels over HTTPS ({@link #tokenFor}); a
+            // hand-made clone's SSH address is written as the same repository's HTTPS one.
+            String https = SyncModel.slug(url).map(s -> "https://github.com/" + s + ".git").orElse(url);
+            config.setString("remote", Remote.MINE.id(), "url", https);
             config.setString("remote", Remote.MINE.id(), "fetch", "+refs/heads/*:refs/remotes/" + Remote.MINE.id() + "/*");
             config.save();
             if (shared) return true;

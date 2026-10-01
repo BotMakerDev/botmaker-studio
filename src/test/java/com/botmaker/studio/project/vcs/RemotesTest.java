@@ -154,7 +154,8 @@ class RemotesTest {
         }
 
         assertTrue(vcs.adoptLegacyBackup());
-        assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl(Remote.MINE));
+        assertEquals("https://github.com/BotMakerDev/bot.git", vcs.remoteUrl(Remote.MINE),
+                "the HTTPS form, which the token is sent to");
         assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl("origin"));
         assertEquals("BotMakerDev/bot", SyncModel.slug(vcs.remoteUrl(Remote.MINE)).orElseThrow().toString());
     }

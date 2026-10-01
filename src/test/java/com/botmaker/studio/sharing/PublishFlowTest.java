@@ -177,4 +177,16 @@ class PublishFlowTest {
         node.fieldNames().forEachRemaining(names::add);
         return names;
     }
+
+    /** An organization's template publishes into the organization's repository, when the account can push there. */
+    @Test
+    void aPublishGoesToTheCopysOwnerOnlyWhenTheAccountCanPushThere() {
+        var org = com.botmaker.studio.project.vcs.SyncModel.slug("https://github.com/BotMakerDev/botmaker-gamebot");
+        assertEquals("BotMakerDev", BotPublisher.ownerFor("LiQiyeDev", org, true));
+        assertEquals("LiQiyeDev", BotPublisher.ownerFor("LiQiyeDev", org, false));
+        assertEquals("alice", BotPublisher.ownerFor("alice", Optional.empty(), true), "no copy yet: your own");
+        assertEquals("alice", BotPublisher.ownerFor("alice",
+                com.botmaker.studio.project.vcs.SyncModel.slug("https://github.com/Alice/koala"), false),
+                "your own copy, whatever its case");
+    }
 }

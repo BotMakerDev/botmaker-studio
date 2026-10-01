@@ -100,6 +100,19 @@ public record SyncModel(Ownership ownership, Facts facts) {
         return m.matches() ? Optional.of(new Slug(m.group(1), m.group(2))) : Optional.empty();
     }
 
+    /**
+     * Whether a project's provenance file ({@code botmaker-source.json}) records the project's <i>own</i>
+     * publish rather than the bot it was installed from: it names the repository the project's copy is, under
+     * that copy's owner or the user's own login. A publish writes the file too, and a repository that moved
+     * from the author's account to an organization keeps the old owner in it — neither is somebody else's bot
+     * to link as the original.
+     */
+    public static boolean ownProvenance(Slug source, Optional<Slug> mine, String login) {
+        if (mine.isEmpty() || !source.repo().equalsIgnoreCase(mine.get().repo())) return false;
+        return source.owner().equalsIgnoreCase(mine.get().owner())
+                || (login != null && source.owner().equalsIgnoreCase(login));
+    }
+
     public static SyncModel of(Facts f) {
         return new SyncModel(ownership(f), f);
     }

@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -50,10 +51,36 @@ public final class BotPublisher {
 
     /**
      * A publish of {@code request}, nothing run yet, pushing with {@code vcs} — whose {@code HEAD} is the version
-     * being published, saved by the caller. Call {@link Run#resume} off the FX thread.
+     * being published, saved by the caller — to {@code owner/<repo>}: the signed-in account, or an owner the
+     * project's copy already lives under and the account can push to ({@link #ownerFor}). Call
+     * {@link Run#resume} off the FX thread.
      */
-    public Run start(PublishRequest request, ProjectVcs vcs) {
-        return new Run(request, vcs);
+    public Run start(PublishRequest request, ProjectVcs vcs, String owner) {
+        return new Run(request, vcs, owner);
+    }
+
+    /**
+     * Whose repository a publish goes to: the owner of the project's copy ({@code mine}) when the signed-in
+     * account may push there — an organization's template, a repository shared with the user — else the
+     * account itself, which is where a new copy is made. Comparing case-blind, as GitHub does.
+     */
+    public static String ownerFor(String login, Optional<SyncModel.Slug> mine, boolean canPushToMine) {
+        if (mine.isEmpty() || mine.get().owner().equalsIgnoreCase(login)) return login;
+        return canPushToMine ? mine.get().owner() : login;
+    }
+
+    /**
+     * Whether the signed-in account may push to {@code owner/repo}: the repository's {@code permissions.push}
+     * as GitHub reports it to that account. False when it cannot be read. Blocking; off the FX thread.
+     */
+    public boolean canPush(String owner, String repo) {
+        if (!auth.isAuthenticated()) return false;
+        try {
+            JsonNode found = client.get(GitHubConfig.API_BASE + "/repos/" + owner + "/" + repo, auth.token()).join();
+            return found != null && found.path("permissions").path("push").asBoolean(false);
+        } catch (Exception unreadable) {
+            return false;
+        }
     }
 
     /**
@@ -66,6 +93,8 @@ public final class BotPublisher {
 
         private final PublishRequest request;
         private final ProjectVcs vcs;
+        /** Whose repository this publishes: the account, or an owner it can push to. */
+        private final String owner;
         private PublishPlan plan;
         private ListingStatus listing = ListingStatus.of(ListingStatus.State.NOT_LISTED);
 
@@ -76,10 +105,16 @@ public final class BotPublisher {
         private String branch;
         private String commitSha;
 
-        private Run(PublishRequest request, ProjectVcs vcs) {
+        private Run(PublishRequest request, ProjectVcs vcs, String owner) {
             this.request = request;
             this.vcs = vcs;
+            this.owner = owner;
             this.plan = PublishPlan.start(request.listed());
+        }
+
+        /** Whose repository this publishes. */
+        public String owner() {
+            return owner;
         }
 
         public PublishRequest request() {
@@ -142,7 +177,11 @@ public final class BotPublisher {
             }
             token = auth.token();
             login = name;
-            repoApi = GitHubConfig.API_BASE + "/repos/" + login + "/" + request.repoName();
+            repoApi = GitHubConfig.API_BASE + "/repos/" + owner + "/" + request.repoName();
+        }
+
+        private String slug() {
+            return owner + "/" + request.repoName();
         }
 
         /**
@@ -152,14 +191,24 @@ public final class BotPublisher {
          */
         private String ensureRepository() throws IOException {
             account();
-            String url = BotInstaller.cloneUrl(login, request.repoName());
+            String url = BotInstaller.cloneUrl(owner, request.repoName());
             String mine = vcs.remoteUrl(Remote.MINE);
             if (mine != null && !sameRepo(mine, url)) {
                 throw new IOException("This project's copy is " + mine + ", not " + url + ". A publish goes to "
                         + "your own copy; publish under that repository's name, or use Save to my copy.");
             }
-            // No auto-init: an empty repository takes the first push as it is, with no README commit to join.
-            JsonNode repo = client.ensureRepo(login, request.repoName(), request.description(), false, false, token);
+            JsonNode repo;
+            if (owner.equalsIgnoreCase(login)) {
+                // No auto-init: an empty repository takes the first push as it is, with no README commit to join.
+                repo = client.ensureRepo(login, request.repoName(), request.description(), false, false, token);
+            } else {
+                // Another owner's repository is published into, never made: Studio creates only the user's own.
+                repo = client.get(repoApi, token).join();
+                if (repo == null) {
+                    throw new IOException("github.com/" + slug() + " does not exist, and Studio makes repositories "
+                            + "only on your own account.");
+                }
+            }
             if (mine == null) vcs.setRemote(Remote.MINE, url);
 
             // ensureRepo returns an existing repo as-is, and Save to my copy creates that repo private.
@@ -171,12 +220,12 @@ public final class BotPublisher {
                     repo = client.patch(repoApi, mapOf("private", false), token).join();
                     madePublic = true;
                 } catch (Exception e) {
-                    throw new IOException("Couldn't make " + login + "/" + request.repoName() + " public, so the "
+                    throw new IOException("Couldn't make " + slug() + " public, so the "
                             + "release wouldn't be installable (" + rootMessage(e) + "). Change its visibility "
                             + "on github.com, or sign out and back in to refresh the token's permissions.", e);
                 }
             }
-            repoUrl = repo.path("html_url").asText("https://github.com/" + login + "/" + request.repoName());
+            repoUrl = repo.path("html_url").asText("https://github.com/" + slug());
             branch = repo.path("default_branch").asText("main");
             return madePublic ? repoUrl + " (made public)" : repoUrl;
         }
@@ -189,7 +238,7 @@ public final class BotPublisher {
         private String push() throws IOException {
             if (branch == null) ensureRepository();
             boolean joined = vcs.joinUnrelated(Remote.MINE, branch,
-                    "Joined the versions already on github.com/" + login + "/" + request.repoName(), token);
+                    "Joined the versions already on github.com/" + slug(), token);
             commitSha = vcs.tagHead(request.version(), "Published " + request.botName() + " " + request.version());
             vcs.push(Remote.MINE, branch, token);
             return commitSha.substring(0, 7) + (joined ? ", joined to the history on GitHub" : "");
@@ -221,7 +270,7 @@ public final class BotPublisher {
          */
         private String checkArchive() throws IOException {
             account();
-            String url = GitHubConfig.archiveUrl(login, request.repoName(), request.version());
+            String url = GitHubConfig.archiveUrl(owner, request.repoName(), request.version());
             Exception last = null;
             for (int attempt = 0; attempt < 4; attempt++) {
                 try {
@@ -245,7 +294,7 @@ public final class BotPublisher {
             } catch (Exception ignored) {
                 // A secondary signal only; the gallery is authoritative.
             }
-            listing = submit(login, token, request.repoName(), request.entry(login));
+            listing = submit(login, token, owner, request.repoName(), request.entry(owner));
             return listing.describe();
         }
     }
@@ -258,7 +307,7 @@ public final class BotPublisher {
      * Delists a bot: removes its entry file from the gallery, by pull request. The author's repository and
      * releases are left intact — this only removes the bot from discovery. Blocking; run off the FX thread.
      */
-    public ListingStatus unpublish(String repoName) throws IOException {
+    public ListingStatus unpublish(String owner, String repoName) throws IOException {
         if (!auth.isAuthenticated()) {
             throw new IOException("Not signed in to GitHub.");
         }
@@ -266,15 +315,15 @@ public final class BotPublisher {
         if (login == null || login.isBlank()) {
             throw new IOException("Could not read your GitHub account.");
         }
-        return submit(login, auth.token(), repoName, null);
+        return submit(login, auth.token(), owner, repoName, null);
     }
 
     /**
-     * What the gallery currently says about {@code login/repoName}'s listing: the newest listing pull request
+     * What the gallery currently says about {@code owner/repoName}'s listing: the newest listing pull request
      * from this Studio's branch for it, read through its check run, labels and the gallery's comment, or — with
      * none — whether the entry file exists. Blocking; run off the FX thread.
      */
-    public ListingStatus listingStatus(String repoName) throws IOException {
+    public ListingStatus listingStatus(String owner, String repoName) throws IOException {
         if (!auth.isAuthenticated()) {
             throw new IOException("Not signed in to GitHub.");
         }
@@ -283,7 +332,7 @@ public final class BotPublisher {
             throw new IOException("Could not read your GitHub account.");
         }
         String token = auth.token();
-        boolean inGallery = client.get(upstreamApi() + "/contents/" + GitHubConfig.entryPath(login, repoName)
+        boolean inGallery = client.get(upstreamApi() + "/contents/" + GitHubConfig.entryPath(owner, repoName)
                 + "?ref=" + GitHubConfig.INDEX_BRANCH, token).join() != null;
         if (!login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
             JsonNode prs = client.get(upstreamApi() + "/pulls?state=all&per_page=1&head=" + login + ":"
@@ -301,7 +350,8 @@ public final class BotPublisher {
     }
 
     /**
-     * Writes ({@code entry} non-null) or removes ({@code entry} null) {@code bots/<login>-<repoName>.json}.
+     * Writes ({@code entry} non-null) or removes ({@code entry} null) {@code bots/<owner>-<repoName>.json}, as
+     * {@code login} — who commits or opens the pull request, and is not always the repository's owner.
      *
      * <p>The maintainer commits directly, since they cannot fork their own repository. The comparison is
      * against {@link GitHubConfig#MAINTAINER} — the person — rather than the gallery's owner, which is an
@@ -313,12 +363,12 @@ public final class BotPublisher {
      * the first listing again. A branch reset to the gallery's tip carries exactly one file's change, and an
      * open pull request from it is updated in place rather than duplicated.
      */
-    private ListingStatus submit(String login, String token, String repoName, Map<String, Object> entry)
-            throws IOException {
+    private ListingStatus submit(String login, String token, String owner, String repoName,
+                                 Map<String, Object> entry) throws IOException {
         if (!GitHubConfig.isGalleryConfigured()) {
             throw new IOException("The gallery is not configured in this build.");
         }
-        String path = GitHubConfig.entryPath(login, repoName);
+        String path = GitHubConfig.entryPath(owner, repoName);
         JsonNode current = client.get(upstreamApi() + "/contents/" + path + "?ref=" + GitHubConfig.INDEX_BRANCH,
                 token).join();
         if (entry != null && current != null && sameEntry(client.mapper(), current, entry)) {
@@ -331,9 +381,9 @@ public final class BotPublisher {
         try {
             if (login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
                 if (entry != null) {
-                    writeEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, entry, login, repoName);
+                    writeEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, entry, owner, repoName);
                 } else {
-                    deleteEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, login, repoName);
+                    deleteEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, owner, repoName);
                 }
                 return ListingStatus.of(entry != null ? ListingStatus.State.COMMITTED
                         : ListingStatus.State.NOT_LISTED);
@@ -346,9 +396,9 @@ public final class BotPublisher {
             String branch = listingBranch(repoName);
             prepareBranch(login, branch, token);
             if (entry != null) {
-                writeEntry(login, branch, token, entry, login, repoName);
+                writeEntry(login, branch, token, entry, owner, repoName);
             } else {
-                deleteEntry(login, branch, token, login, repoName);
+                deleteEntry(login, branch, token, owner, repoName);
             }
 
             JsonNode open = client.get(upstreamApi() + "/pulls?state=open&head=" + login + ":" + branch, token)
@@ -356,7 +406,7 @@ public final class BotPublisher {
             if (open != null && open.isArray() && !open.isEmpty()) {
                 return statusOf(open.get(0), token);
             }
-            String slug = login + "/" + repoName;
+            String slug = owner + "/" + repoName;
             JsonNode pr = client.post(upstreamApi() + "/pulls", mapOf(
                     "title", (entry != null ? (current == null ? "Add " : "Update ") : "Remove ") + slug,
                     "head", login + ":" + branch,
