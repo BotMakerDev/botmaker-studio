@@ -38,7 +38,7 @@ final class NewProjectPlugins {
         list.setPlaceholder(new Label("Loading plugins…"));
         catalog.rows().whenComplete((rows, failure) -> Platform.runLater(() -> {
             List<PluginRegistry.Plugin> installable = rows == null ? List.of()
-                    : rows.plugins().stream().filter(PluginRegistry.Plugin::isInstallable).toList();
+                    : rows.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
             list.getItems().setAll(installable);
             list.setPlaceholder(new Label("No plugins listed — the registry could not be reached. Add them "
                     + "later from Project ▸ Plugins & Libraries."));

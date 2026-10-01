@@ -42,8 +42,6 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
     public enum Source {
         /** The plugin registry lists it. {@code available} is the entry's {@code verifiedVersion}. */
         REGISTRY,
-        /** A {@code *SNAPSHOT} build in {@code ~/.m2}, which is a plugin author's own working copy. */
-        LOCAL_BUILD,
         /** The pom declares a plugin nothing else accounts for — published by hand, or not published. */
         UNLISTED
     }
@@ -78,44 +76,29 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
     /**
      * Every plugin {@code declared} contains, in pom order.
      *
-     * <p>The three sources are tried in order of how much they know — a registry entry carries a name, a
-     * description and the editor dependencies; a local build carries a version and nothing else; an
-     * unlisted plugin carries only its coordinate. A coordinate matching <b>both</b> the registry and a
-     * local build is a {@code LOCAL_BUILD} row keeping the registry's editor dependencies, which is exactly
-     * what {@code BrowsePluginsTab.merge} already does and for the same reason: a developer's own build
-     * of a plugin needs what the published one needs.
+     * <p>The two sources are tried in order of how much they know — a registry entry carries a name, a
+     * description and the editor dependencies; an unlisted plugin carries only its coordinate. (A third, a
+     * {@code ~/.m2} dev build, went on 2026-10-01 with the scan behind it.)
      *
-     * @param declared    what the pom declares — {@code LibraryService.declaredLibraries()}
-     * @param registry    the registry's entries, empty when it could not be read
-     * @param localBuilds {@code MavenService.localPluginBuilds()}, empty in a packaged Studio
-     * @param isPlugin    whether a coordinate the first two do not account for is a plugin at all. Live,
-     *                    that is {@link #jarDeclaresPlugin}; a test hands in a set.
+     * @param declared what the pom declares — {@code LibraryService.declaredLibraries()}
+     * @param registry the registry's entries, empty when it could not be read
+     * @param isPlugin whether a coordinate the registry does not account for is a plugin at all. Live,
+     *                 that is {@link #jarDeclaresPlugin}; a test hands in a set.
      */
     public static List<InstalledPlugin> of(List<UserLibrary> declared,
                                            List<PluginRegistry.Plugin> registry,
-                                           List<MavenService.LocalPluginBuild> localBuilds,
                                            Predicate<UserLibrary> isPlugin) {
         Map<String, PluginRegistry.Plugin> listed = new LinkedHashMap<>();
         for (PluginRegistry.Plugin entry : registry) {
             if (entry.isInstallable()) listed.put(entry.coordinate(), entry);
-        }
-        Map<String, String> built = new LinkedHashMap<>();
-        for (MavenService.LocalPluginBuild build : localBuilds) {
-            built.putIfAbsent(build.coordinate(), build.version());
         }
 
         List<InstalledPlugin> rows = new ArrayList<>();
         for (UserLibrary library : declared) {
             String coordinate = library.groupId() + ":" + library.artifactId();
             PluginRegistry.Plugin entry = listed.get(coordinate);
-            String localVersion = built.get(coordinate);
 
-            if (localVersion != null) {
-                rows.add(new InstalledPlugin(library,
-                        entry == null ? library.artifactId() : entry.name(),
-                        library.version(), localVersion, Source.LOCAL_BUILD,
-                        entry == null ? List.of() : entry.editorLibraries()));
-            } else if (entry != null) {
+            if (entry != null) {
                 rows.add(new InstalledPlugin(library, entry.name(), library.version(),
                         entry.verifiedVersion(), Source.REGISTRY, entry.editorLibraries()));
             } else if (isPlugin.test(library)) {

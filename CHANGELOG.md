@@ -12,6 +12,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+- Publish refuses a bot whose pom pins a `-SNAPSHOT` or an undefined `${property}`, naming each one: the
+  release would compile on this computer and nowhere else.
+
+### Removed
+- Local `~/.m2` builds of plugins and the SDK are no longer offered in Plugins & Libraries, Browse or New
+  Project, and the `(local build)` labels are gone. Pin a local build in the pom by hand to try it.
+
 ### Fixed
 - A project checked out as a git submodule (its `.git` is a file) has its history again. Studio read it as
   "no history" and *Publish* failed with "Creating directories for …/.git failed".

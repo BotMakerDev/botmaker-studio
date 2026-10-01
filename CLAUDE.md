@@ -12,6 +12,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > changes outside Studio; it compares with the pom last bound, so Studio's own writes do not rebind twice.
 > Read the older names below through this.
 
+> **No dev versions are offered (2026-10-01, the maintainer's call).** `MavenService.localSdkVersions()` and
+> `localPluginBuilds()` are deleted, with `InstalledPlugin.Source.LOCAL_BUILD`, `PluginCatalog`'s merge (its
+> `rows()` is the registry) and every `(local build)` label. A plugin author pins their SNAPSHOT in the pom by
+> hand and presses Reload plugins, which still works. Publish refuses a pom with a SNAPSHOT or undefined
+> `${property}` pin (`PublishRequest.unreleasedPins`), the contract pin a dev Studio writes
+> (`HostContract.DEV_VERSION`) included. Read the *plugin author's loop* and *local build* paragraphs below
+> as history.
+
 > **The shell keeps one Scene (2026-09-29).** Every screen (selector, loading, editor, Runner) is shown by
 > `StudioWindow.showOnShell`, which swaps the built scene's **root** into the scene already showing — never
 > `setScene` after the first. A scene set on a maximized stage came up at the restored size, and the

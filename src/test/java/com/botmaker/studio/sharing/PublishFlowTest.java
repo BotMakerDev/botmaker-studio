@@ -178,6 +178,23 @@ class PublishFlowTest {
         return names;
     }
 
+    /** A bot pinned to a build only this computer has would compile here and nowhere else, so Publish waits. */
+    @Test
+    void aSnapshotOrAnUndefinedPropertyIsAnUnreleasedPin() {
+        List<UserLibrary> declared = List.of(
+                new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "${botmaker.sdk.version}"),
+                new UserLibrary("com.github.LiQiyeDev", "botmaker-studio-api", "0.0.0-SNAPSHOT"),
+                new UserLibrary("org.example", "mine", "${nobody.defines.this}"),
+                new UserLibrary("org.junit.jupiter", "junit-jupiter", "5.9.3"),
+                new UserLibrary("org.example", "managed", ""));
+
+        assertEquals(List.of("com.github.LiQiyeDev:botmaker-studio-api:0.0.0-SNAPSHOT",
+                        "org.example:mine:${nobody.defines.this}"),
+                PublishRequest.unreleasedPins(declared, Map.of("botmaker.sdk.version", "1.2.3")));
+        assertEquals(List.of("com.github.LiQiyeDev:botmaker-sdk:1.2-snapshot"),
+                PublishRequest.unreleasedPins(declared.subList(0, 1), Map.of("botmaker.sdk.version", "1.2-snapshot")));
+    }
+
     /** An organization's template publishes into the organization's repository, when the account can push there. */
     @Test
     void aPublishGoesToTheCopysOwnerOnlyWhenTheAccountCanPushThere() {

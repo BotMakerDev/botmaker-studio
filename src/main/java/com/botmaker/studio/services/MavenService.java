@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.config.AppVersion;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.UserLibrary;
 import org.apache.maven.model.Dependency;
@@ -36,7 +35,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -98,137 +96,20 @@ public final class MavenService {
     // catalogue, loaded from its own jars, which is strictly better than a version comparison.
     // release.sh's check_sdk_floor went with it.
 
-    /**
-     * Locally-installed SDK dev builds found in {@code ~/.m2} (typically {@code 0.0.0-SNAPSHOT}, produced by
-     * {@code mvn -pl botmaker-sdk -am install} from the umbrella root), newest first. These never appear in
-     * JitPack's tag list, so the version pickers surface them from here — a developer picks the local build
-     * instead of typing it. A bot pinned to such a version resolves it from {@code ~/.m2} ahead of JitPack
-     * (see {@link #resolveClasspath}).
-     *
-     * <p>Best-effort: returns an empty list on any IO error or when nothing is installed (the common user case).
-     */
-    public static List<String> localSdkVersions() {
-        // Developer-only affordance: never surface local snapshots in a packaged/released build (a
-        // maintainer running the shipped app would otherwise see their own ~/.m2 dev builds).
-        if (!AppVersion.isDevBuild()) return List.of();
-        Path sdkDir = Path.of(System.getProperty("user.home"), ".m2", "repository",
-                SDK_GROUP_ID.replace('.', '/'), SDK_ARTIFACT_ID);
-        if (!Files.isDirectory(sdkDir)) return List.of();
-        try (var entries = Files.list(sdkDir)) {
-            return entries
-                    .filter(Files::isDirectory)
-                    // Only dev builds (SNAPSHOTs), and only if the jar is actually present.
-                    .filter(dir -> dir.getFileName().toString().contains("SNAPSHOT"))
-                    .filter(dir -> Files.exists(dir.resolve(
-                            SDK_ARTIFACT_ID + "-" + dir.getFileName() + ".jar")))
-                    .sorted(Comparator.comparingLong(MavenService::lastModifiedMillis).reversed())
-                    .map(dir -> dir.getFileName().toString())
-                    // One local build is enough — the newest wins (a plain `mvn install` writes
-                    // 0.0.0-SNAPSHOT); this also hides a stale leftover like an old local-SNAPSHOT.
-                    .limit(1)
-                    .collect(Collectors.toList());
-        } catch (IOException e) {
-            return List.of();
-        }
-    }
-
-    private static long lastModifiedMillis(Path p) {
-        try {
-            return Files.getLastModifiedTime(p).toMillis();
-        } catch (IOException e) {
-            return 0L;
-        }
-    }
-
-    /** A plugin built into {@code ~/.m2} and not published anywhere — what a plugin author is working on. */
-    public record LocalPluginBuild(String groupId, String artifactId, String version) {
-
-        /** {@code group:artifact}, which is how a registry entry and a pom row both name a dependency. */
-        public String coordinate() {
-            return groupId + ":" + artifactId;
-        }
-    }
-
-    /**
-     * The plugins installed as dev builds in {@code ~/.m2}, newest first.
-     *
-     * <p>The counterpart of {@link #localSdkVersions()} for the <em>other</em> kind of local build: a plugin
-     * author runs {@code mvn install} and wants Studio to offer what they just built, without publishing it,
-     * tagging it or hand-editing a pom.
-     *
-     * <p><b>What makes a jar a plugin is the service file, and nothing else asks.</b> A candidate is
-     * accepted when its jar carries {@code META-INF/services/com.botmaker.plugin.api.StudioPlugin} — the
-     * very entry {@code ServiceLoader} reads — so this needs no registry, no naming convention and no list
-     * to keep in step with anything. A local build of the SDK is therefore listed too, correctly: the SDK
-     * <em>is</em> a plugin, and its version is Manage Libraries' business rather than this scan's.
-     *
-     * <p>Only {@code *SNAPSHOT} versions are considered, for the same reason {@link #localSdkVersions()}
-     * considers only those: a released version in {@code ~/.m2} is simply a download, not something somebody
-     * is working on. Best-effort throughout — an unreadable jar or directory yields fewer rows, never an
-     * exception.
-     */
-    public static List<LocalPluginBuild> localPluginBuilds() {
-        // Developer-only affordance, exactly like localSdkVersions(): a packaged Studio must never surface
-        // whatever happens to be in the user's own ~/.m2.
-        if (!AppVersion.isDevBuild()) return List.of();
-        return localPluginBuilds(Path.of(System.getProperty("user.home"), ".m2", "repository"));
-    }
-
-    /** The scan itself, with the repository root given, so a test can point it at a tree it built. */
-    static List<LocalPluginBuild> localPluginBuilds(Path repositoryRoot) {
-        if (!Files.isDirectory(repositoryRoot)) return List.of();
-        List<Path> versionDirs = new ArrayList<>();
-        collectSnapshotDirs(repositoryRoot, versionDirs, 0);
-        List<LocalPluginBuild> found = new ArrayList<>();
-        versionDirs.sort(Comparator.comparingLong(MavenService::lastModifiedMillis).reversed());
-        for (Path versionDir : versionDirs) {
-            String version = versionDir.getFileName().toString();
-            Path artifactDir = versionDir.getParent();
-            if (artifactDir == null || artifactDir.getParent() == null) continue;
-            String artifactId = artifactDir.getFileName().toString();
-            Path jar = versionDir.resolve(artifactId + "-" + version + ".jar");
-            if (!Files.isRegularFile(jar) || !declaresPlugin(jar)) continue;
-            String groupId = repositoryRoot.relativize(artifactDir.getParent()).toString()
-                    .replace('\\', '/').replace('/', '.');
-            if (groupId.isBlank()) continue;
-            found.add(new LocalPluginBuild(groupId, artifactId, version));
-        }
-        return List.copyOf(found);
-    }
-
-    /**
-     * Every {@code *SNAPSHOT} directory under {@code dir}, without listing the files in any other.
-     *
-     * <p>A local repository is tens of thousands of files and a handful of snapshots, so this walks
-     * directories only and stops descending the moment it finds one — a snapshot directory holds an
-     * artifact's files, never another artifact.
-     */
-    private static void collectSnapshotDirs(Path dir, List<Path> out, int depth) {
-        // A Maven coordinate is deep but not unbounded; the cap is what stops a symlink loop rather than a
-        // real repository, which never approaches it.
-        if (depth > 12) return;
-        try (var children = Files.newDirectoryStream(dir, Files::isDirectory)) {
-            for (Path child : children) {
-                if (child.getFileName().toString().contains("SNAPSHOT")) {
-                    out.add(child);
-                } else {
-                    collectSnapshotDirs(child, out, depth + 1);
-                }
-            }
-        } catch (IOException | RuntimeException e) {
-            // An unreadable directory is one fewer candidate, never a failed scan.
-        }
-    }
+    // localSdkVersions() and localPluginBuilds() — dev-build scans of ~/.m2 for *SNAPSHOT SDK and plugin builds,
+    // offered in the version pickers, Browse and New Project — were deleted on 2026-10-01 (the maintainer's
+    // call): a bot published from a project pinned to one named a version nobody else could resolve. A plugin
+    // author still tests a local build by pinning its SNAPSHOT in the pom by hand and pressing Reload plugins;
+    // Studio just does not offer it, and Publish refuses a SNAPSHOT pin (sharing/PublishPins).
 
     /**
      * Whether {@code jar} declares a {@code StudioPlugin} the way {@code ServiceLoader} finds one.
      *
-     * <p><b>This is the project's only definition of "is this a plugin", and it has two readers since
-     * 2026-09-15.</b> {@link #localPluginBuilds} asks it of a {@code ~/.m2} candidate, and
+     * <p><b>This is the project's only definition of "is this a plugin".</b>
      * {@code services/upgrade/InstalledPlugin} asks it of a dependency the pom declares that no registry
-     * entry and no local build accounts for. A second rule — a naming convention, a registry lookup treated
-     * as definitive — would answer differently the first time somebody published a plugin the registry has
-     * not seen, which is precisely the case the second reader exists for.
+     * entry accounts for. A second rule — a naming convention, a registry lookup treated as definitive —
+     * would answer differently the first time somebody published a plugin the registry has not seen, which
+     * is precisely the case that reader exists for.
      */
     public static boolean declaresPlugin(Path jar) {
         try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {

@@ -161,6 +161,8 @@ public final class PublishSheet {
      */
     private volatile String repoOwner = "";
     private volatile List<GalleryEntry.Requirement> requires = List.of();
+    /** The pom's pins nobody else can resolve ({@link PublishRequest#unreleasedPins}); Publish waits on none. */
+    private List<String> unreleased = List.of();
     /** The gallery's listing of this repo, when it has one: its tier is what the preview shows. */
     private volatile GalleryEntry currentListing;
 
@@ -188,6 +190,7 @@ public final class PublishSheet {
     /** Re-reads what the sheet shows from outside it — the account, the listing, the last release. */
     public void shown() {
         if (accountBar == null) return;
+        readPins();
         refreshAll();
         onAuthChanged();
     }
@@ -230,7 +233,14 @@ public final class PublishSheet {
 
         root.getChildren().setAll(header, accountBar, scroll, buildButtonBar());
         renderChecklist(PublishPlan.start(true));
+        readPins();
         loadRequirements();
+    }
+
+    /** Re-reads the pom's unreleased pins — the pom may have changed since the sheet was last shown. */
+    private void readPins() {
+        unreleased = PublishRequest.unreleasedPins(MavenService.readDeclaredLibraries(projectDir),
+                MavenService.readProperties(projectDir));
     }
 
     private VBox buildForm() {
@@ -440,6 +450,8 @@ public final class PublishSheet {
         String reason = !signedIn ? "Sign in to GitHub to publish."
                 : repoOwner.isBlank() ? "Reading your GitHub account…"
                 : whoseProblem() != null ? whoseProblem()
+                : !unreleased.isEmpty() ? "This bot depends on a build only this computer has: "
+                        + String.join(", ", unreleased) + ". Pin a released version in Plugins & Libraries first."
                 : repoName().isBlank() ? "A repository name is required."
                 : templateProblem != null ? "Fix the template first, or publish it as a bot."
                 : !SemVer.isValid(version) ? "Version must look like MAJOR.MINOR.PATCH (e.g. 1.0.0)."
@@ -633,7 +645,8 @@ public final class PublishSheet {
     private void doPublish() {
         String problem = kindTemplate.isSelected() ? templateProblem() : null;
         String to = repoOwner;
-        if (problem != null || whoseProblem() != null || to.isBlank()
+        readPins();
+        if (problem != null || whoseProblem() != null || to.isBlank() || !unreleased.isEmpty()
                 || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
             refreshAll();
             return;

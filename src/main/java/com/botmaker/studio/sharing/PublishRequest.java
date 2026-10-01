@@ -100,6 +100,25 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         return List.copyOf(out);
     }
 
+    /**
+     * The dependencies a stranger installing this bot could not resolve, as {@code group:artifact:version}: a
+     * {@code -SNAPSHOT} (a build that lives in this machine's {@code ~/.m2} — {@code 0.0.0-SNAPSHOT} is what
+     * every local {@code mvn install} of ours writes) or a {@code ${property}} nobody defines. Publish refuses
+     * while this is not empty (2026-10-01): the release would compile here and nowhere else. A version left to
+     * dependency management (blank) is the pom's business and not listed.
+     */
+    public static List<String> unreleasedPins(List<UserLibrary> declared, Map<String, String> properties) {
+        List<String> out = new ArrayList<>();
+        for (UserLibrary library : declared) {
+            if (library.version().isBlank()) continue;
+            String version = interpolate(library.version(), properties);
+            if (version.toUpperCase(java.util.Locale.ROOT).contains("SNAPSHOT") || version.contains("${")) {
+                out.add(library.groupArtifact() + ":" + version);
+            }
+        }
+        return List.copyOf(out);
+    }
+
     /** {@code ${name}} replaced from {@code properties}; a property nobody defines is left as written. */
     static String interpolate(String text, Map<String, String> properties) {
         if (text == null) return "";

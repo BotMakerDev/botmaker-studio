@@ -1,7 +1,6 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.services.MavenService.LocalPluginBuild;
 import com.botmaker.studio.sharing.PluginRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +41,7 @@ class InstalledPluginTest {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK),
                 List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
-                List.of(), lib -> false);
+                lib -> false);
 
         assertEquals(1, rows.size());
         InstalledPlugin row = rows.getFirst();
@@ -60,7 +59,7 @@ class InstalledPluginTest {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK, JACKSON),
                 List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
-                List.of(), lib -> false);
+                lib -> false);
 
         assertEquals(List.of("com.github.LiQiyeDev:botmaker-sdk"),
                 rows.stream().map(InstalledPlugin::coordinate).toList(),
@@ -70,7 +69,7 @@ class InstalledPluginTest {
     @Test
     void aDeclaredPluginNoRegistryKnowsIsUnlistedWithNothingToMoveTo() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
-                List.of(BASICS), List.of(), List.of(), lib -> true);
+                List.of(BASICS), List.of(), lib -> true);
 
         InstalledPlugin row = rows.getFirst();
         assertEquals(InstalledPlugin.Source.UNLISTED, row.source());
@@ -83,27 +82,9 @@ class InstalledPluginTest {
     }
 
     @Test
-    void aLocalBuildWinsOverTheRegistryAndKeepsItsEditorDependencies() {
-        List<InstalledPlugin> rows = InstalledPlugin.of(
-                List.of(SDK),
-                List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6",
-                        List.of("org.openjfx:javafx-controls:21"))),
-                List.of(new LocalPluginBuild("com.github.LiQiyeDev", "botmaker-sdk", "0.0.0-SNAPSHOT")),
-                lib -> false);
-
-        InstalledPlugin row = rows.getFirst();
-        assertEquals(InstalledPlugin.Source.LOCAL_BUILD, row.source());
-        assertEquals("0.0.0-SNAPSHOT", row.available());
-        // A developer's own build of a plugin needs exactly what the published one needs, which is why the
-        // entry's list survives the local build winning the version.
-        assertEquals(List.of(new UserLibrary("org.openjfx", "javafx-controls", "21")),
-                row.editorDependencies());
-    }
-
-    @Test
     void theRowsKeepTheOrderThePomDeclaresThem() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
-                List.of(BASICS, SDK), List.of(), List.of(), lib -> true);
+                List.of(BASICS, SDK), List.of(), lib -> true);
 
         assertEquals(List.of("com.github.LiQiyeDev:botmaker-plugin-basics",
                         "com.github.LiQiyeDev:botmaker-sdk"),

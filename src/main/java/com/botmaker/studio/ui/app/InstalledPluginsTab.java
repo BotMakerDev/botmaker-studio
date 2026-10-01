@@ -225,8 +225,7 @@ public final class InstalledPluginsTab {
         status("Reading this project's plugins…");
         registry.browse().thenAccept(entries -> {
             List<InstalledPlugin> found = InstalledPlugin.of(
-                    libraryService.declaredLibraries(), entries, MavenService.localPluginBuilds(),
-                    InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
+                    libraryService.declaredLibraries(), entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
             Set<String> ambiguous = InstalledPlugin.ambiguousAmong(config.projectPath(), found);
             Platform.runLater(() -> render(found, ambiguous));
         }).exceptionally(error -> {
@@ -302,8 +301,7 @@ public final class InstalledPluginsTab {
             this.upgrades = new PluginUpgradeService(config, state, libraryService, jitpack,
                     plugin.artifact(), ambiguous);
 
-            name = new Label(plugin.displayName()
-                    + (plugin.source() == InstalledPlugin.Source.LOCAL_BUILD ? "   (local build)" : ""));
+            name = new Label(plugin.displayName());
             // Resolved: a template pins its SDK as ${botmaker.sdk.version}, and the pom's text is not a version.
             installed = new Label(upgrades.currentVersion());
             installed.getStyleClass().add("sdk-upgrade-detail");

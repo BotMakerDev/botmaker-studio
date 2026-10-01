@@ -28,9 +28,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -79,9 +77,6 @@ final class BrowsePluginsTab {
      * {@code botmaker-sdk} to the pom.
      */
     private List<UserLibrary> installed = List.of();
-
-    /** The coordinates a dev build in {@code ~/.m2} answers for, so a row can say where its version came from. */
-    private final Set<String> localCoordinates = new HashSet<>();
 
     /**
      * @param onShowInstalled an installed row's <i>Manage…</i>: the window switches to Installed
@@ -133,10 +128,7 @@ final class BrowsePluginsTab {
 
     private void load() {
         catalog.rows()
-                .thenAccept(catalogRows -> Platform.runLater(() -> {
-                    List<PluginRegistry.Plugin> rows = catalogRows.plugins();
-                    localCoordinates.clear();
-                    localCoordinates.addAll(catalogRows.localCoordinates());
+                .thenAccept(rows -> Platform.runLater(() -> {
                     all.clear();
                     all.addAll(rows);
                     refilter(searchField.getText());
@@ -279,11 +271,7 @@ final class BrowsePluginsTab {
             }
             Label name = new Label(plugin.name().isBlank() ? plugin.id() : plugin.name());
             name.setStyle("-fx-font-weight: bold;");
-            // The same wording the SDK dropdown uses for the same thing, because it is the same thing: a
-            // build in ~/.m2 that no repository has ever served.
-            boolean localBuild = localCoordinates.contains(plugin.coordinate());
-            Label coordinate = new Label(plugin.coordinate()
-                    + (localBuild ? "  " + plugin.verifiedVersion() + " (local build)" : ""));
+            Label coordinate = new Label(plugin.coordinate());
             coordinate.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
             Label description = new Label(plugin.description());
             description.setWrapText(true);
