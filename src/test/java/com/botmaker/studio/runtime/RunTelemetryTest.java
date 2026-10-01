@@ -82,7 +82,7 @@ class RunTelemetryTest {
 
         assertEquals(Optional.of(file), RunTelemetry.sourceFile(root, "com.example.Collect"));
         assertEquals(Optional.of(file), RunTelemetry.sourceFile(root, "com.example.Collect$1"));
-        assertEquals(Optional.empty(), RunTelemetry.sourceFile(root, "com.botmaker.sdk.api.interaction.Mouse"));
+        assertEquals(Optional.empty(), RunTelemetry.sourceFile(root, "com.botmaker.sdk.api.input.Mouse"));
         assertEquals(Optional.empty(), RunTelemetry.sourceFile(root, ""));
     }
 

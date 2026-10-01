@@ -157,7 +157,7 @@ class ProjectRepairTest {
     @Test
     void aDeletedBuildFileIsRestoredWithTheSdkWhenTheCodeNamesIt() throws IOException {
         Files.writeString(mainDir.resolve("Uses.java"),
-                "package com.mybot;\nimport com.botmaker.sdk.api.interaction.Mouse;\npublic class Uses {}\n");
+                "package com.mybot;\nimport com.botmaker.sdk.api.input.Mouse;\npublic class Uses {}\n");
         Path pom = config.projectPath().resolve("pom.xml");
         Files.delete(pom);
 

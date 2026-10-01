@@ -23,6 +23,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **The run diagram describes today's entry point**: `main` calls `run(goHome, Sdk.class)`; it still named
+  `Sdk.install()` and `Bot.start`, both gone from the SDK.
 - **A plugin call from the statement menu no longer lands unresolved.** `Mouse ▸ click` and `Wait ▸ time`
   wrote `new Point(0, 0)` and `Duration.ofSeconds(1)` without importing `Point` or `Duration`; each seeded
   argument's type is now imported with the call.

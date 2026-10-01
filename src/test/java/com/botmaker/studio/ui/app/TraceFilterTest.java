@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TraceFilterTest {
 
     private static final Set<TraceLine.Level> ALL = EnumSet.allOf(TraceLine.Level.class);
-    private static final String MOUSE = "com.botmaker.sdk.api.interaction.Mouse";
+    private static final String MOUSE = "com.botmaker.sdk.api.input.Mouse";
 
     private static TraceLine line(TraceLine.Level level, String source, String text) {
         return written(level, source, text, "", "");
@@ -64,7 +64,7 @@ class TraceFilterTest {
         assertTrue(TracePanel.matches(unknown, Set.of(MOUSE), ALL, null, ""),
                 "a line whose writer is unknown cannot be hidden by writer");
         assertEquals("Mouse", TraceWriters.simpleName(MOUSE));
-        assertEquals("LaunchTarget$Steam", TraceWriters.simpleName("com.botmaker.sdk.api.launch.LaunchTarget$Steam"));
+        assertEquals("LaunchTarget$Steam", TraceWriters.simpleName("com.botmaker.sdk.internal.launch.LaunchTarget$Steam"));
     }
 
     @Test

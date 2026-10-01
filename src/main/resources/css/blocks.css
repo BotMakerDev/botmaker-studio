@@ -1468,14 +1468,7 @@
     -fx-text-fill: -bm-on-accent;
 }
 
-/* The 3x3 arrow pad a Direction is picked on, and the mouse-button diagram beside it: square keys, so the
-   layout of the control is the meaning of the value. */
-.direction-pad-key {
-    -fx-font-size: 14px;
-    -fx-padding: 0;
-    -fx-min-width: 30;
-    -fx-min-height: 30;
-}
+/* The mouse-button diagram's keys. */
 .mouse-diagram-key { -fx-font-size: 11px; -fx-padding: 3 8 3 8; }
 
 /* The run controls and the log, pinned under the scrolling content. */

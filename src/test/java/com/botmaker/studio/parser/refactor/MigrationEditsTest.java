@@ -280,11 +280,11 @@ class MigrationEditsTest {
         CompilationUnit unit = SourceParser.parse(before);
         EditContext ctx = EditContext.of(unit, null, null);
         CallMigrator.renameTypeIn(ctx, "com.botmaker.sdk.api.Key",
-                "com.botmaker.sdk.api.interaction.Key");
+                "com.botmaker.sdk.api.input.Key");
         String source = ctx.applyTo(before);
 
         assertParses(source);
-        assertTrue(source.contains("import com.botmaker.sdk.api.interaction.Key;"), source);
+        assertTrue(source.contains("import com.botmaker.sdk.api.input.Key;"), source);
         assertFalse(source.contains("import com.botmaker.sdk.api.Key;"), source);
         // Same simple name on both sides: the uses are correct as written and must not be churned.
         assertTrue(source.contains("Key k = Key.ENTER;"), source);
