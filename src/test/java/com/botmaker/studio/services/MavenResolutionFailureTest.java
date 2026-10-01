@@ -83,6 +83,39 @@ class MavenResolutionFailureTest {
                 "the success case: nothing to resolve, so nothing resolved");
     }
 
+    /**
+     * A pin written as {@code ${property}} resolves at the property's value (2026-10-01). The templates pin their
+     * plugin that way, and the resolver was handed the placeholder text, which names no version at all. The
+     * artifact is one already in {@code ~/.m2}: the JUnit running this test.
+     */
+    @Test
+    void aPropertyPinResolvesAtThePropertysValue(@TempDir Path dir) throws Exception {
+        Path jar = Path.of(Test.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        String version = jar.getParent().getFileName().toString();
+        Path project = projectWith(dir.resolve("pinned"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.example</groupId>
+                  <artifactId>bot</artifactId>
+                  <version>1.0.0</version>
+                  <properties><junit.api.version>%s</junit.api.version></properties>
+                  <dependencies>
+                    <dependency>
+                      <groupId>org.junit.jupiter</groupId>
+                      <artifactId>junit-jupiter-api</artifactId>
+                      <version>${junit.api.version}</version>
+                    </dependency>
+                  </dependencies>
+                </project>
+                """.formatted(version));
+
+        MavenService.Resolution resolution = MavenService.resolve(project, (fraction, message) -> { });
+
+        assertEquals(List.of(), resolution.problems());
+        assertTrue(resolution.jars().stream().anyMatch(p -> p.endsWith("junit-jupiter-api-" + version + ".jar")),
+                resolution.jars().toString());
+    }
+
     // ---- The failures, and what makes them invisible ----
 
     @Test

@@ -20,6 +20,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A project pinning a plugin as `${property}` loads it.** Both templates pin their plugin that way
+  (`${botmaker.sdk.version}`, `${botmaker.basics.version}`); Studio handed the placeholder text to the
+  resolver, which found no such version, so the plugin did not load. The property's value is used now.
 - **Installing a plugin that brings another plugin you already declare removes the redundant entry.** Adding
   the SDK to a project made from the Base template left the template's own `botmaker-plugin-basics` entry in
   the pom, which pinned a basics version the SDK was not built against. The entry is now removed, and the

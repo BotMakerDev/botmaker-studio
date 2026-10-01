@@ -590,8 +590,10 @@ public final class MavenService {
             if ("test".equals(d.getScope())) continue;
             if ("sources".equals(d.getClassifier())) continue;
             String classifier = d.getClassifier() == null ? "" : d.getClassifier();
+            // A template pins its plugin as ${botmaker.sdk.version}; handed the placeholder, the resolver looked
+            // for a version of that name and the project bound no plugin at all (until 2026-10-01).
             Artifact artifact = new DefaultArtifact(
-                    d.getGroupId(), d.getArtifactId(), classifier, "jar", d.getVersion());
+                    d.getGroupId(), d.getArtifactId(), classifier, "jar", versionOf(model, d));
             String scope = d.getScope() == null ? "compile" : d.getScope();
             collectRequest.addDependency(new org.eclipse.aether.graph.Dependency(artifact, scope));
         }
