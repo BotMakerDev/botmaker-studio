@@ -19,6 +19,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   finish 1 removed type · nothing else changes", or "Nothing breaks"). The "What breaks in this bot" list
   is gone: it repeated the repair card and the finish-yourself list. The repair card now lists where each
   repaired call is.
+- The welcome screen's project list is one list, sorted as chosen. Projects opened from outside
+  `~/BotMakerProjects` were always listed last under their own header, whatever the sort; they now carry an
+  *Elsewhere* tag instead. *Newest first* reads when Studio last opened a project, or its folder's date when
+  that is later, so the project you just opened is on top.
 
 ### Removed
 - Local `~/.m2` builds of plugins and the SDK are no longer offered in Plugins & Libraries, Browse or New

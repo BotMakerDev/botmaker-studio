@@ -138,6 +138,26 @@ public class ProjectPreferences {
     }
 
     /**
+     * When each remembered project was last opened, by directory. An entry with no readable time is left out,
+     * so its project falls back to its folder's modification time in the list.
+     */
+    @JsonIgnore
+    public Map<Path, LocalDateTime> openedTimes() {
+        Map<Path, LocalDateTime> out = new LinkedHashMap<>();
+        for (ProjectEntry entry : recentProjects) {
+            try {
+                if (entry.getLastOpened() != null) {
+                    out.put(entry.directory(), LocalDateTime.parse(entry.getLastOpened(),
+                            DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                }
+            } catch (java.time.format.DateTimeParseException ignored) {
+                // A hand-edited time is no time; the folder's own date stands in.
+            }
+        }
+        return out;
+    }
+
+    /**
      * Moves {@code spec} to the front of the launch-target MRU, capped at {@link #MAX_RECENT_LAUNCH_TARGETS}.
      * Mirrors {@link #addRecentProject}: remove-then-{@code addFirst}, so re-picking an old target promotes it
      * rather than duplicating it. A null/blank spec (the "Clear target" path) is not recorded — clearing is not
@@ -201,6 +221,11 @@ public class ProjectPreferences {
     /** The remembered projects' directories, newest first. */
     public static List<Path> recentDirectories() {
         return load().getRecentProjects().stream().map(ProjectEntry::directory).toList();
+    }
+
+    /** See {@link #openedTimes()}. */
+    public static Map<Path, LocalDateTime> recentOpenTimes() {
+        return load().openedTimes();
     }
 
     /** Removes {@code projectDir} from the MRU. The folder itself is not touched. */

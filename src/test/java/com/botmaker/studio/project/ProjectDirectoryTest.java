@@ -119,6 +119,21 @@ class ProjectDirectoryTest {
         assertNull(prefs.lastOpenedDirectory());
     }
 
+    /** The welcome list's date sort reads when a project was opened, wherever it lives (2026-10-01). */
+    @Test
+    void eachRememberedProjectKnowsWhenItWasOpened() throws IOException {
+        Path file = tmp.resolve("botmaker-config.json");
+        ProjectPreferences prefs = new ProjectPreferences();
+        prefs.recordOpened(tmp.resolve("repos/Bot"));
+        prefs.recordOpened(tmp.resolve("Other"));
+        prefs.getRecentProjects().get(1).setLastOpened("not a time");
+        prefs.write(file);
+
+        var opened = ProjectPreferences.read(file).openedTimes();
+        assertEquals(List.of(tmp.resolve("Other")), List.copyOf(opened.keySet()),
+                "an unreadable time is left out, so the folder's own date stands in");
+    }
+
     // ── ProjectManager ───────────────────────────────────────────────────────
 
     @Test

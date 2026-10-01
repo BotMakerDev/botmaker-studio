@@ -213,7 +213,7 @@ BotMaker-Studio/
 
 **No projects in the selection screen**
 The list shows what sits directly under `~/BotMakerProjects/`, plus the projects you opened from elsewhere
-(under **Elsewhere**). A project needs a `pom.xml` and a `src/main/java` folder. One kept in another folder
+(tagged **Elsewhere**, sorted with the rest). A project needs a `pom.xml` and a `src/main/java` folder. One kept in another folder
 is opened with **Open Folder…**, and is listed from then on.
 
 **SDK types missing from autocomplete**

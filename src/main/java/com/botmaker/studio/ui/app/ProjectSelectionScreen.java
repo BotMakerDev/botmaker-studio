@@ -30,10 +30,12 @@ import javafx.stage.Stage;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -75,7 +77,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private final OpenHandler onProjectSelected;
 
     private final Stage stage;
-    private ListView<Row> projectListView;
+    private ListView<ProjectRow> projectListView;
     private CheckBox myProjectsCheckbox;
     private ComboBox<SortMode> sortCombo;
     private Button openButton;
@@ -88,10 +90,12 @@ public class ProjectSelectionScreen implements ProjectWindow {
     /** Where a project came from, derived from its provenance + the signed-in login. */
     private enum Ownership { LOCAL, MINE, IMPORTED }
 
-    /** A row in the list: either a non-selectable group header or a project. */
-    private sealed interface Row permits HeaderRow, ProjectRow {}
-    private record HeaderRow(String title) implements Row {}
-    private record ProjectRow(ProjectInfo info, Ownership owner) implements Row {}
+    /**
+     * A project in the list. {@code when} is what the date sort reads: the later of when Studio last opened
+     * it and when its folder last changed, so a project opened from anywhere goes to the top.
+     */
+    private record ProjectRow(ProjectInfo info, Ownership owner, boolean elsewhere, LocalDateTime when,
+                              boolean opened) {}
 
     /** Sort order offered in the footer dropdown. */
     private enum SortMode {
@@ -156,11 +160,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         projectListView = new ListView<>();
         projectListView.setPrefHeight(400);
         projectListView.setCellFactory(lv -> new RowCell());
-        // Header rows aren't a meaningful selection — bounce selection to the nearest project row.
-        projectListView.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
-            if (now instanceof HeaderRow) Platform.runLater(this::selectNearestProjectRow);
-            updateArchiveButton();
-        });
+        projectListView.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> updateArchiveButton());
 
         resolveLogin();
 
@@ -173,7 +173,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         openFolderButton = new Button("Open Folder…");
         openFolderButton.setPrefWidth(130);
         openFolderButton.setTooltip(new Tooltip("Open a project kept outside " + Constants.PROJECTS_ROOT
-                + " — a repository of your own, say. It is remembered under “Elsewhere”."));
+                + " — a repository of your own, say. It is remembered in this list, tagged “Elsewhere”."));
         openFolderButton.setOnAction(e -> openFolder());
 
         createButton = new Button("Create New Project");
@@ -236,49 +236,39 @@ public class ProjectSelectionScreen implements ProjectWindow {
         return ThemedWindows.scene(root);
     }
 
-    /** Renders a row: a bold group header (non-selectable) or the project card. */
-    private final class RowCell extends ListCell<Row> {
+    /** Renders one project card. */
+    private final class RowCell extends ListCell<ProjectRow> {
         @Override
-        protected void updateItem(Row row, boolean empty) {
+        protected void updateItem(ProjectRow row, boolean empty) {
             super.updateItem(row, empty);
-            getStyleClass().remove("group-header");
-            if (empty || row == null) {
-                setText(null);
-                setGraphic(null);
-                setDisable(false);
-                return;
-            }
-            if (row instanceof HeaderRow header) {
-                setGraphic(buildHeaderCell(header.title()));
-                setDisable(true); // not a selectable target
-            } else if (row instanceof ProjectRow projectRow) {
-                setGraphic(buildProjectCell(projectRow));
-                setDisable(false);
-            }
+            setText(null);
+            setGraphic(empty || row == null ? null : buildProjectCell(row));
         }
     }
 
-    private Label buildHeaderCell(String title) {
-        Label label = new Label(title);
-        label.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #555; "
-                + "-fx-padding: 6 0 2 0;");
-        return label;
-    }
-
-    /** The graphic for one project row: name, badge, path and last-modified. */
+    /** The graphic for one project row: name, badges, path and the date the sort reads. */
     private VBox buildProjectCell(ProjectRow row) {
         ProjectInfo project = row.info();
         Label nameLabel = new Label(project.name());
         nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
         HBox nameRow = new HBox(8, nameLabel, ownershipBadge(project, row.owner()));
+        if (row.elsewhere()) {
+            // One list since 2026-10-01, so where a project lives is a tag on its row, not a group header.
+            Label tag = new Label("Elsewhere");
+            tag.setStyle("-fx-font-size: 10px; -fx-text-fill: white; -fx-background-radius: 3; "
+                    + "-fx-padding: 1 6 1 6; -fx-background-color: #6e7781;");
+            tag.setTooltip(new Tooltip("Opened from outside " + Constants.PROJECTS_ROOT
+                    + ". Remove from Recents forgets it; the folder stays."));
+            nameRow.getChildren().add(tag);
+        }
         nameRow.setAlignment(Pos.CENTER_LEFT);
 
         Label pathLabel = new Label(project.projectPath().toString());
         pathLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
-        Label dateLabel = new Label("Last modified: " +
-                project.lastModified().format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")));
+        Label dateLabel = new Label((row.opened() ? "Last opened: " : "Last modified: ")
+                + row.when().format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")));
         dateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
 
         return new VBox(5, nameRow, pathLabel, dateLabel);
@@ -316,19 +306,13 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     private void selectNearestProjectRow() {
-        List<Row> rows = projectListView.getItems();
-        for (Row row : rows) {
-            if (row instanceof ProjectRow) {
-                projectListView.getSelectionModel().select(row);
-                return;
-            }
-        }
-        projectListView.getSelectionModel().clearSelection();
+        if (projectListView.getItems().isEmpty()) projectListView.getSelectionModel().clearSelection();
+        else projectListView.getSelectionModel().selectFirst();
     }
 
     private ProjectInfo selectedProject() {
-        Row row = projectListView.getSelectionModel().getSelectedItem();
-        return row instanceof ProjectRow projectRow ? projectRow.info() : null;
+        ProjectRow row = projectListView.getSelectionModel().getSelectedItem();
+        return row == null ? null : row.info();
     }
 
     private void openSelectedProject() {
@@ -373,56 +357,35 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Rebuilds the list rows from the current source (live vs archived), applying the "My projects"
-     * filter, the chosen sort, and Local/Imported/Elsewhere group headers.
+     * Rebuilds the list from the projects under the root and the remembered ones outside it, applying the
+     * "My projects" filter and the chosen sort to <b>one</b> list.
      *
-     * <p>"Elsewhere" is the recents list's projects outside the root, one directory each: the list never scans
-     * a folder it was not pointed at. A remembered folder that is gone, or is no longer a project, is skipped
-     * rather than shown as broken — it costs nothing to open it again.
+     * <p>It was three groups (Local, Imported, Elsewhere) until 2026-10-01, each sorted alone, so a project
+     * just opened from outside the root sat under every root project whatever the sort said. Where a project
+     * lives and where it came from are its row's badges now.
+     *
+     * <p>Outside projects are the recents list's, one directory each: the list never scans a folder it was not
+     * pointed at. A remembered folder that is gone, or is no longer a project, is skipped rather than shown as
+     * broken — it costs nothing to open it again.
      */
     private void rebuildRows() {
         if (projectListView == null) return;
-        List<ProjectInfo> projects = projectManager.listProjects();
-
         boolean mineOnly = myProjectsCheckbox != null && myProjectsCheckbox.isSelected();
-        List<ProjectRow> local = new ArrayList<>();
-        List<ProjectRow> imported = new ArrayList<>();
-        List<ProjectRow> elsewhere = new ArrayList<>();
-        for (ProjectInfo p : projects) {
-            Ownership owner = ownershipOf(p);
-            if (owner == Ownership.IMPORTED) {
-                if (mineOnly) continue;
-                imported.add(new ProjectRow(p, owner));
-            } else {
-                local.add(new ProjectRow(p, owner));
-            }
-        }
+        Map<Path, LocalDateTime> opened = ProjectPreferences.recentOpenTimes();
+
+        List<ProjectInfo> found = new ArrayList<>(projectManager.listProjects());
         for (Path dir : ProjectPreferences.recentDirectories()) {
-            if (projectManager.isUnderRoot(dir)) continue;
-            projectManager.projectAt(dir).ifPresent(p -> {
-                Ownership owner = ownershipOf(p);
-                if (!(mineOnly && owner == Ownership.IMPORTED)) elsewhere.add(new ProjectRow(p, owner));
-            });
+            if (!projectManager.isUnderRoot(dir)) projectManager.projectAt(dir).ifPresent(found::add);
         }
-
-        Comparator<ProjectRow> cmp = sortComparator();
-        local.sort(cmp);
-        imported.sort(cmp);
-        elsewhere.sort(cmp);
-
-        List<Row> rows = new ArrayList<>();
-        if (!local.isEmpty()) {
-            rows.add(new HeaderRow("Local"));
-            rows.addAll(local);
+        List<ProjectRow> rows = new ArrayList<>();
+        for (ProjectInfo p : found) {
+            Ownership owner = ownershipOf(p);
+            if (mineOnly && owner == Ownership.IMPORTED) continue;
+            LocalDateTime openedAt = opened.get(p.projectPath().toAbsolutePath().normalize());
+            boolean byOpen = openedAt != null && openedAt.isAfter(p.lastModified());
+            rows.add(new ProjectRow(p, owner, isElsewhere(p), byOpen ? openedAt : p.lastModified(), byOpen));
         }
-        if (!imported.isEmpty()) {
-            rows.add(new HeaderRow("Imported"));
-            rows.addAll(imported);
-        }
-        if (!elsewhere.isEmpty()) {
-            rows.add(new HeaderRow("Elsewhere"));
-            rows.addAll(elsewhere);
-        }
+        rows.sort(sortComparator());
         projectListView.getItems().setAll(rows);
         selectNearestProjectRow();
         updateArchiveButton();
@@ -431,7 +394,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private Comparator<ProjectRow> sortComparator() {
         SortMode mode = sortCombo == null || sortCombo.getValue() == null ? DEFAULT_SORT : sortCombo.getValue();
         Comparator<ProjectRow> byName = Comparator.comparing(r -> r.info().name(), String.CASE_INSENSITIVE_ORDER);
-        Comparator<ProjectRow> byDate = Comparator.comparing(r -> r.info().lastModified());
+        Comparator<ProjectRow> byDate = Comparator.comparing(ProjectRow::when);
         return switch (mode) {
             case NAME_ASC -> byName;
             case NAME_DESC -> byName.reversed();
