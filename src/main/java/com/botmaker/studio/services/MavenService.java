@@ -631,7 +631,8 @@ public final class MavenService {
      * <p>Versions are whatever the pom says, uninterpolated — a {@code ${property}} pin comes back as text.
      * Every caller so far compares {@code groupId:artifactId} and never the version, which is the same rule
      * {@code PluginRegistry.Plugin.isInstalledIn} states for itself: a plugin pinned to an older version is
-     * installed.
+     * installed. {@link #resolveArtifact(Path, String, String, String, String)} reads such a pin through the
+     * pom's properties, so the text may be handed to it as is.
      */
     public static List<UserLibrary> readDeclaredLibraries(Path projectDir) {
         Model model = readModel(projectDir);
@@ -999,7 +1000,10 @@ public final class MavenService {
         if (version == null || version.isBlank()) {
             return Optional.empty();
         }
-        Artifact artifact = new DefaultArtifact(groupId, artifactId, classifier, "jar", version.trim());
+        // A pin read off the pom as written (readDeclaredLibraries) is still ${botmaker.sdk.version} text here;
+        // the pom it came from says what it means (2026-10-01: the gamebot's SDK jar never resolved).
+        String pinned = propertyOf(version).map(model.getProperties()::getProperty).orElse(version);
+        Artifact artifact = new DefaultArtifact(groupId, artifactId, classifier, "jar", pinned.trim());
 
         RepositorySystem system = new RepositorySystemSupplier().get();
         DefaultRepositorySystemSession session = newSession(system);

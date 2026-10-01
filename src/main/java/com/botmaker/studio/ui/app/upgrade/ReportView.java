@@ -54,7 +54,8 @@ public final class ReportView {
     /** Which question the report is answering, which is the only thing that changes the layout. */
     public enum Mode {
         /**
-         * Moving to another version: what breaks, what is new, what will be repaired. A <b>downgrade</b> is
+         * Moving to another version: one line of what it costs, then what will be repaired (with where), what
+         * is left for the user, what is deprecated and what is new. A <b>downgrade</b> is
          * this mode too — it is the same report with the jars the other way round, and what it needs is one
          * sentence saying so rather than a layout of its own. See {@link Report#operation()}.
          */
@@ -155,15 +156,12 @@ public final class ReportView {
             box.getChildren().add(note);
         }
 
-        List<String> breaks = new ArrayList<>();
-        for (Break b : r.breaks()) {
-            breaks.add(b.display() + describe(b));
-            for (var site : b.sites()) breaks.add("        " + site);
-        }
-        box.getChildren().add(section("What breaks in this bot", breaks,
-                r.isIncomplete()
-                        ? "Nothing in the files that could be read."
-                        : "Nothing — every call in this bot still exists on " + r.to() + "."));
+        // One line in place of the old "What breaks in this bot" list (2026-10-01): that list was the repair
+        // card and the finish-yourself list again, so it said each break twice. The count is the answer.
+        Label summary = new Label(summary(r));
+        summary.setWrapText(true);
+        summary.setStyle("-fx-font-weight: bold;");
+        box.getChildren().add(summary);
 
         if (!r.leftForYou().isEmpty()) {
             box.getChildren().add(section("What you finish yourself, after the upgrade", leftForYouLines(r,
@@ -393,6 +391,35 @@ public final class ReportView {
         box.getChildren().add(note);
     }
 
+    /**
+     * What the upgrade costs, in one line: the calls Studio repairs, the calls waiting for a pick, the types
+     * left for the user. Each count is detailed by the card below it, so the line names no member.
+     */
+    static String summary(Report r) {
+        int repaired = 0;
+        for (Break b : r.repairable()) repaired += Math.max(1, b.sites().size());
+        int picks = 0;
+        for (Choice c : r.splits()) picks += c.sites().size();
+        for (Choice c : r.guesses()) picks += c.sites().size();
+        int finish = r.leftForYou().size();
+        if (repaired + picks + finish == 0) {
+            return r.isIncomplete()
+                    ? "Nothing breaks in the files that could be read."
+                    : "Nothing breaks — every call in this bot still exists on " + r.to() + ".";
+        }
+        List<String> parts = new ArrayList<>();
+        if (repaired > 0) parts.add("Studio repairs " + count(repaired, "call"));
+        if (picks > 0) parts.add("you pick for " + count(picks, "call"));
+        if (finish > 0) parts.add("you finish " + count(finish, "removed type"));
+        parts.add("nothing else changes");
+        String line = String.join(" · ", parts);
+        return Character.toUpperCase(line.charAt(0)) + line.substring(1);
+    }
+
+    private static String count(int n, String noun) {
+        return n + " " + noun + (n == 1 ? "" : "s");
+    }
+
     private static String describe(Break b) {
         return switch (b.kind()) {
             case TYPE_REMOVED -> " — the whole class is gone";
@@ -432,6 +459,7 @@ public final class ReportView {
         for (Break b : r.repairable()) {
             lines.add(b.display() + describe(b));
             lines.add("        → " + b.repair());
+            for (var site : b.sites()) lines.add("        " + site);
         }
         VBox card = new VBox(6, heading, why);
         card.getChildren().add(section("", lines));

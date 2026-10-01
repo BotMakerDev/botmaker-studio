@@ -196,7 +196,7 @@ public final class InstalledPluginsTab {
         Button add = new Button("Add a plugin…");
         add.setOnAction(e -> onAddPlugin.run());
 
-        // Every row to the version the registry verified (or the local build), each checked as it moves —
+        // Every row to the version the registry verified, when newer, each checked as it moves —
         // the one click the "Update plugins…" banner leads to.
         Button updateAll = new Button("Update all");
         updateAll.setOnAction(e -> rows.forEach(Row::selectRecommended));
@@ -330,17 +330,9 @@ public final class InstalledPluginsTab {
             verdict.setWrapText(true);
         }
 
-        /**
-         * Fills the combo box.
-         *
-         * <p>Seeded with what is already known — the registry's verified version, or the local build — so a
-         * row is usable before JitPack answers and stays usable if it never does. The list itself is every
-         * version JitPack can build, which is what makes a <b>downgrade</b> reachable: the versions below the
-         * installed one are in the same menu as the ones above it.
-         */
-        /** The version this row is seeded with: the registry's verified one, the local build, or the installed. */
+        /** The version this row is seeded with: the registry's verified one when newer, else the installed. */
         String recommended() {
-            return plugin.available().isBlank() ? upgrades.currentVersion() : plugin.available();
+            return PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
         }
 
         /** <i>Update all</i> for this row: the recommended version, checked when that is a move. */
@@ -354,10 +346,25 @@ public final class InstalledPluginsTab {
             }
         }
 
+        /**
+         * Fills the combo box.
+         *
+         * <p>Seeded with what is already known — the installed version and the registry's verified one — so a
+         * row is usable before JitPack answers and stays usable if it never does. The list itself is every
+         * version JitPack can build, which is what makes a <b>downgrade</b> reachable: the versions below the
+         * installed one are in the same menu as the ones above it.
+         */
         void loadVersions() {
             seeding = true;
             String seed = recommended();
-            versions.getItems().setAll(seed);
+            List<String> known = new ArrayList<>();
+            for (String v : List.of(upgrades.currentVersion(), plugin.available())) {
+                if (!v.isBlank() && !known.contains(v)) known.add(v);
+            }
+            if (!known.contains(seed)) known.add(seed);
+            versions.setCellFactory(list -> new VersionCell());
+            versions.setButtonCell(new VersionCell());
+            versions.getItems().setAll(known);
             versions.getSelectionModel().select(seed);
             versions.setDisable(false);
             versions.setPromptText(null);
@@ -368,12 +375,27 @@ public final class InstalledPluginsTab {
                 if (fetched.isEmpty()) return;               // offline: the seed is still a real answer
                 String selected = versions.getValue();
                 List<String> items = new ArrayList<>(fetched);
-                if (!items.contains(seed)) items.add(seed);
+                for (String v : known) if (!items.contains(v)) items.add(v);
                 seeding = true;
                 versions.getItems().setAll(items);
                 versions.getSelectionModel().select(items.contains(selected) ? selected : seed);
                 seeding = false;
             }));
+        }
+
+        /** A version, with which one is installed and which one the registry verified. */
+        private final class VersionCell extends javafx.scene.control.ListCell<String> {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    return;
+                }
+                String tag = item.equals(installed.getText()) ? "  (installed)"
+                        : item.equals(plugin.available()) ? "  (verified)" : "";
+                setText(item + tag);
+            }
         }
 
         /** Repaints this row's state cell. One class per state, so both themes are the stylesheet's job. */

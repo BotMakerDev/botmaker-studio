@@ -114,6 +114,12 @@ class MavenResolutionFailureTest {
         assertEquals(List.of(), resolution.problems());
         assertTrue(resolution.jars().stream().anyMatch(p -> p.endsWith("junit-jupiter-api-" + version + ".jar")),
                 resolution.jars().toString());
+
+        // The pin as readDeclaredLibraries hands it back — the plugins window resolves each row's jar with it.
+        var declared = MavenService.readDeclaredLibraries(project).getFirst();
+        assertEquals("${junit.api.version}", declared.version(), "the pom as written, so a write keeps it");
+        assertTrue(MavenService.resolveArtifact(project, declared.groupId(), declared.artifactId(), "",
+                declared.version()).isPresent());
     }
 
     // ---- The failures, and what makes them invisible ----

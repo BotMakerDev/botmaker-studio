@@ -62,11 +62,18 @@ public final class JitPackSearch {
     private CompletableFuture<String> getMetadata(String groupId, String artifactId) {
         String path = groupId.replace('.', '/') + "/" + artifactId + "/maven-metadata.xml";
         HttpRequest request = HttpRequest.newBuilder(URI.create(BASE + "/" + path))
-                .timeout(Duration.ofSeconds(8))
+                // 20 s, not 8: right after a release JitPack regenerates the metadata and can take that long,
+                // and an empty answer left the version picker with only the seed (2026-10-01).
+                .timeout(Duration.ofSeconds(20))
                 .GET()
                 .build();
         return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(resp -> resp.statusCode() == 200 ? resp.body() : null)
+                .thenApply(resp -> {
+                    if (resp.statusCode() == 200) return resp.body();
+                    System.err.println("JitPack metadata for " + groupId + ":" + artifactId + " answered "
+                            + resp.statusCode());
+                    return null;
+                })
                 .exceptionally(e -> {
                     System.err.println("JitPack metadata fetch failed: " + e.getMessage());
                     return null;

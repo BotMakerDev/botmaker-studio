@@ -15,6 +15,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ### Changed
 - Publish refuses a bot whose pom pins a `-SNAPSHOT` or an undefined `${property}`, naming each one: the
   release would compile on this computer and nowhere else.
+- The plugin upgrade report opens with one line saying what the move costs ("Studio repairs 4 calls · you
+  finish 1 removed type · nothing else changes", or "Nothing breaks"). The "What breaks in this bot" list
+  is gone: it repeated the repair card and the finish-yourself list. The repair card now lists where each
+  repaired call is.
 
 ### Removed
 - Local `~/.m2` builds of plugins and the SDK are no longer offered in Plugins & Libraries, Browse or New
@@ -32,6 +36,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   own account.
 - A provenance file naming the project's own repository (written by an earlier publish, or before the
   repository moved to an organization) no longer links that repository as somebody else's original.
+- The plugin version picker starts on the installed version, and offers the registry's verified one only
+  as a move up. A bot on SDK 1.2.3 opened on 1.1.7 and, when JitPack's list came back empty, offered
+  nothing else. Both are labelled in the list, and JitPack gets 20 seconds instead of 8.
+- A plugin pinned as `${property}` resolves its jar in the plugins window, so it is recognised as a plugin
+  and its type names count when two plugins clash.
 
 ## [1.2.3] — 2026-10-01
 

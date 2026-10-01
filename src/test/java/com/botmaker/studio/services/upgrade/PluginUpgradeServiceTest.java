@@ -1194,4 +1194,14 @@ class PluginUpgradeServiceTest {
                 serviceOver(tmp, FINDER_BOT).compare(jarOf(tmp, "old", jar, Map.of()),
                         jarOf(tmp, "new", jar, Map.of()), "1.0.0", "1.0.0").operation());
     }
+
+    /** A row starts on the installed version unless the registry verified a newer one — never on a downgrade. */
+    @Test
+    void theSeedIsTheVerifiedVersionOnlyWhenItIsNewer() {
+        assertEquals("1.2.3", PluginUpgradeService.recommended("1.2.3", "v1.1.7"));
+        assertEquals("v1.2.4", PluginUpgradeService.recommended("1.2.3", "v1.2.4"));
+        assertEquals("1.2.3", PluginUpgradeService.recommended("1.2.3", "v1.2.3"));
+        assertEquals("1.2.3", PluginUpgradeService.recommended("1.2.3", ""));
+        assertEquals("v1.1.7", PluginUpgradeService.recommended("", "v1.1.7"));
+    }
 }
