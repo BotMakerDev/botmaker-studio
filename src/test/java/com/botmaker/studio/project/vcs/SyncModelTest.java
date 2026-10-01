@@ -94,6 +94,9 @@ class SyncModelTest {
     void slugReadsGitHubUrlsOnly() {
         assertEquals("alice/miner", SyncModel.slug("https://github.com/alice/miner.git").orElseThrow().toString());
         assertEquals("alice/miner", SyncModel.slug("https://github.com/alice/miner").orElseThrow().toString());
+        assertEquals("BotMakerDev/botmaker-gamebot",
+                SyncModel.slug("git@github.com:BotMakerDev/botmaker-gamebot.git").orElseThrow().toString());
+        assertEquals("alice/miner", SyncModel.slug("ssh://git@github.com/alice/miner.git").orElseThrow().toString());
         assertTrue(SyncModel.slug("file:///tmp/repo").isEmpty());
         assertTrue(SyncModel.slug(null).isEmpty());
     }

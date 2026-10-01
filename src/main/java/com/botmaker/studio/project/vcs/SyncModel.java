@@ -86,9 +86,14 @@ public record SyncModel(Ownership ownership, Facts facts) {
         }
     }
 
-    private static final Pattern GITHUB = Pattern.compile("^https://github\\.com/([^/]+)/([^/]+?)(?:\\.git)?/?$");
+    private static final Pattern GITHUB = Pattern.compile(
+            "^(?:https://github\\.com/|ssh://git@github\\.com/|git@github\\.com:)([^/]+)/([^/]+?)(?:\\.git)?/?$");
 
-    /** {@code owner/repo} of a {@code https://github.com/…} URL, else empty. */
+    /**
+     * {@code owner/repo} of a GitHub URL — {@code https://github.com/o/r}, {@code git@github.com:o/r} or
+     * {@code ssh://git@github.com/o/r}, each with or without {@code .git} — else empty. A repository cloned by
+     * hand over SSH is as much a published one as a clone Studio made.
+     */
     public static Optional<Slug> slug(String url) {
         if (url == null) return Optional.empty();
         Matcher m = GITHUB.matcher(url.trim());

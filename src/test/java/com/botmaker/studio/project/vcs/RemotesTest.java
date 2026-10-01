@@ -141,4 +141,21 @@ class RemotesTest {
         }
         assertFalse(vcs.adoptLegacyBackup(), "idempotent");
     }
+
+    /** A submodule's {@code origin} is pushed to by name by another tool (the umbrella's release), so it stays. */
+    @Test
+    void aSubmodulesOriginIsCopiedNotMoved(@TempDir Path root) throws Exception {
+        Path project = ProjectVcsTest.submoduleCheckout(root);
+        ProjectVcs vcs = new ProjectVcs(project);
+        try (Git git = vcs.open()) {
+            var config = git.getRepository().getConfig();
+            config.setString("remote", "origin", "url", "git@github.com:BotMakerDev/bot.git");
+            config.save();
+        }
+
+        assertTrue(vcs.adoptLegacyBackup());
+        assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl(Remote.MINE));
+        assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl("origin"));
+        assertEquals("BotMakerDev/bot", SyncModel.slug(vcs.remoteUrl(Remote.MINE)).orElseThrow().toString());
+    }
 }

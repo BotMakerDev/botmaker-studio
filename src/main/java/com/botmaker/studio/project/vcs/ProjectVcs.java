@@ -129,9 +129,33 @@ public final class ProjectVcs {
         this.author = author;
     }
 
-    /** True when the project directory already has a {@code .git} repository. */
+    /**
+     * True when the project directory already has a repository: a {@code .git} directory, or a {@code .git}
+     * <i>file</i> naming one elsewhere ({@code gitdir: …}), which is what a submodule or a linked worktree
+     * has — the template checked out inside the umbrella is one.
+     */
     public boolean isRepo() {
-        return Files.isDirectory(projectDir.resolve(".git"));
+        return gitDir() != null;
+    }
+
+    /**
+     * The repository's own directory: {@code .git} itself, or the directory a {@code .git} file's
+     * {@code gitdir:} line names (relative to the project). Null when there is neither.
+     */
+    Path gitDir() {
+        Path dotGit = projectDir.resolve(".git");
+        if (Files.isDirectory(dotGit)) return dotGit;
+        if (!Files.isRegularFile(dotGit)) return null;
+        try {
+            for (String line : Files.readAllLines(dotGit)) {
+                if (!line.startsWith("gitdir:")) continue;
+                Path dir = projectDir.resolve(line.substring("gitdir:".length()).trim()).normalize();
+                return Files.isDirectory(dir) ? dir : null;
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        return null;
     }
 
     /**
@@ -774,18 +798,24 @@ public final class ProjectVcs {
     /**
      * Renames the old backup remote {@code origin} to {@link Remote#MINE}, with its remote-tracking refs, when
      * the project has the one and not the other. Returns whether it did. Idempotent.
+     *
+     * <p>A checkout whose {@code .git} is a <i>file</i> — a submodule, a linked worktree — belongs to another
+     * tool as well, which pushes to {@code origin} by name (the umbrella's release does, for the template). There
+     * the remote is <b>copied</b> to {@link Remote#MINE} and {@code origin} stays, refs and all.
      */
     public boolean adoptLegacyBackup() throws IOException {
         if (!isRepo()) return false;
+        boolean shared = !Files.isDirectory(projectDir.resolve(".git"));
         try (Git git = open()) {
             Repository repo = git.getRepository();
             StoredConfig config = repo.getConfig();
             String url = config.getString("remote", LEGACY_BACKUP, "url");
             if (url == null || url.isBlank() || remoteUrl(Remote.MINE) != null) return false;
-            config.unsetSection("remote", LEGACY_BACKUP);
+            if (!shared) config.unsetSection("remote", LEGACY_BACKUP);
             config.setString("remote", Remote.MINE.id(), "url", url);
             config.setString("remote", Remote.MINE.id(), "fetch", "+refs/heads/*:refs/remotes/" + Remote.MINE.id() + "/*");
             config.save();
+            if (shared) return true;
             String from = "refs/remotes/" + LEGACY_BACKUP + "/";
             for (Ref ref : repo.getRefDatabase().getRefsByPrefix(from)) {
                 org.eclipse.jgit.lib.RefUpdate moved = repo.updateRef(
@@ -1126,10 +1156,12 @@ public final class ProjectVcs {
     /** The repository, for this package's readers ({@link VersionReader}); the caller closes it. */
     Git open() throws IOException {
         excludeStudioState();
+        Path gitDir = gitDir();
+        if (gitDir == null) throw new IOException("This project has no history yet.");
         Repository repo = new FileRepositoryBuilder()
-                .setGitDir(projectDir.resolve(".git").toFile())
+                .setGitDir(gitDir.toFile())
+                .setWorkTree(projectDir.toFile())
                 .readEnvironment()
-                .findGitDir()
                 .build();
         return new Git(repo);
     }
@@ -1142,8 +1174,9 @@ public final class ProjectVcs {
      * it rather than into a file that would then show up as a change of theirs.
      */
     private void excludeStudioState() throws IOException {
-        Path info = projectDir.resolve(".git").resolve("info");
-        if (!Files.isDirectory(projectDir.resolve(".git"))) return;
+        Path gitDir = gitDir();
+        if (gitDir == null) return;
+        Path info = gitDir.resolve("info");
         Path exclude = info.resolve("exclude");
         String line = "/" + ProjectConfig.STUDIO_DIR + "/";
         String existing = Files.exists(exclude) ? Files.readString(exclude) : "";

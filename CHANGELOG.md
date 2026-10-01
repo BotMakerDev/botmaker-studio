@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+- A project checked out as a git submodule (its `.git` is a file) has its history again. Studio read it as
+  "no history" and *Publish* failed with "Creating directories for …/.git failed".
+- An SSH remote (`git@github.com:owner/repo`) counts as a GitHub repository, so a project cloned by hand reads
+  as published. A submodule's `origin` is copied to *My copy*, never renamed, so tools that push to `origin`
+  keep working.
+
 ## [1.2.3] — 2026-10-01
 
 ### Added

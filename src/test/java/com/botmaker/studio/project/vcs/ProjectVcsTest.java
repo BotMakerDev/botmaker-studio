@@ -194,4 +194,36 @@ class ProjectVcsTest {
         assertEquals(3, history.size());
         assertTrue(history.get(0).message().startsWith("Roll back to"));
     }
+
+    /**
+     * A submodule's {@code .git} is a file naming the repository elsewhere. Studio read it as "no history" and
+     * ran {@code git init} over it, which failed creating {@code .git/} where the file sat.
+     */
+    @Test
+    void aGitFileIsARepositoryNotAnInvitationToInit(@TempDir Path root) throws IOException {
+        Path project = submoduleCheckout(root);
+        ProjectVcs vcs = new ProjectVcs(project);
+
+        assertTrue(vcs.isRepo());
+        assertEquals(1, vcs.history().size(), "the existing history, not a fresh one");
+
+        Files.writeString(project.resolve("Bot.java"), "class Bot { int a; }");
+        assertTrue(vcs.checkpoint(VersionOrigin.SAVE, "add field") != null);
+        assertEquals(2, vcs.history().size());
+        assertTrue(Files.isRegularFile(project.resolve(".git")), "the gitfile is left as it was");
+        assertTrue(Files.readString(root.resolve("modules/bot/info/exclude")).contains("/.botmaker/"),
+                "Studio's state is excluded in the real repository directory");
+    }
+
+    /** {@code root/Project} with its repository moved to {@code root/modules/bot}, as git submodules lay it out. */
+    static Path submoduleCheckout(Path root) throws IOException {
+        Path project = root.resolve("Project");
+        Files.createDirectories(project);
+        Files.writeString(project.resolve("Bot.java"), "class Bot {}");
+        new ProjectVcs(project).init();
+        Path modules = Files.createDirectories(root.resolve("modules"));
+        Files.move(project.resolve(".git"), modules.resolve("bot"));
+        Files.writeString(project.resolve(".git"), "gitdir: ../modules/bot\n");
+        return project;
+    }
 }
