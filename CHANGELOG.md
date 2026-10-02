@@ -13,6 +13,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Changed
+- The getting-started text describes activities and outcomes as constants (`Outcomes.BAG_FULL`,
+  `Outcome.NEXT`), matching the SDK's typed flow names.
 - Publish refuses a bot whose pom pins a `-SNAPSHOT` or an undefined `${property}`, naming each one: the
   release would compile on this computer and nowhere else.
 - The plugin upgrade report opens with one line saying what the move costs ("Studio repairs 4 calls · you

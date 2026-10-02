@@ -45,9 +45,9 @@ public class ReturnBlock extends AbstractStatementBlock {
      *
      * <p>An activity's run() used to close with a pinned {@code return Outcome.X;} that BotMaker wrote and
      * kept, so this drew a dedicated outcome picker over it instead of the generic expression menu, with no
-     * delete button. Nothing generates an activity class or its Outcome enum now: an outcome is reported by
-     * {@code Activities.outcome("BAG_FULL")}, an ordinary call whose argument gets its picker from the SDK's own slot
-     * editor. So a return is a return, and this is the only path.
+     * delete button. Nothing generates an activity class or its Outcome enum now: an outcome is a constant of the
+     * bot's own {@code Outcomes} class ({@code return Outcomes.BAG_FULL;}), an ordinary value whose picker is the
+     * SDK's editor for its type. So a return is a return, and this is the only path.
      *
      * <p>The three arms declare different components rather than one component that changes shape, because
      * each is a different thing to point at: a value that can be changed, a value that is missing, and a

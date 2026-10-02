@@ -98,11 +98,12 @@ public final class Workflow {
                         + "is what that looks like at run time; it is worth reading before you draw a graph, "
                         + "because activities do not run top to bottom, once each.",
                         "An activity is a method you write — a public static Outcome body() that returns "
-                        + "Activities.outcome(\"…\") or Activities.next() — and the flow names it as a method "
-                        + "reference, Collect::body. That is the "
+                        + "one of your Outcomes constants (Outcomes.BAG_FULL) or Outcome.NEXT — and the flow "
+                        + "names it as a method reference, Collect::body. That is the "
                         + "whole binding: rename or delete the method and the compiler says so, pointing at "
-                        + "the flow, instead of a card that quietly stops doing anything. A card's label is "
-                        + "a separate string on purpose, so renaming one never touches your code.",
+                        + "the flow, instead of a card that quietly stops doing anything. Activities and "
+                        + "outcomes are constants too (Activities.COLLECT, Outcomes.BAG_FULL), so a typo is a "
+                        + "compile error.",
                         "The flow itself is a value in your own plugins/sdk/Sdk.java, written by the editor "
                         + "when you save and readable as ordinary Java when you do not. To stop an activity "
                         + "running, turn its switch off — the card stays and so does your method. Delete "
