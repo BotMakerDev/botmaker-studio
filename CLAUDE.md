@@ -12,6 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > changes outside Studio; it compares with the pom last bound, so Studio's own writes do not rebind twice.
 > Read the older names below through this.
 
+> **No dev versions are loaded either (2026-10-03, the maintainer's call).** `plugin/ReleasedPlugins` leaves
+> a plugin jar resolved at a `-SNAPSHOT` version off `PluginHost.bind`'s loader and reports it in
+> `failures()`; the Installed tab marks the row and *Pin released versions* moves it through the checked pass.
+> A non-plugin SNAPSHOT library still loads. `HostContract` writes `MavenService.CONTRACT_FALLBACK_VERSION` (a
+> released tag the release bumps), never `DEV_VERSION`, which is deleted. So a plugin change is tried in
+> Studio only after its release; read "pins its SNAPSHOT by hand and presses Reload" below as history.
+
 > **No dev versions are offered (2026-10-01, the maintainer's call).** `MavenService.localSdkVersions()` and
 > `localPluginBuilds()` are deleted, with `InstalledPlugin.Source.LOCAL_BUILD`, `PluginCatalog`'s merge (its
 > `rows()` is the registry) and every `(local build)` label. A plugin author pins their SNAPSHOT in the pom by

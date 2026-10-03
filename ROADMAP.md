@@ -6,7 +6,11 @@ whenever work lands here (see CLAUDE.md → Roadmap).
 
 ## Completed
 
-- **2026-10-01 (latest) — New Project picks plugins (new-project plugins, phases 1–2).** `ui/app/NewProjectPlugins`
+- **2026-10-03 (latest) — Released versions only (phase 1).** `plugin/ReleasedPlugins` leaves a `-SNAPSHOT`
+  plugin jar off `PluginHost.bind`'s loader and reports it as a failure; `InstalledPluginsTab` marks a dev row,
+  seeds a release and offers *Pin released versions*. `HostContract` falls back to
+  `MavenService.CONTRACT_FALLBACK_VERSION`, never `0.0.0-SNAPSHOT`.
+- **2026-10-01 — New Project picks plugins (new-project plugins, phases 1–2).** `ui/app/NewProjectPlugins`
   lists `sharing/PluginCatalog`'s rows, the template's `requires` locked; `ProjectCreator.installPlugins` declares
   the picks before `ProjectVcs.init()` and runs `MavenService.dropShadowedPlugins`, which Browse runs too.
 - **2026-09-29 — the trace's level ids held together (dashboard pass, phase 5).**

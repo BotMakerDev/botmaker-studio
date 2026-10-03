@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.JitPackSearch;
@@ -121,6 +122,11 @@ public final class InstalledPluginsTab {
     private final VBox root = new VBox(12);
     private Row showing;
 
+    /** Shown while a row pins a dev build; see {@link #showDevBar}. */
+    private final Label devText = new Label();
+    private final Button pinReleased = new Button("Pin released versions");
+    private final HBox devBar = new HBox(10, devText, pinReleased);
+
     /**
      * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
      * @param onOpenReview the result block's <i>Open Review tab</i>; the tab is the shell's, so the shell
@@ -184,10 +190,31 @@ public final class InstalledPluginsTab {
         resultBox.setVisible(false);
         resultBox.setManaged(false);
 
+        devText.setWrapText(true);
+        HBox.setHgrow(devText, Priority.ALWAYS);
+        pinReleased.setOnAction(e -> rows.stream().filter(Row::isDev).forEach(Row::selectReleased));
+        devBar.setAlignment(Pos.CENTER_LEFT);
+        devBar.getStyleClass().add("sdk-upgrade-card");
+        showDevBar(0);
+
         root.setPadding(new Insets(12, 0, 0, 0));
-        root.getChildren().addAll(new HBox(8, hint, progress), table, reportScroll, resultBox, statusLabel,
+        root.getChildren().addAll(new HBox(8, hint, progress), devBar, table, reportScroll, resultBox, statusLabel,
                 whyDisabled, buttonBar());
         load();
+    }
+
+    /** The dev-build line above the table, shown while any row pins a build Studio will not load. */
+    private void showDevBar(int devRows) {
+        devText.setText(devText(devRows));
+        devBar.setVisible(devRows > 0);
+        devBar.setManaged(devRows > 0);
+    }
+
+    /** What the dev-build line says, or "" when no row pins a dev build. */
+    static String devText(int devRows) {
+        if (devRows == 0) return "";
+        return (devRows == 1 ? "A plugin is" : devRows + " plugins are") + " pinned to a dev build, which Studio "
+                + "does not load. Move " + (devRows == 1 ? "it" : "them") + " to a released version, then apply.";
     }
 
     private Node buttonBar() {
@@ -241,6 +268,7 @@ public final class InstalledPluginsTab {
         progress.setVisible(false);
         table.getChildren().clear();
         rows.clear();
+        showDevBar(0);
 
         if (found.isEmpty()) {
             status("");
@@ -268,6 +296,7 @@ public final class InstalledPluginsTab {
             line++;
             row.loadVersions();
         }
+        showDevBar((int) rows.stream().filter(Row::isDev).count());
     }
 
     private static Label heading(String text) {
@@ -330,9 +359,30 @@ public final class InstalledPluginsTab {
             verdict.setWrapText(true);
         }
 
-        /** The version this row is seeded with: the registry's verified one when newer, else the installed. */
+        /**
+         * The version this row is seeded with: the registry's verified one when newer, else the installed —
+         * and for a dev build, any released version over the one Studio will not load.
+         */
         String recommended() {
+            if (isDev() && !released().isEmpty()) return released();
             return PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
+        }
+
+        /** Whether this row pins a build only this machine has, which {@code PluginHost.bind} refused. */
+        boolean isDev() {
+            return ReleasedPlugins.isDevVersion(upgrades.currentVersion());
+        }
+
+        /** The release a dev row moves to: the registry's verified one, else the newest JitPack lists, else "". */
+        String released() {
+            if (!plugin.available().isBlank()) return plugin.available();
+            return versions.getItems().stream().filter(v -> !ReleasedPlugins.isDevVersion(v)).findFirst().orElse("");
+        }
+
+        /** <i>Pin released versions</i> for this row; the selection listener checks the move. */
+        void selectReleased() {
+            String target = released();
+            if (!target.isEmpty() && !target.equals(versions.getValue())) versions.getSelectionModel().select(target);
         }
 
         /** <i>Update all</i> for this row: the recommended version, checked when that is a move. */
@@ -370,6 +420,7 @@ public final class InstalledPluginsTab {
             versions.setPromptText(null);
             check.setDisable(false);
             seeding = false;
+            markDev();
 
             upgrades.availableVersions().thenAccept(fetched -> Platform.runLater(() -> {
                 if (fetched.isEmpty()) return;               // offline: the seed is still a real answer
@@ -379,8 +430,18 @@ public final class InstalledPluginsTab {
                 seeding = true;
                 versions.getItems().setAll(items);
                 versions.getSelectionModel().select(items.contains(selected) ? selected : seed);
+                // A dev row with no verified release learns one only now: the newest tag JitPack lists.
+                if (isDev() && ReleasedPlugins.isDevVersion(versions.getValue()) && !released().isEmpty()) {
+                    versions.getSelectionModel().select(released());
+                }
                 seeding = false;
+                markDev();
             }));
+        }
+
+        /** Says on the row that Studio did not load it; cleared like any chip when the version moves. */
+        private void markDev() {
+            if (isDev() && report == null) chip("dev build — not loaded", "partial");
         }
 
         /** A version, with which one is installed and which one the registry verified. */
@@ -392,7 +453,8 @@ public final class InstalledPluginsTab {
                     setText(null);
                     return;
                 }
-                String tag = item.equals(installed.getText()) ? "  (installed)"
+                String tag = item.equals(installed.getText())
+                        ? (isDev() ? "  (installed, dev build)" : "  (installed)")
                         : item.equals(plugin.available()) ? "  (verified)" : "";
                 setText(item + tag);
             }

@@ -13,6 +13,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Changed
+- Studio loads released plugins only. A plugin pinned to a dev build (`-SNAPSHOT`) is not loaded; the
+  editor says so, and *Project ▸ Plugins & Libraries ▸ Installed* offers **Pin released versions**, which
+  moves each one to a release through the usual checked upgrade.
+- A Studio built from source gives a new project the latest released plugin contract instead of
+  `0.0.0-SNAPSHOT`.
 - The getting-started text describes activities and outcomes as constants (`Outcomes.BAG_FULL`,
   `Outcome.NEXT`), matching the SDK's typed flow names.
 - Publish refuses a bot whose pom pins a `-SNAPSHOT` or an undefined `${property}`, naming each one: the

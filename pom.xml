@@ -31,9 +31,10 @@
         <!-- The contract TAG a project is given when Studio writes the first @Param into it
              (config/HostContract). Not botmaker.studioapi.version: the release build installs the contract
              from source at 0.0.0-SNAPSHOT, so that property never holds a tag a user's project could
-             resolve from JitPack. ci.yml passes STUDIO_API_TAG from .deps.env; a dev build keeps
-             0.0.0-SNAPSHOT, which resolves from ~/.m2. -->
-        <botmaker.contract.tag>0.0.0-SNAPSHOT</botmaker.contract.tag>
+             resolve from JitPack. ci.yml passes STUDIO_API_TAG from .deps.env; a dev build leaves it blank
+             and HostContract falls back to MavenService.CONTRACT_FALLBACK_VERSION, a released tag (never a
+             SNAPSHOT since 2026-10-03). -->
+        <botmaker.contract.tag></botmaker.contract.tag>
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
         <botmaker.pluginhost.version>0.0.0-SNAPSHOT</botmaker.pluginhost.version>

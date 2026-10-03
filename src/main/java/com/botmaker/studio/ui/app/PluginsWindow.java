@@ -38,15 +38,16 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li><b>Installed</b> ({@link InstalledPluginsTab}) — what this project runs, on which version: update,
  *       downgrade and remove, each through its checked report;</li>
- *   <li><b>Browse</b> ({@link BrowsePluginsTab}) — what it could run: the registry and local builds;</li>
+ *   <li><b>Browse</b> ({@link BrowsePluginsTab}) — what it could run: the registry;</li>
  *   <li><b>Libraries</b> ({@link LibrariesTab}) — its ordinary Maven dependencies, plugins held back.</li>
  * </ul>
  * Reload sits in the header because it is about all three, and so does the line naming what did not load,
  * which is the first thing a user sent here by the canvas banner needs to read. Manage Imports is deleted:
  * every edit imports what it writes, and an unused import compiles.
  *
- * <p>A pom edited outside Studio rebinds by itself ({@code LibraryService.watchPom}), so Reload is the plugin
- * author's button: the jar's bytes changed in {@code ~/.m2} and the pom did not.
+ * <p>A pom edited outside Studio rebinds by itself ({@code LibraryService.watchPom}). Reload stays for a jar
+ * whose bytes changed under the same path; it was the plugin author's button for a {@code ~/.m2} build until
+ * 2026-10-03, when Studio stopped loading dev builds at all ({@code plugin/ReleasedPlugins}).
  */
 public final class PluginsWindow {
 
@@ -114,8 +115,8 @@ public final class PluginsWindow {
         showLoadProblems();
 
         Button reload = new Button("Reload plugins");
-        reload.setTooltip(new Tooltip("Load this project's plugin jars again, without changing pom.xml — for a"
-                + " plugin you just rebuilt into ~/.m2."));
+        reload.setTooltip(new Tooltip("Load this project's plugin jars again, without changing pom.xml. A dev"
+                + " build (-SNAPSHOT) is never loaded: Studio runs released plugins only."));
         reload.setOnAction(e -> reload(reload));
 
         Button close = new Button("Close");

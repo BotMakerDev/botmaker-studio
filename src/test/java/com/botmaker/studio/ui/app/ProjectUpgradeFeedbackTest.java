@@ -28,6 +28,15 @@ class ProjectUpgradeFeedbackTest {
         assertTrue(why.contains("Pick a version"), why);
     }
 
+    /** A row pinned to a dev build was not loaded (2026-10-03); the line above the table says what to do. */
+    @Test
+    void devBuildRowsAreNamedWithTheWayOut() {
+        assertEquals("", InstalledPluginsTab.devText(0));
+        assertTrue(InstalledPluginsTab.devText(1).startsWith("A plugin is pinned to a dev build"));
+        assertTrue(InstalledPluginsTab.devText(2).startsWith("2 plugins are"));
+        assertTrue(InstalledPluginsTab.devText(2).contains("released version, then apply"));
+    }
+
     /** A check in flight is a wait, not a refusal, and must not read as one. */
     @Test
     void aCheckStillRunningSaysSoRatherThanNamingAProblem() {

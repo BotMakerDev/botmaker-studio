@@ -223,8 +223,10 @@ public final class PluginHost {
      */
     public static synchronized void bind(List<String> resolvedClasspath, StudioServices services) {
         opening = services;
-        PluginLoader.Loaded loaded = PluginLoader.openReporting(resolvedClasspath);
-        failures = loaded.failures();
+        // A dev build of a plugin is never bound (ReleasedPlugins): it is reported beside what failed to load.
+        ReleasedPlugins.Split released = ReleasedPlugins.split(resolvedClasspath);
+        PluginLoader.Loaded loaded = PluginLoader.openReporting(released.loadable());
+        failures = concat(released.refused(), loaded.failures());
         PluginLoader opened = loaded.loader();
         if (opened == null) {
             // Not unbind(): a classpath that would not open is still a project opening, and the bundled set

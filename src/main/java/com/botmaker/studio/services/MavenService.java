@@ -83,6 +83,13 @@ public final class MavenService {
      */
     public static final String SDK_FALLBACK_VERSION = "1.2.3";
 
+    /**
+     * The contract tag a dev build of Studio writes into a project ({@code config/HostContract}); a release
+     * build writes the tag it was built against instead. Hand-typed for the same reason as
+     * {@link #SDK_FALLBACK_VERSION}: the release bumps this literal on every {@code --studio-api} release.
+     */
+    public static final String CONTRACT_FALLBACK_VERSION = "0.3.1";
+
     // There is no MIN_SDK_VERSION any more, and its absence is deliberate (2026-08-25).
     //
     // The floor was a statement about generation: below it Studio could not render a generated file, because
