@@ -36,11 +36,9 @@ so work can be resumed if a session is interrupted.
 
 ## Roadmap
 
-`ROADMAP.md` (repo root) is the living backlog + changelog for the **Studio** (this repo only — the SDK and
-shared modules each own their own `ROADMAP.md`). **After completing a meaningful change, update it:** add a
-dated entry to the top of the **Completed** section (date — what changed — where), and check off / remove the
-corresponding backlog item if it's now done. Keep entries to 1–3 lines. New backlog ideas that surface during
-work go under the relevant backlog section.
+`ROADMAP.md` (repo root) is the **open** backlog for the Studio only. A finished change writes `CHANGELOG.md`
+under `## [Unreleased]`; `ROADMAP.md` changes only when open work is added or removed — never a dated
+done-entry.
 
 ## Commands
 
