@@ -7,6 +7,7 @@ import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
+import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
@@ -21,6 +22,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
@@ -321,6 +323,8 @@ public final class InstalledPluginsTab {
         private Report report;
         /** A removal report on screen that waits for picks; the next Remove… confirms it instead of re-checking. */
         private Report pendingRemoval;
+        /** The plugin's files in the bot, read with the removal report; what its question offers to delete. */
+        private PluginHolders removalHolders = PluginHolders.NONE;
         /** True while {@link #loadVersions} is filling the combo box, so seeding checks nothing. */
         private boolean seeding = true;
         private boolean checking;
@@ -529,8 +533,10 @@ public final class InstalledPluginsTab {
 
             Thread worker = new Thread(() -> {
                 Report result;
+                PluginHolders holders;
                 try {
                     result = upgrades.removal();
+                    holders = upgrades.holders();
                 } catch (RuntimeException e) {
                     String message = e.getMessage();
                     Platform.runLater(() -> {
@@ -542,7 +548,9 @@ public final class InstalledPluginsTab {
                     return;
                 }
                 Report done = result;
+                PluginHolders files = holders;
                 Platform.runLater(() -> {
+                    removalHolders = files;
                     progress.setVisible(false);
                     remove.setDisable(false);
                     report = null;                           // this one is not about a version change
@@ -573,20 +581,35 @@ public final class InstalledPluginsTab {
             }
             if (reportView.unpicked() > 0) what += "\n\n" + unpickedReason(reportView.unpicked());
             if (r.isIncomplete()) what += "\n\nNot everything could be read: " + r.problems().getFirst();
-            Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
-                    "Remove " + plugin.displayName() + " from this project?\n\n" + what
-                            + "\n\nA version of the project is saved first.");
+            String question = "Remove " + plugin.displayName() + " from this project?\n\n" + what
+                    + "\n\nA version of the project is saved first.";
+            Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, question);
+            PluginHolders holders = removalHolders;
+            CheckBox deleteFiles = new CheckBox("Delete this plugin's files: " + holders.fileNames());
+            if (!holders.isEmpty()) {
+                deleteFiles.setSelected(true);
+                Label text = new Label(question);
+                text.setWrapText(true);
+                VBox content = new VBox(10, text, deleteFiles);
+                if (!holders.references().isEmpty()) {
+                    Label refs = new Label(holderReferences(holders.references()));
+                    refs.setWrapText(true);
+                    refs.getStyleClass().add("text-muted");
+                    content.getChildren().add(refs);
+                }
+                ask.getDialogPane().setContent(content);
+            }
             if (ask.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
-            runRemoval(r);
+            runRemoval(r, deleteFiles.isSelected() ? holders : PluginHolders.NONE);
         }
 
-        private void runRemoval(Report r) {
+        private void runRemoval(Report r, PluginHolders holders) {
             remove.setDisable(true);
             progress.setVisible(true);
             status("Committing a snapshot, repairing your call sites and removing "
                     + plugin.displayName() + "…");
 
-            upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks())
+            upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks(), holders)
                     .whenComplete((repaired, error) -> Platform.runLater(() -> {
                         progress.setVisible(false);
                         remove.setDisable(false);
@@ -598,8 +621,9 @@ public final class InstalledPluginsTab {
                             return;
                         }
                         status("");
+                        holders.forget(config, state);
                         showResult(removalSummary(plugin.displayName(), repaired.files(), r.breaks().size(),
-                                repaired.leftAsWritten()), repaired.files() > 0);
+                                repaired.leftAsWritten(), repaired.deleted()), repaired.files() > 0);
                         // The table it was a row of is now wrong, and the clash set with it: one plugin
                         // fewer can make a name that was ambiguous answerable again.
                         reload();
@@ -644,16 +668,37 @@ public final class InstalledPluginsTab {
 
     /** As above, with what the repair left as written. */
     static String removalSummary(String plugin, int filesRewritten, int calls, List<String> leftForYou) {
-        String head = "Removed " + plugin + " from this project.";
+        return removalSummary(plugin, filesRewritten, calls, leftForYou, "");
+    }
+
+    /** As above, naming the plugin's files the removal deleted ({@code ""} for none). */
+    static String removalSummary(String plugin, int filesRewritten, int calls, List<String> leftForYou,
+                                 String deleted) {
+        String head = "Removed " + plugin + " from this project."
+                + (deleted.isBlank() ? "" : " Deleted its files: " + deleted + ".");
         String left = leftForYou.isEmpty() ? "" : " " + leftForYou.size()
                 + (leftForYou.size() == 1 ? " thing was" : " things were") + " left for you to finish: "
                 + String.join(" ", leftForYou);
-        if (filesRewritten == 0) return head + " This bot called nothing in it, so only the pom changed." + left
-                + " The previous state is one restore away in the Versions tab.";
-        return head + " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in "
-                + filesRewritten + " file" + (filesRewritten == 1 ? "" : "s")
-                + " — the functions they are in are marked for review." + left
-                + " The previous state is one restore away in the Versions tab.";
+        String back = " The previous state is one restore away in the Versions tab.";
+        if (filesRewritten == 0) {
+            return head + (deleted.isBlank() ? " This bot called nothing in it, so only the pom changed."
+                    : " Nothing else in this bot named it.") + left + back;
+        }
+        String files = filesRewritten + " file" + (filesRewritten == 1 ? "" : "s");
+        String what = calls == 0
+                ? " Removed their imports in " + files + "; the functions still naming them are marked for review."
+                : " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in " + files
+                        + " — the functions they are in are marked for review.";
+        return head + what + left + back;
+    }
+
+    /** The lines that name a plugin file about to be deleted, at most eight of them spelled out. */
+    static String holderReferences(List<String> references) {
+        int shown = Math.min(references.size(), 8);
+        String more = references.size() > shown ? " and " + (references.size() - shown) + " more" : "";
+        return "Your code still names them at " + String.join(", ", references.subList(0, shown)) + more
+                + ". Those lines will not compile without the files: each function they are in is marked for "
+                + "review, and anything outside a function is listed afterwards. Their imports are removed.";
     }
 
     /** The states as a style class, so the colour is the stylesheet's and not this file's. */

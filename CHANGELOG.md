@@ -28,6 +28,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   (`package com.botmaker.plugin.api.meta does not exist`): the plugin brought the contract, so Studio now
   declares the contract after any pom change that took it away, not only when the project opens.
 - A refactor that marks several functions of one file writes one `import …Refactor;`, not one per function.
+- Removing a plugin offers to delete its files (`plugins/<id>/Sdk.java`, `Pictures.java`…), ticked by
+  default, and lists the lines of your code that still name them. Ticked, the files go, their imports go,
+  and each function still naming one is marked for review; the version saved first brings them back.
 
 ## [1.3.0] — 2026-10-05
 

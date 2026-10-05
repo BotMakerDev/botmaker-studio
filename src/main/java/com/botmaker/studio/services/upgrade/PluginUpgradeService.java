@@ -5,7 +5,10 @@ import com.botmaker.studio.parser.refactor.ApiMigrationRunner;
 import com.botmaker.studio.parser.refactor.ApiReferences;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
+import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
+import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
@@ -726,6 +729,28 @@ public final class PluginUpgradeService {
     }
 
     /**
+     * This plugin's files in the bot and the lines naming them — what a removal offers to delete. Only the
+     * plugins loaded from this coordinate's own jar count, so a second plugin's {@code plugins/} folder is never
+     * offered. Empty when the jar cannot be resolved or no plugin was loaded from it.
+     */
+    public PluginHolders holders() {
+        Optional<Path> jar = resolve(currentVersion());
+        if (jar.isEmpty()) return PluginHolders.NONE;
+        List<StudioPlugin> fromJar = PluginHost.plugins().stream().filter(p -> loadedFrom(p, jar.get())).toList();
+        return PluginHolders.of(config, state, PluginFiles.holdersOf(fromJar));
+    }
+
+    private static boolean loadedFrom(StudioPlugin plugin, Path jar) {
+        try {
+            var source = plugin.getClass().getProtectionDomain().getCodeSource();
+            if (source == null) return false;
+            return Path.of(source.getLocation().toURI()).toRealPath().equals(jar.toRealPath());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * The removal comparison itself, given the jar — split out for the same reason
      * {@link #compare(Path, Path, String, String)} is.
      */
@@ -882,10 +907,29 @@ public final class PluginUpgradeService {
      */
     public CompletableFuture<Repaired> remove(List<UserLibrary> editorDependencies, boolean repairSources,
                                               Map<CallSite, Decision> picks) {
+        return remove(editorDependencies, repairSources, picks, PluginHolders.NONE);
+    }
+
+    /**
+     * The same, also deleting {@code holders} — the plugin's files the user agreed to lose — after the source
+     * repair and before the pom write, so the snapshot taken first brings them back too. The caller drops their
+     * buffers on the FX thread once this completes ({@link PluginHolders#forget}).
+     */
+    public CompletableFuture<Repaired> remove(List<UserLibrary> editorDependencies, boolean repairSources,
+                                              Map<CallSite, Decision> picks, PluginHolders holders) {
         return CompletableFuture
                 .supplyAsync(() -> {
                     snapshot("Before removing " + name());
-                    return repairSources ? repairRemovalReporting(picks) : Repaired.NOTHING;
+                    Repaired repaired = repairSources ? repairRemovalReporting(picks) : Repaired.NOTHING;
+                    if (holders.isEmpty()) return repaired;
+                    try {
+                        PluginHolders.Deleted deleted = holders.delete(config, state, name());
+                        List<String> left = new ArrayList<>(repaired.leftAsWritten());
+                        left.addAll(deleted.left());
+                        return new Repaired(repaired.files() + deleted.rewritten(), left, holders.fileNames());
+                    } catch (IOException e) {
+                        throw new RuntimeException("The plugin's files could not be deleted: " + e.getMessage(), e);
+                    }
                 })
                 // The count survives the pom write: what the user is owed afterwards is how much of their own
                 // code changed, and only this pass knows it.
@@ -910,11 +954,17 @@ public final class PluginUpgradeService {
      *
      * @param files         how many of the project's files were rewritten
      * @param leftAsWritten what the repair could not do, each with its reason — never a reason it did nothing
+     * @param deleted       the plugin's files a removal deleted, {@code "Sdk.java, Pictures.java"}, or blank
      */
-    public record Repaired(int files, List<String> leftAsWritten) {
+    public record Repaired(int files, List<String> leftAsWritten, String deleted) {
 
         public Repaired {
             leftAsWritten = List.copyOf(leftAsWritten);
+            deleted = deleted == null ? "" : deleted;
+        }
+
+        public Repaired(int files, List<String> leftAsWritten) {
+            this(files, leftAsWritten, "");
         }
 
         static final Repaired NOTHING = new Repaired(0, List.of());
