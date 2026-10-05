@@ -103,6 +103,22 @@ class UnusedImportsTest {
                 (cu, rewrite) -> ImportManager.addImport(cu, rewrite, java.util.Map.Entry.class)));
     }
 
+    @Test
+    void oneRewriteImportingATypeTwiceWritesOneImport() {
+        // A refactor marking four functions of one file imports @Refactor four times on one rewrite.
+        String code = """
+                package com.mybot;
+
+                public class Subject {}
+                """;
+        CompilationUnit cu = BotParser.SYNTAX.parse(null, code);
+        ASTRewrite rewrite = ASTRewrite.create(cu.getAST());
+        ImportManager.addImport(cu, rewrite, "java.util.List");
+        ImportManager.addImport(cu, rewrite, "java.util.List");
+        String written = AstRewriteHelper.applyRewrite(rewrite, code);
+        assertEquals(1, written.lines().filter(line -> line.equals("import java.util.List;")).count(), written);
+    }
+
     private static String importWrittenBy(BiConsumer<CompilationUnit, ASTRewrite> add) {
         String code = """
                 package com.mybot;

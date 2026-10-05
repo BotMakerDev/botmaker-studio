@@ -2,6 +2,7 @@ package com.botmaker.studio.services;
 
 import com.botmaker.studio.config.HostContract;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectState;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -70,6 +71,30 @@ class ContractDependencyTest {
 
         assertFalse(ContractDependency.onClasspath(List.of(named.toString())));
         assertTrue(ContractDependency.onClasspath(List.of(named.toString(), classes.toString())));
+    }
+
+    @Test
+    void aBotWhosePluginLeftKeepsTheContractItsOwnSourceImports() throws Exception {
+        ProjectConfig cfg = ProjectConfig.forProject("Blank", root);
+        MavenService.writeBlankPom(cfg.projectPath(), cfg);
+        ProjectState state = new ProjectState();
+        // The plugin brought the contract until it was removed; the classpath after the removal has none.
+        assertFalse(ContractDependency.ensureFor(cfg, state, List.of()), "nothing imports it yet");
+        assertTrue(contractEntries(cfg.projectPath()).isEmpty());
+
+        Files.createDirectories(cfg.mainPackageDir());
+        Files.writeString(cfg.mainPackageDir().resolve("Blank.java"), """
+                package %s;
+
+                import com.botmaker.plugin.api.meta.Refactor;
+
+                public class Blank {
+                    @Refactor("Ask.choice went with the plugin.")
+                    public static void main(String[] args) {}
+                }
+                """.formatted(cfg.mainPackage()));
+        assertTrue(ContractDependency.ensureFor(cfg, state, List.of()));
+        assertEquals(1, contractEntries(cfg.projectPath()).size());
     }
 
     private Path blankProject() throws Exception {

@@ -23,6 +23,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   marks drawn over the desktop that let every click through. Studio shows those marks only where it can make
   the window click-through (X11 and Xwayland), and draws nothing of its own there.
 
+### Fixed
+- Removing the last plugin from a bot no longer leaves it unable to compile its own `@Refactor` marks
+  (`package com.botmaker.plugin.api.meta does not exist`): the plugin brought the contract, so Studio now
+  declares the contract after any pom change that took it away, not only when the project opens.
+- A refactor that marks several functions of one file writes one `import …Refactor;`, not one per function.
+
 ## [1.3.0] — 2026-10-05
 
 ### Changed

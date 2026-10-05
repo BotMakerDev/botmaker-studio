@@ -130,15 +130,13 @@ public class BotProject {
         // 5a. A bot whose own source imports the contract's annotations (a @Param written into a blank
         //     project before Studio declared the jar for it) gets the jar now, and resolves again. Nothing is
         //     written when the classpath already carries it, however it got there — see ContractDependency.
-        if (ContractDependency.usedBy(config, state)) {
-            try {
-                if (ContractDependency.ensure(config.projectPath(), classpath)) {
-                    classpath = MavenService.resolveClasspath(config.projectPath(), progress);
-                    state.setResolvedClasspath(classpath);
-                }
-            } catch (Exception e) {
-                System.err.println("Warning: Could not declare the plugin contract: " + e.getMessage());
+        try {
+            if (ContractDependency.ensureFor(config, state, classpath)) {
+                classpath = MavenService.resolveClasspath(config.projectPath(), progress);
+                state.setResolvedClasspath(classpath);
             }
+        } catch (Exception e) {
+            System.err.println("Warning: Could not declare the plugin contract: " + e.getMessage());
         }
 
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary

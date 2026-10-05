@@ -86,4 +86,15 @@ public final class ContractDependency {
         if (onClasspath(classpath)) return false;
         return MavenService.declareIfAbsent(projectDir, coordinate());
     }
+
+    /**
+     * {@link #ensure}, asked only of a bot whose own source imports the contract — on open; a rebind asks the
+     * same in {@code LibraryService.bind}. Removing the plugin that brought the contract leaves the
+     * {@code @Refactor} its repair wrote with nothing to compile against (2026-10-05: the SDK removed from a
+     * blank-template bot).
+     */
+    public static boolean ensureFor(ProjectConfig config, ProjectState state, List<String> classpath)
+            throws IOException {
+        return usedBy(config, state) && ensure(config.projectPath(), classpath);
+    }
 }

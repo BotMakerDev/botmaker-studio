@@ -332,14 +332,19 @@ public class ImportManager {
     // the honest outcome and the one this method's own javadoc preferred for unrecognised names anyway.
 
     /**
-     * Internal method to add import declaration.
+     * Internal method to add import declaration — once per rewrite: {@link #isAlreadyImported} reads the
+     * original tree, so an import this same rewrite already queued (one per function a refactor marks) is
+     * looked for in the rewritten list.
      */
     private static void addImportInternal(CompilationUnit cu, ASTRewrite rewriter, String qualifiedClassName) {
+        ListRewrite listRewrite = rewriter.getListRewrite(cu, CompilationUnit.IMPORTS_PROPERTY);
+        for (Object queued : listRewrite.getRewrittenList()) {
+            ImportDeclaration imp = (ImportDeclaration) queued;
+            if (!imp.isOnDemand() && imp.getName().getFullyQualifiedName().equals(qualifiedClassName)) return;
+        }
         AST ast = cu.getAST();
         ImportDeclaration newImport = ast.newImportDeclaration();
         newImport.setName(ast.newName(qualifiedClassName));
-
-        ListRewrite listRewrite = rewriter.getListRewrite(cu, CompilationUnit.IMPORTS_PROPERTY);
         listRewrite.insertLast(newImport, null);
     }
 }

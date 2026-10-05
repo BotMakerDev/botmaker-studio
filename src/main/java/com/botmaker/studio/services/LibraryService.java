@@ -154,8 +154,7 @@ public final class LibraryService {
                 throw new RuntimeException("Could not download " + String.join("; ", refused)
                         + ". pom.xml is unchanged.");
             }
-            bind(resolution);
-            boundPom = after;
+            boundPom = bind(resolution, after);
         }, rebinds);
     }
 
@@ -180,8 +179,7 @@ public final class LibraryService {
         return CompletableFuture.supplyAsync(() -> {
             String now = readQuietly(pom());
             if (now == null || now.equals(boundPom)) return false;
-            bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
-            boundPom = now;
+            boundPom = bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE), now);
             return true;
         }, rebinds);
     }
@@ -222,8 +220,7 @@ public final class LibraryService {
     /** Re-resolve without a pom write, then {@link #bind}. */
     private void rebind() {
         String pom = readQuietly(pom());
-        bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
-        boundPom = pom;
+        boundPom = bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE), pom);
     }
 
     /**
@@ -236,8 +233,28 @@ public final class LibraryService {
      * {@link #ensureContract} starts could overlap, and the one that finished last — not the one that
      * started last — decided which classpath the editor was bound to. The classpath itself is handed to
      * {@link ProjectState} on the FX thread, which is the only thread that object is used on.
+     *
+     * @param pom the pom text {@code resolution} was resolved from
+     * @return the pom text now bound — {@code pom}, or the pom as re-read when the contract was declared here,
+     *         so the watcher does not take Studio's own write for an outside one
      */
-    private void bind(MavenService.Resolution resolution) {
+    private String bind(MavenService.Resolution resolution, String pom) {
+        // A pom edit that took away what brought the contract (a plugin removed) leaves the bot's own
+        // annotations unresolved: declare it and resolve once more — see ContractDependency.ensureFor. Only
+        // after a complete resolve: a jar that failed to download is not a plugin gone, and a direct entry
+        // written then would outlive it and pin the contract once it came back.
+        if (resolution.problems().isEmpty() && !ContractDependency.onClasspath(resolution.jars())) {
+            boolean[] used = {false};
+            onFx(() -> used[0] = ContractDependency.usedBy(config, state));
+            try {
+                if (used[0] && ContractDependency.ensure(config.projectPath(), resolution.jars())) {
+                    resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
+                    pom = readQuietly(pom());
+                }
+            } catch (Exception e) {
+                System.err.println("Could not declare the plugin contract: " + e.getMessage());
+            }
+        }
         List<String> classpath = resolution.jars();
         onFx(() -> state.setResolvedClasspath(classpath));
         PluginHost.bind(classpath, HostServices.forProject(config));
@@ -247,6 +264,7 @@ public final class LibraryService {
         typeIndex.refresh(classpath);
         unresolved = resolution.problems();
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));
+        return pom;
     }
 
     /** What the last re-resolve could not download, one {@code group:artifact:version — reason} per line. */
