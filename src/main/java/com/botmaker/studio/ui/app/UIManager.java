@@ -19,7 +19,10 @@ import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.services.ReviewService;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.ui.app.terminal.TerminalPane;
 import com.botmaker.studio.ui.app.versions.VersionsPane;
@@ -45,6 +48,7 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.function.Consumer;
@@ -500,7 +504,29 @@ public class UIManager implements ProjectWindow {
                 () -> selectBottomTab(BottomTab.ERRORS));
 
         // What the last refactor changed and could not finish. Scanned from the sources, never cached.
-        reviewPanel = new ReviewPanel(config, state, this::revealMarkedFunction);
+        reviewPanel = new ReviewPanel(config, state, new ReviewPanel.Actions() {
+            @Override
+            public void reveal(ReviewService.Item item) {
+                revealMarkedFunction(item);
+            }
+
+            @Override
+            public void rename(ReviewService.Item item, String newName) {
+                withMarkedFunction(item, (method, owner) -> SignatureEdits.edit(codeEditorService, owner, method,
+                        draft -> new FunctionDraft(newName, draft.returnType(), draft.parameters())));
+            }
+
+            @Override
+            public void delete(ReviewService.Item item) {
+                withMarkedFunction(item, (method, owner) -> SignatureEdits.delete(codeEditorService, owner, method));
+            }
+
+            @Override
+            public void redraw(Path file) {
+                Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
+                if (file.equals(active)) codeEditorService.switchToFile(file);
+            }
+        });
 
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
@@ -674,6 +700,34 @@ public class UIManager implements ProjectWindow {
         Platform.runLater(() -> codeEditorService.getRootBlock()
                 .map(root -> functionBlock(root, item.function()))
                 .ifPresent(editorCanvas::scrollToBlock));
+    }
+
+    /**
+     * Opens {@code item}'s function and hands its declaration — the canvas's own tree, which the header's
+     * gestures edit — to {@code then}, once the file is drawn, then re-reads the Review list. The function is
+     * the one carrying the row's mark, not the first of its name: a rename or delete must not land on an
+     * overload.
+     */
+    private void withMarkedFunction(ReviewService.Item item,
+                                    java.util.function.BiConsumer<MethodDeclaration, javafx.stage.Window> then) {
+        revealMarkedFunction(item);
+        Platform.runLater(() -> {
+            List<MethodDeclarationBlock> named = new ArrayList<>();
+            codeEditorService.getRootBlock().ifPresent(root -> functionBlocks(root, item.function(), named));
+            named.stream()
+                    .map(block -> block.getAstNode() instanceof MethodDeclaration md ? md : null)
+                    .filter(md -> md != null && ReviewMarks.openEntriesOf(md).equals(item.entries()))
+                    .findFirst()
+                    .ifPresent(md -> then.accept(md,
+                            reviewPanel.node().getScene() == null ? null : reviewPanel.node().getScene().getWindow()));
+            reviewPanel.refresh();
+        });
+    }
+
+    private static void functionBlocks(CodeBlock block, String name, List<MethodDeclarationBlock> out) {
+        if (block instanceof MethodDeclarationBlock method && name.equals(method.getMethodName())) out.add(method);
+        if (!(block instanceof BlockWithChildren parent)) return;
+        for (CodeBlock child : parent.getChildren()) functionBlocks(child, name, out);
     }
 
     /**

@@ -23,6 +23,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   marks drawn over the desktop that let every click through. Studio shows those marks only where it can make
   the window click-through (X11 and Xwayland), and draws nothing of its own there.
 
+### Changed
+- **A Review row is a menu.** Click one to go to it, mark it reviewed, remove the mark, undo the change (the
+  function comes back as the newest version without the mark had it, with the imports it used), or rename or
+  delete the function — the same rename and delete as its header's, refusals included. The *Mark Reviewed*
+  button is gone; each action saves a version first.
+
 ### Fixed
 - Removing the last plugin from a bot no longer leaves it unable to compile its own `@Refactor` marks
   (`package com.botmaker.plugin.api.meta does not exist`): the plugin brought the contract, so Studio now

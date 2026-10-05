@@ -3,6 +3,8 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -149,6 +151,130 @@ class ReviewServiceTest {
 
         assertTrue(open.getContent().contains("done = true"), open.getContent());
         assertEquals(open.getContent(), Files.readString(file));
+    }
+
+    @Test
+    void removingAMarkTakesItsImportOnlyWithTheLastOne(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        Path file = write(config, "Miner.java", """
+                package com.refbot;
+
+                %s
+
+                class Miner {
+                    @Refactor("one")
+                    void mine() {}
+
+                    @Refactor("two")
+                    void haul() {}
+                }
+                """.formatted(IMPORT));
+        List<ReviewService.Item> items = ReviewService.scan(config, null);
+
+        assertTrue(ReviewService.removeMark(config, null, items.getFirst()));
+        String once = Files.readString(file);
+        assertFalse(once.contains("@Refactor(\"one\")"), once);
+        assertTrue(once.contains(IMPORT), "haul() still carries one");
+
+        assertTrue(ReviewService.removeMark(config, null, ReviewService.scan(config, null).getFirst()));
+        String twice = Files.readString(file);
+        assertFalse(twice.contains("@Refactor"), twice);
+    }
+
+    @Test
+    void undoPutsTheFunctionBackFromTheVersionBeforeTheMark(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        Path file = write(config, "Miner.java", """
+                package com.refbot;
+
+                import java.util.List;
+
+                class Miner {
+                    void mine() {
+                        List.of(1);
+                    }
+
+                    void rest() {}
+                }
+                """);
+        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before removing SDK");
+        Files.writeString(file, """
+                package com.refbot;
+
+                %s
+
+                class Miner {
+                    @Refactor("List.of is gone.")
+                    void mine() {
+                    }
+
+                    void rest() {}
+                }
+                """.formatted(IMPORT));
+
+        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
+
+        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
+        String now = Files.readString(file);
+        assertTrue(now.contains("List.of(1);"), now);
+        assertTrue(now.contains("import java.util.List;"), "the import the old body used comes back: " + now);
+        assertFalse(now.contains("@Refactor(\"List.of"), now);
+        assertTrue(ReviewService.scan(config, null).isEmpty());
+    }
+
+    @Test
+    void undoBringsBackTheMarkedOverloadNotAnotherOfTheSameName(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        Path file = write(config, "Miner.java", """
+                package com.refbot;
+
+                class Miner {
+                    void mine() {}
+
+                    void mine(int depth) {
+                        System.out.println(depth);
+                    }
+                }
+                """);
+        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before");
+        Files.writeString(file, """
+                package com.refbot;
+
+                %s
+
+                class Miner {
+                    void mine() {}
+
+                    @Refactor("depth went")
+                    void mine(int depth) {
+                    }
+                }
+                """.formatted(IMPORT));
+
+        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
+
+        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
+        String now = Files.readString(file);
+        assertTrue(now.contains("void mine() {}"), now);
+        assertTrue(now.contains("System.out.println(depth);"), now);
+    }
+
+    @Test
+    void undoWithNoVersionBeforeItSaysSo(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Miner.java", """
+                package com.refbot;
+
+                %s
+
+                class Miner {
+                    @Refactor("guessed")
+                    void mine() {}
+                }
+                """.formatted(IMPORT));
+
+        assertTrue(ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst())
+                instanceof ReviewService.Undo.Refused);
     }
 
     private static Path write(ProjectConfig config, String name, String source) throws IOException {
