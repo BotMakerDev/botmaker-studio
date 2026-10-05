@@ -1,5 +1,10 @@
 # Dated notes — read these before the other files here
 
+> **A try is a run (2026-10-06).** `CodeExecutionService.runCode` and `tryCode` share one launch: a try compiles
+> the project, then its caller (`services/trial/TrialCaller`) into `target/botmaker-trial/`, and runs that class
+> instead of the entry class — same events, console, telemetry and Stop, no version taken. Both editors reach
+> it through `ui/app/trial/Trials`; nothing writes a try into the bot's sources.
+
 > **One desktop layer (2026-10-06).** The run overlay's click-through window left `RunOverlayWindows` for
 > `ui/app/run/DesktopLayer`, which the overlay editor holds as well; a run's layer parts and the editor's
 > `Marks` share it. `OverlayEditor.open` takes a `WatchedScreen.LiveSession`, not a session window id: a

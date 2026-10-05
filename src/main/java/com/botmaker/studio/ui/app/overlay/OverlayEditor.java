@@ -17,6 +17,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents.CodeUpdatedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.ExecutionRequestedEvent;
+import com.botmaker.studio.events.CoreApplicationEvents.MethodRunRequestedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.ProgramStoppedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.StatusMessageEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.UIBlocksUpdatedEvent;
@@ -42,6 +43,8 @@ import com.botmaker.studio.services.overlay.OverlayTargets;
 import com.botmaker.studio.services.overlay.ProbeCalls;
 import com.botmaker.studio.services.overlay.ProbeEngine;
 import com.botmaker.studio.services.overlay.WatchedScreen;
+import com.botmaker.studio.services.trial.TrialCaller;
+import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.ToolbarVisibility;
 import com.botmaker.studio.ui.app.run.DesktopLayer;
 import com.botmaker.studio.ui.app.run.RunBarDock;
@@ -324,7 +327,8 @@ public final class OverlayEditor {
         tree.setProbes(this::probeOf);
 
         header = new PanelHeader(new PanelHeader.Callbacks(this::changeWatched, () -> panel.dock(),
-                () -> context.getEventBus().publish(new ExecutionRequestedEvent()), () -> panel.close()));
+                () -> context.getEventBus().publish(new ExecutionRequestedEvent()), this::runTarget,
+                () -> panel.close()));
         header.showWatched(watched.label(), bounds);
         tools = new ToolTabs(this::toolContext, this::actionsRow, new VBox(8, palette.node(), autoFillArgs));
 
@@ -550,6 +554,7 @@ public final class OverlayEditor {
             Platform.runLater(() -> {
                 if (stage() == null || !stage().isShowing()) return;
                 strip.showTargets(targets, currentTargetKey());
+                showWhere();   // ▶ Run names the target shown, which may only now be known
                 if (!targetChosen) {
                     targetChosen = true;
                     initialTarget(targets).ifPresent(this::pickTarget);
@@ -609,6 +614,47 @@ public final class OverlayEditor {
         String name = file == null ? null : file.getFileName().toString().replaceFirst("\\.java$", "");
         strip.showMethod(name, selectedMethod, root == null ? List.of() : index().methodLabels());
         strip.select(currentTargetKey());
+        if (header != null) {
+            header.showTarget(TrialCaller.entry().isEmpty() ? null
+                    : currentTarget().filter(t -> targetMethod(t).isPresent())
+                            .map(t -> t.label() + "." + t.method() + "()").orElse(null));
+        }
+    }
+
+    /** The target whose method the script shows, if it is one. */
+    private Optional<OverlayTargets.Target> currentTarget() {
+        String key = currentTargetKey();
+        return key == null ? Optional.empty() : strip.targets().stream().filter(t -> t.key().equals(key)).findFirst();
+    }
+
+    /** {@code target}'s method in the open file, when it runs on its own: static, taking nothing. */
+    private Optional<org.eclipse.jdt.core.dom.IMethodBinding> targetMethod(OverlayTargets.Target target) {
+        org.eclipse.jdt.core.dom.CompilationUnit unit = state.getCompilationUnit().orElse(null);
+        if (unit == null) return Optional.empty();
+        Optional<org.eclipse.jdt.core.dom.IMethodBinding> found = Optional.empty();
+        for (Object type : unit.types()) {
+            if (!(type instanceof org.eclipse.jdt.core.dom.TypeDeclaration declared)) continue;
+            for (org.eclipse.jdt.core.dom.MethodDeclaration method : declared.getMethods()) {
+                if (!method.getName().getIdentifier().equals(target.method())) continue;
+                found = TrialMenu.runnable(method).filter(b ->
+                        b.getDeclaringClass().getErasure().getQualifiedName().equals(target.className()));
+                if (found.isPresent()) return found;
+            }
+        }
+        return found;
+    }
+
+    /** ▶ Run ▸ Run this activity: the target shown, on its own, through the plugin's trial entry. */
+    private void runTarget() {
+        Optional<OverlayTargets.Target> target = currentTarget();
+        Optional<org.eclipse.jdt.core.dom.IMethodBinding> method = target.flatMap(this::targetMethod);
+        if (target.isEmpty() || method.isEmpty()) {
+            status("The script shows no activity that runs on its own. Pick one above.");
+            return;
+        }
+        context.getEventBus().publish(new MethodRunRequestedEvent(TrialMenu.packageOf(method.get()),
+                target.get().className(), target.get().method(),
+                !"void".equals(method.get().getReturnType().getName()), stage()));
     }
 
     private String currentTargetKey() {

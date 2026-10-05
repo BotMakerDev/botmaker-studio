@@ -8,6 +8,7 @@ import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.session.launch.BackgroundLauncher;
 import com.botmaker.studio.util.ClassPathManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
@@ -60,6 +61,8 @@ public class CodeExecutionService {
                 e -> compileCode(state.snapshot()), false);
         eventBus.subscribe(CoreApplicationEvents.ExecutionRequestedEvent.class,
                 e -> runCode(state.snapshot()), false);
+        eventBus.subscribe(CoreApplicationEvents.TrialRunRequestedEvent.class,
+                e -> tryCode(state.snapshot(), e.caller(), e.label()), false);
         eventBus.subscribe(CoreApplicationEvents.StopRunRequestedEvent.class,
                 e -> stopRunningProgram(), false);
         eventBus.subscribe(CoreApplicationEvents.InputAnsweredEvent.class,
@@ -88,6 +91,21 @@ public class CodeExecutionService {
      * for its whole life, which is also what makes "the console shows what this run compiled" true.
      */
     public void runCode(ProjectState.Snapshot snapshot) {
+        launch(snapshot, null, null);
+    }
+
+    /**
+     * ▶ Try: compiles the project as {@link #runCode} does, then {@code caller} beside it in
+     * {@code target/botmaker-trial/} — never in the project's sources — and runs the caller as a run, with its
+     * console, its trace, Stop and the run bar. No version is taken: a try is not the bot running.
+     *
+     * @param label what is tried, for the status line
+     */
+    public void tryCode(ProjectState.Snapshot snapshot, TrialCaller.Source caller, String label) {
+        launch(snapshot, caller, label);
+    }
+
+    private void launch(ProjectState.Snapshot snapshot, TrialCaller.Source trial, String label) {
         // Pre-compile block validation: a slot still waiting on one of the user's variables (a red "Choose a
         // variable…" chip) would only surface as a raw javac error. Detect it via BlockValidator, surface it in
         // the Errors panel, and abort before compiling. Always publish (an empty list clears any previously
@@ -118,13 +136,29 @@ public class CodeExecutionService {
                 Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
 
                 if (!compileAndWait(snapshot, config.compiledOutputPath())) {
-                    status("Run aborted due to build failure.");
+                    status((trial == null ? "Run" : "Try") + " aborted due to build failure.");
                     return;
                 }
-                // The version that ran, so "go back to when it worked" has somewhere to go.
-                Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
-
-                status("Running... (Press Stop to terminate)");
+                String classpath = buildRuntimeClasspath(snapshot);
+                String mainClass;
+                if (trial == null) {
+                    // The version that ran, so "go back to when it worked" has somewhere to go.
+                    Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
+                    // entryClassName(), not mainClassName(): the entry class is named after the project only in a
+                    // project Studio created and the user has not renamed. One made from a published template
+                    // keeps its author's class name, which is the whole point of a template arriving as shipped.
+                    mainClass = config.entryClassName();
+                    status("Running... (Press Stop to terminate)");
+                } else {
+                    Path classes = compileTrial(snapshot, trial);
+                    if (classes == null) {
+                        status("Try aborted: Studio's caller for it did not compile — see the Run tab.");
+                        return;
+                    }
+                    classpath = classes + java.io.File.pathSeparator + classpath;
+                    mainClass = trial.className();
+                    status("Trying " + label + "… (Press Stop to end it)");
+                }
                 isRunning.set(true);
 
                 // Tell UI the program has started so the Stop button becomes clickable.
@@ -136,10 +170,7 @@ public class CodeExecutionService {
                 command.addAll(BotJvm.options(state.getSettings()));
                 command.addAll(BotJvm.traceAgent(config, state.getSettings()));
                 command.addAll(sessionHandoffArguments());
-                // entryClassName(), not mainClassName(): the entry class is named after the project only in a
-                // project Studio created and the user has not renamed. One made from a published template
-                // keeps its author's class name, which is the whole point of a template arriving as shipped.
-                command.addAll(List.of("-cp", buildRuntimeClasspath(snapshot), config.entryClassName()));
+                command.addAll(List.of("-cp", classpath, mainClass));
                 ProcessBuilder pb = new ProcessBuilder(command)
                         .directory(config.projectPath().toFile());
 
@@ -157,7 +188,7 @@ public class CodeExecutionService {
                 // output that arrived in the last <100ms.
                 console.finish();
 
-                if (exitCode == 0) status("Program completed successfully.");
+                if (exitCode == 0) status(trial == null ? "Program completed successfully." : "Tried " + label + ".");
                 else if (exitCode == 143 || exitCode == 130 || exitCode == 1 || exitCode == -1)
                     status("Program stopped.");
                 else status("Program exited with code: " + exitCode);
@@ -209,6 +240,40 @@ public class CodeExecutionService {
             cp.append(java.io.File.pathSeparator).append(jar);
         }
         return cp.toString();
+    }
+
+    /**
+     * Writes {@code trial}'s caller under {@code target/botmaker-trial/src} and compiles it against the bot into
+     * {@code target/botmaker-trial/classes}, javac's output in the Run tab; the classes folder, or null when it did
+     * not compile. Both folders are emptied first, so nothing from an earlier try is left to run.
+     */
+    private Path compileTrial(ProjectState.Snapshot snapshot, TrialCaller.Source trial)
+            throws IOException, InterruptedException {
+        Path root = config.compiledOutputPath().resolveSibling("botmaker-trial");
+        deleteTree(root);
+        Path source = root.resolve("src").resolve(trial.path());
+        Path classes = root.resolve("classes");
+        Files.createDirectories(source.getParent());
+        Files.createDirectories(classes);
+        Files.writeString(source, trial.text());
+        ProcessBuilder pb = new ProcessBuilder(config.javacExecutable(), "-encoding", "UTF-8",
+                "-cp", buildRuntimeClasspath(snapshot), "-d", classes.toString(), source.toString())
+                .directory(config.projectPath().toFile())
+                .redirectErrorStream(true);
+        Process process = pb.start();
+        try (ConsoleBatcher console = console()) {
+            console.pump(process.getInputStream(), "javac-trial-output");
+            int exitCode = process.waitFor();
+            console.finish();
+            return exitCode == 0 ? classes : null;
+        }
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root)) return;
+        try (var walk = Files.walk(root)) {
+            for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) Files.delete(p);
+        }
     }
 
     /** As {@link #runCode}, minus the run: the snapshot is taken by the caller, on the FX thread. */

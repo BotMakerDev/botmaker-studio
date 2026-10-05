@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app.overlay;
 import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.AbstractCodeBlock;
+import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
@@ -253,16 +254,23 @@ final class OverlayTreeView {
         node.getChildren().add(spring);
 
         // One ⋮ per row for everything done to the block, so a row is never a strip of glyph buttons. Generated
-        // scaffolding is not the user's to change, so a read-only row has none.
-        if (!locked) node.getChildren().add(rowMenu(stmt, row));
+        // scaffolding is not the user's to change, so a read-only row's ⋮ only tries it, which edits nothing.
+        MenuButton menu = rowMenu(stmt, row, locked);
+        if (menu != null) node.getChildren().add(menu);
         return node;
     }
 
-    /** The row's ⋮: configure a call's arguments, move the block, delete it. */
-    private MenuButton rowMenu(StatementBlock stmt, BlockTree.Row row) {
+    /** The row's ⋮: try the block, configure a call's arguments, move it, delete it; null when it holds nothing. */
+    private MenuButton rowMenu(StatementBlock stmt, BlockTree.Row row, boolean locked) {
         MenuButton menu = new MenuButton("⋮");
         menu.getStyleClass().add("overlay-row-menu");
         menu.setTooltip(new Tooltip("What to do with this block"));
+        TrialMenu.item(stmt, context.getEventBus(),
+                () -> menu.getScene() == null ? null : menu.getScene().getWindow()).ifPresent(trial -> {
+            menu.getItems().add(trial);
+            if (!locked) menu.getItems().add(new SeparatorMenuItem());
+        });
+        if (locked) return menu.getItems().isEmpty() ? null : menu;
         if (stmt instanceof MethodInvocationBlock mib) {
             MenuItem config = new MenuItem("⚙ Configure arguments (Enter)");
             config.setOnAction(e -> callbacks.onConfig().accept(mib));

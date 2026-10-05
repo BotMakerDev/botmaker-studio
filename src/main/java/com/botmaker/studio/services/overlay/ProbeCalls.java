@@ -156,6 +156,18 @@ public final class ProbeCalls {
         return out;
     }
 
+    /**
+     * Whether {@code binding} is a call some plugin probes read-only — one that only looks, which ▶ Try may run
+     * again to compute a local. An acting probe (a click) does not count.
+     */
+    public static boolean readsOnly(IMethodBinding binding, List<Declared> declared) {
+        if (binding == null) return false;
+        for (Declared d : declared) {
+            if (d.probed().probe().readsOnly() && sameCall(binding, d.probed().call())) return true;
+        }
+        return false;
+    }
+
     /** Whether {@code binding} is {@code call}: declaring class, name and parameter types, all by name. */
     static boolean sameCall(IMethodBinding binding, Executable call) {
         IMethodBinding declaration = binding.getMethodDeclaration();

@@ -4,31 +4,38 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.ui.app.trial.TrialMenu;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
 import org.eclipse.jdt.core.dom.IMethodBinding;
 
 /**
- * Wires the per-block right-click menu (copy / paste after / breakpoint, and Go to Definition on a call). A
- * read-only block gets Go to Definition alone, since reading where a call leads edits nothing.
+ * Wires the per-block right-click menu (copy / paste after / breakpoint, Go to Definition on a call, ▶ Try on a
+ * statement and ▶ Run on a method that takes nothing — {@link TrialMenu}). A read-only block gets Go to Definition
+ * and ▶ Try alone, since neither edits anything.
  */
 public final class InteractionDecorator implements BlockDecorator {
 
     @Override
     public void decorate(Node node, AbstractCodeBlock block, CodeEditorService context) {
         MenuItem definition = goToDefinition(block, context);
+        // Trying a statement edits nothing, so a read-only block offers it as it offers Go to Definition.
+        MenuItem trial = TrialMenu.item(block, context.getEventBus(),
+                () -> node.getScene() == null ? null : node.getScene().getWindow()).orElse(null);
         if (block.isReadOnly()) {
-            if (definition != null) show(node, com.botmaker.studio.ui.render.menu.MenuTracker.track(
-                    new ContextMenu(definition)));
+            ContextMenu reading = new ContextMenu();
+            if (definition != null) reading.getItems().add(definition);
+            if (trial != null) reading.getItems().add(trial);
+            if (!reading.getItems().isEmpty()) show(node, com.botmaker.studio.ui.render.menu.MenuTracker.track(reading));
             return;
         }
 
         ContextMenu menu = com.botmaker.studio.ui.render.menu.MenuTracker.track(new ContextMenu());
 
-        if (definition != null) {
-            menu.getItems().addAll(definition, new javafx.scene.control.SeparatorMenuItem());
-        }
+        if (definition != null) menu.getItems().add(definition);
+        if (trial != null) menu.getItems().add(trial);
+        if (definition != null || trial != null) menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
 
         var blockItems = block.blockMenuItems(context);
         if (!blockItems.isEmpty()) {

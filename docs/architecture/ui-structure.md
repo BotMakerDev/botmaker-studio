@@ -160,6 +160,14 @@ The `ui/` package is split by concern:
   `Marks` on `ui/app/run/DesktopLayer`, the one click-through window the panel and a run both hold. Positions
   are the bot's pixels (a session's own, for a session). Design: `docs/refactor/42-overlay-editor.md`
   (umbrella).
+- **`ui/app/trial/`** — **▶ Try** a statement and **▶ Run** a method on its own (2026-10-06), for the canvas and
+  the overlay editor alike: `TrialMenu` is the one menu item both offer (the canvas's `InteractionDecorator`, an
+  overlay row's ⋮, the panel's ▶ Run ▸ *Run this activity*), and publishes `TryRequestedEvent` /
+  `MethodRunRequestedEvent`; `Trials` answers them — the plan (`services/trial/TrialPlan`: the earlier locals a
+  statement reads, read off bindings), `TryDialog` for where each value comes from (the last debug pause,
+  `services/trial/LastRunValues`; computed again; or asked with `ValueEditors`), and the caller
+  (`services/trial/TrialCaller`, a class written to `target/botmaker-trial/`) — and `CodeExecutionService.tryCode`
+  runs it as a run, through the plugin's trial entry.
 - **`ui/dnd/`** — drag-and-drop and block input events: `BlockDragAndDropManager`, `DropInfo`, `MoveBlockInfo`,
   `BlockEvent`, `DropZoneFactory`.
 - **`palette/`** (top-level, dependency-light) — the insertable catalogs: `BlockType`/`BlockCatalog`/`BlockCategory`

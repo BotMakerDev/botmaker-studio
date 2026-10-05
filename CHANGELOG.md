@@ -26,6 +26,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   caret is on is checked twice a second and its match is boxed on the game, orange where a click would land;
   ⟳ checks every row, and so does the end of a run. Nothing is clicked. A bot that watches its private
   display session is checked on the session's own pixels, and the box is drawn on the window showing it.
+- **▶ Try one statement, or run one activity.** Right-click a block on the canvas, or open an overlay row's ⋮,
+  and pick *▶ Try this statement*: it runs on its own against the screen as it is now, as a run — Stop, the
+  run bar, the Run and Trace tabs — and the Run tab says what it found or returned. Values it reads from earlier
+  lines are taken from the last debug pause, computed again when they only look (a picture search), or asked
+  for with the type's own editor. A static method that takes nothing — an activity's body — offers *▶ Run …
+  on its own*, and so does the overlay's ▶ Run ▸ *Run this activity*. Needs a plugin with a trial entry (the
+  SDK's); nothing is written into the bot.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.

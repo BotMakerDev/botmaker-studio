@@ -149,6 +149,24 @@ public class CoreApplicationEvents {
     public record ProgramStartedEvent() implements ApplicationEvent {}
     public record ProgramStoppedEvent() implements ApplicationEvent {}
 
+    /**
+     * ▶ Try {@code statement} on its own (2026-10-06): from the canvas's right-click or an overlay row's ⋮. The
+     * owner is the window its dialog opens over. {@code ui/app/trial/Trials} plans it and asks for its locals.
+     */
+    public record TryRequestedEvent(org.eclipse.jdt.core.dom.Statement statement, javafx.stage.Window owner)
+            implements ApplicationEvent {}
+
+    /**
+     * ▶ Run this activity: the no-argument static {@code className.method()}, through the trial entry. The package
+     * is given apart, since a nested class's qualified name does not say where its package ends.
+     */
+    public record MethodRunRequestedEvent(String packageName, String className, String method, boolean valued,
+                                          javafx.stage.Window owner) implements ApplicationEvent {}
+
+    /** A try's caller, written: {@code CodeExecutionService} compiles it beside the bot and runs it as a run. */
+    public record TrialRunRequestedEvent(com.botmaker.studio.services.trial.TrialCaller.Source caller, String label)
+            implements ApplicationEvent {}
+
     // --- User history requests ---
 
     public record UndoRequestedEvent() implements ApplicationEvent {}
