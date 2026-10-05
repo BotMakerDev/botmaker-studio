@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
@@ -301,6 +302,7 @@ public final class PluginHost {
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
         runOverlayParts = null;
+        overlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
         catalog = null;
         if (previous != null) previous.close();
@@ -534,7 +536,7 @@ public final class PluginHost {
      * The merged items in one group, in their merged order.
      *
      * <p>Two readers, which is why this exists rather than each filtering for itself: the main bar takes
-     * every group but {@link ToolbarGroup#OVERLAY}, and {@code ProgramShapeOverlay} takes only that one. A
+     * every group but {@link ToolbarGroup#OVERLAY}, and {@code OverlayEditor} takes only that one. A
      * group nobody reads is an item <em>silently absent</em>, which is the class of failure every rule in
      * {@code ToolbarMergeTest} is about — so the split is one filter with two callers rather than two
      * conditions that can disagree about which groups exist.
@@ -614,6 +616,42 @@ public final class PluginHost {
             for (RunOverlayPart part : offered) {
                 if (part != null && ids.add(part.id())) merged.add(new OwnedPart(plugin.id(), part));
             }
+        }
+        return List.copyOf(merged);
+    }
+
+    /** An overlay editor part with the plugin that declared it. */
+    public record OwnedOverlay(String pluginId, String pluginName, OverlayPart part) {}
+
+    /** Built on first ask after each bind, since a part's supplier loads the plugin's JavaFX classes. */
+    private static volatile List<OwnedOverlay> overlayParts;
+
+    /**
+     * Every bound plugin's part of the overlay editor, in plugin order. A plugin that declared none, or whose
+     * supplier throws, costs only itself.
+     */
+    public static List<OwnedOverlay> overlayParts() {
+        List<OwnedOverlay> parts = overlayParts;
+        if (parts == null) {
+            parts = mergeOverlayParts(plugins);
+            overlayParts = parts;
+        }
+        return parts;
+    }
+
+    static List<OwnedOverlay> mergeOverlayParts(List<StudioPlugin> set) {
+        List<OwnedOverlay> merged = new ArrayList<>();
+        for (StudioPlugin plugin : set) {
+            Optional<OverlayPart> offered;
+            try {
+                offered = plugin.overlayPart();
+            } catch (RuntimeException | LinkageError e) {
+                // Includes a plugin built against a contract without this method: it simply adds nothing.
+                System.err.println("Warning: " + plugin.id() + " could not offer an overlay part: " + e);
+                continue;
+            }
+            if (offered == null || offered.isEmpty() || offered.get().isEmpty()) continue;
+            merged.add(new OwnedOverlay(plugin.id(), plugin.displayName(), offered.get()));
         }
         return List.copyOf(merged);
     }

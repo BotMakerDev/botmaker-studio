@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **The overlay editor is a docked panel (2026-10-06).** `ProgramShapeOverlay`, `OverlayHeader` and
+> `OverlayTargetPicker` are gone; `ui/app/overlay/OverlayEditor` coordinates a panel docked beside what the
+> bot watches (see `ui-structure.md`). `project/managed/ManagedTargets` is replaced by
+> `services/overlay/OverlayTargets` (targets by the plugin's declared type, read off bindings).
+> `plugin/record/` (`Gestures`, `InputCapture`, `RecordingWriter`) and ⏺ Record are deleted, and with them the
+> settings `preferredRecorders` and `lastRecordedActivity` (now `lastTarget`, a target key); `OverlayState`
+> holds the panel's width. Read the older names below through this.
+
 > **One window for the pom (2026-09-29).** *Manage Libraries*, *Manage Plugins*, *Reload Plugins* and
 > *Upgrade…* are **Project ▸ Plugins & Libraries…** (`ui/app/PluginsWindow`): tabs **Installed**
 > (`InstalledPluginsTab`, was `ProjectUpgradeDialog` — the only place a plugin's version moves or a plugin is

@@ -146,6 +146,36 @@ public final class TargetCapture implements ShotSource {
         // Re-resolve after focus (bounds may change when a minimized window is restored/raised).
         GenericWindow refreshed = resolveWindow(target);
         if (refreshed != null) win = refreshed;
+        return grab(win);
+    }
+
+    /**
+     * The window matching {@code target} as it is now, without raising, focusing or waiting for it — for a
+     * caller that grabs again and again while the user works, such as the overlay editor's tools. A window
+     * covered by another one may show what covers it. {@code null} when no window matches or capture fails.
+     */
+    public static WindowShot peekWindow(WindowRef target) {
+        GenericWindow win = resolveWindow(target);
+        return win == null ? null : grab(win);
+    }
+
+    /**
+     * The part of the desktop {@code bounds} covers, in desktop pixels, or {@code null} when the desktop cannot
+     * be grabbed.
+     */
+    public static BufferedImage grabArea(java.awt.Rectangle bounds) {
+        try {
+            BufferedImage desktop = DesktopGrab.grabVirtualDesktop();
+            return desktop == null ? null : cropToBounds(desktop, bounds);
+        } catch (Exception e) {
+            System.err.println("Desktop grab failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** {@code win}'s pixels, falling back to a desktop crop when the native grab is blank. */
+    private static WindowShot grab(GenericWindow win) {
+        NativeController controller = NativeControllerFactory.get();
         java.awt.Rectangle bounds = win.getRect();
 
         BufferedImage img = null;

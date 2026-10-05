@@ -11,7 +11,6 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 - **Constants**: the constant lookup scans the bot's sources on every read of a dotted name the grammar cannot
   read and on every write (a cache keyed on the buffers if a large bot makes it visible); Parameters rows
   (`HostValueContext`) do not resolve constants.
-- **Recording**: no per-gesture choice when two plugins' `@Records` tie on rank (today: plugin order).
 - **Quick Documentation on hover**; today it is F1 on the selected block only.
 - **13 tests skip without the SDK plugin bound** (`TestSupport.assumeSdkPluginBound`); a way to run them —
   an SDK on the test classpath — is the platform rule's question.
@@ -22,10 +21,8 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 - **The Errors tab steals focus on every compile** with an error; the alternative is raising it only when the
   *set* of errors changes (needs a diff and a definition of change). Left as-is by the maintainer's call
   (2026-08-06).
-- **Start a run, or run to the cursor, from the overlay editor**: the run overlay stops, pauses and runs again,
-  but the first run and run-to-cursor still start in Studio.
-- **A recording that knows it is off-resolution**: recorded coordinates are raw window-relative pixels; scaling
-  by `reference / windowBounds` needs a decision about which the user meant.
+- **Run to the cursor, or one activity, from the overlay editor**: the panel's ▶ runs the whole bot; ▶ Try
+  on a row and *Run this activity* are the overlay editor plan's phase 6.
 - **A configured Waydroid framebuffer resolution**: `WaydroidResolution.apply()` (shared) has no caller
   because nothing authors the expected size; it needs a BotMaker-owned project or emulator setting.
 - **Retire `services/capture/ScreenOverlay`** (Studio's own overlay HUD) now the SDK draws its own.

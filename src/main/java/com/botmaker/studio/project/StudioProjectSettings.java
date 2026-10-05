@@ -50,12 +50,13 @@ import java.util.Map;
  *                            guessing from the sources. {@code null} for projects created before this was
  *                            persisted — callers fall back to {@code ProjectRepair.looksLikeGameBot}
  *                            (backward-compatible; absent → null)
- * @param lastRecordedActivity the activity the overlay editor last authored into, preselected the next time it
- *                            opens so a recording session resumes where the previous one left off. {@code null}
- *                            until the overlay has been used, and ignored once the activity is gone
+ * @param lastTarget          the overlay editor's target last authored into, as {@code com.bot.Collect#body}
+ *                            ({@code OverlayTargets.Target.key()}), picked again the next time it opens.
+ *                            {@code null} until the overlay has been used, and ignored once the target is gone.
+ *                            It was {@code lastRecordedActivity}, an activity's name, until 2026-10-06; that
+ *                            field is ignored on read (backward-compatible; absent → null)
+ * @param overlayState        how wide the overlay editor's panel was, restored the next time it opens
  *                            (backward-compatible; absent → null)
- * @param overlayState        where the overlay HUD sat and how tall its tree was, restored the next time it
- *                            opens (backward-compatible; absent → null)
  * @param workspaceLayout     where the main window's two dividers sat and which bottom tab was open, restored
  *                            the next time the project opens (backward-compatible; absent → null)
  * @param hiddenToolbarGroups the {@code ToolbarGroup} names the user has switched off, by enum name. Hidden
@@ -67,12 +68,9 @@ import java.util.Map;
  *                            {@code fully.qualified.TypeName → pluginId}. Empty is the ordinary state — a row
  *                            exists only where a user was actually shown a contest and answered it. A verdict
  *                            naming an uninstalled plugin is inert rather than an error, the same shape as
- *                            {@code lastRecordedActivity} naming a deleted activity; see
- *                            {@code EditorContest} (backward-compatible; absent → empty)
- * @param preferredRecorders  which plugin writes down a gesture two plugins both record:
- *                            {@code Gesture name → pluginId}. The same verdict shape as {@code preferredEditors},
- *                            answered from the HUD's <i>Record with</i> menu; a verdict naming an uninstalled
- *                            plugin is inert (backward-compatible; absent → empty)
+ *                            {@code lastTarget} naming a deleted method; see
+ *                            {@code EditorContest} (backward-compatible; absent → empty). Its twin for
+ *                            recorded gestures, {@code preferredRecorders}, left with ⏺ Record on 2026-10-06
  * @param runProperties       the system properties every run of this bot on this machine starts with,
  *                            {@code name → value} — a plugin's {@code Runs.setProperty} (2026-09-27), such as the
  *                            SDK's {@code botmaker.launch.target}. Here because this file is the checkout's own
@@ -86,25 +84,23 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, String> favoriteOverloads,
                                     Map<String, List<String>> favoriteMethods,
-                                    ProjectTemplate template, String lastRecordedActivity,
+                                    ProjectTemplate template, String lastTarget,
                                     OverlayState overlayState, WorkspaceLayout workspaceLayout,
                                     List<String> hiddenToolbarGroups,
                                     Map<String, String> preferredEditors,
-                                    Map<String, String> preferredRecorders,
                                     Map<String, String> runProperties,
                                     List<String> hiddenTraceWriters) {
 
     /**
-     * The overlay editor HUD's remembered layout: its top-left corner on screen and how many tree rows it
-     * shows before scrolling.
+     * The overlay editor panel's remembered layout: its width. Where it sits is not remembered: it docks
+     * beside the window the bot watches, wherever that window is. {@code 0} is never saved, and the panel's
+     * default stands.
      *
-     * <p>Persisted because the HUD is dragged out of the way of whatever the user is doing in the game, and
-     * that placement is a property of the <em>project</em> — the same game, the same UI, the same corner that
-     * is safe to cover. Re-dragging it on every open (and re-growing a tree that reopened at 8 rows) is the
-     * kind of friction that is invisible in a single session and constant across many. A position off every
-     * attached screen is discarded on restore rather than trusted; monitors come and go.
+     * <p>It was the HUD's top-left corner and its tree's line count until 2026-10-06, when the floating HUD
+     * became the docked panel; those fields are ignored on read.
      */
-    public record OverlayState(int x, int y, int visibleLines) {}
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record OverlayState(int width) {}
 
     /**
      * The main window's remembered layout: the explorer/canvas divider, the canvas/bottom divider, and the
@@ -179,7 +175,6 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         favoriteMethods = favoriteMethods == null ? Map.of() : deepCopy(favoriteMethods);
         hiddenToolbarGroups = hiddenToolbarGroups == null ? List.of() : List.copyOf(hiddenToolbarGroups);
         preferredEditors = preferredEditors == null ? Map.of() : Map.copyOf(preferredEditors);
-        preferredRecorders = preferredRecorders == null ? Map.of() : Map.copyOf(preferredRecorders);
         runProperties = runProperties == null ? Map.of() : Map.copyOf(runProperties);
         hiddenTraceWriters = hiddenTraceWriters == null ? List.of() : List.copyOf(hiddenTraceWriters);
     }
@@ -193,7 +188,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     /** A fresh project's settings — nothing remembered yet, and no template recorded until one is chosen. */
     public static StudioProjectSettings empty() {
         return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null, List.of(),
-                Map.of(), Map.of(), Map.of(), List.of());
+                Map.of(), Map.of(), List.of());
     }
 
     // withTargets, withDefaultIndex, withKnownWindowTitles and withReferenceResolution are deleted
@@ -204,29 +199,29 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     /** This settings with the originating template recorded ({@code null} clears it). */
     public StudioProjectSettings withTemplate(ProjectTemplate template) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
-    /** This settings with the overlay editor's last authored activity recorded ({@code null} clears it). */
-    public StudioProjectSettings withLastRecordedActivity(String activityName) {
+    /** This settings with the overlay editor's last target recorded, by its key ({@code null} clears it). */
+    public StudioProjectSettings withLastTarget(String targetKey) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                activityName, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                targetKey, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
     /** This settings with the overlay HUD's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withOverlayState(OverlayState state) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, state, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                lastTarget, state, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
     /** This settings with the main window's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withWorkspaceLayout(WorkspaceLayout layout) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, layout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                lastTarget, overlayState, layout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
     /**
@@ -239,8 +234,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
      */
     public StudioProjectSettings withHiddenToolbarGroups(Collection<String> groupNames) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout,
-                groupNames == null ? List.of() : List.copyOf(groupNames), preferredEditors, preferredRecorders,
+                lastTarget, overlayState, workspaceLayout,
+                groupNames == null ? List.of() : List.copyOf(groupNames), preferredEditors,
                 runProperties, hiddenTraceWriters);
     }
 
@@ -263,7 +258,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (pluginId == null) next.remove(typeName);
         else next.put(typeName, pluginId);
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, next, preferredRecorders,
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, next,
                 runProperties, hiddenTraceWriters);
     }
 
@@ -273,30 +268,14 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         return preferredEditors.get(typeName);
     }
 
-    /**
-     * This settings with {@code gesture}'s recorder set to {@code pluginId} ({@code null} clears it, which
-     * leaves the gesture to the highest-ranked writer).
-     *
-     * <p>Keyed on the gesture's enum <em>name</em>, for the reason {@link #withHiddenToolbarGroups} takes names:
-     * this record is Jackson's and names no contract type.
-     */
-    public StudioProjectSettings withPreferredRecorder(String gesture, String pluginId) {
-        Map<String, String> next = new LinkedHashMap<>(preferredRecorders);
-        if (pluginId == null) next.remove(gesture);
-        else next.put(gesture, pluginId);
-        return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors, next,
-                runProperties, hiddenTraceWriters);
-    }
-
     /** This settings with the run property {@code name} set to {@code value}; {@code null} or blank clears it. */
     public StudioProjectSettings withRunProperty(String name, String value) {
         Map<String, String> next = new LinkedHashMap<>(runProperties);
         if (value == null || value.isBlank()) next.remove(name);
         else next.put(name, value.trim());
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, next, hiddenTraceWriters);
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                next, hiddenTraceWriters);
     }
 
     /**
@@ -305,14 +284,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
      */
     public StudioProjectSettings withHiddenTraceWriters(Collection<String> writers) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, writers == null ? List.of() : List.copyOf(writers));
-    }
-
-    /** The chosen plugin id for {@code gesture} (an enum name), or {@code null} when none was chosen. */
-    @JsonIgnore
-    public String preferredRecorderFor(String gesture) {
-        return preferredRecorders.get(gesture);
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,writers == null ? List.of() : List.copyOf(writers));
     }
 
     /**
@@ -324,8 +297,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (signatureKey == null) next.remove(methodKey);
         else next.put(methodKey, signatureKey);
         return new StudioProjectSettings(knownWindowTitles, next, favoriteMethods, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
     /** The chosen overload signature key for {@code methodKey}, or {@code null} if no favorite is set. */
@@ -343,8 +316,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         if (methods == null || methods.isEmpty()) next.remove(className);
         else next.put(className, List.copyOf(methods));
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, next, template,
-                lastRecordedActivity, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                preferredRecorders, runProperties, hiddenTraceWriters);
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties,hiddenTraceWriters);
     }
 
     /** The favorite method names for {@code className} (preference order), or an empty list if none. */

@@ -3554,3 +3554,79 @@
 .variables-open-button:hover {
     -fx-opacity: 1;
 }
+
+/* The overlay editor's panel (ui/app/overlay). It is drawn dark over the game in every theme, like the run bar,
+   so these name colours rather than theme tokens. */
+.overlay-script,
+.overlay-script > .viewport,
+.overlay-script-rows {
+    -fx-background: transparent;
+    -fx-background-color: transparent;
+}
+.overlay-row {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+}
+.overlay-row:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+}
+.overlay-row-focused,
+.overlay-row-focused:hover {
+    -fx-background-color: rgba(74, 144, 226, 0.35);
+    -fx-border-color: #4a90e2;
+    -fx-border-radius: 4;
+}
+.overlay-row-text {
+    -fx-font-family: monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: #dfe6f2;
+}
+.overlay-row-text-broken {
+    -fx-text-fill: #ff6b6b;
+}
+.overlay-row-text-locked {
+    -fx-text-fill: #8b93a1;
+}
+.overlay-row-caption {
+    -fx-text-fill: #b8a2e0;
+}
+.overlay-row-empty {
+    -fx-font-style: italic;
+    -fx-text-fill: #8b93a1;
+}
+.overlay-caret-text {
+    -fx-font-style: italic;
+    -fx-text-fill: #9fc0ff;
+}
+.overlay-row-menu {
+    -fx-font-size: 11px;
+    -fx-padding: 0 2 0 2;
+}
+/* A target chip, one per method blocks can go into; the one being edited is selected. */
+.overlay-target-chip {
+    -fx-font-size: 11px;
+    -fx-background-radius: 10;
+    -fx-padding: 2 9 2 9;
+}
+.overlay-target-chip:selected {
+    -fx-background-color: #4a90e2;
+    -fx-text-fill: white;
+}
+.overlay-group-caption {
+    -fx-font-size: 10px;
+    -fx-text-fill: #8b93a1;
+}
+.overlay-breadcrumb {
+    -fx-text-fill: #c9d4e6;
+    -fx-font-weight: bold;
+}
+.overlay-status {
+    -fx-text-fill: #c9d4e6;
+    -fx-font-size: 11px;
+}
+.overlay-tools {
+    -fx-background-color: transparent;
+}
+.overlay-tools > .tab-content-area {
+    -fx-background-color: transparent;
+}

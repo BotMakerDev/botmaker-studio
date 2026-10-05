@@ -28,6 +28,7 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -104,6 +105,11 @@ public final class ScreenOverlay {
      * machine (the modal overlay was shown before the slow grab returned); this keeps the UI responsive.
      */
     private void grabAsync(Window owner, Consumer<ScreenShot> onShot) {
+        grabAsync(owner, onShot, () -> { });
+    }
+
+    /** As {@link #grabAsync(Window, Consumer)}; {@code onCancelled} runs when no shot comes of it. */
+    private void grabAsync(Window owner, Consumer<ScreenShot> onShot, Runnable onCancelled) {
         Thread t = new Thread(() -> {
             Grab grab;
             try {
@@ -113,7 +119,9 @@ public final class ScreenOverlay {
                 grab = new Grab(null, null);
             }
             Grab result = grab;
-            Platform.runLater(() -> finishGrab(owner, result, onShot));
+            Platform.runLater(() -> {
+                if (!finishGrab(owner, result, onShot)) onCancelled.run();
+            });
         }, "screen-capture-grab");
         t.setDaemon(true);
         t.start();
@@ -122,24 +130,25 @@ public final class ScreenOverlay {
     /**
      * FX-thread completion of {@link #grabAsync}: runs the screen chooser if one is pending, guards against a
      * blank (Wayland) grab so the user is never trapped behind a black full-screen overlay, and finally hands
-     * the finished shot to {@code onShot}.
+     * the finished shot to {@code onShot}. Answers whether it did.
      */
-    private void finishGrab(Window owner, Grab grab, Consumer<ScreenShot> onShot) {
+    private boolean finishGrab(Window owner, Grab grab, Consumer<ScreenShot> onShot) {
         ScreenShot shot = grab.shot();
         if (shot == null && grab.desktopForChooser() != null) {
             BufferedImage desktop = grab.desktopForChooser();
             List<Screen> screens = Screen.getScreens();
             Screen screen = chooseScreen(owner, screens, desktop);
-            if (screen == null) return; // chooser cancelled
+            if (screen == null) return false; // chooser cancelled
             shot = new ScreenShot(Screens.cropToScreen(desktop, screens, screen), screen.getBounds(), true,
                     DesktopGrab.looksBlank(desktop));
         }
-        if (shot == null) return;
+        if (shot == null) return false;
         if (shot.blank()) {
             showBlankWarning(owner);
-            return;
+            return false;
         }
         onShot.accept(shot);
+        return true;
     }
 
     /**
@@ -163,7 +172,15 @@ public final class ScreenOverlay {
      * Does nothing if the user cancels (Esc / empty selection) or capture is unavailable.
      */
     public void selectRegion(Window owner, Consumer<int[]> onSelected) {
-        grabAsync(owner, shot -> showRegionOverlay(owner, shot, onSelected));
+        selectRegion(owner, onSelected, () -> { });
+    }
+
+    /**
+     * As {@link #selectRegion(Window, Consumer)}, with {@code onCancelled} run instead when nothing is selected
+     * — Esc, an empty drag, a blank or failed grab — so a caller waiting on the pick always hears back.
+     */
+    public void selectRegion(Window owner, Consumer<int[]> onSelected, Runnable onCancelled) {
+        grabAsync(owner, shot -> showRegionOverlay(owner, shot, onSelected, onCancelled), onCancelled);
     }
 
     /**
@@ -173,8 +190,13 @@ public final class ScreenOverlay {
      * unavailable.
      */
     public void pickPoint(Window owner, Consumer<int[]> onPicked) {
+        pickPoint(owner, onPicked, () -> { });
+    }
+
+    /** As {@link #pickPoint(Window, Consumer)}, with {@code onCancelled} run instead when no point is picked. */
+    public void pickPoint(Window owner, Consumer<int[]> onPicked, Runnable onCancelled) {
         grabAsync(owner, shot -> showPointOverlay(owner, shot, false,
-                pick -> onPicked.accept(new int[]{pick.x(), pick.y()})));
+                pick -> onPicked.accept(new int[]{pick.x(), pick.y()}), onCancelled), onCancelled);
     }
 
     /** What a {@link #pickPoint}-style overlay reports: where the click landed, and the pixel that was under it. */
@@ -189,7 +211,7 @@ public final class ScreenOverlay {
      * between.
      */
     public void pickColor(Window owner, Consumer<ScreenPick> onPicked) {
-        grabAsync(owner, shot -> showPointOverlay(owner, shot, true, onPicked));
+        grabAsync(owner, shot -> showPointOverlay(owner, shot, true, onPicked, () -> { }));
     }
 
     /**
@@ -306,7 +328,8 @@ public final class ScreenOverlay {
      * pane-to-image scale the crop uses — see {@link #sourcePoint} for why the source's origin, and not the
      * desktop's, is what a picked coordinate is relative to.
      */
-    private void showRegionOverlay(Window owner, ScreenShot shot, Consumer<int[]> onSelected) {
+    private void showRegionOverlay(Window owner, ScreenShot shot, Consumer<int[]> onSelected,
+                                   Runnable onCancelled) {
         BufferedImage screenshot = shot.image();
         ImageView background = new ImageView(toFxImage(screenshot));
         Pane pane = new Pane(background);
@@ -337,10 +360,17 @@ public final class ScreenOverlay {
             selection.setWidth(Math.abs(e.getX() - origin[0]));
             selection.setHeight(Math.abs(e.getY() - origin[1]));
         });
+        // Set before the close, whose hidden event is what reports a cancel.
+        boolean[] selected = {false};
         pane.setOnMouseReleased(e -> {
+            int[] rect = selection.getWidth() < 3 || selection.getHeight() < 3 ? null
+                    : sourceRect(shot, pane, selection);
+            selected[0] = rect != null;
             stage.close();
-            if (selection.getWidth() < 3 || selection.getHeight() < 3) return;
-            onSelected.accept(sourceRect(shot, pane, selection));
+            if (rect != null) onSelected.accept(rect);
+        });
+        stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, e -> {
+            if (!selected[0]) onCancelled.run();
         });
 
         Scene scene = new Scene(pane);
@@ -359,7 +389,8 @@ public final class ScreenOverlay {
      * <p>{@code showColor} only changes what the readout says — coordinates for a point pick, the hex value
      * for a colour pick. Both picks want the same lens, and one overlay is what keeps them from drifting.
      */
-    private void showPointOverlay(Window owner, ScreenShot shot, boolean showColor, Consumer<ScreenPick> onPicked) {
+    private void showPointOverlay(Window owner, ScreenShot shot, boolean showColor, Consumer<ScreenPick> onPicked,
+                                  Runnable onCancelled) {
         BufferedImage screenshot = shot.image();
         Image fxImage = toFxImage(screenshot);
         ImageView background = new ImageView(fxImage);
@@ -472,11 +503,17 @@ public final class ScreenOverlay {
             zoom[0] = clamp(next, 4, 64);
             place.run();
         });
+        boolean[] taken = {false};
         pane.setOnMouseClicked(e -> {
             if (e.getButton() != javafx.scene.input.MouseButton.PRIMARY) return;
-            stage.close();
             int[] picked = sourcePoint(shot, pane, e.getX(), e.getY());
-            onPicked.accept(new ScreenPick(picked[0], picked[1], pixelAt(screenshot, pane, e.getX(), e.getY())));
+            java.awt.Color under = pixelAt(screenshot, pane, e.getX(), e.getY());
+            taken[0] = true;
+            stage.close();
+            onPicked.accept(new ScreenPick(picked[0], picked[1], under));
+        });
+        stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, e -> {
+            if (!taken[0]) onCancelled.run();
         });
 
         Scene scene = new Scene(pane);

@@ -22,7 +22,7 @@ import java.util.function.Predicate;
  *
  * <p>Every edit re-parses the whole file, and until this existed every block object and every JavaFX
  * {@code Node} in it was thrown away and rebuilt. That is why {@code EditorCanvas} restores its scroll
- * position by hand and why {@code ProgramShapeOverlay} keeps a "focus this after the next update" field: the
+ * position by hand and why {@code OverlayEditor} keeps a "focus this after the next update" field: the
  * identity of a drawn block did not survive the edit that redrew it.
  *
  * <p><b>The unit is the subtree, and that is what makes this buildable.</b> {@link BlockConverter} offers

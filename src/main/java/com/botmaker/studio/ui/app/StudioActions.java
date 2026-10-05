@@ -19,7 +19,7 @@ import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
-import com.botmaker.studio.ui.app.overlay.ProgramShapeOverlay;
+import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import com.botmaker.session.launch.BackgroundLauncher;
 import javafx.stage.Stage;
@@ -209,13 +209,12 @@ final class StudioActions {
     // Restored 2026-09-12, and not by the route recorded here (the launcher becoming a plugin's toolbar
     // item): the overlay asks which window to draw over. That is a better answer than the dialog it lost,
     // because the dialog arranged a *launch* while the question is which of the windows already open the
-    // user means — and a window opened by hand was never reachable through it at all.
+    // user means — and a window opened by hand was never reachable through it at all. Since 2026-10-06 it
+    // asks only when no plugin says what the bot watches.
 
-    /**
-     * Opens the program-shape overlay authoring editor (compact clickable block tree + insertion cursor).
-     */
+    /** Opens the overlay editor, docked beside the screen the bot watches. */
     private void openOverlayEditor() {
-        ProgramShapeOverlay.open(primaryStage, codeEditorService, projectSettingsService, screenCaptureService,
+        OverlayEditor.open(primaryStage, codeEditorService, projectSettingsService, screenCaptureService,
                 this::liveSessionWindow);
     }
 

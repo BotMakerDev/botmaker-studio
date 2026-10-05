@@ -140,29 +140,22 @@ The `ui/` package is split by concern:
   edited through, so there is one way to edit a value and not two.
   **A body that is not exactly `return <expression>;` is read-only with a named reason** — the rule
   `whyNotEditable` already applies to a computed `@Param` initializer.
-- **`ui/app/overlay/`** — the **Overlay Editor**: the always-on-top HUD that mirrors the program as one-line
-  rows over the running game, and the only place a bot can be authored or recorded without leaving it.
-  `OverlayToolbars.promoteAboveFullscreen` is a two-line delegation since 2026-08-30 — the EWMH trick that
-  stacks a transparent stage above a fullscreen game is
-  `com.botmaker.sdk.internal.plugin.capture.OverlayStage`, because the capture surfaces that were its other
-  callers are the plugin's now and the raise itself is `botmaker-shared`'s. Its last two callers here leave
-  with the launch pickers.
-  `ProgramShapeOverlay` is the *coordinator* — the stage, the event subscriptions, and the FX-thread-confined
-  state that sequences an edit against the re-parse it causes. Everything else is a collaborator it constructs
-  and hands callbacks to; none of them holds a reference back to it:
-  `BlockTree` (**pure, no JavaFX** — the tree model and the flattened row list, so the placement rules that
-  fail silently are testable headlessly), `OverlayTreeView` (the rows), `OverlayTargetPicker` (which activity
-  and method blocks land in), `OverlayPalette` (the SDK facade chips + ＋ Add block),
-  `ArgumentConfigPopover`, `OverlayHeader`, `OverlayStyles` and `OverlayToolbars` (shared with `capture/`).
-  **`OverlayRecorder`, `RecordedBatchInserter`, `OverlayHotkey` (the global `F9`) and
-  `services/record/` are gone (2026-09-02)** — the macro recorder is the SDK plugin's, as
-  `internal/plugin/record/`, reached from its own toolbar item. `RecordingSession` moved byte-for-byte
-  because its only dependency was ever `com.botmaker.shared.input`; only the *translator* named the SDK,
-  because deciding what a recorded click is written down as is a plugin's vocabulary. **The accepted cost,
-  stated rather than glossed:** recorded actions no longer land at the overlay's cursor. The plugin emits
-  Java source and the user pastes it — there is no contract capability for *"insert these statements here"*,
-  `Sources` is find-and-replace rather than append, and a surface shaped to one caller is the back door the
-  platform exists to close.
+- **`ui/app/overlay/`** — the **Overlay Editor** (2026-10-06): a panel docked beside the screen the bot
+  watches, where the bot is built while looking at what it sees. `OverlayEditor` is the *coordinator* — what
+  the panel is beside, the event subscriptions, the caret, every edit, and the FX-thread state that sequences
+  an edit against the re-parse it causes. Its collaborators take callbacks and hold no reference back:
+  `DockedPanel` (the window: docks via the pure `DockPlacement`, follows the window, resizes, stays above
+  fullscreen through `OverlayToolbars`), `PanelHeader` (what it is beside, ⇄ Change, and the run bar's slot —
+  `ui/app/run/RunBarDock`), `TargetStrip` (a chip per plugin target, and the `Collect ▸ body() ▾` breadcrumb),
+  `OverlayTreeView` over `BlockTree` (**pure, no JavaFX** — the tree model and the flattened rows; one ⋮ per
+  row), `ToolTabs` (each plugin's `OverlayTool` pane, *Actions* for `ToolbarGroup.OVERLAY`, *Blocks* for
+  `OverlayPalette`), `ToolContext` and `WatchedShots` (a tool's frame, picks and insert),
+  `ArgumentConfigPopover`, `OverlayStyles`. What the panel is beside comes from a live session, else the
+  plugins' `OverlayPart.watched` (`services/overlay/WatchedScreen`), else `OverlayWindowPicker`, which lists
+  open windows only. Where blocks go is `services/overlay/OverlayTargets`, read off bindings; a tool's insert
+  is `services/overlay/OverlayCalls`. **⏺ Record is gone** (with `plugin/record/` and the
+  `preferredRecorders` setting): its job — turning what is on screen into a call — is the tools'. The row
+  look is `overlay-*` classes in `blocks.css`. Design: `docs/refactor/42-overlay-editor.md` (umbrella).
 - **`ui/dnd/`** — drag-and-drop and block input events: `BlockDragAndDropManager`, `DropInfo`, `MoveBlockInfo`,
   `BlockEvent`, `DropZoneFactory`.
 - **`palette/`** (top-level, dependency-light) — the insertable catalogs: `BlockType`/`BlockCatalog`/`BlockCategory`

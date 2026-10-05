@@ -18,10 +18,10 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * The overlay editor's <b>tree model</b>: every question {@code ProgramShapeOverlay} asks about the shape of the
+ * The overlay editor's <b>tree model</b>: every question {@code OverlayEditor} asks about the shape of the
  * block tree, answered without a single JavaFX type. Pure and static, so the placement rules it encodes — which
  * fail <em>silently</em> when they are wrong, since a misplaced caret just drops the insert — are testable
- * headlessly (see {@code ProgramShapeOverlayCursorTest}).
+ * headlessly (see {@code BlockTreeRunCursorTest}).
  *
  * <p><b>Why an {@link Index}.</b> Blocks carry no parent pointers, so every lookup used to re-walk the whole
  * tree: "is this body nested inside another" alone was a walk per body (quadratic), and the ordinal / locate /

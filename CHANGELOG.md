@@ -13,6 +13,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Added
+- **The overlay editor docks beside the game.** ⧉ Overlay opens a panel beside the window your bot watches —
+  with the SDK, the one `Sdk.captureSource()` names — without asking; ⇄ Change picks another. It follows the
+  window, drags off to float (⇲ docks it again) and resizes from either edge. Chips across the top are your
+  activities: pick one and its file opens in the editor and the caret goes inside it. The script below has one
+  ⋮ per row (configure, move, delete); ▲▼ always move the caret. The tabs at the bottom are the plugins' tools —
+  with the SDK, *Picture* cuts a picture off the game and can insert a click on it, *Point* inserts a click at
+  a spot, *Flow* opens 🔀 Activity Flow — then *Actions* (the plugins' overlay buttons) and *Blocks*. While the
+  bot runs, its stop, pause and trace sit in the panel's header instead of a second window.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.
@@ -32,6 +40,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   function comes back as the newest version without the mark had it, with the imports it used), or rename or
   delete the function — the same rename and delete as its header's, refusals included. The *Mark Reviewed*
   button is gone; each action saves a version first.
+
+### Removed
+- **⏺ Record is gone from the overlay editor**, with its *Record with* menu. The panel's tool tabs do its job
+  — turn what is on screen into a call — one picked thing at a time, and the window picker lists only windows
+  that are open now.
 
 ### Fixed
 - Removing the last plugin from a bot no longer leaves it unable to compile its own `@Refactor` marks

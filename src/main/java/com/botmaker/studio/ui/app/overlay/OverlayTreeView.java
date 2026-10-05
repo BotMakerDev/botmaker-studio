@@ -17,8 +17,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Spinner;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -31,8 +33,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
- * The HUD's <b>compact tree</b>: the scrolling list of one-line rows that <em>is</em> the overlay's view of the
- * program, plus the Show-lines control that sizes it.
+ * The panel's <b>script</b>: the scrolling list of one-line rows that <em>is</em> the overlay's view of the
+ * method being edited. It takes whatever height the panel leaves it.
  *
  * <p>It renders {@link BlockTree#flatten} and nothing else — it holds no cursor, no tree and no editor. What a
  * row <em>does</em> is a callback the coordinator supplies ({@link Callbacks}), so the view can be reasoned
@@ -42,6 +44,10 @@ import java.util.function.Predicate;
  * ({@code ⚠ missing value}) before any compile, a compile error the main editor shows on the block but the HUD
  * never did, a lock on generated scaffolding that previously read as "delete is broken here", and the full
  * source text as a tooltip because a row is truncated at 70 characters with no other way to see the rest.
+ *
+ * <p><b>One meaning per control</b> (2026-10-06). ▲▼ move the caret, always; moving a block is the row's ⋮ menu
+ * or Alt+↑/↓. The focused row used to carry ▲▼ buttons that moved the <em>block</em>, beside the step bar's ▲▼
+ * that moved the caret. A row's look is CSS classes in {@code blocks.css} ({@code overlay-row…}).
  */
 final class OverlayTreeView {
 
@@ -65,9 +71,6 @@ final class OverlayTreeView {
         }
     }
 
-    /** The pixel height one row (including spacing) costs, used to turn "show N lines" into a pref height. */
-    private static final double ROW_HEIGHT_PX = 24;
-
     /** Longest row text before truncation; the full text stays reachable as the row's tooltip. */
     private static final int MAX_LABEL_CHARS = 70;
 
@@ -83,56 +86,25 @@ final class OverlayTreeView {
 
     private final VBox rows = new VBox(2);
     private final ScrollPane scroll = new ScrollPane(rows);
-    private final Spinner<Integer> visibleLines = new Spinner<>(3, 30, 8);
-    private final VBox panel;
 
     /** Compile diagnostics, so a broken block is marked here as well as in the main editor. May be null. */
     private DiagnosticsManager diagnostics;
 
-    OverlayTreeView(CodeEditorService context, Callbacks callbacks, Runnable onResize) {
+    OverlayTreeView(CodeEditorService context, Callbacks callbacks) {
         this.context = context;
         this.callbacks = callbacks;
 
         rows.setPadding(new Insets(6));
-        rows.setStyle("-fx-background-color: transparent;");
+        rows.getStyleClass().add("overlay-script-rows");
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
-
-        // How many rows are visible before the pane scrolls internally. This is a *preferred* height, not
-        // just a cap: with the HUD's fixed Scene size gone, the window sizes to the sum of its children's
-        // preferred heights, so a ScrollPane with no explicit prefHeight falls back to its own tiny default —
-        // that's what made only one row visible before this control existed.
-        visibleLines.setEditable(true);
-        visibleLines.setPrefWidth(60);
-        visibleLines.setTooltip(new Tooltip("How many rows are visible at once before the tree scrolls"));
-        scroll.setPrefHeight(visibleLines.getValue() * ROW_HEIGHT_PX + 12);
-        scroll.setMinHeight(Region.USE_PREF_SIZE);
-        visibleLines.valueProperty().addListener((obs, old, val) -> {
-            scroll.setPrefHeight(val * ROW_HEIGHT_PX + 12);
-            onResize.run();   // the Scene only auto-sizes to content at first show(); later changes need this
-        });
-
-        HBox linesRow = new HBox(6, OverlayStyles.label("Show:"), visibleLines, OverlayStyles.label("lines"));
-        linesRow.setAlignment(Pos.CENTER_LEFT);
-
-        panel = new VBox(6, linesRow, scroll);
-        panel.setStyle(OverlayStyles.PANEL);
+        scroll.getStyleClass().add("overlay-script");
+        scroll.setMinHeight(120);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-        VBox.setVgrow(panel, Priority.ALWAYS);
     }
 
-    /** The node to put in the HUD. */
-    VBox node() {
-        return panel;
-    }
-
-    /** How many rows the user asked to see at once — persisted with the rest of the HUD's state. */
-    int visibleLineCount() {
-        return visibleLines.getValue();
-    }
-
-    void setVisibleLineCount(int lines) {
-        visibleLines.getValueFactory().setValue(lines);
+    /** The node to put in the panel; it grows to the height the panel leaves. */
+    ScrollPane node() {
+        return scroll;
     }
 
     void setDiagnostics(DiagnosticsManager diagnostics) {
@@ -169,10 +141,10 @@ final class OverlayTreeView {
     /** The caret's own row, drawn when it sits before a body's first statement. */
     private static HBox caretRow(int depth) {
         Label text = new Label("▸ next block goes here");
-        text.setStyle("-fx-font-style: italic; -fx-text-fill: #9fc0ff;");
+        text.getStyleClass().add("overlay-caret-text");
         HBox node = new HBox(6, indent(depth), text);
         node.setPadding(new Insets(3, 6, 3, 6));
-        node.setStyle("-fx-background-color: rgba(74,144,226,0.35); -fx-background-radius: 4;");
+        node.getStyleClass().addAll("overlay-row", "overlay-row-focused");
         return node;
     }
 
@@ -198,9 +170,10 @@ final class OverlayTreeView {
         if (row.fold() == BlockTree.Fold.COLLAPSED) suffix += "   …";
         Label text = new Label((locked ? "🔒 " : "") + compactLabel(stmt) + suffix);
         // An empty slot or a compile error shows red before the user has to go looking for it; scaffolding is
-        // dimmed, because "why is there no ✕ on this row" was the only signal that it wasn't the user's to edit.
-        String colour = (incomplete || broken) ? "#ff6b6b;" : (locked ? "#8b93a1;" : "#dfe6f2;");
-        text.setStyle("-fx-font-family: monospace; -fx-font-size: 12px; -fx-text-fill: " + colour);
+        // dimmed, because "why is there no ⋮ on this row" was the only signal that it wasn't the user's to edit.
+        text.getStyleClass().add("overlay-row-text");
+        if (incomplete || broken) text.getStyleClass().add("overlay-row-text-broken");
+        else if (locked) text.getStyleClass().add("overlay-row-text-locked");
 
         HBox node = shell(row, focused);
         if (row.fold() != BlockTree.Fold.NONE) node.getChildren().add(foldToggle(row));
@@ -220,34 +193,30 @@ final class OverlayTreeView {
         HBox.setHgrow(spring, Priority.ALWAYS);
         node.getChildren().add(spring);
 
-        // Reorder (▲▼), on the focused row only. Every row carrying them would put five glyph buttons on a
-        // 340px-wide line; the keyboard equivalent (Alt+↑/↓) works wherever the caret is either way.
-        if (focused && !locked) {
-            Button up = OverlayStyles.iconButton(
-                    "▲", "Move up (Alt+↑)", () -> callbacks.onMove().move(stmt, row.body(), row.index(), -1));
-            Button down = OverlayStyles.iconButton(
-                    "▼", "Move down (Alt+↓)", () -> callbacks.onMove().move(stmt, row.body(), row.index(), +1));
-            up.setMinWidth(26);
-            down.setMinWidth(26);
-            node.getChildren().addAll(up, down);
-        }
-        // Config (⚙) for SDK/method calls: draw the rect / pick the template for the call's arguments without
-        // leaving the overlay (reuses the standard argument pickers).
-        if (stmt instanceof MethodInvocationBlock mib) {
-            Button config = OverlayStyles.iconButton(
-                    "⚙", "Configure arguments (draw rect / pick template)", () -> callbacks.onConfig().accept(mib));
-            config.setMinWidth(26);
-            node.getChildren().add(config);
-        }
-        // Delete (✕), the row-level twin of the main editor's per-block delete. Generated scaffolding is not
-        // the user's to remove, so a read-only row simply doesn't offer it.
-        if (!locked) {
-            Button remove = OverlayStyles.iconButton(
-                    "✕", "Delete this block (Del)", () -> callbacks.onDelete().run(stmt, row.body(), row.index()));
-            remove.setMinWidth(26);
-            node.getChildren().add(remove);
-        }
+        // One ⋮ per row for everything done to the block, so a row is never a strip of glyph buttons. Generated
+        // scaffolding is not the user's to change, so a read-only row has none.
+        if (!locked) node.getChildren().add(rowMenu(stmt, row));
         return node;
+    }
+
+    /** The row's ⋮: configure a call's arguments, move the block, delete it. */
+    private MenuButton rowMenu(StatementBlock stmt, BlockTree.Row row) {
+        MenuButton menu = new MenuButton("⋮");
+        menu.getStyleClass().add("overlay-row-menu");
+        menu.setTooltip(new Tooltip("What to do with this block"));
+        if (stmt instanceof MethodInvocationBlock mib) {
+            MenuItem config = new MenuItem("⚙ Configure arguments (Enter)");
+            config.setOnAction(e -> callbacks.onConfig().accept(mib));
+            menu.getItems().addAll(config, new SeparatorMenuItem());
+        }
+        MenuItem up = new MenuItem("Move up (Alt+↑)");
+        up.setOnAction(e -> callbacks.onMove().move(stmt, row.body(), row.index(), -1));
+        MenuItem down = new MenuItem("Move down (Alt+↓)");
+        down.setOnAction(e -> callbacks.onMove().move(stmt, row.body(), row.index(), +1));
+        MenuItem remove = new MenuItem("✕ Delete (Del)");
+        remove.setOnAction(e -> callbacks.onDelete().run(stmt, row.body(), row.index()));
+        menu.getItems().addAll(up, down, new SeparatorMenuItem(), remove);
+        return menu;
     }
 
     /**
@@ -265,8 +234,8 @@ final class OverlayTreeView {
      * actually have moved — {@code BlockReuse} refuses every subtree when it does — but this is the shape
      * phase 4's breakpoint bug had, and a one-way stamp beside a cache is the same trap set again.
      *
-     * <p>Safe to hand back the same nodes each pulse because there is one HUD at a time
-     * ({@code ProgramShapeOverlay.active}) and its canvas twin is a different object: a block builds fresh
+     * <p>Safe to hand back the same nodes each pulse because there is one panel at a time
+     * ({@code OverlayEditor.active}) and its canvas twin is a different object: a block builds fresh
      * suppliers per {@code componentSpec} call, so the two surfaces never contend for one node's parent.
      */
     private List<Node> compactNodes(StatementBlock stmt, boolean locked) {
@@ -323,7 +292,7 @@ final class OverlayTreeView {
      */
     private HBox captionRow(BlockTree.Row row, InsertionCursor cursor) {
         Label text = new Label(row.caption());
-        text.setStyle("-fx-font-family: monospace; -fx-font-size: 12px; -fx-text-fill: #b8a2e0;");
+        text.getStyleClass().addAll("overlay-row-text", "overlay-row-caption");
         HBox node = shell(row, focused(row, cursor));
         node.getChildren().add(text);
         if (row.body() != null) {
@@ -334,7 +303,7 @@ final class OverlayTreeView {
 
     private HBox emptyRow(BlockTree.Row row, InsertionCursor cursor) {
         Label text = new Label("· (empty) ·");
-        text.setStyle("-fx-font-style: italic; -fx-text-fill: #8b93a1;");
+        text.getStyleClass().add("overlay-row-empty");
         HBox node = shell(row, cursor != null && cursor.body() == row.body());
         node.getChildren().add(text);
         node.setOnMouseClicked(e -> callbacks.onFocus().accept(new InsertionCursor(row.body(), 0)));
@@ -346,10 +315,8 @@ final class OverlayTreeView {
         HBox node = new HBox(6, indent(row.depth()));
         node.setAlignment(Pos.CENTER_LEFT);
         node.setPadding(new Insets(3, 6, 3, 6));
-        node.setStyle(focused
-                ? "-fx-background-color: rgba(74,144,226,0.35); -fx-background-radius: 4; "
-                        + "-fx-border-color: #4a90e2; -fx-border-radius: 4;"
-                : "-fx-background-color: transparent;");
+        node.getStyleClass().add("overlay-row");
+        if (focused) node.getStyleClass().add("overlay-row-focused");
         return node;
     }
 

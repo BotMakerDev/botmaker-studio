@@ -1,18 +1,14 @@
 package com.botmaker.studio.ui.app.run;
 
-import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.shared.capture.NativeController;
 import com.botmaker.shared.capture.NativeControllerFactory;
-import com.botmaker.shared.input.InputListenerFactory;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.studio.ui.app.overlay.OverlayStyles;
 import com.botmaker.studio.ui.app.overlay.OverlayToolbars;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -25,13 +21,8 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.OverrunStyle;
-import javafx.scene.control.Tooltip;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.scene.transform.Translate;
@@ -46,7 +37,8 @@ import java.util.function.Function;
 
 /**
  * The run overlay's windows for one run: the <b>bar</b>, a small window the user places, with the controls,
- * the trace's last lines and each plugin's bar node; and the <b>layer</b>, a transparent window over the whole
+ * the trace's last lines and each plugin's bar node ({@link RunBar}) — drawn in the overlay editor's header
+ * instead while that panel is open ({@link RunBarDock}); and the <b>layer</b>, a transparent window over the whole
  * desktop holding each plugin's layer node in desktop pixels ({@link DesktopSpace}), which takes no clicks.
  *
  * <p>Both are kept above a fullscreen window the way the authoring overlay is ({@link OverlayToolbars}). The
@@ -63,16 +55,17 @@ final class RunOverlayWindows implements RunOverlay.Surface {
     private static final Duration LAYER_TICK = Duration.millis(250);
     /** How many ticks the layer may take to become click-through before it is given up. */
     private static final int LAYER_TRIES = 12;
-    /** How often the bar reads the run's pause state. */
-    private static final Duration BAR_TICK = Duration.millis(500);
     private static final double BAR_MARGIN = 16;
     private static final double TRACE_WIDTH = 420;
 
     private final EventBus eventBus;
     private final List<PartContext> contexts = new ArrayList<>();
     private final Stage bar;
-    private final VBox trace = new VBox(2);
-    private Timeline barKeeper;
+    private RunBar runBar;
+    /** The bar window's content: the {@link RunBar}, unless the overlay editor's panel holds it. */
+    private StackPane floating;
+    private AutoCloseable dockListener;
+    private boolean promoted;
     private Stage layer;
     private Timeline layerKeeper;
 
@@ -83,7 +76,7 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         List<Node> barNodes = new ArrayList<>();
         List<Node> layerNodes = new ArrayList<>();
         for (PluginHost.OwnedPart owned : PluginHost.runOverlayParts()) {
-            PartContext context = new PartContext(HostServices.forProject(config, () -> bar));
+            PartContext context = new PartContext(HostServices.forProject(config, this::barWindow));
             contexts.add(context);
             RunOverlayPart part = owned.part();
             part.barFactory().map(f -> build(owned, f, context)).ifPresent(barNodes::add);
@@ -112,77 +105,58 @@ final class RunOverlayWindows implements RunOverlay.Surface {
     // --- The bar ---
 
     private void buildBar(RunOverlay.Session session, List<Node> barNodes) {
-        Runs runs = HostRuns.live();
-        Label grip = OverlayStyles.dimLabel("⠿");
-        Button stop = OverlayStyles.iconButton("⏹", "Stop the bot", session::stop);
-        Button pause = OverlayStyles.iconButton("⏸", "Pause the bot", () -> { });
-        // Signalled off the FX thread: pausing runs `kill`, which the bar must not wait on.
-        pause.setOnAction(e -> {
-            pause.setDisable(true);
-            Thread.ofVirtual().start(() -> {
-                if (runs.isPaused()) runs.resume();
-                else runs.pause();
-                Platform.runLater(() -> {
-                    pause.setDisable(false);
-                    refreshPause(pause, runs, session);
-                });
-            });
-        });
-        refreshPause(pause, runs, session);
-        // Read again while the bar is up: the run's process starts after the bar opens, and a plugin may pause
-        // or resume the run itself.
-        barKeeper = new Timeline(new KeyFrame(BAR_TICK, e -> refreshPause(pause, runs, session)));
-        barKeeper.setCycleCount(Animation.INDEFINITE);
-        barKeeper.play();
-        Button again = OverlayStyles.iconButton("↻", "Stop the bot and run it again", session::runAgain);
-        show(again, !session.debugging());
-        Button hide = OverlayStyles.iconButton("✕", "Hide until the next run", session::dismiss);
+        runBar = new RunBar(session, barNodes);
 
-        HBox controls = new HBox(6, grip, stop, pause, again);
-        controls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        if (InputListenerFactory.isSupported()) {
-            controls.getChildren().add(OverlayStyles.dimLabel(StopKeyPreference.name() + " stops it"));
-        }
-        Pane spacer = new Pane();
-        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
-        controls.getChildren().addAll(spacer, hide);
-        OverlayToolbars.installDrag(controls, bar);
-
-        VBox root = new VBox(6, controls);
-        if (!barNodes.isEmpty()) root.getChildren().add(new HBox(8, barNodes.toArray(Node[]::new)));
-        show(trace, false);
-        root.getChildren().add(trace);
+        // The bar's own window holds it only while no overlay editor panel has taken it (RunBarDock).
+        floating = new StackPane();
         // -fx-background is what modena derives a label's text colour from: a plugin's plain Label reads light
         // on the dark panel without knowing the bar is dark.
-        root.setStyle(OverlayStyles.PANEL + "-fx-background: rgb(20,24,33); -fx-padding: 8;");
+        floating.setStyle(OverlayStyles.PANEL + "-fx-background: rgb(20,24,33); -fx-padding: 8;");
         // A fixed width, so the first trace lines grow the bar downwards only and it stays where it was placed.
-        root.setPrefWidth(TRACE_WIDTH + 16);
-        root.setMaxWidth(TRACE_WIDTH + 16);
-        root.getStyleClass().add(ThemedWindows.UNTHEMED);
+        floating.setPrefWidth(TRACE_WIDTH + 16);
+        floating.setMaxWidth(TRACE_WIDTH + 16);
+        floating.getStyleClass().add(ThemedWindows.UNTHEMED);
 
-        Scene scene = new Scene(root, Color.TRANSPARENT);
+        Scene scene = new Scene(floating, Color.TRANSPARENT);
         java.net.URL css = getClass().getResource("/css/blocks.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
-        OverlayStyles.applyThemeClass(root);
+        OverlayStyles.applyThemeClass(floating);
 
         bar.setTitle(BAR_TITLE);
         bar.setAlwaysOnTop(true);
         bar.setScene(scene);
         bar.setOnShown(e -> place());
         bar.setOnHidden(e -> RunOverlayPreference.saveBar(bar.getX(), bar.getY()));
-        bar.show();
-        OverlayToolbars.promoteAboveFullscreen(bar);
+        dockListener = RunBarDock.listen(this::placeBar);
+        placeBar();
     }
 
-    /** Shows the pause button while the run can be paused or is paused, its glyph saying which click it takes. */
-    private static void refreshPause(Button pause, Runs runs, RunOverlay.Session session) {
-        boolean paused = runs.isPaused();
-        show(pause, !session.debugging() && (paused || runs.canPause()));
-        String glyph = paused ? "▶" : "⏸";
-        if (!glyph.equals(pause.getText())) {
-            pause.setText(glyph);
-            pause.setTooltip(new Tooltip(paused ? "Resume the bot" : "Pause the bot"));
+    /** The window the bar is drawn in now — its own, or the overlay editor's — for a part's dialogs to sit on. */
+    private javafx.stage.Window barWindow() {
+        if (bar.isShowing()) return bar;
+        return RunBarDock.slot().map(Node::getScene).map(Scene::getWindow).orElse(bar);
+    }
+
+    /** Puts the bar in the panel's slot when one is offered, else in its own window. */
+    private void placeBar() {
+        var slot = RunBarDock.slot();
+        if (slot.isPresent()) {
+            floating.getChildren().clear();
+            // Docked, its controls row drags nothing: the window it would drag is hidden.
+            runBar.handle().setOnMousePressed(null);
+            runBar.handle().setOnMouseDragged(null);
+            slot.get().getChildren().setAll(runBar.node());
+            if (bar.isShowing()) bar.hide();
+            return;
         }
+        OverlayToolbars.installDrag(runBar.handle(), bar);
+        floating.getChildren().setAll(runBar.node());
+        if (!bar.isShowing()) {
+            bar.show();
+            if (!promoted) OverlayToolbars.promoteAboveFullscreen(bar);
+            promoted = true;
+        }
+        bar.sizeToScene();
     }
 
     /** Where the user left the bar, if that is still on a screen; else the primary screen's top-right corner. */
@@ -202,26 +176,8 @@ final class RunOverlayWindows implements RunOverlay.Surface {
 
     @Override
     public void trace(List<TraceLine> tail) {
-        List<Node> lines = new ArrayList<>();
-        for (TraceLine line : tail) lines.add(traceLabel(line));
-        trace.getChildren().setAll(lines);
-        show(trace, !lines.isEmpty());
-        bar.sizeToScene();
-    }
-
-    private static Label traceLabel(TraceLine line) {
-        String text = line.count() > 1 ? line.text() + " (×" + line.count() + ")" : line.text();
-        Label label = new Label(text.replace('\n', ' '));
-        label.setMaxWidth(TRACE_WIDTH);
-        label.setTextOverrun(OverrunStyle.ELLIPSIS);
-        label.setStyle(switch (line.level()) {
-            case ERROR -> "-fx-text-fill: #ff7b72;";
-            case WARN -> "-fx-text-fill: #e3b341;";
-            case DEBUG -> OverlayStyles.DIM_LABEL;
-            case INFO, UNKNOWN -> OverlayStyles.LABEL;
-        });
-        label.setTooltip(new Tooltip(line.text()));
-        return label;
+        runBar.trace(tail);
+        if (bar.isShowing()) bar.sizeToScene();
     }
 
     // --- The layer ---
@@ -303,15 +259,19 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         layer = null;
     }
 
-    private static void show(Node node, boolean shown) {
-        node.setVisible(shown);
-        node.setManaged(shown);
-    }
-
     @Override
     public void close() {
         closeLayer();
-        if (barKeeper != null) barKeeper.stop();
+        if (dockListener != null) {
+            try {
+                dockListener.close();
+            } catch (Exception ignored) {
+                // removing a listener from a list does not fail
+            }
+        }
+        runBar.close();
+        // Out of the panel's slot too, or a finished run's bar stays in its header.
+        RunBarDock.slot().ifPresent(slot -> slot.getChildren().remove(runBar.node()));
         bar.hide();
         contexts.forEach(PartContext::close);
         contexts.clear();

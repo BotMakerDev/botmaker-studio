@@ -48,7 +48,7 @@ class WorkspaceLayoutTest {
 
         StudioProjectSettings after = settings
                 .withTemplate(null)
-                .withLastRecordedActivity("Mining");
+                .withLastTarget("com.bot.Mining#body");
 
         assertNotNull(after.workspaceLayout());
         assertEquals(0.3, after.workspaceLayout().explorerDivider());

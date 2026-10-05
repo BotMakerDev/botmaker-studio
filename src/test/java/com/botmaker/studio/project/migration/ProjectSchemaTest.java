@@ -89,12 +89,12 @@ class ProjectSchemaTest {
     void whenBothPlacesHoldOneTheNewOneIsTheAnswerAndTheOldOneIsLeft(@TempDir Path root) throws Exception {
         ProjectConfig config = project(root);
         Path legacy = config.resourcesRoot().resolve(StudioProjectSettings.FILE_NAME);
-        Files.writeString(legacy, "{\"lastRecordedActivity\":\"old\"}");
-        StudioProjectSettings.empty().withLastRecordedActivity("new").write(config.studioRoot());
+        Files.writeString(legacy, "{\"lastTarget\":\"old\"}");
+        StudioProjectSettings.empty().withLastTarget("new").write(config.studioRoot());
 
         assertFalse(StudioProjectSettings.moveOutOfResources(config));
         assertTrue(Files.exists(legacy), "a file this did not move is not this one's to delete");
-        assertEquals("new", StudioProjectSettings.read(config.studioRoot()).lastRecordedActivity());
+        assertEquals("new", StudioProjectSettings.read(config.studioRoot()).lastTarget());
     }
 
     // --- writing it ----------------------------------------------------------------------------------

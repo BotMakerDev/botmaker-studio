@@ -10,7 +10,7 @@ import com.botmaker.studio.core.StatementBlock;
  * <p>Unlike {@link ProjectState}'s {@code highlightedBlock} (which marks a <em>selected</em> block), the cursor
  * marks <em>where the next block will be inserted</em>. It is the anchor the overlay authoring toolbar's
  * step / step-into / step-out buttons move around, and where its "add below" / palette inserts write to
- * (see {@code CursorNavigator} and {@code ProgramShapeOverlay}).
+ * (see {@code CursorNavigator} and {@code OverlayEditor}).
  *
  * <p>{@code index} spans {@code -1 .. size}. Both ends are real positions rather than clamping artefacts:
  * {@code size} is "at the very end", and {@code -1} is "above every statement" — the only caret that puts an

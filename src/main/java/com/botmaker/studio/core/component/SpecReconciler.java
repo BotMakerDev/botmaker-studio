@@ -9,7 +9,7 @@ import java.util.Optional;
  * <p><b>The problem it exists for.</b> Every edit re-parses the file and builds an entirely new block tree, so
  * a widget the user is typing in is destroyed and rebuilt between keystrokes. The symptoms are visible all
  * over the editor and each has its own hand-written workaround: {@code EditorCanvas} restores its scroll
- * position by hand, {@code ProgramShapeOverlay} keeps a pending-focus field, and a text field loses its caret,
+ * position by hand, {@code OverlayEditor} keeps a pending-focus field, and a text field loses its caret,
  * its selection and any in-progress IME composition.
  *
  * <p><b>Why it keeps one component and not every unchanged one.</b> The obvious rule — carry every component

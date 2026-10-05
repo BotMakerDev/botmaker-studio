@@ -12,7 +12,7 @@ import javafx.stage.Window;
  * The look and the small talk of the overlay windows: the translucent panel style both overlays draw on, the
  * dim-on-dark label colours, and the alert helpers.
  *
- * <p>Every one of these was duplicated between {@link ProgramShapeOverlay} and
+ * <p>Every one of these was duplicated between the overlay editor and
  * {@code capture.OverlayTemplateCapture} — the panel background as the same literal in two places, {@code warn}
  * as the same four lines. They are the parts that have to <em>stay</em> identical: the two overlays are
  * routinely on screen together (the HUD opens capture surfaces), so a panel colour that drifts in one reads as

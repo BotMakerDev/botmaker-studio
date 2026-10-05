@@ -14,10 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Where the overlay parks its caret inside an activity. Every case here is one the user would experience as
- * "recording did nothing": the caret lands somewhere an insert is dropped, or below a {@code return} where the
+ * "the insert did nothing": the caret lands somewhere an insert is dropped, or below a {@code return} where the
  * inserted block never runs. Neither reports anything, which is why they are pinned down here.
  */
-class ProgramShapeOverlayCursorTest {
+class BlockTreeRunCursorTest {
 
     private static AbstractCodeBlock treeOf(String source) {
         return OverlayTestTrees.treeOf(source);

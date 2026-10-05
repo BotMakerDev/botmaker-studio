@@ -10,7 +10,6 @@ import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,7 +17,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -71,8 +69,7 @@ class OverlayReuseTest extends FxHeadlessTest {
         OverlayTreeView[] made = new OverlayTreeView[1];
         onFx(() -> made[0] = new OverlayTreeView(
                 fixture.context(),
-                new OverlayTreeView.Callbacks(c -> {}, (s, b, i) -> {}, m -> {}, (s, b, i, d) -> {}, s -> {}),
-                () -> {}));
+                new OverlayTreeView.Callbacks(c -> {}, (s, b, i) -> {}, m -> {}, (s, b, i, d) -> {}, s -> {})));
         return made[0];
     }
 
@@ -88,13 +85,10 @@ class OverlayReuseTest extends FxHeadlessTest {
     /**
      * The rows the view just drew.
      *
-     * <p>Reached through the panel's own children rather than a lookup: the rows {@code VBox} carries no id
-     * or style class, and giving it one only so a test could find it would be a production change made for
-     * a test.
+     * <p>Reached through the scroll pane's content rather than a lookup, which is what the view is.
      */
     private static List<Node> rowsOf(OverlayTreeView tree) {
-        VBox panel = tree.node();
-        ScrollPane scroll = (ScrollPane) panel.getChildren().get(1);
+        ScrollPane scroll = tree.node();
         return ((Pane) scroll.getContent()).getChildrenUnmodifiable();
     }
 
@@ -167,13 +161,13 @@ class OverlayReuseTest extends FxHeadlessTest {
         draw(tree, fixture, 0);
 
         Node rowBefore = rowsOf(tree).get(1);
-        String styleBefore = rowBefore.getStyle();
+        assertFalse(rowBefore.getStyleClass().contains("overlay-row-focused"));
 
         draw(tree, fixture, 1);
 
         Node rowAfter = rowsOf(tree).get(1);
         assertNotSame(rowBefore, rowAfter, "the row is a function of the caret, so it is drawn again");
-        assertNotEquals(styleBefore, rowAfter.getStyle(), "and the focus ring follows the caret onto it");
-        assertTrue(rowAfter.getStyle().contains("#4a90e2"), "the focused row carries the highlight border");
+        assertTrue(rowAfter.getStyleClass().contains("overlay-row-focused"),
+                "and the focus ring follows the caret onto it");
     }
 }
