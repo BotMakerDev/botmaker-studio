@@ -13,6 +13,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Changed
+- A value a plugin's editor hands over that Studio has no Java for is no longer dropped without a word: the
+  field keeps what it had and the status line says why. A plugin can ask itself through the contract's new
+  `ValueContext.write`.
 - Studio loads released plugins only. A plugin pinned to a dev build (`-SNAPSHOT`) is not loaded; the
   editor says so, and *Project ▸ Plugins & Libraries ▸ Installed* offers **Pin released versions**, which
   moves each one to a release through the usual checked upgrade.

@@ -154,17 +154,26 @@ public final class HostValueContext implements ValueContext {
 
     /**
      * Writes {@code value} through the grammar, or as the bot's constant holding it. A value the grammar
-     * cannot write for this form is ignored rather than written half-way: there is no expression for it, and
-     * the field keeps what it had.
+     * cannot write for this form is not written half-way: there is no expression for it, the field keeps what
+     * it had, and the status line says so.
      */
     @Override
     public void set(Object value) {
-        Object kept = clamped(value, bounds);
-        ConstantValues.write(grammar, constants, form, kept).ifPresent(tree -> {
-            held = kept;
-            written = tree;
-            if (onChange != null) onChange.accept(tree);
+        write(value).ifPresent(refused -> {
+            if (services != null) services.status(refused);
         });
+    }
+
+    /** {@link #set}, answering the sentence when nothing was written (2026-10-05). */
+    @Override
+    public Optional<String> write(Object value) {
+        Object kept = clamped(value, bounds);
+        Optional<JavaValue> tree = ConstantValues.write(grammar, constants, form, kept);
+        if (tree.isEmpty()) return Optional.of(ConstantValues.refusal(grammar, form, kept));
+        held = kept;
+        written = tree.get();
+        if (onChange != null) onChange.accept(written);
+        return Optional.empty();
     }
 
     /**

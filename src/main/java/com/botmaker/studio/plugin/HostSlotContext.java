@@ -123,7 +123,7 @@ public final class HostSlotContext implements SlotContext {
     /**
      * Writes {@code value} with every type by its simple name and the imports that needs — a bot's source is
      * a file a person reads — or as the bot's {@code @Managed} constant holding it. A value the grammar
-     * cannot write is ignored rather than written half-way.
+     * cannot write is not written half-way, and the status line says so.
      *
      * <p>One rewrite for the tree and every import. It was one rewrite per import until 2026-09-23, which was
      * harmless while an editor wrote one type; the grammar writes {@code new Rect(new Point(…), …)} with
@@ -131,9 +131,19 @@ public final class HostSlotContext implements SlotContext {
      */
     @Override
     public void set(Object value) {
-        if (slot.node() == null) return;
-        write(context, form(), value).ifPresent(written ->
-                context.getCodeEditor().replaceWithValue(slot.node(), written));
+        write(value).ifPresent(refused -> {
+            if (services != null) services.status(refused);
+        });
+    }
+
+    /** {@link #set}, answering the sentence when nothing was written (2026-10-05). */
+    @Override
+    public Optional<String> write(Object value) {
+        if (slot.node() == null) return Optional.of("This slot is no longer in the file; nothing was written.");
+        Optional<JavaValue> written = write(context, form(), value);
+        if (written.isEmpty()) return Optional.of(ConstantValues.refusal(grammar(), form(), value));
+        context.getCodeEditor().replaceWithValue(slot.node(), written.get());
+        return Optional.empty();
     }
 
     /**

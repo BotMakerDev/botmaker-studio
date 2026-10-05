@@ -50,6 +50,22 @@ public final class ConstantValues {
         return lookup(grammar, constants).spell(value).or(() -> grammar.write(form, value));
     }
 
+    /**
+     * What a context answers when {@link #write} wrote nothing for {@code value} — {@code ValueContext.write}'s
+     * refusal, and the status line {@code set} shows. The grammar answers only "no expression", so the sentence
+     * names both causes it can stand for: a value that does not fit the field's type ({@code "x"} for an
+     * {@code int}, a list holding the wrong element) and one whose class no loaded plugin writes.
+     */
+    public static String refusal(ValueGrammar grammar, Type form, Object value) {
+        if (value == null) return "There is no value to write; the field keeps what it had.";
+        Class<?> kind = value.getClass();
+        String shown = kind.getSimpleName().isEmpty() ? kind.getName() : kind.getSimpleName();
+        String field = HostValueContext.typeRef(form, grammar).displayName();
+        return "BotMaker could not write that value (" + shown + ")"
+                + (field.isBlank() ? "" : " as " + field)
+                + ": it does not fit the field, or no loaded plugin says how to write it. The field keeps what it had.";
+    }
+
     private static ManagedConstants.Lookup lookup(ValueGrammar grammar,
                                                   Supplier<List<ManagedConstants.Constant>> constants) {
         return new ManagedConstants.Lookup(constants == null ? List.of() : constants.get(), grammar);
