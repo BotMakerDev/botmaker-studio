@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
@@ -299,6 +300,7 @@ public final class PluginHost {
         ownedToolbarItems = mergeOwnedToolbarItems(bound);
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
+        runOverlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
         catalog = null;
         if (previous != null) previous.close();
@@ -575,6 +577,45 @@ public final class PluginHost {
      */
     public static List<com.botmaker.studio.project.PluginFiles.Holder> pluginFiles() {
         return pluginFiles;
+    }
+
+    /** A run overlay part with the plugin that offered it. */
+    public record OwnedPart(String pluginId, RunOverlayPart part) {}
+
+    /** Built on first ask after each bind, since listing parts loads the plugins' JavaFX classes. */
+    private static volatile List<OwnedPart> runOverlayParts;
+
+    /**
+     * Every bound plugin's part of the run overlay, in plugin order; a part whose id its plugin already used
+     * is dropped, and a plugin that cannot list its parts costs only itself.
+     */
+    public static List<OwnedPart> runOverlayParts() {
+        List<OwnedPart> parts = runOverlayParts;
+        if (parts == null) {
+            parts = mergeRunOverlayParts(plugins);
+            runOverlayParts = parts;
+        }
+        return parts;
+    }
+
+    static List<OwnedPart> mergeRunOverlayParts(List<StudioPlugin> set) {
+        List<OwnedPart> merged = new ArrayList<>();
+        for (StudioPlugin plugin : set) {
+            List<RunOverlayPart> offered;
+            try {
+                offered = plugin.runOverlayParts();
+            } catch (RuntimeException | LinkageError e) {
+                // Includes a plugin built against a contract without this method: it simply draws nothing.
+                System.err.println("Warning: " + plugin.id() + " could not offer run overlay parts: " + e);
+                continue;
+            }
+            if (offered == null) continue;
+            Set<String> ids = new LinkedHashSet<>();
+            for (RunOverlayPart part : offered) {
+                if (part != null && ids.add(part.id())) merged.add(new OwnedPart(plugin.id(), part));
+            }
+        }
+        return List.copyOf(merged);
     }
 
     /** Every plugin's entries, a throwing or malformed one costing only itself. */

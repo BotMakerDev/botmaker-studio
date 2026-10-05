@@ -57,6 +57,7 @@ public final class HostRuns implements Runs {
     private final List<Consumer<TraceLine>> traceListeners = new CopyOnWriteArrayList<>();
 
     private volatile boolean running;
+    private volatile boolean paused;
 
     private HostRuns(EventBus eventBus, CodeExecutionService execution, ProjectSettingsService settings) {
         this.eventBus = eventBus;
@@ -119,6 +120,50 @@ public final class HostRuns implements Runs {
         return execution.runningBotPid();
     }
 
+    /**
+     * A run's process is frozen with {@code SIGSTOP} and thawed with {@code SIGCONT}, so only where there are
+     * signals, and only for a plain run: a debug session already pauses through its debugger. Stopping a paused
+     * run needs no thaw first, since Stop kills the process outright.
+     */
+    @Override
+    public boolean canPause() {
+        return running && PAUSABLE && pid().isPresent();
+    }
+
+    @Override
+    public void pause() {
+        if (!paused && canPause() && signal("-STOP")) paused = true;
+    }
+
+    @Override
+    public void resume() {
+        if (paused && signal("-CONT")) paused = false;
+    }
+
+    @Override
+    public boolean isPaused() {
+        return paused;
+    }
+
+    /** Whether this OS has the signals {@link #pause} sends. */
+    private static final boolean PAUSABLE = !System.getProperty("os.name", "").toLowerCase().startsWith("win");
+
+    /** Sends {@code signal} to the bot's process; false when there is none or {@code kill} failed. */
+    private boolean signal(String signal) {
+        OptionalLong pid = pid();
+        if (pid.isEmpty()) return false;
+        try {
+            Process kill = new ProcessBuilder("kill", signal, Long.toString(pid.getAsLong()))
+                    .redirectErrorStream(true).start();
+            return kill.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) && kill.exitValue() == 0;
+        } catch (java.io.IOException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     /** This checkout's run property {@code name}, kept in {@code .botmaker/settings.json}; null when unset. */
     @Override
     public String property(String name) {
@@ -160,6 +205,7 @@ public final class HostRuns implements Runs {
 
     private void fireState(boolean nowRunning) {
         running = nowRunning;
+        paused = false;
         for (Consumer<Boolean> listener : stateListeners) {
             deliver(() -> listener.accept(nowRunning));
         }

@@ -10,6 +10,7 @@ import com.botmaker.studio.ui.render.theme.BlockStyle;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.BlockFontPreference;
+import com.botmaker.studio.ui.app.run.RunOverlayPreference;
 import com.botmaker.studio.ui.app.vars.NamingPreference;
 import javafx.scene.control.CheckMenuItem;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
@@ -402,6 +403,7 @@ public class MenuBarManager {
                 blockFontMenu(),
                 askForNamesItem(),
                 new SeparatorMenuItem(),
+                runOverlayItem(),
                 stopKeyItem()
         );
 
@@ -504,6 +506,13 @@ public class MenuBarManager {
         menu.setOnShowing(e -> rebuild.run());
         rebuild.run();
         return menu;
+    }
+
+    /** View ▸ Show Run Overlay — see {@link RunOverlayPreference}. */
+    private static CheckMenuItem runOverlayItem() {
+        CheckMenuItem item = new CheckMenuItem("Show Run Overlay");
+        item.selectedProperty().bindBidirectional(RunOverlayPreference.shownProperty());
+        return item;
     }
 
     /** View ▸ Ask for Names When Inserting — see {@link NamingPreference}. */

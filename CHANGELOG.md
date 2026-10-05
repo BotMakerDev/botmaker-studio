@@ -16,6 +16,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.
+- **A run overlay: a small window over the desktop while the bot runs.** It stops, pauses, resumes and runs
+  the bot again, and shows the trace's last three lines. Drag it anywhere; it opens there next time. ✕ hides it
+  until the next run, and View ▸ Show Run Overlay turns it off. Pause works for a plain run on Linux and
+  macOS; a debug session pauses through its debugger. A plugin can add its own part: a line in the bar, or
+  marks drawn over the desktop that let every click through. Studio shows those marks only where it can make
+  the window click-through (X11 and Xwayland), and draws nothing of its own there.
 
 ## [1.3.0] — 2026-10-05
 
