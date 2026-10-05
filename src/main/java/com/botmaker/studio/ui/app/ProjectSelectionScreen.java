@@ -516,7 +516,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
 
         // The starting point: a published bot tagged `template` in the gallery. The list opens on the templates
         // the gallery listed last time and is refreshed in the background — see loadTemplates. Studio's own
-        // Blank is the row only when the gallery answered with no template and none is remembered.
+        // Blank is the row only when the gallery answered with no template or cannot be reached.
         List<TemplateChoice> initial = StartingPoints.rows(
                 GalleryEntry.templates(StartingPoints.remembered(gitHubClient.mapper()), false),
                 StartingPoints.Fetch.PENDING);
@@ -529,6 +529,14 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 return t == null ? "" : t.label();
             }
             @Override public TemplateChoice fromString(String s) { return null; }
+        });
+        // Its own button cell: the default one shows no prompt once a value has been cleared, and fillTemplates
+        // clears it to say a picked template left the gallery.
+        templateCombo.setButtonCell(new ListCell<>() {
+            @Override protected void updateItem(TemplateChoice t, boolean empty) {
+                super.updateItem(t, empty);
+                setText(empty || t == null ? templateCombo.getPromptText() : t.label());
+            }
         });
         // Vetted templates only, until asked. A template is somebody's project you start from and build, so
         // New Project leads with the ones a maintainer looked at. The toggle stays hidden until the gallery has
@@ -554,7 +562,11 @@ public class ProjectSelectionScreen implements ProjectWindow {
             TemplateChoice now = templateCombo.getValue();
             boolean blank = now == null || now.isBlank();
             boolean extra = plugins[0] != null && !plugins[0].picked().isEmpty();
-            if (now != null && !now.isCreatable()) {
+            if (now == null) {
+                startNote.setText("");
+                return;
+            }
+            if (!now.isCreatable()) {
                 startNote.setText("Asking the gallery for its templates…");
                 return;
             }
@@ -624,26 +636,25 @@ public class ProjectSelectionScreen implements ProjectWindow {
      * Puts the gallery's fresh templates into {@code combo}, off the FX thread, and remembers them for the next
      * open ({@link StartingPoints}).
      *
-     * <p>Blank is not listed beside fresh templates: {@code botmaker-base} is what Blank used to be, so both
-     * would offer the same thing under two names. It joins the remembered ones only when the gallery cannot be
-     * reached, since a template downloads at creation — New Project has to work on a plane, which is the only
-     * reason Studio composes a starting project at all ({@code project/StarterSources}).
+     * <p>Blank is never listed beside templates: {@code botmaker-base} is what Blank used to be, so both would
+     * offer the same thing under two names. It is the row when the gallery cannot be reached — the remembered
+     * templates go then, since nothing confirms them and each downloads at creation. New Project has to work
+     * on a plane, which is the only reason Studio composes a starting project at all
+     * ({@code project/StarterSources}).
      *
      * <p>Vetted first and then by name ({@link GalleryEntry#templates}), so the default is the same row on
      * every launch. Community templates join only while {@code showCommunity} is ticked, and the toggle is
      * revealed only when there is one.
      *
-     * <p>Failure is silent on purpose: the remembered list stays with Blank after it. An error
+     * <p>Failure is silent on purpose: Blank replaces the rows. An error
      * dialog in front of a working New Project dialog would be the network's problem presented as the user's.
      */
     private void loadTemplates(ComboBox<TemplateChoice> combo, CheckBox showCommunity) {
-        List<GalleryEntry> remembered = StartingPoints.remembered(gitHubClient.mapper());
         new GitHubGallery(gitHubClient, gitHubAuth).browse()
                 .exceptionally(error -> List.of())
-                .thenAccept(fresh -> Platform.runLater(() -> {
-                    boolean answered = fresh.stream().anyMatch(GalleryEntry::isTemplate);
-                    if (answered) StartingPoints.remember(gitHubClient.mapper(), fresh);
-                    List<GalleryEntry> entries = answered ? fresh : remembered;
+                .thenAccept(entries -> Platform.runLater(() -> {
+                    boolean answered = entries.stream().anyMatch(GalleryEntry::isTemplate);
+                    if (answered) StartingPoints.remember(gitHubClient.mapper(), entries);
                     boolean anyCommunity = entries.stream().anyMatch(e -> e.isTemplate() && !e.isVetted());
                     showCommunity.setVisible(anyCommunity);
                     showCommunity.setManaged(anyCommunity);
@@ -659,11 +670,16 @@ public class ProjectSelectionScreen implements ProjectWindow {
     /**
      * Replaces the combo's rows with {@code rows}, keeping the current choice when it is still offered.
      *
-     * <p>The value is set before the old rows go: dropping the selected item would leave the value null for a
-     * moment, and every listener on it would see a dialog with nothing chosen.
+     * <p>A template the gallery no longer lists is not swapped for another one silently: the choice is
+     * cleared, the prompt says why, and Create waits for a new pick. Otherwise the value is set before the old
+     * rows go, so no listener sees a dialog with nothing chosen.
      */
     private static void fillTemplates(ComboBox<TemplateChoice> combo, List<TemplateChoice> rows) {
-        TemplateChoice keep = StartingPoints.same(rows, combo.getValue()).orElse(rows.getFirst());
+        TemplateChoice was = combo.getValue();
+        Optional<TemplateChoice> same = StartingPoints.same(rows, was);
+        boolean dropped = same.isEmpty() && was != null && was.entry() != null;
+        TemplateChoice keep = dropped ? null : same.orElse(rows.getFirst());
+        if (dropped) combo.setPromptText(was.displayName() + " is no longer listed — pick where to start");
         combo.getItems().addAll(rows.stream().filter(r -> !combo.getItems().contains(r)).toList());
         combo.setValue(keep);
         combo.getItems().retainAll(rows);

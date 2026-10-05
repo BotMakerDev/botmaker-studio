@@ -12,6 +12,7 @@ import javafx.scene.control.ListView;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
  *
  * <p>The chosen template's own plugins are ticked and locked, read off its gallery entry's {@code requires}: its
  * code may call them, and creation offers no version choice, so there is nothing to decide about them. What
- * this hands back is only the user's extra ticks. Offline the list is empty with a sentence, and creating still
+ * this hands back is only the user's extra ticks. Each row names the version the project gets ({@link #label}). Offline the list is empty with a sentence, and creating still
  * works — a plugin is one visit to Plugins &amp; Libraries away afterwards.
  */
 final class NewProjectPlugins {
@@ -29,7 +30,7 @@ final class NewProjectPlugins {
     private final ListView<PluginRegistry.Plugin> list = new ListView<>();
     private final Set<PluginRegistry.Plugin> ticked = new LinkedHashSet<>();
     private final Runnable onChange;
-    private Set<String> locked = Set.of();
+    private Map<String, GalleryEntry.Requirement> locked = Map.of();
 
     NewProjectPlugins(PluginCatalog catalog, Runnable onChange) {
         this.onChange = onChange;
@@ -51,20 +52,38 @@ final class NewProjectPlugins {
 
     /** Re-marks the rows for {@code entry}, or for Studio's own blank project when it is null. */
     void lockFor(GalleryEntry entry) {
-        locked = lockedIds(entry);
+        locked = lockedRequirements(entry);
         list.refresh();
         onChange.run();
     }
 
     /** The user's ticks, the template's own plugins left out. */
     List<PluginRegistry.Plugin> picked() {
-        return ticked.stream().filter(p -> !locked.contains(p.id())).toList();
+        return ticked.stream().filter(p -> !locked.containsKey(p.id())).toList();
     }
 
-    /** The registry ids {@code entry} declares, which are its rows to lock. Pure. */
-    static Set<String> lockedIds(GalleryEntry entry) {
-        if (entry == null) return Set.of();
-        return entry.requires().stream().map(GalleryEntry.Requirement::id).collect(Collectors.toUnmodifiableSet());
+    /** What {@code entry} declares, by registry id: its rows to lock, with the version its pom pins. Pure. */
+    static Map<String, GalleryEntry.Requirement> lockedRequirements(GalleryEntry entry) {
+        if (entry == null) return Map.of();
+        return entry.requires().stream().collect(Collectors.toUnmodifiableMap(
+                GalleryEntry.Requirement::id, r -> r, (first, again) -> first));
+    }
+
+    /**
+     * A row's text: the plugin's name and the version the project gets — the template's pin for its own
+     * plugins, the registry's verified version for the rest. A version nobody pinned is left out: an
+     * unverified plugin resolves its newest release only at creation.
+     */
+    static String label(PluginRegistry.Plugin plugin, GalleryEntry.Requirement own) {
+        String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
+        String version = own != null ? own.version() : plugin.verifiedVersion();
+        String named = version.isBlank() ? name : name + "  " + displayVersion(version);
+        return own != null ? named + "  — comes with the template" : named;
+    }
+
+    /** {@code 1.2.3} and {@code v1.2.3} both read {@code v1.2.3}; anything else as written. */
+    private static String displayVersion(String version) {
+        return Character.isDigit(version.charAt(0)) ? "v" + version : version;
     }
 
     private final class Row extends ListCell<PluginRegistry.Plugin> {
@@ -76,9 +95,9 @@ final class NewProjectPlugins {
                 setGraphic(null);
                 return;
             }
-            boolean own = locked.contains(plugin.id());
-            String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
-            CheckBox box = new CheckBox(own ? name + "  — comes with the template" : name);
+            GalleryEntry.Requirement requirement = locked.get(plugin.id());
+            boolean own = requirement != null;
+            CheckBox box = new CheckBox(label(plugin, requirement));
             box.setSelected(own || ticked.contains(plugin));
             box.setDisable(own);
             box.setOnAction(e -> {

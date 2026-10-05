@@ -31,12 +31,14 @@ class StartingPointsTest {
         return rows.stream().map(TemplateChoice::kind).toList();
     }
 
+    /** Shown at once, and never created from: the gallery may since have delisted one or changed its release. */
     @Test
-    void rememberedTemplatesAreTheFirstRows() {
+    void rememberedTemplatesAreTheFirstRowsButWaitForTheGallery() {
         List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base"), template("gamebot")), Fetch.PENDING);
 
-        assertEquals(List.of(Kind.TEMPLATE, Kind.TEMPLATE), kinds(rows));
-        assertTrue(rows.getFirst().isCreatable());
+        assertEquals(List.of(Kind.REMEMBERED, Kind.REMEMBERED), kinds(rows));
+        assertEquals("Base — A base bot.  (LiQiyeDev)", rows.getFirst().label());
+        assertFalse(rows.getFirst().isCreatable());
     }
 
     @Test
@@ -48,28 +50,31 @@ class StartingPointsTest {
     }
 
     @Test
-    void freshTemplatesNeverListBlank() {
-        assertEquals(List.of(Kind.TEMPLATE), kinds(StartingPoints.rows(List.of(template("base")), Fetch.ANSWERED)));
+    void freshTemplatesAreCreatableAndNeverListBlank() {
+        List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base")), Fetch.ANSWERED);
+
+        assertEquals(List.of(Kind.TEMPLATE), kinds(rows));
+        assertTrue(rows.getFirst().isCreatable());
         assertEquals(List.of(TemplateChoice.BLANK), StartingPoints.rows(List.of(), Fetch.ANSWERED));
     }
 
-    /** A remembered template still downloads at creation, so offline Blank is the row that can be created. */
+    /** Nothing confirms a remembered entry offline, and it downloads at creation anyway. */
     @Test
-    void anUnreachableGalleryAddsBlankAfterTheRememberedTemplates() {
-        assertEquals(List.of(Kind.TEMPLATE, Kind.BLANK), kinds(StartingPoints.rows(List.of(template("base")),
-                Fetch.FAILED)));
-        assertEquals(List.of(TemplateChoice.BLANK), StartingPoints.rows(List.of(), Fetch.FAILED));
+    void anUnreachableGalleryLeavesBlankAlone() {
+        assertEquals(List.of(TemplateChoice.BLANK), StartingPoints.rows(List.of(template("base")), Fetch.FAILED));
+        assertTrue(TemplateChoice.BLANK.isCreatable());
     }
 
-    /** A refreshed entry (a new vetted release) is still the row the user picked. */
+    /** A remembered row picked while loading is still picked once the gallery lists it, changed or not. */
     @Test
     void thePickedTemplateSurvivesARefreshThatChangedIt() {
         GalleryEntry picked = template("gamebot");
         GalleryEntry refreshed = new GalleryEntry(picked.name(), picked.owner(), picked.repo(), "Newer words.",
                 picked.tags(), picked.launchTargets(), picked.tier(), "v2.0.0", picked.requires());
+        TemplateChoice remembered = StartingPoints.rows(List.of(picked), Fetch.PENDING).getFirst();
         List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base"), refreshed), Fetch.ANSWERED);
 
-        assertEquals(Optional.of(TemplateChoice.of(refreshed)), StartingPoints.same(rows, TemplateChoice.of(picked)));
+        assertEquals(Optional.of(TemplateChoice.of(refreshed)), StartingPoints.same(rows, remembered));
         assertEquals(Optional.empty(), StartingPoints.same(rows, TemplateChoice.LOADING));
     }
 

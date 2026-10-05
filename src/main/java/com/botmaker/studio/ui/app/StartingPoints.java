@@ -4,7 +4,6 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -14,9 +13,10 @@ import java.util.prefs.Preferences;
  * New Project's "Start from" rows, and the template list it remembers between opens.
  *
  * <p>The dialog opens on the templates the gallery listed last time, so it starts where it will end up; the
- * fresh list replaces them when it lands. With nothing remembered it says it is loading rather than offering
- * Blank, which a user would otherwise pick before the templates arrive. Blank joins only once the fetch failed
- * or answered with no template — New Project still works offline.
+ * fresh list replaces them when it lands, and only a fresh row is created from. With nothing remembered it
+ * says it is loading rather than offering Blank, which a user would otherwise pick before the templates
+ * arrive. Blank is the row once the fetch failed or answered with no template — New Project still works
+ * offline.
  */
 final class StartingPoints {
 
@@ -28,6 +28,8 @@ final class StartingPoints {
     /** What a row of "Start from" is. */
     enum Kind {
         TEMPLATE("template", null),
+        /** A template from the remembered list, shown until the gallery confirms it; never created from. */
+        REMEMBERED("remembered", null),
         BLANK("blank", "Blank — a main() and nothing else"),
         LOADING("loading", "Loading templates…");
 
@@ -66,13 +68,16 @@ final class StartingPoints {
             return kind == Kind.BLANK;
         }
 
-        /** Whether this row can be created from: not the placeholder shown while the list loads. */
+        /**
+         * Whether this row can be created from: a blank project or a template the gallery listed just now. A
+         * remembered entry may since have been delisted or lost its vetted release, so it is never installed.
+         */
         boolean isCreatable() {
-            return kind != Kind.LOADING;
+            return kind == Kind.TEMPLATE || kind == Kind.BLANK;
         }
 
         String label() {
-            if (kind != Kind.TEMPLATE) return kind.displayName();
+            if (entry == null) return kind.displayName();
             String description = entry.description().isBlank() ? "" : " — " + entry.description();
             String tier = entry.isVetted() ? "" : " · Community";
             return displayName() + description + "  (" + entry.owner() + tier + ")";
@@ -115,23 +120,30 @@ final class StartingPoints {
     }
 
     /**
-     * The rows for {@code templates} (already ordered by {@link GalleryEntry#templates}). While the fetch is
-     * pending: the templates, or the loading row. Once it failed, Blank joins them last: a remembered template
-     * still downloads at creation, so offline it is the one row that can be created.
+     * The rows for {@code templates} (already ordered by {@link GalleryEntry#templates}). Pending: the
+     * remembered templates, shown and not creatable, or the loading row. Answered: the fresh templates, or
+     * Blank with none. Failed: Blank alone — nothing confirms a remembered entry, and it downloads at creation.
      */
     static List<TemplateChoice> rows(List<GalleryEntry> templates, Fetch fetch) {
-        List<TemplateChoice> rows = new ArrayList<>(templates.stream().map(TemplateChoice::of).toList());
-        if (fetch == Fetch.FAILED || (rows.isEmpty() && fetch == Fetch.ANSWERED)) rows.add(TemplateChoice.BLANK);
-        if (rows.isEmpty()) rows.add(TemplateChoice.LOADING);
-        return List.copyOf(rows);
+        return switch (fetch) {
+            case PENDING -> templates.isEmpty() ? List.of(TemplateChoice.LOADING)
+                    : templates.stream().map(e -> new TemplateChoice(Kind.REMEMBERED, e)).toList();
+            case ANSWERED -> templates.isEmpty() ? List.of(TemplateChoice.BLANK)
+                    : templates.stream().map(TemplateChoice::of).toList();
+            case FAILED -> List.of(TemplateChoice.BLANK);
+        };
     }
 
-    /** The row in {@code rows} that is {@code choice}, matched by repository so a refreshed entry still counts. */
+    /**
+     * The row in {@code rows} that is {@code choice}: the same repository — so a picked remembered row is
+     * still picked once the gallery confirms it — or the same kind of row without an entry.
+     */
     static Optional<TemplateChoice> same(List<TemplateChoice> rows, TemplateChoice choice) {
         if (choice == null) return Optional.empty();
         return rows.stream()
-                .filter(r -> r.kind() == choice.kind()
-                        && (r.entry() == null || r.entry().slug().equalsIgnoreCase(choice.entry().slug())))
+                .filter(r -> r.entry() == null || choice.entry() == null
+                        ? r.kind() == choice.kind()
+                        : r.entry().slug().equalsIgnoreCase(choice.entry().slug()))
                 .findFirst();
     }
 
