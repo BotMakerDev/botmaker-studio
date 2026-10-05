@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.3.0] — 2026-10-05
 
 ### Changed
 - New Project opens on the templates, not on Blank: it shows the gallery's last list at once, and Create
