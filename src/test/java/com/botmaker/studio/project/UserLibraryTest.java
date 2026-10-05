@@ -82,12 +82,12 @@ public class UserLibraryTest {
     /** The record is the whole of a user library: three coordinates, no separate store file. */
     @Test
     void aUserLibraryIsItsMavenCoordinate() {
-        UserLibrary lib = new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "1.0.7");
+        UserLibrary lib = new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.0.7");
 
-        assertEquals("com.github.LiQiyeDev", lib.groupId());
+        assertEquals("com.github.BotMakerDev", lib.groupId());
         assertEquals("botmaker-sdk", lib.artifactId());
         assertEquals("1.0.7", lib.version());
-        assertEquals(lib, new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "1.0.7"),
+        assertEquals(lib, new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.0.7"),
                 "value identity — the pom is the source of truth and these are compared by content");
     }
 }

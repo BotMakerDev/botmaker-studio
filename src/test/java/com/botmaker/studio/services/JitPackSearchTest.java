@@ -12,7 +12,7 @@ class JitPackSearchTest {
     private static final String METADATA = """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <metadata modelVersion="1.0.0">
-                <groupId>com.github.LiQiyeDev</groupId>
+                <groupId>com.github.BotMakerDev</groupId>
                 <artifactId>BotMaker-sdk</artifactId>
                 <versioning>
                     <release>1.0.6</release>

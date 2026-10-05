@@ -95,7 +95,7 @@ class TwoPluginCollisionTest {
         Path sdk = jarOf(tmp, SDK_PKG, "sdk", sdkJar(), Map.of());
         Path other = jarOf(tmp, OTHER_PKG, "other", otherJar(), Map.of());
         return InstalledPlugin.ambiguousTypeNames(Map.of(
-                "com.github.LiQiyeDev:botmaker-sdk", ApiModel.snapshot(sdk).keySet(),
+                "com.github.BotMakerDev:botmaker-sdk", ApiModel.snapshot(sdk).keySet(),
                 "com.example:shapes", ApiModel.snapshot(other).keySet()));
     }
 

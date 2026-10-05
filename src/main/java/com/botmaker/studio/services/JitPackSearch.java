@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 
 /**
  * Queries JitPack for the versions of a GitHub-hosted artifact (notably the BotMaker SDK,
- * {@code com.github.LiQiyeDev:BotMaker-sdk}). JitPack builds artifacts on demand from git tags and
+ * {@code com.github.BotMakerDev:BotMaker-sdk}). JitPack builds artifacts on demand from git tags and
  * exposes a standard Maven {@code maven-metadata.xml}; there is no Solr-style fuzzy search (that is why the
  * Maven Central search cannot find {@code com.github.*} coordinates), so this only resolves versions for a
  * known {@code groupId:artifactId}.

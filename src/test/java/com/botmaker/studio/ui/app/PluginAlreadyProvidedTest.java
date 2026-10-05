@@ -28,12 +28,12 @@ class PluginAlreadyProvidedTest {
     }
 
     private static final PluginRegistry.Plugin BASICS =
-            entry("com.botmaker.basics", "Basics", "com.github.LiQiyeDev:botmaker-plugin-basics");
+            entry("com.botmaker.basics", "Basics", "com.github.BotMakerDev:botmaker-plugin-basics");
 
     @Test
     void aPluginAnotherPluginBringsIsRefusedWithTheReason() {
         String refusal = BrowsePluginsTab.alreadyProvided(BASICS,
-                List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "1.1.12")),
+                List.of(new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.1.12")),
                 List.of("com.botmaker.sdk", "com.botmaker.basics"));
 
         assertTrue(refusal.contains("Basics"), refusal);
@@ -44,7 +44,7 @@ class PluginAlreadyProvidedTest {
     @Test
     void aPluginThePomAlreadyDeclaresIsNeverRefused() {
         assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS,
-                List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-plugin-basics", "0.0.5")),
+                List.of(new UserLibrary("com.github.BotMakerDev", "botmaker-plugin-basics", "0.0.5")),
                 List.of("com.botmaker.sdk", "com.botmaker.basics")),
                 "re-installing is idempotent by coordinate and must stay possible");
     }

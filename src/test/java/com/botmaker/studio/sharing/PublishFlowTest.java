@@ -99,11 +99,11 @@ class PublishFlowTest {
     @Test
     void requiresNamesRegistryPluginsWithTheirInterpolatedVersion() {
         List<UserLibrary> declared = List.of(
-                new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "${botmaker.sdk.version}"),
+                new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "${botmaker.sdk.version}"),
                 new UserLibrary("org.junit.jupiter", "junit-jupiter", "5.10.0"),
                 new UserLibrary("com.example", "unregistered-plugin", "1.0"));
         List<PluginRegistry.Plugin> registry = List.of(new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
-                "com.github.LiQiyeDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.1.6", ""));
+                "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.1.6", ""));
 
         assertEquals(List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.1.6")),
                 PublishRequest.requires(declared, Map.of("botmaker.sdk.version", "1.1.6"), registry));
@@ -182,16 +182,16 @@ class PublishFlowTest {
     @Test
     void aSnapshotOrAnUndefinedPropertyIsAnUnreleasedPin() {
         List<UserLibrary> declared = List.of(
-                new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "${botmaker.sdk.version}"),
-                new UserLibrary("com.github.LiQiyeDev", "botmaker-studio-api", "0.0.0-SNAPSHOT"),
+                new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "${botmaker.sdk.version}"),
+                new UserLibrary("com.github.BotMakerDev", "botmaker-studio-api", "0.0.0-SNAPSHOT"),
                 new UserLibrary("org.example", "mine", "${nobody.defines.this}"),
                 new UserLibrary("org.junit.jupiter", "junit-jupiter", "5.9.3"),
                 new UserLibrary("org.example", "managed", ""));
 
-        assertEquals(List.of("com.github.LiQiyeDev:botmaker-studio-api:0.0.0-SNAPSHOT",
+        assertEquals(List.of("com.github.BotMakerDev:botmaker-studio-api:0.0.0-SNAPSHOT",
                         "org.example:mine:${nobody.defines.this}"),
                 PublishRequest.unreleasedPins(declared, Map.of("botmaker.sdk.version", "1.2.3")));
-        assertEquals(List.of("com.github.LiQiyeDev:botmaker-sdk:1.2-snapshot"),
+        assertEquals(List.of("com.github.BotMakerDev:botmaker-sdk:1.2-snapshot"),
                 PublishRequest.unreleasedPins(declared.subList(0, 1), Map.of("botmaker.sdk.version", "1.2-snapshot")));
     }
 

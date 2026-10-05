@@ -71,7 +71,7 @@ public final class MavenService {
     }
 
     /** Maven coordinate of the BotMaker SDK (published from GitHub tags via JitPack). */
-    public static final String SDK_GROUP_ID = "com.github.LiQiyeDev";
+    public static final String SDK_GROUP_ID = "com.github.BotMakerDev";
     public static final String SDK_ARTIFACT_ID = "botmaker-sdk";
     /**
      * Version used for the SDK when none is supplied / JitPack is unreachable.
@@ -239,7 +239,9 @@ public final class MavenService {
             // entry outranked it by nearest-wins; JavaFX is parent-first in PluginLoader, so the host's own
             // is what every plugin links. Left in an existing pom they are harmless — an unused provided
             // dependency — and taking them out is Manage Libraries' business, not a rewrite's.
+            // The old groupId is the one every such pom actually names: the coordinate moved on 2026-10-05.
             "com.github.LiQiyeDev:botmaker-plugin-toolkit",
+            "com.github.BotMakerDev:botmaker-plugin-toolkit",
             "org.openjfx:javafx-controls",
             "org.openjfx:javafx-graphics");
 

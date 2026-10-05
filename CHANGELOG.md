@@ -24,6 +24,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the window click-through (X11 and Xwayland), and draws nothing of its own there.
 
 ### Changed
+- **Plugins and the SDK are `com.github.BotMakerDev` now** (were `com.github.LiQiyeDev`): a new project, an
+  installed plugin and the contract entry Studio declares all name the new groupId, and the plugin search
+  looks there. A project whose pom still names `com.github.LiQiyeDev` is not migrated: it keeps resolving
+  its old tags, but Studio no longer recognises those entries as its SDK or contract.
 - **A Review row is a menu.** Click one to go to it, mark it reviewed, remove the mark, undo the change (the
   function comes back as the newest version without the mark had it, with the imports it used), or rename or
   delete the function — the same rename and delete as its header's, refusals included. The *Mark Reviewed*

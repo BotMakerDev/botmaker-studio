@@ -24,9 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InstalledPluginTest {
 
     private static final UserLibrary SDK =
-            new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "1.1.5");
+            new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.1.5");
     private static final UserLibrary BASICS =
-            new UserLibrary("com.github.LiQiyeDev", "botmaker-plugin-basics", "0.1.0");
+            new UserLibrary("com.github.BotMakerDev", "botmaker-plugin-basics", "0.1.0");
     private static final UserLibrary JACKSON =
             new UserLibrary("com.fasterxml.jackson.core", "jackson-databind", "2.17.0");
 
@@ -40,7 +40,7 @@ class InstalledPluginTest {
     void aDependencyTheRegistryListsIsARegistryRowAtItsVerifiedVersion() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK),
-                List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
+                List.of(entry("com.github.BotMakerDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
                 lib -> false);
 
         assertEquals(1, rows.size());
@@ -58,10 +58,10 @@ class InstalledPluginTest {
     void aDependencyNothingAccountsForIsNoRowAtAll() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK, JACKSON),
-                List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
+                List.of(entry("com.github.BotMakerDev:botmaker-sdk", "BotMaker SDK", "1.1.6", List.of())),
                 lib -> false);
 
-        assertEquals(List.of("com.github.LiQiyeDev:botmaker-sdk"),
+        assertEquals(List.of("com.github.BotMakerDev:botmaker-sdk"),
                 rows.stream().map(InstalledPlugin::coordinate).toList(),
                 "an ordinary library is not a plugin and must not be offered an upgrade here");
     }
@@ -86,8 +86,8 @@ class InstalledPluginTest {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(BASICS, SDK), List.of(), lib -> true);
 
-        assertEquals(List.of("com.github.LiQiyeDev:botmaker-plugin-basics",
-                        "com.github.LiQiyeDev:botmaker-sdk"),
+        assertEquals(List.of("com.github.BotMakerDev:botmaker-plugin-basics",
+                        "com.github.BotMakerDev:botmaker-sdk"),
                 rows.stream().map(InstalledPlugin::coordinate).toList());
     }
 
@@ -98,7 +98,7 @@ class InstalledPluginTest {
     @Test
     void aSimpleNameTwoPluginsBothDeclareIsAmbiguousAndOneOnlyOneDeclaresIsNot() {
         Set<String> clashing = InstalledPlugin.ambiguousTypeNames(Map.of(
-                "com.github.LiQiyeDev:botmaker-sdk", Set.of("Mouse", "Point", "Wait"),
+                "com.github.BotMakerDev:botmaker-sdk", Set.of("Mouse", "Point", "Wait"),
                 "com.example:shapes", Set.of("Point", "Rect")));
 
         assertEquals(Set.of("Point"), clashing);
@@ -107,7 +107,7 @@ class InstalledPluginTest {
     @Test
     void oneJarOnItsOwnMakesNothingAmbiguous() {
         assertTrue(InstalledPlugin.ambiguousTypeNames(Map.of(
-                "com.github.LiQiyeDev:botmaker-sdk", Set.of("Mouse", "Point"))).isEmpty(),
+                "com.github.BotMakerDev:botmaker-sdk", Set.of("Mouse", "Point"))).isEmpty(),
                 "a name is only ambiguous against another plugin, never against itself");
     }
 }

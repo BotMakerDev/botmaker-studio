@@ -17,7 +17,7 @@
         <javafx.version>25.0.4</javafx.version>
         <!-- botmaker-shared version. Default 0.0.0-SNAPSHOT resolves the sibling module in the umbrella
              reactor; the umbrella release.sh bumps this to the released shared tag so a JitPack/standalone
-             build resolves com.github.LiQiyeDev:botmaker-shared:<tag>. -->
+             build resolves com.github.BotMakerDev:botmaker-shared:<tag>. -->
         <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
         <!-- botmaker-session version. Same contract as botmaker.shared.version above. -->
         <botmaker.session.version>0.0.0-SNAPSHOT</botmaker.session.version>
@@ -104,10 +104,10 @@
     <dependencies>
         <!-- Shared cross-platform native window plumbing (enumerate / capture / focus).
              Editor-time window capture only.
-             com.github.LiQiyeDev coordinate + version property so it resolves from the umbrella reactor
+             com.github.BotMakerDev coordinate + version property so it resolves from the umbrella reactor
              locally and from JitPack when published (see the property comment above). -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-shared</artifactId>
             <version>${botmaker.shared.version}</version>
         </dependency>
@@ -115,7 +115,7 @@
         <!-- Private display sessions (com.botmaker.session.*): the background launcher and the BotPilot
              services drive a nested :N display. A sibling library over shared, not part of the SDK. -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-session</artifactId>
             <version>${botmaker.session.version}</version>
         </dependency>
@@ -145,7 +145,7 @@
              Compile scope, not optional — unlike in the SDK, these types are on Studio's own execution path.
              See ../docs/refactor/24-plugin-platform.md. -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-studio-api</artifactId>
             <version>${botmaker.studioapi.version}</version>
         </dependency>
@@ -156,7 +156,7 @@
              It declares botmaker-studio-api as `provided` on purpose — a contract class must be ONE Class
              object on both sides of the plugin boundary, so the contract above is the only copy. -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-plugin-host</artifactId>
             <version>${botmaker.pluginhost.version}</version>
         </dependency>

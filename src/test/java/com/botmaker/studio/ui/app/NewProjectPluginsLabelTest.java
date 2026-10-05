@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class NewProjectPluginsLabelTest {
 
     private static PluginRegistry.Plugin plugin(String id, String name, String verified) {
-        return new PluginRegistry.Plugin(id, name, "com.github.LiQiyeDev:" + id, "LiQiyeDev/" + id, "", null,
+        return new PluginRegistry.Plugin(id, name, "com.github.BotMakerDev:" + id, "LiQiyeDev/" + id, "", null,
                 null, null, verified, null);
     }
 

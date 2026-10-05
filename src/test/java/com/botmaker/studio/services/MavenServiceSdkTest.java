@@ -204,7 +204,7 @@ class MavenServiceSdkTest {
         // own pom, so it arrives transitively — and a direct entry here would BEAT it by nearest-wins,
         // pinning the bot to a toolkit its SDK was never built against. JavaFX is parent-first in
         // PluginLoader, so the host's own is what the plugin links whatever this pom says.
-        for (String gone : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+        for (String gone : List.of("com.github.BotMakerDev:botmaker-plugin-toolkit",
                 "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics")) {
             assertFalse(after.contains(gone), gone + " must not be declared by an install");
         }
@@ -366,7 +366,7 @@ class MavenServiceSdkTest {
                 "net.java.dev.jna:jna", "org.junit.jupiter:junit-jupiter")) {
             assertTrue(declared.contains(named), named + " is missing from a bot pom");
         }
-        for (String absent : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+        for (String absent : List.of("com.github.BotMakerDev:botmaker-plugin-toolkit",
                 "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics",
                 "io.javalin:javalin", "com.google.zxing:core")) {
             assertFalse(declared.contains(absent), absent + " must not be written into a bot pom");
@@ -392,7 +392,7 @@ class MavenServiceSdkTest {
         // The shape every project created before 2026-09-06 has on disk.
         Model model = readModel(projectDir);
         for (String[] retired : new String[][] {
-                {"com.github.LiQiyeDev", "botmaker-plugin-toolkit", "0.0.5"},
+                {"com.github.BotMakerDev", "botmaker-plugin-toolkit", "0.0.5"},
                 {"org.openjfx", "javafx-controls", "21"},
                 {"org.openjfx", "javafx-graphics", "21"}}) {
             Dependency dependency = new Dependency();
@@ -411,7 +411,7 @@ class MavenServiceSdkTest {
         MavenService.writeUserLibraries(projectDir,
                 List.of(new UserLibrary("com.example", "widget", "2.3.4")));
         List<String> after = groupArtifacts(projectDir);
-        for (String kept : List.of("com.github.LiQiyeDev:botmaker-plugin-toolkit",
+        for (String kept : List.of("com.github.BotMakerDev:botmaker-plugin-toolkit",
                 "org.openjfx:javafx-controls", "org.openjfx:javafx-graphics")) {
             assertTrue(after.contains(kept), kept + " was dropped from an older bot's pom");
         }
@@ -433,7 +433,7 @@ class MavenServiceSdkTest {
                 new UserLibrary("com.example", "shapes", "0.1.0"), List.of());
 
         MavenService.setDependencyVersions(projectDir, java.util.Map.of(
-                "com.github.LiQiyeDev:botmaker-sdk", "1.2.0",
+                "com.github.BotMakerDev:botmaker-sdk", "1.2.0",
                 "com.example:shapes", "0.2.0"));
 
         assertEquals("1.2.0", MavenService.readSdkVersion(projectDir).orElse(""));
@@ -457,7 +457,7 @@ class MavenServiceSdkTest {
 
         MavenService.setDependencyVersions(projectDir, java.util.Map.of(
                 "com.example:never-installed", "9.9.9",
-                "com.github.LiQiyeDev:botmaker-sdk", "   "));
+                "com.github.BotMakerDev:botmaker-sdk", "   "));
 
         assertEquals(before, groupArtifacts(projectDir));
         assertEquals("1.1.5", MavenService.readSdkVersion(projectDir).orElse(""),
@@ -483,7 +483,7 @@ class MavenServiceSdkTest {
 
         assertEquals("1.1.14", MavenService.readSdkVersion(projectDir).orElse(""));
 
-        MavenService.setDependencyVersions(projectDir, java.util.Map.of("com.github.LiQiyeDev:botmaker-sdk", "2.0.0"));
+        MavenService.setDependencyVersions(projectDir, java.util.Map.of("com.github.BotMakerDev:botmaker-sdk", "2.0.0"));
 
         Model after = readModel(projectDir);
         assertEquals("2.0.0", after.getProperties().getProperty("botmaker.sdk.version"));

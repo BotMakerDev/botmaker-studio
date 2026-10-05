@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReleasedPluginsTest {
 
-    private static final String REPO = "/home/u/.m2/repository/com/github/LiQiyeDev/";
+    private static final String REPO = "/home/u/.m2/repository/com/github/BotMakerDev/";
     private static final String SDK_DEV = REPO + "botmaker-sdk/0.0.0-SNAPSHOT/botmaker-sdk-0.0.0-SNAPSHOT.jar";
     private static final String SDK_TAG = REPO + "botmaker-sdk/1.2.3/botmaker-sdk-1.2.3.jar";
     private static final String SHARED_DEV = REPO + "botmaker-shared/0.0.0-SNAPSHOT/botmaker-shared-0.0.0-SNAPSHOT.jar";

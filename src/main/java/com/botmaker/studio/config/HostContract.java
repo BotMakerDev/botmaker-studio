@@ -21,7 +21,7 @@ import java.util.Properties;
  */
 public final class HostContract {
 
-    public static final String GROUP_ID = "com.github.LiQiyeDev";
+    public static final String GROUP_ID = "com.github.BotMakerDev";
     public static final String ARTIFACT_ID = "botmaker-studio-api";
 
     private static final String VERSION = read();
