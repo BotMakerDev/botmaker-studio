@@ -51,7 +51,7 @@ mvn compile
 # Run the application
 mvn javafx:run
 
-# Run all tests
+# Run all tests (three JVMs side by side; -Dstudio.test.forks=1 for one)
 mvn test
 
 # Run a single test class

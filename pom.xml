@@ -60,6 +60,9 @@
              agent-based plugin (JaCoCo) overwrites this property with its -javaagent argument; without
              the default, a build with no such plugin would pass the literal "@{argLine}" to the JVM. -->
         <argLine></argLine>
+
+        <!-- Test JVMs run side by side; -Dstudio.test.forks=1 runs the suite in one, as before. -->
+        <studio.test.forks>3</studio.test.forks>
     </properties>
 
     <repositories>
@@ -575,7 +578,15 @@
                          extending it discards the agent silently — the build stays green and coverage
                          reads 0%, indistinguishable from "no tests". The empty <argLine/> property above
                          keeps this resolvable when no agent set it. -->
-                    <argLine>@{argLine} -Xmx6096m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${project.build.directory} -verbose:gc
+                    <!-- Three JVMs, each running whole test classes in turn: the suite's live heap peaks
+                         near 750 MB, so 1.5 GB each leaves room and three fit a 13 GB machine with the IDE
+                         open. Everything a test may write is per fork (${surefire.forkNumber} below), Java
+                         preferences included — java.util.prefs.userRoot keeps a test off the developer's
+                         own settings and off another fork's. -->
+                    <forkCount>${studio.test.forks}</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <argLine>@{argLine} -Xmx1536m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${project.build.directory}
+                        -Djava.util.prefs.userRoot=${project.build.directory}/test-prefs-${surefire.forkNumber}
                         --add-exports javafx.graphics/com.sun.glass.ui.monocle=ALL-UNNAMED
                         --add-opens javafx.graphics/com.sun.glass.ui=ALL-UNNAMED
                         --add-opens javafx.graphics/com.sun.glass.ui.monocle=ALL-UNNAMED
@@ -593,7 +604,7 @@
                         <prism.text>t2k</prism.text>
                         <java.awt.headless>true</java.awt.headless>
                         <!-- UserDirs.config(): imported fonts and anything else a test might save there. -->
-                        <botmaker.config.dir>${project.build.directory}/test-config</botmaker.config.dir>
+                        <botmaker.config.dir>${project.build.directory}/test-config-${surefire.forkNumber}</botmaker.config.dir>
                     </systemPropertyVariables>
                     <!-- Redirect the BotMaker cache dir into target/ for the whole suite. BotMakerDirs
                          resolves it from the environment (XDG_CACHE_HOME / LOCALAPPDATA / user.home), and
@@ -605,8 +616,8 @@
                          user.home, which is deliberately not overridden (other tests read ~/.m2 through
                          it); TypeSummaryManagerCacheTest states that as an assumption and skips. -->
                     <environmentVariables>
-                        <XDG_CACHE_HOME>${project.build.directory}/test-cache</XDG_CACHE_HOME>
-                        <LOCALAPPDATA>${project.build.directory}/test-cache</LOCALAPPDATA>
+                        <XDG_CACHE_HOME>${project.build.directory}/test-cache-${surefire.forkNumber}</XDG_CACHE_HOME>
+                        <LOCALAPPDATA>${project.build.directory}/test-cache-${surefire.forkNumber}</LOCALAPPDATA>
                     </environmentVariables>
                 </configuration>
             </plugin>
