@@ -248,6 +248,8 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<String> add(String id, String member, Object value) {
         if (value == null) return Optional.of("No value was given for " + member + ".");
+        Optional<String> stranger = notAnElement(PluginHost.managedValues(), id, member, value);
+        if (stranger.isPresent()) return stranger;
         Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
         Optional<JavaValue> initializer = PluginHost.grammar().spellAny(value);
         if (initializer.isEmpty()) {
@@ -255,6 +257,34 @@ public final class HostPluginValues implements PluginValues {
                     + member + " cannot be written.");
         }
         return apply(ManagedSets.add(index(), id, member, type, initializer.get()));
+    }
+
+    /**
+     * Why {@code value} may not join the open set {@code id}, or empty when it may: the set's declaration
+     * names the class of each constant, and a value of another class would compile into a set the plugin then
+     * reads as the wrong type. Compared by binary name, the class or any supertype — the plugin's class loader
+     * is not Studio's. A set no plugin declares with an element type is not checked here.
+     */
+    static Optional<String> notAnElement(List<ManagedValue<?>> declared, String id, String member, Object value) {
+        for (ManagedValue<?> set : declared) {
+            if (set == null || !set.isOpenSet() || !set.id().equals(id) || set.type() == null) continue;
+            if (isA(value.getClass(), set.type().getName())) return Optional.empty();
+            return Optional.of(member + " cannot join " + set.holder() + ": it is " + article(value.getClass())
+                    + ", and every constant there is " + article(set.type()) + ".");
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isA(Class<?> cls, String name) {
+        if (cls == null) return false;
+        if (cls.getName().equals(name) || isA(cls.getSuperclass(), name)) return true;
+        for (Class<?> face : cls.getInterfaces()) if (isA(face, name)) return true;
+        return false;
+    }
+
+    private static String article(Class<?> cls) {
+        String name = cls.getSimpleName().isEmpty() ? cls.getName() : cls.getSimpleName();
+        return ("AEIOU".indexOf(name.charAt(0)) >= 0 ? "an " : "a ") + name;
     }
 
     @Override

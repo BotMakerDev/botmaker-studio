@@ -28,8 +28,8 @@ class ManagedHoldersTest {
     private static final List<ManagedValue<?>> DECLARED = List.of(
             ManagedValue.method("greeting").in("Sdk").holds(String.class, null).because("Mine."),
             ManagedValue.method("rest-between").in("Sdk").holds(java.time.Duration.class, null).because("Mine."),
-            ManagedValue.openSet("pictures").in("Pictures").because("Mine."),
-            ManagedValue.method("opened-only").notCreated().because("Mine."));
+            ManagedValue.openSet("pictures").of(String.class).in("Pictures").because("Mine."),
+            ManagedValue.method("opened-only").openedOnly().holds(String.class).because("Mine."));
 
     @TempDir
     Path dir;
