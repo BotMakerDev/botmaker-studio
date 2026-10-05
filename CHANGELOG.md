@@ -16,6 +16,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - New Project opens on the templates, not on Blank: it shows the gallery's last list at once, and Create
   waits until the gallery confirms it. On a first run it says it is loading; Blank is offered only when the
   gallery cannot be reached.
+- The theme styles the contract's new text roles (`text-strong`, `-warning`, `-error`, `-ok`, `-muted`,
+  `-small`, `-mono`) in every theme, so a plugin's status lines read in the dark themes.
 - New Project's plugin checklist names each plugin's version: the template's pin for its own plugins, the
   registry's verified release for the rest.
 - A value a plugin's editor hands over that Studio has no Java for is no longer dropped without a word: the

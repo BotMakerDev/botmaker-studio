@@ -320,6 +320,17 @@
 .dialog-status--ok    { -fx-text-fill: -bm-severity-ok-text; }
 .dialog-status--error { -fx-text-fill: -bm-severity-error-text; }
 
+/* Text roles a plugin's widgets wear (StyleClasses.*_TEXT), so its windows carry no literal colour. Colours
+ * come from the severity tokens every theme redefines; dimming is opacity, as for the hint. They combine:
+ * a bold warning is .text-strong.text-warning. */
+.text-strong  { -fx-font-weight: bold; }
+.text-warning { -fx-text-fill: -bm-severity-warning-text; }
+.text-error   { -fx-text-fill: -bm-severity-error-text; }
+.text-ok      { -fx-text-fill: -bm-severity-ok-text; }
+.text-muted   { -fx-opacity: 0.75; }
+.text-small   { -fx-font-size: 11px; }
+.text-mono    { -fx-font-family: monospace; }
+
 /* The Versions tab's timeline (docs/refactor/39-versions.md §4). A milestone is bold; a version nobody chose,
  * and the fold that hides a run of them, are quieter by opacity — the same theme-proof dimming as the hint. */
 .versions-title             { -fx-font-size: 12px; }
