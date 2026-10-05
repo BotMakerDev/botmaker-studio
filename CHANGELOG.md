@@ -32,7 +32,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ### Fixed
 - Removing the last plugin from a bot no longer leaves it unable to compile its own `@Refactor` marks
   (`package com.botmaker.plugin.api.meta does not exist`): the plugin brought the contract, so Studio now
-  declares the contract after any pom change that took it away, not only when the project opens.
+  declares the contract after any pom change that took it away, not only when the project opens. That entry
+  goes again once a plugin brings the contract at the same version or newer — left beside the plugin, it
+  would pin the bot to it instead of the plugin's. A plugin with an older contract, or one whose entry
+  excludes it, leaves it in place.
 - A refactor that marks several functions of one file writes one `import …Refactor;`, not one per function.
 - Removing a plugin offers to delete its files (`plugins/<id>/Sdk.java`, `Pictures.java`…), ticked by
   default, and lists the lines of your code that still name them. Ticked, the files go, their imports go,

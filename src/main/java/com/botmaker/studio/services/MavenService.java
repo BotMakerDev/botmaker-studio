@@ -749,25 +749,8 @@ public final class MavenService {
         }
         if (plugins.size() < 2) return List.of();
 
-        RepositorySystem system = new RepositorySystemSupplier().get();
-        DefaultRepositorySystemSession session = newSession(system);
-        List<RemoteRepository> repositories = buildRemoteRepositories(model);
         Map<String, Set<String>> brings = new LinkedHashMap<>();
-        for (Dependency plugin : plugins) {
-            Set<String> below = new java.util.HashSet<>();
-            CollectRequest request = new CollectRequest();
-            request.setRoot(new org.eclipse.aether.graph.Dependency(new DefaultArtifact(
-                    plugin.getGroupId(), plugin.getArtifactId(), "", "jar", versionOf(model, plugin)), "compile"));
-            request.setRepositories(repositories);
-            try {
-                collectBelow(system.collectDependencies(session, request).getRoot(), below, true);
-            } catch (org.eclipse.aether.collection.DependencyCollectionException e) {
-                if (e.getResult() != null && e.getResult().getRoot() != null) {
-                    collectBelow(e.getResult().getRoot(), below, true);
-                }
-            }
-            brings.put(coordinate(plugin), below);
-        }
+        treesBelow(model, plugins).forEach((plugin, tree) -> brings.put(plugin, tree.keySet()));
 
         List<Shadowed> removed = shadowed(brings);
         if (removed.isEmpty()) return removed;
@@ -776,6 +759,101 @@ public final class MavenService {
         model.getDependencies().removeIf(d -> gone.contains(coordinate(d)));
         writeModel(projectDir, model);
         return removed;
+    }
+
+    /**
+     * Each of {@code declared}'s {@code groupId:artifactId} mapped to every coordinate in its own tree, collected
+     * one at a time so the pom's own conflict resolution cannot hide an edge. A tree that cannot be collected
+     * brings what could be read of it. May block on the network.
+     */
+    private static Map<String, Map<String, String>> treesBelow(Model model, List<Dependency> declared) {
+        RepositorySystem system = new RepositorySystemSupplier().get();
+        DefaultRepositorySystemSession session = newSession(system);
+        List<RemoteRepository> repositories = buildRemoteRepositories(model);
+        Map<String, Map<String, String>> brings = new LinkedHashMap<>();
+        for (Dependency each : declared) {
+            Map<String, String> below = new java.util.HashMap<>();
+            CollectRequest request = new CollectRequest();
+            request.setRoot(new org.eclipse.aether.graph.Dependency(new DefaultArtifact(
+                    each.getGroupId(), each.getArtifactId(), "", "jar", versionOf(model, each)), "compile"));
+            request.setRepositories(repositories);
+            try {
+                collectBelow(system.collectDependencies(session, request).getRoot(), below, true);
+            } catch (org.eclipse.aether.collection.DependencyCollectionException e) {
+                if (e.getResult() != null && e.getResult().getRoot() != null) {
+                    collectBelow(e.getResult().getRoot(), below, true);
+                }
+            }
+            brings.put(coordinate(each), below);
+        }
+        return brings;
+    }
+
+    /**
+     * Removes the pom's direct {@code contract} entry when a declared plugin already brings the contract at that
+     * version or newer, and answers whether it did (2026-10-05).
+     *
+     * <p>Studio writes that entry for a bot whose own source imports the contract while nothing else brings it
+     * ({@code ContractDependency}). Left in place once a plugin brings it again, nearest-wins would pin the bot
+     * to that contract rather than the one the plugin was built against — the trap {@link #dropShadowedPlugins}
+     * closes for plugins, and the same rule: a direct entry beside a plugin that brings it goes, whoever wrote
+     * it. Three things keep it:
+     * <ul>
+     *   <li>a plugin bringing an <em>older</em> contract — the bot may use what only the newer one has
+     *       ({@code @Refactor} arrived after {@code @Param}), and nearest-wins would then hand it the older;</li>
+     *   <li>a plugin whose entry {@code <exclusions>} the contract — it brings nothing here;</li>
+     *   <li>a tree that cannot be collected (offline) — it brings nothing, so nothing is removed for it.</li>
+     * </ul>
+     * An entry nothing imports any more stays: harmless with no plugin, and dropped by this once one arrives.
+     * Plugins only, as {@link #dropShadowedPlugins} reads them, so a bot's libraries cost no tree walk. May block
+     * on the network: call it off the FX thread.
+     */
+    public static boolean dropRedundantContract(Path projectDir, UserLibrary contract) throws IOException {
+        Model model = requireModel(projectDir);
+        Dependency direct = model.getDependencies().stream()
+                .filter(d -> sameArtifact(d, contract.groupId(), contract.artifactId()))
+                .findFirst().orElse(null);
+        if (direct == null) return false;
+        String pinned = versionOf(model, direct);
+        if (pinned == null) return false;
+
+        List<Dependency> plugins = new ArrayList<>();
+        for (Dependency d : model.getDependencies()) {
+            String scope = d.getScope() == null ? "compile" : d.getScope();
+            if (!"compile".equals(scope) && !"runtime".equals(scope)) continue;
+            if (d == direct || excludes(d, contract)) continue;
+            resolveArtifact(model, d.getGroupId(), d.getArtifactId(), "", versionOf(model, d))
+                    .filter(MavenService::declaresPlugin).ifPresent(jar -> plugins.add(d));
+        }
+        if (plugins.isEmpty()) return false;
+
+        String wanted = contract.groupId() + ":" + contract.artifactId();
+        boolean brought = treesBelow(model, plugins).values().stream()
+                .flatMap(tree -> tree.entrySet().stream())
+                .anyMatch(e -> e.getKey().equals(wanted) && notOlder(e.getValue(), pinned));
+        if (!brought) return false;
+        model.getDependencies().remove(direct);
+        writeModel(projectDir, model);
+        return true;
+    }
+
+    private static boolean excludes(Dependency d, UserLibrary library) {
+        return d.getExclusions().stream().anyMatch(x ->
+                ("*".equals(x.getGroupId()) || library.groupId().equals(x.getGroupId()))
+                        && ("*".equals(x.getArtifactId()) || library.artifactId().equals(x.getArtifactId())));
+    }
+
+    /** Whether {@code version} is {@code pinned} or newer, a leading {@code v} ignored; false when unreadable. */
+    static boolean notOlder(String version, String pinned) {
+        if (version == null || pinned == null) return false;
+        try {
+            org.eclipse.aether.version.VersionScheme scheme = new org.eclipse.aether.util.version.GenericVersionScheme();
+            org.eclipse.aether.version.Version brought = scheme.parseVersion(version.replaceFirst("^v", ""));
+            org.eclipse.aether.version.Version ours = scheme.parseVersion(pinned.replaceFirst("^v", ""));
+            return brought.compareTo(ours) >= 0;
+        } catch (org.eclipse.aether.version.InvalidVersionSpecificationException e) {
+            return false;
+        }
     }
 
     /** A declared plugin {@link #dropShadowedPlugins} removed, and the declared plugin that brings it. */
@@ -816,10 +894,13 @@ public final class MavenService {
         return out;
     }
 
-    private static void collectBelow(org.eclipse.aether.graph.DependencyNode node, Set<String> out, boolean root) {
+    /** Every {@code groupId:artifactId} under {@code node}, each with the version its tree resolved it at. */
+    private static void collectBelow(org.eclipse.aether.graph.DependencyNode node, Map<String, String> out,
+                                     boolean root) {
         if (node == null) return;
         if (!root && node.getArtifact() != null) {
-            out.add(node.getArtifact().getGroupId() + ":" + node.getArtifact().getArtifactId());
+            out.putIfAbsent(node.getArtifact().getGroupId() + ":" + node.getArtifact().getArtifactId(),
+                    node.getArtifact().getVersion());
         }
         for (org.eclipse.aether.graph.DependencyNode child : node.getChildren()) collectBelow(child, out, false);
     }

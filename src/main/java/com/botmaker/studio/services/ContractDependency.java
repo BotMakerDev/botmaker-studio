@@ -88,8 +88,20 @@ public final class ContractDependency {
     }
 
     /**
-     * {@link #ensure}, asked only of a bot whose own source imports the contract — on open; a rebind asks the
-     * same in {@code LibraryService.bind}. Removing the plugin that brought the contract leaves the
+     * The pom's contract entry, put right after a complete resolve: declared when the bot's source imports the
+     * contract ({@code used}) and {@code classpath} lacks it, removed once a plugin brings the contract again at
+     * that version or newer ({@link MavenService#dropRedundantContract}) — so it never sits beside a plugin's
+     * and pins it. An entry nothing imports any more is left: harmless alone, and gone when a plugin arrives.
+     * Answers whether the pom changed; blocking.
+     */
+    public static boolean reconcile(Path projectDir, boolean used, List<String> classpath) throws IOException {
+        if (used && !onClasspath(classpath)) return MavenService.declareIfAbsent(projectDir, coordinate());
+        return MavenService.dropRedundantContract(projectDir, coordinate());
+    }
+
+    /**
+     * {@link #ensure}, asked only of a bot whose own source imports the contract — on open; a rebind asks
+     * {@link #reconcile} in {@code LibraryService.bind}. Removing the plugin that brought the contract leaves the
      * {@code @Refactor} its repair wrote with nothing to compile against (2026-10-05: the SDK removed from a
      * blank-template bot).
      */

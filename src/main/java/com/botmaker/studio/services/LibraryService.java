@@ -235,24 +235,24 @@ public final class LibraryService {
      * {@link ProjectState} on the FX thread, which is the only thread that object is used on.
      *
      * @param pom the pom text {@code resolution} was resolved from
-     * @return the pom text now bound — {@code pom}, or the pom as re-read when the contract was declared here,
-     *         so the watcher does not take Studio's own write for an outside one
+     * @return the pom text now bound — {@code pom}, or the pom as re-read when the contract entry was changed
+     *         here, so the watcher does not take Studio's own write for an outside one
      */
     private String bind(MavenService.Resolution resolution, String pom) {
-        // A pom edit that took away what brought the contract (a plugin removed) leaves the bot's own
-        // annotations unresolved: declare it and resolve once more — see ContractDependency.ensureFor. Only
-        // after a complete resolve: a jar that failed to download is not a plugin gone, and a direct entry
-        // written then would outlive it and pin the contract once it came back.
-        if (resolution.problems().isEmpty() && !ContractDependency.onClasspath(resolution.jars())) {
+        // The contract entry follows the bot's own imports (ContractDependency.reconcile): declared when a pom
+        // edit took away what brought it (a plugin removed), dropped when a plugin brings it again at that version
+        // or newer. Only after a complete resolve: a jar that failed to download is not a plugin gone, and a direct
+        // entry written then would outlive it and pin the contract once it came back.
+        if (resolution.problems().isEmpty()) {
             boolean[] used = {false};
             onFx(() -> used[0] = ContractDependency.usedBy(config, state));
             try {
-                if (used[0] && ContractDependency.ensure(config.projectPath(), resolution.jars())) {
+                if (ContractDependency.reconcile(config.projectPath(), used[0], resolution.jars())) {
                     resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
                     pom = readQuietly(pom());
                 }
             } catch (Exception e) {
-                System.err.println("Could not declare the plugin contract: " + e.getMessage());
+                System.err.println("Could not put the plugin contract right in pom.xml: " + e.getMessage());
             }
         }
         List<String> classpath = resolution.jars();

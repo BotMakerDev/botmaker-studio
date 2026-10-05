@@ -97,6 +97,70 @@ class ContractDependencyTest {
         assertEquals(1, contractEntries(cfg.projectPath()).size());
     }
 
+    @Test
+    void anEntryNothingImportsAnyMoreStaysWhileNoPluginBringsIt() throws Exception {
+        Path projectDir = blankProject();
+        assertTrue(ContractDependency.ensure(projectDir, List.of()));
+
+        // An import gone for a moment (a cut before a paste) must not cost the bot its contract; alone, the
+        // entry is harmless.
+        assertFalse(ContractDependency.reconcile(projectDir, false, List.of()));
+        assertEquals(1, contractEntries(projectDir).size());
+    }
+
+    @Test
+    void anOlderBroughtContractDoesNotReplaceTheEntry() {
+        assertTrue(MavenService.notOlder("v0.5.0", "v0.4.0"));
+        assertTrue(MavenService.notOlder("0.4.0", "v0.4.0"));
+        assertFalse(MavenService.notOlder("v0.3.1", "v0.4.0"), "it may lack what the bot uses, @Refactor say");
+        assertFalse(MavenService.notOlder(null, "v0.4.0"));
+    }
+
+    @Test
+    void anEntryTheBotStillNeedsAndNothingElseBringsStays() throws Exception {
+        Path projectDir = blankProject();
+        assertTrue(ContractDependency.ensure(projectDir, List.of()));
+        Path jar = jarWith(root.resolve("botmaker-studio-api.jar"), ContractDependency.PARAM_CLASS);
+
+        assertFalse(ContractDependency.reconcile(projectDir, true, List.of(jar.toString())));
+        assertEquals(1, contractEntries(projectDir).size());
+    }
+
+    @Test
+    void anEntryAPluginBringsAgainIsTakenOut() throws Exception {
+        // The SDK brings the contract at compile; the locally installed snapshot is the one tree to read offline.
+        Path sdk = Path.of(System.getProperty("user.home"), ".m2", "repository", "com", "github", "LiQiyeDev",
+                "botmaker-sdk", "0.0.0-SNAPSHOT");
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(sdk), "needs the SDK chain installed");
+        Path projectDir = blankProject();
+        // Pinned at what the local SDK brings (its contract is the snapshot too), so the plugin's is not older.
+        MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
+                HostContract.GROUP_ID, HostContract.ARTIFACT_ID, "0.0.0-SNAPSHOT"));
+        MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
+                "com.github.LiQiyeDev", "botmaker-sdk", "0.0.0-SNAPSHOT"));
+        Path jar = jarWith(root.resolve("botmaker-studio-api.jar"), ContractDependency.PARAM_CLASS);
+
+        assertTrue(ContractDependency.reconcile(projectDir, true, List.of(jar.toString())));
+        assertTrue(contractEntries(projectDir).isEmpty());
+    }
+
+    @Test
+    void anEntryNewerThanThePluginsContractStays() throws Exception {
+        Path sdk = Path.of(System.getProperty("user.home"), ".m2", "repository", "com", "github", "LiQiyeDev",
+                "botmaker-sdk", "0.0.0-SNAPSHOT");
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(sdk), "needs the SDK chain installed");
+        Path projectDir = blankProject();
+        MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
+                HostContract.GROUP_ID, HostContract.ARTIFACT_ID, "v99.0.0"));
+        MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
+                "com.github.LiQiyeDev", "botmaker-sdk", "0.0.0-SNAPSHOT"));
+        Path jar = jarWith(root.resolve("botmaker-studio-api.jar"), ContractDependency.PARAM_CLASS);
+
+        // Dropping it would hand the bot the plugin's older contract, which may lack what the bot uses.
+        assertFalse(ContractDependency.reconcile(projectDir, true, List.of(jar.toString())));
+        assertEquals(1, contractEntries(projectDir).size());
+    }
+
     private Path blankProject() throws Exception {
         ProjectConfig cfg = ProjectConfig.forProject("Blank", root);
         MavenService.writeBlankPom(cfg.projectPath(), cfg);
