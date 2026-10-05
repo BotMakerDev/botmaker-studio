@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+- A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
+  changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
+  windows only (Linux), and the focused program receives the key too.
+
 ## [1.3.0] — 2026-10-05
 
 ### Changed

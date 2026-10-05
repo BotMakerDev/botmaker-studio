@@ -8,6 +8,7 @@ import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.studio.runtime.StopKey;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ContractDependency;
 import com.botmaker.studio.services.ApiDocsService;
@@ -52,6 +53,7 @@ public class BotProject {
     private CodeEditorService codeEditorService;
     private CodeExecutionService codeExecutionService;
     private DebuggingService debuggingService;
+    private StopKey stopKey;
     private BlockConverter blockConverter;
 
     private BotProject(ProjectConfig config,
@@ -267,6 +269,9 @@ public class BotProject {
                 state, eventBus, codeExec, config
         );
 
+        // A key that stops the run from anywhere on the desktop, listening only while something runs.
+        this.stopKey = StopKey.install(eventBus);
+
         // The bot, as a plugin is allowed to see it. After CodeExecutionService, since that is what owns the
         // process; cleared in close(), so a plugin between projects reaches Runs.NONE rather than a channel
         // into the project the user just left.
@@ -327,6 +332,9 @@ public class BotProject {
      * it without that leaves the VM wedged rather than exiting.
      */
     public void close() {
+        if (stopKey != null) {
+            stopKey.close();
+        }
         if (debuggingService != null) {
             debuggingService.stopDebugging();
         }

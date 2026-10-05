@@ -1,6 +1,11 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.shared.input.InputEvent;
+import com.botmaker.shared.input.InputListener;
+import com.botmaker.shared.input.InputListenerFactory;
 import com.botmaker.studio.config.AppVersion;
+import com.botmaker.studio.runtime.StopKey;
+import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.studio.ui.render.theme.BlockStyle;
 import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.BlockFont;
@@ -395,10 +400,61 @@ public class MenuBarManager {
                 themeMenu,
                 blockStyleMenu(),
                 blockFontMenu(),
-                askForNamesItem()
+                askForNamesItem(),
+                new SeparatorMenuItem(),
+                stopKeyItem()
         );
 
         return viewMenu;
+    }
+
+    /**
+     * View ▸ Stop Key: Pause… — which key stops a running bot from anywhere ({@link StopKey}). The key is
+     * read through the same global listener that will watch for it, so what is stored is exactly what it
+     * compares. Esc cancels and is never taken: most programs a bot drives use it.
+     */
+    private static MenuItem stopKeyItem() {
+        MenuItem item = new MenuItem();
+        item.textProperty().bind(javafx.beans.binding.Bindings.createStringBinding(
+                () -> "Stop Key: " + StopKeyPreference.name() + "…", StopKeyPreference.keysymProperty()));
+        if (!InputListenerFactory.isSupported()) {
+            item.setDisable(true);
+            return item;
+        }
+        item.setOnAction(e -> chooseStopKey());
+        return item;
+    }
+
+    private static void chooseStopKey() {
+        javafx.scene.control.Alert prompt = ThemedWindows.alert(javafx.scene.control.Alert.AlertType.INFORMATION,
+                "Press the key that should stop a running bot: one key, not a combination. Esc cancels.\n\nThe key"
+                        + " also reaches whatever has focus, so pick one it does not use.",
+                javafx.scene.control.ButtonType.CANCEL);
+        prompt.setTitle("Stop Key");
+        prompt.setHeaderText("Now: " + StopKeyPreference.name());
+        InputListener listener;
+        try {
+            listener = InputListenerFactory.create();
+            listener.start(event -> {
+                if (event instanceof InputEvent.KeyPress press && StopKeyPreference.offerable(press.keysym())) {
+                    javafx.application.Platform.runLater(() -> {
+                        if (!prompt.isShowing()) return;
+                        StopKeyPreference.keysymProperty().set(press.keysym());
+                        prompt.close();
+                    });
+                }
+            });
+        } catch (RuntimeException ex) {
+            // No DISPLAY, no RECORD extension: the key cannot be read here, and so could not be watched either.
+            javafx.scene.control.Alert failed = ThemedWindows.alert(javafx.scene.control.Alert.AlertType.ERROR,
+                    "Keys cannot be read on this desktop: " + ex.getMessage());
+            failed.setTitle("Stop Key");
+            failed.setHeaderText("The stop key is unavailable");
+            failed.show();
+            return;
+        }
+        prompt.setOnHidden(h -> listener.close());
+        prompt.show();
     }
 
     /**

@@ -19,8 +19,6 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
   SDK's pom implements, so a second plugin's report is empty (a contract question); the upgrade dialog is
   still the SDK's; `LibraryService.updateLibraries` is SDK-keyed, so `apply` refuses any other coordinate;
   the docs stack (`resolveSdkSourcesJar`) is coordinate-specific.
-- **A global stop hotkey** for a running bot (the game holds focus; stop fires only from the toolbar). Needs
-  a global hook or an SDK-level one.
 - **The Errors tab steals focus on every compile** with an error; the alternative is raising it only when the
   *set* of errors changes (needs a diff and a definition of change). Left as-is by the maintainer's call
   (2026-08-06).
