@@ -152,7 +152,9 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         if (!barNodes.isEmpty()) root.getChildren().add(new HBox(8, barNodes.toArray(Node[]::new)));
         show(trace, false);
         root.getChildren().add(trace);
-        root.setStyle(OverlayStyles.PANEL + "-fx-padding: 8;");
+        // -fx-background is what modena derives a label's text colour from: a plugin's plain Label reads light
+        // on the dark panel without knowing the bar is dark.
+        root.setStyle(OverlayStyles.PANEL + "-fx-background: rgb(20,24,33); -fx-padding: 8;");
         // A fixed width, so the first trace lines grow the bar downwards only and it stays where it was placed.
         root.setPrefWidth(TRACE_WIDTH + 16);
         root.setMaxWidth(TRACE_WIDTH + 16);
