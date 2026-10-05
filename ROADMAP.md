@@ -22,7 +22,8 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 - **The Errors tab steals focus on every compile** with an error; the alternative is raising it only when the
   *set* of errors changes (needs a diff and a definition of change). Left as-is by the maintainer's call
   (2026-08-06).
-- **Run / run-to-cursor from the overlay**, so a bot can be tested without switching back to Studio.
+- **Start a run, or run to the cursor, from the overlay editor**: the run overlay stops, pauses and runs again,
+  but the first run and run-to-cursor still start in Studio.
 - **A recording that knows it is off-resolution**: recorded coordinates are raw window-relative pixels; scaling
   by `reference / windowBounds` needs a decision about which the user meant.
 - **A configured Waydroid framebuffer resolution**: `WaydroidResolution.apply()` (shared) has no caller
