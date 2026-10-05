@@ -160,7 +160,8 @@ separate JVM; **Debug** attaches over JDI with breakpoints set on blocks.
 SDK jar your project pins — Studio fills in what is true about *your* project and nothing else — so they are
 written in the idiom of your SDK version, not of the Studio that created the project.
 
-For the architecture in depth see [`CLAUDE.md`](CLAUDE.md); the living backlog and changelog are in
+For the architecture in depth see [`docs/architecture/`](docs/architecture), indexed by
+[`CLAUDE.md`](CLAUDE.md); the living backlog and changelog are in
 [`ROADMAP.md`](ROADMAP.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Packaging a Release
