@@ -19,6 +19,7 @@ import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
+import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import com.botmaker.session.launch.BackgroundLauncher;
@@ -215,21 +216,44 @@ final class StudioActions {
     /** Opens the overlay editor, docked beside the screen the bot watches. */
     private void openOverlayEditor() {
         OverlayEditor.open(primaryStage, codeEditorService, projectSettingsService, screenCaptureService,
-                this::liveSessionWindow);
+                liveSession());
     }
 
     /**
-     * The live private session's host window for the overlay to draw over, or {@code 0} when none is running —
-     * revealed first, since a session is brought up minimized and an overlay over a minimized window shows
-     * nothing.
+     * The live private session for the overlay to dock beside: its host window — revealed first, since a session
+     * is brought up minimized and an overlay over a minimized window shows nothing — and its own frames.
      *
      * <p>Asked of the project's one {@link BackgroundLauncher} rather than of the pilot. It used to come from
      * {@code RemotePilotUi}, which was the only thing holding a launcher; the pilot is a plugin now, and a
      * host may not reach into one. The launcher is the right source anyway — it is per project and holds the
      * session whether the pilot, the ▶ Launch button, or nothing at all started it.
      */
-    private long liveSessionWindow() {
-        return BackgroundLauncher.forProject(config.resourcesRoot()).revealHostWindow();
+    private WatchedScreen.LiveSession liveSession() {
+        BackgroundLauncher launcher = BackgroundLauncher.forProject(config.resourcesRoot());
+        return new WatchedScreen.LiveSession() {
+            @Override
+            public long revealHostWindow() {
+                return launcher.revealHostWindow();
+            }
+
+            @Override
+            public java.awt.Rectangle screen() {
+                var session = launcher.session();
+                return session == null ? null : session.screen();
+            }
+
+            @Override
+            public java.awt.image.BufferedImage capture() {
+                var session = launcher.session();
+                try {
+                    // The whole session screen, not capture()'s attached window: the frame sits at 0,0 of the
+                    // session, the space its window shows and the bot's matches convert to (SessionSource.origin).
+                    return session == null ? null : session.captureScreen();
+                } catch (RuntimeException unreadable) {
+                    return null;   // the session is going away: the probe says it cannot see
+                }
+            }
+        };
     }
 
     /**

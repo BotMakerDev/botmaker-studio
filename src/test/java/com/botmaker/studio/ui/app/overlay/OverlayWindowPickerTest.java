@@ -40,6 +40,9 @@ class OverlayWindowPickerTest {
     void studiosOwnOverlaysAreNotOffered() {
         assertEquals(List.of("Diablo IV"),
                 OverlayWindowPicker.candidates(List.of("__bm_overlay_1f3a", "Diablo IV")));
+        assertEquals(List.of("Diablo IV"), OverlayWindowPicker.candidates(
+                List.of("BotMaker run layer", "Diablo IV", "BotMaker run bar")),
+                "the click-through layer and the run bar are Studio's too");
     }
 
     @Test

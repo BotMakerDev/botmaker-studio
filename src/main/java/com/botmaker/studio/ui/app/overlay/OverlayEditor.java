@@ -2,9 +2,13 @@ package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.OverlayContext;
+import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.plugin.api.overlay.Watched;
+import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.toolbar.ActionContext;
+import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.plugin.api.toolbar.Pressed;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
@@ -13,6 +17,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents.CodeUpdatedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.ExecutionRequestedEvent;
+import com.botmaker.studio.events.CoreApplicationEvents.ProgramStoppedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.StatusMessageEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.UIBlocksUpdatedEvent;
 import com.botmaker.studio.events.EventBus;
@@ -34,8 +39,11 @@ import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 import com.botmaker.studio.services.overlay.OverlayCalls;
 import com.botmaker.studio.services.overlay.OverlayTargets;
+import com.botmaker.studio.services.overlay.ProbeCalls;
+import com.botmaker.studio.services.overlay.ProbeEngine;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.ToolbarVisibility;
+import com.botmaker.studio.ui.app.run.DesktopLayer;
 import com.botmaker.studio.ui.app.run.RunBarDock;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 import com.botmaker.studio.util.MethodSignature;
@@ -55,6 +63,7 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.Statement;
 
+import java.awt.image.BufferedImage;
 import java.lang.reflect.Executable;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -65,7 +74,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -87,6 +95,11 @@ import java.util.function.Supplier;
  * <p><b>Where blocks go.</b> The plugins' targets ({@link OverlayTargets}): picking a chip opens that method's
  * file in the main editor — visibly, the status line says so — and parks the caret inside it. In a game bot
  * every file that opens by default is generated and read-only, which is why the panel names its target at all.
+ *
+ * <p><b>What each row would do now.</b> A row whose call a plugin probes ({@link ProbeCalls}) shows the answer
+ * — ✓ ✗ ? — from the {@link ProbeEngine}: the caret's row twice a second, every row on ⟳ and when a run ends.
+ * The caret's row's match is boxed on the game through the {@link DesktopLayer}, which the panel holds while it
+ * is open, opening the plugins' layer parts in {@code EDITING} mode.
  *
  * <p>Replaced {@code ProgramShapeOverlay} on 2026-10-06, a 340px floating HUD over the window with an
  * Activity combo, a Method combo, two ▲▼ sets that did different things, and ⏺ Record, which went with it.
@@ -144,6 +157,21 @@ public final class OverlayEditor {
     private volatile String lastMessage;
     /** Whether a {@link #rewatch} is already asking, so code updates in a burst ask once. */
     private boolean rewatching;
+
+    /** The desktop layer, held while the panel is open: the plugins' layer parts, and every box drawn here. */
+    private DesktopLayer.Lease layer;
+    /** The plugins' probes, run on the watched screen; null until the panel shows. */
+    private ProbeEngine probes;
+    /** The probes the plugins declare, read when the panel opens. */
+    private List<ProbeCalls.Declared> declaredProbes = List.of();
+    /** The focused row's box on the game, in desktop pixels. */
+    private Marks probeMarks = Marks.NONE;
+    /** The last answer for each probed row of {@link #probedRoot}'s tree, by position. */
+    private final Map<BlockTree.Position, ProbeResult> probed = new HashMap<>();
+    private CodeBlock probedRoot;
+
+    /** What a probe's answer is for: a row of one published tree. An answer for a replaced tree is dropped. */
+    private record ProbeKey(CodeBlock root, BlockTree.Position at) {}
 
     /** What an edit just requested does once the re-parse lands: which kind of edit, so what to say and open. */
     private enum Landed {
@@ -207,18 +235,18 @@ public final class OverlayEditor {
     /**
      * Opens (or focuses) the overlay editor. FX thread.
      *
-     * @param sessionWindow the live private session's host window id, or {@code 0} for none; it outranks every
-     *                      other answer, because while a session is up that is where the game is
+     * @param session the project's private session; a running one outranks every other answer, because while
+     *                a session is up that is where the game is
      */
     public static void open(Window owner, CodeEditorService context, ProjectSettingsService settings,
-                            ScreenCaptureService capture, LongSupplier sessionWindow) {
+                            ScreenCaptureService capture, WatchedScreen.LiveSession session) {
         // An editor still opening — its window read off the FX thread — counts as open, or a second press in
         // that moment builds a second panel.
         if (active != null) {
             if (active.stage() != null && active.stage().isShowing()) active.stage().toFront();
             return;
         }
-        WatchedScreen watched = watchedNow(context, owner, sessionWindow);
+        WatchedScreen watched = watchedNow(context, owner, session);
         if (watched == null) watched = pickWindow(owner);
         if (watched == null) {
             OverlayStyles.warn(owner, "The overlay editor docks beside the window the bot watches, and none is "
@@ -232,10 +260,11 @@ public final class OverlayEditor {
     }
 
     /** The live session, else what the first plugin that says names; null when neither answers. */
-    private static WatchedScreen watchedNow(CodeEditorService context, Window owner, LongSupplier sessionWindow) {
-        long id = sessionWindow == null ? 0 : sessionWindow.getAsLong();
-        if (id != 0) return WatchedScreen.session(id);
-        return firstOpen(pluginsWatched(context, owner), sessionWindow);
+    private static WatchedScreen watchedNow(CodeEditorService context, Window owner,
+                                            WatchedScreen.LiveSession session) {
+        long id = session == null ? 0 : session.revealHostWindow();
+        if (id != 0) return WatchedScreen.session(id, session);
+        return firstOpen(pluginsWatched(context, owner), session);
     }
 
     /** What each plugin says the bot watches, in plugin order. FX thread: a plugin reads its own values. */
@@ -254,9 +283,9 @@ public final class OverlayEditor {
     }
 
     /** The first of {@code said} that names something open now; null for none. Reads the window list. */
-    private static WatchedScreen firstOpen(List<Watched> said, LongSupplier sessionWindow) {
+    private static WatchedScreen firstOpen(List<Watched> said, WatchedScreen.LiveSession session) {
         for (Watched w : said) {
-            Optional<WatchedScreen> screen = WatchedScreen.resolve(w, sessionWindow);
+            Optional<WatchedScreen> screen = WatchedScreen.resolve(w, session);
             if (screen.isPresent()) return screen.get();
         }
         return null;
@@ -287,6 +316,13 @@ public final class OverlayEditor {
     }
 
     private void show(java.awt.Rectangle bounds) {
+        // Before the tool tabs, whose panes are handed their marks as they are built.
+        layer = DesktopLayer.hold(RunOverlayContext.Mode.EDITING, context.getConfig(), context.getEventBus());
+        probeMarks = layer.marks();
+        declaredProbes = ProbeCalls.declared(PluginHost.overlayParts());
+        probes = new ProbeEngine(PluginHost.grammar(), services, probeScreen(), this::probeAnswered);
+        tree.setProbes(this::probeOf);
+
         header = new PanelHeader(new PanelHeader.Callbacks(this::changeWatched, () -> panel.dock(),
                 () -> context.getEventBus().publish(new ExecutionRequestedEvent()), () -> panel.close()));
         header.showWatched(watched.label(), bounds);
@@ -345,6 +381,10 @@ public final class OverlayEditor {
             lastMessage = e.message();
             if (stage.isShowing()) Platform.runLater(() -> status(e.message()));
         }));
+        // A run moves the game on: what every row would answer now is asked again once it ends.
+        subscriptions.add(context.getEventBus().subscribe(ProgramStoppedEvent.class, e -> {
+            if (stage.isShowing()) Platform.runLater(this::probeAll);
+        }));
 
         root = context.getRootBlock().orElse(null);
         refreshMethods();
@@ -357,8 +397,12 @@ public final class OverlayEditor {
         settings.update(settings.current().withOverlayState(
                 new StudioProjectSettings.OverlayState((int) panel.width())));
         RunBarDock.withdraw(header.runSlot());
+        probes.close();
+        probes = null;
+        probeMarks.clear();
         toolContexts.values().forEach(ToolContext::close);
         toolContexts.clear();
+        layer.close();
         if (captureVisibility != null) {
             try { captureVisibility.close(); } catch (Exception ignored) {}
             captureVisibility = null;
@@ -402,7 +446,10 @@ public final class OverlayEditor {
         Button branch = OverlayStyles.iconButton("⇄", "Next branch — else / case / otherwise (Shift+→)",
                 () -> move(CursorNavigator.stepIntoNext(cursor(), root)));
         Button out = OverlayStyles.iconButton("⤴", "Out of the block (←)", () -> move(CursorNavigator.stepOut(cursor(), root)));
-        Button refresh = OverlayStyles.iconButton("⟳", "Redraw", this::render);
+        Button refresh = OverlayStyles.iconButton("⟳", "Redraw, and ask every row what it would answer now", () -> {
+            render();
+            probeAll();
+        });
         HBox bar = new HBox(4, OverlayStyles.dimLabel("Caret"), up, down, into, branch, out, refresh);
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
@@ -457,12 +504,12 @@ public final class OverlayEditor {
      * live session stays there, and the session is not asked again: revealing its window has a side effect.
      */
     private void rewatch() {
-        if (rewatching || watched.windowRef().map(r -> r.windowId() != null).orElse(false)) return;
+        if (rewatching || watched.isSession()) return;
         List<Watched> said = pluginsWatched(context, stage());
         if (said.isEmpty()) return;
         rewatching = true;
         Thread.ofVirtual().name("overlay-rewatch").start(() -> {
-            WatchedScreen now = firstOpen(said, () -> 0);
+            WatchedScreen now = firstOpen(said, null);
             Platform.runLater(() -> {
                 rewatching = false;
                 if (now != null && !now.sameAs(watched) && stage() != null && stage().isShowing()) setWatched(now);
@@ -581,7 +628,97 @@ public final class OverlayEditor {
 
     private ToolContext toolContext(String pluginId) {
         return toolContexts.computeIfAbsent(pluginId, id -> new ToolContext(services, () -> watched,
-                this::insertCall, this::status));
+                this::insertCall, this::status, new BotPixelMarks(layer.marks(), () -> watched)));
+    }
+
+    // ── probes ──────────────────────────────────────────────────────────────────────────────────────────
+
+    /** The watched screen as the probes read it, whatever it is beside now. */
+    private ProbeEngine.Screen probeScreen() {
+        return new ProbeEngine.Screen() {
+            @Override
+            public Optional<BufferedImage> frame() {
+                WatchedScreen now = watched;
+                return now == null ? Optional.empty() : now.frame();
+            }
+
+            @Override
+            public Optional<Area> area() {
+                WatchedScreen now = watched;
+                return now == null ? Optional.empty() : now.area();
+            }
+        };
+    }
+
+    /** The probe for {@code stmt}'s call, keyed by its row; empty when no plugin probes it. */
+    private Optional<ProbeCalls.Job> probeJob(StatementBlock stmt, ManagedConstants.Lookup constants) {
+        if (declaredProbes.isEmpty() || stmt == null) return Optional.empty();
+        BlockTree.Position at = index().locate(stmt);
+        if (at == null) return Optional.empty();
+        return ProbeCalls.job(new ProbeKey(root, at), stmt.enclosingStatement(), declaredProbes, constants);
+    }
+
+    /** The bot's {@code @Managed} constants now, which a probed argument may name. */
+    private ManagedConstants.Lookup constants() {
+        return new ManagedConstants.Lookup(ManagedConstants.scan(context.getConfig(), state), PluginHost.grammar());
+    }
+
+    /** Probes the caret's row at the live pace; a row with no probe clears the box on the game. */
+    private void probeFocused() {
+        if (probes == null) return;
+        StatementBlock focused = focusedStatement();
+        Optional<ProbeCalls.Job> job = focused == null || declaredProbes.isEmpty() ? Optional.empty()
+                : probeJob(focused, constants());
+        probes.focus(job.orElse(null));
+        if (job.isEmpty()) probeMarks.clear();
+    }
+
+    /** ⟳ and a run's end: every row shown is probed once, on one frame. */
+    private void probeAll() {
+        if (probes == null || root == null || declaredProbes.isEmpty()) return;
+        ManagedConstants.Lookup constants = constants();
+        List<ProbeCalls.Job> jobs = new ArrayList<>();
+        for (BodyBlock body : shownBodies()) {
+            for (BlockTree.Row row : BlockTree.flatten(body, 0, s -> false)) {
+                if (row.kind() == BlockTree.Kind.STATEMENT) probeJob(row.stmt(), constants).ifPresent(jobs::add);
+            }
+        }
+        probes.refresh(jobs);
+    }
+
+    /**
+     * An answer, on the probe thread: where its box goes on the desktop is worked out here, since the session's
+     * reads its window's bounds; the row and the box are updated on FX, unless the tree was replaced meanwhile.
+     */
+    private void probeAnswered(ProbeEngine.Answer answer) {
+        ProbeKey key = (ProbeKey) answer.job().key();
+        ProbeResult result = answer.result();
+        WatchedScreen screen = watched;
+        Optional<Area> drawAt = screen == null ? Optional.empty() : result.area().flatMap(screen::toDesktop);
+        Marks.Kind kind = result.state() != ProbeResult.State.FOUND ? Marks.Kind.MISSING
+                : answer.job().acting() ? Marks.Kind.CLICK : Marks.Kind.FOUND;
+        Platform.runLater(() -> {
+            if (probes == null || key.root() != root || stage() == null || !stage().isShowing()) return;
+            probeOf(null);   // drops the answers of a replaced tree
+            probed.put(key.at(), result);
+            StatementBlock stmt = index().statementAt(key.at());
+            if (stmt != null) tree.showProbe(stmt, result);
+            if (stmt != null && stmt == focusedStatement()) {
+                probeMarks.clear();
+                drawAt.ifPresent(at -> probeMarks.show(at, kind, result.text()));
+            }
+        });
+    }
+
+    /** The last answer for {@code stmt}'s row of the tree shown now; null when none. */
+    private ProbeResult probeOf(StatementBlock stmt) {
+        if (probedRoot != root) {
+            probed.clear();
+            probedRoot = root;
+        }
+        if (stmt == null) return null;
+        BlockTree.Position at = index().locate(stmt);
+        return at == null ? null : probed.get(at);
     }
 
     /** The Actions tab: every {@code ToolbarGroup.OVERLAY} item, with the toolbar's show/hide menu. */
@@ -872,16 +1009,20 @@ public final class OverlayEditor {
         ensureCursor();
         if (root == null) {
             tree.showMessage("No open file.");
+            probeFocused();
             return;
         }
+        List<BodyBlock> shown = shownBodies();
+        if (shown.isEmpty()) tree.showMessage("Program is empty.");
+        else tree.render(shown, cursor(), this::isCollapsed);
+        probeFocused();
+    }
+
+    /** What the script shows: the selected method's body, else every top-level body. */
+    private List<BodyBlock> shownBodies() {
+        if (root == null) return List.of();
         BodyBlock scoped = index().methodBody(selectedMethod);
-        if (scoped != null) {
-            tree.render(List.of(scoped), cursor(), this::isCollapsed);
-            return;
-        }
-        List<BodyBlock> tops = index().topLevelBodies();
-        if (tops.isEmpty()) tree.showMessage("Program is empty.");
-        else tree.render(tops, cursor(), this::isCollapsed);
+        return scoped != null ? List.of(scoped) : index().topLevelBodies();
     }
 
     /** {@link #root}'s structural index, rebuilt once per published tree rather than per lookup. */

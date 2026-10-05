@@ -1,5 +1,10 @@
 # Dated notes — read these before the other files here
 
+> **One desktop layer (2026-10-06).** The run overlay's click-through window left `RunOverlayWindows` for
+> `ui/app/run/DesktopLayer`, which the overlay editor holds as well; a run's layer parts and the editor's
+> `Marks` share it. `OverlayEditor.open` takes a `WatchedScreen.LiveSession`, not a session window id: a
+> session is probed and picked on in its own pixels. Read the older "run layer" text below through this.
+
 > **The overlay editor is a docked panel (2026-10-06).** `ProgramShapeOverlay`, `OverlayHeader` and
 > `OverlayTargetPicker` are gone; `ui/app/overlay/OverlayEditor` coordinates a panel docked beside what the
 > bot watches (see `ui-structure.md`). `project/managed/ManagedTargets` is replaced by

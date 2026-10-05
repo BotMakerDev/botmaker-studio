@@ -1,10 +1,8 @@
 package com.botmaker.studio.ui.app.run;
 
 import com.botmaker.plugin.api.TraceLine;
+import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.run.RunOverlayPart;
-import com.botmaker.shared.capture.NativeController;
-import com.botmaker.shared.capture.NativeControllerFactory;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
@@ -12,79 +10,57 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.ui.app.overlay.OverlayStyles;
 import com.botmaker.studio.ui.app.overlay.OverlayToolbars;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
-import javafx.animation.Animation;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.application.ConditionalFeature;
-import javafx.application.Platform;
 import javafx.geometry.Rectangle2D;
-import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
-import javafx.scene.transform.Scale;
-import javafx.scene.transform.Translate;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 
 /**
  * The run overlay's windows for one run: the <b>bar</b>, a small window the user places, with the controls,
  * the trace's last lines and each plugin's bar node ({@link RunBar}) — drawn in the overlay editor's header
- * instead while that panel is open ({@link RunBarDock}); and the <b>layer</b>, a transparent window over the whole
- * desktop holding each plugin's layer node in desktop pixels ({@link DesktopSpace}), which takes no clicks.
+ * instead while that panel is open ({@link RunBarDock}); and a hold on the <b>layer</b>, the one click-through
+ * window over the desktop holding each plugin's layer node ({@link DesktopLayer}), which the overlay editor
+ * may already have open.
  *
- * <p>Both are kept above a fullscreen window the way the authoring overlay is ({@link OverlayToolbars}). The
- * layer is first shown one pixel wide and grows to the desktop only once the native side has made it
- * click-through; where that cannot be done it is not shown at all, since a layer that caught the bot's own
- * clicks would break the run it shows.
+ * <p>The bar is kept above a fullscreen window the way the authoring overlay is ({@link OverlayToolbars}).
  */
 final class RunOverlayWindows implements RunOverlay.Surface {
 
-    static final String BAR_TITLE = "BotMaker run bar";
-    static final String LAYER_TITLE = "BotMaker run layer";
-
-    /** How often the layer's click-through and stacking are re-asserted. */
-    private static final Duration LAYER_TICK = Duration.millis(250);
-    /** How many ticks the layer may take to become click-through before it is given up. */
-    private static final int LAYER_TRIES = 12;
     private static final double BAR_MARGIN = 16;
     private static final double TRACE_WIDTH = 420;
 
-    private final EventBus eventBus;
     private final List<PartContext> contexts = new ArrayList<>();
     private final Stage bar;
+    private final DesktopLayer.Lease layer;
     private RunBar runBar;
     /** The bar window's content: the {@link RunBar}, unless the overlay editor's panel holds it. */
     private StackPane floating;
     private AutoCloseable dockListener;
     private boolean promoted;
-    private Stage layer;
-    private Timeline layerKeeper;
 
     private RunOverlayWindows(RunOverlay.Session session, ProjectConfig config, EventBus eventBus) {
-        this.eventBus = eventBus;
         this.bar = new Stage(StageStyle.TRANSPARENT);
 
         List<Node> barNodes = new ArrayList<>();
-        List<Node> layerNodes = new ArrayList<>();
         for (PluginHost.OwnedPart owned : PluginHost.runOverlayParts()) {
-            PartContext context = new PartContext(HostServices.forProject(config, this::barWindow));
-            contexts.add(context);
             RunOverlayPart part = owned.part();
-            part.barFactory().map(f -> build(owned, f, context)).ifPresent(barNodes::add);
-            part.layerFactory().map(f -> build(owned, f, context)).ifPresent(layerNodes::add);
+            if (part.barFactory().isEmpty()) continue;
+            PartContext context = new PartContext(HostServices.forProject(config, this::barWindow),
+                    RunOverlayContext.Mode.RUNNING);
+            contexts.add(context);
+            Node node = build(owned, part.barFactory().get(), context);
+            if (node != null) barNodes.add(node);
         }
 
         buildBar(session, barNodes);
-        if (!layerNodes.isEmpty()) openLayer(layerNodes);
+        layer = DesktopLayer.hold(RunOverlayContext.Mode.RUNNING, config, eventBus);
     }
 
     static RunOverlay.Surface open(RunOverlay.Session session, ProjectConfig config, EventBus eventBus) {
@@ -92,7 +68,7 @@ final class RunOverlayWindows implements RunOverlay.Surface {
     }
 
     /** A part's node, or null when its factory threw: one part's failure costs only that part. */
-    private static Node build(PluginHost.OwnedPart owned, RunOverlayPart.Factory factory, PartContext context) {
+    static Node build(PluginHost.OwnedPart owned, RunOverlayPart.Factory factory, PartContext context) {
         try {
             return factory.create(context);
         } catch (RuntimeException | LinkageError e) {
@@ -122,7 +98,7 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
         OverlayStyles.applyThemeClass(floating);
 
-        bar.setTitle(BAR_TITLE);
+        bar.setTitle(RunBarDock.BAR_TITLE);
         bar.setAlwaysOnTop(true);
         bar.setScene(scene);
         bar.setOnShown(e -> place());
@@ -180,88 +156,9 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         if (bar.isShowing()) bar.sizeToScene();
     }
 
-    // --- The layer ---
-
-    private void openLayer(List<Node> layerNodes) {
-        DesktopSpace space = DesktopSpace.of(screens());
-        if (layerNodes.isEmpty() || space == null) return;
-        if (!Platform.isSupported(ConditionalFeature.TRANSPARENT_WINDOW)) {
-            layerOff("this desktop cannot draw a transparent window");
-            return;
-        }
-        Group content = new Group(layerNodes);
-        content.getTransforms().addAll(new Scale(1 / space.scale(), 1 / space.scale()),
-                new Translate(-space.originPixelX(), -space.originPixelY()));
-        Pane root = new Pane(content);
-        root.setMouseTransparent(true);
-        root.setStyle("-fx-background-color: transparent;");
-        root.getStyleClass().add(ThemedWindows.UNTHEMED);
-
-        layer = new Stage(StageStyle.TRANSPARENT);
-        layer.setTitle(LAYER_TITLE);
-        layer.setAlwaysOnTop(true);
-        layer.setScene(new Scene(root, Color.TRANSPARENT));
-        // One pixel until it lets clicks through: a full-desktop window that caught them, even for a moment,
-        // would take the bot's.
-        layer.setX(space.x());
-        layer.setY(space.y());
-        layer.setWidth(1);
-        layer.setHeight(1);
-        layer.show();
-
-        NativeController controller = NativeControllerFactory.get();
-        int[] ticks = {0};
-        int[] madeInARow = {0};
-        boolean[] through = {false};
-        layerKeeper = new Timeline(new KeyFrame(LAYER_TICK, e -> {
-            ticks[0]++;
-            // The first promotion remaps the window, and the window manager frames it again later, unshaped: so
-            // promote alone on the first tick, and grow only after two passes that both came after the remap.
-            if (ticks[0] % 3 == 1) controller.promoteOverlayAboveFullscreen(LAYER_TITLE);
-            if (ticks[0] == 1) return;
-            boolean made = controller.makeInputTransparent(LAYER_TITLE);
-            madeInARow[0] = made ? madeInARow[0] + 1 : 0;
-            if (!through[0] && madeInARow[0] >= 2) {
-                through[0] = true;
-                layer.setWidth(space.width());
-                layer.setHeight(space.height());
-            } else if (!through[0] && ticks[0] >= LAYER_TRIES) {
-                layerOff("this desktop cannot make a window let clicks through");
-            }
-        }));
-        layerKeeper.setCycleCount(Animation.INDEFINITE);
-        layerKeeper.play();
-    }
-
-    /** The screens as {@link DesktopSpace} reads them, the primary first. */
-    private static List<DesktopSpace.Screen> screens() {
-        List<DesktopSpace.Screen> screens = new ArrayList<>();
-        Function<Screen, DesktopSpace.Screen> of = s -> new DesktopSpace.Screen(s.getBounds().getMinX(),
-                s.getBounds().getMinY(), s.getBounds().getWidth(), s.getBounds().getHeight(), s.getOutputScaleX());
-        Screen primary = Screen.getPrimary();
-        screens.add(of.apply(primary));
-        for (Screen s : Screen.getScreens()) {
-            if (!s.equals(primary)) screens.add(of.apply(s));
-        }
-        return screens;
-    }
-
-    private void layerOff(String why) {
-        closeLayer();
-        eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
-                "The run overlay shows no marks over the desktop: " + why + "."));
-    }
-
-    private void closeLayer() {
-        if (layerKeeper != null) layerKeeper.stop();
-        layerKeeper = null;
-        if (layer != null) layer.hide();
-        layer = null;
-    }
-
     @Override
     public void close() {
-        closeLayer();
+        layer.close();
         if (dockListener != null) {
             try {
                 dockListener.close();

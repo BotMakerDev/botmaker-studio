@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
+import com.botmaker.studio.ui.app.run.DesktopLayer;
+import com.botmaker.studio.ui.app.run.RunBarDock;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.scene.control.ChoiceDialog;
 import javafx.stage.Window;
@@ -27,6 +29,8 @@ final class OverlayWindowPicker {
 
     /** The prefix {@link OverlayToolbars} titles Studio's own borderless windows with. */
     private static final String OWN_WINDOW = "__bm_overlay_";
+    /** Studio's other windows over the desktop: the run bar and the click-through layer. */
+    private static final Set<String> OWN_TITLES = Set.of(RunBarDock.BAR_TITLE, DesktopLayer.TITLE);
 
     private OverlayWindowPicker() {}
 
@@ -41,7 +45,8 @@ final class OverlayWindowPicker {
         Set<String> seen = new LinkedHashSet<>();
         if (live != null) {
             for (String title : live) {
-                if (title == null || title.isBlank() || title.startsWith(OWN_WINDOW)) continue;
+                if (title == null || title.isBlank() || title.startsWith(OWN_WINDOW)
+                        || OWN_TITLES.contains(title.trim())) continue;
                 seen.add(title.trim());
             }
         }

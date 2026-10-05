@@ -10,16 +10,23 @@ import java.util.List;
 final class PartContext implements RunOverlayContext {
 
     private final StudioServices services;
+    private final Mode mode;
     private final List<Runnable> onClosed = new ArrayList<>();
     private boolean closed;
 
-    PartContext(StudioServices services) {
+    PartContext(StudioServices services, Mode mode) {
         this.services = services;
+        this.mode = mode;
     }
 
     @Override
     public StudioServices services() {
         return services;
+    }
+
+    @Override
+    public Mode mode() {
+        return mode;
     }
 
     @Override

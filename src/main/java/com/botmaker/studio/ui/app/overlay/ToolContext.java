@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.overlay.OverlayToolContext;
 import com.botmaker.plugin.api.overlay.Pixel;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
@@ -22,7 +23,8 @@ import java.util.function.Supplier;
 
 /**
  * One plugin's {@link OverlayToolContext} for one opening of the panel: the watched screen, picks drawn over
- * it, and inserts at the panel's caret through {@link Inserter}. FX thread, except {@link #frame()}.
+ * it, boxes on the desktop layer, and inserts at the panel's caret through {@link Inserter}. FX thread, except
+ * {@link #frame()} and {@link #marks()}.
  */
 final class ToolContext implements OverlayToolContext {
 
@@ -42,17 +44,26 @@ final class ToolContext implements OverlayToolContext {
     private final Supplier<WatchedScreen> screen;
     private final Inserter inserter;
     private final Consumer<String> status;
+    private final Marks marks;
     private final List<Runnable> onClosed = new ArrayList<>();
     private boolean closed;
 
     /**
      * @param status the panel's status line, where a pick's prompt is shown while the screen is picked on
+     * @param marks  this tool's boxes, in the bot's pixels; cleared when the panel closes
      */
-    ToolContext(StudioServices services, Supplier<WatchedScreen> screen, Inserter inserter, Consumer<String> status) {
+    ToolContext(StudioServices services, Supplier<WatchedScreen> screen, Inserter inserter, Consumer<String> status,
+                Marks marks) {
         this.services = services;
         this.screen = screen;
         this.inserter = inserter;
         this.status = status;
+        this.marks = marks;
+    }
+
+    @Override
+    public Marks marks() {
+        return marks;
     }
 
     @Override
@@ -115,6 +126,7 @@ final class ToolContext implements OverlayToolContext {
         closed = true;
         for (Runnable action : onClosed) run(action);
         onClosed.clear();
+        marks.clear();
     }
 
     private static void run(Runnable action) {

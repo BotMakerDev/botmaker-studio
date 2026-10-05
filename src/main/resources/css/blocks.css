@@ -3602,6 +3602,20 @@
     -fx-font-size: 11px;
     -fx-padding: 0 2 0 2;
 }
+/* What a row's call would answer now, from its plugin's probe: ✓ found, ✗ missing, ? cannot tell. */
+.overlay-probe {
+    -fx-font-weight: bold;
+    -fx-min-width: 14px;
+}
+.overlay-probe-found {
+    -fx-text-fill: #3fb950;
+}
+.overlay-probe-missing {
+    -fx-text-fill: #f85149;
+}
+.overlay-probe-unknown {
+    -fx-text-fill: #8b93a1;
+}
 /* A target chip, one per method blocks can go into; the one being edited is selected. */
 .overlay-target-chip {
     -fx-font-size: 11px;

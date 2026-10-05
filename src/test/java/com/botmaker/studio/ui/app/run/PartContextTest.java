@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.run;
 
+import com.botmaker.plugin.api.run.RunOverlayContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -13,7 +14,8 @@ class PartContextTest {
     @Test
     void closeRunsEachActionOnceAndALateOneAtOnce() {
         List<String> ran = new ArrayList<>();
-        PartContext context = new PartContext(null);
+        PartContext context = new PartContext(null, RunOverlayContext.Mode.EDITING);
+        assertEquals(RunOverlayContext.Mode.EDITING, context.mode(), "the part is told why the overlay opened");
         context.onClosed(() -> ran.add("first"));
         context.onClosed(() -> {
             throw new IllegalStateException("broken part");

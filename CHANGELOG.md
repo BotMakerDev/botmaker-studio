@@ -21,6 +21,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   with the SDK, *Picture* cuts a picture off the game and can insert a click on it, *Point* inserts a click at
   a spot, *Flow* opens 🔀 Activity Flow — then *Actions* (the plugins' overlay buttons) and *Blocks*. While the
   bot runs, its stop, pause and trace sit in the panel's header instead of a second window.
+- **The overlay editor shows what each row would do now.** A row whose call a plugin can check — with the SDK,
+  finding, waiting for or clicking a picture — gets ✓, ✗ or ? (hover for *found 0.94 at 412,230*). The row the
+  caret is on is checked twice a second and its match is boxed on the game, orange where a click would land;
+  ⟳ checks every row, and so does the end of a run. Nothing is clicked. A bot that watches its private
+  display session is checked on the session's own pixels, and the box is drawn on the window showing it.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.
@@ -29,7 +34,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   until the next run, and View ▸ Show Run Overlay turns it off. Pause works for a plain run on Linux and
   macOS; a debug session pauses through its debugger. A plugin can add its own part: a line in the bar, or
   marks drawn over the desktop that let every click through. Studio shows those marks only where it can make
-  the window click-through (X11 and Xwayland), and draws nothing of its own there.
+  the window click-through (X11 and Xwayland), and draws nothing of its own there during a run.
 
 ### Changed
 - **Plugins and the SDK are `com.github.BotMakerDev` now** (were `com.github.LiQiyeDev`): a new project, an

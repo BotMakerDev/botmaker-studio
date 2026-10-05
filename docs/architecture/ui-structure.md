@@ -155,7 +155,11 @@ The `ui/` package is split by concern:
   open windows only. Where blocks go is `services/overlay/OverlayTargets`, read off bindings; a tool's insert
   is `services/overlay/OverlayCalls`. **⏺ Record is gone** (with `plugin/record/` and the
   `preferredRecorders` setting): its job — turning what is on screen into a call — is the tools'. The row
-  look is `overlay-*` classes in `blocks.css`. Design: `docs/refactor/42-overlay-editor.md` (umbrella).
+  look is `overlay-*` classes in `blocks.css`. A row's ✓ ✗ ? is the plugins' probes, matched by
+  `services/overlay/ProbeCalls` and run off FX by `services/overlay/ProbeEngine`; the boxes on the game are
+  `Marks` on `ui/app/run/DesktopLayer`, the one click-through window the panel and a run both hold. Positions
+  are the bot's pixels (a session's own, for a session). Design: `docs/refactor/42-overlay-editor.md`
+  (umbrella).
 - **`ui/dnd/`** — drag-and-drop and block input events: `BlockDragAndDropManager`, `DropInfo`, `MoveBlockInfo`,
   `BlockEvent`, `DropZoneFactory`.
 - **`palette/`** (top-level, dependency-light) — the insertable catalogs: `BlockType`/`BlockCatalog`/`BlockCategory`

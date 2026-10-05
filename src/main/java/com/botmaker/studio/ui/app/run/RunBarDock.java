@@ -15,6 +15,9 @@ import java.util.Optional;
  */
 public final class RunBarDock {
 
+    /** The run bar's own window's title, which a window picker leaves out. */
+    public static final String BAR_TITLE = "BotMaker run bar";
+
     private static Pane slot;
     private static final List<Runnable> listeners = new ArrayList<>();
 

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
+import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
@@ -28,8 +29,11 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import org.eclipse.jdt.core.dom.ASTNode;
 
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -90,6 +94,11 @@ final class OverlayTreeView {
     /** Compile diagnostics, so a broken block is marked here as well as in the main editor. May be null. */
     private DiagnosticsManager diagnostics;
 
+    /** The last probe answer for a statement, or null — what a row's marker shows when it is drawn. */
+    private Function<StatementBlock, ProbeResult> probed = stmt -> null;
+    /** Each drawn statement row's probe marker, so an answer updates one label rather than the list. */
+    private final Map<StatementBlock, Label> markers = new IdentityHashMap<>();
+
     OverlayTreeView(CodeEditorService context, Callbacks callbacks) {
         this.context = context;
         this.callbacks = callbacks;
@@ -111,6 +120,49 @@ final class OverlayTreeView {
         this.diagnostics = diagnostics;
     }
 
+    /** Where a drawn row reads its last probe answer from. */
+    void setProbes(Function<StatementBlock, ProbeResult> probed) {
+        this.probed = probed == null ? stmt -> null : probed;
+    }
+
+    /**
+     * Shows {@code result} on {@code stmt}'s row, if it is drawn: {@code ✓}, {@code ✗} or {@code ?}, with the
+     * probe's line as the marker's tooltip. Null clears it.
+     */
+    void showProbe(StatementBlock stmt, ProbeResult result) {
+        Label marker = markers.get(stmt);
+        if (marker != null) paint(marker, result);
+    }
+
+    private static void paint(Label marker, ProbeResult result) {
+        marker.getStyleClass().removeAll("overlay-probe-found", "overlay-probe-missing", "overlay-probe-unknown");
+        boolean shown = result != null;
+        marker.setVisible(shown);
+        marker.setManaged(shown);
+        if (!shown) {
+            marker.setTooltip(null);
+            return;
+        }
+        switch (result.state()) {
+            case FOUND -> {
+                marker.setText("✓");
+                marker.getStyleClass().add("overlay-probe-found");
+            }
+            case MISSING -> {
+                marker.setText("✗");
+                marker.getStyleClass().add("overlay-probe-missing");
+            }
+            case UNKNOWN -> {
+                marker.setText("?");
+                marker.getStyleClass().add("overlay-probe-unknown");
+            }
+        }
+        String line = result.text().isBlank() ? result.state().displayName() : result.text();
+        Tooltip tip = marker.getTooltip();
+        if (tip == null) marker.setTooltip(new Tooltip(line));
+        else tip.setText(line);
+    }
+
     /** Replaces the list with a single message — "No open file.", "Program is empty.". */
     void showMessage(String message) {
         rows.getChildren().setAll(OverlayStyles.dimLabel(message));
@@ -122,6 +174,7 @@ final class OverlayTreeView {
      */
     void render(List<BodyBlock> bodies, InsertionCursor cursor, Predicate<StatementBlock> collapsed) {
         rows.getChildren().clear();
+        markers.clear();
         for (BodyBlock body : bodies) {
             List<BlockTree.Row> flat = BlockTree.flatten(body, 0, collapsed);
             for (int i = 0; i < flat.size(); i++) {
@@ -177,6 +230,12 @@ final class OverlayTreeView {
 
         HBox node = shell(row, focused);
         if (row.fold() != BlockTree.Fold.NONE) node.getChildren().add(foldToggle(row));
+        // The probe's gutter: hidden until the row's call has an answer, so a row with no probe takes no room.
+        Label marker = new Label();
+        marker.getStyleClass().add("overlay-probe");
+        paint(marker, probed.apply(stmt));
+        markers.put(stmt, marker);
+        node.getChildren().add(marker);
 
         // A block that declares a render schema is drawn from it — the same components the canvas draws, on
         // one line. One that declares none falls back to its source text, which is what every row was until

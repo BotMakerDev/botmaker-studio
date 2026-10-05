@@ -111,11 +111,16 @@ public final class ManagedConstants {
          * the way javac would, through the file's imports ({@link SourceNames}), not matched by its spelling.
          */
         public Optional<Object> read(QualifiedName name) {
+            return constant(name).flatMap(constant -> grammar.valueOfAny(constant.initializer()));
+        }
+
+        /** The known constant {@code name} refers to, resolved as {@link #read} resolves it; empty for none. */
+        public Optional<Constant> constant(QualifiedName name) {
             if (name == null) return Optional.empty();
             for (Constant constant : constants) {
                 if (name.getName().getIdentifier().equals(constant.field())
                         && SourceNames.refersTo(name.getQualifier(), constant.owner())) {
-                    return grammar.valueOfAny(constant.initializer());
+                    return Optional.of(constant);
                 }
             }
             return Optional.empty();
