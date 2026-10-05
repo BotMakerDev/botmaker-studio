@@ -16,6 +16,7 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.ui.app.StartingPoints.TemplateChoice;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -513,13 +514,15 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // toolbar item on the first capture — so New Project no longer asks for it, and a fresh project has
         // no capture.width/capture.height until a picture is taken.
 
-        // The starting point. "Blank" is Studio's own and is what the list starts as, which is what makes New
-        // Project work with no network; every other row is a published bot tagged `template` in the gallery,
-        // fetched in the background. Since 2026-09-05 Blank is REPLACED by the templates when any arrive,
-        // rather than leading them — see loadTemplates.
+        // The starting point: a published bot tagged `template` in the gallery. The list opens on the templates
+        // the gallery listed last time and is refreshed in the background — see loadTemplates. Studio's own
+        // Blank is the row only when the gallery answered with no template and none is remembered.
+        List<TemplateChoice> initial = StartingPoints.rows(
+                GalleryEntry.templates(StartingPoints.remembered(gitHubClient.mapper()), false),
+                StartingPoints.Fetch.PENDING);
         ComboBox<TemplateChoice> templateCombo = new ComboBox<>(
-                javafx.collections.FXCollections.observableArrayList(TemplateChoice.blank()));
-        templateCombo.setValue(TemplateChoice.blank());
+                javafx.collections.FXCollections.observableArrayList(initial));
+        templateCombo.setValue(initial.getFirst());
         templateCombo.setMaxWidth(Double.MAX_VALUE);
         templateCombo.setConverter(new javafx.util.StringConverter<>() {
             @Override public String toString(TemplateChoice t) {
@@ -551,6 +554,10 @@ public class ProjectSelectionScreen implements ProjectWindow {
             TemplateChoice now = templateCombo.getValue();
             boolean blank = now == null || now.isBlank();
             boolean extra = plugins[0] != null && !plugins[0].picked().isEmpty();
+            if (now != null && !now.isCreatable()) {
+                startNote.setText("Asking the gallery for its templates…");
+                return;
+            }
             startNote.setText(blank
                     ? (extra ? "A plain Java project — a pom, a source folder and a main() — with the plugins "
                             + "ticked below."
@@ -586,11 +593,15 @@ public class ProjectSelectionScreen implements ProjectWindow {
         dialog.getDialogPane().setContent(content);
 
         Button createButton = (Button) dialog.getDialogPane().lookupButton(createButtonType);
-        createButton.setDisable(true);
+        // Create waits for a valid name and for a row it can create from: not "Loading templates…".
+        Runnable updateCreate = () -> createButton.setDisable(!isValidProjectName(projectNameField.getText())
+                || templateCombo.getValue() == null || !templateCombo.getValue().isCreatable());
+        updateCreate.run();
+        templateCombo.valueProperty().addListener((o, was, now) -> updateCreate.run());
 
         projectNameField.textProperty().addListener((observable, oldValue, newValue) -> {
             boolean isValid = isValidProjectName(newValue);
-            createButton.setDisable(!isValid);
+            updateCreate.run();
             if (newValue.isEmpty()) projectNameField.setStyle("");
             else if (isValid) projectNameField.setStyle("-fx-border-color: green; -fx-border-width: 2px;");
             else projectNameField.setStyle("-fx-border-color: red; -fx-border-width: 2px;");
@@ -599,9 +610,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
         javafx.application.Platform.runLater(projectNameField::requestFocus);
 
         dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == createButtonType) {
-                TemplateChoice choice = templateCombo.getValue() == null
-                        ? TemplateChoice.blank() : templateCombo.getValue();
+            TemplateChoice choice = templateCombo.getValue();
+            if (dialogButton == createButtonType && choice != null && choice.isCreatable()) {
                 return new CreateRequest(projectNameField.getText(), choice, plugins[0].picked());
             }
             return null;
@@ -611,84 +621,49 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * One row of the "Start from" list: Studio's blank project, or a published template.
+     * Puts the gallery's fresh templates into {@code combo}, off the FX thread, and remembers them for the next
+     * open ({@link StartingPoints}).
      *
-     * <p>{@code entry} is null for the blank one rather than there being two types, because the list is one
-     * list to the user and the difference is a branch at creation time, not a kind of thing.
-     */
-    private record TemplateChoice(GalleryEntry entry) {
-        static TemplateChoice blank() {
-            return new TemplateChoice(null);
-        }
-
-        boolean isBlank() {
-            return entry == null;
-        }
-
-        String label() {
-            if (entry == null) return "Blank — a main() and nothing else";
-            String description = entry.description() == null || entry.description().isBlank()
-                    ? "" : " — " + entry.description();
-            String tier = entry.isVetted() ? "" : " · Community";
-            return displayName() + description + "  (" + entry.owner() + tier + ")";
-        }
-
-        /**
-         * The entry's name with its first letter capitalized, for display only.
-         *
-         * <p>A gallery entry's name comes from its repository — {@code botmaker-base} publishes as
-         * {@code base} — so it is lowercase, and it sat in a list beside Studio's own "Blank" looking like a
-         * different kind of thing. Nothing may capitalize it anywhere but here: {@code entry.name()} is what
-         * {@code BotInstaller} resolves and what {@code GitHubConfig.entryPath} keys on.
-         */
-        String displayName() {
-            String name = entry.name() == null ? "" : entry.name();
-            return name.isEmpty() ? name : Character.toUpperCase(name.charAt(0)) + name.substring(1);
-        }
-    }
-
-    /**
-     * Puts the gallery's templates into {@code combo}, off the FX thread — <b>replacing</b> the blank row
-     * rather than joining it.
-     *
-     * <p>The maintainer's call, 2026-09-05: {@code botmaker-base} is what Blank used to be, so listing both
-     * offered the same thing twice under two names. Blank stays as the row you get when the gallery cannot
-     * be reached, which is the only reason Studio composes a starting project at all
-     * ({@code project/StarterSources}) — New Project has to work on a plane. Nobody picks it on purpose.
+     * <p>Blank is not listed beside fresh templates: {@code botmaker-base} is what Blank used to be, so both
+     * would offer the same thing under two names. It joins the remembered ones only when the gallery cannot be
+     * reached, since a template downloads at creation — New Project has to work on a plane, which is the only
+     * reason Studio composes a starting project at all ({@code project/StarterSources}).
      *
      * <p>Vetted first and then by name ({@link GalleryEntry#templates}), so the default is the same row on
-     * every launch: the catalog's own order is a property of how CI generated it, and the first row here is
-     * the one preselected. Community templates join only while {@code showCommunity} is ticked, and the
-     * toggle is revealed only when there is one.
+     * every launch. Community templates join only while {@code showCommunity} is ticked, and the toggle is
+     * revealed only when there is one.
      *
-     * <p>Failure is silent on purpose, and this is what it degrades to: the blank row is untouched, which is
-     * a complete answer to "what can I start from". An error dialog in front of a working New Project dialog
-     * would be the network's problem presented as the user's.
+     * <p>Failure is silent on purpose: the remembered list stays with Blank after it. An error
+     * dialog in front of a working New Project dialog would be the network's problem presented as the user's.
      */
     private void loadTemplates(ComboBox<TemplateChoice> combo, CheckBox showCommunity) {
-        new GitHubGallery(gitHubClient, gitHubAuth).browse().thenAccept(entries -> Platform.runLater(() -> {
-            boolean anyCommunity = entries.stream().anyMatch(e -> e.isTemplate() && !e.isVetted());
-            showCommunity.setVisible(anyCommunity);
-            showCommunity.setManaged(anyCommunity);
-            Runnable fill = () -> fillTemplates(combo, GalleryEntry.templates(entries, showCommunity.isSelected()));
-            showCommunity.selectedProperty().addListener((o, was, now) -> fill.run());
-            fill.run();
-        }));
+        List<GalleryEntry> remembered = StartingPoints.remembered(gitHubClient.mapper());
+        new GitHubGallery(gitHubClient, gitHubAuth).browse()
+                .exceptionally(error -> List.of())
+                .thenAccept(fresh -> Platform.runLater(() -> {
+                    boolean answered = fresh.stream().anyMatch(GalleryEntry::isTemplate);
+                    if (answered) StartingPoints.remember(gitHubClient.mapper(), fresh);
+                    List<GalleryEntry> entries = answered ? fresh : remembered;
+                    boolean anyCommunity = entries.stream().anyMatch(e -> e.isTemplate() && !e.isVetted());
+                    showCommunity.setVisible(anyCommunity);
+                    showCommunity.setManaged(anyCommunity);
+                    StartingPoints.Fetch fetch = answered
+                            ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
+                    Runnable fill = () -> fillTemplates(combo, StartingPoints.rows(
+                            GalleryEntry.templates(entries, showCommunity.isSelected()), fetch));
+                    showCommunity.selectedProperty().addListener((o, was, now) -> fill.run());
+                    fill.run();
+                }));
     }
 
     /**
-     * Replaces the combo's rows with {@code templates}, or with the blank row when there are none, keeping the
-     * current choice when it is still offered.
+     * Replaces the combo's rows with {@code rows}, keeping the current choice when it is still offered.
      *
-     * <p>The value is set before the old rows go: dropping the selected item would leave the value null, and
-     * the dialog's result converter reads "no value" as the blank project — which may be a row being taken
-     * away.
+     * <p>The value is set before the old rows go: dropping the selected item would leave the value null for a
+     * moment, and every listener on it would see a dialog with nothing chosen.
      */
-    private static void fillTemplates(ComboBox<TemplateChoice> combo, List<GalleryEntry> templates) {
-        List<TemplateChoice> rows = templates.isEmpty()
-                ? List.of(TemplateChoice.blank())
-                : templates.stream().map(TemplateChoice::new).toList();
-        TemplateChoice keep = rows.contains(combo.getValue()) ? combo.getValue() : rows.get(0);
+    private static void fillTemplates(ComboBox<TemplateChoice> combo, List<TemplateChoice> rows) {
+        TemplateChoice keep = StartingPoints.same(rows, combo.getValue()).orElse(rows.getFirst());
         combo.getItems().addAll(rows.stream().filter(r -> !combo.getItems().contains(r)).toList());
         combo.setValue(keep);
         combo.getItems().retainAll(rows);

@@ -13,6 +13,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Changed
+- New Project opens on the templates, not on Blank: it remembers the gallery's last list and refreshes it in
+  the background. On a first run it says it is loading, with Create held, and offers Blank only when the
+  gallery cannot be reached.
 - A value a plugin's editor hands over that Studio has no Java for is no longer dropped without a word: the
   field keeps what it had and the status line says why. A plugin can ask itself through the contract's new
   `ValueContext.write`.

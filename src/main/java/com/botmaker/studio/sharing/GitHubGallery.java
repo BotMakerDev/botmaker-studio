@@ -67,7 +67,7 @@ public final class GitHubGallery {
      * add fields, and {@link GalleryEntry} ignores the ones it does not know, so a lagging Studio shows less
      * rather than nothing.
      */
-    static Optional<List<GalleryEntry>> parseCatalog(ObjectMapper mapper, String body) {
+    public static Optional<List<GalleryEntry>> parseCatalog(ObjectMapper mapper, String body) {
         if (body == null || body.isBlank()) return Optional.empty();
         try {
             JsonNode bots = mapper.readTree(body).get("bots");
