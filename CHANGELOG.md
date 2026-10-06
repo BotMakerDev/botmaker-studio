@@ -19,6 +19,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   names what is loaded. A plugin refused outside dev mode offers *Use dev mode* on its row. A Studio run from
   source gives a dev-mode project its own unreleased contract. Publish still refuses a `-SNAPSHOT` pin, and
   turning dev mode off moves the contract entry back to the released one.
+- **Dev mode offers your local builds.** In a dev-mode project, *Browse* lists every plugin built into
+  `~/.m2` at a `-SNAPSHOT`, marked *(local build)*. That includes your own and, from the umbrella, the SDK,
+  plugin-basics and the rest. Each *Installed* row's version list offers its local build too, the SDK's
+  included, through the usual checked pass.
 - **The overlay editor docks beside the game.** ⧉ Overlay opens a panel beside the window your bot watches —
   with the SDK, the one `Sdk.captureSource()` names — without asking; ⇄ Change picks another. It follows the
   window, drags off to float (⇲ docks it again) and resizes from either edge. Chips across the top are your

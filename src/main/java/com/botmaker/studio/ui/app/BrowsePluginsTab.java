@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
+import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.studio.plugin.PluginHost;
@@ -29,11 +30,14 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
- * The <b>Browse</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — the plugin registry, local builds, and
- * the Install button. It was the <b>Manage Plugins</b> window until 2026-09-29.
+ * The <b>Browse</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — the plugin registry, the {@code ~/.m2}
+ * builds while the project is in dev mode, and the Install button. It was the <b>Manage Plugins</b> window until
+ * 2026-09-29.
  *
  * <p>Installing is deliberately not special: it adds an ordinary dependency through {@link LibraryService},
  * so a plugin is on the project's classpath and {@code PluginHost.bind} finds it through the same
@@ -78,18 +82,38 @@ final class BrowsePluginsTab {
      */
     private List<UserLibrary> installed = List.of();
 
+    /** The coordinates a {@code ~/.m2} build answers for in dev mode, so a row can say its version is local. */
+    private Set<String> localCoordinates = Set.of();
+
+    /** The classpath bound, read with {@link #installed}, so a cell draw never copies it. */
+    private List<String> classpath = List.of();
+
+    /** The window's shared {@code ~/.m2} scan, asked only in dev mode. */
+    private final Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds;
+
+    /** The registry's rows and the local builds, each as last read; {@link #show} merges them. */
+    private List<PluginRegistry.Plugin> published = List.of();
+    private List<LocalBuilds.Build> local = List.of();
+    private boolean registryRead;
+
+    /** Bumped by every {@link #load}, so a slower earlier load never overwrites a later one's rows. */
+    private int generation;
+
     /**
      * @param onShowInstalled an installed row's <i>Manage…</i>: the window switches to Installed
      * @param onChanged       after an install wrote the pom, so the window's other tabs read it again
      */
     BrowsePluginsTab(LibraryService libraryService, PluginRegistry registry, JitPackSearch jitpack,
+                     Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds,
                      Runnable onShowInstalled, Runnable onChanged) {
         this.libraryService = libraryService;
         this.catalog = new PluginCatalog(registry, jitpack);
+        this.localBuilds = localBuilds;
         this.onShowInstalled = onShowInstalled;
         this.onChanged = onChanged;
 
         installed = libraryService.declaredLibraries();
+        classpath = libraryService.resolvedClasspath();
 
         searchField.setPromptText("Search plugins");
         searchField.textProperty().addListener((obs, old, text) -> refilter(text));
@@ -123,19 +147,50 @@ final class BrowsePluginsTab {
     /** Re-reads what the pom declares and redraws the badges — another tab or a reload changed it. */
     void refreshInstalled() {
         installed = libraryService.declaredLibraries();
+        classpath = libraryService.resolvedClasspath();
         list.refresh();
     }
 
+    /** Reads the rows again — dev mode was switched, so the local builds come or go. */
+    void reload() {
+        load();
+    }
+
+    /**
+     * The registry's rows, with the {@code ~/.m2} plugin builds over them while the project is in dev mode
+     * ({@link PluginCatalog#withLocalBuilds}). The scan is the window's, off the FX thread. Each half is shown
+     * as it arrives, so the local builds never wait on the network: an author trying an unpublished build may
+     * have no registry at all. Leaving dev mode drops the local rows at once.
+     */
     private void load() {
-        catalog.rows()
-                .thenAccept(rows -> Platform.runLater(() -> {
-                    all.clear();
-                    all.addAll(rows);
-                    refilter(searchField.getText());
-                    list.setPlaceholder(new Label(rows.isEmpty()
-                            ? "No plugins listed — the registry is empty or could not be reached."
-                            : "No plugin matches that search."));
-                }));
+        int asked = ++generation;
+        local = List.of();
+        show();
+        if (libraryService.devMode()) {
+            localBuilds.get().thenAccept(builds -> Platform.runLater(() -> {
+                if (asked != generation) return;
+                local = builds;
+                show();
+            }));
+        }
+        catalog.rows().thenAccept(rows -> Platform.runLater(() -> {
+            if (asked != generation) return;
+            published = rows;
+            registryRead = true;
+            show();
+        }));
+    }
+
+    /** Puts the registry's rows and the local builds on screen, merged. */
+    private void show() {
+        List<PluginRegistry.Plugin> rows = PluginCatalog.withLocalBuilds(published, local);
+        localCoordinates = Set.copyOf(local.stream().map(LocalBuilds.Build::coordinate).toList());
+        all.clear();
+        all.addAll(rows);
+        refilter(searchField.getText());
+        list.setPlaceholder(new Label(!registryRead ? "Loading…"
+                : rows.isEmpty() ? "No plugins listed — the registry is empty or could not be reached."
+                : "No plugin matches that search."));
     }
 
     /** The ids of the plugins bound to the open project — whatever put them on its classpath. */
@@ -155,14 +210,32 @@ final class BrowsePluginsTab {
      */
     static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
                                   List<String> boundIds) {
+        return alreadyProvided(plugin, declared, boundIds, List.of());
+    }
+
+    /**
+     * {@link #alreadyProvided(PluginRegistry.Plugin, List, List)}, a plugin also counting as brought when its
+     * artifact's jar is on {@code classpath} — the only answer for a local build's own row (2026-10-06), whose
+     * id is its coordinate because no registry entry names its plugin id.
+     */
+    static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
+                                  List<String> boundIds, List<String> classpath) {
         // A coordinate the pom already declares is an ordinary re-install or version change, whatever else
         // is bound: this tab is idempotent by coordinate and must stay so.
         if (plugin.isInstalledIn(declared)) return "";
-        if (plugin.id().isBlank() || !boundIds.contains(plugin.id())) return "";
+        boolean bound = !plugin.id().isBlank() && boundIds.contains(plugin.id());
+        if (!bound && !onClasspath(plugin, classpath)) return "";
         String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
         return name + " is already on this project's classpath — another plugin it is a dependency of brings "
                 + "it. Declaring it here too would let this pom pin a version that plugin was never built "
                 + "against. Change the version of the plugin that brings it instead.";
+    }
+
+    /** Whether a jar of {@code plugin}'s artifact, at any version, is on {@code classpath} (repository layout). */
+    static boolean onClasspath(PluginRegistry.Plugin plugin, List<String> classpath) {
+        if (plugin.groupId().isBlank() || plugin.artifactId().isBlank()) return false;
+        String dir = "/" + plugin.groupId().replace('.', '/') + "/" + plugin.artifactId() + "/";
+        return classpath.stream().map(entry -> entry.replace('\\', '/')).anyMatch(entry -> entry.contains(dir));
     }
 
     // merge and version moved to sharing/PluginCatalog on 2026-10-01, so New Project offers the same rows at the
@@ -192,7 +265,7 @@ final class BrowsePluginsTab {
             error("This entry has no resolvable coordinate — nothing to install.");
             return;
         }
-        String provided = alreadyProvided(plugin, installed, boundPluginIds());
+        String provided = alreadyProvided(plugin, installed, boundPluginIds(), libraryService.resolvedClasspath());
         if (!provided.isEmpty()) {
             error(provided);
             return;
@@ -271,7 +344,9 @@ final class BrowsePluginsTab {
             }
             Label name = new Label(plugin.name().isBlank() ? plugin.id() : plugin.name());
             name.setStyle("-fx-font-weight: bold;");
-            Label coordinate = new Label(plugin.coordinate());
+            boolean localBuild = localCoordinates.contains(plugin.coordinate());
+            Label coordinate = new Label(plugin.coordinate()
+                    + (localBuild ? "  " + plugin.verifiedVersion() + " (local build)" : ""));
             coordinate.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
             Label description = new Label(plugin.description());
             description.setWrapText(true);
@@ -288,7 +363,7 @@ final class BrowsePluginsTab {
             Node action;
             // Brought by another plugin: nothing to install, and nothing this pom can remove. Saying
             // "Install" and then refusing the click is what this label replaces.
-            String provided = alreadyProvided(plugin, installed, boundPluginIds());
+            String provided = alreadyProvided(plugin, installed, boundPluginIds(), classpath);
             if (!provided.isEmpty()) {
                 Label state = new Label("Included");
                 state.setTooltip(new Tooltip(provided));

@@ -50,6 +50,19 @@ class PluginAlreadyProvidedTest {
     }
 
     @Test
+    void aLocalBuildsRowIsRefusedWhenItsJarIsAlreadyOnTheClasspath() {
+        // A dev-mode row for a build no registry lists: its id is its coordinate, so only the jar can tell.
+        PluginRegistry.Plugin local = entry("com.github.BotMakerDev:botmaker-plugin-basics", "botmaker-plugin-basics",
+                "com.github.BotMakerDev:botmaker-plugin-basics");
+        List<String> classpath = List.of("/home/u/.m2/repository/com/github/BotMakerDev/botmaker-plugin-basics/"
+                + "0.3.1-SNAPSHOT/botmaker-plugin-basics-0.3.1-SNAPSHOT.jar");
+
+        assertTrue(BrowsePluginsTab.alreadyProvided(local, List.of(), List.of(), classpath)
+                .contains("already on this project's classpath"));
+        assertEquals("", BrowsePluginsTab.alreadyProvided(local, List.of(), List.of(), List.of()));
+    }
+
+    @Test
     void aPluginNothingBringsInstallsNormally() {
         assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS, List.of(), List.of("com.botmaker.sdk")));
     }

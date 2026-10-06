@@ -5,6 +5,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
+import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
@@ -39,6 +40,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 /**
  * The <b>Installed</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — every plugin this project installs,
@@ -106,6 +109,9 @@ public final class InstalledPluginsTab {
     private final PluginRegistry registry;
     private final JitPackSearch jitpack;
 
+    /** The window's shared {@code ~/.m2} scan, asked only in dev mode. */
+    private final Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds;
+
     private final GridPane table = new GridPane();
     private final Label statusLabel = new Label();
     private final Label whyDisabled = new Label();
@@ -134,6 +140,12 @@ public final class InstalledPluginsTab {
     /** Whether the project is in dev mode, read on every {@link #load}: its dev rows load and are not refused. */
     private boolean devMode;
 
+    /** In dev mode, the {@code ~/.m2} build of each coordinate that has one: {@code group:artifact → version}. */
+    private Map<String, String> localVersions = Map.of();
+
+    /** Bumped by every {@link #load}, so a slower earlier load never draws over a later one. */
+    private int generation;
+
     /**
      * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
      * @param onOpenReview the result block's <i>Open Review tab</i>; the tab is the shell's, so the shell
@@ -142,12 +154,14 @@ public final class InstalledPluginsTab {
      */
     InstalledPluginsTab(ProjectConfig config, ProjectState state, LibraryService libraryService,
                         PluginRegistry registry, JitPackSearch jitpack,
+                        Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds,
                         Runnable onAddPlugin, Runnable onOpenReview, Runnable onChanged) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
         this.registry = registry;
         this.jitpack = jitpack;
+        this.localBuilds = localBuilds;
         this.onAddPlugin = onAddPlugin;
         this.onOpenReview = onOpenReview;
         this.onChanged = onChanged;
@@ -270,13 +284,26 @@ public final class InstalledPluginsTab {
      * the window must never do is show an empty table because a network call failed.
      */
     private void load() {
+        int asked = ++generation;
         devMode = libraryService.devMode();
+        // In dev mode each row also offers this computer's own build of it (LocalBuilds), e.g. the SDK the
+        // umbrella just installed at its main SNAPSHOT. The scan is the window's, off the FX thread.
+        CompletableFuture<List<LocalBuilds.Build>> scan = devMode
+                ? localBuilds.get() : CompletableFuture.completedFuture(List.of());
         status("Reading this project's plugins…");
-        registry.browse().thenAccept(entries -> {
+        // Async: with no registry configured both halves may already be done, and this reads jars.
+        registry.browse().thenCombineAsync(scan, (entries, builds) -> {
             List<InstalledPlugin> found = InstalledPlugin.of(
                     libraryService.declaredLibraries(), entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
             Set<String> ambiguous = InstalledPlugin.ambiguousAmong(config.projectPath(), found);
-            Platform.runLater(() -> render(found, ambiguous));
+            Map<String, String> local = new java.util.HashMap<>();
+            builds.forEach(build -> local.put(build.coordinate(), build.version()));
+            Platform.runLater(() -> {
+                if (asked != generation) return;        // a later load (a dev-mode switch) owns the table
+                localVersions = Map.copyOf(local);
+                render(found, ambiguous);
+            });
+            return null;
         }).exceptionally(error -> {
             Platform.runLater(() -> {
                 progress.setVisible(false);
@@ -439,7 +466,7 @@ public final class InstalledPluginsTab {
             seeding = true;
             String seed = recommended();
             List<String> known = new ArrayList<>();
-            for (String v : List.of(upgrades.currentVersion(), plugin.available())) {
+            for (String v : List.of(upgrades.currentVersion(), plugin.available(), localVersion())) {
                 if (!v.isBlank() && !known.contains(v)) known.add(v);
             }
             if (!known.contains(seed)) known.add(seed);
@@ -486,9 +513,15 @@ public final class InstalledPluginsTab {
                 }
                 String tag = item.equals(installed.getText())
                         ? (isDev() ? "  (installed, dev build)" : "  (installed)")
+                        : item.equals(localVersion()) ? "  (local build)"
                         : item.equals(plugin.available()) ? "  (verified)" : "";
                 setText(item + tag);
             }
+        }
+
+        /** This computer's {@code ~/.m2} build of the row's coordinate in dev mode, else {@code ""}. */
+        String localVersion() {
+            return localVersions.getOrDefault(plugin.artifact().groupId() + ":" + plugin.artifact().artifactId(), "");
         }
 
         /** Repaints this row's state cell. One class per state, so both themes are the stylesheet's job. */

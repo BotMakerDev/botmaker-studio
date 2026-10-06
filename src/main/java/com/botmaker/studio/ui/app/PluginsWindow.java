@@ -7,6 +7,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
+import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -71,6 +72,12 @@ public final class PluginsWindow {
     private final Label loadProblems = new Label();
     private final Label status = new Label();
     private final CheckBox devMode = new CheckBox("Dev mode");
+
+    /**
+     * The {@code ~/.m2} scan both tabs read in dev mode, run once and shared until the next reload: it walks
+     * the whole local repository and opens jars. Touched on the FX thread only.
+     */
+    private CompletableFuture<List<LocalBuilds.Build>> localScan;
     private InstalledPluginsTab installed;
     private BrowsePluginsTab browse;
     private LibrariesTab libraries;
@@ -95,14 +102,14 @@ public final class PluginsWindow {
                 .size(820, 680).minSize(620, 480);
         stage = window.stage();
 
-        installed = new InstalledPluginsTab(config, state, libraryService, registry, jitpack,
+        installed = new InstalledPluginsTab(config, state, libraryService, registry, jitpack, this::localBuilds,
                 () -> select(Section.BROWSE),
                 () -> {
                     stage.close();
                     onOpenReview.run();
                 },
                 this::afterInstalledChanged);
-        browse = new BrowsePluginsTab(libraryService, registry, jitpack,
+        browse = new BrowsePluginsTab(libraryService, registry, jitpack, this::localBuilds,
                 () -> select(Section.INSTALLED), this::afterBrowseChanged);
         libraries = new LibrariesTab(libraryService, mavenCentral, jitpack,
                 InstalledPlugin.jarDeclaresPlugin(config.projectPath()), this::afterLibrariesChanged);
@@ -163,14 +170,18 @@ public final class PluginsWindow {
             // nothing, and an author who forgot to run mvn install needs to tell those apart.
             status.setText(loadedText(PluginHost.plugins()) + devText(PluginHost.devBuilds()));
             showLoadProblems();
+            localScan = null;       // a rebuild or a dev-mode switch changes which ~/.m2 builds are offered
             installed.reload();
+            browse.reload();
             browse.refreshInstalled();
         }));
     }
 
     private void afterInstalledChanged() {
+        boolean wasDevMode = devMode.isSelected();
         devMode.setSelected(libraryService.devMode());   // the tab's Use dev mode turns it on too
         showLoadProblems();
+        if (wasDevMode != devMode.isSelected()) browse.reload();
         browse.refreshInstalled();
         libraries.reload();
     }
@@ -197,6 +208,12 @@ public final class PluginsWindow {
         loadProblems.setText(text);
         loadProblems.setVisible(!text.isEmpty());
         loadProblems.setManaged(!text.isEmpty());
+    }
+
+    /** The shared {@link #localScan}, started off the FX thread the first time a tab asks. */
+    private CompletableFuture<List<LocalBuilds.Build>> localBuilds() {
+        if (localScan == null) localScan = CompletableFuture.supplyAsync(LocalBuilds::scan);
+        return localScan;
     }
 
     /** What the Dev mode box's tooltip says it does, and what it does not change. */

@@ -359,6 +359,11 @@ public final class LibraryService {
         return CompletableFuture.runAsync(this::rebind, rebinds);
     }
 
+    /** The classpath the editor is bound to: every jar the pom resolved to, transitive ones included. */
+    public List<String> resolvedClasspath() {
+        return List.copyOf(state.getResolvedClasspath());
+    }
+
     /** Whether this project is in dev mode: its plugin jars at a {@code -SNAPSHOT} version are bound. */
     public boolean devMode() {
         return StudioProjectSettings.devModeIn(config.projectPath());
