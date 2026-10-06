@@ -102,6 +102,77 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no review list here.");
     }
 
+    // ---- versions, plugins and the project (phase 9) — each refused here unless the implementation offers it
+
+    /** The bot's newest {@code limit} versions, newest first: id, when, who and what. */
+    default String listVersions(int limit) {
+        throw new IllegalArgumentException("Studio keeps no versions here.");
+    }
+
+    /** Saves the bot as it is now as a version named {@code label}, a milestone the user sees in Versions. */
+    default String checkpoint(String label) {
+        throw new IllegalArgumentException("Studio keeps no versions here.");
+    }
+
+    /**
+     * Puts the whole bot back as the version {@code version} had it, after saving what it is now as a version,
+     * then reloads the project.
+     */
+    default String revert(String version) {
+        throw new IllegalArgumentException("Studio keeps no versions here.");
+    }
+
+    /**
+     * Whether the project is about to reload — a {@link #revert} put the files back and the editor still holds
+     * what was there before — so no tool may touch the editor, run or save: each would write the old code back.
+     */
+    default boolean reloading() {
+        return false;
+    }
+
+    /** The plugins the bot's pom declares, each with its version and whether it loaded. */
+    default String listPlugins() {
+        throw new IllegalArgumentException("Studio has no plugins here.");
+    }
+
+    /** The registry's plugins {@code query} matches; every one for a blank query. */
+    default String searchPlugins(String query) {
+        throw new IllegalArgumentException("Studio has no plugin registry here.");
+    }
+
+    /** Adds the registry's plugin {@code id} to the pom, once the user agrees on screen. */
+    default String addPlugin(String id) {
+        throw new IllegalArgumentException("Studio cannot add a plugin here.");
+    }
+
+    /**
+     * What removing the declared plugin {@code id} would change, or, when {@code confirm}, removes it: a version
+     * first, the calls into it repaired, and its files deleted when {@code deleteFiles}.
+     */
+    default String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot remove a plugin here.");
+    }
+
+    /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
+    default String listParams() {
+        throw new IllegalArgumentException("Studio reads no parameters here.");
+    }
+
+    /** Sets the {@code @Param} field {@code param}'s value in the code, read by the host grammar from {@code value}. */
+    default String setParamDefault(String param, String value) {
+        throw new IllegalArgumentException("Studio sets no parameters here.");
+    }
+
+    /** The project settings an assistant may read and set, each with its value and what it takes. */
+    default String settings() {
+        throw new IllegalArgumentException("Studio has no settings here.");
+    }
+
+    /** Sets the project setting {@code key}, one {@link #settings} lists, to {@code value}. */
+    default String setSetting(String key, String value) {
+        throw new IllegalArgumentException("Studio has no settings here.");
+    }
+
     /** The bound plugins' assistant tools, in plugin order. */
     List<PluginTool> pluginTools();
 

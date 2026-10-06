@@ -22,10 +22,10 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
- * The assistant's tools as MCP serves them, in four groups: the bot's files ({@link AssistTools} over a fresh
+ * The assistant's tools as MCP serves them, in five groups: the bot's files ({@link AssistTools} over a fresh
  * {@link AssistTurn} per call), Studio ({@link StudioDriver}: targets, the overlay's caret, boxes on the game),
- * runs (the bot, one activity, one statement, and what they printed — {@link RunLog}), and every bound plugin's
- * own tools ({@code <plugin>_<name>}).
+ * runs (the bot, one activity, one statement, and what they printed — {@link RunLog}), the project (versions,
+ * plugins, parameters, settings), and every bound plugin's own tools ({@code <plugin>_<name>}).
  *
  * <p>An MCP client has no "end of reply" Studio can see, so <b>every edit is its own turn</b>, committed when it
  * is accepted, and therefore its own undo step.
@@ -38,18 +38,30 @@ public final class McpTools {
     public static final String INSTRUCTIONS = """
             You build a bot in BotMaker Studio, a block editor over Java. You work only through the tools.
 
-            - list_files and list_targets say where things are. A target is where an activity's blocks go;
-              set_target opens it in Studio. Every file tool takes `file`; leave it empty for the open file.
-            - Read a method with read_tree before editing, and again after edits: ids below an insertion shift.
-            - Insert only what list_palette offers, by its id. You cannot write Java directly. apply_edits
-              makes several edits in one call, as one step. add_method, edit_signature and move_block shape
-              the code; rename and find_usages work across files by symbol (Type.member).
-            - A slot takes a value of its type: a literal, one of the bot's constants (Pictures.ORE), or a
-              constant or factory call of that type.
+            Work in this loop, one small step at a time:
+            1. Look. list_targets says where each activity's blocks go and set_target opens one; list_files
+               and list_methods say where the rest is. A plugin's own tools (named <plugin>_<tool>) see the
+               game: a screenshot, its pictures, what matches where.
+            2. Pictures. Make the pictures and places the bot looks for with the plugin's tools; each becomes
+               one of the bot's constants (Pictures.ORE).
+            3. Blocks. read_tree a method, then insert what list_palette offers, by its id, and set_slot each
+               value. apply_edits makes several edits in one call, as one step. add_method, edit_signature,
+               move_block, rename and find_usages shape the code.
+            4. Try. try_statement runs one statement, run_activity one activity, run_bot the whole bot. They
+               act on the game: it is the only way you do.
+            5. Read. read_trace says what the run printed and traced; run_state whether it still runs; stop
+               ends it.
+            6. Fix what the trace shows, and go round again.
+
+            - Every file tool takes `file`; leave it empty for the open file. Read the tree again after an
+              edit: ids below an insertion shift.
+            - You cannot write Java. A slot takes a value of its type: a literal, one of the bot's constants,
+              or a constant or factory call of that type.
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
-            - Each accepted edit lands in the user's file at once, as one step they can undo.
-            - You act on the game only by running the bot's code: try_statement, run_activity, run_bot. Then
-              read_trace says what happened, and run_state whether it still runs. stop ends it.
+            - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
+              before a large change saves a version to go back to with revert.
+            - list_params and set_param_default are the values the bot's user sets; list_plugins,
+              search_plugins, add_plugin and remove_plugin what it is built from.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -74,18 +86,53 @@ public final class McpTools {
     private static final Prop FILE = Prop.optionalText("file",
             "the file, as list_files names it (its path, file name or class name); empty for the file open in Studio");
 
+    /** Studio's own tools and the plugins' as they are now. */
     public static List<SyncToolSpecification> all(McpJsonMapper json, LiveBot bot, StudioDriver driver, RunLog log) {
+        List<SyncToolSpecification> tools = new ArrayList<>(studio(json, bot, driver, log, () -> { }));
+        tools.addAll(pluginTools(json, driver, names(tools)));
+        return tools;
+    }
+
+    /**
+     * Studio's own tools, without the plugins'.
+     *
+     * @param pluginsChanged run after a tool added or removed a plugin, so the plugins' tools are served anew
+     */
+    static List<SyncToolSpecification> studio(McpJsonMapper json, LiveBot bot, StudioDriver driver, RunLog log,
+                                              Runnable pluginsChanged) {
         List<SyncToolSpecification> tools = new ArrayList<>(fileTools(json, bot));
         tools.addAll(studioTools(json, driver));
         tools.addAll(runTools(json, driver, log));
-        java.util.Set<String> taken = new java.util.HashSet<>();
-        tools.forEach(t -> taken.add(t.tool().name()));
+        tools.addAll(projectTools(json, driver, log, pluginsChanged));
+        return tools.stream().map(t -> guarded(driver, t)).toList();
+    }
+
+    /** {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}). */
+    private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
+        return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> driver.reloading()
+                ? result("REFUSED: Studio is reloading the project after a revert. Call again once it has "
+                + "reopened.", true)
+                : tool.callHandler().apply(exchange, request)).build();
+    }
+
+    /**
+     * The bound plugins' tools, but one whose name is in {@code taken}: a name that is Studio's own or an earlier
+     * plugin's would shadow it, so the first one keeps it.
+     */
+    static List<SyncToolSpecification> pluginTools(McpJsonMapper json, StudioDriver driver, java.util.Set<String> taken) {
+        java.util.Set<String> names = new java.util.HashSet<>(taken);
+        List<SyncToolSpecification> out = new ArrayList<>();
         for (SyncToolSpecification tool : pluginTools(json, driver)) {
-            // A plugin's name that is Studio's own or another plugin's would shadow it: the first one keeps it.
-            if (taken.add(tool.tool().name())) tools.add(tool);
+            if (names.add(tool.tool().name())) out.add(guarded(driver, tool));
             else System.err.println("Warning: a plugin's assistant tool " + tool.tool().name() + " is taken; skipped.");
         }
-        return tools;
+        return out;
+    }
+
+    static java.util.Set<String> names(List<SyncToolSpecification> tools) {
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        tools.forEach(t -> names.add(t.tool().name()));
+        return names;
     }
 
     // ---- the bot's files -----------------------------------------------------------------------------------
@@ -378,6 +425,84 @@ public final class McpTools {
         return start.get();
     }
 
+    // ---- versions, plugins and the project -----------------------------------------------------------------
+
+    private static List<SyncToolSpecification> projectTools(McpJsonMapper json, StudioDriver driver,
+                                                            RunLog log, Runnable pluginsChanged) {
+        return List.of(
+                act(json, "list_versions",
+                        "List the bot's versions, newest first: each one's id, when it was made, who made it and "
+                                + "its name. revert takes the id.",
+                        List.of(new Prop("limit", "integer", "how many, 20 when not given", false)),
+                        args -> driver.listVersions(args.get("limit") == null ? 20 : number(args, "limit"))),
+                act(json, "checkpoint",
+                        "Save the bot as it is now as a named version — before a change you may want to undo as a "
+                                + "whole. The user sees it in the Versions tab.",
+                        List.of(Prop.text("label", "what the version is: Before the battle loop")),
+                        args -> driver.checkpoint(text(args, "label"))),
+                act(json, "revert",
+                        "Put the whole bot back as a version had it. What it is now is saved as a version first, so "
+                                + "nothing is lost. The project reloads, which ends an assistant session running in "
+                                + "Studio's Assistant tab: say so to the user before calling it.",
+                        List.of(Prop.text("version", "the version's id, from list_versions")),
+                        args -> idle(log, () -> driver.revert(text(args, "version")))),
+                act(json, "list_plugins",
+                        "List the plugins the bot uses, each with its version and whether it loaded. A plugin brings "
+                                + "the palette's calls and the types slots take, and may bring tools of its own.",
+                        List.of(), args -> driver.listPlugins()),
+                act(json, "search_plugins", "Search the plugin registry, by a word of a plugin's name, id, "
+                                + "description or tags.",
+                        List.of(Prop.optionalText("query", "the word; empty for every plugin")),
+                        args -> driver.searchPlugins(text(args, "query"))),
+                act(json, "add_plugin",
+                        "Add a plugin from the registry to the bot, at the version the registry checked. The user "
+                                + "is asked on screen first: a plugin runs with Studio's permissions. Its tools "
+                                + "are served once it loads.",
+                        List.of(Prop.text("id", "the plugin's id, from search_plugins")),
+                        args -> changed(pluginsChanged, driver.addPlugin(text(args, "id")))),
+                spec(json, "remove_plugin",
+                        "Remove a plugin from the bot. Without confirm it only says what would change: the calls "
+                                + "into it that become a default value or are deleted, and its files. With "
+                                + "confirm a version is saved first, then the calls are repaired and the "
+                                + "functions they were in are marked for review.",
+                        """
+                                {"type":"object","properties":{
+                                  "id":{"type":"string","description":"the plugin, as list_plugins names it"},
+                                  "deleteFiles":{"type":"boolean","description":"also delete the files it keeps in the bot (its pictures, its flow)"},
+                                  "confirm":{"type":"boolean","description":"true to remove it; false or absent to only see what would change"}},
+                                 "required":["id"],"additionalProperties":false}""",
+                        request -> {
+                            Map<String, Object> args = arguments(request);
+                            boolean confirm = flag(args, "confirm");
+                            return answer(() -> {
+                                String done = driver.removePlugin(text(args, "id"), flag(args, "deleteFiles"), confirm);
+                                return confirm ? changed(pluginsChanged, done) : done;
+                            });
+                        }),
+                act(json, "list_params",
+                        "List the bot's parameters — its @Param fields, the values its user can set — with each "
+                                + "one's type and value.",
+                        List.of(), args -> driver.listParams()),
+                act(json, "set_param_default",
+                        "Set a parameter's value in the code: what the bot runs with until its user changes it.",
+                        List.of(Prop.text("param", "the parameter: Class.name, or its name alone when only one has it"),
+                                Prop.text("value", "a value of its type, as set_slot takes it")),
+                        args -> driver.setParamDefault(text(args, "param"), text(args, "value"))),
+                act(json, "get_settings", "List the project settings you may change, each with its value and "
+                                + "what it takes.",
+                        List.of(), args -> driver.settings()),
+                act(json, "set_setting", "Change a project setting, one get_settings lists.",
+                        List.of(Prop.text("key", "the setting's key, from get_settings"),
+                                Prop.text("value", "its new value")),
+                        args -> driver.setSetting(text(args, "key"), text(args, "value"))));
+    }
+
+    /** {@code answer}, after telling the endpoint the plugins may have changed. */
+    private static String changed(Runnable pluginsChanged, String answer) {
+        pluginsChanged.run();
+        return answer;
+    }
+
     // ---- the plugins' tools --------------------------------------------------------------------------------
 
     private static List<SyncToolSpecification> pluginTools(McpJsonMapper json, StudioDriver driver) {
@@ -431,15 +556,18 @@ public final class McpTools {
     /** A tool that answers a sentence; an {@link IllegalArgumentException} is its refusal. */
     private static SyncToolSpecification act(McpJsonMapper json, String name, String description, List<Prop> props,
                                              Function<Map<String, Object>, String> call) {
-        return spec(json, name, description, schema(props), request -> {
-            try {
-                return result(call.apply(arguments(request)), false);
-            } catch (IllegalArgumentException e) {
-                return result("REFUSED: " + e.getMessage(), true);
-            } catch (RuntimeException e) {
-                return result("Studio could not do that: " + e.getMessage(), true);
-            }
-        });
+        return spec(json, name, description, schema(props), request -> answer(() -> call.apply(arguments(request))));
+    }
+
+    /** {@code call}'s sentence as a result; an {@link IllegalArgumentException} is its refusal. */
+    private static CallToolResult answer(java.util.function.Supplier<String> call) {
+        try {
+            return result(call.get(), false);
+        } catch (IllegalArgumentException e) {
+            return result("REFUSED: " + e.getMessage(), true);
+        } catch (RuntimeException e) {
+            return result("Studio could not do that: " + e.getMessage(), true);
+        }
     }
 
     private static SyncToolSpecification spec(McpJsonMapper json, String name, String description, String schema,
@@ -471,6 +599,12 @@ public final class McpTools {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(key + " must be a whole number, not " + value);
         }
+    }
+
+    /** {@code key} as a yes or no; no when not given. */
+    private static boolean flag(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        return value instanceof Boolean b ? b : "true".equalsIgnoreCase(String.valueOf(value).strip());
     }
 
     /** {@code key}'s list; empty when not given. */

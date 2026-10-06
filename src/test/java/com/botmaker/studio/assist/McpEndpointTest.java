@@ -126,13 +126,44 @@ class McpEndpointTest {
         }
         @Override public String stop() { return "stopped"; }
         @Override public String rename(String symbol, String to) { asked.add("rename " + symbol + " " + to); return "renamed"; }
+        @Override public String revert(String version) {
+            asked.add("revert " + version);
+            reloading = true;
+            return "reverted";
+        }
+        volatile boolean reloading;
+        @Override public boolean reloading() { return reloading; }
+        @Override public String checkpoint(String label) { asked.add("checkpoint " + label); return "saved"; }
+        @Override public String addPlugin(String id) {
+            asked.add("add " + id);
+            more = true;
+            return "added";
+        }
+        @Override public String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+            asked.add("remove " + id + " " + deleteFiles + " " + confirm);
+            if (confirm) more = false;
+            return confirm ? "removed" : "would remove";
+        }
+        @Override public String setParamDefault(String param, String value) {
+            asked.add("param " + param + "=" + value);
+            return "set";
+        }
+
+        /** Whether the plugin add_plugin adds is bound. */
+        volatile boolean more;
 
         @Override
         public List<PluginTool> pluginTools() {
             AssistantTool<Snap> snap = AssistantTool.named("snap").describedAs("A square picture.")
                     .takes(Snap.class).handledBy((p, ctx) -> AgentReply.text("a " + p.size() + "px square")
                             .and(AgentReply.image(new BufferedImage(p.size(), p.size(), BufferedImage.TYPE_INT_RGB))));
-            return List.of(new PluginTool("fake_snap", "Fake", snap));
+            List<PluginTool> tools = new ArrayList<>(List.of(new PluginTool("fake_snap", "Fake", snap),
+                    new PluginTool("list_files", "Fake", snap)));
+            if (more) {
+                tools.add(new PluginTool("more_snap", "More", AssistantTool.named("snap").describedAs("Another.")
+                        .takesNothing().handledBy((none, ctx) -> AgentReply.text("more"))));
+            }
+            return tools;
         }
 
         @Override
@@ -235,10 +266,57 @@ class McpEndpointTest {
         assertEquals(List.of("list_files", "list_methods", "list_palette", "read_tree", "list_errors", "insert_block",
                 "set_slot", "delete_block", "apply_edits", "add_method", "move_block", "edit_signature",
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "find_usages", "rename", "open",
-                "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity", "try_statement", "stop", "run_state", "read_trace", "fake_snap"), names);
+                "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
+                "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
+                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "list_params", "set_param_default",
+                "get_settings", "set_setting", "fake_snap"), names, "a plugin's list_files does not shadow Studio's");
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
+    }
+
+    @Test
+    void aPluginAddedIsServedAndOneRemovedGoes() throws Exception {
+        initialize();
+        assertFalse(toolNames().contains("more_snap"));
+        assertEquals("added", text(call("add_plugin", "{\"id\":\"more\"}")));
+        assertTrue(toolNames().contains("more_snap"), "served without a restart");
+        assertEquals("more", text(call("more_snap", "{}")));
+
+        assertEquals("would remove", text(call("remove_plugin", "{\"id\":\"more\"}")));
+        assertTrue(toolNames().contains("more_snap"), "a preview changes nothing");
+        assertEquals("removed", text(call("remove_plugin", "{\"id\":\"more\",\"deleteFiles\":true,\"confirm\":true}")));
+        assertFalse(toolNames().contains("more_snap"));
+        assertEquals(List.of("add more", "remove more false false", "remove more true true"), driver.asked);
+        assertEquals(1, toolNames().stream().filter("list_files"::equals).count());
+    }
+
+    @Test
+    void versionsAndParametersGoToStudio() throws Exception {
+        initialize();
+        assertEquals("saved", text(call("checkpoint", "{\"label\":\"Before the loop\"}")));
+        assertEquals("set", text(call("set_param_default", "{\"param\":\"Parameters.rounds\",\"value\":\"3\"}")));
+        assertTrue(isError(call("list_params", "{}")), "what the driver lacks is refused");
+
+        bus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+        JsonNode during = call("revert", "{\"version\":\"abc1234\"}");
+        assertTrue(isError(during) && text(during).contains("Stop it first"), "no revert under a run: " + during);
+        bus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
+        assertEquals("reverted", text(call("revert", "{\"version\":\"abc1234\"}")));
+        for (String[] tool : List.of(new String[] {"run_bot", "{}"}, new String[] {"checkpoint", "{\"label\":\"x\"}"},
+                new String[] {"fake_snap", "{\"size\":1}"},
+                new String[] {"insert_block", "{\"bodyId\":\"b\",\"index\":0,\"paletteId\":\"block:PRINT\"}"})) {
+            JsonNode after = call(tool[0], tool[1]);
+            assertTrue(isError(after) && text(after).contains("reloading"), tool[0] + " before the reload: " + after);
+        }
+        assertTrue(bot.commits.isEmpty(), "no edit lands over the restored files");
+        assertEquals(List.of("checkpoint Before the loop", "param Parameters.rounds=3", "revert abc1234"), driver.asked);
+    }
+
+    private List<String> toolNames() throws Exception {
+        List<String> names = new ArrayList<>();
+        rpc("tools/list", "{}").path("result").path("tools").forEach(t -> names.add(t.path("name").asText()));
+        return names;
     }
 
     @Test

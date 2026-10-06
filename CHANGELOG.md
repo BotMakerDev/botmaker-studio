@@ -46,6 +46,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `edit_signature` (the file's calls follow; refused when another file's call would break), `move_block` and
   `add_file`; `find_usages`, `rename` (every file, one undo step) and `open`, each naming a declaration as
   `Collect.body`; and the Review list — `list_review`, `mark_reviewed`, `remove_mark`, `undo_change`.
+- **The assistant keeps versions, picks plugins and sets parameters.** `list_versions`, `checkpoint` (a named
+  version, a milestone in Versions) and `revert` (what the bot is now is saved first; the project reloads, which
+  ends an assistant session in the Assistant tab). `list_plugins`, `search_plugins`, `add_plugin` — you are asked
+  on screen first — and `remove_plugin`, which only says what would change until it is confirmed, and asks you
+  too. A plugin added or removed this way serves its own tools at once. `list_params` and `set_param_default`
+  set a `@Param` value in the code; `get_settings` and `set_setting` change 🐞 Debug output and what the Trace
+  tab hides. The server's instructions now walk a client through the loop: look, pictures, blocks, try, read the
+  trace, fix. A bot that is a submodule (the template) keeps its versions to you: the assistant saves and
+  restores none.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.

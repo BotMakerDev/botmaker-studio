@@ -33,6 +33,32 @@ import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.trial.Trials;
+import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.api.Runs;
+import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.project.params.JavaParameter;
+import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.studio.project.params.ParameterRow;
+import com.botmaker.studio.project.vcs.Checkpoints;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.studio.services.MavenService;
+import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.services.upgrade.InstalledPlugin;
+import com.botmaker.studio.services.upgrade.PluginHolders;
+import com.botmaker.studio.services.upgrade.PluginUpgradeService;
+import com.botmaker.studio.sharing.PluginCatalog;
+import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -44,12 +70,20 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static com.botmaker.studio.ui.app.LiveEditorBot.onFx;
@@ -68,6 +102,9 @@ final class StudioBridge implements StudioDriver {
     private final Trials trials;
     private final RunLog log;
     private final Supplier<Window> owner;
+    private final JitPackSearch jitpack = new JitPackSearch();
+    // The plugin index, read off the same raw CDN as Plugins & Libraries, with no account.
+    private final PluginRegistry registry = new PluginRegistry(new GitHubClient());
 
     StudioBridge(StudioContext ctx, Trials trials, RunLog log, Supplier<Window> owner) {
         this.ctx = ctx;
@@ -383,6 +420,413 @@ final class StudioBridge implements StudioDriver {
             ctx.codeEditorService().switchToFile(file);
             say("The assistant opened " + file.getFileName() + ".");
         }
+    }
+
+    // ---- versions ------------------------------------------------------------------------------------------
+
+    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.systemDefault());
+
+    @Override
+    public String listVersions(int limit) {
+        List<ProjectVcs.CommitInfo> history = history();
+        if (history.isEmpty()) return "The bot has no versions yet. checkpoint saves one.";
+        int shown = Math.clamp(limit, 1, 200);
+        List<String> lines = new ArrayList<>();
+        for (ProjectVcs.CommitInfo c : history.subList(0, Math.min(shown, history.size()))) {
+            lines.add(c.shortSha() + "  " + WHEN.format(c.when()) + "  " + c.origin().displayName() + "  "
+                    + c.title() + (c.milestone() ? "  ★" : "")
+                    + (c.tags().isEmpty() ? "" : "  [" + String.join(", ", c.tags()) + "]"));
+        }
+        if (history.size() > shown) lines.add("… and " + (history.size() - shown) + " older.");
+        return String.join("\n", lines);
+    }
+
+    @Override
+    public String checkpoint(String label) {
+        String name = label == null ? "" : label.strip();
+        if (name.isEmpty()) throw new IllegalArgumentException("A version needs a label: what it is.");
+        Path dir = versionedProject();
+        ProjectState.Snapshot editor = onFx(() -> ctx.state().snapshot());
+        try {
+            String sha = Checkpoints.save(dir, editor, VersionOrigin.AI, name);
+            if (sha == null) return "Nothing changed since the last version, so none was saved.";
+            // Named, so it is a milestone in the Versions tab like a version the user saved.
+            new ProjectVcs(dir).name(sha, name);
+            return "Saved the version " + sha + " “" + name + "”. revert " + sha + " puts the bot back to it.";
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Studio could not save a version: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public String revert(String version) {
+        String wanted = version == null ? "" : version.strip();
+        Path dir = versionedProject();
+        ProjectVcs vcs = new ProjectVcs(dir);
+        if (vcs.merging()) {
+            throw new IllegalArgumentException("An update is in progress; the user finishes or cancels it in the "
+                    + "Versions tab first.");
+        }
+        List<ProjectVcs.CommitInfo> matching = wanted.length() < 4 ? List.of()
+                : history().stream().filter(c -> c.sha().startsWith(wanted)).toList();
+        if (matching.size() != 1) {
+            throw new IllegalArgumentException((matching.isEmpty() ? "No version " : "More than one version starts ")
+                    + wanted + ". list_versions gives the ids.");
+        }
+        ProjectVcs.CommitInfo target = matching.getFirst();
+        // From here to the reload the editor holds the old code: a run or a save would write it back.
+        reloading = true;
+        try {
+            ProjectState.Snapshot editor = onFx(() -> ctx.state().snapshot());
+            // The editor's edits go to disk first, so the version restoreTo saves of "now" holds them.
+            Checkpoints.flush(editor);
+            vcs.restoreTo(target.sha());
+        } catch (IOException | RuntimeException e) {
+            reloading = false;
+            throw new IllegalArgumentException("Studio could not put the bot back: " + e.getMessage());
+        }
+        // The reload tears this window down, endpoint and all: it waits for the answer to reach the client.
+        CompletableFuture.delayedExecutor(RELOAD_DELAY_MS, TimeUnit.MILLISECONDS).execute(() -> Platform.runLater(() ->
+                ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent())));
+        return "Put the bot back as “" + target.title() + "” (" + WHEN.format(target.when()) + ") had it; what it "
+                + "was is saved as a version first. Studio reloads the project now.";
+    }
+
+    private static final long RELOAD_DELAY_MS = 1500;
+
+    /** Set by {@link #revert} until the reload replaces this window, and this bridge with it. */
+    private volatile boolean reloading;
+
+    @Override
+    public boolean reloading() {
+        return reloading;
+    }
+
+    private List<ProjectVcs.CommitInfo> history() {
+        try {
+            return new ProjectVcs(ctx.config().projectPath()).history();
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
+    /**
+     * The project's folder, when its versions are the assistant's to write. Not in a submodule: its history is
+     * also another repository's, where Studio writes only the versions the user starts ({@link Checkpoints}).
+     */
+    private Path versionedProject() {
+        Path dir = ctx.config().projectPath();
+        if (new ProjectVcs(dir).sharedRepository()) {
+            throw new IllegalArgumentException("This bot's history is another repository's too, so the assistant "
+                    + "saves and restores no version of it; the user does that in the Versions tab.");
+        }
+        return dir;
+    }
+
+    // ---- plugins -------------------------------------------------------------------------------------------
+
+    @Override
+    public String listPlugins() {
+        List<InstalledPlugin> declared = installed(registryEntries());
+        List<String> lines = new ArrayList<>();
+        if (declared.isEmpty()) lines.add("The bot's pom declares no plugin.");
+        for (InstalledPlugin plugin : declared) {
+            lines.add(plugin.displayName() + "  " + plugin.coordinate() + "  " + plugin.installed()
+                    + (plugin.source() == InstalledPlugin.Source.UNLISTED ? "  (not in the registry)"
+                    : plugin.canChange() ? "  (the registry checked " + plugin.available() + ")" : ""));
+        }
+        List<StudioPlugin> bound = PluginHost.plugins();
+        lines.add(bound.isEmpty() ? "No plugin is loaded." : "Loaded: "
+                + String.join(", ", bound.stream().map(StudioPlugin::displayName).toList()) + ".");
+        String failed = PluginsWindow.failureText(PluginHost.failures());
+        if (!failed.isEmpty()) lines.add(failed);
+        return String.join("\n", lines);
+    }
+
+    @Override
+    public String searchPlugins(String query) {
+        List<PluginRegistry.Plugin> entries = registryEntries();
+        if (entries.isEmpty()) return "The plugin registry could not be read, or lists nothing.";
+        List<UserLibrary> declared = ctx.libraryService().declaredLibraries();
+        List<String> lines = new ArrayList<>();
+        for (PluginRegistry.Plugin plugin : entries) {
+            if (!plugin.matches(query) || !plugin.isInstallable()) continue;
+            lines.add(plugin.id() + "  " + plugin.name()
+                    + (plugin.verifiedVersion().isBlank() ? "" : " " + plugin.verifiedVersion())
+                    + (plugin.isInstalledIn(declared) ? "  (in the bot)" : "")
+                    + (plugin.description().isBlank() ? "" : " — " + plugin.description().strip()));
+        }
+        return lines.isEmpty() ? "No plugin matches " + query + "." : String.join("\n", lines);
+    }
+
+    @Override
+    public String addPlugin(String id) {
+        List<PluginRegistry.Plugin> entries = registryEntries();
+        if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
+        String wanted = id == null ? "" : id.strip();
+        PluginRegistry.Plugin plugin = entries.stream().filter(PluginRegistry.Plugin::isInstallable)
+                .filter(p -> p.id().equalsIgnoreCase(wanted) || p.name().equalsIgnoreCase(wanted)
+                        || p.artifactId().equalsIgnoreCase(wanted))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
+                        + ". search_plugins lists them."));
+        String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
+        List<UserLibrary> declared = ctx.libraryService().declaredLibraries();
+        if (plugin.isInstalledIn(declared)) throw new IllegalArgumentException(name + " is in the bot already.");
+        String provided = BrowsePluginsTab.alreadyProvided(plugin, declared,
+                PluginHost.plugins().stream().map(StudioPlugin::id).toList());
+        if (!provided.isEmpty()) throw new IllegalArgumentException(provided);
+        String version = waitFor(new PluginCatalog(registry, jitpack).version(plugin), 30, "find " + name + "'s version");
+        if (version == null || version.isBlank()) {
+            throw new IllegalArgumentException("No version of " + plugin.coordinate() + " could be found.");
+        }
+        if (!userAgrees("Add a plugin?", "The assistant wants to add " + name + " " + version + " ("
+                + plugin.coordinate() + ") to this bot.\n\nA plugin runs with Studio's own permissions. Registry "
+                + "plugins are checked for loading, not reviewed for safety.")) {
+            throw new IllegalArgumentException("The user did not agree to add " + name + ".");
+        }
+        List<MavenService.Shadowed> dropped = waitFor(ctx.libraryService().installPlugin(
+                new UserLibrary(plugin.groupId(), plugin.artifactId(), version), plugin.editorLibraries()),
+                PLUGIN_WRITE_SECONDS, "add " + name);
+        String removed = MavenService.Shadowed.sentence(dropped);
+        say("The assistant added " + name + " " + version + ".");
+        return "Added " + name + " " + version + "." + (removed.isEmpty() ? "" : " " + removed)
+                + " list_palette shows what it offers.";
+    }
+
+    @Override
+    public String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+        List<InstalledPlugin> declared = installed(registryEntries());
+        String wanted = id == null ? "" : id.strip();
+        InstalledPlugin plugin = declared.stream()
+                .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.artifact().artifactId().equalsIgnoreCase(wanted)
+                        || p.displayName().equalsIgnoreCase(wanted))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("The bot declares no plugin " + wanted
+                        + ". list_plugins lists them."));
+        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
+                jitpack, plugin.artifact(), InstalledPlugin.ambiguousAmong(ctx.config().projectPath(), declared));
+        PluginUpgradeService.Report report = upgrades.removal();
+        PluginHolders holders = upgrades.holders();
+        String preview = removalPreview(plugin, report, holders, deleteFiles);
+        if (!confirm) return preview + "\nremove_plugin with confirm removes it.";
+        if (!userAgrees("Remove a plugin?", preview)) {
+            throw new IllegalArgumentException("The user did not agree to remove " + plugin.displayName() + ".");
+        }
+        PluginHolders deleted = deleteFiles ? holders : PluginHolders.NONE;
+        // No picks: a call with nothing that replaces it takes its default, a value and a review mark.
+        PluginUpgradeService.Repaired repaired = waitFor(upgrades.remove(plugin.editorDependencies(),
+                !report.breaks().isEmpty(), Map.of(), deleted), PLUGIN_WRITE_SECONDS, "remove " + plugin.displayName());
+        onFx(() -> {
+            deleted.forget(ctx.config(), ctx.state());
+            return null;
+        });
+        say("The assistant removed " + plugin.displayName() + ".");
+        return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), report.breaks().size(),
+                repaired.leftAsWritten(), repaired.deleted());
+    }
+
+    private static final long PLUGIN_WRITE_SECONDS = 600;
+
+    /** What removing {@code plugin} would change, as the Installed tab's question says it. */
+    private static String removalPreview(InstalledPlugin plugin, PluginUpgradeService.Report report,
+                                         PluginHolders holders, boolean deleteFiles) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Removing " + plugin.displayName() + " (" + plugin.coordinate() + "): "
+                + InstalledPluginsTab.chipText(report) + ".");
+        lines.add(report.breaks().isEmpty() ? "The bot calls nothing in it, so only the pom changes."
+                : report.breaks().size() + " use(s) become a default value or are deleted, and the functions they "
+                + "are in are marked for review: " + String.join(", ", report.breaks().stream()
+                .map(PluginUpgradeService.Break::display).distinct().limit(20).toList()) + ".");
+        if (!report.leftForYou().isEmpty()) {
+            lines.add("Left as written and marked, for the user to change: " + String.join(", ", report.leftForYou()
+                    .stream().map(PluginUpgradeService.Break::type).distinct().toList()) + ".");
+        }
+        if (report.isIncomplete()) lines.add("Not everything could be read: " + report.problems().getFirst());
+        if (!holders.isEmpty()) {
+            lines.add((deleteFiles ? "Its files are deleted: " : "Its files stay (deleteFiles deletes them): ")
+                    + holders.fileNames() + ".");
+            if (!holders.references().isEmpty()) lines.add(InstalledPluginsTab.holderReferences(holders.references()));
+        }
+        lines.add("A version of the bot is saved first.");
+        return String.join("\n", lines);
+    }
+
+    private List<PluginRegistry.Plugin> registryEntries() {
+        try {
+            return registry.browse().get(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (ExecutionException | TimeoutException e) {
+            return List.of();
+        }
+    }
+
+    private List<InstalledPlugin> installed(List<PluginRegistry.Plugin> entries) {
+        return InstalledPlugin.of(ctx.libraryService().declaredLibraries(), entries,
+                InstalledPlugin.jarDeclaresPlugin(ctx.config().projectPath()));
+    }
+
+    /**
+     * Asks the user {@code question} on screen and waits for the answer; a question left unanswered for
+     * {@link #ASK_MINUTES} is closed and taken as a no, so no dialog lingers that would act after the call ended.
+     */
+    private boolean userAgrees(String header, String question) {
+        CompletableFuture<Boolean> answer = new CompletableFuture<>();
+        AtomicReference<Alert> shown = new AtomicReference<>();
+        Platform.runLater(() -> {
+            try {
+                Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, question, ButtonType.OK, ButtonType.CANCEL);
+                ask.initOwner(owner.get());
+                ask.setHeaderText(header);
+                shown.set(ask);
+                answer.complete(ask.showAndWait().filter(b -> b == ButtonType.OK).isPresent());
+            } catch (RuntimeException e) {
+                answer.completeExceptionally(e);
+            }
+        });
+        try {
+            return answer.get(ASK_MINUTES, TimeUnit.MINUTES);
+        } catch (TimeoutException e) {
+            Platform.runLater(() -> {
+                if (shown.get() != null) shown.get().close();
+            });
+            throw new IllegalArgumentException("The user did not answer in " + ASK_MINUTES + " minutes.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted waiting for the user", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause().getMessage(), e.getCause());
+        }
+    }
+
+    private static final long ASK_MINUTES = 5;
+
+    /** {@code future}'s result; a failure is refused with its own message. */
+    private static <T> T waitFor(CompletableFuture<T> future, long seconds, String doing) {
+        try {
+            return future.get(seconds, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted waiting to " + doing, e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            while (cause.getCause() != null) cause = cause.getCause();
+            throw new IllegalArgumentException("Studio could not " + doing + ": " + cause.getMessage());
+        } catch (TimeoutException e) {
+            throw new IllegalArgumentException("Studio did not " + doing + " in " + seconds + "s.");
+        }
+    }
+
+    // ---- parameters and settings ---------------------------------------------------------------------------
+
+    @Override
+    public String listParams() {
+        record Read(Supplier<BotIndex> index, ValueGrammar grammar) {}
+        Read read = onFx(() -> new Read(BotIndex.prepare(ctx.config(), ctx.state()), PluginHost.grammar()));
+        List<JavaParameter> params = JavaParameters.over(read.index().get(), read.grammar());
+        if (params.isEmpty()) return "The bot has no parameters (@Param fields).";
+        List<String> lines = new ArrayList<>();
+        for (JavaParameter p : params) {
+            ParameterRow row = p.row();
+            lines.add(p.qualified() + "  " + row.typeName() + " = " + (p.editable() ? row.value() : p.initializer())
+                    + "  [" + row.categoryOrGeneral() + "]"
+                    + (row.options().isEmpty() ? "" : "  one of " + row.options())
+                    + (range(row).isEmpty() ? "" : "  " + range(row))
+                    + (row.description().isBlank() ? "" : " — " + row.description().strip())
+                    + (p.editable() ? "" : "  (not set here: " + p.note() + ")"));
+        }
+        return String.join("\n", lines);
+    }
+
+    /** {@code row}'s declared bounds as a phrase, {@code ""} when it declares none. */
+    private static String range(ParameterRow row) {
+        boolean low = !Double.isInfinite(row.min());
+        boolean high = !Double.isInfinite(row.max());
+        if (low && high) return "from " + bound(row.min()) + " to " + bound(row.max());
+        if (low) return "at least " + bound(row.min());
+        return high ? "at most " + bound(row.max()) : "";
+    }
+
+    private static String bound(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
+    }
+
+    @Override
+    public String setParamDefault(String param, String value) {
+        String wanted = param == null ? "" : param.strip();
+        String text = value == null ? "" : value.strip();
+        return onFx(() -> {
+            ValueGrammar grammar = PluginHost.grammar();
+            List<JavaParameter> all = JavaParameters.scan(ctx.config(), ctx.state(), grammar);
+            List<JavaParameter> named = all.stream().filter(p -> p.qualified().equals(wanted)).toList();
+            if (named.isEmpty()) named = all.stream().filter(p -> p.name().equals(wanted)).toList();
+            if (named.size() != 1) {
+                throw new IllegalArgumentException((named.isEmpty() ? "The bot has no parameter " : "More than one "
+                        + "class has a parameter ") + wanted + ". list_params names them"
+                        + (named.isEmpty() ? "." : ": give Class.name."));
+            }
+            JavaParameter p = named.getFirst();
+            if (!p.editable()) throw new IllegalArgumentException(p.qualified() + " cannot be set here: " + p.note());
+            Optional<Object> read = grammar.valueOf(p.form(), text);
+            if (read.isEmpty()) {
+                throw new IllegalArgumentException("`" + text + "` is not a " + p.row().typeName() + " value.");
+            }
+            ParameterRow row = p.row();
+            if (!row.options().isEmpty() && row.options().stream()
+                    .noneMatch(option -> grammar.valueOf(p.form(), option).equals(read))) {
+                throw new IllegalArgumentException(p.qualified() + " takes one of " + row.options() + ".");
+            }
+            if (read.get() instanceof Number n && (n.doubleValue() < row.min() || n.doubleValue() > row.max())) {
+                throw new IllegalArgumentException(p.qualified() + " is " + range(row) + ".");
+            }
+            JavaValue written = grammar.initializer(p.form(), read.get()).orElseThrow(() ->
+                    new IllegalArgumentException("That value cannot be written as " + row.typeName() + "."));
+            ParameterRow stored = JavaParameters.setValue(ctx.config(), ctx.state(), p, written, grammar)
+                    .orElseThrow(() -> new IllegalArgumentException(p.qualified() + " changed meanwhile. Try again."));
+            return "Set " + p.qualified() + " to " + stored.value() + ".";
+        });
+    }
+
+    @Override
+    public String settings() {
+        StudioProjectSettings now = onFx(() -> ctx.projectSettingsService().current());
+        List<String> lines = new ArrayList<>();
+        for (AssistedSetting setting : AssistedSetting.offered()) {
+            lines.add(setting.id() + " = " + valueOf(setting, now) + "  — " + setting.displayName() + ": "
+                    + setting.takes());
+        }
+        return String.join("\n", lines);
+    }
+
+    @Override
+    public String setSetting(String key, String value) {
+        AssistedSetting setting = AssistedSetting.fromId(key == null ? "" : key.strip());
+        String text = value == null ? "" : value.strip();
+        ProjectSettingsService service = ctx.projectSettingsService();
+        StudioProjectSettings now = onFx(service::current);
+        StudioProjectSettings next = switch (setting) {
+            case DEBUG_OUTPUT -> {
+                DebugOutput output = java.util.Arrays.stream(DebugOutput.values())
+                        .filter(o -> o.name().equalsIgnoreCase(text)).findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException("debug_output is bot, on or off."));
+                yield now.withRunProperty(Runs.DEBUG_PROPERTY, output.propertyValue());
+            }
+            case HIDDEN_TRACE -> now.withHiddenTraceWriters(text.isEmpty() ? List.of()
+                    : java.util.Arrays.stream(text.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList());
+            case UNKNOWN -> throw new IllegalArgumentException("No setting " + key + ". get_settings lists them.");
+        };
+        waitFor(service.update(next), 30, "save the settings");
+        return "Set " + setting.id() + " to " + valueOf(setting, next) + ".";
+    }
+
+    private static String valueOf(AssistedSetting setting, StudioProjectSettings settings) {
+        return switch (setting) {
+            case DEBUG_OUTPUT -> DebugOutput.fromProperty(settings.runProperties().get(Runs.DEBUG_PROPERTY))
+                    .name().toLowerCase(java.util.Locale.ROOT);
+            case HIDDEN_TRACE -> String.join(", ", settings.hiddenTraceWriters());
+            case UNKNOWN -> "";
+        };
     }
 
     // ---- the plugins' tools --------------------------------------------------------------------------------

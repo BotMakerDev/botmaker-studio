@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -20,8 +21,12 @@ import org.eclipse.jetty.server.ServerConnector;
 import java.net.InetSocketAddress;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Serves {@link McpTools} over MCP's streamable HTTP transport, so any MCP client — Claude Code, Cursor, Codex,
@@ -50,7 +55,8 @@ public final class McpEndpoint implements AutoCloseable {
 
     /**
      * Starts serving {@code bot} and {@code driver} on {@code port} ({@code 0} for any free one). The plugins'
-     * tools are the ones {@code driver} offers now.
+     * tools are the ones {@code driver} offers now, and again each time a tool adds or removes a plugin; a plugin
+     * changed another way (Plugins &amp; Libraries) is served on the endpoint's next start.
      *
      * @param log what runs and what it printed; the caller closes it
      * @throws Exception when the port is taken or Jetty will not start; nothing is left running
@@ -61,12 +67,20 @@ public final class McpEndpoint implements AutoCloseable {
         McpJsonMapper json = new JacksonMcpJsonMapper(new ObjectMapper());
         HttpServletStreamableServerTransportProvider transport = HttpServletStreamableServerTransportProvider.builder()
                 .jsonMapper(json).mcpEndpoint(PATH).build();
+        AtomicReference<Runnable> refresh = new AtomicReference<>(() -> { });
+        List<McpServerFeatures.SyncToolSpecification> own =
+                McpTools.studio(json, bot, driver, log, () -> refresh.get().run());
+        Set<String> ownNames = McpTools.names(own);
+        List<McpServerFeatures.SyncToolSpecification> theirs = McpTools.pluginTools(json, driver, ownNames);
+        List<McpServerFeatures.SyncToolSpecification> tools = new ArrayList<>(own);
+        tools.addAll(theirs);
         McpSyncServer mcp = McpServer.sync(transport)
                 .serverInfo("botmaker-studio", "1")
                 .instructions(McpTools.INSTRUCTIONS)
-                .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
-                .tools(McpTools.all(json, bot, driver, log))
+                .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
+                .tools(tools)
                 .build();
+        refresh.set(new PluginToolRefresh(mcp, json, driver, ownNames, McpTools.names(theirs))::run);
 
         Server jetty = new Server(new InetSocketAddress("127.0.0.1", port));
         ServletContextHandler context = new ServletContextHandler();
@@ -103,6 +117,41 @@ public final class McpEndpoint implements AutoCloseable {
                 jetty.stop();
             } catch (Exception ignored) {
                 // Stopping is best-effort: the port is released with the process in any case.
+            }
+        }
+    }
+
+    /**
+     * Serves the plugins' tools anew after a tool added or removed a plugin: the ones served go, the bound
+     * plugins' now come, and clients are told the list changed. One at a time: two plugin changes racing would
+     * each remove what the other added.
+     */
+    private static final class PluginToolRefresh {
+        private final McpSyncServer mcp;
+        private final McpJsonMapper json;
+        private final StudioDriver driver;
+        private final Set<String> own;
+        private Set<String> served;
+
+        PluginToolRefresh(McpSyncServer mcp, McpJsonMapper json, StudioDriver driver, Set<String> own,
+                          Set<String> served) {
+            this.mcp = mcp;
+            this.json = json;
+            this.driver = driver;
+            this.own = own;
+            this.served = served;
+        }
+
+        synchronized void run() {
+            try {
+                List<McpServerFeatures.SyncToolSpecification> now = McpTools.pluginTools(json, driver, own);
+                for (String name : served) mcp.removeTool(name);
+                now.forEach(mcp::addTool);
+                served = McpTools.names(now);
+                mcp.notifyToolsListChanged();
+            } catch (RuntimeException e) {
+                // The change itself is done; a client that is not told lists the tools again on its next start.
+                System.err.println("Warning: the plugins' assistant tools could not be served anew: " + e.getMessage());
             }
         }
     }
