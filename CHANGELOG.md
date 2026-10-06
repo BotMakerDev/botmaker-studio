@@ -33,6 +33,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   for with the type's own editor. A static method that takes nothing — an activity's body — offers *▶ Run …
   on its own*, and so does the overlay's ▶ Run ▸ *Run this activity*. Needs a plugin with a trial entry (the
   SDK's); nothing is written into the bot.
+- **The assistant works on the whole bot, and runs it.** Over MCP, every file tool takes a `file`, so Claude
+  edits the activity it is automating rather than only the open file — an edit to another file opens it in the
+  editor first, as one undo step there. `apply_edits` makes several inserts, slot sets and deletes in one call,
+  kept all together as one undo step or not at all. A slot takes one of the bot's constants by name
+  (`Pictures.ORE`). New tools: `list_files`, `list_methods`, `list_targets`, `set_target`, `move_caret` and
+  `show_area` (the overlay editor's caret and a box on the game), `run_bot`, `run_activity`, `try_statement`,
+  `stop`, `run_state` and `read_trace`. Nothing starts while something runs. The plugins' own tools are served
+  too — with the SDK, `sdk_screenshot`, `sdk_crop_picture`, `sdk_find_picture` and the rest, pictures coming
+  back as images. The game is still touched only by running the bot's code; there is no click or key tool.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.
@@ -59,6 +68,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   that are open now.
 
 ### Fixed
+- Pressing ▶ Run again while the bot was still compiling started a second bot beside the first, and Stop pressed
+  during the compile was lost, so the bot started anyway. A run now counts from the press, and a Stop during
+  the compile ends it before the bot starts.
 - Removing the last plugin from a bot no longer leaves it unable to compile its own `@Refactor` marks
   (`package com.botmaker.plugin.api.meta does not exist`): the plugin brought the contract, so Studio now
   declares the contract after any pom change that took it away, not only when the project opens. That entry

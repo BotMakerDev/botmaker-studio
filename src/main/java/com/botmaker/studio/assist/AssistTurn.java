@@ -18,6 +18,7 @@ import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -73,6 +74,11 @@ public final class AssistTurn {
     /** The working copy as it stands. */
     public String source() {
         return source;
+    }
+
+    /** The file the turn edits. */
+    public java.nio.file.Path file() {
+        return workspace.file();
     }
 
     /** How many edits this turn has kept. */
@@ -170,15 +176,52 @@ public final class AssistTurn {
             return Outcome.Refused.because("No loaded plugin declares " + nameOf(expected)
                     + ", so a value of it cannot be written here.");
         }
-        Optional<Object> read = workspace.grammar().valueOf(type.get(), value == null ? "" : value);
+        String text = value == null ? "" : value.strip();
+        List<ManagedConstants.Constant> named = constantsNamed(text);
+        if (named.size() > 1) {
+            return Outcome.Refused.because("`" + text + "` names " + named.size() + " of the bot's constants: "
+                    + named.stream().map(c -> c.owner() + "." + c.field()).toList() + ". Give its owner's full name.");
+        }
+        if (named.size() == 1) {
+            ManagedConstants.Constant constant = named.getFirst();
+            if (workspace.grammar().valueOf(type.get(), constant.initializer()).isEmpty()) {
+                return Outcome.Refused.because("`" + text + "` is not a " + nameOf(expected) + ".");
+            }
+            JavaValue reference = reference(constant);
+            return apply(stage, "set " + slotId + " to " + reference.source(),
+                    editor -> editor.replaceWithValue(slot.get(), reference));
+        }
+        Optional<Object> read = workspace.grammar().valueOf(type.get(), text);
         if (read.isEmpty()) {
             return Outcome.Refused.because("`" + value + "` is not a " + nameOf(expected)
-                    + " value. Write a literal, or a constant or factory call the type declares.");
+                    + " value. Write a literal, one of the bot's constants (Pictures.ORE), or a constant or "
+                    + "factory call the type declares.");
         }
-        Optional<JavaValue> written = workspace.grammar().spell(type.get(), read.get());
+        // A value one of the bot's constants holds is written as that constant, as the slot editors write it.
+        Optional<JavaValue> written = workspace.lookup().spell(read.get())
+                .or(() -> workspace.grammar().spell(type.get(), read.get()));
         if (written.isEmpty()) return Outcome.Refused.because("That value cannot be written as " + nameOf(expected) + ".");
         return apply(stage, "set " + slotId + " to " + written.get().source(),
                 editor -> editor.replaceWithValue(slot.get(), written.get()));
+    }
+
+    /** The bot's {@code @Managed} constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
+    private List<ManagedConstants.Constant> constantsNamed(String text) {
+        int dot = text.lastIndexOf('.');
+        if (dot <= 0 || dot == text.length() - 1) return List.of();
+        String owner = text.substring(0, dot);
+        String field = text.substring(dot + 1);
+        return workspace.constants().stream()
+                .filter(c -> c.field().equals(field) && (c.owner().equals(owner) || c.simpleOwner().equals(owner)))
+                .toList();
+    }
+
+    /** {@code Owner.FIELD}, importing its owner. */
+    private static JavaValue reference(ManagedConstants.Constant constant) {
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        QualifiedName name = ast.newQualifiedName(ast.newSimpleName(constant.simpleOwner()),
+                ast.newSimpleName(constant.field()));
+        return JavaValue.built(name, List.of(constant.owner()));
     }
 
     /** Deletes the statement {@code blockId}. */

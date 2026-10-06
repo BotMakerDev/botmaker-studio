@@ -169,6 +169,8 @@ public final class OverlayEditor {
     private List<ProbeCalls.Declared> declaredProbes = List.of();
     /** The focused row's box on the game, in desktop pixels. */
     private Marks probeMarks = Marks.NONE;
+    /** The assistant's boxes ({@link #assistantMarks}), made on first use; null until then. */
+    private Marks assistantMarks;
     /** The last answer for each probed row of {@link #probedRoot}'s tree, by position. */
     private final Map<BlockTree.Position, ProbeResult> probed = new HashMap<>();
     private CodeBlock probedRoot;
@@ -404,6 +406,7 @@ public final class OverlayEditor {
         probes.close();
         probes = null;
         probeMarks.clear();
+        if (assistantMarks != null) assistantMarks.clear();
         toolContexts.values().forEach(ToolContext::close);
         toolContexts.clear();
         layer.close();
@@ -1078,5 +1081,64 @@ public final class OverlayEditor {
             index = BlockTree.index(root);
         }
         return index;
+    }
+
+    // ── the assistant ───────────────────────────────────────────────────────────────────────────────────
+    // What an MCP client may do with the open panel (StudioBridge): the same moves a user makes, so the user sees
+    // them. FX thread, each.
+
+    /** The open panel; empty while none is shown. */
+    private static Optional<OverlayEditor> shown() {
+        OverlayEditor editor = active;
+        return editor != null && editor.stage() != null && editor.stage().isShowing()
+                ? Optional.of(editor) : Optional.empty();
+    }
+
+    /** Picks {@code target} as its chip would; false when no panel is open. */
+    public static boolean showTarget(OverlayTargets.Target target) {
+        Optional<OverlayEditor> editor = shown();
+        editor.ifPresent(e -> e.pickTarget(target));
+        return editor.isPresent();
+    }
+
+    /**
+     * Parks the caret on {@code stmt}, showing its method; empty when it is there, else the sentence why not.
+     */
+    public static Optional<String> caretOn(StatementBlock stmt) {
+        Optional<OverlayEditor> shown = shown();
+        if (shown.isEmpty()) return Optional.of("The overlay editor is not open. The user opens it with ⧉ Overlay.");
+        OverlayEditor editor = shown.get();
+        BlockTree.Position at = editor.root == null ? null : editor.index().locate(stmt);
+        if (at == null) return Optional.of("That statement is not in the file the overlay editor shows.");
+        BodyBlock body = editor.index().bodyAt(at.bodyOrdinal());
+        for (String label : editor.index().methodLabels()) {
+            BodyBlock method = editor.index().methodBody(label);
+            if (method != null && (method == body || BlockTree.containsDescendant(method, body))) {
+                editor.selectedMethod = label;
+                break;
+            }
+        }
+        editor.showWhere();
+        editor.move(new InsertionCursor(body, at.index()));
+        editor.status("The assistant moved the caret.");
+        return Optional.empty();
+    }
+
+    /** Boxes in the bot's pixels on the game, the assistant's own, cleared with the panel; empty with no panel. */
+    public static Optional<Marks> assistantMarks() {
+        return shown().map(e -> {
+            if (e.assistantMarks == null) e.assistantMarks = new BotPixelMarks(e.layer.marks(), () -> e.watched);
+            return e.assistantMarks;
+        });
+    }
+
+    /** What the open panel is beside; empty with no panel. */
+    public static Optional<WatchedScreen> watchedScreen() {
+        return shown().map(e -> e.watched);
+    }
+
+    /** What each plugin says the bot watches, in plugin order — what the panel would open beside. */
+    public static List<Watched> watchedSaid(CodeEditorService context, Window owner) {
+        return pluginsWatched(context, owner);
     }
 }

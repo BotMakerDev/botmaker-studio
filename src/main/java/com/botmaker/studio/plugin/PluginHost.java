@@ -301,6 +301,7 @@ public final class PluginHost {
         ownedToolbarItems = mergeOwnedToolbarItems(bound);
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
+        assistantTools = mergeAssistantTools(bound);
         runOverlayParts = null;
         overlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
@@ -652,6 +653,33 @@ public final class PluginHost {
             }
             if (offered == null || offered.isEmpty() || offered.get().isEmpty()) continue;
             merged.add(new OwnedOverlay(plugin.id(), plugin.displayName(), offered.get()));
+        }
+        return List.copyOf(merged);
+    }
+
+    /** An assistant tool with the plugin that offered it. */
+    public record OwnedTool(String pluginId, String pluginName, com.botmaker.plugin.api.assist.AssistantTool<?> tool) {}
+
+    private static volatile List<OwnedTool> assistantTools = List.of();
+
+    /** Every bound plugin's assistant tools, in plugin order, asked for once per bind. */
+    public static List<OwnedTool> assistantTools() {
+        return assistantTools;
+    }
+
+    static List<OwnedTool> mergeAssistantTools(List<StudioPlugin> set) {
+        List<OwnedTool> merged = new ArrayList<>();
+        for (StudioPlugin plugin : set) {
+            try {
+                List<com.botmaker.plugin.api.assist.AssistantTool<?>> offered = plugin.assistantTools();
+                if (offered == null) continue;
+                for (var tool : offered) {
+                    if (tool != null) merged.add(new OwnedTool(plugin.id(), plugin.displayName(), tool));
+                }
+            } catch (RuntimeException | LinkageError e) {
+                // Includes a plugin built against a contract without this method: it simply offers none.
+                System.err.println("Warning: " + plugin.id() + " could not list assistant tools: " + e);
+            }
         }
         return List.copyOf(merged);
     }

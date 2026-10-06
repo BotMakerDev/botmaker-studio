@@ -46,8 +46,38 @@ public final class AssistTools {
     }
 
     public synchronized String readTree() {
-        record("readTree()");
-        return json(current().tree());
+        return readTree("");
+    }
+
+    /**
+     * The tree of the method named {@code method}, every overload of it; the whole file's for a blank name.
+     *
+     * @throws IllegalArgumentException when the file has no method of that name
+     */
+    public synchronized String readTree(String method) {
+        String asked = method == null ? "" : method.strip().replaceFirst("\\(\\)$", "");
+        // list_methods names a method Owner.name: either spelling is the method.
+        int dot = asked.lastIndexOf('.');
+        String owner = dot < 0 ? "" : asked.substring(0, dot);
+        String wanted = asked.substring(dot + 1);
+        List<BlockView.Method> methods = current().tree().stream()
+                .filter(m -> wanted.isEmpty() || m.name().equals(wanted) && (owner.isEmpty() || m.owner().equals(owner)))
+                .toList();
+        if (methods.isEmpty() && !wanted.isEmpty()) {
+            throw new IllegalArgumentException("This file has no method " + asked + " with a body. list_methods "
+                    + "names them.");
+        }
+        record("readTree(" + asked + ")");
+        return json(methods);
+    }
+
+    /** The file's methods with a body, each as {@code Owner.name} and the id of its body. */
+    public synchronized String listMethods() {
+        List<String> methods = current().tree().stream()
+                .map(m -> (m.owner().isEmpty() ? "" : m.owner() + ".") + m.name() + "  body " + m.body().id())
+                .toList();
+        record("listMethods() → " + methods.size());
+        return methods.isEmpty() ? "No method with a body." : String.join("\n", methods);
     }
 
     public synchronized String insertBlock(String bodyId, int index, String paletteId) {

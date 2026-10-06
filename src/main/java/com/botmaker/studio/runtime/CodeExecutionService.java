@@ -31,7 +31,10 @@ public class CodeExecutionService {
     private volatile Process currentRunningProcess;
     private volatile ConsoleBatcher activeConsole;
     private volatile TelemetryServer telemetryServer;
+    /** From the request to the process's end, the compile included. */
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    /** Stop was pressed while the run was still compiling: it ends before starting the bot. */
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
     /**
      * Kills the bot when this JVM exits. The bot runs as its own OS process, so it outlives the Studio unless
@@ -125,10 +128,13 @@ public class CodeExecutionService {
             status("Run aborted due to errors.");
             return;
         }
-        if (isRunning.get()) {
+        // Claimed before the compile, not after it: a second request during the compile (a double click, an
+        // assistant's second call) would otherwise compile beside the first and put two bots on the game.
+        if (!isRunning.compareAndSet(false, true)) {
             status("Program is already running. Stop it first.");
             return;
         }
+        cancelled.set(false);
 
         new Thread(() -> {
             try {
@@ -137,6 +143,10 @@ public class CodeExecutionService {
 
                 if (!compileAndWait(snapshot, config.compiledOutputPath())) {
                     status((trial == null ? "Run" : "Try") + " aborted due to build failure.");
+                    return;
+                }
+                if (cancelled.get()) {
+                    status("Stopped before it started.");
                     return;
                 }
                 String classpath = buildRuntimeClasspath(snapshot);
@@ -159,7 +169,10 @@ public class CodeExecutionService {
                     mainClass = trial.className();
                     status("Trying " + label + "… (Press Stop to end it)");
                 }
-                isRunning.set(true);
+                if (cancelled.get()) {
+                    status("Stopped before it started.");
+                    return;
+                }
 
                 // Tell UI the program has started so the Stop button becomes clickable.
                 eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
@@ -176,6 +189,8 @@ public class CodeExecutionService {
 
                 startTelemetry(pb);
                 currentRunningProcess = pb.start();
+                // A stop that landed between the last check and the start found no process to kill.
+                if (cancelled.get()) killRunningProcess();
 
                 ConsoleBatcher console = console();
                 activeConsole = console;
@@ -343,6 +358,13 @@ public class CodeExecutionService {
     }
 
     public void stopRunningProgram() {
+        // While it still compiles there is no process to kill: the run ends itself before starting one, and its
+        // own finally says it stopped — resetting the claim here would let a second run start beside it.
+        if (isRunning.get() && currentRunningProcess == null) {
+            cancelled.set(true);
+            status("Stopping before it starts…");
+            return;
+        }
         killRunningProcess();
         closeConsole();
         stopTelemetry();

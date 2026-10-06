@@ -9,13 +9,14 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 
 import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Everything an assistant's edits need to know about the open file, copied out of {@link ProjectState} once so
+ * Everything an assistant's edits need to know about one of the bot's files, copied out of {@link ProjectState} once so
  * that a turn never reads the live editor state again.
  *
  * <p><b>Why a copy.</b> The canvas re-parses on every accepted edit, and the block registry it publishes lags
@@ -26,7 +27,8 @@ import java.util.List;
  *
  * @param index   the library index a staged {@link ProjectAnalyzer} reads, or {@code null} in a test
  * @param journal where a refused rewrite is recorded, or {@code null} for the cache directory
- * @param grammar the value grammar a slot's value is read and written with
+ * @param grammar   the value grammar a slot's value is read and written with
+ * @param constants the bot's {@code @Managed} constants, which a slot may be set to by name ({@code Pictures.ORE})
  */
 public record AssistWorkspace(ProjectConfig config,
                               Path file,
@@ -36,19 +38,25 @@ public record AssistWorkspace(ProjectConfig config,
                               StudioProjectSettings settings,
                               TypeSummaryManager index,
                               RefusalJournal journal,
-                              ValueGrammar grammar) {
+                              ValueGrammar grammar,
+                              List<ManagedConstants.Constant> constants) {
 
     public AssistWorkspace {
         classpath = classpath == null ? List.of() : List.copyOf(classpath);
         if (grammar == null) grammar = PluginHost.grammar();
+        constants = constants == null ? List.of() : List.copyOf(constants);
     }
 
-    /** The open project's active file. FX thread, as {@link ProjectState} is. */
-    public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index) {
-        ProjectFile active = state.getActiveFile();
-        return new AssistWorkspace(config, active == null ? null : active.getPath(), state.getResolvedClasspath(),
-                state.getSourcePath(), state.getTemplate(), state.getSettings(), index, null,
-                PluginHost.grammar());
+    /** {@code file} of the open project. FX thread, as {@link ProjectState} is. */
+    public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index, Path file) {
+        return new AssistWorkspace(config, file, state.getResolvedClasspath(), state.getSourcePath(),
+                state.getTemplate(), state.getSettings(), index, null, PluginHost.grammar(),
+                ManagedConstants.scan(config, state));
+    }
+
+    /** The constants as the grammar reads them. */
+    ManagedConstants.Lookup lookup() {
+        return new ManagedConstants.Lookup(constants, grammar);
     }
 
     /** A fresh {@link ProjectState} holding {@code source} as this workspace's file — one step of a turn. */

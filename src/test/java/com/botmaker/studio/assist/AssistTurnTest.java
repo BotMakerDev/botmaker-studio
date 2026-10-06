@@ -43,7 +43,7 @@ class AssistTurnTest {
                 Paths.get("src", "main", "java").toAbsolutePath(),
                 ProjectTemplate.GAME_BOT, null, null,
                 RefusalJournal.in(Path.of(System.getProperty("java.io.tmpdir"), "botmaker-test-refusals")),
-                ValueGrammar.empty());
+                ValueGrammar.empty(), List.of());
     }
 
     private static AssistTurn turn(String source) {
@@ -103,6 +103,23 @@ class AssistTurnTest {
         assertInstanceOf(Outcome.Accepted.class, turn.setSlot(slot, "1_000"));
         assertTrue(turn.source().contains("System.out.println(1000)"),
                 "the grammar's canonical spelling is written, not the text given:\n" + turn.source());
+    }
+
+    @Test
+    void aSlotTakesOneOfTheBotsConstantsByName() {
+        String source = SOURCE.replace("public class Subject {", "public class Subject {\n    public static final int LIMIT = 5;");
+        List<com.botmaker.studio.project.managed.ManagedConstants.Constant> constants = List.of(
+                new com.botmaker.studio.project.managed.ManagedConstants.Constant("com.mybot.Subject", "LIMIT", "5"),
+                new com.botmaker.studio.project.managed.ManagedConstants.Constant("com.mybot.Subject", "NAME", "\"a\""));
+        AssistWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+                base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), base.grammar(),
+                constants), source);
+        String slot = statement(turn, "System.out.println").slots().getFirst().id();
+
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "Subject.NAME"), "a String is not an int");
+        assertInstanceOf(Outcome.Accepted.class, turn.setSlot(slot, "Subject.LIMIT"));
+        assertTrue(turn.source().contains("System.out.println(Subject.LIMIT)"), turn.source());
     }
 
     // ---- what is refused, and leaves nothing behind ----

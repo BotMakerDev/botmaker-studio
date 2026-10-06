@@ -71,7 +71,7 @@ class PaletteCompilesTest {
                 Paths.get("src", "main", "java").toAbsolutePath(),
                 ProjectTemplate.EMPTY, null, null,
                 RefusalJournal.in(Path.of(System.getProperty("java.io.tmpdir"), "botmaker-test-refusals")),
-                ValueGrammar.empty());
+                ValueGrammar.empty(), List.of());
     }
 
     private static BlockView.Body method(AssistTurn turn, String name) {

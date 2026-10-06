@@ -11,6 +11,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.TrialRunRequestedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TryRequestedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -28,6 +29,8 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Statement;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,7 +43,9 @@ import java.util.function.Supplier;
  * <p>A statement is planned ({@link TrialPlan}), its earlier locals asked about when it reads any
  * ({@link TryDialog}), its caller written ({@link TrialCaller}) with the bot's {@code @Managed} holders, and the run
  * requested as {@link TrialRunRequestedEvent}, which {@code CodeExecutionService} runs as it runs the bot. A refusal
- * is told in a dialog, with the plan's sentence. One project's; it keeps itself subscribed.
+ * is told in a dialog, with the plan's sentence. The assistant asks through {@link #tryWith} and {@link #runOnItsOwn},
+ * which take the values the dialog would ask for and throw the refusal instead. One project's; it keeps itself
+ * subscribed.
  */
 public final class Trials {
 
@@ -68,53 +73,130 @@ public final class Trials {
     }
 
     private void tryStatement(Statement statement, Window owner) {
-        Optional<Method> entry = ready(owner);
-        if (entry.isEmpty()) return;
+        try {
+            Method entry = ready();
+            TrialPlan.Plan plan = plan(statement);
+            if (plan.needed(Map.of()).isEmpty()) {
+                start(plan, Map.of(), entry);
+            } else {
+                TryDialog.ask(owner, plan, config).ifPresent(values -> start(plan, values, entry));
+            }
+        } catch (IllegalArgumentException refused) {
+            refuse(owner, refused.getMessage());
+        }
+    }
+
+    private void runMethod(MethodRunRequestedEvent request) {
+        try {
+            runOnItsOwn(request.packageName(), request.className(), request.method(), request.valued());
+        } catch (IllegalArgumentException refused) {
+            refuse(request.owner(), refused.getMessage());
+        }
+    }
+
+    /**
+     * ▶ Try {@code statement} with no dialog, for the assistant: an earlier local it reads takes its value from
+     * {@code given}, by name, as text its type's grammar reads; one not given takes the source the dialog would
+     * default it to. FX thread.
+     *
+     * @return what was started
+     * @throws IllegalArgumentException with the sentence why not: something runs, the plan's refusal, a value
+     *                                  that does not read, a local that can be neither found nor computed
+     */
+    public String tryWith(Statement statement, Map<String, String> given) {
+        Method entry = ready();
+        TrialPlan.Plan plan = plan(statement);
+        Map<String, TrialPlan.Source> chosen = new LinkedHashMap<>();
+        given.keySet().forEach(name -> chosen.put(name, TrialPlan.Source.ASK));
+        List<TrialPlan.Local> needed = plan.needed(chosen);
+        List<String> reads = plan.locals().stream().map(TrialPlan.Local::name).toList();
+        for (String name : given.keySet()) {
+            if (!reads.contains(name)) {
+                throw new IllegalArgumentException(name + " is not an earlier value this statement reads"
+                        + (reads.isEmpty() ? "; it reads none." : "; it reads " + reads + "."));
+            }
+        }
+        ValueGrammar grammar = PluginHost.grammar();
+        Map<String, TrialCaller.Value> values = new LinkedHashMap<>();
+        List<String> missing = new ArrayList<>();
+        for (TrialPlan.Local local : needed) {
+            switch (chosen.getOrDefault(local.name(), local.defaultSource())) {
+                case LAST_RUN -> values.put(local.name(), new TrialCaller.Given(local.lastRun()));
+                case COMPUTE -> values.put(local.name(), new TrialCaller.Computed());
+                case ASK -> {
+                    String text = given.get(local.name());
+                    if (text == null) {
+                        missing.add(local.name() + " (" + local.type() + ")");
+                        continue;
+                    }
+                    // Through the grammar, as a slot is set: text is read as a value, never pasted in as Java.
+                    Optional<JavaValue> value = grammar.named(local.typeName())
+                            .flatMap(type -> grammar.valueOf(type, text).flatMap(v -> grammar.spell(type, v)));
+                    if (value.isEmpty()) {
+                        throw new IllegalArgumentException("`" + text + "` is not a " + local.type()
+                                + " value Studio can write, for " + local.name() + ".");
+                    }
+                    values.put(local.name(), new TrialCaller.Given(value.get()));
+                }
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("This statement reads earlier values the last run did not leave and "
+                    + "Studio cannot compute: give them in values — " + String.join(", ", missing) + ".");
+        }
+        start(plan, values, entry);
+        return "Trying " + plan.label() + ".";
+    }
+
+    /**
+     * ▶ Run {@code className.method()} on its own. FX thread.
+     *
+     * @throws IllegalArgumentException with the sentence why not
+     */
+    public String runOnItsOwn(String packageName, String className, String method, boolean valued) {
+        Method entry = ready();
+        TrialPlan.Plan plan = TrialPlan.call(packageName, className, method, valued);
+        start(plan, Map.of(), entry);
+        return "Running " + plan.label() + " on its own.";
+    }
+
+    /**
+     * {@code statement}'s plan, from the tree the editors show.
+     *
+     * @throws IllegalArgumentException when the tree is stale, or the plan refuses
+     */
+    private TrialPlan.Plan plan(Statement statement) {
         // The tree the editors show is the active file's; its text is what the tree was parsed from, unless
         // something was typed since, in which case the tree no longer says where anything is.
         ProjectFile file = state.getActiveFile();
         CompilationUnit unit = statement == null ? null : (CompilationUnit) statement.getRoot();
         if (file == null || unit == null || state.getCompilationUnit().orElse(null) != unit) {
-            refuse(owner, "The file changed since this block was drawn. Try again once it has caught up.");
-            return;
+            throw new IllegalArgumentException("The file changed since this block was drawn. Try again once it has "
+                    + "caught up.");
         }
         ValueGrammar grammar = PluginHost.grammar();
         List<ProbeCalls.Declared> probes = ProbeCalls.declared(PluginHost.overlayParts());
         TrialPlan.Result result = TrialPlan.plan(statement, file.getContent(),
                 binding -> ProbeCalls.readsOnly(binding, probes),
                 text -> grammar.valueOfAny(text).isPresent(), lastRun.reader(grammar));
-        switch (result) {
-            case TrialPlan.Refused refused -> refuse(owner, refused.reason());
-            case TrialPlan.Planned planned -> {
-                TrialPlan.Plan plan = planned.plan();
-                if (plan.needed(Map.of()).isEmpty()) {
-                    start(plan, Map.of(), entry.get());
-                } else {
-                    TryDialog.ask(owner, plan, config).ifPresent(values -> start(plan, values, entry.get()));
-                }
-            }
-        }
+        return switch (result) {
+            case TrialPlan.Refused refused -> throw new IllegalArgumentException(refused.reason());
+            case TrialPlan.Planned planned -> planned.plan();
+        };
     }
 
-    private void runMethod(MethodRunRequestedEvent request) {
-        Optional<Method> entry = ready(request.owner());
-        if (entry.isEmpty()) return;
-        start(TrialPlan.call(request.packageName(), request.className(), request.method(), request.valued()),
-                Map.of(), entry.get());
-    }
-
-    /** The trial entry, when one is offered and nothing runs; else empty, the user told why. */
-    private Optional<Method> ready(Window owner) {
+    /**
+     * The trial entry, when one is offered and nothing runs.
+     *
+     * @throws IllegalArgumentException saying why not
+     */
+    private Method ready() {
         if (running || debugging) {
-            refuse(owner, (debugging ? "The bot is being debugged." : "The bot is running.")
+            throw new IllegalArgumentException((debugging ? "The bot is being debugged." : "The bot is running.")
                     + " Stop it first, then try again.");
-            return Optional.empty();
         }
-        Optional<Method> entry = TrialCaller.entry();
-        if (entry.isEmpty()) {
-            refuse(owner, "None of this bot's plugins offers a way to try one statement, so it can only run whole.");
-        }
-        return entry;
+        return TrialCaller.entry().orElseThrow(() -> new IllegalArgumentException(
+                "None of this bot's plugins offers a way to try one statement, so it can only run whole."));
     }
 
     /**

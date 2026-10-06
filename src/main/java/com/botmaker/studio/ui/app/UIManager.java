@@ -199,7 +199,10 @@ public class UIManager implements ProjectWindow {
         this.openReport = ProjectOpenMigrations.run(config, state, eventBus);
 
         this.fileExplorerManager = new FileExplorerManager(ctx);
-        this.assistantPane = new AssistantPane(ctx);
+        // ▶ Try a statement and ▶ Run a method on its own, from the canvas, the overlay editor and the assistant.
+        // It keeps itself subscribed.
+        this.assistantPane = new AssistantPane(ctx,
+                new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config));
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,
                 menuBarManager, toolbarManager,
@@ -488,8 +491,6 @@ public class UIManager implements ProjectWindow {
         tracePanel = new TracePanel(eventBus, config.sourceRoot(), projectSettingsService, navigation::revealLine);
         // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
         new LiveValues(eventBus, state);
-        // ▶ Try a statement and ▶ Run a method on its own, from the canvas and the overlay editor alike.
-        new com.botmaker.studio.ui.app.trial.Trials(eventBus, state, config);
         navigation.wire(menuBarManager, binding -> {
             selectBottomTab(BottomTab.USAGES);
             usagesPanel.search(binding);

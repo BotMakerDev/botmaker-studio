@@ -4,10 +4,12 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.assist.AiTool;
 import com.botmaker.studio.assist.McpConfig;
 import com.botmaker.studio.assist.McpEndpoint;
+import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.app.terminal.TerminalView;
+import com.botmaker.studio.ui.app.trial.Trials;
 import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Pos;
@@ -32,6 +34,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -72,14 +75,19 @@ final class AssistantPane {
     private final Map<AiTool, Optional<Path>> found = new EnumMap<>(AiTool.class);
     private McpConfig mcpConfig = McpConfig.load();
     private McpEndpoint endpoint;
+    /** What runs and what it printed, as {@link #endpoint}'s tools read it; closed with it. */
+    private RunLog runLog;
+    /** ▶ Try and ▶ Run on its own, which the endpoint's run tools ask. */
+    private final Trials trials;
     /** Callers waiting for the endpoint that is starting now; null when none is starting. */
     private List<Consumer<McpEndpoint>> waiting;
     /** This window's private directory for the tools' config files (they hold the token); made on first use. */
     private Path configDir;
     private boolean disposed;
 
-    AssistantPane(StudioContext ctx) {
+    AssistantPane(StudioContext ctx, Trials trials) {
         this.ctx = ctx;
+        this.trials = trials;
         this.projectDir = ctx.config().projectPath();
         build();
         serve.setSelected(mcpConfig.enabled());
@@ -278,11 +286,14 @@ final class AssistantPane {
         waiting = new ArrayList<>(List.of(then));
         mcpStatus.setText("Starting…");
         McpConfig starting = mcpConfig;
+        RunLog log = new RunLog(ctx.eventBus(), Clock.systemUTC(), ctx.codeExecutionService()::isRunning);
+        StudioBridge driver = new StudioBridge(ctx, trials, log,
+                () -> root.getScene() == null ? null : root.getScene().getWindow());
         Thread starter = new Thread(() -> {
             McpEndpoint started = null;
             String failure = null;
             try {
-                started = McpEndpoint.start(starting.port(), starting.token(), new LiveEditorFile(ctx));
+                started = McpEndpoint.start(starting.port(), starting.token(), new LiveEditorBot(ctx), driver, log);
             } catch (Exception e) {
                 failure = "Could not listen on port " + starting.port() + ": " + e.getMessage();
             }
@@ -295,14 +306,17 @@ final class AssistantPane {
                     // A start that finishes after the window closed must let go of the port, or the next
                     // window's endpoint cannot bind it.
                     if (result != null) result.close();
+                    log.close();
                     return;
                 }
                 if (result == null) {
+                    log.close();
                     mcpStatus.setText(reason);
                     status.setText(reason);
                     serve.setSelected(false);
                 } else {
                     endpoint = result;
+                    runLog = log;
                     mcpStatus.setText("Serving " + result.url() + " (token required)");
                 }
                 callers.forEach(c -> c.accept(result));
@@ -329,6 +343,8 @@ final class AssistantPane {
         if (endpoint == null) return;
         endpoint.close();
         endpoint = null;
+        runLog.close();
+        runLog = null;
         mcpStatus.setText("Stopped.");
     }
 

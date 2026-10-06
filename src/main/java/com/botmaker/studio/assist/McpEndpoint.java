@@ -25,7 +25,8 @@ import java.util.Objects;
 
 /**
  * Serves {@link McpTools} over MCP's streamable HTTP transport, so any MCP client — Claude Code, Cursor, Codex,
- * Gemini CLI, opencode, a local runner — can edit the file open in Studio through the host's own edit checks.
+ * Gemini CLI, opencode, a local runner — can edit the bot open in Studio through the host's own edit checks,
+ * and run it.
  * The Assistant tab starts it when it opens an AI tool ({@link AiTool}), and points that tool here.
  *
  * <p><b>Local and authenticated.</b> Bound to {@code 127.0.0.1} only, and every request must carry
@@ -48,11 +49,14 @@ public final class McpEndpoint implements AutoCloseable {
     }
 
     /**
-     * Starts serving {@code file} on {@code port} ({@code 0} for any free one).
+     * Starts serving {@code bot} and {@code driver} on {@code port} ({@code 0} for any free one). The plugins'
+     * tools are the ones {@code driver} offers now.
      *
+     * @param log what runs and what it printed; the caller closes it
      * @throws Exception when the port is taken or Jetty will not start; nothing is left running
      */
-    public static McpEndpoint start(int port, String token, LiveFile file) throws Exception {
+    public static McpEndpoint start(int port, String token, LiveBot bot, StudioDriver driver, RunLog log)
+            throws Exception {
         Objects.requireNonNull(token, "token");
         McpJsonMapper json = new JacksonMcpJsonMapper(new ObjectMapper());
         HttpServletStreamableServerTransportProvider transport = HttpServletStreamableServerTransportProvider.builder()
@@ -61,7 +65,7 @@ public final class McpEndpoint implements AutoCloseable {
                 .serverInfo("botmaker-studio", "1")
                 .instructions(McpTools.INSTRUCTIONS)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
-                .tools(McpTools.all(json, file))
+                .tools(McpTools.all(json, bot, driver, log))
                 .build();
 
         Server jetty = new Server(new InetSocketAddress("127.0.0.1", port));
