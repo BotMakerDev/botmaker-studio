@@ -71,6 +71,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the window click-through (X11 and Xwayland), and draws nothing of its own there during a run.
 
 ### Changed
+- The pom carries a real version and names its upstreams' versions instead of `0.0.0-SNAPSHOT`, and the
+  module's `.deps.env` is gone (umbrella `docs/refactor/43-real-versions.md`). A local SDK build now shows as
+  its real `-SNAPSHOT` in the version lists.
 - **Plugins and the SDK are `com.github.BotMakerDev` now** (were `com.github.LiQiyeDev`): a new project, an
   installed plugin and the contract entry Studio declares all name the new groupId, and the plugin search
   looks there. A project whose pom still names `com.github.LiQiyeDev` is not migrated: it keeps resolving

@@ -6,7 +6,9 @@
 
     <groupId>com.botmaker.studio</groupId>
     <artifactId>botmaker-studio</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
+    <!-- Real: -SNAPSHOT on main, the release version on a tag; only the release moves it (umbrella
+         docs/refactor/43-real-versions.md). -->
+    <version>1.3.1-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
@@ -15,19 +17,18 @@
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>25.0.4</javafx.version>
-        <!-- botmaker-shared version. Default 0.0.0-SNAPSHOT resolves the sibling module in the umbrella
-             reactor; the umbrella release.sh bumps this to the released shared tag so a JitPack/standalone
-             build resolves com.github.BotMakerDev:botmaker-shared:<tag>. -->
-        <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
+        <!-- botmaker-shared version. On main, shared's main -SNAPSHOT, which resolves the sibling module in
+             the umbrella reactor; a release commit sets the released version (doc 43). -->
+        <botmaker.shared.version>0.1.3-SNAPSHOT</botmaker.shared.version>
         <!-- botmaker-session version. Same contract as botmaker.shared.version above. -->
-        <botmaker.session.version>0.0.0-SNAPSHOT</botmaker.session.version>
+        <botmaker.session.version>0.1.3-SNAPSHOT</botmaker.session.version>
         <!-- botmaker.sdk.version was here and is gone with the dependency it versioned (2026-09-02).
              Studio resolves no SDK at all now; the only SDK a running Studio sees is the one the open
              project's own pom pins, resolved onto that project's classpath. See the dependency section. -->
         <!-- botmaker-studio-api version: the plugin contract Studio hosts. Same contract again. Studio is
              the *host* side of it — it implements SlotContext/StudioServices and consumes what a plugin
              contributes. -->
-        <botmaker.studioapi.version>0.0.0-SNAPSHOT</botmaker.studioapi.version>
+        <botmaker.studioapi.version>0.4.3-SNAPSHOT</botmaker.studioapi.version>
         <!-- The contract TAG a project is given when Studio writes the first @Param into it
              (config/HostContract). Not botmaker.studioapi.version: the release build installs the contract
              from source at 0.0.0-SNAPSHOT, so that property never holds a tag a user's project could
@@ -37,7 +38,7 @@
         <botmaker.contract.tag></botmaker.contract.tag>
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
-        <botmaker.pluginhost.version>0.0.0-SNAPSHOT</botmaker.pluginhost.version>
+        <botmaker.pluginhost.version>0.3.3-SNAPSHOT</botmaker.pluginhost.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
         <mcp.version>2.0.1</mcp.version>
