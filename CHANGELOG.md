@@ -39,6 +39,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   The *Check* button, the report under the table, *Snapshot, repair & switch* and *Pin released versions* are
   gone; a pass still saves a version first and repairs the bot's calls. A dev build in a dev-mode project
   shows *Dev build* and is never offered an upgrade.
+- **An upgrade asks a fix for every place it breaks, before writing anything.** When a move breaks calls,
+  a list opens with each place in source order and the fixes for it as buttons: Studio's suggestion, each
+  member a split one became, a default value marked for review, or deleting the call. A type the bot writes
+  that is gone is listed to acknowledge. Picking a fix moves to the next one; *Use the suggested fix for the N
+  left* answers the rest. *Upgrade* stays disabled until every place has a fix, and Cancel changes nothing.
 - **Remove asks in a window that fits.** One sentence counts the calls and types it changes, the plugin's
   files are a scrolling list with one checkbox, and the buttons stay at the bottom. It replaces an alert that
   could open taller or wider than the screen.

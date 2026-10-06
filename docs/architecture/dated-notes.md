@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **An upgrade asks every fix first (2026-10-06).** Before a pass writes anything, `InstalledPluginsTab.runPass`
+> reads each row's report and turns it into `services/upgrade/FixList` issues: one per call site the move
+> breaks, in source order, with the fixes the repair can write (`Decision`: the engine's answer, a split's
+> candidates, a default value, delete the call) and one acknowledgement per gone type the bot writes down.
+> `ui/app/FixSheet` walks them one at a time; *Upgrade* enables only when each has a fix, Cancel writes
+> nothing, and the picks go to `ProjectUpgrade.run`. `ui/app/upgrade/ReportView` and its prose report are
+> deleted; read `sdk-and-shared.md`'s text about it as history.
+
 > **Installed has one button per row (2026-10-06).** `InstalledPluginsTab` rows open on the installed version;
 > `actionLabel`/`actionTarget` decide *Upgrade to* / *Switch to* / nothing, and each click runs
 > `ProjectUpgrade.run` with that one row and no picks (an unanswered site gets a default value and a review

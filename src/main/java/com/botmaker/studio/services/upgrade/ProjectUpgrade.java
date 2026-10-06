@@ -178,8 +178,19 @@ public final class ProjectUpgrade {
                         report.problems().forEach(problem -> left.add(row.upgrades().displayName() + ": "
                                 + problem));
                         if (report.canMigrate() || (row.alsoModernise() && report.canModernise())) {
+                            // The picks name sites by position, read before anything was written. A row
+                            // after the first repairs files an earlier row has rewritten, so its picks are
+                            // carried onto its report read now (2026-10-06): a fix the user chose is never
+                            // dropped because a call moved.
+                            Row asked = row;
+                            if (i > 0 && !row.picks().isEmpty()) {
+                                Report now = report(row);
+                                asked = new Row(row.upgrades(), row.targetVersion(), row.alsoModernise(),
+                                        carried(row.picks(), sitesOf(report), sitesOf(now)));
+                                report = now;
+                            }
                             PluginUpgradeService.Repaired repaired = row.upgrades().repairReporting(
-                                    row.targetVersion(), row.alsoModernise(), true, withDefaults(report, row));
+                                    row.targetVersion(), row.alsoModernise(), true, withDefaults(report, asked));
                             files += repaired.files();
                             left.addAll(repaired.leftAsWritten());
                             calls += report.breaks().size();
@@ -210,6 +221,39 @@ public final class ProjectUpgrade {
      * default value — the answer that compiles, and is marked {@code @Refactor} so the Review tab lists it.
      * Until 2026-09-29 an unanswered site refused the pass.
      */
+    /**
+     * {@code picks}, keyed by {@code before}'s sites, moved onto the matching sites of {@code after}: the same
+     * file, the same call text, the same place among that file's calls of that text. A rewrite above a call
+     * moves it; it does not change what the call says. A pick whose site has no match is dropped, and its site
+     * then takes the default like any unanswered one.
+     */
+    static Map<CallSite, Decision> carried(Map<CallSite, Decision> picks, List<CallSite> before,
+                                           List<CallSite> after) {
+        Map<CallSite, Decision> out = new LinkedHashMap<>();
+        for (Map.Entry<CallSite, Decision> pick : picks.entrySet()) {
+            CallSite site = pick.getKey();
+            int ordinal = sameCall(before, site).indexOf(site);
+            List<CallSite> now = sameCall(after, site);
+            if (ordinal >= 0 && ordinal < now.size()) out.put(now.get(ordinal), pick.getValue());
+        }
+        return out;
+    }
+
+    /** {@code sites} with {@code site}'s file and text, in file order. */
+    private static List<CallSite> sameCall(List<CallSite> sites, CallSite site) {
+        return sites.stream().filter(s -> s.file().equals(site.file()) && s.text().equals(site.text()))
+                .sorted(java.util.Comparator.comparingInt(CallSite::offset)).toList();
+    }
+
+    /** Every site a report names — its breaks', its splits' and its guesses' — once each. */
+    static List<CallSite> sitesOf(Report report) {
+        java.util.Set<CallSite> out = new java.util.LinkedHashSet<>();
+        report.breaks().forEach(b -> out.addAll(b.sites()));
+        for (Choice choice : report.splits()) for (Site site : choice.sites()) out.add(site.site());
+        for (Choice choice : report.guesses()) for (Site site : choice.sites()) out.add(site.site());
+        return List.copyOf(out);
+    }
+
     static Map<CallSite, Decision> withDefaults(Report report, Row row) {
         Map<CallSite, Decision> picks = new LinkedHashMap<>(row.picks());
         for (CallSite site : waitingSites(report)) picks.putIfAbsent(site, Decision.DEFAULT);

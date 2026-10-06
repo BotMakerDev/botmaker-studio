@@ -8,6 +8,7 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
+import com.botmaker.studio.services.upgrade.FixList;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
@@ -809,14 +810,61 @@ public final class InstalledPluginsTab {
     // A pass
     // -------------------------------------------------------------------------
 
-    /** Moves {@code moving} in one pass: one snapshot, each row's calls repaired, the pom written once. */
+    /**
+     * Moves {@code moving}: reads what each move breaks, asks a fix for every place ({@link FixSheet}) when
+     * there is any, and only then runs the one pass. Cancelling the fixes writes nothing.
+     */
     private void runPass(List<ProjectUpgrade.Row> moving) {
         if (moving.isEmpty()) return;
         busy = true;
         refreshButtons();
         progress.setVisible(true);
         hideResult();
-        status("Saving a version, repairing your calls and moving " + (moving.size() == 1
+        status("Reading what " + (moving.size() == 1 ? "moving to " + moving.getFirst().targetVersion()
+                : "moving " + moving.size() + " plugins") + " would break…");
+
+        CompletableFuture.supplyAsync(() -> moving.stream()
+                .map(row -> new FixSheet.Part(row.upgrades().displayName(), row.targetVersion(),
+                        FixList.of(row.upgrades().compare(row.targetVersion(), row.alsoModernise()))))
+                .toList()).whenComplete((parts, error) -> Platform.runLater(() -> {
+                    if (error != null) {
+                        endBusy();
+                        Throwable cause = error.getCause() != null ? error.getCause() : error;
+                        status("Could not read what the move would break: " + cause.getMessage());
+                        return;
+                    }
+                    try {
+                        if (parts.stream().allMatch(p -> p.issues().isEmpty())) {
+                            apply(moving);
+                            return;
+                        }
+                        status("");
+                        Optional<List<Map<PluginUpgradeService.CallSite, PluginUpgradeService.Decision>>> picks =
+                                FixSheet.ask(root.getScene() == null ? null : root.getScene().getWindow(), parts);
+                        if (picks.isEmpty()) {
+                            endBusy();
+                            status("Nothing was changed.");
+                            return;
+                        }
+                        List<ProjectUpgrade.Row> fixed = new ArrayList<>();
+                        for (int i = 0; i < moving.size(); i++) {
+                            ProjectUpgrade.Row row = moving.get(i);
+                            fixed.add(new ProjectUpgrade.Row(row.upgrades(), row.targetVersion(),
+                                    row.alsoModernise(), picks.get().get(i)));
+                        }
+                        apply(fixed);
+                    } catch (RuntimeException e) {
+                        // A tab left busy keeps every button grey until the window is reopened.
+                        endBusy();
+                        status("The upgrade did not start: " + e.getMessage());
+                    }
+                }));
+    }
+
+    /** The pass itself: one snapshot, each row's calls repaired with its fixes, the pom written once. */
+    private void apply(List<ProjectUpgrade.Row> moving) {
+        progress.setVisible(true);
+        status("Saving a version, writing the fixes and moving " + (moving.size() == 1
                 ? "to " + moving.getFirst().targetVersion() : moving.size() + " plugins") + "…");
 
         ProjectUpgrade.run(moving, libraryService::updateVersions)
