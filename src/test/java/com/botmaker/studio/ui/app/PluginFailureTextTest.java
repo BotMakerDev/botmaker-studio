@@ -29,6 +29,17 @@ class PluginFailureTextTest {
     }
 
     @Test
+    void dev_mode_names_the_dev_builds_it_loaded() {
+        assertEquals("", PluginsWindow.devText(List.of()));
+        assertEquals(" Dev builds: my-plugin 0.1.0-SNAPSHOT.", PluginsWindow.devText(List.of("my-plugin 0.1.0-SNAPSHOT")));
+
+        assertEquals("", EditorCanvas.devModeText(List.of()));
+        String banner = EditorCanvas.devModeText(List.of("botmaker-sdk 1.4.1-SNAPSHOT", "my-plugin 0.1.0-SNAPSHOT"));
+        assertTrue(banner.startsWith("Dev mode: 2 local plugin builds are loaded"), banner);
+        assertTrue(banner.contains("Publish refuses"), banner);
+    }
+
+    @Test
     void one_failure_names_the_plugin_and_the_cause() {
         String text = PluginsWindow.failureText(List.of(new PluginLoader.PluginFailure(
                 "com.example.demo.ExamplePlugin",

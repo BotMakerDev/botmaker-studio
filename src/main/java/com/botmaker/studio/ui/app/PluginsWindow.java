@@ -14,6 +14,8 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Control;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -26,6 +28,7 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -47,7 +50,8 @@ import java.util.stream.Collectors;
  *
  * <p>A pom edited outside Studio rebinds by itself ({@code LibraryService.watchPom}). Reload stays for a jar
  * whose bytes changed under the same path; it was the plugin author's button for a {@code ~/.m2} build until
- * 2026-10-03, when Studio stopped loading dev builds at all ({@code plugin/ReleasedPlugins}).
+ * 2026-10-03, when Studio stopped loading dev builds at all ({@code plugin/ReleasedPlugins}), and is again in
+ * <b>Dev mode</b> (2026-10-06), the footer's per-project box that lets them load.
  */
 public final class PluginsWindow {
 
@@ -66,6 +70,7 @@ public final class PluginsWindow {
     private final TabPane tabs = new TabPane();
     private final Label loadProblems = new Label();
     private final Label status = new Label();
+    private final CheckBox devMode = new CheckBox("Dev mode");
     private InstalledPluginsTab installed;
     private BrowsePluginsTab browse;
     private LibrariesTab libraries;
@@ -115,9 +120,13 @@ public final class PluginsWindow {
         showLoadProblems();
 
         Button reload = new Button("Reload plugins");
-        reload.setTooltip(new Tooltip("Load this project's plugin jars again, without changing pom.xml. A dev"
-                + " build (-SNAPSHOT) is never loaded: Studio runs released plugins only."));
-        reload.setOnAction(e -> reload(reload));
+        reload.setTooltip(new Tooltip("Load this project's plugin jars again, without changing pom.xml — after"
+                + " mvn install rebuilt one. A dev build (-SNAPSHOT) loads only in Dev mode."));
+        reload.setOnAction(e -> reload(reload, libraryService.reloadPlugins()));
+
+        devMode.setSelected(libraryService.devMode());
+        devMode.setTooltip(new Tooltip(DEV_MODE_TIP));
+        devMode.setOnAction(e -> reload(devMode, libraryService.setDevMode(devMode.isSelected())));
 
         Button close = new Button("Close");
         close.setCancelButton(true);
@@ -126,7 +135,7 @@ public final class PluginsWindow {
         status.getStyleClass().add("sdk-upgrade-detail");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox footer = new HBox(10, reload, status, spacer, close);
+        HBox footer = new HBox(10, reload, devMode, status, spacer, close);
         footer.setAlignment(Pos.CENTER_LEFT);
 
         VBox root = new VBox(10, loadProblems, tabs, footer);
@@ -138,18 +147,21 @@ public final class PluginsWindow {
         tabs.getSelectionModel().select(section.ordinal());
     }
 
-    private void reload(Button button) {
-        button.setDisable(true);
+    /** Disables {@code control} until {@code reloading} — a reload, or a dev-mode switch and its reload — ends. */
+    private void reload(Control control, CompletableFuture<Void> reloading) {
+        control.setDisable(true);
         status.setText("Reloading plugins…");
-        libraryService.reloadPlugins().whenComplete((ignored, failure) -> Platform.runLater(() -> {
-            button.setDisable(false);
+        reloading.whenComplete((ignored, failure) -> Platform.runLater(() -> {
+            control.setDisable(false);
+            devMode.setSelected(libraryService.devMode());   // what the file says, also when saving it failed
             if (failure != null) {
-                status.setText("Could not reload plugins: " + failure.getMessage());
+                Throwable cause = failure.getCause() != null ? failure.getCause() : failure;
+                status.setText("Could not reload plugins: " + cause.getMessage());
                 return;
             }
             // Named, not counted: a reload that found the same plugins looks exactly like one that did
             // nothing, and an author who forgot to run mvn install needs to tell those apart.
-            status.setText(loadedText(PluginHost.plugins()));
+            status.setText(loadedText(PluginHost.plugins()) + devText(PluginHost.devBuilds()));
             showLoadProblems();
             installed.reload();
             browse.refreshInstalled();
@@ -157,6 +169,7 @@ public final class PluginsWindow {
     }
 
     private void afterInstalledChanged() {
+        devMode.setSelected(libraryService.devMode());   // the tab's Use dev mode turns it on too
         showLoadProblems();
         browse.refreshInstalled();
         libraries.reload();
@@ -184,6 +197,17 @@ public final class PluginsWindow {
         loadProblems.setText(text);
         loadProblems.setVisible(!text.isEmpty());
         loadProblems.setManaged(!text.isEmpty());
+    }
+
+    /** What the Dev mode box's tooltip says it does, and what it does not change. */
+    static final String DEV_MODE_TIP = "Load this project's plugin jars at a -SNAPSHOT version: the ones mvn install"
+            + " put in this computer's ~/.m2. Try a plugin before its release, then press Reload after each"
+            + " rebuild. This computer only; Publish still refuses a -SNAPSHOT pin.";
+
+    /** What Reload adds about the dev builds it bound, or {@code ""} when there are none. */
+    static String devText(List<String> devBuilds) {
+        if (devBuilds.isEmpty()) return "";
+        return " Dev builds: " + String.join(", ", devBuilds) + ".";
     }
 
     /** What Reload says it found: every plugin bound, by name. */

@@ -1522,6 +1522,21 @@
 }
 
 /*
+ * The dev-mode banner (2026-10-06): this project loads plugin builds only this computer has. A mode, so the
+ * same shape as the two above, in its own colour so it is never mistaken for a problem.
+ */
+.dev-mode-banner {
+    -fx-background-color: -bm-cat-utility;
+    -bm-text-on-color: -bm-on-accent;
+    -fx-padding: 6 12 6 12;
+    -fx-alignment: center-left;
+}
+.dev-mode-banner .label {
+    -fx-text-fill: -bm-text-on-color;
+    -fx-font-weight: bold;
+}
+
+/*
  * The Upgrade SDK report. Named colours only — the whole point of the dialog is to be read carefully, and a
  * hard-coded grey that vanishes on one of the two themes is the one failure mode that matters here.
  *

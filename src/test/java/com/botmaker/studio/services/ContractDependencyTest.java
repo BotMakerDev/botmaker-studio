@@ -3,6 +3,8 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.config.HostContract;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.studio.project.UserLibrary;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -159,6 +161,40 @@ class ContractDependencyTest {
         // Dropping it would hand the bot the plugin's older contract, which may lack what the bot uses.
         assertFalse(ContractDependency.reconcile(projectDir, true, List.of(jar.toString())));
         assertEquals(1, contractEntries(projectDir).size());
+    }
+
+    @Test
+    void aProjectInDevModeIsGivenTheContractThisStudioRuns() throws Exception {
+        Path projectDir = blankProject();
+        StudioProjectSettings.empty().withDevMode(true).write(projectDir.resolve(ProjectConfig.STUDIO_DIR));
+
+        assertTrue(ContractDependency.ensure(projectDir, List.of()));
+
+        assertEquals(HostContract.devVersion(), contractEntries(projectDir).getFirst().getVersion());
+    }
+
+    @Test
+    void outsideDevModeTheSnapshotDevModeWroteMovesBackToTheReleasedOne() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(HostContract.devVersion().endsWith("-SNAPSHOT"),
+                "a build from main, whose contract tag is a SNAPSHOT");
+        Path projectDir = blankProject();
+        MavenService.declareIfAbsent(projectDir,
+                new UserLibrary(HostContract.GROUP_ID, HostContract.ARTIFACT_ID, HostContract.devVersion()));
+
+        assertTrue(ContractDependency.reconcile(projectDir, true, List.of()));
+
+        assertEquals(HostContract.version(), contractEntries(projectDir).getFirst().getVersion());
+    }
+
+    @Test
+    void aSnapshotContractPinnedByHandStays() throws Exception {
+        Path projectDir = blankProject();
+        MavenService.declareIfAbsent(projectDir,
+                new UserLibrary(HostContract.GROUP_ID, HostContract.ARTIFACT_ID, "9.9.9-SNAPSHOT"));
+
+        assertFalse(ContractDependency.reconcile(projectDir, true, List.of()));
+
+        assertEquals("9.9.9-SNAPSHOT", contractEntries(projectDir).getFirst().getVersion());
     }
 
     private Path blankProject() throws Exception {

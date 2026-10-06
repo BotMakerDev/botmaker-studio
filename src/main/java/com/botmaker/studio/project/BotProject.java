@@ -142,7 +142,9 @@ public class BotProject {
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
         // falls back to the bundled plugins; it never leaves Studio without an answer.
-        PluginHost.bind(classpath, HostServices.forProject(config));
+        // Read from the file, not state: the settings are loaded into state later in the open.
+        PluginHost.bind(classpath, HostServices.forProject(config),
+                StudioProjectSettings.devModeIn(config.projectPath()));
 
         // 5b. was PluginSourceFiles.install(config) — copying each bound plugin's shipped Java into the
         // project on every bind. Deleted 2026-09-21: a project's plugins/<id>/ file comes from the template

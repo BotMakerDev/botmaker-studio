@@ -28,4 +28,12 @@ class HostContractTest {
         assertEquals(fallback, HostContract.orReleased("0.0.0-SNAPSHOT"));
         assertEquals("v0.3.0", HostContract.orReleased(" v0.3.0 "));
     }
+
+    @Test
+    void devModeKeepsADevBuildsSnapshotAndOnlyThat() {
+        assertEquals("0.5.1-SNAPSHOT", HostContract.devVersion(" 0.5.1-SNAPSHOT "));
+        assertEquals("v0.5.0", HostContract.devVersion("v0.5.0"));
+        assertEquals(MavenService.CONTRACT_FALLBACK_VERSION, HostContract.devVersion("${botmaker.contract.tag}"));
+        assertEquals(MavenService.CONTRACT_FALLBACK_VERSION, HostContract.devVersion(null));
+    }
 }

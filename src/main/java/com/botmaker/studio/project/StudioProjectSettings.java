@@ -80,6 +80,11 @@ import java.util.Map;
  *                            whole class, or {@code class#method}. Hidden rather than shown, for the reason
  *                            {@code hiddenToolbarGroups} is: a class the bot gains later must appear
  *                            (backward-compatible; absent → empty)
+ * @param devMode             whether this project loads plugin jars at a {@code -SNAPSHOT} version, the ones
+ *                            {@code mvn install} put in this machine's {@code ~/.m2} (2026-10-06). Here for the
+ *                            reason {@code runProperties} is: a jar only this computer has is a fact about this
+ *                            computer. Publish refuses the pins whatever this says
+ *                            (backward-compatible; absent → false)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, String> favoriteOverloads,
@@ -89,7 +94,8 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
                                     List<String> hiddenToolbarGroups,
                                     Map<String, String> preferredEditors,
                                     Map<String, String> runProperties,
-                                    List<String> hiddenTraceWriters) {
+                                    List<String> hiddenTraceWriters,
+                                    boolean devMode) {
 
     /**
      * The overlay editor panel's remembered layout: its width. Where it sits is not remembered: it docks
@@ -188,7 +194,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     /** A fresh project's settings — nothing remembered yet, and no template recorded until one is chosen. */
     public static StudioProjectSettings empty() {
         return new StudioProjectSettings(List.of(), Map.of(), Map.of(), null, null, null, null, List.of(),
-                Map.of(), Map.of(), List.of());
+                Map.of(), Map.of(), List.of(), false);
     }
 
     // withTargets, withDefaultIndex, withKnownWindowTitles and withReferenceResolution are deleted
@@ -200,28 +206,28 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     public StudioProjectSettings withTemplate(ProjectTemplate template) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** This settings with the overlay editor's last target recorded, by its key ({@code null} clears it). */
     public StudioProjectSettings withLastTarget(String targetKey) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 targetKey, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** This settings with the overlay HUD's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withOverlayState(OverlayState state) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, state, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** This settings with the main window's remembered layout replaced ({@code null} clears it). */
     public StudioProjectSettings withWorkspaceLayout(WorkspaceLayout layout) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, layout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /**
@@ -236,7 +242,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout,
                 groupNames == null ? List.of() : List.copyOf(groupNames), preferredEditors,
-                runProperties, hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** Whether {@code groupName} (a {@code ToolbarGroup} enum name) is switched off for this project. */
@@ -259,7 +265,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         else next.put(typeName, pluginId);
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, next,
-                runProperties, hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** The chosen plugin id for {@code typeName}, or {@code null} when the user has not been asked. */
@@ -275,7 +281,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         else next.put(name, value.trim());
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                next, hiddenTraceWriters);
+                next, hiddenTraceWriters, devMode);
     }
 
     /**
@@ -285,7 +291,22 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     public StudioProjectSettings withHiddenTraceWriters(Collection<String> writers) {
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,writers == null ? List.of() : List.copyOf(writers));
+                runProperties, writers == null ? List.of() : List.copyOf(writers), devMode);
+    }
+
+    /**
+     * This settings with dev mode on or off (2026-10-06): whether this project loads plugin jars at a
+     * {@code -SNAPSHOT} version. See {@code ReleasedPlugins}.
+     */
+    public StudioProjectSettings withDevMode(boolean on) {
+        return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
+                lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
+                runProperties, hiddenTraceWriters, on);
+    }
+
+    /** Whether the project in {@code projectDir} is in dev mode, read from its file; false when it has none. */
+    public static boolean devModeIn(Path projectDir) {
+        return read(projectDir.resolve(ProjectConfig.STUDIO_DIR)).devMode();
     }
 
     /**
@@ -298,7 +319,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         else next.put(methodKey, signatureKey);
         return new StudioProjectSettings(knownWindowTitles, next, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** The chosen overload signature key for {@code methodKey}, or {@code null} if no favorite is set. */
@@ -317,7 +338,7 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
         else next.put(className, List.copyOf(methods));
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, next, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, preferredEditors,
-                runProperties,hiddenTraceWriters);
+                runProperties, hiddenTraceWriters, devMode);
     }
 
     /** The favorite method names for {@code className} (preference order), or an empty list if none. */

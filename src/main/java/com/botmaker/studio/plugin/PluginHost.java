@@ -144,6 +144,9 @@ public final class PluginHost {
     /** What the last {@link #bind} could not load. See {@link #failures()}. */
     private static volatile List<PluginLoader.PluginFailure> failures = List.of();
 
+    /** The dev builds the last {@link #bind} bound in dev mode. See {@link #devBuilds()}. */
+    private static volatile List<String> devBuilds = List.of();
+
     /**
      * The project being bound, handed to every plugin that ends up serving it.
      *
@@ -223,10 +226,20 @@ public final class PluginHost {
      * contribution surface takes a services argument, deliberately, because they are asked every time a
      * window is drawn.
      */
-    public static synchronized void bind(List<String> resolvedClasspath, StudioServices services) {
+    public static void bind(List<String> resolvedClasspath, StudioServices services) {
+        bind(resolvedClasspath, services, false);
+    }
+
+    /**
+     * {@link #bind(List, StudioServices)}, binding the classpath's dev builds too when {@code devMode} — the
+     * project's own setting, {@code StudioProjectSettings.devMode}. See {@link #devBuilds()}.
+     */
+    public static synchronized void bind(List<String> resolvedClasspath, StudioServices services,
+                                         boolean devMode) {
         opening = services;
-        // A dev build of a plugin is never bound (ReleasedPlugins): it is reported beside what failed to load.
-        ReleasedPlugins.Split released = ReleasedPlugins.split(resolvedClasspath);
+        // A dev build of a plugin is bound only in dev mode (ReleasedPlugins); otherwise it is reported beside
+        // what failed to load.
+        ReleasedPlugins.Split released = ReleasedPlugins.split(resolvedClasspath, devMode);
         PluginLoader.Loaded loaded = PluginLoader.openReporting(released.loadable());
         failures = concat(released.refused(), loaded.failures());
         PluginLoader opened = loaded.loader();
@@ -234,11 +247,35 @@ public final class PluginHost {
             // Not unbind(): a classpath that would not open is still a project opening, and the bundled set
             // is about to serve it. Saying "no project" here would leave the next close with nobody to tell.
             swap(null, BUNDLED);
+            devBuilds = List.of();
             serving = true;
             return;
         }
         swap(opened, opened.plugins());
+        devBuilds = bound(released.dev());
         serving = true;
+    }
+
+    /**
+     * The dev-build jars among {@code devJars} that a bound plugin came from, described: a dev build that
+     * failed to load, or that {@link #swap} rejected, is a failure and not a loaded build.
+     */
+    private static List<String> bound(List<String> devJars) {
+        if (devJars.isEmpty()) return List.of();
+        java.util.Set<String> sources = new java.util.HashSet<>();
+        for (StudioPlugin plugin : plugins) {
+            java.net.URL where = codeSource(plugin.getClass());
+            if (where == null) continue;
+            try {
+                sources.add(java.nio.file.Path.of(where.toURI()).toAbsolutePath().normalize().toString());
+            } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+                // Not a file: it is no jar on the project's classpath.
+            }
+        }
+        return devJars.stream()
+                .filter(jar -> sources.contains(java.nio.file.Path.of(jar).toAbsolutePath().normalize().toString()))
+                .map(ReleasedPlugins::describe)
+                .toList();
     }
 
     /**
@@ -253,6 +290,15 @@ public final class PluginHost {
         swap(null, BUNDLED);
         serving = false;
         failures = List.of();
+        devBuilds = List.of();
+    }
+
+    /**
+     * The dev builds the last {@link #bind} let through because the project is in dev mode, each as
+     * {@code <artifact> <version>}: empty outside dev mode, and empty in it when the pom pins only releases.
+     */
+    public static List<String> devBuilds() {
+        return devBuilds;
     }
 
     /**

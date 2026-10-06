@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **Dev mode (2026-10-06).** `StudioProjectSettings.devMode`, a per-project, git-excluded setting, lets
+> `PluginHost.bind(classpath, services, devMode)` load `-SNAPSHOT` plugin jars. `ReleasedPlugins.Split.dev`
+> names them, and `EditorCanvas` shows them in a banner. It is switched with the *Dev mode* box in
+> `PluginsWindow` or the Installed tab's *Use dev mode* (`LibraryService.setDevMode`). A dev-mode project is
+> given `HostContract.devVersion()`, which is a source-run Studio's own SNAPSHOT. Outside dev mode,
+> `ContractDependency.reconcile` moves a SNAPSHOT contract entry back to the released one. Publish still
+> refuses SNAPSHOT pins. Read the 2026-10-03 note below as "outside dev mode".
+
 > **A try is a run (2026-10-06).** `CodeExecutionService.runCode` and `tryCode` share one launch: a try compiles
 > the project, then its caller (`services/trial/TrialCaller`) into `target/botmaker-trial/`, and runs that class
 > instead of the entry class — same events, console, telemetry and Stop, no version taken. Both editors reach

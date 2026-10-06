@@ -1,14 +1,17 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.studio.config.HostContract;
+import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.UserLibrary;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarFile;
 
 /**
@@ -39,6 +42,15 @@ public final class ContractDependency {
     /** The coordinate a project is given: the contract tag this Studio was built against. */
     public static UserLibrary coordinate() {
         return new UserLibrary(HostContract.GROUP_ID, HostContract.ARTIFACT_ID, HostContract.version());
+    }
+
+    /**
+     * The coordinate the project in {@code projectDir} is given: in dev mode, the contract this Studio runs
+     * ({@link HostContract#devVersion()}, a dev build's {@code -SNAPSHOT}); otherwise {@link #coordinate()}.
+     */
+    static UserLibrary coordinate(Path projectDir) {
+        if (!StudioProjectSettings.devModeIn(projectDir)) return coordinate();
+        return new UserLibrary(HostContract.GROUP_ID, HostContract.ARTIFACT_ID, HostContract.devVersion());
     }
 
     /** Whether any entry of {@code classpath} — a jar or a class directory — carries {@code @Param}. */
@@ -84,7 +96,7 @@ public final class ContractDependency {
      */
     public static boolean ensure(Path projectDir, List<String> classpath) throws IOException {
         if (onClasspath(classpath)) return false;
-        return MavenService.declareIfAbsent(projectDir, coordinate());
+        return MavenService.declareIfAbsent(projectDir, coordinate(projectDir));
     }
 
     /**
@@ -92,11 +104,23 @@ public final class ContractDependency {
      * contract ({@code used}) and {@code classpath} lacks it, removed once a plugin brings the contract again at
      * that version or newer ({@link MavenService#dropRedundantContract}) — so it never sits beside a plugin's
      * and pins it. An entry nothing imports any more is left: harmless alone, and gone when a plugin arrives.
-     * Answers whether the pom changed; blocking.
+     * Outside dev mode an entry at the {@code -SNAPSHOT} dev mode writes ({@link HostContract#devVersion()}) is
+     * moved back to the released contract (2026-10-06); any other SNAPSHOT pin is the author's and stays. Answers whether the pom changed; blocking.
      */
     public static boolean reconcile(Path projectDir, boolean used, List<String> classpath) throws IOException {
-        if (used && !onClasspath(classpath)) return MavenService.declareIfAbsent(projectDir, coordinate());
-        return MavenService.dropRedundantContract(projectDir, coordinate());
+        UserLibrary wanted = coordinate(projectDir);
+        if (used && !onClasspath(classpath) && MavenService.declareIfAbsent(projectDir, wanted)) return true;
+        if (MavenService.dropRedundantContract(projectDir, wanted)) return true;
+        // Only the exact SNAPSHOT dev mode would write here: one pinned by hand is the author's, and a released
+        // Studio's dev mode writes no SNAPSHOT at all.
+        String devWritten = HostContract.devVersion();
+        if (ReleasedPlugins.isDevVersion(wanted.version()) || !ReleasedPlugins.isDevVersion(devWritten)) return false;
+        boolean devPin = MavenService.readDependencyVersion(projectDir, wanted.groupId(), wanted.artifactId())
+                .filter(devWritten::equals).isPresent();
+        if (!devPin) return false;
+        MavenService.setDependencyVersions(projectDir,
+                Map.of(wanted.groupId() + ":" + wanted.artifactId(), wanted.version()));
+        return true;
     }
 
     /**

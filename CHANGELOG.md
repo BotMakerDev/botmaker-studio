@@ -13,6 +13,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Added
+- **Dev mode: try a plugin before it is released.** *Project ▸ Plugins & Libraries* has a *Dev mode* box, per
+  project and only on this computer. While it is on, plugins pinned at a `-SNAPSHOT` version (the build
+  `mvn install` put in `~/.m2`) load. *Reload plugins* picks up each rebuild, and a banner above the canvas
+  names what is loaded. A plugin refused outside dev mode offers *Use dev mode* on its row. A Studio run from
+  source gives a dev-mode project its own unreleased contract. Publish still refuses a `-SNAPSHOT` pin, and
+  turning dev mode off moves the contract entry back to the released one.
 - **The overlay editor docks beside the game.** ⧉ Overlay opens a panel beside the window your bot watches —
   with the SDK, the one `Sdk.captureSource()` names — without asking; ⇄ Change picks another. It follows the
   window, drags off to float (⇲ docks it again) and resizes from either edge. Chips across the top are your

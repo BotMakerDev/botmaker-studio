@@ -1,6 +1,7 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
+import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.plugin.HostPluginValues;
@@ -8,6 +9,7 @@ import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.UserLibrary;
 
 import javafx.application.Platform;
@@ -257,7 +259,8 @@ public final class LibraryService {
         }
         List<String> classpath = resolution.jars();
         onFx(() -> state.setResolvedClasspath(classpath));
-        PluginHost.bind(classpath, HostServices.forProject(config));
+        PluginHost.bind(classpath, HostServices.forProject(config),
+                StudioProjectSettings.devModeIn(config.projectPath()));
         // A plugin just added brings its @Managed holders with it (2026-09-26): written from what the plugin
         // declares, never over a file, never into main. The explorer redraws on the event below.
         HostPluginValues.createMissing();
@@ -354,5 +357,36 @@ public final class LibraryService {
      */
     public CompletableFuture<Void> reloadPlugins() {
         return CompletableFuture.runAsync(this::rebind, rebinds);
+    }
+
+    /** Whether this project is in dev mode: its plugin jars at a {@code -SNAPSHOT} version are bound. */
+    public boolean devMode() {
+        return StudioProjectSettings.devModeIn(config.projectPath());
+    }
+
+    /**
+     * Turns dev mode on or off for this project (2026-10-06), writes it to the project's settings and
+     * {@link #reloadPlugins reloads}, so the dev builds the pom pins load or are refused at once.
+     *
+     * <p>Built from the settings in state, as {@code ProjectSettingsService} builds every other change, so a
+     * save from either keeps the other's fields; written on {@link #rebinds}, so the reload that follows reads
+     * what was just written.
+     */
+    public CompletableFuture<Void> setDevMode(boolean on) {
+        return CompletableFuture.runAsync(() -> {
+            StudioProjectSettings[] next = new StudioProjectSettings[1];
+            onFx(() -> {
+                StudioProjectSettings current = state.getSettings();
+                next[0] = (current != null ? current : StudioProjectSettings.empty()).withDevMode(on);
+                try {
+                    next[0].write(config.studioRoot());
+                } catch (java.io.IOException e) {
+                    throw new java.io.UncheckedIOException("Could not save dev mode: " + e.getMessage(), e);
+                }
+                state.setSettings(next[0]);
+            });
+            eventBus.publish(new SettingsChangedEvent(next[0]));
+            rebind();
+        }, rebinds);
     }
 }

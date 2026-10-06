@@ -18,14 +18,17 @@ import java.util.Properties;
  * <p><b>A dev build writes a released tag too (2026-10-03)</b>: its pin is a {@code -SNAPSHOT}, so it gets
  * {@link MavenService#CONTRACT_FALLBACK_VERSION}, which the release moves with every contract tag. It wrote a
  * snapshot until then, a pin only this machine resolved and Publish refused; Studio works with released
- * versions only.
+ * versions only — outside dev mode, which gives a project {@link #devVersion()} (2026-10-06).
  */
 public final class HostContract {
 
     public static final String GROUP_ID = "com.github.BotMakerDev";
     public static final String ARTIFACT_ID = "botmaker-studio-api";
 
-    private static final String VERSION = read();
+    /** The baked {@code contract.tag} as read, or {@code null}: a SNAPSHOT on a dev build. */
+    private static final String TAG = read();
+
+    private static final String VERSION = orReleased(TAG);
 
     private HostContract() {}
 
@@ -34,15 +37,32 @@ public final class HostContract {
         return VERSION;
     }
 
+    /**
+     * The contract a project in dev mode is given (2026-10-06): a dev build's own {@code -SNAPSHOT}, so a bot
+     * compiles against contract members not released yet — the contract the Studio running it actually has.
+     * A released Studio's tag is a release, so it is {@link #version()} there.
+     */
+    public static String devVersion() {
+        return devVersion(TAG);
+    }
+
     private static String read() {
         try (InputStream in = HostContract.class.getResourceAsStream("/botmaker/host.properties")) {
-            if (in == null) return MavenService.CONTRACT_FALLBACK_VERSION;
+            if (in == null) return null;
             Properties properties = new Properties();
             properties.load(in);
-            return orReleased(properties.getProperty("contract.tag"));
+            return properties.getProperty("contract.tag");
         } catch (IOException e) {
-            return MavenService.CONTRACT_FALLBACK_VERSION;
+            return null;
         }
+    }
+
+    /** A SNAPSHOT tag as it is; anything else as {@link #orReleased} reads it. */
+    static String devVersion(String tag) {
+        if (tag != null && !tag.contains("${") && tag.trim().toUpperCase(Locale.ROOT).endsWith("-SNAPSHOT")) {
+            return tag.trim();
+        }
+        return orReleased(tag);
     }
 
     /** A blank, still-unfiltered or SNAPSHOT value is the released fallback. */

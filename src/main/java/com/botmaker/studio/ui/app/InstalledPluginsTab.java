@@ -27,6 +27,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -127,7 +128,11 @@ public final class InstalledPluginsTab {
     /** Shown while a row pins a dev build; see {@link #showDevBar}. */
     private final Label devText = new Label();
     private final Button pinReleased = new Button("Pin released versions");
-    private final HBox devBar = new HBox(10, devText, pinReleased);
+    private final Button useDevMode = new Button("Use dev mode");
+    private final HBox devBar = new HBox(10, devText, useDevMode, pinReleased);
+
+    /** Whether the project is in dev mode, read on every {@link #load}: its dev rows load and are not refused. */
+    private boolean devMode;
 
     /**
      * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
@@ -195,6 +200,19 @@ public final class InstalledPluginsTab {
         devText.setWrapText(true);
         HBox.setHgrow(devText, Priority.ALWAYS);
         pinReleased.setOnAction(e -> rows.stream().filter(Row::isDev).forEach(Row::selectReleased));
+        useDevMode.setTooltip(new Tooltip(PluginsWindow.DEV_MODE_TIP));
+        useDevMode.setOnAction(e -> {
+            useDevMode.setDisable(true);
+            libraryService.setDevMode(true).whenComplete((ignored, failure) -> Platform.runLater(() -> {
+                useDevMode.setDisable(false);
+                if (failure != null) {
+                    status("Could not turn on dev mode: " + failure.getMessage());
+                    return;
+                }
+                reload();
+                onChanged.run();
+            }));
+        });
         devBar.setAlignment(Pos.CENTER_LEFT);
         devBar.getStyleClass().add("sdk-upgrade-card");
         showDevBar(0);
@@ -216,7 +234,8 @@ public final class InstalledPluginsTab {
     static String devText(int devRows) {
         if (devRows == 0) return "";
         return (devRows == 1 ? "A plugin is" : devRows + " plugins are") + " pinned to a dev build, which Studio "
-                + "does not load. Move " + (devRows == 1 ? "it" : "them") + " to a released version, then apply.";
+                + "does not load. Move " + (devRows == 1 ? "it" : "them") + " to a released version, then apply — "
+                + "or use dev mode to try " + (devRows == 1 ? "it" : "them") + " on this computer.";
     }
 
     private Node buttonBar() {
@@ -251,6 +270,7 @@ public final class InstalledPluginsTab {
      * the window must never do is show an empty table because a network call failed.
      */
     private void load() {
+        devMode = libraryService.devMode();
         status("Reading this project's plugins…");
         registry.browse().thenAccept(entries -> {
             List<InstalledPlugin> found = InstalledPlugin.of(
@@ -298,7 +318,7 @@ public final class InstalledPluginsTab {
             line++;
             row.loadVersions();
         }
-        showDevBar((int) rows.stream().filter(Row::isDev).count());
+        showDevBar((int) rows.stream().filter(Row::refused).count());
     }
 
     private static Label heading(String text) {
@@ -365,16 +385,23 @@ public final class InstalledPluginsTab {
 
         /**
          * The version this row is seeded with: the registry's verified one when newer, else the installed —
-         * and for a dev build, any released version over the one Studio will not load.
+         * and for a dev build Studio refused, any released version over it. In dev mode a dev build is the
+         * one being tried, so it stays.
          */
         String recommended() {
-            if (isDev() && !released().isEmpty()) return released();
+            if (isDev() && devMode) return upgrades.currentVersion();
+            if (refused() && !released().isEmpty()) return released();
             return PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
         }
 
-        /** Whether this row pins a build only this machine has, which {@code PluginHost.bind} refused. */
+        /** Whether this row pins a build only this machine has. */
         boolean isDev() {
             return ReleasedPlugins.isDevVersion(upgrades.currentVersion());
+        }
+
+        /** Whether this row pins a dev build {@code PluginHost.bind} refused: one outside dev mode. */
+        boolean refused() {
+            return isDev() && !devMode;
         }
 
         /** The release a dev row moves to: the registry's verified one, else the newest JitPack lists, else "". */
@@ -435,7 +462,7 @@ public final class InstalledPluginsTab {
                 versions.getItems().setAll(items);
                 versions.getSelectionModel().select(items.contains(selected) ? selected : seed);
                 // A dev row with no verified release learns one only now: the newest tag JitPack lists.
-                if (isDev() && ReleasedPlugins.isDevVersion(versions.getValue()) && !released().isEmpty()) {
+                if (refused() && ReleasedPlugins.isDevVersion(versions.getValue()) && !released().isEmpty()) {
                     versions.getSelectionModel().select(released());
                 }
                 seeding = false;
@@ -445,7 +472,7 @@ public final class InstalledPluginsTab {
 
         /** Says on the row that Studio did not load it; cleared like any chip when the version moves. */
         private void markDev() {
-            if (isDev() && report == null) chip("dev build — not loaded", "partial");
+            if (refused() && report == null) chip("dev build — not loaded", "partial");
         }
 
         /** A version, with which one is installed and which one the registry verified. */

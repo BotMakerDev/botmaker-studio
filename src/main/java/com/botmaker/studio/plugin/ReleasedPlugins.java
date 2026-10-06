@@ -18,6 +18,11 @@ import java.util.function.Predicate;
  * run. Until this date Studio loaded whatever the pom pinned and only Publish refused the SNAPSHOT, which let
  * a whole session of edits pile up against a build that was then refused at the last step.
  *
+ * <p><b>Dev mode is the one exception (2026-10-06)</b>: a project whose settings turn it on
+ * ({@code StudioProjectSettings.devMode}) binds its dev builds, and they are reported as {@link Split#dev}
+ * so the window can say so. It exists because a release was the only way to try a plugin change, and a
+ * JitPack build that fails costs a tag. Publish still refuses the pins.
+ *
  * <p><b>Only plugins are refused.</b> A SNAPSHOT library that declares no {@code StudioPlugin} stays on the
  * classpath: it is the bot's business, and Maven builds (the umbrella's {@code -Ptemplates}, CI) still use
  * SNAPSHOTs freely. The version is the Maven repository's own: the directory a resolved jar sits in.
@@ -29,43 +34,56 @@ public final class ReleasedPlugins {
 
     /** The sentence a refused plugin is reported with, after its coordinate. */
     static final String REFUSAL = "a dev build, and Studio loads released versions only. Pin a released "
-            + "version in Project ▸ Plugins & Libraries ▸ Installed";
+            + "version in Project ▸ Plugins & Libraries ▸ Installed, or turn on Dev mode there for this project";
 
     private ReleasedPlugins() {}
 
-    /** What the loader may open, and the plugins left off it. */
-    public record Split(List<String> loadable, List<PluginLoader.PluginFailure> refused) {
+    /**
+     * What the loader may open, the plugins left off it, and the dev-build plugin jars dev mode let through
+     * (classpath entries, a subset of {@code loadable}; {@link #describe} names one).
+     */
+    public record Split(List<String> loadable, List<PluginLoader.PluginFailure> refused, List<String> dev) {
         public Split {
             loadable = List.copyOf(loadable);
             refused = List.copyOf(refused);
+            dev = List.copyOf(dev);
         }
     }
 
-    /** {@link #split(List, Predicate)} over the jars' own service files. */
-    public static Split split(List<String> resolvedClasspath) {
-        return split(resolvedClasspath, MavenService::declaresPlugin);
+    /** {@link #split(List, boolean, Predicate)} over the jars' own service files. */
+    public static Split split(List<String> resolvedClasspath, boolean devMode) {
+        return split(resolvedClasspath, devMode, MavenService::declaresPlugin);
     }
 
     /**
-     * Leaves every dev-build plugin jar out of {@code resolvedClasspath}.
+     * Leaves every dev-build plugin jar out of {@code resolvedClasspath}, unless {@code devMode}.
      *
      * @param declaresPlugin whether a jar carries the {@code StudioPlugin} service entry; asked of dev-build
      *                       jars only, so a released classpath opens no jar here
      */
-    public static Split split(List<String> resolvedClasspath, Predicate<Path> declaresPlugin) {
+    public static Split split(List<String> resolvedClasspath, boolean devMode, Predicate<Path> declaresPlugin) {
         List<String> loadable = new ArrayList<>();
         List<PluginLoader.PluginFailure> refused = new ArrayList<>();
+        List<String> dev = new ArrayList<>();
         for (String entry : resolvedClasspath) {
             Path jar = Path.of(entry);
             String version = versionOf(jar);
-            if (isDevVersion(version) && declaresPlugin.test(jar)) {
-                refused.add(new PluginLoader.PluginFailure(artifactOf(jar) + " " + version,
-                        new IllegalStateException(REFUSAL)));
-            } else {
+            if (!isDevVersion(version) || !declaresPlugin.test(jar)) {
                 loadable.add(entry);
+            } else if (devMode) {
+                loadable.add(entry);
+                dev.add(entry);
+            } else {
+                refused.add(new PluginLoader.PluginFailure(describe(entry), new IllegalStateException(REFUSAL)));
             }
         }
-        return new Split(loadable, refused);
+        return new Split(loadable, refused, dev);
+    }
+
+    /** A resolved jar as {@code <artifact> <version>}, read off the Maven repository layout. */
+    public static String describe(String entry) {
+        Path jar = Path.of(entry);
+        return artifactOf(jar) + " " + versionOf(jar);
     }
 
     /** Whether {@code version} names a build only this machine has: a SNAPSHOT, or a property nobody set. */

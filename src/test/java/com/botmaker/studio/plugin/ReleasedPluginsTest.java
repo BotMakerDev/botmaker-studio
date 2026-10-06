@@ -21,7 +21,25 @@ class ReleasedPluginsTest {
     private static final Set<String> PLUGINS = Set.of(SDK_DEV, SDK_TAG);
 
     private static ReleasedPlugins.Split split(String... classpath) {
-        return ReleasedPlugins.split(List.of(classpath), jar -> PLUGINS.contains(jar.toString()));
+        return ReleasedPlugins.split(List.of(classpath), false, jar -> PLUGINS.contains(jar.toString()));
+    }
+
+    @Test
+    void devModeLoadsADevBuildAndNamesIt() {
+        ReleasedPlugins.Split split = ReleasedPlugins.split(List.of(SDK_DEV, SHARED_DEV), true,
+                jar -> PLUGINS.contains(jar.toString()));
+
+        assertEquals(List.of(SDK_DEV, SHARED_DEV), split.loadable());
+        assertTrue(split.refused().isEmpty());
+        assertEquals(List.of(SDK_DEV), split.dev());
+        assertEquals("botmaker-sdk 0.0.0-SNAPSHOT", ReleasedPlugins.describe(SDK_DEV));
+    }
+
+    @Test
+    void theRefusalNamesDevMode() {
+        String line = split(SDK_DEV).refused().getFirst().describe();
+        assertTrue(line.contains("Dev mode"), line);
+        assertTrue(split(SDK_DEV).dev().isEmpty());
     }
 
     @Test
@@ -51,7 +69,7 @@ class ReleasedPluginsTest {
 
     @Test
     void releasedJarsAreNeverOpened() {
-        ReleasedPlugins.split(List.of(SDK_TAG), jar -> {
+        ReleasedPlugins.split(List.of(SDK_TAG), true, jar -> {
             throw new AssertionError("opened " + jar);
         });
     }

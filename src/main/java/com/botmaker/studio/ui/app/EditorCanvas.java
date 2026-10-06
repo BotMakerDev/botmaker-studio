@@ -80,7 +80,8 @@ final class EditorCanvas {
     EditorCanvas(CodeEditorService codeEditorService, EventBus eventBus,
                  boolean readerMode, String projectName, Runnable onSwitchToEditor,
                  Supplier<List<String>> missingPlugins, Runnable onManagePlugins,
-                 Supplier<List<String>> loadProblems, Runnable onUpdatePlugins) {
+                 Supplier<List<String>> loadProblems, Runnable onUpdatePlugins,
+                 Supplier<List<String>> devBuilds) {
         this.codeEditorService = codeEditorService;
         this.eventBus = eventBus;
 
@@ -132,9 +133,11 @@ final class EditorCanvas {
         // the banner's own button, and a banner that outlived its cause would be the worst outcome.
         showMissingPlugins(missingPlugins.get(), onManagePlugins);
         showLoadProblems(loadProblems.get(), onUpdatePlugins);
+        showDevBuilds(devBuilds.get(), onUpdatePlugins);
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> {
             showMissingPlugins(missingPlugins.get(), onManagePlugins);
             showLoadProblems(loadProblems.get(), onUpdatePlugins);
+            showDevBuilds(devBuilds.get(), onUpdatePlugins);
         }, true);
         followSubscription = eventBus.subscribe(CoreApplicationEvents.ExecutionFollowedEvent.class,
                 e -> follow(e.block()), true);
@@ -266,6 +269,42 @@ final class EditorCanvas {
         loadProblemBanner.getStyleClass().add("missing-plugin-banner");
         column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
                 loadProblemBanner);
+    }
+
+    /** Above the canvas while dev mode binds a dev build; null otherwise. */
+    private HBox devModeBanner;
+
+    /**
+     * The dev-mode banner (2026-10-06): which plugin builds only this computer has are loaded, so a bot edited
+     * against one is never taken for a publishable one.
+     */
+    private void showDevBuilds(List<String> devBuilds, Runnable onOpenPlugins) {
+        if (devModeBanner != null) {
+            column.getChildren().remove(devModeBanner);
+            devModeBanner = null;
+        }
+        String text = devModeText(devBuilds);
+        if (text.isEmpty()) return;
+        Label msg = new Label(text);
+        msg.setWrapText(true);
+        msg.setMinWidth(0);
+        HBox.setHgrow(msg, Priority.ALWAYS);
+        Button plugins = new Button("Plugins…");
+        plugins.setMinWidth(Region.USE_PREF_SIZE);
+        plugins.setOnAction(e -> onOpenPlugins.run());
+        devModeBanner = new HBox(10, msg, plugins);
+        devModeBanner.setAlignment(Pos.CENTER_LEFT);
+        devModeBanner.getStyleClass().add("dev-mode-banner");
+        column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
+                devModeBanner);
+    }
+
+    /** The dev-mode banner's line, or {@code ""} when no dev build is bound. Pure, for the test. */
+    static String devModeText(List<String> devBuilds) {
+        if (devBuilds == null || devBuilds.isEmpty()) return "";
+        return "Dev mode: " + (devBuilds.size() == 1 ? "a local plugin build is" : devBuilds.size()
+                + " local plugin builds are") + " loaded (" + String.join(", ", devBuilds)
+                + "). Publish refuses them until they are released.";
     }
 
     VBox node() {
