@@ -635,9 +635,9 @@ submodules** — edit there, commit inside that submodule, bump its pointer in t
 of them inside this repo.
 
 To try a local SDK change in a generated bot without pushing a tag, run `mvn -pl botmaker-sdk -am install`
-from the umbrella root: `-am` builds shared and session first, so all three land at `0.0.0-SNAPSHOT`, the
-version every consumer's pom defaults to. (`dev-install.sh` and the `local-SNAPSHOT` pin are obsolete and
-deleted; the SDK's pom `groupId` is `com.github.LiQiyeDev` now, so a plain install already lands where a bot
+from the umbrella root: `-am` builds shared and session first, so all three land at their `main` `-SNAPSHOT`,
+the version every consumer's pom on `main` pins (umbrella doc 43, 2026-10-06; `0.0.0-SNAPSHOT` before). (`dev-install.sh` and the `local-SNAPSHOT` pin are obsolete and
+deleted; the SDK's pom `groupId` is `com.github.BotMakerDev` now, so a plain install already lands where a bot
 resolves.) Studio lists locally installed SDK snapshots at the top of its version dropdown, labelled
 `(local build)` and preselected, gated on `AppVersion.isDevBuild()`.
 

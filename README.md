@@ -238,7 +238,7 @@ leaves everything else you wrote untouched.
 4. Open a pull request.
 
 > **Note:** the BotMaker SDK is published to JitPack by the maintainer — don't tag or publish it yourself. A
-> dev-run Studio preselects a locally installed `0.0.0-SNAPSHOT` SDK when it finds one, which is why a bot
+> dev-run Studio preselects a locally installed `-SNAPSHOT` SDK when it finds one, which is why a bot
 > created from a development build is pinned to your own build rather than to a released version.
 
 ## License
