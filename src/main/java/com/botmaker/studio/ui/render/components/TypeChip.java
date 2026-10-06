@@ -171,6 +171,32 @@ public final class TypeChip {
     }
 
     /**
+     * {@code replacement} with {@code part}'s type arguments, when both are generic with as many arguments and
+     * the replacement's are only the picker's {@code Object} placeholders: {@code Map<List<String>, Integer>}
+     * picked as {@code HashMap<Object, Object>} stays {@code HashMap<List<String>, Integer>} (2026-10-06). A
+     * replacement typed with its own arguments, or of another arity, is kept as written.
+     */
+    public static String keepingArguments(Type part, String replacement) {
+        // An array's element is reported as the array, and the pick keeps its brackets: compare the elements.
+        Type parsed = JavaSnippets.type(replacement);
+        int dims = parsed instanceof ArrayType array ? array.getDimensions() : 0;
+        Type partElement = part instanceof ArrayType array ? array.getElementType() : part;
+        Type pickElement = parsed instanceof ArrayType array ? array.getElementType() : parsed;
+        if (!(partElement instanceof ParameterizedType was)) return replacement;
+        if (!(pickElement instanceof ParameterizedType now)) return replacement;
+        List<?> kept = was.typeArguments();
+        List<?> placeholders = now.typeArguments();
+        if (kept.size() != placeholders.size()) return replacement;
+        for (Object argument : placeholders) {
+            if (!(argument instanceof SimpleType simple) || !simple.getName().getFullyQualifiedName().equals("Object")) {
+                return replacement;
+            }
+        }
+        return now.getType() + "<" + String.join(", ", kept.stream().map(Object::toString).toList()) + ">"
+                + "[]".repeat(dims);
+    }
+
+    /**
      * {@code root} spelled with {@code part} replaced by the type {@code replacement} names, or {@code null}
      * when {@code replacement} is not a type or {@code part} is not under {@code root}. The replacement is
      * made on a copy, so the tree the canvas reads is never touched.

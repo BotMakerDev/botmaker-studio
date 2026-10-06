@@ -5,7 +5,9 @@ import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.plugin.grammar.ValueContainer;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import javafx.beans.binding.Bindings;
+import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
@@ -25,7 +27,9 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 
 import java.lang.reflect.Type;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -84,6 +88,7 @@ public final class TypeChooser extends Button {
     }
 
     public void setType(Type value) {
+        earlier.clear();
         type.set(value);
     }
 
@@ -94,14 +99,32 @@ public final class TypeChooser extends Button {
 
     // ---- the menu -------------------------------------------------------------------------------------------
 
-    /** The type being put together and the part of it a pick changes; each change of one is checked against the other. */
+    /** One state of the draft: the type and the part selected in it. */
+    private record Step(Type type, TypePath part) {}
+
+    /**
+     * The types this chooser held before, newest first, kept across opens so <i>Back</i> still reaches a type
+     * the last menu replaced (2026-10-06). Cleared when a caller sets the type: that is another value.
+     */
+    private final Deque<Step> earlier = new ArrayDeque<>();
+
+    /**
+     * The type being put together and the part of it a pick changes; each change of one is checked against the
+     * other. Every change of the type pushes the one before, so {@link #back} undoes it: clicking {@code Map} in
+     * {@code Map<List<String>, Integer>} and picking {@code char} replaced the whole type with no way back.
+     */
     private static final class Draft {
         final ObjectProperty<Type> type;
         final ObjectProperty<TypePath> part;
+        final Deque<Step> back;
+        /** Grows and shrinks with {@code back}, so a binding can read whether there is a step to go back to. */
+        final IntegerProperty depth = new SimpleIntegerProperty();
 
-        Draft(Type start) {
+        Draft(Type start, Deque<Step> earlier) {
             type = new SimpleObjectProperty<>(start);
             part = new SimpleObjectProperty<>(TypePath.innermost(start));
+            back = new ArrayDeque<>(earlier);
+            depth.set(back.size());
         }
 
         /** The selected part, cut back to what the type still has. */
@@ -110,8 +133,29 @@ public final class TypeChooser extends Button {
         }
 
         void set(Type next, TypePath selected) {
+            Type was = type.get();
+            if (was != null && !was.equals(next)) {
+                back.push(new Step(was, part()));
+                depth.set(back.size());
+            }
             part.set(selected.within(next));
             type.set(next);
+        }
+
+        /** The type before the last change, with the part that was selected in it; false when there is none. */
+        boolean back() {
+            Step step = back.poll();
+            if (step == null) return false;
+            depth.set(back.size());
+            part.set(step.part().within(step.type()));
+            type.set(step.type());
+            return true;
+        }
+
+        /** The type {@link #back} returns to, or null. */
+        Type previous() {
+            Step step = back.peek();
+            return step == null ? null : step.type();
         }
 
         void pick(Type picked) {
@@ -126,7 +170,7 @@ public final class TypeChooser extends Button {
         ContextMenu menu = new ContextMenu();
         menu.getStyleClass().add("type-chooser-menu");
         // The type being put together; committed when the menu closes, unless Escape closed it.
-        Draft draft = new Draft(type.get());
+        Draft draft = new Draft(type.get(), earlier);
         boolean[] cancelled = {false};
 
         TextField search = new TextField();
@@ -180,10 +224,18 @@ public final class TypeChooser extends Button {
         });
         menu.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ESCAPE) cancelled[0] = true;
+            // Ctrl+Z goes back a step; with a search typed it is the field's own undo.
+            if (e.getCode() == KeyCode.Z && e.isShortcutDown() && !e.isShiftDown() && search.getText().isEmpty()
+                    && draft.back()) {
+                e.consume();
+            }
         });
         menu.setOnHidden(e -> {
             Type chosen = draft.type.get();
-            if (!cancelled[0] && chosen != null && !chosen.equals(type.get())) type.set(chosen);
+            if (cancelled[0] || chosen == null || chosen.equals(type.get())) return;
+            earlier.clear();
+            earlier.addAll(draft.back);
+            type.set(chosen);
         });
         menu.setOnShown(e -> search.requestFocus());
         menu.show(this, Side.BOTTOM, 0, 0);
@@ -202,13 +254,23 @@ public final class TypeChooser extends Button {
         done.setMinWidth(80);
         done.prefHeightProperty().bind(search.heightProperty());
         done.setOnAction(e -> menu.hide());
+        Button back = new Button("↶");
+        back.getStyleClass().add("type-chooser-back");
+        back.prefHeightProperty().bind(search.heightProperty());
+        back.disableProperty().bind(draft.depth.isEqualTo(0));
+        back.setOnAction(e -> draft.back());
         HBox parts = new HBox();
         parts.setAlignment(Pos.CENTER_LEFT);
-        Runnable spell = () -> spellParts(parts, draft);
+        Runnable spell = () -> {
+            spellParts(parts, draft);
+            Type previous = draft.previous();
+            back.setTooltip(new Tooltip(previous == null ? "Nothing to go back to"
+                    : "Back to " + label(previous) + " (Ctrl+Z)"));
+        };
         draft.type.addListener((o, was, now) -> spell.run());
         draft.part.addListener((o, was, now) -> spell.run());
         spell.run();
-        HBox row = new HBox(8, done, parts);
+        HBox row = new HBox(8, done, back, parts);
         row.setAlignment(Pos.CENTER_LEFT);
         CustomMenuItem item = new CustomMenuItem(row);
         item.setHideOnClick(false);

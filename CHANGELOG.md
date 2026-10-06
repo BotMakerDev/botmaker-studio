@@ -127,6 +127,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   that are open now.
 
 ### Fixed
+- The type chooser (Declare Variable, a function's inputs and result, Parameters) could not take a pick back:
+  clicking `Map` in `Map<List<String>, Integer>` and picking `char` replaced the whole type. Its header now has
+  *↶* beside *Done*, and Ctrl+Z works too. Each press goes back one change. In Declare Variable and Add Function
+  the history also outlasts the menu. Edit Variable and Parameters rebuild the chooser after each write, so
+  there the editor's Ctrl+Z, or the dialog's own undo, takes a change back. On the canvas, picking `HashMap` for a `Map` part keeps
+  `<List<String>, Integer>`, and Ctrl+Z takes back a type change as one step.
 - Pressing ▶ Run again while the bot was still compiling started a second bot beside the first, and Stop pressed
   during the compile was lost, so the bot started anyway. A run now counts from the press, and a Stop during
   the compile ends it before the bot starts.

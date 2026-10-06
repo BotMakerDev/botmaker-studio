@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **A type chooser goes back (2026-10-06).** `TypeChooser`'s draft pushes the type before each change (pick,
+> wrap, unwrap). *↶* and Ctrl+Z with an empty search pop it. The stack is kept on the chooser across opens and
+> cleared by `setType`, because a caller setting the type means another value. A dialog that rebuilds its
+> chooser after a write (Edit Variable, Parameters) starts each chooser empty. On the canvas, `TypePicker.chip`
+> passes each pick through `TypeChip.keepingArguments`: a same-arity generic picked with `Object` placeholders
+> keeps the part's arguments. Each commit is one `CodeEditor.insert`, so it is one history step.
+
 > **An upgrade asks every fix first (2026-10-06).** Before a pass writes anything, `InstalledPluginsTab.runPass`
 > reads each row's report and turns it into `services/upgrade/FixList` issues: one per call site the move
 > breaks, in source order, with the fixes the repair can write (`Decision`: the engine's answer, a split's

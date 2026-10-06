@@ -104,6 +104,41 @@ class TypeChooserTest extends FxHeadlessTest {
         assertEquals(com.botmaker.studio.plugin.grammar.ValueTypes.mapOf(int.class, Integer.class), chooser.type());
     }
 
+    /**
+     * Clicking {@code Map} in {@code Map<List<String>, Integer>} and picking {@code char} replaced the whole
+     * type with no way back (2026-10-06): Back restores it, in the menu and after it closed.
+     */
+    @Test
+    void backRestoresATypeAPickReplaced() {
+        java.lang.reflect.Type nested = com.botmaker.studio.plugin.grammar.ValueTypes.mapOf(
+                com.botmaker.studio.plugin.grammar.ValueTypes.listOf(String.class), Integer.class);
+        interact(() -> chooser.setType(nested));
+        ContextMenu menu = opened();
+        Node header = ((CustomMenuItem) menu.getItems().getFirst()).getContent();
+        Node map = header.lookupAll(".type-path-part").stream()
+                .filter(n -> n instanceof javafx.scene.control.Label l && l.getText().equals("Map"))
+                .findFirst().orElseThrow(() -> new AssertionError("no Map in the header"));
+        javafx.scene.control.Button back = (javafx.scene.control.Button) header.lookup(".type-chooser-back");
+        assertTrue(back.isDisabled(), "nothing to go back to yet");
+
+        interact(() -> map.fireEvent(new MouseEvent(MouseEvent.MOUSE_CLICKED, 0, 0, 0, 0, MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, true, false, false, null)));
+        interact(() -> entry(menu, "char").fire());
+        assertFalse(back.isDisabled());
+        interact(() -> back.fireEvent(new ActionEvent()));
+        interact(() -> entry(menu, "char").fire());
+        interact(menu::hide);
+        assertEquals(char.class, chooser.type());
+
+        ContextMenu again = opened();
+        Node header2 = ((CustomMenuItem) again.getItems().getFirst()).getContent();
+        javafx.scene.control.Button back2 = (javafx.scene.control.Button) header2.lookup(".type-chooser-back");
+        assertFalse(back2.isDisabled(), "the replaced type is still reachable after the menu closed");
+        interact(() -> back2.fireEvent(new ActionEvent()));
+        interact(again::hide);
+        assertEquals(nested, chooser.type());
+    }
+
     @Test
     void doneLeadsTheHeader() {
         ContextMenu menu = opened();

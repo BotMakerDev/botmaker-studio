@@ -115,7 +115,9 @@ public final class TypePicker {
      * {@code root} as a {@link TypeChip} whose parts each open this picker, and whose pick is handed to
      * {@code commit} as the whole type respelled ({@link TypeChip#replace}). A type argument is picked from
      * reference types only, whatever {@code options} says, since {@code List<int>} is not Java. Read-only — the
-     * same chip with nothing to click — when {@code editable} is false.
+     * same chip with nothing to click — when {@code editable} is false. A generic picked for a generic part of
+     * as many parameters keeps its arguments ({@link TypeChip#keepingArguments}); any pick is one edit, so
+     * Ctrl+Z puts the type back.
      */
     public static Node chip(Type root, Options options, boolean editable, CodeEditorService context,
                             ASTNode contextNode, Consumer<String> commit) {
@@ -126,7 +128,8 @@ public final class TypePicker {
                     ? new Options(Filter.REFERENCE, false, options.arrayDims(), options.typeArguments())
                     : options;
             show(chip[0], forPart, ProjectAnalyzer.resolveType(part.type()), context, contextNode, choice -> {
-                String text = TypeChip.replace(root, part.type(), choice.text());
+                String text = TypeChip.replace(root, part.type(),
+                        TypeChip.keepingArguments(part.type(), choice.text()));
                 if (text != null) commit.accept(text);
             });
         });

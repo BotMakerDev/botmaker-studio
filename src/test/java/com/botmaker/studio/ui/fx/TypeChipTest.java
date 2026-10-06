@@ -102,6 +102,18 @@ class TypeChipTest extends FxHeadlessTest {
         assertNull(TypeChip.replace(map, list, "not a type!"));
     }
 
+    /** {@code Map} → {@code HashMap} keeps what the map held; another arity, or typed arguments, do not. */
+    @Test
+    void aGenericOfTheSameArityKeepsTheArguments() {
+        Type map = JavaSnippets.type("Map<List<String>, Integer>");
+        assertEquals("HashMap<List<String>, Integer>", TypeChip.keepingArguments(map, "HashMap<Object, Object>"));
+        assertEquals("List<Object>", TypeChip.keepingArguments(map, "List<Object>"));
+        assertEquals("HashMap<String, String>", TypeChip.keepingArguments(map, "HashMap<String, String>"));
+        assertEquals("char", TypeChip.keepingArguments(map, "char"));
+        assertEquals("ArrayList<String>[]",
+                TypeChip.keepingArguments(JavaSnippets.type("List<String>[]"), "ArrayList<Object>[]"));
+    }
+
     private ContextMenu picker(TypePicker.Options options, List<TypePicker.Choice> picked) {
         EditorFixture f = new EditorFixture("""
                 package com.mybot;
