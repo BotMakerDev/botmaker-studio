@@ -679,6 +679,10 @@ final class StudioBridge implements StudioDriver {
                 Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, question, ButtonType.OK, ButtonType.CANCEL);
                 ask.initOwner(owner.get());
                 ask.setHeaderText(header);
+                // The question pops up while the user may be typing to the assistant: an Enter meant for the
+                // terminal must not answer yes. Only a click on OK, or Space on it once focused, does.
+                ((javafx.scene.control.Button) ask.getDialogPane().lookupButton(ButtonType.OK)).setDefaultButton(false);
+                ((javafx.scene.control.Button) ask.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
                 shown.set(ask);
                 answer.complete(ask.showAndWait().filter(b -> b == ButtonType.OK).isPresent());
             } catch (RuntimeException e) {
