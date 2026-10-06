@@ -96,6 +96,14 @@ class McpEndpointTest {
         public List<String> files() {
             return files.keySet().stream().map(p -> LiveBot.relative(ROOT, p)).toList();
         }
+
+        /** What another file would say about an edit; null when nothing breaks. */
+        String elsewhere;
+
+        @Override
+        public Optional<String> breaksElsewhere(AssistTurn turn) {
+            return Optional.ofNullable(elsewhere);
+        }
     }
 
     /** Studio, as far as the tools reach it: what was asked is recorded. */
@@ -117,6 +125,7 @@ class McpEndpointTest {
             return "trying";
         }
         @Override public String stop() { return "stopped"; }
+        @Override public String rename(String symbol, String to) { asked.add("rename " + symbol + " " + to); return "renamed"; }
 
         @Override
         public List<PluginTool> pluginTools() {
@@ -224,8 +233,9 @@ class McpEndpointTest {
         List<String> names = new ArrayList<>();
         tools.forEach(t -> names.add(t.path("name").asText()));
         assertEquals(List.of("list_files", "list_methods", "list_palette", "read_tree", "list_errors", "insert_block",
-                "set_slot", "delete_block", "apply_edits", "list_targets", "set_target", "move_caret", "show_area",
-                "run_bot", "run_activity", "try_statement", "stop", "run_state", "read_trace", "fake_snap"), names);
+                "set_slot", "delete_block", "apply_edits", "add_method", "move_block", "edit_signature",
+                "list_targets", "set_target", "move_caret", "show_area", "add_file", "find_usages", "rename", "open",
+                "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity", "try_statement", "stop", "run_state", "read_trace", "fake_snap"), names);
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
@@ -289,6 +299,33 @@ class McpEndpointTest {
         assertTrue(text(half).contains("edit 2 of 2"), text(half));
         assertEquals(1, bot.commits.size(), "nothing of a refused batch is kept");
         assertEquals(after, bot.files.get(SUBJECT));
+    }
+
+    @Test
+    void aSignatureChangeThatBreaksAnotherFileIsNotKept() throws Exception {
+        initialize();
+        JsonNode added = call("add_method", "{\"name\":\"rest\",\"returns\":\"void\","
+                + "\"params\":[{\"name\":\"seconds\",\"type\":\"int\"}]}");
+        assertFalse(isError(added), added.toString());
+        assertTrue(bot.files.get(SUBJECT).contains("rest(int seconds)"), bot.files.get(SUBJECT));
+
+        bot.elsewhere = "That change would stop the bot compiling (Other.java:3 …)";
+        JsonNode changed = call("edit_signature", "{\"method\":\"rest\",\"name\":\"pause\"}");
+        assertTrue(isError(changed) && text(changed).contains("Other.java:3"), changed.toString());
+        assertEquals(1, bot.commits.size(), "only the add was kept");
+
+        bot.elsewhere = null;
+        assertFalse(isError(call("edit_signature", "{\"method\":\"rest\",\"name\":\"pause\"}")));
+        assertTrue(bot.files.get(SUBJECT).contains("pause(int seconds)"), bot.files.get(SUBJECT));
+    }
+
+    @Test
+    void navigationGoesToStudioAndWhatItLacksIsRefused() throws Exception {
+        initialize();
+        assertEquals("renamed", text(call("rename", "{\"symbol\":\"Other.go\",\"to\":\"start\"}")));
+        assertEquals(List.of("rename Other.go start"), driver.asked);
+        JsonNode review = call("list_review", "{}");
+        assertTrue(isError(review) && text(review).startsWith("REFUSED"), review.toString());
     }
 
     @Test

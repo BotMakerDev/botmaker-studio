@@ -11,6 +11,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -168,6 +169,77 @@ class AssistTurnTest {
         assertFalse(turn.errors().isEmpty());
 
         assertInstanceOf(Outcome.Accepted.class, turn.insert(runBody(turn).id(), 0, "block:PRINT"));
+    }
+
+    // ---- shaping the code ----
+
+    @Test
+    void aMethodIsAddedOfTypesStudioOffers() {
+        AssistTurn turn = turn(SOURCE);
+        Outcome added = turn.addMethod("", "rest", "void", List.of(Map.of("name", "seconds", "type", "int")));
+
+        assertInstanceOf(Outcome.Accepted.class, added, added.toString());
+        assertTrue(turn.source().contains("rest(int seconds)"), turn.source());
+        assertTrue(turn.tree().stream().anyMatch(m -> m.name().equals("rest")), "it has a body to insert into");
+
+        Outcome.Refused unknown = assertInstanceOf(Outcome.Refused.class,
+                turn.addMethod("", "other", "Runtime", List.of()));
+        assertTrue(unknown.reasons().getFirst().contains("no type Runtime"), unknown.reasons().toString());
+        assertInstanceOf(Outcome.Refused.class, turn.addMethod("", "rest", "void",
+                List.of(Map.of("name", "seconds", "type", "int"))), "the same signature twice");
+    }
+
+    @Test
+    void aStatementMovesWithinItsFile() {
+        AssistTurn turn = turn(SOURCE);
+        Outcome moved = turn.moveBlock(statement(turn, "String name").id(), runBody(turn).id(), 0);
+
+        assertInstanceOf(Outcome.Accepted.class, moved, moved.toString());
+        assertTrue(runBody(turn).statements().getFirst().text().startsWith("String name"), turn.source());
+    }
+
+    @Test
+    void aStatementCannotMoveIntoItself() {
+        String source = SOURCE.replace("System.out.println(count);",
+                "if (count > 1) {\n            System.out.println(count);\n        }");
+        AssistTurn turn = turn(source);
+        BlockView.Statement branch = statement(turn, "if (count");
+        Outcome moved = turn.moveBlock(branch.id(), branch.bodies().getFirst().id(), 0);
+
+        assertInstanceOf(Outcome.Refused.class, moved, moved.toString());
+        assertEquals(source, turn.source());
+    }
+
+    @Test
+    void nothingByItsLabelIsAReturnType() {
+        AssistTurn turn = turn(SOURCE);
+        assertInstanceOf(Outcome.Accepted.class, turn.addMethod("", "idle", "Nothing", List.of()));
+        assertInstanceOf(Outcome.Refused.class,
+                turn.addMethod("", "idle2", "void", List.of(Map.of("name", "x", "type", "Nothing"))));
+    }
+
+    @Test
+    void aSignatureChangeCarriesTheFilesCalls() {
+        String source = """
+                package com.mybot;
+                public class Subject {
+                    public void run() {
+                        int count = 3;
+                        System.out.println(helper(count));
+                    }
+                    static int helper(int n) {
+                        return n;
+                    }
+                }
+                """;
+        AssistTurn turn = turn(source);
+        Outcome changed = turn.editSignature("Subject.helper", "twice", null, List.of(
+                Map.of("name", "n", "type", "int"), Map.of("name", "times", "type", "int")));
+
+        assertInstanceOf(Outcome.Accepted.class, changed, changed.toString());
+        assertTrue(turn.source().contains("twice(int n, int times)"), turn.source());
+        assertTrue(turn.source().contains("twice(count, "), "the call keeps n and gains a default:\n" + turn.source());
+        assertInstanceOf(Outcome.Refused.class, turn.editSignature("absent", null, null, null));
     }
 
     // ---- committing ----

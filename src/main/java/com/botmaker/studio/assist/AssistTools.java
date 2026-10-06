@@ -88,6 +88,18 @@ public final class AssistTools {
         return outcome("setSlot(" + value + ")", current().setSlot(slotId, value));
     }
 
+    public synchronized String addMethod(String className, String name, String returns, List<?> params) {
+        return outcome("addMethod(" + name + ")", current().addMethod(className, name, returns, params));
+    }
+
+    public synchronized String moveBlock(String blockId, String bodyId, int index) {
+        return outcome("moveBlock(" + blockId + " to " + index + ")", current().moveBlock(blockId, bodyId, index));
+    }
+
+    public synchronized String editSignature(String method, String name, String returns, List<?> params) {
+        return outcome("editSignature(" + method + ")", current().editSignature(method, name, returns, params));
+    }
+
     public synchronized String deleteBlock(String blockId) {
         return outcome("deleteBlock()", current().delete(blockId));
     }
@@ -96,6 +108,11 @@ public final class AssistTools {
         List<String> errors = current().errors();
         record("listErrors() → " + errors.size());
         return errors.isEmpty() ? "No errors." : String.join("\n", errors);
+    }
+
+    /** The turn in progress. */
+    synchronized AssistTurn turn() {
+        return current();
     }
 
     private AssistTurn current() {

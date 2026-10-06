@@ -9,6 +9,10 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.studio.parser.refactor.MethodReferences;
+import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.parser.CodeEditor;
@@ -232,6 +236,154 @@ public final class AssistTurn {
         if (statement.isEmpty()) return Outcome.Refused.because("No statement has the id " + blockId + ".");
         return apply(stage, "deleted " + oneLine(statement.get(), source),
                 editor -> editor.deleteStatement(statement.get()));
+    }
+
+    /**
+     * Adds a method to the class {@code className} (the file's first class when blank), after its other members,
+     * as the Add Function dialog does: {@code returns} and each parameter's type a type the dialog offers.
+     *
+     * @param params each {@code {name, type}}
+     */
+    public Outcome addMethod(String className, String name, String returns, List<?> params) {
+        Stage stage = stage();
+        Optional<TypeDeclaration> type = typeNamed(stage, className);
+        if (type.isEmpty()) {
+            return Outcome.Refused.because(className == null || className.isBlank() ? "This file declares no class."
+                    : "This file declares no class " + className + ".");
+        }
+        FunctionDraft draft;
+        try {
+            draft = new FunctionDraft(name == null ? "" : name.strip(), SignatureNames.type(returns, true),
+                    SignatureNames.parameters(params == null ? List.of() : params, List.of()));
+        } catch (IllegalArgumentException e) {
+            return Outcome.Refused.because(e.getMessage());
+        }
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        for (MethodDeclaration method : type.get().getMethods()) {
+            MethodSignatures.draftOf(method).ifPresent(d -> taken.add(d.signatureKey()));
+        }
+        Optional<String> problem = draft.problem(taken);
+        if (problem.isPresent()) return Outcome.Refused.because(problem.get());
+        int end = type.get().bodyDeclarations().size();
+        return apply(stage, "added " + draft.name() + "()",
+                editor -> editor.addFunctionToClass(type.get(), draft, end));
+    }
+
+    /** Moves the statement {@code blockId} into body {@code bodyId}, before the statement now at {@code index}. */
+    public Outcome moveBlock(String blockId, String bodyId, int index) {
+        Stage stage = stage();
+        Optional<Statement> statement = stage.findNode(blockId, Statement.class).filter(s -> !(s instanceof Block));
+        if (statement.isEmpty()) return Outcome.Refused.because("No statement has the id " + blockId + ".");
+        Optional<BodyBlock> target = stage.find(bodyId, BodyBlock.class);
+        if (target.isEmpty()) return Outcome.Refused.because("No body has the id " + bodyId + ". Read the tree again.");
+        // Into itself would remove it and insert into what was removed: the statement would vanish, and a
+        // deletion compiles, so the compile check would not catch it.
+        for (ASTNode at = target.get().getAstNode(); at != null; at = at.getParent()) {
+            if (at == statement.get()) {
+                return Outcome.Refused.because("A statement cannot move into a body inside itself.");
+            }
+        }
+        StatementBlock moved = null;
+        BodyBlock from = null;
+        for (CodeBlock block : stage.registry.values()) {
+            if (!(block instanceof BodyBlock body)) continue;
+            for (StatementBlock each : body.getStatements()) {
+                if (each.enclosingStatement() == statement.get()) {
+                    moved = each;
+                    from = body;
+                }
+            }
+        }
+        if (moved == null) return Outcome.Refused.because("Statement " + blockId + " is not in a body it can leave.");
+        StatementBlock block = moved;
+        BodyBlock source = from;
+        int at = Math.max(0, Math.min(index, target.get().getStatements().size()));
+        return apply(stage, "moved " + oneLine(statement.get(), this.source),
+                editor -> editor.moveStatement(block, source, target.get(), at));
+    }
+
+    /**
+     * Changes the method {@code method} ({@code name} or {@code Owner.name}) to the given name, return type and
+     * parameters; a null one is kept. Its calls in this file follow; a parameter keeps its place in them by name.
+     * Calls in other files are the caller's to check ({@code LiveBot.breaksElsewhere}).
+     */
+    public Outcome editSignature(String method, String name, String returns, List<?> params) {
+        Stage stage = stage();
+        List<MethodDeclaration> found = methodsNamed(stage, method);
+        if (found.isEmpty()) return Outcome.Refused.because("This file has no method " + method + ".");
+        if (found.size() > 1) {
+            return Outcome.Refused.because(method + " has " + found.size() + " overloads here; Studio cannot tell "
+                    + "which. Rename one first.");
+        }
+        MethodDeclaration declaration = found.getFirst();
+        Optional<FunctionDraft> current = MethodSignatures.draftOf(declaration);
+        if (current.isEmpty()) return Outcome.Refused.because(method + "'s signature is not one Studio can edit.");
+        List<String> names = current.get().parameters().stream().map(FunctionDraft.Parameter::name).toList();
+        FunctionDraft draft;
+        try {
+            draft = new FunctionDraft(name == null || name.isBlank() ? current.get().name() : name.strip(),
+                    returns == null || returns.isBlank() ? current.get().returnType() : SignatureNames.type(returns, true),
+                    params == null ? current.get().parameters() : SignatureNames.parameters(params, names));
+        } catch (IllegalArgumentException e) {
+            return Outcome.Refused.because(e.getMessage());
+        }
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        if (declaration.getParent() instanceof TypeDeclaration owner) {
+            for (MethodDeclaration other : owner.getMethods()) {
+                if (other != declaration) MethodSignatures.draftOf(other).ifPresent(d -> taken.add(d.signatureKey()));
+            }
+        }
+        Optional<String> problem = draft.problem(taken);
+        if (problem.isPresent()) return Outcome.Refused.because(problem.get());
+        // The calls as the signature dialog finds them — over this stage, which holds this file alone, so the
+        // plan carries this file's calls and no other; the others are the caller's whole-bot check.
+        MethodReferences.Result references = MethodReferences.find(stage.state, declaration);
+        if (references.isRefusal()) return Outcome.Refused.because(references.refusal());
+        if (references.calls().stream().anyMatch(MethodReferences.CallSite::isReference)
+                && !SignatureMigration.sameShape(current.get(), draft)) {
+            return Outcome.Refused.because(method + " is passed by reference, which has no arguments to change with "
+                    + "it. Renaming it is fine; to change its inputs, change the reference first.");
+        }
+        SignatureMigration.Plan plan = SignatureMigration.of(current.get(), draft, declaration, references.calls());
+        return apply(stage, "changed " + current.get().name() + "() to " + draft.name() + "("
+                        + String.join(", ", draft.parameters().stream()
+                        .map(p -> p.type().sourceName() + " " + p.name()).toList()) + ")",
+                editor -> editor.applyFunctionSignature(declaration, draft, plan));
+    }
+
+    private static Optional<TypeDeclaration> typeNamed(Stage stage, String className) {
+        if (stage.cu == null) return Optional.empty();
+        String wanted = className == null ? "" : className.strip();
+        List<TypeDeclaration> types = new ArrayList<>();
+        stage.cu.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(TypeDeclaration type) {
+                if (wanted.isEmpty() ? types.isEmpty() : type.getName().getIdentifier().equals(wanted)) types.add(type);
+                return true;
+            }
+        });
+        return types.stream().findFirst();
+    }
+
+    private static List<MethodDeclaration> methodsNamed(Stage stage, String spelled) {
+        String asked = spelled == null ? "" : spelled.strip().replaceFirst("\\(\\)$", "");
+        int dot = asked.lastIndexOf('.');
+        String owner = dot < 0 ? "" : asked.substring(0, dot);
+        String name = asked.substring(dot + 1);
+        List<MethodDeclaration> out = new ArrayList<>();
+        if (stage.cu == null || name.isEmpty()) return out;
+        stage.cu.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(MethodDeclaration method) {
+                if (method.getName().getIdentifier().equals(name) && !method.isConstructor()
+                        && (owner.isEmpty() || method.getParent() instanceof AbstractTypeDeclaration t
+                        && t.getName().getIdentifier().equals(owner))) {
+                    out.add(method);
+                }
+                return true;
+            }
+        });
+        return out;
     }
 
     /**

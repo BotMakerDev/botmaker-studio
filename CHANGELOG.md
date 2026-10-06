@@ -42,6 +42,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `stop`, `run_state` and `read_trace`. Nothing starts while something runs. The plugins' own tools are served
   too — with the SDK, `sdk_screenshot`, `sdk_crop_picture`, `sdk_find_picture` and the rest, pictures coming
   back as images. The game is still touched only by running the bot's code; there is no click or key tool.
+- **The assistant shapes the code, not just the blocks.** `add_method` (types Studio offers, by name),
+  `edit_signature` (the file's calls follow; refused when another file's call would break), `move_block` and
+  `add_file`; `find_usages`, `rename` (every file, one undo step) and `open`, each naming a declaration as
+  `Collect.body`; and the Review list — `list_review`, `mark_reviewed`, `remove_mark`, `undo_change`.
 - A key stops a running bot from anywhere on the desktop, without bringing Studio back: Pause by default,
   changed in View ▸ Stop Key…. It works while Studio has a run or a debug session going, X11 and Xwayland
   windows only (Linux), and the focused program receives the key too.

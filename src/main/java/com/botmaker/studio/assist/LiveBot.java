@@ -36,6 +36,14 @@ public interface LiveBot {
     List<String> files();
 
     /**
+     * Why {@code turn}'s file as it now stands would stop <em>another</em> file of the bot compiling — a call of a
+     * method whose signature changed — or empty when it would not. The turn's own compile sees only its file.
+     */
+    default Optional<String> breaksElsewhere(AssistTurn turn) {
+        return Optional.empty();
+    }
+
+    /**
      * The one of {@code files} that {@code given} names: its path below {@code root} ({@code com/bot/Collect.java}),
      * its file name ({@code Collect.java}) or its class's simple name ({@code Collect}).
      *

@@ -41,7 +41,9 @@ public final class McpTools {
             - list_files and list_targets say where things are. A target is where an activity's blocks go;
               set_target opens it in Studio. Every file tool takes `file`; leave it empty for the open file.
             - Read a method with read_tree before editing, and again after edits: ids below an insertion shift.
-            - Insert only what list_palette offers, by its id. You cannot write Java directly.
+            - Insert only what list_palette offers, by its id. You cannot write Java directly. apply_edits
+              makes several edits in one call, as one step. add_method, edit_signature and move_block shape
+              the code; rename and find_usages work across files by symbol (Type.member).
             - A slot takes a value of its type: a literal, one of the bot's constants (Pictures.ORE), or a
               constant or factory call of that type.
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
@@ -136,7 +138,70 @@ public final class McpTools {
                                 + "and the answer says which. Ids are those of the tree as the earlier edits left "
                                 + "it: an insert shifts the statements below it, so insert from the bottom up, or "
                                 + "count the shift.",
-                        EDITS_SCHEMA, request -> run(bot, request, McpTools::applyEdits, true)));
+                        EDITS_SCHEMA, request -> run(bot, request, McpTools::applyEdits, true)),
+                spec(json, "add_method",
+                        "Add a method to a class of a file, after its other members, as the Add Function dialog does. "
+                                + "Types are those Studio offers: int, double, boolean, String, a plugin's type "
+                                + "(Point, Picture…), List<…> of one, or void to return nothing.",
+                        METHOD_SCHEMA.formatted("""
+                                "class":{"type":"string","description":"the class; empty for the file's first"},
+                                "name":{"type":"string","description":"the method's name"},""", "[\"name\"]"),
+                        request -> run(bot, request, (tools, args) -> tools.addMethod(text(args, "class"),
+                                text(args, "name"), text(args, "returns"), list(args, "params")), true)),
+                edit(json, "move_block",
+                        "Move a statement into a body of the same file, before the statement now at index.",
+                        List.of(FILE, Prop.text("blockId", "the statement id, from read_tree"),
+                                Prop.text("bodyId", "the body it goes into, from read_tree"),
+                                Prop.whole("index", "where in that body, 0 for first")),
+                        bot, (tools, args) -> tools.moveBlock(text(args, "blockId"), text(args, "bodyId"),
+                                number(args, "index")), true),
+                spec(json, "edit_signature",
+                        "Change a method's name, return type or parameters; what is not given is kept. Its calls in "
+                                + "the file follow, a parameter keeping its place by name and a new one getting a "
+                                + "default. Refused when a call in another file would stop compiling — use rename "
+                                + "to rename a method used elsewhere.",
+                        METHOD_SCHEMA.formatted("""
+                                "method":{"type":"string","description":"the method, name or Owner.name"},
+                                "name":{"type":"string","description":"its new name; empty to keep it"},""",
+                                "[\"method\"]"),
+                        request -> runChecked(bot, request, (tools, args) -> tools.editSignature(text(args, "method"),
+                                text(args, "name"), args.containsKey("returns") ? text(args, "returns") : null,
+                                args.containsKey("params") ? list(args, "params") : null))));
+    }
+
+    /** A method's input: {@code %1$s} its naming properties, {@code %2$s} the required list. */
+    private static final String METHOD_SCHEMA = """
+            {"type":"object","properties":{
+              "file":{"type":"string","description":"the file, as list_files names it; empty for the file open in Studio"},
+              %1$s
+              "returns":{"type":"string","description":"the type it gives back, void for nothing"},
+              "params":{"type":"array","description":"its parameters, in order","items":{"type":"object",
+                "properties":{"name":{"type":"string"},"type":{"type":"string"}},
+                "required":["name","type"],"additionalProperties":false}}},
+             "required":%2$s,"additionalProperties":false}""";
+
+    /**
+     * {@link #run} for an edit that can break another file: once accepted, the whole bot is compiled with it, and
+     * nothing is committed when another file would stop compiling.
+     */
+    private static CallToolResult runChecked(LiveBot bot, CallToolRequest request,
+                                             BiFunction<AssistTools, Map<String, Object>, String> call) {
+        return run(bot, request, (tools, args) -> {
+            String answer = call.apply(tools, args);
+            if (!answer.startsWith("OK")) return answer;
+            Optional<String> broken;
+            try {
+                broken = bot.breaksElsewhere(tools.turn());
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                // Kept nothing: an edit whose effect on the rest of the bot is unknown is not one to land.
+                throw new IllegalArgumentException("Studio could not compile the rest of the bot to check that "
+                        + "change (" + e.getMessage() + "), so nothing was changed.");
+            }
+            if (broken.isPresent()) throw new IllegalArgumentException(broken.get());
+            return answer;
+        }, true);
     }
 
     private static final String EDITS_SCHEMA = """
@@ -244,8 +309,38 @@ public final class McpTools {
                                 Prop.whole("width", "width"), Prop.whole("height", "height"),
                                 Prop.optionalText("label", "what the box shows")),
                         args -> driver.showArea(new Area(number(args, "x"), number(args, "y"),
-                                number(args, "width"), number(args, "height")), text(args, "label"))));
+                                number(args, "width"), number(args, "height")), text(args, "label"))),
+                act(json, "add_file",
+                        "Add an empty class to the bot's main package, for methods to go in. It is saved as a "
+                                + "version the user can go back to.",
+                        List.of(Prop.text("name", "the class's name: Helpers")), args -> driver.addFile(text(args, "name"))),
+                act(json, "find_usages", "List every use of a declaration of the bot, by binding: file, line, "
+                                + "the method it is in, and the line's text.",
+                        List.of(SYMBOL), args -> driver.findUsages(text(args, "symbol"))),
+                act(json, "rename",
+                        "Rename a declaration and every use of it across the bot, as one step the user can undo. "
+                                + "Refused, with why, when the bot would stop compiling.",
+                        List.of(SYMBOL, Prop.text("to", "the new name")),
+                        args -> driver.rename(text(args, "symbol"), text(args, "to"))),
+                act(json, "open", "Open a declaration in Studio's editor, so the user sees it.",
+                        List.of(SYMBOL), args -> driver.open(text(args, "symbol"))),
+                act(json, "list_review",
+                        "List the functions a refactor changed by guessing and marked for the user to look at, each "
+                                + "with its id and what the mark says.",
+                        List.of(), args -> driver.listReview()),
+                act(json, "mark_reviewed", "Mark a review item looked at; the mark stays in the code as the record.",
+                        List.of(REVIEW_ID), args -> driver.markReviewed(text(args, "id"))),
+                act(json, "remove_mark", "Take a review item's mark out of the code.",
+                        List.of(REVIEW_ID), args -> driver.removeMark(text(args, "id"))),
+                act(json, "undo_change",
+                        "Put a review item's function back as it was before the refactor that marked it, from the "
+                                + "bot's versions. What comes back may not compile.",
+                        List.of(REVIEW_ID), args -> driver.undoChange(text(args, "id"))));
     }
+
+    private static final Prop SYMBOL = Prop.text("symbol",
+            "the declaration: Type, Type.member (a method, field or constant) or Type.method.local");
+    private static final Prop REVIEW_ID = Prop.text("id", "the item's id, from list_review");
 
     // ---- runs ----------------------------------------------------------------------------------------------
 
@@ -376,6 +471,14 @@ public final class McpTools {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(key + " must be a whole number, not " + value);
         }
+    }
+
+    /** {@code key}'s list; empty when not given. */
+    private static List<?> list(Map<String, Object> args, String key) {
+        Object value = args.get(key);
+        if (value == null) return List.of();
+        if (value instanceof List<?> items) return items;
+        throw new IllegalArgumentException(key + " is a list, not " + value);
     }
 
     /** {@code values}: names to value text. */

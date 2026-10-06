@@ -4,6 +4,8 @@ import com.botmaker.studio.assist.AssistTurn;
 import com.botmaker.studio.assist.AssistWorkspace;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.services.BotSources;
@@ -95,6 +97,17 @@ final class LiveEditorBot implements LiveBot {
             Path root = ctx.config().sourceRoot();
             return sources().keySet().stream().filter(LiveBot::isJava).map(p -> LiveBot.relative(root, p)).toList();
         });
+    }
+
+    @Override
+    public Optional<String> breaksElsewhere(AssistTurn turn) {
+        // The sources are read on FX; the whole bot is compiled here, on the caller's thread.
+        BotIndex index = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state())).get();
+        Path file = turn.file().toAbsolutePath().normalize();
+        return switch (Refactor.checked(index, new Refactor.Planned("", Map.of(file, turn.source())), "That change")) {
+            case Refactor.Refused refused -> Optional.of(refused.reason());
+            case Refactor.Planned ignored -> Optional.empty();
+        };
     }
 
     /** Every source of the bot, buffer first, by path. FX thread. */

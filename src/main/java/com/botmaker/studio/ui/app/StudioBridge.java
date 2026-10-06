@@ -9,6 +9,14 @@ import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.assist.StudioDriver;
+import com.botmaker.studio.assist.SymbolNames;
+import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.nav.Usages;
+import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.studio.project.ProjectWrites;
+import com.botmaker.studio.services.ReviewService;
+import org.eclipse.jdt.core.dom.NodeFinder;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -198,6 +206,185 @@ final class StudioBridge implements StudioDriver {
         });
     }
 
+    // ---- structure and navigation --------------------------------------------------------------------------
+
+    @Override
+    public String addFile(String name) {
+        String className = name == null ? "" : name.strip();
+        FunctionDraft.identifierProblem(className, "class").ifPresent(problem -> {
+            throw new IllegalArgumentException(problem);
+        });
+        Path file = ctx.config().mainPackageDir().resolve(className + ".java");
+        if (java.nio.file.Files.exists(file)) {
+            throw new IllegalArgumentException(className + ".java already exists. read_tree reads it.");
+        }
+        String source = """
+                package %s;
+
+                public final class %s {
+
+                    private %s() {}
+                }
+                """.formatted(ctx.config().mainPackage(), className, className);
+        if (!ProjectWrites.create(ctx.config(), file, source, "Create " + className)) {
+            throw new IllegalArgumentException("Studio could not write " + className + ".java.");
+        }
+        return "Added " + LiveBot.relative(ctx.config().sourceRoot(), file) + ". add_method puts methods in it.";
+    }
+
+    @Override
+    public String findUsages(String symbol) {
+        BotIndex index = index();
+        SymbolNames.Located at = index.read(units -> SymbolNames.locate(units, symbol));
+        List<Usages.Usage> uses = Refactor.uses(index, at.file(), at.start()).orElseThrow(() ->
+                new IllegalArgumentException(symbol + " could not be resolved, so its uses cannot be found."));
+        if (uses.isEmpty()) return "Nothing uses " + at.what() + ".";
+        Path root = ctx.config().sourceRoot();
+        List<String> lines = new ArrayList<>();
+        for (Usages.Usage use : uses.subList(0, Math.min(uses.size(), USAGE_LIMIT))) {
+            lines.add(LiveBot.relative(root, use.file()) + ":" + use.line()
+                    + (use.enclosing().isEmpty() ? "" : " in " + use.enclosing()) + "  " + use.text().strip());
+        }
+        if (uses.size() > USAGE_LIMIT) lines.add("… and " + (uses.size() - USAGE_LIMIT) + " more.");
+        return uses.size() + " uses of " + at.what() + ":\n" + String.join("\n", lines);
+    }
+
+    private static final int USAGE_LIMIT = 200;
+
+    @Override
+    public String rename(String symbol, String to) {
+        BotIndex index = index();
+        SymbolNames.Located at = index.read(units -> SymbolNames.locate(units, symbol));
+        Refactor.Planned plan = switch (Refactor.rename(index, at.file(), at.start(), to)) {
+            case Refactor.Refused refused -> throw new IllegalArgumentException(refused.reason()
+                    + (refused.fixes().isEmpty() ? "" : " Names that would work: "
+                    + refused.fixes().stream().map(Refactor.Fix::label).toList() + "."));
+            case Refactor.Planned planned -> planned;
+        };
+        if (!plan.moves().isEmpty()) {
+            throw new IllegalArgumentException("Renaming " + at.what() + " renames its file too; the user does that "
+                    + "in Studio's file explorer.");
+        }
+        return onFx(() -> {
+            // The plan was made from the sources as they were read; a file typed in since would be overwritten.
+            Map<Path, String> now = new LinkedHashMap<>();
+            BotSources.scan(ctx.config(), ctx.state(), now::put);
+            for (Path file : plan.rewrites().keySet()) {
+                if (!java.util.Objects.equals(now.get(file), index.sources().get(file))) {
+                    throw new IllegalArgumentException(file.getFileName() + " changed meanwhile. Try again.");
+                }
+            }
+            openFile(at.file());
+            CompilationUnit unit = ctx.state().getCompilationUnit().orElseThrow(() ->
+                    new IllegalArgumentException("Studio has not drawn " + at.file().getFileName() + " yet."));
+            ASTNode target = NodeFinder.perform(unit, at.start(), 0);
+            List<String> said = new ArrayList<>();
+            try (EventBus.Subscription heard = ctx.eventBus().subscribe(CoreApplicationEvents.StatusMessageEvent.class,
+                    e -> said.add(e.message()))) {
+                if (!ctx.codeEditorService().getCodeEditor().applyRefactor(plan, target)) {
+                    throw new IllegalArgumentException("Studio did not rename it"
+                            + (said.isEmpty() ? "." : ": " + said.getLast()));
+                }
+            }
+            return plan.summary() + " — " + plan.rewrites().size() + " file(s), one undo step.";
+        });
+    }
+
+    @Override
+    public String open(String symbol) {
+        BotIndex index = index();
+        SymbolNames.Located at = index.read(units -> SymbolNames.locate(units, symbol));
+        return onFx(() -> {
+            openFile(at.file());
+            ctx.eventBus().publish(new CoreApplicationEvents.RevealRequestedEvent(at.file(), at.start()));
+            return "Showing " + at.what() + " in " + at.file().getFileName() + ".";
+        });
+    }
+
+    // ---- review --------------------------------------------------------------------------------------------
+
+    @Override
+    public String listReview() {
+        List<ReviewService.Item> items = onFx(() -> ReviewService.scan(ctx.config(), ctx.state()));
+        if (items.isEmpty()) return "Nothing to review.";
+        List<String> lines = new ArrayList<>();
+        for (ReviewService.Item item : items) {
+            lines.add(reviewId(item) + "  " + item.where() + " line " + item.line() + ": "
+                    + String.join(" / ", item.entries()));
+        }
+        return String.join("\n", lines);
+    }
+
+    @Override
+    public String markReviewed(String id) {
+        return onFx(() -> {
+            ReviewService.Item item = reviewItem(id);
+            if (!ReviewService.markReviewed(ctx.config(), ctx.state(), item)) {
+                throw new IllegalArgumentException(item.where() + " changed since; list_review again.");
+            }
+            return "Marked " + item.where() + " reviewed.";
+        });
+    }
+
+    @Override
+    public String removeMark(String id) {
+        return onFx(() -> {
+            ReviewService.Item item = reviewItem(id);
+            if (!ReviewService.removeMark(ctx.config(), ctx.state(), item)) {
+                throw new IllegalArgumentException(item.where() + " changed since; list_review again.");
+            }
+            return "Took the mark off " + item.where() + ".";
+        });
+    }
+
+    @Override
+    public String undoChange(String id) {
+        record Asked(ReviewService.Item item, List<String> parameters) {}
+        Asked asked = onFx(() -> {
+            ReviewService.Item item = reviewItem(id);
+            return new Asked(item, ReviewService.parametersOf(ctx.config(), ctx.state(), item));
+        });
+        // The versions are read here, off the FX thread; the function is written back on it.
+        ReviewService.Undo found = ReviewService.findEarlier(ctx.config(), asked.item(), asked.parameters());
+        if (!(found instanceof ReviewService.Undo.Ready ready)) {
+            throw new IllegalArgumentException(found instanceof ReviewService.Undo.Refused refused ? refused.reason()
+                    : "Nothing to undo.");
+        }
+        ReviewService.Undo done = onFx(() -> ReviewService.restore(ctx.config(), ctx.state(), asked.item(), ready.earlier()));
+        return switch (done) {
+            case ReviewService.Undo.Done d -> "Put " + asked.item().where() + " back as \"" + d.version() + "\" had it.";
+            case ReviewService.Undo.Refused r -> throw new IllegalArgumentException(r.reason());
+            case ReviewService.Undo.Ready r -> throw new IllegalStateException("not written");
+        };
+    }
+
+    /** {@code com/bot/Miner.java#mine@12}: a review item's file, function and line, stable until it is edited. */
+    private String reviewId(ReviewService.Item item) {
+        return LiveBot.relative(ctx.config().sourceRoot(), item.file()) + "#" + item.function() + "@" + item.line();
+    }
+
+    /** The review item {@code id} names in a fresh scan. FX thread. */
+    private ReviewService.Item reviewItem(String id) {
+        String wanted = id == null ? "" : id.strip();
+        return ReviewService.scan(ctx.config(), ctx.state()).stream().filter(i -> reviewId(i).equals(wanted))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("No review item " + wanted
+                        + ". list_review gives the ids; one moves when its file is edited."));
+    }
+
+    /** The bot's index: its sources read on FX, parsed on the caller's thread. */
+    private BotIndex index() {
+        return onFx(() -> BotIndex.prepare(ctx.config(), ctx.state())).get();
+    }
+
+    /** Shows {@code file} in the editor, saying so when it was not the one shown. FX thread. */
+    private void openFile(Path file) {
+        ProjectFile active = ctx.state().getActiveFile();
+        if (active == null || !active.getPath().equals(file)) {
+            ctx.codeEditorService().switchToFile(file);
+            say("The assistant opened " + file.getFileName() + ".");
+        }
+    }
+
     // ---- the plugins' tools --------------------------------------------------------------------------------
 
     @Override
@@ -258,11 +445,7 @@ final class StudioBridge implements StudioDriver {
      */
     private Statement statementOf(String file, String blockId) {
         Path path = path(file);
-        ProjectFile active = ctx.state().getActiveFile();
-        if (active == null || !active.getPath().equals(path)) {
-            ctx.codeEditorService().switchToFile(path);
-            say("The assistant opened " + path.getFileName() + ".");
-        }
+        openFile(path);
         CompilationUnit unit = ctx.state().getCompilationUnit().orElseThrow(() ->
                 new IllegalArgumentException("Studio has not drawn " + path.getFileName() + " yet. Try again."));
         List<Statement> found = new ArrayList<>(1);

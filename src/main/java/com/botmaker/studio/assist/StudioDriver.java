@@ -60,6 +60,48 @@ public interface StudioDriver {
     /** Stops the run, the try or the debug session. */
     String stop();
 
+    // ---- structure, navigation and review (phase 8) — each refused here unless the implementation offers it
+
+    /** Writes an empty class {@code name} in the bot's main package, as one version the user can go back to. */
+    default String addFile(String name) {
+        throw new IllegalArgumentException("Studio cannot add a file here.");
+    }
+
+    /** Every use of {@code symbol} ({@link SymbolNames}), one line each: file, line, enclosing method, text. */
+    default String findUsages(String symbol) {
+        throw new IllegalArgumentException("Studio cannot search here.");
+    }
+
+    /** Renames {@code symbol} and every use of it across the bot, as one undo step; refused when it would not compile. */
+    default String rename(String symbol, String to) {
+        throw new IllegalArgumentException("Studio cannot rename here.");
+    }
+
+    /** Opens {@code symbol}'s file in the editor and shows its declaration. */
+    default String open(String symbol) {
+        throw new IllegalArgumentException("Studio cannot open that here.");
+    }
+
+    /** The functions a refactor marked for the user to look at, each with its id and what the mark says. */
+    default String listReview() {
+        throw new IllegalArgumentException("Studio has no review list here.");
+    }
+
+    /** Sets the mark {@code id} reviewed: it stays in the code as the record. */
+    default String markReviewed(String id) {
+        throw new IllegalArgumentException("Studio has no review list here.");
+    }
+
+    /** Takes the mark {@code id} out of the code. */
+    default String removeMark(String id) {
+        throw new IllegalArgumentException("Studio has no review list here.");
+    }
+
+    /** Puts the function the mark {@code id} is on back as the newest version without the mark has it. */
+    default String undoChange(String id) {
+        throw new IllegalArgumentException("Studio has no review list here.");
+    }
+
     /** The bound plugins' assistant tools, in plugin order. */
     List<PluginTool> pluginTools();
 
