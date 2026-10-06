@@ -4,28 +4,48 @@ import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * What the upgrade window says when it is not doing anything — the two sentences a user reads instead of
- * guessing.
- *
- * <p>The window used to leave a disabled Apply button with nothing beside it, and to close itself on success
- * so the one message worth reading was on screen for no frames at all. Both are sentences rather than
- * layout, so both are asserted with no toolkit: these are static methods over plain values, the same split
- * as {@code PluginAlreadyProvidedTest} beside it.
+ * What the Installed tab says on each row and after a pass — sentences rather than layout, so asserted with no
+ * toolkit: static methods over plain values, the same split as {@code PluginAlreadyProvidedTest} beside it.
  */
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class ProjectUpgradeFeedbackTest {
 
+    /** A row opens on its installed version, so its one button is the upgrade (2026-10-06). */
     @Test
-    void aWindowWhereNoRowMovedSaysToPickAVersion() {
-        String why = InstalledPluginsTab.applyBlockedReason(0, false, 0);
+    void aRowOnItsVersionOffersTheNewerOne() {
+        assertEquals("Upgrade to 1.4.0", InstalledPluginsTab.actionLabel("1.3.0", "1.3.0", "1.4.0", false));
+        assertEquals("1.4.0", InstalledPluginsTab.actionTarget("1.3.0", "1.3.0", "1.4.0", false));
+    }
 
-        assertTrue(why.contains("Pick a version"), why);
+    @Test
+    void aPickedVersionIsASwitchEvenWhenItIsOlder() {
+        assertEquals("Switch to 1.2.0", InstalledPluginsTab.actionLabel("1.3.0", "1.2.0", "1.4.0", false));
+        assertEquals("1.2.0", InstalledPluginsTab.actionTarget("1.3.0", "1.2.0", "1.4.0", false));
+    }
+
+    @Test
+    void aRowWithNothingNewerHasNothingToDo() {
+        assertEquals("", InstalledPluginsTab.actionLabel("1.4.0", "1.4.0", "", false));
+        assertEquals("", InstalledPluginsTab.actionTarget("1.4.0", "1.4.0", "", false));
+        assertEquals("Up to date", InstalledPluginsTab.idleLabel(false));
+    }
+
+    /** The dev build a dev-mode project is trying is never offered an upgrade. */
+    @Test
+    void aDevBuildInDevModeOffersNoUpgrade() {
+        assertEquals("", InstalledPluginsTab.actionLabel("1.3.1-SNAPSHOT", "1.3.1-SNAPSHOT", "1.4.0", true));
+        assertEquals("Dev build", InstalledPluginsTab.idleLabel(true));
+    }
+
+    /** Outside dev mode a refused dev build moves to a release, which is a switch: it may be older. */
+    @Test
+    void aRefusedDevBuildSwitchesToARelease() {
+        assertEquals("Switch to v1.2.3", InstalledPluginsTab.actionLabel("1.3.1-SNAPSHOT", "1.3.1-SNAPSHOT",
+                "v1.2.3", false));
     }
 
     /** A row pinned to a dev build was not loaded (2026-10-03); the line above the table says what to do. */
@@ -34,33 +54,7 @@ class ProjectUpgradeFeedbackTest {
         assertEquals("", InstalledPluginsTab.devText(0));
         assertTrue(InstalledPluginsTab.devText(1).startsWith("A plugin is pinned to a dev build"));
         assertTrue(InstalledPluginsTab.devText(2).startsWith("2 plugins are"));
-        assertTrue(InstalledPluginsTab.devText(2).contains("released version, then apply"));
-    }
-
-    /** A check in flight is a wait, not a refusal, and must not read as one. */
-    @Test
-    void aCheckStillRunningSaysSoRatherThanNamingAProblem() {
-        assertEquals("A check is still running.",
-                InstalledPluginsTab.applyBlockedReason(1, true, 0));
-    }
-
-    /**
-     * A call nothing replaces is a guess either way: the user is asked, and one left unanswered gets a default
-     * and a review mark rather than holding Apply (2026-09-29).
-     */
-    @Test
-    void callsWaitingForAPickAreSaidAndWhatHappensToThem() {
-        String why = InstalledPluginsTab.applyBlockedReason(1, false, 2);
-
-        assertTrue(why.startsWith("2 calls have nothing that replaces it"), why);
-        assertTrue(why.contains("default value or is deleted"), why);
-        assertTrue(why.contains("left unchosen gets a default value"), why);
-    }
-
-    /** Nothing in the way, nothing said: an enabled button needs no caption. */
-    @Test
-    void aPassThatCanRunHasNoSentenceAtAll() {
-        assertEquals("", InstalledPluginsTab.applyBlockedReason(1, false, 0));
+        assertTrue(InstalledPluginsTab.devText(2).contains("or use dev mode"));
     }
 
     @Test

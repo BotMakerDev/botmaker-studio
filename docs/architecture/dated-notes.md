@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **Installed has one button per row (2026-10-06).** `InstalledPluginsTab` rows open on the installed version;
+> `actionLabel`/`actionTarget` decide *Upgrade to* / *Switch to* / nothing, and each click runs
+> `ProjectUpgrade.run` with that one row and no picks (an unanswered site gets a default value and a review
+> mark, as before). *Upgrade all* is the same pass over every row's upgrade. The tab no longer uses
+> `ui/app/upgrade/ReportView`; Remove asks in `RemovalSheet`. Read older text about Check, seeded versions and
+> *Snapshot, repair & switch* as history.
+
 > **One plugin, one copy (2026-10-06).** A pom naming an artifact under both `com.github.LiQiyeDev` and
 > `com.github.BotMakerDev` resolves both jars and both trees, and one `URLClassLoader` gives each class the
 > first jar's answer — a mix. `plugin/DuplicatePlugins.split` runs after `ReleasedPlugins.split` in

@@ -8,15 +8,12 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
-import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import com.botmaker.studio.services.upgrade.ProjectUpgrade;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.ui.app.upgrade.ReportView;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -24,8 +21,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
@@ -42,64 +37,51 @@ import javafx.scene.layout.VBox;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
  * The <b>Installed</b> tab of <b>Project ▸ Plugins &amp; Libraries…</b> — every plugin this project installs,
- * with the version it is on and the version it could be on.
+ * the version it is on, the jar Studio loaded, and one button that moves it.
  *
- * <p>This was the <b>Upgrade…</b> window until 2026-09-29, one of five Project-menu entries about the same
- * pom; it is a tab of {@link PluginsWindow} now, beside Browse and Libraries. It is <b>Upgrade SDK…</b>
- * generalised, and the generalisation is the point: plugin #1 got a checked migration and every other plugin
- * got a pom edit, which is exactly the privilege the plugin platform exists to refuse. The SDK appears here
- * as an ordinary row, and this is the only place any plugin's version is changed — Libraries holds plugin
- * rows back and Browse offers no Remove, so no plugin moves without its report.
+ * <p>This was the <b>Upgrade…</b> window until 2026-09-29; it is a tab of {@link PluginsWindow} now, beside
+ * Browse and Libraries. The SDK appears here as an ordinary row, and this is the only place any plugin's
+ * version is changed — Libraries holds plugin rows back and Browse offers no Remove, so no plugin moves
+ * without its repair.
  *
- * <h2>Saying what it is doing</h2>
+ * <h2>One button per row (2026-10-06)</h2>
  *
- * <p>Three rules, all learned from a window that did the work and said nothing about it. Picking a version
- * <b>runs that row's check by itself</b>, because a user who has chosen a version has already asked the
- * question the Check button repeats. Every row carries its <b>own</b> state chip rather than sharing one
- * spinner. And Apply <b>says why it is disabled</b>, since a dead button with no sentence beside it reads as
- * a broken window rather than as a missing step.
+ * <p>A row opens on the version it is <em>on</em>. Its button says what one click does: <i>Upgrade to X</i>
+ * when a newer release is known, <i>Switch to X</i> once another version is picked in the menu (a downgrade is
+ * the same operation), and nothing when there is nothing to do. <i>Upgrade all</i> moves every row that has an
+ * upgrade, in one pass. Until this date every row was seeded with its newest version, each pick ran a Check
+ * whose report filled the tab with prose, and a separate <i>Snapshot, repair &amp; switch</i> applied whatever
+ * was picked — so upgrading one plugin meant un-picking all the others. The repair is unchanged: a pass takes
+ * a snapshot, repairs the bot's calls, and gives a call nothing replaces a default value and a review mark.
  *
- * <p>On success the window <b>stays open</b> with what the pass did — versions moved, files rewritten, calls
- * repaired, and the way back. Closing on success threw away the one message worth reading.
+ * <p>A dev build in a dev-mode project is the build being tried, so its row offers no upgrade.
  *
- * <h2>What the window is, and what it is not</h2>
+ * <h2>Remove is the same repair with no target jar</h2>
  *
- * <p>It is a <b>table of coordinates with two versions each</b>. The version control is a combo box rather
- * than an up arrow, so a <b>downgrade is the same operation</b> — the engine runs with the jars the other way
- * round and reports what an older release lacks, which needs no new code path. Check is per row because the
- * report is per plugin: what a bot calls of plugin A says nothing about plugin B.
+ * <p>Every call into the plugin becomes a default value or a deleted line, every import of it is dropped, and
+ * a type the bot writes <em>down</em> is left as written, marked and listed. {@link RemovalSheet} says so in
+ * one sentence before anything is written.
  *
- * <h2>Four operations, one report</h2>
- *
- * <p>Upgrade, downgrade, remove and install. The first two are the same control and the same engine run with
- * the jars in a different order. <b>Remove is the same report with no target jar at all</b> — every call into
- * the plugin becomes a default value or a deleted line, every import of it is dropped, and a type the bot
- * writes <em>down</em> is left as written, marked and listed, because a declaration has no value to stand in
- * for. It refused the removal until 2026-09-29; nothing here refuses now.
- *
- * <p><b>Install is the one operation with no report</b>, and needs none: nothing is migrated by adding a
- * dependency. It is {@link BrowsePluginsTab}'s — the catalogue, the descriptions and the editor dependencies
- * live there — and this tab's <i>Add a plugin…</i> switches to it.
+ * <p><b>Install has no repair</b>, and needs none: it is {@link BrowsePluginsTab}'s, and this tab's <i>Add a
+ * plugin…</i> switches to it.
  *
  * <h2>One pass, not one pass per row</h2>
  *
- * <p>Applying takes one snapshot, repairs each row in sequence and writes the pom once. {@link ProjectUpgrade}
- * owns that rule rather than this class, because it is not a layout decision: a project sitting on plugin A's
- * new version with plugin B's old source compiles against neither. Nothing a check finds refuses the pass
- * (2026-09-29); what cannot be repaired is left as written, marked and listed.
+ * <p>{@link ProjectUpgrade} takes one snapshot, repairs each row in sequence and writes the pom once: a
+ * project sitting on plugin A's new version with plugin B's old source compiles against neither.
  *
  * <h2>Two plugins, one simple name</h2>
  *
  * <p>Call sites are attributed by the simple type name the source writes, so two plugins declaring
  * {@code Point} make that call unanswerable. The set of clashing names is computed once, from the installed
- * jars, and handed to every service built here — which leaves those names out rather than guessing. See
- * {@link InstalledPlugin#ambiguousAmong}.
+ * jars, and handed to every service built here. See {@link InstalledPlugin#ambiguousAmong}.
  */
 public final class InstalledPluginsTab {
 
@@ -117,10 +99,8 @@ public final class InstalledPluginsTab {
 
     private final GridPane table = new GridPane();
     private final Label statusLabel = new Label();
-    private final Label whyDisabled = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
-    private final Button applyButton = new Button("Snapshot, repair & switch");
-    private final ReportView reportView = new ReportView();
+    private final Button upgradeAll = new Button("Upgrade all");
     private final List<Row> rows = new ArrayList<>();
 
     /** The success block, hidden until there is one. See {@link #showResult}. */
@@ -132,13 +112,11 @@ public final class InstalledPluginsTab {
     private final Runnable onOpenReview;
     private final Runnable onChanged;
     private final VBox root = new VBox(12);
-    private Row showing;
 
-    /** Shown while a row pins a dev build; see {@link #showDevBar}. */
+    /** Shown while a row pins a dev build Studio refused; see {@link #showDevBar}. */
     private final Label devText = new Label();
-    private final Button pinReleased = new Button("Pin released versions");
     private final Button useDevMode = new Button("Use dev mode");
-    private final HBox devBar = new HBox(10, devText, useDevMode, pinReleased);
+    private final HBox devBar = new HBox(10, devText, useDevMode);
 
     /** Whether the project is in dev mode, read on every {@link #load}: its dev rows load and are not refused. */
     private boolean devMode;
@@ -148,6 +126,9 @@ public final class InstalledPluginsTab {
 
     /** Bumped by every {@link #load}, so a slower earlier load never draws over a later one. */
     private int generation;
+
+    /** True while a pass or a removal runs: every row's button waits for it. */
+    private boolean busy;
 
     /**
      * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
@@ -185,28 +166,20 @@ public final class InstalledPluginsTab {
     private void build() {
         progress.setPrefSize(18, 18);
         progress.setVisible(true);
-        applyButton.setDisable(true);
-        applyButton.setOnAction(e -> runApply());
-        reportView.onPicked(this::refreshApply);
 
         table.setHgap(10);
         table.setVgap(6);
         ColumnConstraints name = new ColumnConstraints();
         name.setHgrow(Priority.ALWAYS);
         table.getColumnConstraints().add(name);
+        ScrollPane tableScroll = new ScrollPane(table);
+        tableScroll.setFitToWidth(true);
+        VBox.setVgrow(tableScroll, Priority.ALWAYS);
 
-        Label hint = new Label("Every plugin this project's pom declares. Check a row to see what moving it "
-                + "would do to this bot; nothing is changed until you apply.");
+        Label hint = new Label("Every plugin this project uses. A move takes a snapshot first and repairs "
+                + "this bot's calls into the plugin.");
         hint.setWrapText(true);
         hint.getStyleClass().add("sdk-upgrade-empty");
-
-        ScrollPane reportScroll = new ScrollPane(reportView.node());
-        reportScroll.setFitToWidth(true);
-        VBox.setVgrow(reportScroll, Priority.ALWAYS);
-        reportView.placeholder("Pick a version and press Check on a row.");
-
-        whyDisabled.setWrapText(true);
-        whyDisabled.getStyleClass().add("sdk-upgrade-empty");
 
         resultText.setWrapText(true);
         openReview.setOnAction(e -> onOpenReview.run());
@@ -216,7 +189,6 @@ public final class InstalledPluginsTab {
 
         devText.setWrapText(true);
         HBox.setHgrow(devText, Priority.ALWAYS);
-        pinReleased.setOnAction(e -> rows.stream().filter(Row::isDev).forEach(Row::selectReleased));
         useDevMode.setTooltip(new Tooltip(PluginsWindow.DEV_MODE_TIP));
         useDevMode.setOnAction(e -> {
             useDevMode.setDisable(true);
@@ -234,9 +206,10 @@ public final class InstalledPluginsTab {
         devBar.getStyleClass().add("sdk-upgrade-card");
         showDevBar(0);
 
+        statusLabel.setWrapText(true);
         root.setPadding(new Insets(12, 0, 0, 0));
-        root.getChildren().addAll(new HBox(8, hint, progress), devBar, table, reportScroll, resultBox, statusLabel,
-                whyDisabled, buttonBar());
+        root.getChildren().addAll(new HBox(8, hint, progress), devBar, tableScroll, resultBox, statusLabel,
+                buttonBar());
         load();
     }
 
@@ -251,27 +224,35 @@ public final class InstalledPluginsTab {
     static String devText(int devRows) {
         if (devRows == 0) return "";
         return (devRows == 1 ? "A plugin is" : devRows + " plugins are") + " pinned to a dev build, which Studio "
-                + "does not load. Move " + (devRows == 1 ? "it" : "them") + " to a released version, then apply — "
-                + "or use dev mode to try " + (devRows == 1 ? "it" : "them") + " on this computer.";
+                + "does not load outside dev mode. Switch " + (devRows == 1 ? "it" : "them") + " to a release on "
+                + (devRows == 1 ? "its row" : "their rows") + ", or use dev mode on this computer.";
     }
 
     private Node buttonBar() {
-        // Install has no report and needs none, so it is a door to the catalogue rather than a fifth control
-        // here: the descriptions, the editor dependencies and the id check all already live there.
+        // Install has no repair and needs none, so it is a door to the catalogue rather than a control here.
         Button add = new Button("Add a plugin…");
         add.setOnAction(e -> onAddPlugin.run());
 
-        // Every row to the version the registry verified, when newer, each checked as it moves —
-        // the one click the "Update plugins…" banner leads to.
-        Button updateAll = new Button("Update all");
-        updateAll.setOnAction(e -> rows.forEach(Row::selectRecommended));
+        upgradeAll.setDisable(true);
+        upgradeAll.setTooltip(new Tooltip("Every row with a newer release, in one pass: a snapshot first, then "
+                + "this bot's calls repaired."));
+        upgradeAll.setOnAction(e -> runPass(rows.stream().filter(r -> !r.upgrade().isEmpty())
+                .map(r -> r.asRow(r.upgrade())).toList()));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(8, add, spacer, updateAll, applyButton);
+        HBox bar = new HBox(8, add, spacer, upgradeAll);
         bar.setAlignment(Pos.CENTER_RIGHT);
         return bar;
+    }
+
+    /** Repaints every row's button and <i>Upgrade all</i>, after a version list arrived or a pass ended. */
+    private void refreshButtons() {
+        rows.forEach(Row::refreshAction);
+        long upgradable = rows.stream().filter(r -> !r.upgrade().isEmpty()).count();
+        upgradeAll.setText(upgradable > 1 ? "Upgrade all (" + upgradable + ")" : "Upgrade all");
+        upgradeAll.setDisable(busy || upgradable == 0);
     }
 
     // -------------------------------------------------------------------------
@@ -345,8 +326,7 @@ public final class InstalledPluginsTab {
     }
 
     /** The loaded plugin whose jar is exactly {@code row}'s coordinate: its groupId too, not the other one. */
-    static java.util.Optional<PluginHost.LoadedPlugin> loadedFrom(InstalledPlugin row,
-                                                                List<PluginHost.LoadedPlugin> loaded) {
+    static Optional<PluginHost.LoadedPlugin> loadedFrom(InstalledPlugin row, List<PluginHost.LoadedPlugin> loaded) {
         String group = row.artifact().groupId();
         return loaded.stream()
                 .filter(l -> l.isOf(group, row.artifact().artifactId()))
@@ -365,7 +345,7 @@ public final class InstalledPluginsTab {
     }
 
     /** What the Loaded cell says: the jar's version, marked when it is a dev build, or that nothing loaded. */
-    static String loadedText(java.util.Optional<PluginHost.LoadedPlugin> loaded) {
+    static String loadedText(Optional<PluginHost.LoadedPlugin> loaded) {
         return loaded.map(l -> l.version() + (l.dev() ? " (dev build)" : "")).orElse("not loaded");
     }
 
@@ -386,7 +366,8 @@ public final class InstalledPluginsTab {
         if (declared.isEmpty() && bundled.isEmpty()) {
             status("");
             table.add(new Label("This project declares no plugins, so there is nothing to upgrade. "
-                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 7, 1);
+                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 6, 1);
+            refreshButtons();
             return;
         }
 
@@ -396,30 +377,23 @@ public final class InstalledPluginsTab {
         table.add(heading("Plugin"), 0, line);
         table.add(heading("Installed"), 1, line);
         table.add(heading("Loaded"), 2, line);
-        table.add(heading("Move to"), 3, line);
+        table.add(heading("Version"), 3, line);
         line++;
 
         for (Declared entry : declared) {
-            Row row = new Row(entry.row(), ambiguous);
+            Row row = new Row(entry.row(), ambiguous, !entry.twins().isEmpty());
             rows.add(row);
             table.add(row.name, 0, line);
             table.add(row.installed, 1, line);
             table.add(loadedCell(loadedFrom(entry.row(), loaded), entry.row().artifact().artifactId()), 2, line);
             table.add(row.versions, 3, line);
-            table.add(row.check, 4, line);
+            table.add(row.action, 4, line);
             table.add(row.remove, 5, line);
-            table.add(row.verdict, 6, line);
+            line++;
+            table.add(row.verdict, 1, line, 5, 1);
             line++;
             row.loadVersions();
-            if (!entry.twins().isEmpty()) {
-                // Removing or moving one copy would report on the plugin as if the other were not still
-                // declared: the bot's calls rewritten for a plugin the next bind loads again.
-                for (Control control : List.<Control>of(row.versions, row.check, row.remove)) {
-                    control.setDisable(true);
-                }
-                row.remove.setTooltip(new Tooltip("Keep one copy first, below."));
-                table.add(twinBar(entry), 0, line++, 7, 1);
-            }
+            if (!entry.twins().isEmpty()) table.add(twinBar(entry), 0, line++, 6, 1);
         }
         for (PluginHost.LoadedPlugin plugin : bundled) {
             Label name = new Label(plugin.name());
@@ -431,15 +405,22 @@ public final class InstalledPluginsTab {
                     + "decide. Change the plugin that brings it instead."));
             table.add(name, 0, line);
             table.add(version, 1, line);
-            table.add(loadedCell(java.util.Optional.of(plugin), ""), 2, line);
-            table.add(how, 3, line, 4, 1);
+            table.add(loadedCell(Optional.of(plugin), ""), 2, line);
+            table.add(how, 3, line, 3, 1);
             line++;
         }
         showDevBar((int) rows.stream().filter(Row::refused).count());
+        refreshButtons();
+    }
+
+    private static Label heading(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-weight: bold;");
+        return label;
     }
 
     /** The Loaded cell, its tooltip saying why when nothing loaded. */
-    private static Label loadedCell(java.util.Optional<PluginHost.LoadedPlugin> loaded, String artifactId) {
+    private static Label loadedCell(Optional<PluginHost.LoadedPlugin> loaded, String artifactId) {
         Label cell = new Label(loadedText(loaded));
         cell.getStyleClass().add("sdk-upgrade-detail");
         if (loaded.isEmpty()) {
@@ -498,36 +479,57 @@ public final class InstalledPluginsTab {
         }));
     }
 
-    private static Label heading(String text) {
-        Label label = new Label(text);
-        label.setStyle("-fx-font-weight: bold;");
-        return label;
+    // -------------------------------------------------------------------------
+    // A row
+    // -------------------------------------------------------------------------
+
+    /**
+     * What one click on a row's button does, as its label: {@code ""} when there is nothing to do.
+     *
+     * @param picked   the version the menu shows
+     * @param newer    the upgrade on offer, {@code ""} for none
+     * @param heldDev  a dev build in a dev-mode project: the build being tried, never offered an upgrade
+     */
+    static String actionLabel(String installed, String picked, String newer, boolean heldDev) {
+        if (picked != null && !picked.isBlank() && !picked.equals(installed)) return "Switch to " + picked;
+        if (heldDev || newer.isBlank() || newer.equals(installed)) return "";
+        // From a dev build to a release is not "up": the release may well be older than the build.
+        return (ReleasedPlugins.isDevVersion(installed) ? "Switch to " : "Upgrade to ") + newer;
     }
 
-    /** One plugin: its two versions, its own Check, and the report that Check produced. */
+    /** The version a row's button moves to, {@code ""} for none — the target {@link #actionLabel} names. */
+    static String actionTarget(String installed, String picked, String newer, boolean heldDev) {
+        if (picked != null && !picked.isBlank() && !picked.equals(installed)) return picked;
+        if (heldDev || newer.isBlank() || newer.equals(installed)) return "";
+        return newer;
+    }
+
+    /** What a row's disabled button says instead. */
+    static String idleLabel(boolean heldDev) {
+        return heldDev ? "Dev build" : "Up to date";
+    }
+
+    /** One plugin: its version menu, its one button, its Remove. */
     private final class Row {
 
         private final InstalledPlugin plugin;
         private final PluginUpgradeService upgrades;
+        /** Declared twice: nothing moves until one copy is kept, or the repair would be about the wrong pom. */
+        private final boolean twinned;
 
         private final Label name;
         private final Label installed;
         private final ComboBox<String> versions = new ComboBox<>();
-        private final Button check = new Button("Check");
+        private final Button action = new Button();
         private final Button remove = new Button("Remove…");
         private final Label verdict = new Label();
 
-        private Report report;
-        /** A removal report on screen that waits for picks; the next Remove… confirms it instead of re-checking. */
-        private Report pendingRemoval;
-        /** The plugin's files in the bot, read with the removal report; what its question offers to delete. */
-        private PluginHolders removalHolders = PluginHolders.NONE;
-        /** True while {@link #loadVersions} is filling the combo box, so seeding checks nothing. */
-        private boolean seeding = true;
-        private boolean checking;
+        /** The newest release JitPack lists, once it answers: the upgrade of a row no registry entry verifies. */
+        private String newestListed = "";
 
-        Row(InstalledPlugin plugin, Set<String> ambiguous) {
+        Row(InstalledPlugin plugin, Set<String> ambiguous, boolean twinned) {
             this.plugin = plugin;
+            this.twinned = twinned;
             this.upgrades = new PluginUpgradeService(config, state, libraryService, jitpack,
                     plugin.artifact(), ambiguous);
 
@@ -539,36 +541,20 @@ public final class InstalledPluginsTab {
             versions.setPrefWidth(190);
             versions.setPromptText("loading versions…");
             versions.setDisable(true);
-            // A version change invalidates the verdict beside it: a chip that still says "nothing breaks"
-            // about the version the user has just moved away from is worse than no chip. Choosing one then
-            // runs the check, because choosing a version IS asking what it would do — the button stays for
-            // re-runs, and the seeding pass is exempt so opening the window fires nothing.
-            versions.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
-                report = null;
-                pendingRemoval = null;
-                chip("", "none");
-                refreshApply();
-                if (!seeding && isMoving()) runCheck();
-            });
+            versions.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> refreshButtons());
 
-            check.setOnAction(e -> runCheck());
-            check.setDisable(true);
-            remove.setOnAction(e -> {
-                if (pendingRemoval != null && showing == this) confirmRemoval(pendingRemoval);
-                else runRemovalCheck();
+            action.setOnAction(e -> {
+                String target = target();
+                if (!target.isEmpty()) runPass(List.of(asRow(target)));
             });
+            remove.setOnAction(e -> runRemoval());
             verdict.setWrapText(true);
-        }
-
-        /**
-         * The version this row is seeded with: the registry's verified one when newer, else the installed —
-         * and for a dev build Studio refused, any released version over it. In dev mode a dev build is the
-         * one being tried, so it stays.
-         */
-        String recommended() {
-            if (isDev() && devMode) return upgrades.currentVersion();
-            if (refused() && !released().isEmpty()) return released();
-            return PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
+            if (twinned) {
+                // Removing or moving one copy would repair the bot as if the other were not still declared:
+                // its calls rewritten for a plugin the next bind loads again.
+                for (Control control : List.<Control>of(versions, action, remove)) control.setDisable(true);
+                remove.setTooltip(new Tooltip("Keep one copy first, below."));
+            }
         }
 
         /** Whether this row pins a build only this machine has. */
@@ -581,53 +567,66 @@ public final class InstalledPluginsTab {
             return isDev() && !devMode;
         }
 
+        /** A dev build in a dev-mode project: the one being tried, offered no upgrade. */
+        boolean heldDev() {
+            return isDev() && devMode;
+        }
+
+        /**
+         * The upgrade on offer, {@code ""} for none: for a refused dev build, a release; else the registry's
+         * verified version or JitPack's newest tag, when newer.
+         */
+        String newer() {
+            if (twinned || heldDev()) return "";
+            if (refused()) return released();
+            String best = PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
+            if (plugin.available().isBlank() && !newestListed.isBlank()) {
+                best = PluginUpgradeService.recommended(upgrades.currentVersion(), newestListed);
+            }
+            return best.equals(upgrades.currentVersion()) ? "" : best;
+        }
+
+        /** What <i>Upgrade all</i> moves this row to, {@code ""} for nothing: the upgrade alone, never a pick. */
+        String upgrade() {
+            return busy || versions.isDisable() ? "" : newer();
+        }
+
+        /** What this row's button moves to now. */
+        String target() {
+            return actionTarget(upgrades.currentVersion(), versions.getValue(), newer(), heldDev());
+        }
+
         /** The release a dev row moves to: the registry's verified one, else the newest JitPack lists, else "". */
         String released() {
             if (!plugin.available().isBlank()) return plugin.available();
             return versions.getItems().stream().filter(v -> !ReleasedPlugins.isDevVersion(v)).findFirst().orElse("");
         }
 
-        /** <i>Pin released versions</i> for this row; the selection listener checks the move. */
-        void selectReleased() {
-            String target = released();
-            if (!target.isEmpty() && !target.equals(versions.getValue())) versions.getSelectionModel().select(target);
-        }
-
-        /** <i>Update all</i> for this row: the recommended version, checked when that is a move. */
-        void selectRecommended() {
-            if (versions.isDisable()) return;
-            String seed = recommended();
-            if (!seed.equals(versions.getValue())) {
-                versions.getSelectionModel().select(seed);  // the listener checks it
-            } else if (isMoving() && report == null && !checking) {
-                runCheck();
-            }
+        void refreshAction() {
+            String label = actionLabel(upgrades.currentVersion(), versions.getValue(), newer(), heldDev());
+            action.setText(label.isEmpty() ? idleLabel(heldDev()) : label);
+            action.setDisable(twinned || busy || label.isEmpty());
+            remove.setDisable(twinned || busy);
         }
 
         /**
-         * Fills the combo box.
+         * Fills the menu, opened on the installed version.
          *
-         * <p>Seeded with what is already known — the installed version and the registry's verified one — so a
-         * row is usable before JitPack answers and stays usable if it never does. The list itself is every
-         * version JitPack can build, which is what makes a <b>downgrade</b> reachable: the versions below the
-         * installed one are in the same menu as the ones above it.
+         * <p>Seeded with what is already known — the installed version, the registry's verified one, the
+         * local build — so a row is usable before JitPack answers and stays usable if it never does. The list
+         * is then every version JitPack can build, which is what makes a downgrade reachable.
          */
         void loadVersions() {
-            seeding = true;
-            String seed = recommended();
             List<String> known = new ArrayList<>();
             for (String v : List.of(upgrades.currentVersion(), plugin.available(), localVersion())) {
                 if (!v.isBlank() && !known.contains(v)) known.add(v);
             }
-            if (!known.contains(seed)) known.add(seed);
             versions.setCellFactory(list -> new VersionCell());
             versions.setButtonCell(new VersionCell());
             versions.getItems().setAll(known);
-            versions.getSelectionModel().select(seed);
-            versions.setDisable(false);
+            versions.getSelectionModel().select(upgrades.currentVersion());
+            versions.setDisable(twinned);
             versions.setPromptText(null);
-            check.setDisable(false);
-            seeding = false;
             markDev();
 
             upgrades.availableVersions().thenAccept(fetched -> Platform.runLater(() -> {
@@ -635,24 +634,19 @@ public final class InstalledPluginsTab {
                 String selected = versions.getValue();
                 List<String> items = new ArrayList<>(fetched);
                 for (String v : known) if (!items.contains(v)) items.add(v);
-                seeding = true;
                 versions.getItems().setAll(items);
-                versions.getSelectionModel().select(items.contains(selected) ? selected : seed);
-                // A dev row with no verified release learns one only now: the newest tag JitPack lists.
-                if (refused() && ReleasedPlugins.isDevVersion(versions.getValue()) && !released().isEmpty()) {
-                    versions.getSelectionModel().select(released());
-                }
-                seeding = false;
-                markDev();
+                versions.getSelectionModel().select(items.contains(selected) ? selected : upgrades.currentVersion());
+                newestListed = fetched.stream().filter(v -> !ReleasedPlugins.isDevVersion(v)).findFirst().orElse("");
+                refreshButtons();
             }));
         }
 
-        /** Says on the row that Studio did not load it; cleared like any chip when the version moves. */
+        /** Says on the row that Studio did not load it. */
         private void markDev() {
-            if (refused() && report == null) chip("dev build — not loaded", "partial");
+            if (refused()) chip("dev build — not loaded", "partial");
         }
 
-        /** A version, with which one is installed and which one the registry verified. */
+        /** A version, with which one is installed, which one is local and which one the registry verified. */
         private final class VersionCell extends javafx.scene.control.ListCell<String> {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -674,155 +668,65 @@ public final class InstalledPluginsTab {
             return localVersions.getOrDefault(plugin.artifact().groupId() + ":" + plugin.artifact().artifactId(), "");
         }
 
-        /** Repaints this row's state cell. One class per state, so both themes are the stylesheet's job. */
+        /** Repaints this row's state line. One class per state, so both themes are the stylesheet's job. */
         private void chip(String text, String state) {
             verdict.getStyleClass().removeIf(c -> c.startsWith(CHIP));
             if (!text.isEmpty()) verdict.getStyleClass().addAll(CHIP, CHIP + "-" + state);
             verdict.setText(text);
         }
 
-        /** The report for this row alone, read off the FX thread and shown below the table. */
-        void runCheck() {
-            String target = versions.getValue();
-            if (target == null || target.isBlank()) return;
-            pendingRemoval = null;
-            check.setDisable(true);
-            checking = true;
-            chip("checking…", "checking");
-            progress.setVisible(true);
-            status("Resolving and scanning " + plugin.displayName() + " " + target + "…");
-            refreshApply();
-
-            Thread worker = new Thread(() -> {
-                Report result;
-                try {
-                    result = upgrades.compare(target, false);
-                } catch (RuntimeException e) {
-                    String message = e.getMessage();
-                    Platform.runLater(() -> {
-                        progress.setVisible(false);
-                        check.setDisable(false);
-                        checking = false;
-                        chip("could not check", "blocked");
-                        status("The check for " + plugin.displayName() + " failed: " + message);
-                        refreshApply();
-                    });
-                    return;
-                }
-                Report done = result;
-                Platform.runLater(() -> {
-                    progress.setVisible(false);
-                    check.setDisable(false);
-                    checking = false;
-                    report = done;
-                    chip(chipText(done), chipState(done));
-                    showing = Row.this;
-                    reportView.render(done, ReportView.Mode.UPGRADE);
-                    // The outcome stays on the status line instead of being wiped: the chip is four words
-                    // and the line is where the version that was checked is named.
-                    status("Checked " + plugin.displayName() + " " + target + ": " + chipText(done) + ".");
-                    refreshApply();
-                });
-            }, "plugin-upgrade-check");
-            worker.setDaemon(true);
-            worker.start();
+        ProjectUpgrade.Row asRow(String target) {
+            return new ProjectUpgrade.Row(upgrades, target, false, Map.of());
         }
 
         /**
-         * The removal pre-flight: the same report with no target jar, shown before anything is asked.
-         *
-         * <p>It is never one button. The user reads what removing the plugin would rewrite, and only then
-         * confirms — because the rewrite is destructive in a way an upgrade is not: a call that used to do
-         * something becomes a default value or disappears, and no later version will bring it back.
+         * Reads what removing the plugin would rewrite, then asks ({@link RemovalSheet}) before anything is
+         * written: a call that used to do something becomes a default value or disappears.
          */
-        void runRemovalCheck() {
-            remove.setDisable(true);
+        void runRemoval() {
+            busy = true;
+            refreshButtons();
             progress.setVisible(true);
-            chip("checking…", "checking");
-            status("Reading what removing " + plugin.displayName() + " would break…");
+            chip("reading…", "checking");
+            status("Reading what removing " + plugin.displayName() + " would change…");
 
             Thread worker = new Thread(() -> {
-                Report result;
+                Report report;
                 PluginHolders holders;
                 try {
-                    result = upgrades.removal();
+                    report = upgrades.removal();
                     holders = upgrades.holders();
                 } catch (RuntimeException e) {
                     String message = e.getMessage();
                     Platform.runLater(() -> {
-                        progress.setVisible(false);
-                        remove.setDisable(false);
-                        chip("could not check", "blocked");
-                        status("The check for removing " + plugin.displayName() + " failed: " + message);
+                        endBusy();
+                        chip("could not read it", "blocked");
+                        status("Reading " + plugin.displayName() + " failed: " + message);
                     });
                     return;
                 }
-                Report done = result;
-                PluginHolders files = holders;
                 Platform.runLater(() -> {
-                    removalHolders = files;
-                    progress.setVisible(false);
-                    remove.setDisable(false);
-                    report = null;                           // this one is not about a version change
-                    chip(chipText(done), chipState(done));
-                    showing = Row.this;
-                    reportView.render(done, ReportView.Mode.REMOVAL);
-                    status("Removing " + plugin.displayName() + ": " + chipText(done) + ".");
-                    confirmRemoval(done);
+                    endBusy();
+                    chip("", "none");
+                    status("");
+                    Optional<Boolean> answer = RemovalSheet.ask(root.getScene() == null ? null
+                            : root.getScene().getWindow(), plugin.displayName(), report, holders);
+                    answer.ifPresent(deleteFiles -> remove(report, deleteFiles ? holders : PluginHolders.NONE));
                 });
             }, "plugin-removal-check");
             worker.setDaemon(true);
             worker.start();
         }
 
-        /** The report is on screen; this is the question that follows it. */
-        private void confirmRemoval(Report r) {
-            // Nothing here refuses since 2026-09-29: what could not be read, a type the bot writes down, and a
-            // call nobody chose for are each said, then left as written or defaulted and marked.
-            pendingRemoval = null;
-            String what = r.breaks().isEmpty()
-                    ? "This bot calls nothing in it, so only the pom changes."
-                    : r.breaks().size() + " call(s) will be replaced by a default value or deleted, and the "
-                    + "functions they are in will be marked for review.";
-            if (!r.leftForYou().isEmpty()) {
-                what += "\n\n" + r.leftForYou().stream().map(Break::type).distinct().count()
-                        + " type(s) this bot writes down will be left as written and marked, for you to change: "
-                        + String.join(", ", r.leftForYou().stream().map(Break::type).distinct().toList()) + ".";
-            }
-            if (reportView.unpicked() > 0) what += "\n\n" + unpickedReason(reportView.unpicked());
-            if (r.isIncomplete()) what += "\n\nNot everything could be read: " + r.problems().getFirst();
-            String question = "Remove " + plugin.displayName() + " from this project?\n\n" + what
-                    + "\n\nA version of the project is saved first.";
-            Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, question);
-            PluginHolders holders = removalHolders;
-            CheckBox deleteFiles = new CheckBox("Delete this plugin's files: " + holders.fileNames());
-            if (!holders.isEmpty()) {
-                deleteFiles.setSelected(true);
-                Label text = new Label(question);
-                text.setWrapText(true);
-                VBox content = new VBox(10, text, deleteFiles);
-                if (!holders.references().isEmpty()) {
-                    Label refs = new Label(holderReferences(holders.references()));
-                    refs.setWrapText(true);
-                    refs.getStyleClass().add("text-muted");
-                    content.getChildren().add(refs);
-                }
-                ask.getDialogPane().setContent(content);
-            }
-            if (ask.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
-            runRemoval(r, deleteFiles.isSelected() ? holders : PluginHolders.NONE);
-        }
-
-        private void runRemoval(Report r, PluginHolders holders) {
-            remove.setDisable(true);
+        private void remove(Report report, PluginHolders holders) {
+            busy = true;
+            refreshButtons();
             progress.setVisible(true);
-            status("Committing a snapshot, repairing your call sites and removing "
-                    + plugin.displayName() + "…");
+            status("Saving a version, repairing your calls and removing " + plugin.displayName() + "…");
 
-            upgrades.remove(plugin.editorDependencies(), !r.breaks().isEmpty(), reportView.picks(), holders)
+            upgrades.remove(plugin.editorDependencies(), !report.breaks().isEmpty(), Map.of(), holders)
                     .whenComplete((repaired, error) -> Platform.runLater(() -> {
-                        progress.setVisible(false);
-                        remove.setDisable(false);
+                        endBusy();
                         if (error != null) {
                             Throwable cause = error.getCause() != null ? error.getCause() : error;
                             status("");
@@ -832,31 +736,22 @@ public final class InstalledPluginsTab {
                         }
                         status("");
                         holders.forget(config, state);
-                        showResult(removalSummary(plugin.displayName(), repaired.files(), r.breaks().size(),
+                        showResult(removalSummary(plugin.displayName(), repaired.files(), report.breaks().size(),
                                 repaired.leftAsWritten(), repaired.deleted()), repaired.files() > 0);
-                        // The table it was a row of is now wrong, and the clash set with it: one plugin
-                        // fewer can make a name that was ambiguous answerable again.
+                        // One plugin fewer can make a name that was ambiguous answerable again.
                         reload();
                         onChanged.run();
                     }));
         }
-
-        /** Whether this row is asking for anything at all. A row on its installed version is not. */
-        boolean isMoving() {
-            String target = versions.getValue();
-            return target != null && !target.isBlank() && !target.equals(upgrades.currentVersion());
-        }
-
-        ProjectUpgrade.Row asRow() {
-            return new ProjectUpgrade.Row(upgrades, versions.getValue(), false,
-                    showing == this ? reportView.picks() : Map.of());
-        }
     }
 
-    /**
-     * The row's one-line verdict. None of them stops the move since 2026-09-29: <i>to finish by hand</i> and
-     * <i>partly checked</i> say what the user will be left with, not that the button refuses.
-     */
+    private void endBusy() {
+        busy = false;
+        progress.setVisible(false);
+        refreshButtons();
+    }
+
+    /** A report's verdict in a few words; what the assistant's removal preview opens with ({@code StudioBridge}). */
     static String chipText(Report r) {
         if (!r.leftForYou().isEmpty()) {
             return r.breaks().size() + " repairable, " + r.leftForYou().size() + " to finish by hand";
@@ -911,86 +806,33 @@ public final class InstalledPluginsTab {
                 + "review, and anything outside a function is listed afterwards. Their imports are removed.";
     }
 
-    /** The states as a style class, so the colour is the stylesheet's and not this file's. */
-    static String chipState(Report r) {
-        if (!r.leftForYou().isEmpty() || r.isIncomplete()) return "partial";
-        return r.breaks().isEmpty() ? "ok" : "repairable";
-    }
-
     // -------------------------------------------------------------------------
-    // Apply
+    // A pass
     // -------------------------------------------------------------------------
 
-    /**
-     * Enabled whenever something is being asked for and no check is running. Nothing a check finds disables
-     * it since 2026-09-29 — an upgrade is never blocked. A call waiting for a pick is said beside the button,
-     * because pressing Apply gives it a default value and a review mark.
-     */
-    private void refreshApply() {
-        int moving = (int) rows.stream().filter(Row::isMoving).count();
-        boolean checking = rows.stream().anyMatch(r -> r.checking);
-        // Only the report on screen can have sites waiting, and only a moving row's report counts.
-        int unpicked = showing != null && showing.report != null && showing.isMoving() ? reportView.unpicked() : 0;
-        applyButton.setDisable(moving == 0 || checking);
-
-        String why = applyBlockedReason(moving, checking, unpicked);
-        whyDisabled.setText(why);
-        whyDisabled.setVisible(!why.isEmpty());
-        whyDisabled.setManaged(!why.isEmpty());
-    }
-
-    /**
-     * What the line beside Apply says, or "" for nothing: why it is grey (no row moves, a check is running),
-     * or what pressing it will do to the calls still waiting for a pick.
-     *
-     * <p>A disabled button is a statement the user cannot read: they see that BotMaker will not do the thing
-     * and are left to guess whether the window is broken. Each sentence names the <em>next action</em>, which
-     * is the only part they can act on.
-     */
-    static String applyBlockedReason(int movingRows, boolean checking, int unpicked) {
-        if (movingRows == 0) {
-            return "Pick a version different from the installed one on at least one row.";
-        }
-        if (checking) return "A check is still running.";
-        if (unpicked > 0) return unpickedReason(unpicked);
-        return "";
-    }
-
-    /**
-     * What happens to a call with nothing that fits: the user may choose, and one left unchosen gets a default
-     * value and a review mark rather than holding the upgrade.
-     */
-    static String unpickedReason(int unpicked) {
-        return unpicked + (unpicked == 1 ? " call has" : " calls have") + " nothing that replaces it. Choose in "
-                + "the report below whether each becomes a default value or is deleted; any left unchosen gets "
-                + "a default value and is marked for review.";
-    }
-
-    private void runApply() {
-        List<ProjectUpgrade.Row> moving = rows.stream().filter(Row::isMoving).map(Row::asRow).toList();
+    /** Moves {@code moving} in one pass: one snapshot, each row's calls repaired, the pom written once. */
+    private void runPass(List<ProjectUpgrade.Row> moving) {
         if (moving.isEmpty()) return;
-
-        applyButton.setDisable(true);
+        busy = true;
+        refreshButtons();
         progress.setVisible(true);
         hideResult();
-        status("Committing a snapshot, repairing your call sites and switching " + moving.size()
-                + " plugin(s)…");
+        status("Saving a version, repairing your calls and moving " + (moving.size() == 1
+                ? "to " + moving.getFirst().targetVersion() : moving.size() + " plugins") + "…");
 
         ProjectUpgrade.run(moving, libraryService::updateVersions)
                 .whenComplete((result, error) -> Platform.runLater(() -> {
-                    progress.setVisible(false);
+                    endBusy();
                     if (error != null) {
                         Throwable cause = error.getCause() != null ? error.getCause() : error;
                         status("");
                         ThemedWindows.alert(Alert.AlertType.ERROR,
                                 "The upgrade did not run:\n\n" + cause.getMessage()).showAndWait();
-                        applyButton.setDisable(false);
                         return;
                     }
                     status("");
                     showResult(result.summary(), result.touchedSources());
-                    // The table is about versions that have just changed, so it is read again — the same
-                    // reason a removal reloads it.
+                    // The table is about versions that have just changed, so it is read again.
                     reload();
                     onChanged.run();
                 }));

@@ -33,6 +33,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `(dev build)` included, or *not loaded* with the reason. Plugins another plugin brings (plugin-basics with
   the SDK) are listed read-only, *comes with another plugin*. Browse's *Included* is now *Installed with
   another plugin — view…*.
+- **Installed: one button per row.** A row opens on its installed version. Its button reads *Upgrade to X*
+  when a newer release is known, or *Switch to X* once another version is picked in the menu, a downgrade
+  included. One click runs that row alone. *Upgrade all* moves every row that has an upgrade, in one pass.
+  The *Check* button, the report under the table, *Snapshot, repair & switch* and *Pin released versions* are
+  gone; a pass still saves a version first and repairs the bot's calls. A dev build in a dev-mode project
+  shows *Dev build* and is never offered an upgrade.
+- **Remove asks in a window that fits.** One sentence counts the calls and types it changes, the plugin's
+  files are a scrolling list with one checkbox, and the buttons stay at the bottom. It replaces an alert that
+  could open taller or wider than the screen.
 - **Libraries points to Installed and marks unneeded editor dependencies.** A link says how many plugins are on
   the Installed tab. A library only an absent plugin lists as an editor dependency is marked *not needed*.
 - **The overlay editor docks beside the game.** ⧉ Overlay opens a panel beside the window your bot watches —
