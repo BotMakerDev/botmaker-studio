@@ -112,7 +112,8 @@ public final class PluginsWindow {
         browse = new BrowsePluginsTab(libraryService, registry, jitpack, this::localBuilds,
                 () -> select(Section.INSTALLED), this::afterBrowseChanged);
         libraries = new LibrariesTab(libraryService, mavenCentral, jitpack,
-                InstalledPlugin.jarDeclaresPlugin(config.projectPath()), this::afterLibrariesChanged);
+                InstalledPlugin.jarDeclaresPlugin(config.projectPath()), registry, () -> select(Section.INSTALLED),
+                this::afterLibrariesChanged);
 
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().setAll(

@@ -49,6 +49,20 @@ class PluginCatalogTest {
     }
 
     @Test
+    void anEditorDependencyOnlyAnAbsentPluginListsIsUnneeded() {
+        PluginRegistry.Plugin pilot = published("pilot", "g:pilot", "1.0.0");    // lists g:companion
+        List<com.botmaker.studio.project.UserLibrary> libraries = List.of(
+                new com.botmaker.studio.project.UserLibrary("g", "companion", "1"),
+                new com.botmaker.studio.project.UserLibrary("mine", "own-library", "2"));
+
+        assertEquals(java.util.Set.of("g:companion"),
+                PluginCatalog.unneededEditorDependencies(libraries, List.of(pilot), entry -> false));
+        assertEquals(java.util.Set.of(),
+                PluginCatalog.unneededEditorDependencies(libraries, List.of(pilot), entry -> true),
+                "the plugin is here, so its companion is needed");
+    }
+
+    @Test
     void noLocalBuildIsTheRegistryAlone() {
         List<PluginRegistry.Plugin> published = List.of(published("sdk", "g:sdk", "2.0.0"));
 

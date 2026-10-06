@@ -1,8 +1,10 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
@@ -25,6 +27,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Control;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
@@ -293,15 +296,22 @@ public final class InstalledPluginsTab {
         status("Reading this project's plugins…");
         // Async: with no registry configured both halves may already be done, and this reads jars.
         registry.browse().thenCombineAsync(scan, (entries, builds) -> {
+            List<UserLibrary> declaredLibraries = libraryService.declaredLibraries();
             List<InstalledPlugin> found = InstalledPlugin.of(
-                    libraryService.declaredLibraries(), entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
-            Set<String> ambiguous = InstalledPlugin.ambiguousAmong(config.projectPath(), found);
+                    declaredLibraries, entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
+            List<PluginHost.LoadedPlugin> loaded = PluginHost.loaded();
+            List<Declared> declared = declaredOnce(found, loaded);
+            // Over the copies kept only: two copies of one plugin declare every name twice, and an
+            // ambiguous name is one no report may attribute.
+            Set<String> ambiguous = InstalledPlugin.ambiguousAmong(config.projectPath(),
+                    declared.stream().map(Declared::row).toList());
+            List<PluginHost.LoadedPlugin> bundled = bundled(declaredLibraries, loaded);
             Map<String, String> local = new java.util.HashMap<>();
             builds.forEach(build -> local.put(build.coordinate(), build.version()));
             Platform.runLater(() -> {
                 if (asked != generation) return;        // a later load (a dev-mode switch) owns the table
                 localVersions = Map.copyOf(local);
-                render(found, ambiguous);
+                render(declared, bundled, ambiguous);
             });
             return null;
         }).exceptionally(error -> {
@@ -313,39 +323,179 @@ public final class InstalledPluginsTab {
         });
     }
 
-    private void render(List<InstalledPlugin> found, Set<String> ambiguous) {
+    /**
+     * A plugin the pom declares, once: {@code twins} are the other copies of it the pom also names, under
+     * BotMaker's other groupId (2026-10-06). Studio loads {@code row}'s; the twins are offered for removal.
+     */
+    record Declared(InstalledPlugin row, List<InstalledPlugin> twins) {
+        Declared {
+            twins = List.copyOf(twins);
+        }
+    }
+
+    /** {@code found} as one entry per plugin, the copy kept being the one Studio {@code loaded}. */
+    static List<Declared> declaredOnce(List<InstalledPlugin> found, List<PluginHost.LoadedPlugin> loaded) {
+        List<Declared> out = new ArrayList<>();
+        for (List<InstalledPlugin> group : InstalledPlugin.sameArtifactGroups(found)) {
+            InstalledPlugin kept = InstalledPlugin.keeper(group, row -> loadedFrom(row, loaded).isPresent()
+                    && group.size() > 1);
+            out.add(new Declared(kept, group.stream().filter(row -> row != kept).toList()));
+        }
+        return List.copyOf(out);
+    }
+
+    /** The loaded plugin whose jar is exactly {@code row}'s coordinate: its groupId too, not the other one. */
+    static java.util.Optional<PluginHost.LoadedPlugin> loadedFrom(InstalledPlugin row,
+                                                                List<PluginHost.LoadedPlugin> loaded) {
+        String group = row.artifact().groupId();
+        return loaded.stream()
+                .filter(l -> l.isOf(group, row.artifact().artifactId()))
+                .filter(l -> l.groupId().isEmpty() || l.groupId().equals(group))
+                .findFirst();
+    }
+
+    /**
+     * The loaded plugins whose jar the pom does not declare: each came with another plugin (plugin-basics
+     * with the SDK). Shown read-only — its version is Maven's mediation, not this pom's to pin.
+     */
+    static List<PluginHost.LoadedPlugin> bundled(List<UserLibrary> declared, List<PluginHost.LoadedPlugin> loaded) {
+        return loaded.stream()
+                .filter(l -> declared.stream().noneMatch(lib -> l.isOf(lib.groupId(), lib.artifactId())))
+                .toList();
+    }
+
+    /** What the Loaded cell says: the jar's version, marked when it is a dev build, or that nothing loaded. */
+    static String loadedText(java.util.Optional<PluginHost.LoadedPlugin> loaded) {
+        return loaded.map(l -> l.version() + (l.dev() ? " (dev build)" : "")).orElse("not loaded");
+    }
+
+    /** The line under a plugin the pom declares twice. */
+    static String twinText(InstalledPlugin kept, List<InstalledPlugin> twins) {
+        String others = String.join(", ", twins.stream()
+                .map(t -> t.coordinate() + " " + t.installed()).toList());
+        return "Declared twice: also as " + others + ". Studio loads " + kept.installed()
+                + " only; compiling and running the bot still mixes both until one is removed.";
+    }
+
+    private void render(List<Declared> declared, List<PluginHost.LoadedPlugin> bundled, Set<String> ambiguous) {
         progress.setVisible(false);
         table.getChildren().clear();
         rows.clear();
         showDevBar(0);
 
-        if (found.isEmpty()) {
+        if (declared.isEmpty() && bundled.isEmpty()) {
             status("");
             table.add(new Label("This project declares no plugins, so there is nothing to upgrade. "
-                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 6, 1);
+                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 7, 1);
             return;
         }
 
         status("");
+        List<PluginHost.LoadedPlugin> loaded = PluginHost.loaded();
         int line = 0;
         table.add(heading("Plugin"), 0, line);
         table.add(heading("Installed"), 1, line);
-        table.add(heading("Move to"), 2, line);
+        table.add(heading("Loaded"), 2, line);
+        table.add(heading("Move to"), 3, line);
         line++;
 
-        for (InstalledPlugin plugin : found) {
-            Row row = new Row(plugin, ambiguous);
+        for (Declared entry : declared) {
+            Row row = new Row(entry.row(), ambiguous);
             rows.add(row);
             table.add(row.name, 0, line);
             table.add(row.installed, 1, line);
-            table.add(row.versions, 2, line);
-            table.add(row.check, 3, line);
-            table.add(row.remove, 4, line);
-            table.add(row.verdict, 5, line);
+            table.add(loadedCell(loadedFrom(entry.row(), loaded), entry.row().artifact().artifactId()), 2, line);
+            table.add(row.versions, 3, line);
+            table.add(row.check, 4, line);
+            table.add(row.remove, 5, line);
+            table.add(row.verdict, 6, line);
             line++;
             row.loadVersions();
+            if (!entry.twins().isEmpty()) {
+                // Removing or moving one copy would report on the plugin as if the other were not still
+                // declared: the bot's calls rewritten for a plugin the next bind loads again.
+                for (Control control : List.<Control>of(row.versions, row.check, row.remove)) {
+                    control.setDisable(true);
+                }
+                row.remove.setTooltip(new Tooltip("Keep one copy first, below."));
+                table.add(twinBar(entry), 0, line++, 7, 1);
+            }
+        }
+        for (PluginHost.LoadedPlugin plugin : bundled) {
+            Label name = new Label(plugin.name());
+            Label version = new Label(plugin.version());
+            version.getStyleClass().add("sdk-upgrade-detail");
+            Label how = new Label("comes with another plugin");
+            how.getStyleClass().add("text-muted");
+            how.setTooltip(new Tooltip("Another plugin depends on it, so its version is that plugin's to "
+                    + "decide. Change the plugin that brings it instead."));
+            table.add(name, 0, line);
+            table.add(version, 1, line);
+            table.add(loadedCell(java.util.Optional.of(plugin), ""), 2, line);
+            table.add(how, 3, line, 4, 1);
+            line++;
         }
         showDevBar((int) rows.stream().filter(Row::refused).count());
+    }
+
+    /** The Loaded cell, its tooltip saying why when nothing loaded. */
+    private static Label loadedCell(java.util.Optional<PluginHost.LoadedPlugin> loaded, String artifactId) {
+        Label cell = new Label(loadedText(loaded));
+        cell.getStyleClass().add("sdk-upgrade-detail");
+        if (loaded.isEmpty()) {
+            String why = PluginHost.failures().stream()
+                    .filter(f -> !artifactId.isEmpty() && f.provider().contains(artifactId))
+                    .map(f -> f.cause().getMessage()).filter(m -> m != null && !m.isBlank())
+                    .findFirst().orElse("Studio did not load it. Reload in this window says why.");
+            cell.setTooltip(new Tooltip(why));
+        } else if (loaded.get().dev()) {
+            cell.setTooltip(new Tooltip("A build only this computer has, loaded because this project is in dev mode."));
+        }
+        return cell;
+    }
+
+    /** The fix under a plugin declared twice: keep one copy, a pom edit — the plugin itself stays. */
+    private Node twinBar(Declared entry) {
+        Label text = new Label(twinText(entry.row(), entry.twins()));
+        text.setWrapText(true);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        HBox bar = new HBox(8, text);
+        List<InstalledPlugin> copies = new ArrayList<>(List.of(entry.row()));
+        copies.addAll(entry.twins());
+        for (InstalledPlugin keep : copies) {
+            Button button = new Button("Keep " + keep.installed());
+            button.setTooltip(new Tooltip("Remove every other copy from the pom: "
+                    + String.join(", ", copies.stream().filter(c -> c != keep)
+                    .map(c -> c.coordinate() + " " + c.installed()).toList())));
+            button.setOnAction(e -> keepOnly(keep, copies, bar));
+            bar.getChildren().add(button);
+        }
+        bar.setAlignment(Pos.CENTER_LEFT);
+        bar.getStyleClass().add("sdk-upgrade-card");
+        return bar;
+    }
+
+    private void keepOnly(InstalledPlugin keep, List<InstalledPlugin> copies, Node bar) {
+        bar.setDisable(true);
+        status("Removing the other copies of " + keep.displayName() + "…");
+        CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
+        for (InstalledPlugin copy : copies) {
+            if (copy == keep) continue;
+            // List.of(): its editor dependencies are the kept copy's too.
+            done = done.thenCompose(ignored -> libraryService.removePlugin(
+                    copy.artifact().groupId(), copy.artifact().artifactId(), List.of()));
+        }
+        done.whenComplete((ignored, failure) -> Platform.runLater(() -> {
+            bar.setDisable(false);
+            if (failure != null) {
+                Throwable cause = failure.getCause() != null ? failure.getCause() : failure;
+                status("Could not remove the other copy: " + cause.getMessage());
+                return;
+            }
+            status("Kept " + keep.coordinate() + " " + keep.installed() + ".");
+            reload();
+            onChanged.run();
+        }));
     }
 
     private static Label heading(String text) {

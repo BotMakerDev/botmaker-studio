@@ -65,6 +65,26 @@ public final class PluginCatalog {
         return List.copyOf(rows);
     }
 
+    /**
+     * The {@code groupId:artifactId} of each of {@code libraries} that only a plugin this project does not have
+     * needs: some registry entry lists it as an editor dependency, and no entry listing it is {@code present}.
+     * What the Libraries tab marks <i>not needed</i> (2026-10-06); a library no entry lists is the user's and
+     * never marked.
+     */
+    public static java.util.Set<String> unneededEditorDependencies(List<com.botmaker.studio.project.UserLibrary> libraries,
+                                                                   List<PluginRegistry.Plugin> registry,
+                                                                   java.util.function.Predicate<PluginRegistry.Plugin> present) {
+        java.util.Set<String> unneeded = new java.util.LinkedHashSet<>();
+        for (com.botmaker.studio.project.UserLibrary library : libraries) {
+            List<PluginRegistry.Plugin> listing = registry.stream()
+                    .filter(entry -> entry.editorLibraries().stream()
+                            .anyMatch(dep -> dep.groupArtifact().equals(library.groupArtifact())))
+                    .toList();
+            if (!listing.isEmpty() && listing.stream().noneMatch(present)) unneeded.add(library.groupArtifact());
+        }
+        return java.util.Set.copyOf(unneeded);
+    }
+
     /** What a local build's own row says about it. */
     public static final String LOCAL_BUILD_DESCRIPTION = "Built on this computer into ~/.m2 — not published.";
 

@@ -4,6 +4,8 @@ import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
+import com.botmaker.studio.sharing.PluginCatalog;
+import com.botmaker.studio.sharing.PluginRegistry;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -14,6 +16,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressIndicator;
@@ -55,7 +58,17 @@ final class LibrariesTab {
     private final MavenCentralSearch search;
     private final JitPackSearch jitpack;
     private final Predicate<UserLibrary> isPlugin;
+    private final PluginRegistry registry;
     private final Runnable onChanged;
+
+    /** <i>Plugins are on the Installed tab (N)</i>: the door to where a plugin's version changes. */
+    private final Hyperlink pluginsLink = new Hyperlink();
+
+    /** {@code groupId:artifactId} of each row only a plugin this project lacks needs; marked <i>not needed</i>. */
+    private java.util.Set<String> unneeded = java.util.Set.of();
+
+    /** Bumped by every {@link #markUnneeded}, so an older registry reply never marks a newer table. */
+    private int unneededAsked;
 
     /** The rows shown: every user library that is not a plugin. */
     private final ObservableList<UserLibrary> libraries = FXCollections.observableArrayList();
@@ -74,15 +87,20 @@ final class LibrariesTab {
     /**
      * @param isPlugin whether a declared library's jar is a plugin ({@code InstalledPlugin.jarDeclaresPlugin});
      *                 asked off the FX thread, since it may resolve the jar
+     * @param registry       the plugin registry: whose editor dependencies a row is
+     * @param onShowInstalled the plugins line's link: the window switches to Installed
      * @param onChanged after Apply wrote the pom, so the window's other tabs read it again
      */
     LibrariesTab(LibraryService libraryService, MavenCentralSearch search, JitPackSearch jitpack,
-                 Predicate<UserLibrary> isPlugin, Runnable onChanged) {
+                 Predicate<UserLibrary> isPlugin, PluginRegistry registry, Runnable onShowInstalled,
+                 Runnable onChanged) {
         this.libraryService = libraryService;
         this.search = search;
         this.jitpack = jitpack;
         this.isPlugin = isPlugin;
+        this.registry = registry;
         this.onChanged = onChanged;
+        pluginsLink.setOnAction(e -> onShowInstalled.run());
 
         root.setPadding(new Insets(12, 0, 0, 0));
         root.getChildren().addAll(buildTable(), buildAddRow(), buildButtonBar());
@@ -109,15 +127,35 @@ final class LibrariesTab {
             }
             heldPlugins = List.copyOf(split.get(true));
             libraries.setAll(split.get(false));
+            pluginsLink.setText("Plugins are on the Installed tab (" + heldPlugins.size() + ")");
+            markUnneeded(split.get(false), split.get(true));
         }));
+    }
+
+    /** Fills {@link #unneeded} once the registry answers; a registry that cannot be read marks nothing. */
+    private void markUnneeded(List<UserLibrary> rows, List<UserLibrary> plugins) {
+        List<com.botmaker.studio.plugin.PluginHost.LoadedPlugin> loaded =
+                com.botmaker.studio.plugin.PluginHost.loaded();
+        int asked = ++unneededAsked;
+        registry.browse().thenAccept(entries -> {
+            java.util.Set<String> found = PluginCatalog.unneededEditorDependencies(rows, entries,
+                    entry -> entry.isInstalledIn(plugins)
+                            || loaded.stream().anyMatch(l -> l.isOf(entry.groupId(), entry.artifactId())));
+            Platform.runLater(() -> {
+                if (asked != unneededAsked) return;
+                unneeded = found;
+                table.refresh();
+            });
+        });
     }
 
     // -------------------------------------------------------------------------
     // Current libraries table
     // -------------------------------------------------------------------------
 
+    private final TableView<UserLibrary> table = new TableView<>(libraries);
+
     private VBox buildTable() {
-        TableView<UserLibrary> table = new TableView<>(libraries);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setEditable(true);
         table.setPlaceholder(new Label("No additional libraries. Built-in dependencies are managed automatically."));
@@ -129,7 +167,22 @@ final class LibrariesTab {
         TableColumn<UserLibrary, String> versionCol = new TableColumn<>("Version");
         versionCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().version()));
         versionCol.setCellFactory(col -> new VersionCell());
-        table.getColumns().addAll(List.of(groupCol, artifactCol, versionCol));
+        TableColumn<UserLibrary, String> noteCol = new TableColumn<>("");
+        noteCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(
+                unneeded.contains(c.getValue().groupArtifact()) ? "not needed" : ""));
+        noteCol.setCellFactory(col -> new javafx.scene.control.TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                boolean show = !empty && item != null && !item.isEmpty();
+                setText(show ? item : null);
+                setTooltip(show ? new javafx.scene.control.Tooltip("Only a plugin this project does not have "
+                        + "lists it as an editor dependency. Remove it, then Apply.") : null);
+                getStyleClass().remove("text-muted");
+                if (show) getStyleClass().add("text-muted");
+            }
+        });
+        table.getColumns().addAll(List.of(groupCol, artifactCol, versionCol, noteCol));
 
         Button removeBtn = new Button("Remove");
         removeBtn.setDisable(true);
@@ -145,11 +198,11 @@ final class LibrariesTab {
 
         Label heading = new Label("Project libraries");
         heading.setStyle("-fx-font-weight: bold;");
-        Label hint = new Label("Double-click a version to change it. Plugins are not listed here: their"
-                + " versions change in Installed, where the bot's calls into them are checked.");
+        Label hint = new Label("Double-click a version to change it. A plugin's version changes in Installed,"
+                + " where the bot's calls into it are checked.");
         hint.setWrapText(true);
         hint.getStyleClass().add("sdk-upgrade-empty");
-        VBox box = new VBox(6, heading, table, hint, tableButtons);
+        VBox box = new VBox(6, heading, table, hint, pluginsLink, tableButtons);
         VBox.setVgrow(table, Priority.ALWAYS);
         return box;
     }

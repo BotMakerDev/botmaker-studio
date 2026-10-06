@@ -227,8 +227,8 @@ final class BrowsePluginsTab {
         if (!bound && !onClasspath(plugin, classpath)) return "";
         String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
         return name + " is already on this project's classpath — another plugin it is a dependency of brings "
-                + "it. Declaring it here too would let this pom pin a version that plugin was never built "
-                + "against. Change the version of the plugin that brings it instead.";
+                + "it, and Installed lists it read-only. Declaring it here too would let this pom pin a version "
+                + "that plugin was never built against. Change the version of the plugin that brings it instead.";
     }
 
     /** Whether a jar of {@code plugin}'s artifact, at any version, is on {@code classpath} (repository layout). */
@@ -365,10 +365,10 @@ final class BrowsePluginsTab {
             // "Install" and then refusing the click is what this label replaces.
             String provided = alreadyProvided(plugin, installed, boundPluginIds(), classpath);
             if (!provided.isEmpty()) {
-                Label state = new Label("Included");
-                state.setTooltip(new Tooltip(provided));
-                state.getStyleClass().add("plugin-provided-label");
-                action = state;
+                Button bundled = new Button("Installed with another plugin — view…");
+                bundled.setTooltip(new Tooltip(provided));
+                bundled.setOnAction(e -> onShowInstalled.run());
+                action = bundled;
             } else if (plugin.isInstalledIn(installed)) {
                 Button manage = new Button("Installed — manage…");
                 manage.setTooltip(new Tooltip("Change its version or remove it in the Installed tab, where "

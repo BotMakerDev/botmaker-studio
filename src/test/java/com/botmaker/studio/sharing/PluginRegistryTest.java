@@ -77,6 +77,16 @@ class PluginRegistryTest {
         assertFalse(plugin.isInstalledIn(List.of()));
     }
 
+    /** BotMaker's former groupId is the same plugin: offering it again under the new one declared it twice. */
+    @Test
+    void installed_counts_botmakers_former_group_id() {
+        PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
+                "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "1.3.0", "");
+
+        assertTrue(sdk.isInstalledIn(List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "v1.2.3"))));
+        assertFalse(sdk.isInstalledIn(List.of(new UserLibrary("com.github.someone", "botmaker-sdk", "1"))));
+    }
+
     @Test
     void an_entry_with_no_coordinate_is_not_installable() {
         PluginRegistry.Plugin plugin = PluginRegistry.parse("[{\"id\":\"a.b\",\"name\":\"A\"}]").getFirst();

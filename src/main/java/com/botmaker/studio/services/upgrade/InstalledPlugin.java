@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.upgrade;
 
+import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -163,6 +164,34 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
                     .ifPresent(jar -> byCoordinate.put(row.coordinate(), ApiModel.snapshot(jar).keySet()));
         }
         return ambiguousTypeNames(byCoordinate);
+    }
+
+    /**
+     * {@code rows} grouped by artifact, in pom order: a group of two is one plugin the pom declares under both
+     * of BotMaker's groupIds (2026-10-06, {@code DuplicatePlugins}). Every other plugin is a group of one.
+     */
+    public static List<List<InstalledPlugin>> sameArtifactGroups(List<InstalledPlugin> rows) {
+        List<List<InstalledPlugin>> groups = new ArrayList<>();
+        for (InstalledPlugin row : rows) {
+            List<InstalledPlugin> group = groups.stream()
+                    .filter(g -> DuplicatePlugins.sameArtifact(g.getFirst().artifact().groupId(),
+                            g.getFirst().artifact().artifactId(), row.artifact().groupId(), row.artifact().artifactId()))
+                    .findFirst().orElse(null);
+            if (group == null) groups.add(group = new ArrayList<>());
+            group.add(row);
+        }
+        return groups.stream().map(List::copyOf).toList();
+    }
+
+    /**
+     * The row of a group that stays: the one Studio loaded, else the one under the current groupId, else the
+     * first the pom declares.
+     */
+    public static InstalledPlugin keeper(List<InstalledPlugin> group, Predicate<InstalledPlugin> loaded) {
+        return group.stream().filter(loaded).findFirst()
+                .or(() -> group.stream()
+                        .filter(row -> DuplicatePlugins.CURRENT_GROUP.equals(row.artifact().groupId())).findFirst())
+                .orElse(group.getFirst());
     }
 
     public static Set<String> ambiguousTypeNames(Map<String, Set<String>> byCoordinate) {

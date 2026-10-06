@@ -304,7 +304,8 @@ final class EditorCanvas {
         if (devBuilds == null || devBuilds.isEmpty()) return "";
         return "Dev mode: " + (devBuilds.size() == 1 ? "a local plugin build is" : devBuilds.size()
                 + " local plugin builds are") + " loaded (" + String.join(", ", devBuilds)
-                + "). Publish refuses them until they are released.";
+                + "); every other plugin is a release, and Installed shows what each one loaded. Publish "
+                + "refuses them until they are released.";
     }
 
     VBox node() {

@@ -37,6 +37,23 @@ class InstalledPluginTest {
     }
 
     @Test
+    void anArtifactDeclaredUnderBothGroupIdsIsOneGroupAndTheNewGroupIdIsKept() {
+        UserLibrary oldSdk = new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "v1.2.3");
+        List<InstalledPlugin> rows = InstalledPlugin.of(List.of(oldSdk, BASICS, SDK), List.of(), lib -> true);
+
+        List<List<InstalledPlugin>> groups = InstalledPlugin.sameArtifactGroups(rows);
+
+        assertEquals(2, groups.size());
+        assertEquals(List.of("com.github.LiQiyeDev:botmaker-sdk", "com.github.BotMakerDev:botmaker-sdk"),
+                groups.getFirst().stream().map(InstalledPlugin::coordinate).toList());
+        assertEquals("com.github.BotMakerDev:botmaker-sdk",
+                InstalledPlugin.keeper(groups.getFirst(), row -> false).coordinate());
+        assertEquals("com.github.LiQiyeDev:botmaker-sdk",
+                InstalledPlugin.keeper(groups.getFirst(), row -> row.installed().equals("v1.2.3")).coordinate(),
+                "the copy Studio loaded wins");
+    }
+
+    @Test
     void aDependencyTheRegistryListsIsARegistryRowAtItsVerifiedVersion() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK),

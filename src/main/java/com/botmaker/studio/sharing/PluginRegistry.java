@@ -109,8 +109,10 @@ public final class PluginRegistry {
          * would be a lie.
          */
         public boolean isInstalledIn(List<UserLibrary> libraries) {
-            return libraries.stream().anyMatch(lib -> lib.groupId().equals(groupId())
-                    && lib.artifactId().equals(artifactId()));
+            // BotMaker's former groupId counts (2026-10-06): a bot pinning the SDK as com.github.LiQiyeDev has
+            // it installed, and offering it again under the new groupId declared it twice.
+            return libraries.stream().anyMatch(lib -> com.botmaker.studio.plugin.DuplicatePlugins.sameArtifact(
+                    lib.groupId(), lib.artifactId(), groupId(), artifactId()));
         }
 
         /** Free-text match over name / id / description / tags, the same shape as {@link GalleryEntry}. */

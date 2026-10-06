@@ -23,6 +23,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `~/.m2` at a `-SNAPSHOT`, marked *(local build)*. That includes your own and, from the umbrella, the SDK,
   plugin-basics and the rest. Each *Installed* row's version list offers its local build too, the SDK's
   included, through the usual checked pass.
+- **A plugin declared twice is one row, and Studio loads one copy.** A pom naming a plugin under both
+  `com.github.LiQiyeDev` and `com.github.BotMakerDev` (the SDK pinned before the move, then installed again)
+  had both jars on one loader, so Studio ran a mix of the two versions. Studio now loads the new groupId's
+  copy and its tree, or the old one's when the new one is a dev build outside dev mode. *Installed* shows one
+  row flagged *Declared twice*, with *Keep <version>* for each copy. Browse no longer offers to install a
+  plugin the pom already declares under the old groupId.
+- **Installed says what each plugin loaded.** A *Loaded* column names the jar each plugin came from,
+  `(dev build)` included, or *not loaded* with the reason. Plugins another plugin brings (plugin-basics with
+  the SDK) are listed read-only, *comes with another plugin*. Browse's *Included* is now *Installed with
+  another plugin — view…*.
+- **Libraries points to Installed and marks unneeded editor dependencies.** A link says how many plugins are on
+  the Installed tab. A library only an absent plugin lists as an editor dependency is marked *not needed*.
 - **The overlay editor docks beside the game.** ⧉ Overlay opens a panel beside the window your bot watches —
   with the SDK, the one `Sdk.captureSource()` names — without asking; ⇄ Change picks another. It follows the
   window, drags off to float (⇲ docks it again) and resizes from either edge. Chips across the top are your

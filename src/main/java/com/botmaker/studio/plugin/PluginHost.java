@@ -19,6 +19,7 @@ import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -240,20 +241,91 @@ public final class PluginHost {
         // A dev build of a plugin is bound only in dev mode (ReleasedPlugins); otherwise it is reported beside
         // what failed to load.
         ReleasedPlugins.Split released = ReleasedPlugins.split(resolvedClasspath, devMode);
-        PluginLoader.Loaded loaded = PluginLoader.openReporting(released.loadable());
-        failures = concat(released.refused(), loaded.failures());
+        // One groupId's copy of each artifact a pom names under both of BotMaker's (DuplicatePlugins): two
+        // copies on one loader is a mix of the two versions, class by class.
+        DuplicatePlugins.Split single = DuplicatePlugins.split(released.loadable());
+        PluginLoader.Loaded loaded = PluginLoader.openReporting(single.loadable());
+        failures = concat(concat(released.refused(), single.dropped()), loaded.failures());
         PluginLoader opened = loaded.loader();
         if (opened == null) {
             // Not unbind(): a classpath that would not open is still a project opening, and the bundled set
             // is about to serve it. Saying "no project" here would leave the next close with nobody to tell.
             swap(null, BUNDLED);
             devBuilds = List.of();
+            loadedJars = List.of();
             serving = true;
             return;
         }
         swap(opened, opened.plugins());
         devBuilds = bound(released.dev());
+        loadedJars = loadedJars();
         serving = true;
+    }
+
+    /**
+     * A bound plugin and the resolved jar it came from — what the Installed tab says is <i>loaded</i>, so a
+     * user can tell a dev build from a release without guessing.
+     *
+     * @param jar the classpath entry, in the Maven repository layout
+     */
+    public record LoadedPlugin(String id, String name, String jar) {
+
+        /** The jar's version directory: {@code 1.3.1-SNAPSHOT}, {@code v1.2.3}. */
+        public String version() {
+            return ReleasedPlugins.versionOf(Path.of(jar));
+        }
+
+        /** Whether the jar is a build only this machine has. */
+        public boolean dev() {
+            return ReleasedPlugins.isDevVersion(version());
+        }
+
+        /** Whether the jar is {@code groupId:artifactId}'s, BotMaker's two groupIds counting as one. */
+        public boolean isOf(String groupId, String artifactId) {
+            Path artifactDir = Path.of(jar).getParent() == null ? null : Path.of(jar).getParent().getParent();
+            if (artifactDir == null || artifactDir.getFileName() == null
+                    || !artifactDir.getFileName().toString().equals(artifactId)) return false;
+            String group = groupId();
+            if (!group.isEmpty()) return DuplicatePlugins.sameArtifact(group, artifactId, groupId, artifactId);
+            return artifactDir.toString().replace('\\', '/').endsWith("/" + groupId.replace('.', '/') + "/" + artifactId);
+        }
+
+        /** Which of BotMaker's two groupIds the jar is under, or {@code ""} for another publisher's. */
+        public String groupId() {
+            return DuplicatePlugins.groupOf(Path.of(jar));
+        }
+
+        /** Whether the jar is under the {@code ~/.m2}-style layout at all, rather than a bundled class folder. */
+        boolean inRepository() {
+            return !version().isEmpty() && Path.of(jar).getFileName().toString().endsWith(".jar");
+        }
+    }
+
+    /** What the last {@link #bind} bound, each with its jar. See {@link #loaded()}. */
+    private static volatile List<LoadedPlugin> loadedJars = List.of();
+
+    /**
+     * Every bound plugin that came from a jar on the project's classpath, with that jar — empty before a
+     * project binds and for the bundled set. Rebuilt on every {@link #bind}.
+     */
+    public static List<LoadedPlugin> loaded() {
+        return loadedJars;
+    }
+
+    private static List<LoadedPlugin> loadedJars() {
+        List<LoadedPlugin> out = new ArrayList<>();
+        for (StudioPlugin plugin : plugins) {
+            java.net.URL where = codeSource(plugin.getClass());
+            if (where == null) continue;
+            try {
+                LoadedPlugin found = new LoadedPlugin(plugin.id(), nameOf(plugin),
+                        Path.of(where.toURI()).toAbsolutePath().normalize().toString());
+                if (found.inRepository()) out.add(found);
+            } catch (java.net.URISyntaxException | RuntimeException | LinkageError e) {
+                // Not a file, or a plugin whose id() throws: nothing to say about its jar.
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -291,6 +363,7 @@ public final class PluginHost {
         serving = false;
         failures = List.of();
         devBuilds = List.of();
+        loadedJars = List.of();
     }
 
     /**

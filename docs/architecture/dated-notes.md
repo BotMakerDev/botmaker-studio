@@ -1,5 +1,15 @@
 # Dated notes — read these before the other files here
 
+> **One plugin, one copy (2026-10-06).** A pom naming an artifact under both `com.github.LiQiyeDev` and
+> `com.github.BotMakerDev` resolves both jars and both trees, and one `URLClassLoader` gives each class the
+> first jar's answer — a mix. `plugin/DuplicatePlugins.split` runs after `ReleasedPlugins.split` in
+> `PluginHost.bind` and keeps one side: the new groupId's when one of its plugin jars is loadable, else the
+> old one's. `PluginHost.loaded()` records each bound plugin's jar. The Installed tab groups rows with
+> `InstalledPlugin.sameArtifactGroups` (keeper: the loaded copy), offers *Keep <version>* (a pom edit,
+> `LibraryService.removePlugin` with no editor dependencies), and lists plugins the pom does not declare
+> read-only. `PluginRegistry.Plugin.isInstalledIn` counts the former groupId. Compiling and running the bot
+> still see both jars until the pom keeps one: Maven, not Studio, builds that classpath.
+
 > **Dev mode (2026-10-06).** `StudioProjectSettings.devMode`, a per-project, git-excluded setting, lets
 > `PluginHost.bind(classpath, services, devMode)` load `-SNAPSHOT` plugin jars. `ReleasedPlugins.Split.dev`
 > names them, and `EditorCanvas` shows them in a banner. It is switched with the *Dev mode* box in
