@@ -105,9 +105,10 @@ public final class MavenService {
 
     // localSdkVersions() and localPluginBuilds() — dev-build scans of ~/.m2 for *SNAPSHOT SDK and plugin builds,
     // offered in the version pickers, Browse and New Project — were deleted on 2026-10-01 (the maintainer's
-    // call): a bot published from a project pinned to one named a version nobody else could resolve. A plugin
-    // author still tests a local build by pinning its SNAPSHOT in the pom by hand and pressing Reload plugins;
-    // Studio just does not offer it, and Publish refuses a SNAPSHOT pin (sharing/PublishPins).
+    // call): a bot published from a project pinned to one named a version nobody else could resolve. Since
+    // 2026-10-06 a project in dev mode lists them again, through services/LocalBuilds and only there: the
+    // pickers outside dev mode and New Project still offer none, and Publish still refuses a SNAPSHOT pin
+    // (sharing/PublishRequest.unreleasedPins).
 
     /**
      * Whether {@code jar} declares a {@code StudioPlugin} the way {@code ServiceLoader} finds one.
