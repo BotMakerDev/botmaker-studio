@@ -259,6 +259,7 @@ public final class OverlayEditor {
                     + "bot launches it — and try again.");
             return;
         }
+        watched = watched.withFrames(pluginFrames(context, owner));
         OverlayEditor editor = new OverlayEditor(context, settings, capture, watched);
         active = editor;
         editor.start(owner);
@@ -285,6 +286,24 @@ public final class OverlayEditor {
             }
         }
         return said;
+    }
+
+    /**
+     * The first plugin's own frames ({@code OverlayPart.frames}), null when none gives any — Studio then grabs
+     * the screen itself. FX thread: a plugin reads its own values; the frames are grabbed off it.
+     */
+    private static OverlayPart.FrameSource pluginFrames(CodeEditorService context, Window owner) {
+        StudioServices services = HostServices.forProject(context.getConfig(), () -> owner);
+        OverlayContext ask = () -> services;
+        for (PluginHost.OwnedOverlay owned : PluginHost.overlayParts()) {
+            try {
+                Optional<OverlayPart.FrameSource> frames = owned.part().framesFor(ask);
+                if (frames.isPresent()) return frames.get();
+            } catch (RuntimeException | LinkageError e) {
+                System.err.println("Warning: " + owned.pluginId() + " could not say where the bot's frames come from: " + e);
+            }
+        }
+        return null;
     }
 
     /** The first of {@code said} that names something open now; null for none. Reads the window list. */
@@ -493,7 +512,8 @@ public final class OverlayEditor {
     }
 
     /** Docks beside {@code next}, read off the FX thread. */
-    private void setWatched(WatchedScreen next) {
+    private void setWatched(WatchedScreen picked) {
+        WatchedScreen next = picked.withFrames(pluginFrames(context, stage()));
         watched = next;
         Thread.ofVirtual().start(() -> {
             java.awt.Rectangle bounds = next.bounds();
@@ -527,6 +547,8 @@ public final class OverlayEditor {
     // ── where blocks go ─────────────────────────────────────────────────────────────────────────────────
 
     private void onCodeUpdated() {
+        // The bot's capture source may have changed (a region narrowed, a monitor picked): frames follow it.
+        watched = watched.withFrames(pluginFrames(context, stage()));
         refreshTargets();
         if (tools != null) tools.refreshActions();
         rewatch();
@@ -798,7 +820,7 @@ public final class OverlayEditor {
     private ActionContext itemContext() {
         return new HostOverlayContext(context::getConfig,
                 () -> watched.windowRef().map(TargetCapture.WindowRef::titleSubstring).orElse(null),
-                () -> watched.area().orElse(null));
+                () -> watched.placed().orElse(null));
     }
 
     // ── insertion ───────────────────────────────────────────────────────────────────────────────────────
@@ -1140,5 +1162,10 @@ public final class OverlayEditor {
     /** What each plugin says the bot watches, in plugin order — what the panel would open beside. */
     public static List<Watched> watchedSaid(CodeEditorService context, Window owner) {
         return pluginsWatched(context, owner);
+    }
+
+    /** The first plugin's own frames, as the panel reads them; null when none gives any. FX thread. */
+    public static OverlayPart.FrameSource framesSaid(CodeEditorService context, Window owner) {
+        return pluginFrames(context, owner);
     }
 }

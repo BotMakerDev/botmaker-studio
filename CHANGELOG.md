@@ -46,6 +46,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `edit_signature` (the file's calls follow; refused when another file's call would break), `move_block` and
   `add_file`; `find_usages`, `rename` (every file, one undo step) and `open`, each naming a declaration as
   `Collect.body`; and the Review list — `list_review`, `mark_reviewed`, `remove_mark`, `undo_change`.
+- **The overlay editor sees what the bot sees.** With a plugin that grabs its own frames (the SDK), the
+  probes, the tool tabs and the assistant's screenshots read the bot's capture source itself: a bot narrowed
+  to a region is checked in that region, a bot watching a monitor on that monitor. The panel still docks
+  beside the watched window, and Studio grabs that window itself when the plugin gives no frame. The private
+  display session is still Studio's own.
 - **The assistant keeps versions, picks plugins and sets parameters.** `list_versions`, `checkpoint` (a named
   version, a milestone in Versions) and `revert` (what the bot is now is saved first; the project reloads, which
   ends an assistant session in the Assistant tab). `list_plugins`, `search_plugins`, `add_plugin` — you are asked

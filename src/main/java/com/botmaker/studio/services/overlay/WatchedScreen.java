@@ -1,5 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
+import com.botmaker.plugin.api.overlay.OverlayFrame;
+import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.services.capture.TargetCapture;
@@ -19,6 +21,10 @@ import java.util.Optional;
  * session is a display of its own, at the project's resolution, shown on the desktop by a window that may be
  * moved, clipped or scaled — so its frame is the session's own and its area starts at {@code 0,0}, and a mark is
  * mapped onto the window to be drawn ({@link #toDesktop}).
+ *
+ * <p><b>The frame is the bot's own</b> when its plugin grabs it ({@link #withFrames}, 2026-10-06): what a probe,
+ * a tool and the assistant read is then what the bot's matching reads — a region of the window, a monitor
+ * — and Studio's grab of the window is only the fallback. Docking still follows the screen.
  *
  * <p>Bounds and frames are read live, since the window moves while the panel is up. Both reach the native
  * window list, so call them off the FX thread when called often.
@@ -44,23 +50,43 @@ public final class WatchedScreen {
     private final TargetCapture.WindowRef window;
     private final Rectangle region;
     private final LiveSession session;
+    /** The plugin's own frames ({@code OverlayPart.frames}); null when it has none. */
+    private final OverlayPart.FrameSource frames;
+    /** The last frame {@link #frames} gave, whose area {@link #area()} answers without grabbing again. */
+    private volatile OverlayFrame lastOwn;
 
-    private WatchedScreen(String label, TargetCapture.WindowRef window, Rectangle region, LiveSession session) {
+    private WatchedScreen(String label, TargetCapture.WindowRef window, Rectangle region, LiveSession session,
+                          OverlayPart.FrameSource frames) {
         this.label = label;
         this.window = window;
         this.region = region;
         this.session = session;
+        this.frames = frames;
+    }
+
+    /**
+     * This screen with the bot's own frames: {@link #frame()} and {@link #area()} ask {@code frames} first and
+     * grab the screen only when it answers nothing. The panel still docks beside this screen. The private
+     * session keeps its own frames — it is Studio's display. {@code null} drops them.
+     */
+    public WatchedScreen withFrames(OverlayPart.FrameSource frames) {
+        return new WatchedScreen(label, window, region, session, session == null ? frames : null);
+    }
+
+    /** Whether the frames come from the plugin rather than from Studio's grab. */
+    public boolean ownFrames() {
+        return frames != null;
     }
 
     /** The window {@code ref} names, captioned {@code label}. */
     public static WatchedScreen window(TargetCapture.WindowRef ref, String label) {
-        return new WatchedScreen(label, ref, null, null);
+        return new WatchedScreen(label, ref, null, null, null);
     }
 
     /** The private display session, shown on the desktop by the window whose id is {@code windowId}. */
     public static WatchedScreen session(long windowId, LiveSession session) {
         return new WatchedScreen("the private display session",
-                new TargetCapture.WindowRef("private session", windowId), null, Objects.requireNonNull(session));
+                new TargetCapture.WindowRef("private session", windowId), null, Objects.requireNonNull(session), null);
     }
 
     /**
@@ -83,7 +109,7 @@ public final class WatchedScreen {
             });
             case REGION -> watched.area().map(a -> new WatchedScreen(
                     "the region " + a.x() + "," + a.y() + " " + a.width() + "×" + a.height(), null,
-                    new Rectangle(a.x(), a.y(), a.width(), a.height()), null));
+                    new Rectangle(a.x(), a.y(), a.width(), a.height()), null, null));
         };
     }
 
@@ -112,17 +138,54 @@ public final class WatchedScreen {
      * session's size. Empty when its window has closed or the session stopped.
      */
     public Optional<Area> area() {
+        if (frames != null) {
+            OverlayFrame last = lastOwn;
+            if (last == null) last = grabOwn().orElse(null);
+            if (last != null) return Optional.of(last.area());
+        }
+        return placed();
+    }
+
+    /**
+     * Where the screen itself is, in the bot's pixels, never grabbing: the window's or region's desktop bounds,
+     * or for the session {@code 0,0} and its size — what a toolbar action is told it is over, whatever area the
+     * plugin's frames cover. Empty when its window has closed. Reads the window list.
+     */
+    public Optional<Area> placed() {
         Rectangle r = session != null ? session.screen() : bounds();
         if (r == null) return Optional.empty();
         return Optional.of(session != null ? new Area(0, 0, r.width, r.height) : new Area(r.x, r.y, r.width, r.height));
     }
 
-    /** What it shows now, in the bot's pixels, without raising it; empty when it cannot be grabbed. Blocking. */
+    /**
+     * What it shows now, in the bot's pixels, without raising it; empty when it cannot be grabbed. The plugin's
+     * own frame when it gives one — {@link #area()} then answers that frame's area. Blocking.
+     */
     public Optional<BufferedImage> frame() {
+        if (frames != null) {
+            Optional<OverlayFrame> own = grabOwn();
+            if (own.isPresent()) return Optional.of(own.get().image());
+        }
         if (session != null) return Optional.ofNullable(session.capture());
         if (window == null) return Optional.ofNullable(TargetCapture.grabArea(region));
         TargetCapture.WindowShot shot = TargetCapture.peekWindow(window);
         return shot == null ? Optional.empty() : Optional.ofNullable(shot.image());
+    }
+
+    /**
+     * The plugin's frame now, remembered for {@link #area()}; empty, and forgotten, when it gives none. A plugin
+     * that throws gives none: the screen is grabbed instead.
+     */
+    private Optional<OverlayFrame> grabOwn() {
+        Optional<OverlayFrame> own;
+        try {
+            own = frames.grab();
+            if (own == null) own = Optional.empty();
+        } catch (RuntimeException | LinkageError e) {
+            own = Optional.empty();
+        }
+        lastOwn = own.orElse(null);
+        return own;
     }
 
     /**

@@ -33,13 +33,17 @@ final class WatchedShots implements ShotSource {
     public Grab grab(Window owner) {
         WatchedScreen watched = screen.get();
         Rectangle bounds = watched == null ? null : watched.bounds();
-        Optional<Area> area = bounds == null ? Optional.empty() : watched.area();
-        Optional<BufferedImage> frame = area.isEmpty() ? Optional.empty() : watched.frame();
-        if (frame.isEmpty()) return new Grab(null, null);
+        // The frame first: with the plugin's own frames, area() then answers that same frame's area.
+        Optional<BufferedImage> frame = bounds == null ? Optional.empty() : watched.frame();
+        Optional<Area> area = frame.isEmpty() ? Optional.empty() : watched.area();
+        if (area.isEmpty()) return new Grab(null, null);
         Area at = area.get();
         origin = new Rectangle(at.x(), at.y(), at.width(), at.height());
         BufferedImage image = frame.get();
-        return new Grab(new ScreenShot(image, new Rectangle2D(bounds.x, bounds.y, bounds.width, bounds.height),
+        // The plugin's frame sits at its own area, in desktop pixels (a region of the window, say); Studio's
+        // grab covers the screen's bounds — for the session, the window showing it.
+        Rectangle drawn = watched.ownFrames() ? origin : bounds;
+        return new Grab(new ScreenShot(image, new Rectangle2D(drawn.x, drawn.y, drawn.width, drawn.height),
                 false, DesktopGrab.looksBlank(image)), null);
     }
 

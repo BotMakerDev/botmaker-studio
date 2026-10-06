@@ -57,6 +57,39 @@ class WatchedScreenTest {
     }
 
     @Test
+    void thePluginsFrameWinsOverStudiosGrab() {
+        WatchedScreen region = WatchedScreen.resolve(Watched.region(new Area(100, 50, 640, 480)), null).orElseThrow();
+        BufferedImage own = new BufferedImage(20, 10, BufferedImage.TYPE_INT_RGB);
+        java.util.concurrent.atomic.AtomicInteger grabs = new java.util.concurrent.atomic.AtomicInteger();
+        WatchedScreen framed = region.withFrames(() -> {
+            grabs.incrementAndGet();
+            return Optional.of(com.botmaker.plugin.api.overlay.OverlayFrame.at(own, 110, 60));
+        });
+
+        assertTrue(framed.ownFrames());
+        assertSame(own, framed.frame().orElseThrow(), "the bot's own frame, not the desktop grab");
+        assertEquals(Optional.of(new Area(110, 60, 20, 10)), framed.area(), "where that frame sits");
+        assertEquals(1, grabs.get(), "the area is the last frame's, not a second grab");
+        assertEquals(region.bounds(), framed.bounds(), "the panel still docks beside the screen");
+
+        WatchedScreen failing = region.withFrames(() -> {
+            throw new IllegalStateException("no adb");
+        });
+        assertEquals(Optional.of(new Area(100, 50, 640, 480)), failing.area(), "a plugin that fails: Studio's own");
+    }
+
+    @Test
+    void theSessionKeepsItsOwnFrames() {
+        BufferedImage frame = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);
+        WatchedScreen screen = WatchedScreen.resolve(Watched.session(),
+                session(7, new Rectangle(0, 0, 8, 8), frame)).orElseThrow()
+                .withFrames(() -> Optional.of(com.botmaker.plugin.api.overlay.OverlayFrame.at(
+                        new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB), 0, 0)));
+        assertTrue(!screen.ownFrames());
+        assertSame(frame, screen.frame().orElseThrow());
+    }
+
+    @Test
     void noSessionRunningResolvesToNothing() {
         assertTrue(WatchedScreen.resolve(Watched.session(), session(0, null, null)).isEmpty());
         assertTrue(WatchedScreen.resolve(Watched.session(), null).isEmpty());

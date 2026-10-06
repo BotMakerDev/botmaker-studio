@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.overlay.Marks;
+import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
@@ -851,31 +852,50 @@ final class StudioBridge implements StudioDriver {
 
     @Override
     public AgentContext agentContext() {
-        record Asked(StudioServices services, WatchedScreen shown, List<Watched> said, Marks marks) {}
+        record Asked(StudioServices services, WatchedScreen shown, List<Watched> said,
+                     OverlayPart.FrameSource frames, Marks marks) {}
         Asked asked = onFx(() -> {
             Optional<WatchedScreen> shown = OverlayEditor.watchedScreen();
             return new Asked(HostServices.forProject(ctx.config(), owner), shown.orElse(null),
                     shown.isPresent() ? List.of() : OverlayEditor.watchedSaid(ctx.codeEditorService(), owner.get()),
+                    shown.isPresent() ? null : OverlayEditor.framesSaid(ctx.codeEditorService(), owner.get()),
                     OverlayEditor.assistantMarks().orElse(Marks.NONE));
         });
         // What the overlay is beside, else the first open thing a plugin says the bot watches; resolved once,
-        // here off the FX thread, since it reads the window list.
+        // here off the FX thread, since it reads the window list. The bot's own frames win over Studio's grab,
+        // and stand alone for a screen with no window to dock beside (a monitor, the desktop).
         WatchedScreen screen = asked.shown() != null ? asked.shown() : asked.said().stream()
-                .map(w -> WatchedScreen.resolve(w, null)).flatMap(Optional::stream).findFirst().orElse(null);
+                .map(w -> WatchedScreen.resolve(w, null)).flatMap(Optional::stream).findFirst()
+                .map(s -> s.withFrames(asked.frames())).orElse(null);
+        Supplier<Optional<OverlayFrame>> alone = () -> {
+            try {
+                Optional<OverlayFrame> grabbed = asked.frames() == null ? null : asked.frames().grab();
+                return grabbed == null ? Optional.empty() : grabbed;
+            } catch (RuntimeException | LinkageError e) {
+                return Optional.empty();
+            }
+        };
         return new AgentContext() {
             @Override
             public StudioServices services() {
                 return asked.services();
             }
 
+            /** The last frame {@code alone} gave, whose area {@link #watchedArea} answers without grabbing again. */
+            private volatile OverlayFrame last;
+
             @Override
             public Optional<BufferedImage> frame() {
-                return screen == null ? Optional.empty() : screen.frame();
+                if (screen != null) return screen.frame();
+                last = alone.get().orElse(null);
+                return Optional.ofNullable(last).map(OverlayFrame::image);
             }
 
             @Override
             public Optional<Area> watchedArea() {
-                return screen == null ? Optional.empty() : screen.area();
+                if (screen != null) return screen.area();
+                if (last == null) last = alone.get().orElse(null);
+                return Optional.ofNullable(last).map(OverlayFrame::area);
             }
 
             @Override
