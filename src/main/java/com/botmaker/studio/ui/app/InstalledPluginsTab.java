@@ -524,9 +524,6 @@ public final class InstalledPluginsTab {
         private final Button remove = new Button("Remove…");
         private final Label verdict = new Label();
 
-        /** The newest release JitPack lists, once it answers: the upgrade of a row no registry entry verifies. */
-        private String newestListed = "";
-
         Row(InstalledPlugin plugin, Set<String> ambiguous, boolean twinned) {
             this.plugin = plugin;
             this.twinned = twinned;
@@ -574,21 +571,24 @@ public final class InstalledPluginsTab {
 
         /**
          * The upgrade on offer, {@code ""} for none: for a refused dev build, a release; else the registry's
-         * verified version or JitPack's newest tag, when newer.
+         * verified version, when newer. Only a verified version is ever offered unasked: a tag JitPack lists is
+         * in the menu, to be picked by hand, but nobody checked it loads in this Studio.
          */
         String newer() {
             if (twinned || heldDev()) return "";
             if (refused()) return released();
             String best = PluginUpgradeService.recommended(upgrades.currentVersion(), plugin.available());
-            if (plugin.available().isBlank() && !newestListed.isBlank()) {
-                best = PluginUpgradeService.recommended(upgrades.currentVersion(), newestListed);
-            }
             return best.equals(upgrades.currentVersion()) ? "" : best;
         }
 
-        /** What <i>Upgrade all</i> moves this row to, {@code ""} for nothing: the upgrade alone, never a pick. */
+        /**
+         * What <i>Upgrade all</i> moves this row to, {@code ""} for nothing: the verified upgrade alone, never a
+         * pick and never a tag only JitPack names (a refused dev row's fallback included).
+         */
         String upgrade() {
-            return busy || versions.isDisable() ? "" : newer();
+            if (busy || versions.isDisable()) return "";
+            String next = newer();
+            return next.equals(plugin.available()) ? next : "";
         }
 
         /** What this row's button moves to now. */
@@ -636,7 +636,6 @@ public final class InstalledPluginsTab {
                 for (String v : known) if (!items.contains(v)) items.add(v);
                 versions.getItems().setAll(items);
                 versions.getSelectionModel().select(items.contains(selected) ? selected : upgrades.currentVersion());
-                newestListed = fetched.stream().filter(v -> !ReleasedPlugins.isDevVersion(v)).findFirst().orElse("");
                 refreshButtons();
             }));
         }
