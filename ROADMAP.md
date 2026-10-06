@@ -5,8 +5,10 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
-- **Not yet run against a real model**: the Assistant tab (`assist/`, `docs/refactor/38-llm-edits.md`). Next
-  after that: an MCP endpoint.
+- **Not yet run against a real model**: the Assistant tab and its MCP endpoint (`assist/`,
+  `docs/refactor/38-llm-edits.md`). The Studio halves of the MCP tools (`StudioBridge`) have no automatic test;
+  a plugin added in the Plugins & Libraries window is served from the endpoint's next start; a `revert` ends a
+  Claude session running in the Assistant tab.
 - **Parameters value cells** for nesting deeper than one container.
 - **Constants**: the constant lookup scans the bot's sources on every read of a dotted name the grammar cannot
   read and on every write (a cache keyed on the buffers if a large bot makes it visible); Parameters rows
@@ -21,8 +23,8 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 - **The Errors tab steals focus on every compile** with an error; the alternative is raising it only when the
   *set* of errors changes (needs a diff and a definition of change). Left as-is by the maintainer's call
   (2026-08-06).
-- **Run to the cursor, or one activity, from the overlay editor**: the panel's ▶ runs the whole bot; ▶ Try
-  on a row and *Run this activity* are the overlay editor plan's phase 6.
+- **Run to the cursor from the overlay editor**: the panel runs the bot, one activity (*Run this activity*) or
+  one statement (▶ Try), but not the bot up to the caret.
 - **A configured Waydroid framebuffer resolution**: `WaydroidResolution.apply()` (shared) has no caller
   because nothing authors the expected size; it needs a BotMaker-owned project or emulator setting.
 - **Retire `services/capture/ScreenOverlay`** (Studio's own overlay HUD) now the SDK draws its own.
