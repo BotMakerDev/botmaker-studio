@@ -594,8 +594,8 @@ public final class MavenService {
             if (r.getUrl() != null) repos.put(r.getId(), r.getUrl());
         }
         // Disable snapshot fetching on every remote: in this project SNAPSHOT coordinates are always
-        // local-only dev builds (botmaker-sdk / botmaker-shared at 0.0.0-SNAPSHOT, installed to ~/.m2 by
-        // the umbrella reactor). Letting a remote (notably jitpack) answer for a SNAPSHOT could shadow the
+        // local-only dev builds (botmaker-sdk / botmaker-shared at their main -SNAPSHOT, installed to ~/.m2
+        // by the umbrella reactor). Letting a remote (notably jitpack) answer for a SNAPSHOT could shadow the
         // freshly reinstalled local jar. Releases are non-SNAPSHOT, so user libraries are unaffected.
         RepositoryPolicy noSnapshots = new RepositoryPolicy(
                 false, RepositoryPolicy.UPDATE_POLICY_NEVER, RepositoryPolicy.CHECKSUM_POLICY_WARN);

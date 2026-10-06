@@ -202,7 +202,7 @@ public class TypeSummaryManager {
 
             Path cacheFile = getCacheFileForJar(jar);
             // Already indexed in memory: keep it only if the on-disk jar hasn't changed since. A reused
-            // SNAPSHOT path (botmaker-sdk-0.0.0-SNAPSHOT.jar) keeps the same key across rebuilds, so without
+            // SNAPSHOT path (botmaker-sdk-1.3.1-SNAPSHOT.jar) keeps the same key across rebuilds, so without
             // this a live session would never pick up a freshly reinstalled SDK.
             if (index.containsKey(jar)) {
                 if (isCacheFresh(jar, cacheFile)) continue;
@@ -368,7 +368,7 @@ public class TypeSummaryManager {
     /**
      * A cached scan is valid only if it exists and is at least as new as the jar it was built from. The
      * cache file is keyed by jar file <em>name</em> ({@link #getCacheFileForJar}); a reused SNAPSHOT jar
-     * (e.g. {@code botmaker-sdk-0.0.0-SNAPSHOT.jar}) is overwritten in place on every local rebuild while
+     * (e.g. {@code botmaker-sdk-1.3.1-SNAPSHOT.jar}) is overwritten in place on every local rebuild while
      * keeping the same name, so without this mtime check its cache would never be regenerated and the
      * editor would show a stale SDK API. On any stat failure we treat the cache as stale and re-index.
      */

@@ -34,7 +34,7 @@ import java.util.jar.JarFile;
  * standing rule, and it needs no version check: the entry's presence <em>is</em> the probe.
  *
  * <p>The version bounds degrade the same way. A bound {@link SemVer} cannot parse — a project pinned to a
- * local {@code 0.0.0-SNAPSHOT} build is the case that actually happens — simply is not applied, so an
+ * local {@code -SNAPSHOT} build is the case that actually happens — simply is not applied, so an
  * unparseable {@code from} shows every section up to the target rather than none. Showing too much is a
  * readable failure; showing nothing looks like a release that changed nothing.
  */

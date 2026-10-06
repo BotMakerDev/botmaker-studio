@@ -22,11 +22,11 @@ public final class VersionInfo {
     /**
      * The {@code shared} version Studio is running against (its only BotMaker dependency). Read from the
      * {@code shared} jar manifest's {@code Implementation-Version}; {@code null} in a reactor/dev-install build
-     * (no manifest version) → reported as {@code 0.0.0-SNAPSHOT (local)}.
+     * (no manifest version) → reported as {@code local build}.
      */
     public static String shared() {
         String v = com.botmaker.shared.capture.NativeControllerFactory.class.getPackage().getImplementationVersion();
-        return (v != null && !v.isBlank()) ? "v" + v : "0.0.0-SNAPSHOT (local)";
+        return (v != null && !v.isBlank()) ? "v" + v : "local build";
     }
 
     /**

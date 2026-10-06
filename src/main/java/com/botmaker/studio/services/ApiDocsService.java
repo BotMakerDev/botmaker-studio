@@ -118,7 +118,8 @@ public final class ApiDocsService {
         if (pom.isEmpty() || versionDir == null) return Optional.empty();
         String groupId = pom.get().getProperty("groupId");
         String artifactId = pom.get().getProperty("artifactId");
-        // The directory, not pom.properties: a JitPack build keeps the pom's cosmetic 0.0.0-SNAPSHOT there.
+        // The directory, not pom.properties: a JitPack build of a tag cut before 2026-10-06 keeps the pom's
+        // cosmetic 0.0.0-SNAPSHOT there.
         String version = versionDir.getFileName().toString();
         if (groupId == null || artifactId == null) return Optional.empty();
         return MavenService.resolveArtifact(config.projectPath(), groupId, artifactId, "sources", version);

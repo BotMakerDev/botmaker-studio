@@ -219,7 +219,7 @@ public class BotProject {
      * Logs which botmaker-sdk build the resolved classpath actually points at, reading the
      * {@code Build-Time} / {@code Implementation-Version} manifest entries the SDK jar now stamps. Cheap
      * diagnostic that makes "the editor is showing an old SDK" visible at a glance — especially for the
-     * reused {@code 0.0.0-SNAPSHOT.jar} name, where the version string alone can't distinguish rebuilds.
+     * reused {@code -SNAPSHOT.jar} name, where the version string alone can't distinguish rebuilds.
      */
     private static void logSdkBuildStamp(List<String> classpath) {
         for (String entry : classpath) {

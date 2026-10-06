@@ -12,12 +12,13 @@ import java.util.Properties;
  * none, the first time it writes an annotation the contract declares ({@code @Param}).
  *
  * <p><b>The version is a tag baked at build time</b> ({@code botmaker/host.properties}, filtered from
- * {@code botmaker.contract.tag}). It is not read off Studio's own classpath: a release build installs the
- * contract from source at {@code 0.0.0-SNAPSHOT}, which names nothing a user's project could resolve.
+ * {@code botmaker.contract.tag}, which is the pom's contract pin): on a tag, the released contract the
+ * release commit pinned (umbrella {@code docs/refactor/43-real-versions.md}).
  *
- * <p><b>A dev build writes a released tag too (2026-10-03)</b>: {@link MavenService#CONTRACT_FALLBACK_VERSION},
- * which the release moves with every contract tag. It wrote {@code 0.0.0-SNAPSHOT} until then, a pin only
- * this machine resolved and Publish refused; Studio works with released versions only.
+ * <p><b>A dev build writes a released tag too (2026-10-03)</b>: its pin is a {@code -SNAPSHOT}, so it gets
+ * {@link MavenService#CONTRACT_FALLBACK_VERSION}, which the release moves with every contract tag. It wrote a
+ * snapshot until then, a pin only this machine resolved and Publish refused; Studio works with released
+ * versions only.
  */
 public final class HostContract {
 
