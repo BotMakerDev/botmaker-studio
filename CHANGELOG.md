@@ -130,8 +130,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The 🎮 Pilot failed with `NoClassDefFoundError: io/javalin/websocket/WsContext` after an SDK declared under both
   `com.github.LiQiyeDev` and `com.github.BotMakerDev` was reduced to one. Removing the old copy also removed the
   libraries the Pilot needs (javalin, zxing), which the kept copy still used. Removing one copy now keeps them.
-  A registry entry under either groupId now counts for the plugin, and opening a project puts back any of these
-  libraries its pom has lost.
+  A registry entry under either groupId now counts for the plugin. Opening a project puts back any of these
+  libraries its pom has lost, but only ones the plugin's own pom marks `optional`, so the registry cannot add
+  anything else. A bot opened read-only is left alone.
 - The type chooser (Declare Variable, a function's inputs and result, Parameters) could not take a pick back:
   clicking `Map` in `Map<List<String>, Integer>` and picking `char` replaced the whole type. Its header now has
   *↶* beside *Done*, and Ctrl+Z works too. Each press goes back one change. In Declare Variable and Add Function

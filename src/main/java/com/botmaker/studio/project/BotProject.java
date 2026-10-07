@@ -141,10 +141,10 @@ public class BotProject {
         }
 
         // 5a'. A declared plugin's editor dependencies the pom lost (the Pilot's javalin) are put back, and the
-        //      classpath resolved again. Asks the registry only when the pom names a BotMaker artifact, and
-        //      never writes the pom of a bot opened read-only.
+        //      classpath resolved again. Only what a BotMaker plugin's own pom marks optional, never in the pom
+        //      of a bot opened read-only.
         try {
-            if (!state.isReaderMode() && EditorCompanions.restore(config.projectPath(), progress)) {
+            if (!state.isReaderMode() && EditorCompanions.restore(config.projectPath(), classpath, progress)) {
                 classpath = MavenService.resolveClasspath(config.projectPath(), progress);
                 state.setResolvedClasspath(classpath);
             }

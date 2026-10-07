@@ -72,6 +72,33 @@ class EditorCompanionsTest {
     }
 
     @Test
+    void onlyWhatABotMakerPluginsOwnPomMarksOptionalMayBeRestored(@TempDir Path repo) throws IOException {
+        Path dir = Files.createDirectories(repo.resolve("com/github/BotMakerDev/botmaker-sdk/v1.2.3"));
+        Path jar = Files.createFile(dir.resolve("botmaker-sdk-v1.2.3.jar"));
+        Files.writeString(dir.resolve("botmaker-sdk-v1.2.3.pom"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modelVersion>4.0.0</modelVersion>
+                  <groupId>com.github.BotMakerDev</groupId><artifactId>botmaker-sdk</artifactId><version>v1.2.3</version>
+                  <dependencies>
+                    <dependency><groupId>io.javalin</groupId><artifactId>javalin</artifactId><version>6.7.0</version><optional>true</optional></dependency>
+                    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>2.0.0</version></dependency>
+                  </dependencies>
+                </project>
+                """);
+        Path other = Files.createDirectories(repo.resolve("org/evil/x/1"));
+        Path otherJar = Files.createFile(other.resolve("x-1.jar"));
+        Files.writeString(other.resolve("x-1.pom"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+                  <groupId>org.evil</groupId><artifactId>x</artifactId><version>1</version>
+                  <dependencies><dependency><groupId>org.evil</groupId><artifactId>y</artifactId><version>1</version><optional>true</optional></dependency></dependencies>
+                </project>
+                """);
+
+        assertEquals(java.util.Set.of("io.javalin:javalin"),
+                EditorCompanions.optionalOfPlugins(List.of(jar.toString(), otherJar.toString())));
+    }
+
+    @Test
     void declaringCompanionsWritesOnlyWhatIsAbsent(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("pom.xml"), """
                 <project xmlns="http://maven.apache.org/POM/4.0.0">

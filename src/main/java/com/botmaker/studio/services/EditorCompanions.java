@@ -5,12 +5,19 @@ import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.sharing.PluginRegistry;
 
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+
 import java.io.IOException;
+import java.io.Reader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,8 +27,8 @@ import java.util.concurrent.TimeUnit;
  * brings them otherwise: the SDK marks javalin and zxing {@code optional}, which is not transitive. A pom that
  * lost them — removing one copy of an SDK declared under both groupIds took them with it until 2026-10-07 —
  * left the Pilot failing on {@code NoClassDefFoundError: io/javalin/websocket/WsContext}, with nothing in
- * Studio to say why or to repair it. Only the registry knows the list, so a pom naming no BotMaker artifact
- * asks nothing, and an unreachable registry repairs nothing.
+ * Studio to say why or to repair it. Only the registry knows the list, so a classpath with no BotMaker plugin
+ * declaring an {@code optional} dependency asks nothing, and an unreachable registry repairs nothing.
  */
 public final class EditorCompanions {
 
@@ -49,20 +56,49 @@ public final class EditorCompanions {
     }
 
     /**
-     * Declares what {@link #missing} finds in {@code projectDir}'s pom and answers whether it wrote — the
-     * caller re-resolves when it did. Blocking: up to {@value #REGISTRY_TIMEOUT_S}s on the registry, said on
-     * {@code progress}.
+     * Every {@code groupId:artifactId} a BotMaker plugin jar on {@code classpath} declares {@code optional} in
+     * its own pom (the {@code .pom} beside the jar in the local repository) — the only companions an open may
+     * write without asking. The registry says which a plugin needs; the plugin's own pom bounds what that can
+     * be, so a registry entry cannot have an open put an arbitrary artifact on the classpath Studio binds
+     * plugins from.
      */
-    public static boolean restore(Path projectDir, ProgressReporter progress) throws IOException {
+    static Set<String> optionalOfPlugins(List<String> classpath) {
+        Set<String> optional = new HashSet<>();
+        for (String entry : classpath) {
+            Path jar = Path.of(entry);
+            if (DuplicatePlugins.groupOf(jar).isEmpty() || !entry.endsWith(".jar")) continue;
+            String name = jar.getFileName().toString();
+            Path pom = jar.resolveSibling(name.substring(0, name.length() - ".jar".length()) + ".pom");
+            if (!Files.isRegularFile(pom)) continue;
+            try (Reader reader = Files.newBufferedReader(pom)) {
+                for (Dependency d : new MavenXpp3Reader().read(reader).getDependencies()) {
+                    if (d.isOptional()) optional.add(d.getGroupId() + ":" + d.getArtifactId());
+                }
+            } catch (Exception e) {
+                // An unreadable pom vouches for nothing.
+            }
+        }
+        return optional;
+    }
+
+    /**
+     * Declares what {@link #missing} finds in {@code projectDir}'s pom, bounded by
+     * {@link #optionalOfPlugins}, and answers whether it wrote — the caller re-resolves when it did. Blocking:
+     * up to {@value #REGISTRY_TIMEOUT_S}s on the registry, said on {@code progress}.
+     */
+    public static boolean restore(Path projectDir, List<String> classpath, ProgressReporter progress)
+            throws IOException {
+        Set<String> allowed = optionalOfPlugins(classpath);
+        if (allowed.isEmpty()) return false;
         List<UserLibrary> declared = MavenService.readDeclaredLibraries(projectDir);
-        boolean namesBotMaker = declared.stream().anyMatch(d -> DuplicatePlugins.isBotMakerGroup(d.groupId()));
-        if (!namesBotMaker) return false;
         progress.message("Checking the libraries your plugins need…");
         List<PluginRegistry.Plugin> registry = new PluginRegistry(new GitHubClient()).browse()
                 .completeOnTimeout(List.of(), REGISTRY_TIMEOUT_S, TimeUnit.SECONDS)
                 .exceptionally(failure -> List.of())
                 .join();
-        List<UserLibrary> lacking = missing(declared, registry);
+        List<UserLibrary> lacking = missing(declared, registry).stream()
+                .filter(l -> allowed.contains(l.groupId() + ":" + l.artifactId()))
+                .toList();
         if (lacking.isEmpty()) return false;
         List<UserLibrary> added = MavenService.declareCompanions(projectDir, lacking);
         if (added.isEmpty()) return false;

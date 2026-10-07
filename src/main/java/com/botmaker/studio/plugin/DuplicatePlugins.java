@@ -112,7 +112,7 @@ public final class DuplicatePlugins {
      * Which of BotMaker's groupIds a resolved jar sits under, read off the repository layout
      * ({@code …/com/github/<org>/<artifact>/<version>/<jar>}), or {@code ""} for any other jar.
      */
-    static String groupOf(Path jar) {
+    public static String groupOf(Path jar) {
         Path artifactDir = parent(parent(jar));
         Path org = parent(artifactDir);
         Path github = parent(org);
