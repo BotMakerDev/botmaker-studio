@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.UserLibrary;
 import org.apache.maven.model.Dependency;
@@ -708,19 +709,37 @@ public final class MavenService {
         dep.setArtifactId(plugin.artifactId());
         dep.setVersion(plugin.version());
         model.getDependencies().add(dep);
+        declareProvided(model, editorDependencies);
+        writeModel(projectDir, model);
+    }
 
-        for (UserLibrary companion : editorDependencies) {
+    /**
+     * Declares {@code provided} each of {@code companions} the pom of {@code projectDir} lacks, as
+     * {@link #installPlugin} would, and answers those it added — empty when the pom was not written.
+     */
+    public static List<UserLibrary> declareCompanions(Path projectDir, List<UserLibrary> companions)
+            throws IOException {
+        Model model = requireModel(projectDir);
+        List<UserLibrary> added = declareProvided(model, companions);
+        if (!added.isEmpty()) writeModel(projectDir, model);
+        return added;
+    }
+
+    private static List<UserLibrary> declareProvided(Model model, List<UserLibrary> companions) {
+        List<UserLibrary> added = new ArrayList<>();
+        for (UserLibrary companion : companions) {
             boolean present = model.getDependencies().stream()
                     .anyMatch(d -> sameArtifact(d, companion.groupId(), companion.artifactId()));
             if (present) continue;
-            Dependency added = new Dependency();
-            added.setGroupId(companion.groupId());
-            added.setArtifactId(companion.artifactId());
-            added.setVersion(companion.version());
-            added.setScope("provided");
-            model.getDependencies().add(added);
+            Dependency dep = new Dependency();
+            dep.setGroupId(companion.groupId());
+            dep.setArtifactId(companion.artifactId());
+            dep.setVersion(companion.version());
+            dep.setScope("provided");
+            model.getDependencies().add(dep);
+            added.add(companion);
         }
-        writeModel(projectDir, model);
+        return added;
     }
 
     /**
@@ -949,11 +968,22 @@ public final class MavenService {
      * removed, which is the same entry — so a plugin whose entry has changed its list since install leaves
      * behind whatever it no longer names. That is the honest outcome for a record kept by the plugin rather
      * than by the project, and it is the same shape as a version the user pinned by hand.
+     *
+     * <p><b>A copy still declared under BotMaker's other groupId keeps them</b> (2026-10-07). Removing the
+     * {@code com.github.LiQiyeDev} half of an SDK declared twice took javalin and zxing with it, and the
+     * {@code com.github.BotMakerDev} SDK left behind needed both: the Pilot failed on
+     * {@code NoClassDefFoundError: io/javalin/websocket/WsContext}.
      */
     public static void removePlugin(Path projectDir, String groupId, String artifactId,
                                     List<UserLibrary> editorDependencies) throws IOException {
         Model model = requireModel(projectDir);
         model.getDependencies().removeIf(d -> sameArtifact(d, groupId, artifactId));
+        boolean stillDeclared = model.getDependencies().stream().anyMatch(d -> DuplicatePlugins.sameArtifact(
+                d.getGroupId(), d.getArtifactId(), groupId, artifactId));
+        if (stillDeclared) {
+            writeModel(projectDir, model);
+            return;
+        }
         for (UserLibrary companion : editorDependencies) {
             model.getDependencies()
                     .removeIf(d -> sameArtifact(d, companion.groupId(), companion.artifactId()));

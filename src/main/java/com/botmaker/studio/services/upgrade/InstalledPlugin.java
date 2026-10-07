@@ -89,19 +89,18 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
     public static List<InstalledPlugin> of(List<UserLibrary> declared,
                                            List<PluginRegistry.Plugin> registry,
                                            Predicate<UserLibrary> isPlugin) {
-        Map<String, PluginRegistry.Plugin> listed = new LinkedHashMap<>();
-        for (PluginRegistry.Plugin entry : registry) {
-            if (entry.isInstallable()) listed.put(entry.coordinate(), entry);
-        }
-
         List<InstalledPlugin> rows = new ArrayList<>();
         for (UserLibrary library : declared) {
-            String coordinate = library.groupId() + ":" + library.artifactId();
-            PluginRegistry.Plugin entry = listed.get(coordinate);
+            // Either of BotMaker's groupIds (2026-10-07): an entry still naming com.github.LiQiyeDev left the
+            // com.github.BotMakerDev SDK UNLISTED, with no editor dependencies to install or keep.
+            PluginRegistry.Plugin entry = PluginRegistry.entryFor(registry, library).orElse(null);
 
             if (entry != null) {
+                // The verified version is a tag under the entry's groupId; offered under the other one, it
+                // would pin a coordinate that tag was never released at.
+                boolean sameGroup = entry.groupId().equals(library.groupId());
                 rows.add(new InstalledPlugin(library, entry.name(), library.version(),
-                        entry.verifiedVersion(), Source.REGISTRY, entry.editorLibraries()));
+                        sameGroup ? entry.verifiedVersion() : "", Source.REGISTRY, entry.editorLibraries()));
             } else if (isPlugin.test(library)) {
                 // No entry to read a name, a description or an editor-dependency list from. The coordinate
                 // is the whole of what is known, and an empty `available` is the truthful answer until

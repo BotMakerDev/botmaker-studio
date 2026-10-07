@@ -126,6 +126,18 @@ public final class PluginRegistry {
         }
     }
 
+    /**
+     * The entry of {@code entries} for {@code library}: the one at its exact coordinate, else one naming the same
+     * artifact under BotMaker's other groupId (2026-10-07) — an entry still at {@code com.github.LiQiyeDev}
+     * accounts for the {@code com.github.BotMakerDev} copy. Empty when none does.
+     */
+    public static java.util.Optional<Plugin> entryFor(List<Plugin> entries, UserLibrary library) {
+        String coordinate = library.groupId() + ":" + library.artifactId();
+        return entries.stream().filter(e -> e.isInstallable() && e.coordinate().equals(coordinate)).findFirst()
+                .or(() -> entries.stream().filter(e -> e.isInstallable() && e.isInstalledIn(List.of(library)))
+                        .findFirst());
+    }
+
     /** Fetches the whole catalog. Empty when the registry is unset, unreachable or malformed. */
     public CompletableFuture<List<Plugin>> browse() {
         if (!GitHubConfig.isRegistryConfigured()) {

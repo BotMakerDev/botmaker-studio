@@ -14,6 +14,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ContractDependency;
 import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.services.DebuggingService;
+import com.botmaker.studio.services.EditorCompanions;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
@@ -137,6 +138,18 @@ public class BotProject {
             }
         } catch (Exception e) {
             System.err.println("Warning: Could not declare the plugin contract: " + e.getMessage());
+        }
+
+        // 5a'. A declared plugin's editor dependencies the pom lost (the Pilot's javalin) are put back, and the
+        //      classpath resolved again. Asks the registry only when the pom names a BotMaker artifact, and
+        //      never writes the pom of a bot opened read-only.
+        try {
+            if (!state.isReaderMode() && EditorCompanions.restore(config.projectPath(), progress)) {
+                classpath = MavenService.resolveClasspath(config.projectPath(), progress);
+                state.setResolvedClasspath(classpath);
+            }
+        } catch (Exception e) {
+            System.err.println("Warning: Could not restore a plugin's editor libraries: " + e.getMessage());
         }
 
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary

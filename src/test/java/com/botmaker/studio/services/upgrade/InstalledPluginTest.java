@@ -72,6 +72,21 @@ class InstalledPluginTest {
     }
 
     @Test
+    void anEntryStillUnderTheFormerGroupIdAccountsForTheNewOneWithItsEditorDependencies() {
+        List<InstalledPlugin> rows = InstalledPlugin.of(
+                List.of(SDK),
+                List.of(entry("com.github.LiQiyeDev:botmaker-sdk", "BotMaker SDK", "1.1.6",
+                        List.of("io.javalin:javalin:6.7.0"))),
+                lib -> false);
+
+        assertEquals(1, rows.size());
+        assertEquals(InstalledPlugin.Source.REGISTRY, rows.getFirst().source());
+        assertEquals(List.of(new UserLibrary("io.javalin", "javalin", "6.7.0")),
+                rows.getFirst().editorDependencies());
+        assertEquals("", rows.getFirst().available(), "1.1.6 was verified under the other groupId");
+    }
+
+    @Test
     void aDependencyNothingAccountsForIsNoRowAtAll() {
         List<InstalledPlugin> rows = InstalledPlugin.of(
                 List.of(SDK, JACKSON),
