@@ -9,6 +9,8 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
   `docs/refactor/38-llm-edits.md`). The Studio halves of the MCP tools (`StudioBridge`) have no automatic test;
   a plugin added in the Plugins & Libraries window is served from the endpoint's next start; a `revert` ends a
   Claude session running in the Assistant tab.
+- **"⭐ Program Entry Point" is unreadable in the light theme**: white text on the `#EAEAEA`
+  `block-nested-wash--highlight` above `main` (`MainBlock`); Dark reads fine.
 - **Parameters value cells** for nesting deeper than one container.
 - **Constants**: the constant lookup scans the bot's sources on every read of a dotted name the grammar cannot
   read and on every write (a cache keyed on the buffers if a large bot makes it visible); Parameters rows
