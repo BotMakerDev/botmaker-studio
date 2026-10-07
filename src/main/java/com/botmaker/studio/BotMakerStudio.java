@@ -3,7 +3,7 @@ package com.botmaker.studio;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
-import com.botmaker.session.impl.NestedSession;
+import com.botmaker.session.Sessions;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.BotProject;
 import com.botmaker.studio.project.ProjectConfig;
@@ -84,7 +84,7 @@ public class BotMakerStudio extends Application {
         // It also warms the `systemd-run --user --scope` probe every SessionReaper needs, which is cached per JVM
         // but costs a spawn and a waitFor the first time. Paying it here, while the user is still opening a
         // project, keeps it off the first session launch — which is why this thread starts before the UI is built.
-        Thread sweep = new Thread(NestedSession::reapOrphanSessions, "session-orphan-sweep");
+        Thread sweep = new Thread(Sessions::reapOrphans, "session-orphan-sweep");
         sweep.setDaemon(true);
         sweep.start();
         applyAppIcons(primaryStage);

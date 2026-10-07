@@ -232,7 +232,7 @@ public class CodeExecutionService {
      * bring up a *second* private display and launch the game into it. Every store launcher is single-instance, so
      * that launch gets handed to the copy already running in the session Studio is showing, and the game ends up on
      * a display nobody is watching. Offered rather than imposed — the bot still declines if its own isolation
-     * setting says {@code :0}, and {@code AdoptedSession} declines if the display has gone since.
+     * setting says {@code :0}, and {@code Sessions.offered()} declines if the display has gone since.
      */
     private List<String> sessionHandoffArguments() {
         try {
