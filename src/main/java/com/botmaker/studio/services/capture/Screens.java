@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.capture;
 
+import com.botmaker.shared.capture.ScreenGeometry;
 import javafx.geometry.Rectangle2D;
 import javafx.stage.Screen;
 
@@ -34,22 +35,17 @@ final class Screens {
     }
 
     /**
-     * Crops the full-desktop {@code desktop} image to the pixel region of {@code target}. Maps JavaFX
-     * logical screen bounds to source pixels via each screen's output scale; assumes monitors share a
-     * scale factor (true for the common case — mixed-DPI layouts may be slightly off).
+     * Crops the full-desktop {@code desktop} image to the pixel region of {@code target}: each screen's JavaFX
+     * logical bounds times its own output scale ({@link ScreenGeometry}), so a layout of mixed scales crops the
+     * right monitor too. The offset used to be scaled by the target's scale alone.
      */
     static BufferedImage cropToScreen(BufferedImage desktop, List<Screen> screens, Screen target) {
-        double unionMinX = screens.stream().mapToDouble(s -> s.getBounds().getMinX()).min().orElse(0);
-        double unionMinY = screens.stream().mapToDouble(s -> s.getBounds().getMinY()).min().orElse(0);
-        javafx.geometry.Rectangle2D b = target.getBounds();
-        int x = (int) Math.round((b.getMinX() - unionMinX) * target.getOutputScaleX());
-        int y = (int) Math.round((b.getMinY() - unionMinY) * target.getOutputScaleY());
-        int w = (int) Math.round(b.getWidth() * target.getOutputScaleX());
-        int h = (int) Math.round(b.getHeight() * target.getOutputScaleY());
-        x = Math.max(0, Math.min(x, desktop.getWidth() - 1));
-        y = Math.max(0, Math.min(y, desktop.getHeight() - 1));
-        w = Math.max(1, Math.min(w, desktop.getWidth() - x));
-        h = Math.max(1, Math.min(h, desktop.getHeight() - y));
-        return desktop.getSubimage(x, y, w, h);
+        return ScreenGeometry.crop(desktop, screens.stream().map(Screens::geometry).toList(), geometry(target));
+    }
+
+    private static ScreenGeometry.Screen geometry(Screen screen) {
+        Rectangle2D b = screen.getBounds();
+        return new ScreenGeometry.Screen(b.getMinX(), b.getMinY(), b.getWidth(), b.getHeight(),
+                screen.getOutputScaleX(), screen.getOutputScaleY());
     }
 }

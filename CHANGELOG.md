@@ -139,6 +139,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   that are open now.
 
 ### Fixed
+- On a scaled screen, the overlay editor's desktop grab and its screen crops are in device pixels, the same
+  pixels as a window's rectangle. The grab was at the logical size, and with mixed scales the screen chooser
+  cropped a second monitor by the wrong offset.
 - The 🎮 Pilot failed with `NoClassDefFoundError: io/javalin/websocket/WsContext` after an SDK declared under both
   `com.github.LiQiyeDev` and `com.github.BotMakerDev` was reduced to one. Removing the old copy also removed the
   libraries the Pilot needs (javalin, zxing), which the kept copy still used. Removing one copy now keeps them.

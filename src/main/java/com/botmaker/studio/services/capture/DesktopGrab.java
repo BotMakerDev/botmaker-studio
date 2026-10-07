@@ -1,11 +1,11 @@
 package com.botmaker.studio.services.capture;
 
 import com.botmaker.shared.Executables;
+import com.botmaker.shared.capture.RobotCapture;
+import com.botmaker.shared.capture.ScreenCapture;
 import com.botmaker.studio.services.platform.SessionEnvironment;
 
 import javax.imageio.ImageIO;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.awt.Robot;
 import java.awt.image.BufferedImage;
@@ -40,24 +40,23 @@ public final class DesktopGrab {
     public static BufferedImage grabVirtualDesktop() {
         if (isWayland()) return grabViaCli();
         try {
-            return new Robot().createScreenCapture(virtualBounds());
+            return RobotCapture.capture(new Robot(), virtualBounds());
         } catch (Throwable t) {
             return null;
         }
     }
 
-    /** The AWT virtual-screen bounds (union of every device); origin can be negative on multi-monitor. */
+    /**
+     * The virtual-screen bounds (union of every device) in device pixels — the space of a desktop grab and of a
+     * window's rectangle; origin can be negative on multi-monitor.
+     */
     public static Rectangle virtualBounds() {
-        Rectangle bounds = new Rectangle();
-        for (GraphicsDevice gd : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            bounds = bounds.union(gd.getDefaultConfiguration().getBounds());
-        }
-        return bounds;
+        return ScreenCapture.getVirtualScreenBounds();
     }
 
     /**
-     * Crops {@code desktop} (a {@link #grabVirtualDesktop()} image) to absolute-screen {@code bounds}, mapping
-     * absolute coordinates to image pixels via the virtual-screen origin. Assumes scale 1.0.
+     * Crops {@code desktop} (a {@link #grabVirtualDesktop()} image) to absolute-screen {@code bounds}, both in
+     * device pixels, mapping absolute coordinates to image pixels via the virtual-screen origin.
      */
     public static BufferedImage cropToBounds(BufferedImage desktop, Rectangle bounds) {
         if (desktop == null) return null;

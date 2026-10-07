@@ -7,8 +7,6 @@ import com.botmaker.shared.capture.NativeControllerFactory;
 import javafx.stage.Screen;
 import javafx.stage.Window;
 
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
@@ -316,15 +314,11 @@ public final class TargetCapture implements ShotSource {
     }
 
     /**
-     * Crops the full-desktop {@code desktop} image to absolute-screen {@code bounds}. Maps absolute
-     * coordinates to desktop-image pixels via the AWT virtual-screen origin (union of all devices).
-     * Assumes scale 1.0 (same caveat as {@link #cropToScreen}); this is only the blank-frame fallback.
+     * Crops the full-desktop {@code desktop} image to absolute-screen {@code bounds}, both in device pixels,
+     * via the virtual-screen origin (union of all devices). This is only the blank-frame fallback.
      */
     private static BufferedImage cropToBounds(BufferedImage desktop, java.awt.Rectangle bounds) {
-        java.awt.Rectangle virtual = new java.awt.Rectangle();
-        for (GraphicsDevice gd : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            virtual = virtual.union(gd.getDefaultConfiguration().getBounds());
-        }
+        java.awt.Rectangle virtual = DesktopGrab.virtualBounds();
         int x = Math.max(0, Math.min(bounds.x - virtual.x, desktop.getWidth() - 1));
         int y = Math.max(0, Math.min(bounds.y - virtual.y, desktop.getHeight() - 1));
         int w = Math.max(1, Math.min(bounds.width, desktop.getWidth() - x));
