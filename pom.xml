@@ -878,6 +878,13 @@
                                         <option>--linux-package-deps</option>
                                         <option>libgtk-3-0t64 | libgtk-3-0, libx11-6, libxtst6, libxi6, libxxf86vm1, libgl1, libfontconfig1, botmaker</option>
                                     </additionalOptions>
+                                    <!-- packaging/linux/control overrides jpackage's DEB control template for one
+                                         line: Recommends: gamescope, xserver-xephyr, the two private-display
+                                         servers, installed with Studio and removable (apt installs Recommends by
+                                         default). jpackage has no option for a weak dependency. The file is
+                                         JDK 25's template.control plus that line; like the rpm spec, re-fork it
+                                         when CI's java-version moves. -->
+                                    <resourceDir>${project.basedir}/packaging/linux</resourceDir>
                                     <linuxShortcut>true</linuxShortcut>
                                     <linuxMenuGroup>Development</linuxMenuGroup>
                                     <linuxAppCategory>Development</linuxAppCategory>

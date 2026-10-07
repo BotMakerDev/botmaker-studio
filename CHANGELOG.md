@@ -13,6 +13,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Added
+- **Installing Studio installs gamescope and Xephyr too**, the two servers a bot's private display runs on. The
+  rpm and the deb recommend them (`Recommends:`), so dnf and apt install them by default and you can remove
+  them afterwards.
 - **Dev mode: try a plugin before it is released.** *Project ▸ Plugins & Libraries* has a *Dev mode* box, per
   project and only on this computer. While it is on, plugins pinned at a `-SNAPSHOT` version (the build
   `mvn install` put in `~/.m2`) load. *Reload plugins* picks up each rebuild, and a banner above the canvas

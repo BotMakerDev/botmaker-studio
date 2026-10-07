@@ -22,7 +22,9 @@
 # Files.readString on FileSystems.getFileSystem(URI.create("jrt:/")).getPath(
 # "/modules/jdk.jpackage/jdk/jpackage/internal/resources/template.spec").
 #
-# THE ENTIRE DELTA IS THE GUARD IN THE preun SECTION AT THE BOTTOM OF THIS FILE.
+# THE DELTA IS TWO THINGS: THE GUARD IN THE preun SECTION AT THE BOTTOM OF THIS FILE, AND THE Recommends
+# LINE AFTER Requires. The second (2026-10-07) installs the two private-display servers with Studio, as weak
+# dependencies so a user can remove them; jpackage has no option for one, which is why it is written here.
 #
 # Why: on an upgrade, rpm runs the NEW package's post section first and only then the OUTGOING package's
 # preun. Upstream's preun unregisters the .desktop file unconditionally, so the sequence is "new package
@@ -61,6 +63,7 @@ Autoreq: 0
 %if "xPACKAGE_DEFAULT_DEPENDENCIES" != "x" || "xPACKAGE_CUSTOM_DEPENDENCIES" != "x"
 Requires: PACKAGE_DEFAULT_DEPENDENCIES PACKAGE_CUSTOM_DEPENDENCIES
 %endif
+Recommends: gamescope, xorg-x11-server-Xephyr
 
 #comment line below to enable effective jar compression
 #it could easily get your package size from 40 to 15Mb but
