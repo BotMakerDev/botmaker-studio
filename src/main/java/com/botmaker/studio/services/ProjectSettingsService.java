@@ -84,6 +84,15 @@ public final class ProjectSettingsService {
     }
 
     /**
+     * {@link #saveNow}, then {@link SettingsChangedEvent}: written before it returns, so a caller reading the
+     * value back sees it, and announced, so what shows it — a plugin's toolbar label — re-reads it.
+     */
+    public void saveAndPublish(StudioProjectSettings newSettings) {
+        saveNow(newSettings);
+        eventBus.publish(new SettingsChangedEvent(newSettings));
+    }
+
+    /**
      * Persists {@code newSettings} ({@code settings.json}), refreshes project state and publishes
      * {@link SettingsChangedEvent}. Runs asynchronously; the returned future completes exceptionally if
      * writing fails.

@@ -293,8 +293,8 @@ public class ToolbarManager {
         // The reading order the bar was hand-arranged into, now stated as four groups rather than as an
         // argument list — and it comes out identical, which is the acceptance test for this change.
         //
-        // PROJECT: Launch target before Capture target — you pick what the bot opens, then where it looks,
-        // and a game's window can only be picked as a capture target once the game is actually up. Settings
+        // PROJECT: the SDK's game button before its Capture Source — you pick what the bot opens, then where it
+        // looks, and a game's window can only be picked as a capture target once the game is actually up. Settings
         // sits next to Setup: the checklist is the guided path, this is the same project's stored values
         // (the resolution the label at the end of this bar is reading) in one dialog.
         // AUTHORING: Flow then Parameters — the activities are drawn first, and their values are what the
@@ -364,10 +364,9 @@ public class ToolbarManager {
     /**
      * One thing on the bar: an item and the node built from it, or a node the host built by hand.
      *
-     * <p>The second case is not a loose end. A {@link ToolbarItem} describes a button and there are three
-     * things up here that are not one — a control {@code QuickLaunch} builds and rebinds itself, a toggle,
-     * and a read-out — so the placement model has to hold a bare {@link Node} beside a described one. Every
-     * attempt to make the record cover all three would have added a member with exactly one implementor.
+     * <p>The second case is not a loose end. A {@link ToolbarItem} describes a button, and the resolution
+     * read-out is not one, so the placement model has to hold a bare {@link Node} beside a described one.
+     * Making the record cover a read-out would add a member with exactly one implementor.
      */
     private record Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item,
                           String ownerId, String ownerName) {

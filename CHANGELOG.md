@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+- A plugin's toolbar button that shows a run property refreshes when the plugin sets it: `Runs.setProperty`
+  announces the change as every other settings write does. The SDK's 🎮 game button needs this.
+
+### Removed
+- The unused global list of recent launch targets in the preferences file (`recentLaunchTargets`). Nothing
+  wrote it since the launch-target dialog moved to the SDK plugin, whose game dialog keeps its recents per
+  computer in the run properties. An older preferences file still reads.
+
 ### Added
 - **Installing Studio installs gamescope and Xephyr too**, the two servers a bot's private display runs on. The
   rpm and the deb recommend them (`Recommends:`), so dnf and apt install them by default and you can remove

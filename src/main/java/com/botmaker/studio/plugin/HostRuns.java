@@ -174,12 +174,13 @@ public final class HostRuns implements Runs {
     /**
      * Sets it for every later run — {@code BotJvm.options} passes each as {@code -D}. Written at once rather than
      * through the asynchronous update, so a plugin that sets a property and reads it back in the same breath (the
-     * emulator picker, then the setup checklist) sees what it wrote.
+     * emulator picker, then the setup checklist) sees what it wrote. Then announced, so a toolbar label that
+     * reads the property (the SDK's game button) is refreshed.
      */
     @Override
     public void setProperty(String name, String value) {
         if (settings == null || name == null || name.isBlank()) return;
-        settings.saveNow(settings.current().withRunProperty(name.trim(), value));
+        settings.saveAndPublish(settings.current().withRunProperty(name.trim(), value));
     }
 
     @Override
