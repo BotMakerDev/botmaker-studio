@@ -159,7 +159,8 @@ public final class HostPluginValues implements PluginValues {
                 return Optional.empty();
             }
         }
-        return Optional.of("No plugin in this project declares a value called \"" + id + "\".");
+        return Optional.of("No plugin in this project declares the value a bot marks "
+                + ManagedIds.spelled(id, PluginHost.managedValues()) + ".");
     }
 
     /**

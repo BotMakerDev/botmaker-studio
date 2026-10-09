@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -26,12 +27,15 @@ class ManagedSetsTest {
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.empty();
 
+    /** The set's id: the class below is marked with it, and resolves through {@link #testClasses()}. */
+    private static final String ID = ManagedValue.idOf(TestValue.Id.PICTURES);
+
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.plugin.api.managed.Managed;
+            import com.botmaker.studio.project.managed.TestValue;
 
-            @Managed("pictures")
+            @TestValue(TestValue.Id.PICTURES)
             public final class Pictures {
                 public static final String ORE = "images/ore.png";
                 public static final String GOLD = "images/gold.png";
@@ -66,7 +70,7 @@ class ManagedSetsTest {
 
     @Test
     void theMembersAreThePublicConstants(@TempDir Path root) {
-        assertEquals(List.of("ORE", "GOLD"), ManagedSets.members(index(root), "pictures", GRAMMAR).stream()
+        assertEquals(List.of("ORE", "GOLD"), ManagedSets.members(index(root), ID,GRAMMAR).stream()
                 .map(ManagedSets.Member::name).toList());
         assertTrue(ManagedSets.members(index(root), "flow", GRAMMAR).isEmpty(), "no class carries that id");
     }
@@ -133,14 +137,14 @@ class ManagedSetsTest {
         JavaValue silver = GRAMMAR.spellAny("images/silver.png").orElseThrow();
 
         Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class,
-                ManagedSets.add(index, "pictures", "SILVER", String.class, silver));
+                ManagedSets.add(index, ID,"SILVER", String.class, silver));
         String pictures = plan.rewrites().get(pictures(root));
         assertTrue(pictures.contains("public static final String SILVER = \"images/silver.png\";"), pictures);
         assertTrue(pictures.indexOf("SILVER") > pictures.indexOf("HIDDEN"), "after the last field: " + pictures);
 
-        assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, "pictures", "GOLD", String.class, silver),
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, ID,"GOLD", String.class, silver),
                 "a second GOLD does not compile");
-        assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, "pictures", "no good", String.class, silver));
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, ID,"no good", String.class, silver));
         assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, "flow", "X", String.class, silver));
     }
 
@@ -152,16 +156,16 @@ class ManagedSetsTest {
         sources.put(root.resolve("com/bot/plugins/sdk/MorePictures.java"),
                 PICTURES.replace("class Pictures", "class MorePictures").replace("private Pictures()",
                         "private MorePictures()"));
-        BotIndex index = BotIndex.over(sources, List.of(contract()), root);
+        BotIndex index = BotIndex.over(sources, List.of(contract(), testClasses()), root);
         JavaValue silver = GRAMMAR.spellAny("images/silver.png").orElseThrow();
 
         Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class,
-                ManagedSets.add(index, "pictures", "SILVER", String.class, silver));
-        assertTrue(refused.reason().contains("are both marked @Managed(\"pictures\")"), refused.reason());
+                ManagedSets.add(index, ID,"SILVER", String.class, silver));
+        assertTrue(refused.reason().contains("are both marked @TestValue(TestValue.Id.PICTURES)"), refused.reason());
     }
 
     private static ManagedSets.Member member(BotIndex index, String name) {
-        return ManagedSets.member(index, "pictures", name, GRAMMAR).orElseThrow();
+        return ManagedSets.member(index, ID,name, GRAMMAR).orElseThrow();
     }
 
     private static Path pictures(Path root) {
@@ -176,14 +180,22 @@ class ManagedSetsTest {
         Map<Path, String> sources = new LinkedHashMap<>();
         sources.put(pictures(root), PICTURES);
         sources.put(bot(root), BOT);
-        return BotIndex.over(sources, List.of(contract()), root);
+        return BotIndex.over(sources, List.of(contract(), testClasses()), root);
     }
 
-    /** The contract, as a bot's classpath carries it — so {@code @Managed} resolves and {@code @Refactor} compiles. */
+    /** The contract, as a bot's classpath carries it — so {@code @Refactor} compiles. */
     private static String contract() {
+        return locationOf(com.botmaker.plugin.api.meta.Refactor.class);
+    }
+
+    /** The test classes, carrying {@link TestValue} as a plugin's jar carries its marker — so the mark resolves. */
+    private static String testClasses() {
+        return locationOf(TestValue.class);
+    }
+
+    private static String locationOf(Class<?> type) {
         try {
-            return Path.of(com.botmaker.plugin.api.meta.Refactor.class.getProtectionDomain().getCodeSource()
-                    .getLocation().toURI()).toString();
+            return Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toString();
         } catch (java.net.URISyntaxException e) {
             throw new IllegalStateException(e);
         }

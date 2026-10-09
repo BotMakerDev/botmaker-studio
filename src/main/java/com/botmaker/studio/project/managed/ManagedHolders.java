@@ -20,7 +20,6 @@ import org.eclipse.jdt.core.dom.PackageDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
 import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TagElement;
 import org.eclipse.jdt.core.dom.TextElement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -32,28 +31,24 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * The class a plugin's {@code @Managed} values live in, written by the host when a project has none
+ * The class a plugin's managed values live in, written by the host when a project has none
  * ({@code PluginValues.create}).
  *
  * <p>Written once and then the user's, as a file a template shipped is: {@code ProjectWrites.create} never
- * overwrites. The content is the least that compiles — the class, and per method-shaped value one
- * {@code @Managed} method returning the value's {@code initial}, or else its type's fresh value, written by
- * the host grammar. A type-level value is an
- * empty class carrying the annotation. Nothing here reads or merges a file that exists.
+ * overwrites. The content is the least that compiles — the class, and per method-shaped value one method
+ * marked with the plugin's annotation returning the value's {@code initial}, or else its type's fresh value,
+ * written by the host grammar. A type-level value is an empty class carrying the annotation. Nothing here
+ * reads or merges a file that exists.
  *
  * <p><b>A tree, since 2026-09-27</b>, as every other piece of Java the host writes: the unit is built from JDT
  * nodes — the return type from {@link ValueTypes#node}, the value the grammar's own node — and laid out by
  * {@link SourceFormatter}. It was joined as text, the value included, until then.
  */
 public final class ManagedHolders {
-
-    /** The annotation every holder names, by the class the contract ships it as. */
-    static final String MANAGED = "com.botmaker.plugin.api.managed.Managed";
 
     private ManagedHolders() {}
 
@@ -77,7 +72,8 @@ public final class ManagedHolders {
                             ValueGrammar grammar) {
         String holder = value.holder();
         if (holder == null || !SourceVersion.isName(holder) || holder.contains(".")) {
-            return new Plan.Refused("\"" + value.id() + "\" is not a value this project can be given a file for.");
+            return new Plan.Refused(ManagedIds.spelled(value.id(), List.of(value))
+                                    + " is not a value this project can be given a file for.");
         }
         String segment = segment(pluginId);
         if (segment == null) {
@@ -177,30 +173,18 @@ public final class ManagedHolders {
         return element;
     }
 
-    /** The simple name of the annotation {@code value} is marked with: the plugin's marker, or {@code Managed}. */
+    /** The simple name of the plugin's annotation {@code value} is marked with. */
     private static String markName(ManagedValue<?> value) {
-        return ManagedIds.Typed.of(value).map(ManagedIds.Typed::markerSimple).orElse("Managed");
+        return ManagedIds.Typed.of(value).markerSimple();
     }
 
-    /**
-     * {@code value}'s mark, its import added to {@code imports}: {@code @SdkValue(SdkValue.Id.FLOW)} for a typed
-     * id, {@code @Managed("id")} for a string.
-     */
+    /** {@code value}'s mark, {@code @SdkValue(SdkValue.Id.FLOW)}, its import added to {@code imports}. */
     private static SingleMemberAnnotation mark(AST ast, ManagedValue<?> value, Set<String> imports) {
         SingleMemberAnnotation annotation = ast.newSingleMemberAnnotation();
-        Optional<ManagedIds.Typed> typed = ManagedIds.Typed.of(value);
-        if (typed.isPresent()) {
-            ManagedIds.Typed id = typed.get();
-            annotation.setTypeName(ast.newSimpleName(id.markerSimple()));
-            annotation.setValue(ast.newName(id.markerSimple() + "." + id.enumSimple() + "." + id.constant()));
-            imports.add(id.markerCanonical());
-            return annotation;
-        }
-        annotation.setTypeName(ast.newSimpleName("Managed"));
-        StringLiteral literal = ast.newStringLiteral();
-        literal.setLiteralValue(value.id());
-        annotation.setValue(literal);
-        imports.add(MANAGED);
+        ManagedIds.Typed id = ManagedIds.Typed.of(value);
+        annotation.setTypeName(ast.newSimpleName(id.markerSimple()));
+        annotation.setValue(ast.newName(id.markerSimple() + "." + id.enumSimple() + "." + id.constant()));
+        imports.add(id.markerCanonical());
         return annotation;
     }
 
@@ -241,7 +225,7 @@ public final class ManagedHolders {
     }
 
     /**
-     * One {@code @Managed} method returning its value — the grammar's node, copied in — its imports added to
+     * One marked method returning its value — the grammar's node, copied in — its imports added to
      * {@code imports}; null when the type has no node or no fresh value.
      */
     private static MethodDeclaration method(AST ast, ManagedValue<?> value, ValueGrammar grammar,
@@ -255,9 +239,9 @@ public final class ManagedHolders {
         if (returnType == null) return null;
 
         MethodDeclaration method = ast.newMethodDeclaration();
-        method.setName(ast.newSimpleName(methodName(ManagedIds.Typed.of(value)
-                // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
-                .map(typed -> typed.constant().toLowerCase(Locale.ROOT).replace('_', '-')).orElse(value.id()))));
+        // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
+        method.setName(ast.newSimpleName(methodName(ManagedIds.Typed.of(value).constant().toLowerCase(Locale.ROOT)
+                .replace('_', '-'))));
         method.setReturnType2(returnType);
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> modifiers = method.modifiers();

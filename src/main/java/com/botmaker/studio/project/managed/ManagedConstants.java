@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -19,6 +21,7 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -64,15 +67,34 @@ public final class ManagedConstants {
      */
     private static final Map<Path, Parsed> PARSED = Collections.synchronizedMap(new HashMap<>());
 
+    /**
+     * The declarations {@link #PARSED} was read against, by identity. A bind replaces the list, and a file read
+     * before its plugin was bound has to be read again for its marks to count, so the cache is dropped with
+     * the old list. Only the current list is held: an entry holding its own would keep every earlier bind's
+     * plugin classes, and their closed class loader, reachable.
+     */
+    private static Collection<ManagedValue<?>> readAgainst;
+
     /** How many files have been parsed — what a test asks to see that an unchanged file is not. */
     private static final AtomicInteger PARSES = new AtomicInteger();
 
-    /** Every constant of every {@code @Managed} top-level type in the bot's sources, in file order. */
+    /** Every constant of every marked top-level type in the bot's sources, in file order. */
     public static List<Constant> scan(ProjectConfig config, ProjectState state) {
+        return scan(config, state, PluginHost.managedValues());
+    }
+
+    /** The same, its marks matched against {@code known} ({@link ManagedIds}). */
+    static List<Constant> scan(ProjectConfig config, ProjectState state, Collection<ManagedValue<?>> known) {
         List<Constant> out = new ArrayList<>();
         if (config == null) return out;
+        synchronized (PARSED) {
+            if (readAgainst != known) {
+                PARSED.clear();
+                readAgainst = known;
+            }
+        }
         try {
-            BotSources.scan(config, state, (file, source) -> out.addAll(cached(file, source)));
+            BotSources.scan(config, state, (file, source) -> out.addAll(cached(file, source, known)));
         } catch (RuntimeException unreadable) {
             // A project mid-save reads as having no constants: every value is then spelled out, which compiles.
             return List.of();
@@ -80,11 +102,11 @@ public final class ManagedConstants {
         return List.copyOf(out);
     }
 
-    private static List<Constant> cached(Path file, String source) {
+    private static List<Constant> cached(Path file, String source, Collection<ManagedValue<?>> known) {
         Parsed last = PARSED.get(file);
         if (last != null && last.source().equals(source)) return last.constants();
         PARSES.incrementAndGet();
-        List<Constant> constants = List.copyOf(read(source));
+        List<Constant> constants = List.copyOf(read(source, known));
         PARSED.put(file, new Parsed(source, constants));
         return constants;
     }
@@ -147,8 +169,8 @@ public final class ManagedConstants {
         }
     }
 
-    /** The constants of the {@code @Managed} top-level types in one file. */
-    static List<Constant> read(String source) {
+    /** The constants of the top-level types in one file marked as one of {@code known} ({@link ManagedIds}). */
+    static List<Constant> read(String source, Collection<ManagedValue<?>> known) {
         CompilationUnit unit = BotParser.syntax(source);
         String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName() + ".";
         List<Constant> out = new ArrayList<>();
@@ -156,7 +178,7 @@ public final class ManagedConstants {
             @Override
             public boolean visit(TypeDeclaration type) {
                 if (!type.isPackageMemberTypeDeclaration()
-                        || JavaManagedSource.managedAnnotation(type) == null) return false;
+                        || ManagedIds.on(type, known) == null) return false;
                 String owner = pkg + type.getName().getIdentifier();
                 for (FieldDeclaration field : type.getFields()) {
                     int flags = field.getModifiers();

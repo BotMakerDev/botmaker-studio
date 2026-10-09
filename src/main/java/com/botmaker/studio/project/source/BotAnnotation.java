@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.source;
 
-import com.botmaker.plugin.api.managed.Managed;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
@@ -50,7 +49,6 @@ import java.util.Set;
 public enum BotAnnotation {
 
     PARAM(Param.class, "com.botmaker.plugin.basics.params.Param"),
-    MANAGED(Managed.class, "com.botmaker.plugin.basics.managed.Managed"),
     /** A refactor that guessed, on a bot's function (2026-09-27). No earlier name: it began in the contract. */
     REFACTOR(Refactor.class);
 

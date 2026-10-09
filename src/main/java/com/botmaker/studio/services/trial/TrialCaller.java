@@ -38,9 +38,6 @@ public final class TrialCaller {
     /** The caller's simple name. */
     public static final String SIMPLE_NAME = "BotMakerTry";
 
-    /** The annotation a {@code @Managed} holder's methods carry, by the class the contract ships it as. */
-    private static final String MANAGED = "com.botmaker.plugin.api.managed.Managed";
-
     /** A caller: its class, qualified, and its source. */
     public record Source(String className, String text) {
 
@@ -77,7 +74,7 @@ public final class TrialCaller {
      * The caller for {@code plan} with {@code values} for the locals it needs.
      *
      * @param entry   the plugin's trial entry, a {@code public static (Runnable, Class<?>...)} method
-     * @param holders the bot's classes holding {@code @Managed} values, qualified, handed to the entry
+     * @param holders the bot's classes holding managed values, qualified, handed to the entry
      * @throws IllegalArgumentException when a needed local has no value
      */
     public static Source write(TrialPlan.Plan plan, Map<String, Value> values, Method entry, List<String> holders) {
@@ -146,8 +143,8 @@ public final class TrialCaller {
     }
 
     /**
-     * The bot's classes holding {@code @Managed} values — the ones a run names, {@code Bot.run(…, Sdk.class)} —
-     * read off the bindings, in name order.
+     * The bot's classes holding managed values (a plugin's marker on a method) — the ones a run names,
+     * {@code Bot.run(…, Sdk.class)} — read off the bindings, in name order.
      */
     public static List<String> holders(BotIndex index) {
         if (index == null) return List.of();
@@ -160,7 +157,7 @@ public final class TrialCaller {
                     if (binding == null) return false;
                     for (IAnnotationBinding annotation : binding.getAnnotations()) {
                         ITypeBinding type = annotation.getAnnotationType();
-                        if (type != null && (MANAGED.equals(type.getQualifiedName()) || ManagedIds.isMarker(type))) {
+                        if (ManagedIds.isMarker(type)) {
                             found.add(binding.getDeclaringClass().getErasure().getQualifiedName());
                         }
                     }

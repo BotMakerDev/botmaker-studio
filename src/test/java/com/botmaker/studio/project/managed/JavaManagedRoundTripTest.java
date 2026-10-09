@@ -1,12 +1,17 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.TestValues;
+import com.botmaker.studio.project.source.BotParser;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +40,10 @@ class JavaManagedRoundTripTest {
 
     private static final ValueGrammar CATALOG = TestValues.GRAMMAR;
 
+    /** The test JVM's own classpath: it carries {@link TestValue}, as a bot's carries its plugin's marker. */
+    private static final BotParser BOUND = new BotParser(
+            Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), null);
+
     private static final Type TEXT = TestValues.TEXT;
     private static final Type DURATION = TestValues.DURATION;
     private static final Type BODY = TestValues.BODY;
@@ -43,12 +52,12 @@ class JavaManagedRoundTripTest {
     private static final Type DEEP = ValueTypes.mapOf(TEXT,
             ValueTypes.listOf(ValueTypes.mapOf(TEXT, ValueTypes.listOf(DURATION))));
 
-    /** The file a plugin ships, with one {@code @Managed} method whose return type is spelled out. */
+    /** The file a plugin ships, with one marked method whose return type is spelled out. */
     private static String fileReturning(String returnType, String expression) {
         return """
                 package com.example.bot.plugins.sdk;
 
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
 
                 /** The plugin's values for this bot. Yours from the moment it was copied here. */
                 public final class Sdk {
@@ -58,7 +67,7 @@ class JavaManagedRoundTripTest {
                         Plugin.use(value());
                     }
 
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     public static %s value() {
                         return %s;
                     }
@@ -77,8 +86,13 @@ class JavaManagedRoundTripTest {
         return CATALOG.valueOf(read.form(), read.expression()).orElseThrow();
     }
 
+    /** Every managed method in {@code source}, its mark resolved by binding as a project's would be. */
+    private static List<ManagedMethod> read(String source) {
+        return JavaManagedSource.read(null, source, CATALOG, BotRecords.none(), BOUND);
+    }
+
     private static ManagedMethod only(String source) {
-        List<ManagedMethod> read = JavaManagedSource.read(null, source, CATALOG);
+        List<ManagedMethod> read = read(source);
         assertEquals(1, read.size(), source);
         return read.getFirst();
     }
@@ -135,9 +149,9 @@ class JavaManagedRoundTripTest {
     void aHandEditedBodyIsReadOnlyAndNotPartlyRead() {
         String source = """
                 package com.example.bot.plugins.sdk;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 public final class Sdk {
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     public static String value() {
                         String base = "Collect";
                         return base + " and battle";
@@ -190,11 +204,11 @@ class JavaManagedRoundTripTest {
         String source = """
                 package com.example.bot.plugins.sdk;
 
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
 
                 public final class Sdk {
 
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     public static java.util.List<String> value() {
                         return null;
                     }
@@ -220,19 +234,19 @@ class JavaManagedRoundTripTest {
 
     @Test
     void onlyAnAnnotatedMethodIsAValue() {
-        List<ManagedMethod> read = JavaManagedSource.read(null, """
+        List<ManagedMethod> read = read("""
                 package com.example.bot;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 public final class Sdk {
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     public static String flow() { return "a"; }
                     public static String helper() { return "b"; }
-                    @Managed
+                    @TestValue
                     public static String noId() { return "c"; }
                 }
-                """, CATALOG);
+                """);
 
-        assertEquals(List.of("flow"), read.stream().map(ManagedMethod::id).toList());
+        assertEquals(List.of(ManagedValue.idOf(TestValue.Id.FLOW)), read.stream().map(ManagedMethod::id).toList());
         assertEquals("Sdk.flow()", read.getFirst().qualified());
     }
 
@@ -247,9 +261,9 @@ class JavaManagedRoundTripTest {
     private static String note(String declaration) {
         return only("""
                 package com.example.bot;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 public final class Sdk {
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     %s
                 }
                 """.formatted(declaration)).note();

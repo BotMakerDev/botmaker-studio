@@ -15,5 +15,5 @@ public @interface TestValue {
 
     Id value();
 
-    enum Id { GREETING, FAREWELL, NAMES, REST_BETWEEN }
+    enum Id { GREETING, FAREWELL, NAMES, REST_BETWEEN, PICTURES, FLOW, MINE, OPENED_ONLY, WORDS, WORDS_TOO }
 }

@@ -134,13 +134,12 @@ class BotAnnotationTest {
     }
 
     @Test
-    void managedIsNotParam() {
+    void aPluginsManagedMarkerIsNotParam() {
         Annotation annotation = only(BotParser.SYNTAX, """
                 package com.example.bot;
-                import com.botmaker.plugin.api.managed.Managed;
-                class Sdk { @Managed("flow") static int a = 1; }
+                import com.botmaker.studio.project.managed.TestValue;
+                class Sdk { @TestValue(TestValue.Id.FLOW) static int a = 1; }
                 """);
-        assertEquals(true, BotAnnotation.MANAGED.marks(annotation));
         assertEquals(false, BotAnnotation.PARAM.marks(annotation));
         assertNull(BotAnnotation.PARAM.on(List.of(annotation)));
     }

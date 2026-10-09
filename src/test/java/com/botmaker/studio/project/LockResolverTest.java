@@ -2,6 +2,7 @@ package com.botmaker.studio.project;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
+import com.botmaker.studio.project.managed.TestValue;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -174,9 +175,10 @@ class LockResolverTest {
     // --- files and fields another window owns (2026-09-19) --------------------------------------------------
 
     private static final List<ManagedValue<?>> PICTURES = List.of(
-            ManagedValue.openSet("pictures").of(String.class).in("Pictures")
+            ManagedValue.openSet(TestValue.Id.PICTURES).of(String.class).in("Pictures")
                     .because("Change pictures in the picture window."),
-            ManagedValue.method("flow").openedOnly().holds(String.class).because("Draw the flow in ✂ Activity Flow."));
+            ManagedValue.method(TestValue.Id.FLOW).openedOnly().holds(String.class)
+                    .because("Draw the flow in ✂ Activity Flow."));
 
     private static TypeDeclaration typeOf(String source) {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
@@ -214,9 +216,9 @@ class LockResolverTest {
     void anAnnotatedClassIsManagedWhole() {
         TypeDeclaration type = typeOf("""
                 package com.mybot;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 import com.example.vision.Picture;
-                @Managed("pictures")
+                @TestValue(TestValue.Id.PICTURES)
                 public final class Pictures {
                     public static final Picture COLLECT = new Picture("collect.png");
                     private Pictures() {}
@@ -250,9 +252,9 @@ class LockResolverTest {
     void anAnnotatedMethodIsLockedAndItsNeighboursAreNot() {
         TypeDeclaration type = typeOf("""
                 package com.mybot.plugins.sdk;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 public final class Sdk {
-                    @Managed("flow")
+                    @TestValue(TestValue.Id.FLOW)
                     public static Flow flow() { return Flow.of(); }
                     public static void install() { Flows.use(flow()); }
                 }
@@ -269,16 +271,16 @@ class LockResolverTest {
     void anIdNoPluginClaimsIsOrdinaryCode() {
         TypeDeclaration type = typeOf("""
                 package com.mybot;
-                import com.botmaker.plugin.basics.managed.Managed;
+                import com.botmaker.studio.project.managed.TestValue;
                 public final class Mine {
-                    @Managed("something-of-my-own")
+                    @TestValue(TestValue.Id.MINE)
                     public static int value() { return 3; }
                 }
                 """);
 
         assertNull(LockResolver.managedReason(type.getMethods()[0], PICTURES));
         assertNotNull(LockResolver.managedReason(type.getMethods()[0],
-                List.of(ManagedValue.method("something-of-my-own").openedOnly().holds(String.class)
+                List.of(ManagedValue.method(TestValue.Id.MINE).openedOnly().holds(String.class)
                         .because("Mine."))));
     }
 

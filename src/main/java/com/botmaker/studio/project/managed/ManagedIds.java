@@ -3,7 +3,6 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.managed.ManagedMarker;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.grammar.SourceNames;
-import com.botmaker.studio.project.source.BotAnnotation;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.Expression;
@@ -22,7 +21,7 @@ import java.util.Optional;
 
 /**
  * Which of a plugin's values a declaration in the bot's source is marked as: a plugin's own
- * {@link ManagedMarker} annotation — {@code @SdkValue(SdkValue.Id.FLOW)} — and, without one, {@code @Managed}.
+ * {@link ManagedMarker} annotation — {@code @SdkValue(SdkValue.Id.FLOW)}.
  *
  * <p><b>The id is the contract's</b>, {@link ManagedValue#idOf}: the enum's binary name and the constant, so a
  * binding answers {@code getBinaryName()} — {@code SdkValue$Id}, never the qualified {@code SdkValue.Id}.
@@ -33,9 +32,6 @@ import java.util.Optional;
  * ({@code known}), through the unit's imports ({@link SourceNames#refersTo}) — never a suffix match. The
  * constant is then the last name the source wrote: the marker's {@code value()} is its one enum, so javac
  * already refuses any other.
- *
- * <p>Typed first, as the bot's runtime reads them ({@code ManagedValues}): a stale {@code @Managed} beside a
- * typed marker never wins.
  */
 public final class ManagedIds {
 
@@ -44,7 +40,7 @@ public final class ManagedIds {
     private ManagedIds() {}
 
     /**
-     * A typed value's names, taken apart once: what a holder's annotation is written as, and what a source is
+     * A value's names, taken apart once: what a holder's annotation is written as, and what a source is
      * matched against.
      *
      * @param id           {@link ManagedValue#id()}, {@code com.botmaker.sdk.api.bot.SdkValue$Id.FLOW}
@@ -54,13 +50,21 @@ public final class ManagedIds {
      */
     public record Typed(String id, String markerBinary, String enumBinary, String constant) {
 
-        /** {@code value}'s names, or empty for a value declared by a string id. */
-        public static Optional<Typed> of(ManagedValue<?> value) {
-            if (value == null || value.marker() == null || value.id() == null) return Optional.empty();
+        /** {@code value}'s names. */
+        public static Typed of(ManagedValue<?> value) {
             int dot = value.id().lastIndexOf('.');
-            if (dot < 0) return Optional.empty();
-            return Optional.of(new Typed(value.id(), value.marker(), value.id().substring(0, dot),
-                    value.id().substring(dot + 1)));
+            return new Typed(value.id(), value.marker(), value.id().substring(0, dot), value.id().substring(dot + 1));
+        }
+
+        /**
+         * The names an id says itself, {@code pkg.Marker$Enum.CONSTANT}, for one no bound plugin declares; empty
+         * for a string of any other shape.
+         */
+        static Optional<Typed> parse(String id) {
+            int dollar = id == null ? -1 : id.lastIndexOf('$');
+            int dot = id == null ? -1 : id.lastIndexOf('.');
+            if (dollar <= 0 || dot <= dollar) return Optional.empty();
+            return Optional.of(new Typed(id, id.substring(0, dollar), id.substring(0, dot), id.substring(dot + 1)));
         }
 
         /** The annotation as source names it, {@code com.botmaker.sdk.api.bot.SdkValue}. */
@@ -84,23 +88,16 @@ public final class ManagedIds {
     }
 
     /**
-     * The mark a bot writes for {@code id}, for a sentence: {@code @SdkValue(SdkValue.Id.FLOW)} when a plugin in
-     * {@code known} declares it typed, {@code @Managed("flow")} otherwise.
+     * The mark a bot writes for {@code id}, for a sentence: {@code @SdkValue(SdkValue.Id.FLOW)}, from the
+     * plugin in {@code known} that declares it, else from the id's own shape, else the id as it is.
      */
     public static String spelled(String id, Collection<ManagedValue<?>> known) {
         if (known != null) {
             for (ManagedValue<?> value : known) {
-                Optional<Typed> typed = Typed.of(value).filter(t -> t.id().equals(id));
-                if (typed.isPresent()) return spelled(typed.get());
+                if (value != null && value.id().equals(id)) return spelled(Typed.of(value));
             }
         }
-        // A typed id no bound plugin declares still says its own shape: pkg.Marker$Enum.CONSTANT.
-        int dollar = id == null ? -1 : id.lastIndexOf('$');
-        int dot = id == null ? -1 : id.lastIndexOf('.');
-        if (dollar > 0 && dot > dollar) {
-            return spelled(new Typed(id, id.substring(0, dollar), id.substring(0, dot), id.substring(dot + 1)));
-        }
-        return "@Managed(\"" + id + "\")";
+        return Typed.parse(id).map(ManagedIds::spelled).orElse(String.valueOf(id));
     }
 
     private static String spelled(Typed typed) {
@@ -108,29 +105,23 @@ public final class ManagedIds {
                 + typed.constant() + ")";
     }
 
-    /** The annotation marking {@code declaration} as a managed value — typed first — or {@code null}. */
+    /** The annotation marking {@code declaration} as a managed value, or {@code null}. */
     public static Annotation on(BodyDeclaration declaration, Collection<ManagedValue<?>> known) {
         if (declaration == null) return null;
         for (Object modifier : declaration.modifiers()) {
-            if (modifier instanceof Annotation annotation && !typedIdOf(annotation, known).isEmpty()) {
-                return annotation;
-            }
+            if (modifier instanceof Annotation annotation && marks(annotation, known)) return annotation;
         }
-        return BotAnnotation.MANAGED.on(declaration);
+        return null;
     }
 
     /** The id {@code annotation} names, or {@code ""} when it is no marker or names nothing constant. */
     public static String idOf(Annotation annotation, Collection<ManagedValue<?>> known) {
-        if (annotation == null) return "";
-        String typed = typedIdOf(annotation, known);
-        if (!typed.isEmpty()) return typed;
-        if (!BotAnnotation.MANAGED.marks(annotation)) return "";
-        return BotAnnotation.MANAGED.members(annotation).get("value") instanceof String id ? id : "";
+        return annotation == null ? "" : typedIdOf(annotation, known);
     }
 
-    /** Whether {@code annotation} marks a managed value, typed or not. */
+    /** Whether {@code annotation} marks a managed value. */
     public static boolean marks(Annotation annotation, Collection<ManagedValue<?>> known) {
-        return !typedIdOf(annotation, known).isEmpty() || BotAnnotation.MANAGED.marks(annotation);
+        return !idOf(annotation, known).isEmpty();
     }
 
     /** Whether the class {@code annotationType} is an annotation a plugin marked {@link ManagedMarker}. */
@@ -143,8 +134,8 @@ public final class ManagedIds {
         return false;
     }
 
-    /** The typed id {@code annotation} holds, or {@code ""} when it is no plugin's marker. */
-    static String typedIdOf(Annotation annotation, Collection<ManagedValue<?>> known) {
+    /** The id {@code annotation} holds, or {@code ""} when it is no plugin's marker. */
+    private static String typedIdOf(Annotation annotation, Collection<ManagedValue<?>> known) {
         IAnnotationBinding binding = annotation.resolveAnnotationBinding();
         ITypeBinding type = binding == null ? null : binding.getAnnotationType();
         if (isMarker(type)) {
@@ -161,9 +152,10 @@ public final class ManagedIds {
         String constant = constantName(valueOf(annotation));
         if (constant == null) return "";
         for (ManagedValue<?> value : known) {
-            Optional<Typed> typed = Typed.of(value);
-            if (typed.isPresent() && SourceNames.refersTo(annotation.getTypeName(), typed.get().markerCanonical())) {
-                return typed.get().enumBinary() + "." + constant;
+            if (value == null) continue;
+            Typed typed = Typed.of(value);
+            if (SourceNames.refersTo(annotation.getTypeName(), typed.markerCanonical())) {
+                return typed.enumBinary() + "." + constant;
             }
         }
         return "";

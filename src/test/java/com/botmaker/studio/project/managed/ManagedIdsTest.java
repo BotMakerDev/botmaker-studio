@@ -126,33 +126,26 @@ class ManagedIdsTest {
         assertNull(idOfLast(BotParser.SYNTAX, source, KNOWN));
     }
 
+    /** Another annotation beside the mark is passed over, whichever comes first. */
     @Test
-    void aTypedMarkWinsOverAStaleManagedBesideIt() {
-        String source = QUALIFIED.replace("    @TestValue(", "    @com.botmaker.plugin.api.managed.Managed(\"old\")\n"
-                + "    @TestValue(");
+    void theMarkIsFoundAmongOtherAnnotations() {
+        String source = QUALIFIED.replace("    @TestValue(", "    @Deprecated\n    @TestValue(");
         assertEquals(GREETING, idOfLast(BotParser.SYNTAX, source, KNOWN));
         assertEquals(GREETING, idOfLast(BOUND, source, List.of()));
     }
 
+    /** A marker holding no constant names no value: there is nothing to be the id. */
     @Test
-    void aStringIdIsStillRead() {
-        String source = """
-                package bot;
-
-                import com.botmaker.plugin.api.managed.Managed;
-
-                public final class Values {
-                    @Managed("greeting")
-                    public static String greeting() { return "hi"; }
-                }
-                """;
-        assertEquals("greeting", idOfLast(BotParser.SYNTAX, source, KNOWN));
+    void aMarkHoldingNoConstantIsNoMark() {
+        String source = QUALIFIED.replace("@TestValue(TestValue.Id.GREETING)", "@TestValue");
+        assertNull(idOfLast(BotParser.SYNTAX, source, KNOWN));
     }
 
     @Test
     void aMarkIsSpelledTheWayABotWritesIt() {
         assertEquals("@TestValue(TestValue.Id.GREETING)", ManagedIds.spelled(GREETING, KNOWN));
-        assertEquals("@Managed(\"flow\")", ManagedIds.spelled("flow", KNOWN));
+        // An id of no shape at all is said as it is.
+        assertEquals("flow", ManagedIds.spelled("flow", KNOWN));
         // A typed id no plugin in hand declares still says its own shape.
         assertEquals("@SdkValue(SdkValue.Id.FLOW)", ManagedIds.spelled("com.botmaker.sdk.api.bot.SdkValue$Id.FLOW",
                 List.of()));

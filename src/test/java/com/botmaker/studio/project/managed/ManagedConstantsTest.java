@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.plugin.grammar.JavaExpressions;
 import com.botmaker.studio.plugin.grammar.JavaNames;
@@ -20,7 +21,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,12 +40,16 @@ class ManagedConstantsTest {
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(List.of(), List.of(PICTURE));
 
+    /** What a bound plugin declares: the set the class below is marked as. */
+    private static final List<ManagedValue<?>> KNOWN = List.of(
+            ManagedValue.openSet(TestValue.Id.PICTURES).of(Picture.class).in("Pictures").because("Mine."));
+
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.plugin.api.managed.Managed;
+            import com.botmaker.studio.project.managed.TestValue;
 
-            @Managed("pictures")
+            @TestValue(TestValue.Id.PICTURES)
             public final class Pictures {
                 public static final Picture ORE = new %s("images/ore.png");
                 public static final Picture GOLD = new %s("images/gold.png");
@@ -58,13 +62,13 @@ class ManagedConstantsTest {
     }
 
     private static ManagedConstants.Lookup lookup() {
-        return new ManagedConstants.Lookup(ManagedConstants.read(PICTURES), GRAMMAR);
+        return new ManagedConstants.Lookup(ManagedConstants.read(PICTURES, KNOWN), GRAMMAR);
     }
 
     @Test
     void onlyPublicStaticFinalFieldsOfAManagedTypeAreConstants() {
         assertEquals(List.of("ORE", "GOLD"),
-                ManagedConstants.read(PICTURES).stream().map(ManagedConstants.Constant::field).toList());
+                ManagedConstants.read(PICTURES, KNOWN).stream().map(ManagedConstants.Constant::field).toList());
     }
 
     @Test
@@ -116,14 +120,18 @@ class ManagedConstantsTest {
         Path pictures = pkg.resolve("Pictures.java");
         Files.writeString(pictures, PICTURES);
 
-        assertEquals(2, ManagedConstants.scan(config, null).size());
+        assertEquals(2, ManagedConstants.scan(config, null, KNOWN).size());
         int afterFirst = ManagedConstants.parses();
-        assertEquals(2, ManagedConstants.scan(config, null).size());
+        assertEquals(2, ManagedConstants.scan(config, null, KNOWN).size());
         assertEquals(afterFirst, ManagedConstants.parses(), "nothing changed, nothing parsed");
 
         Files.writeString(pictures, PICTURES.replace("static final Picture HIDDEN", "public static final Picture HIDDEN"));
         assertEquals(List.of("ORE", "GOLD", "HIDDEN"),
-                ManagedConstants.scan(config, null).stream().map(ManagedConstants.Constant::field).toList());
+                ManagedConstants.scan(config, null, KNOWN).stream().map(ManagedConstants.Constant::field).toList());
         assertEquals(afterFirst + 1, ManagedConstants.parses(), "one file changed, one parsed");
+
+        // A plugin bound since: the same text is read again, against what that plugin declares.
+        assertEquals(List.of(), ManagedConstants.scan(config, null, List.of()));
+        assertEquals(afterFirst + 2, ManagedConstants.parses(), "new declarations, parsed again");
     }
 }
