@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin.grammar;
 
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.plugin.api.value.Wither;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -470,6 +471,20 @@ public final class ValueGrammar {
         try {
             List<Class<?>> declared = component.componentTypes();
             return declared == null ? List.of() : declared;
+        } catch (RuntimeException | LinkageError e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The links {@code component} is written with after its factory, or none when it declares none, answers
+     * null or throws: a call whose withers cannot be asked about is written and read as its factory alone.
+     */
+    public static List<? extends Wither<?>> withersOf(ComponentType<?> component) {
+        try {
+            List<? extends Wither<?>> withers = component.withers();
+            // Not contains(null): an immutable list throws on the question.
+            return withers == null || withers.stream().anyMatch(java.util.Objects::isNull) ? List.of() : withers;
         } catch (RuntimeException | LinkageError e) {
             return List.of();
         }

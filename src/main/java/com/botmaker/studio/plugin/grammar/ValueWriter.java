@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin.grammar;
 
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.plugin.api.value.Wither;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.Expression;
@@ -11,6 +12,7 @@ import org.eclipse.jdt.core.dom.Name;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -27,7 +29,8 @@ import java.util.Set;
  *
  * <p>Every rule of the old writer stands: one part that cannot be written empties the whole answer, plugin
  * code that throws declines that value, and a chain on part 0 is written only for a value the declaration's
- * own factory would lose part of (2026-09-27, {@link #call}).
+ * own factory would lose part of (2026-09-27, {@link #call}). A declaration's own withers are links after its
+ * factory, each written only when its part differs from what the factory makes (2026-10-09, {@link #linked}).
  */
 final class ValueWriter {
 
@@ -144,7 +147,57 @@ final class ValueWriter {
                 if (written.isPresent()) return written;
             }
         }
-        return direct(component, type, value, names);
+        return linked(component, type, value, names);
+    }
+
+    /**
+     * {@code value} as one of its type's named constants, else its factory's call followed by a link for each
+     * wither whose part differs from what the factory alone makes: {@code Flow.activity(COLLECT, Collect::body)
+     * .described("Picks up ore").goesHome()} (2026-10-09). A part as the factory makes it is left out, so a
+     * value with nothing set is the bare call. The chain always starts at the factory's call, never at a
+     * constant, which is the only start the reader unwinds to. A call declaring no wither is its factory alone.
+     * A link that cannot be written — a flag the factory turns on and the value has off, an argument of a type
+     * nothing writes — is left out and only its part lost, as a lossy factory always lost one.
+     */
+    private Optional<Expression> linked(ComponentType<?> component, Class<?> type, Object value, Names names) {
+        List<? extends Wither<?>> withers = ValueGrammar.withersOf(component);
+        if (withers.isEmpty()) return direct(component, type, value, names);
+        Optional<Expression> named = namedConstant(component, type, value, names);
+        if (named.isPresent()) return named;
+        List<Object> parts;
+        List<Object> madeParts;
+        int fixed;
+        try {
+            parts = component.componentsOf(value);
+            fixed = parts == null ? -1 : parts.size() - withers.size();
+            if (fixed < 0) return Optional.empty();
+            Object made = component.build(new ArrayList<>(parts.subList(0, fixed)));
+            madeParts = made == null ? null : component.componentsOf(made);
+        } catch (RuntimeException | LinkageError e) {
+            return Optional.empty();
+        }
+        if (madeParts == null || madeParts.size() != parts.size()) return Optional.empty();
+        Optional<Expression> on = factoryWritten(component, type, value, names);
+        if (on.isEmpty()) return Optional.empty();
+        Expression chain = on.get();
+        for (int i = 0; i < withers.size(); i++) {
+            Object part = parts.get(fixed + i);
+            if (Objects.equals(part, madeParts.get(fixed + i))) continue;
+            Wither<?> wither = withers.get(i);
+            Optional<Expression> argument = Optional.empty();
+            if (wither.flag()) {
+                if (!Boolean.TRUE.equals(part)) continue;
+            } else {
+                argument = ofClass(wither.partType(), part, names);
+                if (argument.isEmpty()) continue;
+            }
+            MethodInvocation link = names.ast.newMethodInvocation();
+            link.setExpression(chain);
+            link.setName(names.ast.newSimpleName(wither.method().getName()));
+            argument.ifPresent(arguments(link)::add);
+            chain = link;
+        }
+        return Optional.of(chain);
     }
 
     /** Whether {@code component}'s own parts build {@code value} back whole; plugin code that throws does not. */
@@ -177,7 +230,8 @@ final class ValueWriter {
         if (!type.isInstance(receiver) || receiver.equals(value) || !keeps(component, receiver)) {
             return Optional.empty();
         }
-        Optional<Expression> on = direct(component, type, receiver, names);
+        // The receiver with its own links: the factory's parts alone would drop what its withers set.
+        Optional<Expression> on = linked(component, type, receiver, names);
         if (on.isEmpty()) return Optional.empty();
         MethodInvocation invocation = names.ast.newMethodInvocation();
         invocation.setExpression(on.get());
@@ -195,7 +249,12 @@ final class ValueWriter {
     /** {@code value} as one of its type's named constants, else through {@code component}'s own factory. */
     private Optional<Expression> direct(ComponentType<?> component, Class<?> type, Object value, Names names) {
         Optional<Expression> named = namedConstant(component, type, value, names);
-        if (named.isPresent()) return named;
+        return named.isPresent() ? named : factoryWritten(component, type, value, names);
+    }
+
+    /** {@code component}'s own factory over {@code value}'s factory parts — a wither's are {@link #linked}'s. */
+    private Optional<Expression> factoryWritten(ComponentType<?> component, Class<?> type, Object value,
+                                                Names names) {
         Optional<Factory> factory = Factory.of(component);
         if (factory.isEmpty() || factory.get().kind() == Factory.Kind.RECEIVER) return Optional.empty();
         List<Object> parts;
@@ -205,6 +264,10 @@ final class ValueWriter {
             return Optional.empty();
         }
         if (parts == null) return Optional.empty();
+        // The factory's own parts: a wither's follow them, and are written as links (linked).
+        int fixed = parts.size() - ValueGrammar.withersOf(component).size();
+        if (fixed < 0) return Optional.empty();
+        parts = parts.subList(0, fixed);
         List<Class<?>> declared = ValueGrammar.componentTypesOf(component);
         List<Expression> arguments;
         if (factory.get().kind() == Factory.Kind.CONSTRUCTOR) {

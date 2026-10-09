@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+- **Values written as named chains.** A type its plugin declares with withers is written as its factory call
+  followed by a link for each part that differs from what the factory makes —
+  `Flow.activity(COLLECT, Collect::body).described("…").goesHome()` — and read back with the links in any
+  order, a link left out reading as the factory's. A chain setting one part twice, or a link no declaration
+  has, stays as written. The Parameters window labels a wither's field by the wither's name.
+
 ### Changed
 - **A plugin's typed marker is a managed value's mark, and `@Managed` is no longer read.** Studio reads a
   plugin's own annotation marked `@ManagedMarker` — `@SdkValue(SdkValue.Id.FLOW)` — as the value it names, on

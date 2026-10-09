@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.plugin.api.value.Wither;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -136,7 +137,10 @@ sealed interface FallbackShape {
         }
     }
 
-    /** The factory's parameter names when the class was compiled with them, else each part's simple type name. */
+    /**
+     * The factory's parameter names when the class was compiled with them, else each part's simple type name;
+     * a wither's part, after the factory's, by the wither's own name ({@code described}, {@code goesHome}).
+     */
     private static List<String> labels(ComponentType<?> component, List<Class<?>> types) {
         List<String> out = new ArrayList<>();
         Parameter[] named = new Parameter[0];
@@ -146,8 +150,15 @@ sealed interface FallbackShape {
         } catch (RuntimeException | LinkageError e) {
             // labels are a courtesy; the type names below still say what each row is
         }
-        boolean useNames = named.length == types.size() && Arrays.stream(named).allMatch(Parameter::isNamePresent);
-        for (int i = 0; i < types.size(); i++) out.add(useNames ? named[i].getName() : types.get(i).getSimpleName());
+        List<? extends Wither<?>> withers = ValueGrammar.withersOf(component);
+        if (withers.size() > types.size()) withers = List.of();
+        int fixed = types.size() - withers.size();
+        boolean useNames = named.length == fixed && Arrays.stream(named).allMatch(Parameter::isNamePresent);
+        for (int i = 0; i < types.size(); i++) {
+            Wither<?> wither = i < fixed ? null : withers.get(i - fixed);
+            if (wither != null) out.add(wither.method().getName());
+            else out.add(useNames && i < fixed ? named[i].getName() : types.get(i).getSimpleName());
+        }
         return out;
     }
 }
