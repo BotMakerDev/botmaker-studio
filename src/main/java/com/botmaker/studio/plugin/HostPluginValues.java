@@ -17,6 +17,7 @@ import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.JavaManagedValues;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.managed.ManagedMethod;
 import com.botmaker.studio.project.managed.ManagedSets;
 import com.botmaker.studio.project.params.JavaParameterEdits;
@@ -329,7 +330,8 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private static String missing(String id, String member) {
-        return "The project has no " + member + " in the class marked @Managed(\"" + id + "\").";
+        return "The project has no " + member + " in the class marked "
+                + ManagedIds.spelled(id, PluginHost.managedValues()) + ".";
     }
 
     /**

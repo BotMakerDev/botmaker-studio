@@ -1,12 +1,12 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
@@ -23,13 +23,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Reads {@code @Managed} methods out of <b>one</b> Java source, with no project, no filesystem and no host.
+ * Reads managed methods out of <b>one</b> Java source, with no project and no filesystem.
  *
- * <p><b>The same shape as {@code JavaParameterSource}, deliberately.</b> Pure, so the reading can be tested
- * over source text headlessly; parsed by the caller's {@link BotParser} or handed a {@code BotIndex} unit, and
- * {@code @Managed} identified by class ({@link BotAnnotation#MANAGED}), so a bot whose dependencies do not
- * resolve still shows its plugin's values instead of an empty window. The form derivation and the annotation
- * match are shared with that class — asked rather than copied, so there is one rule to keep in step.
+ * <p><b>The same shape as {@code JavaParameterSource}, deliberately.</b> Pure but for one input, so the reading
+ * can be tested over source text headlessly; parsed by the caller's {@link BotParser} or handed a
+ * {@code BotIndex} unit. A method is managed by its mark ({@link ManagedIds}): a plugin's typed marker, else
+ * {@code @Managed}, identified by class, and — in a unit without bindings — matched against the bound plugins'
+ * declarations ({@code PluginHost.managedValues()}, the one input), so a bot whose dependencies do not resolve
+ * still shows its plugin's values instead of an empty window. The form derivation is shared with that class —
+ * asked rather than copied, so there is one rule to keep in step.
  *
  * <p><b>What is different is the member and the body rule.</b> A parameter is a field whose initialiser is
  * the value. A managed value is a method whose <em>whole body</em> must be exactly one
@@ -149,23 +151,26 @@ public final class JavaManagedSource {
     }
 
     /**
-     * The {@code @Managed} annotation on this declaration, or {@code null}.
+     * The annotation marking this declaration as a managed value — a plugin's typed marker, else
+     * {@code @Managed} — or {@code null}; a unit without bindings is matched against the bound plugins'
+     * declarations ({@link ManagedIds}).
      *
      * <p>Takes a {@link BodyDeclaration} rather than a method because the annotation has two targets: a
      * method holds one value, and a type holds a set of them. {@code LockResolver} asks about both, and what
      * makes either one managed is stated here once.
      */
     public static Annotation managedAnnotation(BodyDeclaration declaration) {
-        return BotAnnotation.MANAGED.on(declaration);
+        return ManagedIds.on(declaration, PluginHost.managedValues());
     }
 
     /**
      * The id an annotation names, or {@code ""} for one that names nothing constant.
      *
-     * <p>A constant the classpath resolves is read as its value; without bindings only a string literal is,
-     * because a guessed id is a value edited under a name nobody wrote.
+     * <p>A typed marker names {@link com.botmaker.plugin.api.source.ManagedValue#idOf} its constant. Of
+     * {@code @Managed}, a constant the classpath resolves is read as its value; without bindings only a string
+     * literal is, because a guessed id is a value edited under a name nobody wrote.
      */
     public static String idOf(Annotation annotation) {
-        return BotAnnotation.MANAGED.members(annotation).get("value") instanceof String id ? id : "";
+        return ManagedIds.idOf(annotation, PluginHost.managedValues());
     }
 }

@@ -2,7 +2,7 @@ package com.botmaker.studio.project;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.managed.JavaManagedSource;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Annotation;
@@ -194,11 +194,14 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         return null;
     }
 
-    /** The reason of the managed entry this declaration's {@code @Managed} id names, or {@code null}. */
+    /**
+     * The reason of the managed entry this declaration's mark names — a plugin's typed marker or
+     * {@code @Managed} ({@link ManagedIds}) — or {@code null}.
+     */
     private static String pluginReason(BodyDeclaration declaration, List<ManagedValue<?>> managed) {
-        Annotation annotation = JavaManagedSource.managedAnnotation(declaration);
+        Annotation annotation = ManagedIds.on(declaration, managed);
         if (annotation == null) return null;
-        String id = JavaManagedSource.idOf(annotation);
+        String id = ManagedIds.idOf(annotation, managed);
         if (id.isEmpty()) return null;
         for (ManagedValue<?> entry : managed) {
             if (id.equals(entry.id())) return entry.reason();

@@ -1,6 +1,8 @@
 package com.botmaker.studio.blocks.misc;
 
 import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.css.PseudoClass;
@@ -68,7 +70,7 @@ public final class AnnotationRow {
         String written = annotation.toString();
         boolean deletable = editable;
 
-        if (BotAnnotation.PARAM.marks(annotation) || BotAnnotation.MANAGED.marks(annotation)) {
+        if (BotAnnotation.PARAM.marks(annotation) || ManagedIds.marks(annotation, PluginHost.managedValues())) {
             pill.getStyleClass().add("annotation-pill--host");
             text.setText(written);
             text.setTooltip(new Tooltip(written + "\n\n" + (BotAnnotation.PARAM.marks(annotation)

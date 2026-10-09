@@ -3,6 +3,7 @@ package com.botmaker.studio.services.trial;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.IAnnotationBinding;
@@ -159,7 +160,7 @@ public final class TrialCaller {
                     if (binding == null) return false;
                     for (IAnnotationBinding annotation : binding.getAnnotations()) {
                         ITypeBinding type = annotation.getAnnotationType();
-                        if (type != null && MANAGED.equals(type.getQualifiedName())) {
+                        if (type != null && (MANAGED.equals(type.getQualifiedName()) || ManagedIds.isMarker(type))) {
                             found.add(binding.getDeclaringClass().getErasure().getQualifiedName());
                         }
                     }

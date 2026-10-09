@@ -144,6 +144,22 @@ class ManagedSetsTest {
         assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, "flow", "X", String.class, silver));
     }
 
+    /** Two classes carrying one id: which one a constant belongs in is nobody's guess, so nothing is added. */
+    @Test
+    void twoClassesCarryingOneIdRefuseAnAdd(@TempDir Path root) {
+        Map<Path, String> sources = new LinkedHashMap<>();
+        sources.put(pictures(root), PICTURES);
+        sources.put(root.resolve("com/bot/plugins/sdk/MorePictures.java"),
+                PICTURES.replace("class Pictures", "class MorePictures").replace("private Pictures()",
+                        "private MorePictures()"));
+        BotIndex index = BotIndex.over(sources, List.of(contract()), root);
+        JavaValue silver = GRAMMAR.spellAny("images/silver.png").orElseThrow();
+
+        Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.add(index, "pictures", "SILVER", String.class, silver));
+        assertTrue(refused.reason().contains("are both marked @Managed(\"pictures\")"), refused.reason());
+    }
+
     private static ManagedSets.Member member(BotIndex index, String name) {
         return ManagedSets.member(index, "pictures", name, GRAMMAR).orElseThrow();
     }

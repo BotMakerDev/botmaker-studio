@@ -5,6 +5,7 @@ import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -120,15 +121,22 @@ public final class ManagedSets {
         if (name == null || !SourceVersion.isIdentifier(name) || SourceVersion.isKeyword(name)) {
             return new Refactor.Refused("“" + name + "” is not a name Java accepts.");
         }
-        Optional<Holder> holder = holder(index, id);
-        if (holder.isEmpty()) return new Refactor.Refused("The project has no class marked @Managed(\"" + id + "\").");
-        String source = index.sources().get(holder.get().file());
-        String added = added(source, holder.get().className(), name, type, initializer);
-        if (added.equals(source)) {
-            return new Refactor.Refused(holder.get().className() + "." + name + " could not be written.");
+        List<Holder> holders = holders(index, id);
+        String mark = ManagedIds.spelled(id, PluginHost.managedValues());
+        if (holders.isEmpty()) return new Refactor.Refused("The project has no class marked " + mark + ".");
+        if (holders.size() > 1) {
+            return new Refactor.Refused(holders.get(0).className() + " and " + holders.get(1).className()
+                    + " are both marked " + mark + ", so which one gets " + name + " is not clear. Remove the"
+                    + " mark from one of them.");
         }
-        return Refactor.checked(index, new Refactor.Planned("Added " + holder.get().className() + "." + name,
-                Map.of(holder.get().file(), added)), "Adding " + holder.get().className() + "." + name);
+        Holder holder = holders.getFirst();
+        String source = index.sources().get(holder.file());
+        String added = added(source, holder.className(), name, type, initializer);
+        if (added.equals(source)) {
+            return new Refactor.Refused(holder.className() + "." + name + " could not be written.");
+        }
+        return Refactor.checked(index, new Refactor.Planned("Added " + holder.className() + "." + name,
+                Map.of(holder.file(), added)), "Adding " + holder.className() + "." + name);
     }
 
     /**
@@ -230,16 +238,18 @@ public final class ManagedSets {
 
     // --- reading -----------------------------------------------------------------------------------------------
 
-    private static Optional<Holder> holder(BotIndex index, String id) {
+    /** Every class carrying {@code id}: one is the set's holder, two is a project nobody can add to safely. */
+    private static List<Holder> holders(BotIndex index, String id) {
         return index.read(units -> {
+            List<Holder> found = new ArrayList<>();
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
                 for (Object each : entry.getValue().types()) {
                     if (each instanceof TypeDeclaration type && carries(type, id)) {
-                        return Optional.of(new Holder(entry.getKey(), type.getName().getIdentifier()));
+                        found.add(new Holder(entry.getKey(), type.getName().getIdentifier()));
                     }
                 }
             }
-            return Optional.<Holder>empty();
+            return List.copyOf(found);
         });
     }
 

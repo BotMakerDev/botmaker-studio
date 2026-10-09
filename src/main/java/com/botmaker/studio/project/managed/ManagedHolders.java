@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -85,15 +86,14 @@ public final class ManagedHolders {
         String pkg = config.mainPackage() + ".plugins." + segment;
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         TreeSet<String> imports = new TreeSet<>();
-        imports.add(MANAGED);
 
         TypeDeclaration type = ast.newTypeDeclaration();
         type.setName(ast.newSimpleName(holder));
-        type.setJavadoc(javadoc(ast, pluginId));
+        type.setJavadoc(javadoc(ast, pluginId, markName(value)));
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> typeModifiers = type.modifiers();
         boolean typeLevel = value.isOpenSet();
-        if (typeLevel) typeModifiers.add(managed(ast, value.id()));
+        if (typeLevel) typeModifiers.add(mark(ast, value, imports));
         typeModifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
         typeModifiers.add(ast.newModifier(Modifier.ModifierKeyword.FINAL_KEYWORD));
         @SuppressWarnings("unchecked")
@@ -152,7 +152,7 @@ public final class ManagedHolders {
 
     /** The holder's doc comment: whose values these are, and that the file is the user's from now on. */
     @SuppressWarnings("unchecked")
-    private static Javadoc javadoc(AST ast, String pluginId) {
+    private static Javadoc javadoc(AST ast, String pluginId, String markName) {
         Javadoc javadoc = ast.newJavadoc();
         // One untagged element per line: the flattener starts each on its own " * " line.
         for (String line : List.of("Values " + pluginId + " keeps in step with its own windows.",
@@ -164,7 +164,7 @@ public final class ManagedHolders {
         }
         TagElement code = ast.newTagElement();
         code.setTagName(TagElement.TAG_CODE);
-        code.fragments().add(text(ast, " @Managed"));
+        code.fragments().add(text(ast, " @" + markName));
         TagElement last = (TagElement) javadoc.tags().getLast();
         last.fragments().add(code);
         last.fragments().add(text(ast, " method returns and nothing else."));
@@ -177,13 +177,30 @@ public final class ManagedHolders {
         return element;
     }
 
-    /** {@code @Managed("id")}. */
-    private static SingleMemberAnnotation managed(AST ast, String id) {
+    /** The simple name of the annotation {@code value} is marked with: the plugin's marker, or {@code Managed}. */
+    private static String markName(ManagedValue<?> value) {
+        return ManagedIds.Typed.of(value).map(ManagedIds.Typed::markerSimple).orElse("Managed");
+    }
+
+    /**
+     * {@code value}'s mark, its import added to {@code imports}: {@code @SdkValue(SdkValue.Id.FLOW)} for a typed
+     * id, {@code @Managed("id")} for a string.
+     */
+    private static SingleMemberAnnotation mark(AST ast, ManagedValue<?> value, Set<String> imports) {
         SingleMemberAnnotation annotation = ast.newSingleMemberAnnotation();
+        Optional<ManagedIds.Typed> typed = ManagedIds.Typed.of(value);
+        if (typed.isPresent()) {
+            ManagedIds.Typed id = typed.get();
+            annotation.setTypeName(ast.newSimpleName(id.markerSimple()));
+            annotation.setValue(ast.newName(id.markerSimple() + "." + id.enumSimple() + "." + id.constant()));
+            imports.add(id.markerCanonical());
+            return annotation;
+        }
         annotation.setTypeName(ast.newSimpleName("Managed"));
         StringLiteral literal = ast.newStringLiteral();
-        literal.setLiteralValue(id);
+        literal.setLiteralValue(value.id());
         annotation.setValue(literal);
+        imports.add(MANAGED);
         return annotation;
     }
 
@@ -238,11 +255,13 @@ public final class ManagedHolders {
         if (returnType == null) return null;
 
         MethodDeclaration method = ast.newMethodDeclaration();
-        method.setName(ast.newSimpleName(methodName(value.id())));
+        method.setName(ast.newSimpleName(methodName(ManagedIds.Typed.of(value)
+                // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
+                .map(typed -> typed.constant().toLowerCase(Locale.ROOT).replace('_', '-')).orElse(value.id()))));
         method.setReturnType2(returnType);
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> modifiers = method.modifiers();
-        modifiers.add(managed(ast, value.id()));
+        modifiers.add(mark(ast, value, imports));
         modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
         modifiers.add(ast.newModifier(Modifier.ModifierKeyword.STATIC_KEYWORD));
         Block body = ast.newBlock();

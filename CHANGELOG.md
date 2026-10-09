@@ -13,6 +13,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Changed
+- **A plugin's typed marker is a managed value's mark.** Besides `@Managed("flow")`, Studio reads a plugin's own
+  annotation marked `@ManagedMarker` — `@SdkValue(SdkValue.Id.FLOW)` — as the value it names, on a method or
+  on an open set's class: the plugin's window opens and rewrites it, the canvas locks it, ▶ Try names its
+  holder, and its pill reads as a plugin's. A missing holder is written with the plugin's annotation and a
+  method named after the constant (`flowLayout()` for `FLOW_LAYOUT`). Where both marks sit on one member the
+  typed one wins, as it does when the bot runs.
+- Adding a constant to an open set that two classes carry is refused, naming both, instead of going into
+  whichever was found first.
 - A plugin's toolbar button that shows a run property refreshes when the plugin sets it: `Runs.setProperty`
   announces the change as every other settings write does. The SDK's 🎮 game button needs this.
 

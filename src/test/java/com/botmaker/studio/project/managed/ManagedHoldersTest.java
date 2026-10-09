@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,6 +68,32 @@ class ManagedHoldersTest {
         ManagedHolders.Plan.Write write = assertInstanceOf(ManagedHolders.Plan.Write.class, plan("pictures"));
         assertTrue(write.source().contains("@Managed(\"pictures\")\npublic final class Pictures {"), write.source());
         assertEquals(0, parse(write.source()).getProblems().length, write.source());
+    }
+
+    /** A typed id is written in the plugin's own annotation, its method named after the constant. */
+    @Test
+    void aTypedValueIsMarkedWithThePluginsAnnotation() {
+        List<ManagedValue<?>> declared = List.of(
+                ManagedValue.method(TestValue.Id.GREETING).in("Values").holds(String.class, null).because("Mine."),
+                ManagedValue.method(TestValue.Id.REST_BETWEEN).in("Values").holds(String.class, null)
+                        .because("Mine."),
+                ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in("Names").because("Mine."));
+        ProjectConfig config = ProjectConfig.forDirectory(dir);
+
+        String values = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
+                "com.botmaker.test", declared.getFirst(), declared, TestValues.GRAMMAR)).source();
+        assertTrue(values.contains("import " + TestValue.class.getCanonicalName() + ";"), values);
+        assertFalse(values.contains(ManagedHolders.MANAGED), values);
+        assertTrue(values.contains("@TestValue(TestValue.Id.GREETING)\n    public static String greeting() {"),
+                values);
+        assertTrue(values.contains("@TestValue(TestValue.Id.REST_BETWEEN)\n    public static String restBetween() {"),
+                values);
+        assertTrue(values.contains("{@code @TestValue} method returns"), values);
+        assertEquals(0, parse(values).getProblems().length, values);
+
+        String names = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
+                "com.botmaker.test", declared.getLast(), declared, TestValues.GRAMMAR)).source();
+        assertTrue(names.contains("@TestValue(TestValue.Id.NAMES)\npublic final class Names {"), names);
     }
 
     @Test
