@@ -188,7 +188,10 @@ public final class AssistTurn {
         }
         if (named.size() == 1) {
             ManagedConstants.Constant constant = named.getFirst();
-            if (workspace.grammar().valueOf(type.get(), constant.initializer()).isEmpty()) {
+            // An enum's constant has no initialiser: what it holds is spelled through the grammar instead.
+            String held = constant.initializer() != null ? constant.initializer()
+                    : workspace.grammar().initializerOfAny(constant.member()).map(JavaValue::source).orElse(null);
+            if (held == null || workspace.grammar().valueOf(type.get(), held).isEmpty()) {
                 return Outcome.Refused.because("`" + text + "` is not a " + nameOf(expected) + ".");
             }
             JavaValue reference = reference(constant);

@@ -111,6 +111,40 @@ class ManagedConstantsTest {
         assertTrue(lookup().spell(new Picture("images/new.png")).isEmpty(), "no constant holds it");
     }
 
+    /**
+     * A marked enum's constants are what its set's plugin makes of each name, so a reference reads as that
+     * value and the value is written back as the constant.
+     */
+    @Test
+    void anEnumSetsConstantIsWhatItsPluginMakesOfItsName() {
+        ComponentType<TestOutcome.Named> outcome = new ComponentType<>() {
+            @Override public Class<TestOutcome.Named> type() { return TestOutcome.Named.class; }
+            @Override public List<Class<?>> componentTypes() { return List.of(String.class); }
+            @Override public List<Object> components(TestOutcome.Named o) { return List.of(o.name()); }
+            @Override public TestOutcome.Named build(List<Object> parts) {
+                return new TestOutcome.Named((String) parts.getFirst());
+            }
+        };
+        List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
+                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine."));
+        String outcomes = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestOutcome;
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.OUTCOMES)
+                public enum Outcomes implements TestOutcome { WON, LOST }
+                """;
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(outcomes, known),
+                ValueGrammar.of(List.of(), List.of(outcome)));
+
+        assertEquals(new TestOutcome.Named("LOST"), lookup.read(name("Outcomes.LOST")).orElseThrow());
+        assertEquals("Outcomes.WON", lookup.spell(new TestOutcome.Named("WON")).orElseThrow().source());
+        assertTrue(lookup.spell(new TestOutcome.Named("DRAW")).isEmpty(), "no constant is called that");
+        assertEquals(List.of(), ManagedConstants.read(outcomes, KNOWN), "an enum no plugin declares holds nothing");
+    }
+
     /** An unchanged file is not parsed again; a file whose text changed is, and its new constant is found. */
     @Test
     void aScanParsesOnlyWhatChanged(@TempDir Path root) throws IOException {

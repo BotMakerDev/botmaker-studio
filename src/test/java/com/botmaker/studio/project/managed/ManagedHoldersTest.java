@@ -84,6 +84,21 @@ class ManagedHoldersTest {
         assertEquals(0, parse(write.source()).getProblems().length, write.source());
     }
 
+    /** An enum set's holder is an empty enum carrying the mark and implementing the element type. */
+    @Test
+    void anEnumSetIsAnEmptyAnnotatedEnumOfItsElement() {
+        ManagedValue<TestOutcome> outcomes = ManagedValue.openSet(TestValue.Id.OUTCOMES)
+                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine.");
+        String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
+                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", outcomes, List.of(outcomes),
+                TestValues.GRAMMAR)).source();
+
+        assertTrue(source.contains("@TestValue(TestValue.Id.OUTCOMES)\npublic enum Outcomes implements TestOutcome {"),
+                source);
+        assertTrue(source.contains("import " + TestOutcome.class.getCanonicalName() + ";"), source);
+        assertEquals(0, parse(source).getProblems().length, source);
+    }
+
     /** A typed id is written in the plugin's own annotation, its method named after the constant. */
     @Test
     void aTypedValueIsMarkedWithThePluginsAnnotation() {

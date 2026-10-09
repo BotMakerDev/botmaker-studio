@@ -14,10 +14,14 @@ import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.EnumConstantDeclaration;
+import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -35,8 +39,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * A plugin's open sets — a class carrying {@code @Managed("pictures")} whose {@code public static final}
- * constants the plugin adds, renames, repoints and removes (2026-09-28).
+ * A plugin's open sets — a class carrying {@code @SdkValue(SdkValue.Id.PICTURES)} whose {@code public static
+ * final} constants the plugin adds, renames, repoints and removes (2026-09-28), or an enum carrying one whose
+ * bare constants it does the same to ({@code ManagedValue.isEnum}, 2026-10-10).
  *
  * <p><b>Pure, over the bot's one parse.</b> A {@link BotIndex} in, a {@link Refactor.Planned plan} or a
  * {@link Refactor.Refused refusal} out, nothing written — the shape {@link Refactor} has, and for the same
@@ -59,8 +64,8 @@ public final class ManagedSets {
      * @param className   the class's simple name — {@code Pictures}
      * @param name        the constant's name — {@code ORE}
      * @param start       where its name starts, the handle {@link Refactor} takes
-     * @param form        its declared type, as a value's type
-     * @param initializer its initialiser, as written
+     * @param form        its declared type, as a value's type; null for an enum's constant
+     * @param initializer its initialiser, as written; null for an enum's constant, whose name is all it has
      */
     public record Member(Path file, String className, String name, int start, Type form, String initializer) {
 
@@ -82,7 +87,17 @@ public final class ManagedSets {
                 if (!out.isEmpty()) return;
                 String source = index.sources().get(file);
                 for (Object each : unit.types()) {
-                    if (!(each instanceof TypeDeclaration type) || !carries(type, id)) continue;
+                    if (!(each instanceof AbstractTypeDeclaration declared) || !carries(declared, id)) continue;
+                    String className = declared.getName().getIdentifier();
+                    if (declared instanceof EnumDeclaration enumeration) {
+                        for (Object c : enumeration.enumConstants()) {
+                            SimpleName name = ((EnumConstantDeclaration) c).getName();
+                            out.add(new Member(file, className, name.getIdentifier(), name.getStartPosition(),
+                                    null, null));
+                        }
+                        return;
+                    }
+                    if (!(declared instanceof TypeDeclaration type)) return;
                     for (FieldDeclaration field : type.getFields()) {
                         if (!isConstant(field)) continue;
                         for (Object f : field.fragments()) {
@@ -114,7 +129,9 @@ public final class ManagedSets {
 
     /**
      * {@code public static final <type> name = <initializer>;} after the class's last field, or first in its
-     * body when it has none — refused when {@code name} is not a Java name, is taken, or would not compile.
+     * body when it has none — refused when {@code name} is not a Java name, is taken, or would not compile. An
+     * enum holder gets the bare constant {@code name} after its last one, and {@code type} and
+     * {@code initializer} are not read.
      */
     public static Refactor.Outcome add(BotIndex index, String id, String name, Class<?> type,
                                        JavaValue initializer) {
@@ -194,8 +211,9 @@ public final class ManagedSets {
     static String added(String source, String className, String name, Class<?> type, JavaValue initializer) {
         CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
-        TypeDeclaration holder = topLevel(unit, className);
-        if (holder == null || initializer == null) return source;
+        AbstractTypeDeclaration target = topLevel(unit, className);
+        if (target instanceof EnumDeclaration enumeration) return addedConstant(source, unit, enumeration, name);
+        if (!(target instanceof TypeDeclaration holder) || initializer == null) return source;
         Set<String> imports = new LinkedHashSet<>();
         Optional<org.eclipse.jdt.core.dom.Type> declared = ValueTypes.node(ast, type, imports);
         if (declared.isEmpty()) return source;
@@ -219,12 +237,31 @@ public final class ManagedSets {
         return AstRewriteHelper.applyRewrite(rewrite, source);
     }
 
+    /** {@code source} with the bare constant {@code name} after the enum's last one. */
+    private static String addedConstant(String source, CompilationUnit unit, EnumDeclaration holder, String name) {
+        AST ast = unit.getAST();
+        EnumConstantDeclaration constant = ast.newEnumConstantDeclaration();
+        constant.setName(ast.newSimpleName(name));
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        rewrite.getListRewrite(holder, EnumDeclaration.ENUM_CONSTANTS_PROPERTY).insertLast(constant, null);
+        return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
     /** {@code source} with {@code className.name} deleted — the whole field when it declares nothing else. */
     static String removed(String source, String className, String name) {
         CompilationUnit unit = BotParser.syntax(source);
-        TypeDeclaration holder = topLevel(unit, className);
-        if (holder == null) return source;
+        AbstractTypeDeclaration declared = topLevel(unit, className);
         ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+        if (declared instanceof EnumDeclaration enumeration) {
+            for (Object each : enumeration.enumConstants()) {
+                EnumConstantDeclaration constant = (EnumConstantDeclaration) each;
+                if (!constant.getName().getIdentifier().equals(name)) continue;
+                rewrite.remove(constant, null);
+                return AstRewriteHelper.applyRewrite(rewrite, source);
+            }
+            return source;
+        }
+        if (!(declared instanceof TypeDeclaration holder)) return source;
         for (FieldDeclaration field : holder.getFields()) {
             for (Object each : field.fragments()) {
                 VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
@@ -244,7 +281,7 @@ public final class ManagedSets {
             List<Holder> found = new ArrayList<>();
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
                 for (Object each : entry.getValue().types()) {
-                    if (each instanceof TypeDeclaration type && carries(type, id)) {
+                    if (each instanceof AbstractTypeDeclaration type && carries(type, id)) {
                         found.add(new Holder(entry.getKey(), type.getName().getIdentifier()));
                     }
                 }
@@ -253,7 +290,7 @@ public final class ManagedSets {
         });
     }
 
-    private static boolean carries(TypeDeclaration type, String id) {
+    private static boolean carries(AbstractTypeDeclaration type, String id) {
         Annotation annotation = JavaManagedSource.managedAnnotation(type);
         return annotation != null && id.equals(JavaManagedSource.idOf(annotation));
     }
@@ -263,9 +300,11 @@ public final class ManagedSets {
         return Modifier.isPublic(flags) && Modifier.isStatic(flags) && Modifier.isFinal(flags);
     }
 
-    private static TypeDeclaration topLevel(CompilationUnit unit, String className) {
+    private static AbstractTypeDeclaration topLevel(CompilationUnit unit, String className) {
         for (Object each : unit.types()) {
-            if (each instanceof TypeDeclaration type && type.getName().getIdentifier().equals(className)) return type;
+            if (each instanceof AbstractTypeDeclaration type && type.getName().getIdentifier().equals(className)) {
+                return type;
+            }
         }
         return null;
     }

@@ -11,6 +11,7 @@ import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.Javadoc;
@@ -41,7 +42,8 @@ import java.util.TreeSet;
  * <p>Written once and then the user's, as a file a template shipped is: {@code ProjectWrites.create} never
  * overwrites. The content is the least that compiles — the class, and per method-shaped value one method
  * marked with the plugin's annotation returning the value's {@code initial}, or else its type's fresh value,
- * written by the host grammar. A type-level value is an empty class carrying the annotation. Nothing here
+ * written by the host grammar. A type-level value is an empty class carrying the annotation, or for an enum set
+ * an empty enum carrying it and implementing the set's element type. Nothing here
  * reads or merges a file that exists.
  *
  * <p><b>A tree, since 2026-09-27</b>, as every other piece of Java the host writes: the unit is built from JDT
@@ -82,7 +84,67 @@ public final class ManagedHolders {
         String pkg = config.mainPackage() + ".plugins." + segment;
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         TreeSet<String> imports = new TreeSet<>();
+        AbstractTypeDeclaration written;
+        try {
+            written = value.isEnum() ? enumHolder(ast, pluginId, value, imports)
+                    : classHolder(ast, pluginId, value, declared, grammar, imports);
+        } catch (Unwritable refused) {
+            return new Plan.Refused(refused.getMessage());
+        }
+        if (written == null) {
+            return new Plan.Refused("BotMaker cannot write " + holder + ": no plugin in this project declares"
+                    + " what it holds.");
+        }
 
+        CompilationUnit unit = ast.newCompilationUnit();
+        PackageDeclaration declaration = ast.newPackageDeclaration();
+        declaration.setName(ast.newName(pkg));
+        unit.setPackage(declaration);
+        @SuppressWarnings("unchecked")
+        List<ImportDeclaration> importList = unit.imports();
+        for (String name : imports) {
+            if (isImplicit(name, pkg)) continue;
+            ImportDeclaration each = ast.newImportDeclaration();
+            each.setName(ast.newName(name));
+            importList.add(each);
+        }
+        @SuppressWarnings("unchecked")
+        List<AbstractTypeDeclaration> types = unit.types();
+        types.add(written);
+
+        String relative = "plugins/" + segment + "/" + holder + ".java";
+        return new Plan.Write(config.mainPackageDir().resolve("plugins").resolve(segment).resolve(holder + ".java"),
+                relative, laidOut(unit));
+    }
+
+    /**
+     * An enum set's holder: {@code @SdkValue(…) public enum Outcomes implements Outcome {}} — no constant yet,
+     * and nothing else, since a constant's name is all of it. Null when the element type has no node.
+     */
+    private static EnumDeclaration enumHolder(AST ast, String pluginId, ManagedValue<?> value, Set<String> imports) {
+        org.eclipse.jdt.core.dom.Type element = ValueTypes.node(ast, value.type(), imports).orElse(null);
+        if (element == null) return null;
+        EnumDeclaration type = ast.newEnumDeclaration();
+        type.setName(ast.newSimpleName(value.holder()));
+        type.setJavadoc(javadoc(ast, pluginId, markName(value)));
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = type.modifiers();
+        modifiers.add(mark(ast, value, imports));
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        @SuppressWarnings("unchecked")
+        List<org.eclipse.jdt.core.dom.Type> supers = type.superInterfaceTypes();
+        supers.add(element);
+        return type;
+    }
+
+    /**
+     * A class holder: a set's empty class carrying the mark, or one marked method per method-shaped value
+     * sharing the holder; null when one of those has no starting value to write.
+     */
+    private static TypeDeclaration classHolder(AST ast, String pluginId, ManagedValue<?> value,
+                                               List<ManagedValue<?>> declared, ValueGrammar grammar,
+                                               TreeSet<String> imports) {
+        String holder = value.holder();
         TypeDeclaration type = ast.newTypeDeclaration();
         type.setName(ast.newSimpleName(holder));
         type.setJavadoc(javadoc(ast, pluginId, markName(value)));
@@ -99,7 +161,7 @@ public final class ManagedHolders {
                 if (!holder.equals(sibling.holder()) || sibling.isOpenSet()) continue;
                 MethodDeclaration method = method(ast, sibling, grammar, imports);
                 if (method == null) {
-                    return new Plan.Refused("BotMaker cannot write a starting value for \"" + sibling.id()
+                    throw new Unwritable("BotMaker cannot write a starting value for \"" + sibling.id()
                             + "\": no plugin in this project declares " + ValueTypes.sourceName(sibling.type())
                             + ".");
                 }
@@ -114,26 +176,14 @@ public final class ManagedHolders {
         List<IExtendedModifier> constructorModifiers = constructor.modifiers();
         constructorModifiers.add(ast.newModifier(Modifier.ModifierKeyword.PRIVATE_KEYWORD));
         members.add(constructor);
+        return type;
+    }
 
-        CompilationUnit unit = ast.newCompilationUnit();
-        PackageDeclaration declaration = ast.newPackageDeclaration();
-        declaration.setName(ast.newName(pkg));
-        unit.setPackage(declaration);
-        @SuppressWarnings("unchecked")
-        List<ImportDeclaration> importList = unit.imports();
-        for (String name : imports) {
-            if (isImplicit(name, pkg)) continue;
-            ImportDeclaration each = ast.newImportDeclaration();
-            each.setName(ast.newName(name));
-            importList.add(each);
+    /** Why a holder cannot be written, thrown out of {@link #classHolder} to {@link #plan}'s refusal. */
+    private static final class Unwritable extends RuntimeException {
+        Unwritable(String reason) {
+            super(reason, null, false, false);
         }
-        @SuppressWarnings("unchecked")
-        List<AbstractTypeDeclaration> types = unit.types();
-        types.add(type);
-
-        String relative = "plugins/" + segment + "/" + holder + ".java";
-        return new Plan.Write(config.mainPackageDir().resolve("plugins").resolve(segment).resolve(holder + ".java"),
-                relative, laidOut(unit));
     }
 
     /**

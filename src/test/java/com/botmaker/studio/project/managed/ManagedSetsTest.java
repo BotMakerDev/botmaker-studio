@@ -164,6 +164,66 @@ class ManagedSetsTest {
         assertTrue(refused.reason().contains("are both marked @TestValue(TestValue.Id.PICTURES)"), refused.reason());
     }
 
+    private static final String OUTCOMES_ID = ManagedValue.idOf(TestValue.Id.OUTCOMES);
+
+    private static final String OUTCOMES = """
+            package com.bot.plugins.sdk;
+
+            import com.botmaker.studio.project.managed.TestOutcome;
+            import com.botmaker.studio.project.managed.TestValue;
+
+            @TestValue(TestValue.Id.OUTCOMES)
+            public enum Outcomes implements TestOutcome {
+                WON, LOST
+            }
+            """;
+
+    private static final String REPORTS = """
+            package com.bot;
+
+            import com.bot.plugins.sdk.Outcomes;
+            import com.botmaker.studio.project.managed.TestOutcome;
+
+            class Reports {
+                TestOutcome body() {
+                    return Outcomes.WON;
+                }
+            }
+            """;
+
+    /** An enum set: its members are its constants, each a bare name added, renamed and removed as a field is. */
+    @Test
+    void anEnumSetsConstantsAreAddedRenamedAndRemoved(@TempDir Path root) {
+        Path outcomes = root.resolve("com/bot/plugins/sdk/Outcomes.java");
+        Path reports = root.resolve("com/bot/Reports.java");
+        Map<Path, String> sources = new LinkedHashMap<>();
+        sources.put(outcomes, OUTCOMES);
+        sources.put(reports, REPORTS);
+        BotIndex index = BotIndex.over(sources, List.of(contract(), testClasses()), root);
+
+        List<ManagedSets.Member> members = ManagedSets.members(index, OUTCOMES_ID, GRAMMAR);
+        assertEquals(List.of("WON", "LOST"), members.stream().map(ManagedSets.Member::name).toList());
+        assertTrue(members.stream().allMatch(m -> m.initializer() == null), "a constant's name is all it has");
+
+        String added = assertInstanceOf(Refactor.Planned.class,
+                ManagedSets.add(index, OUTCOMES_ID, "BAG_FULL", null, null)).rewrites().get(outcomes);
+        assertTrue(added.contains("WON, LOST, BAG_FULL"), added);
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.add(index, OUTCOMES_ID, "WON", null, null),
+                "a second WON does not compile");
+
+        ManagedSets.Member won = members.getFirst();
+        Refactor.Planned renamed = assertInstanceOf(Refactor.Planned.class,
+                Refactor.rename(index, won.file(), won.start(), "VICTORY"));
+        assertTrue(renamed.rewrites().get(outcomes).contains("VICTORY, LOST"), renamed.rewrites().toString());
+        assertTrue(renamed.rewrites().get(reports).contains("return Outcomes.VICTORY;"));
+
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.remove(index, won), "WON is still returned");
+        String removed = assertInstanceOf(Refactor.Planned.class, ManagedSets.remove(index, members.get(1)))
+                .rewrites().get(outcomes);
+        assertFalse(removed.contains("LOST"), removed);
+        assertTrue(removed.contains("WON"), removed);
+    }
+
     private static ManagedSets.Member member(BotIndex index, String name) {
         return ManagedSets.member(index, ID,name, GRAMMAR).orElseThrow();
     }

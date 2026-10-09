@@ -243,6 +243,7 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<ValueContext> open(String id, String member) {
         return ManagedSets.member(index(), id, member, PluginHost.grammar())
+                .filter(found -> found.initializer() != null)
                 .map(found -> HostValueContext.of(found.form(), found.initializer(), services,
                         expression -> writeInitializer(found, expression)));
     }
@@ -250,8 +251,11 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<String> add(String id, String member, Object value) {
         if (value == null) return Optional.of("No value was given for " + member + ".");
-        Optional<String> stranger = notAnElement(PluginHost.managedValues(), id, member, value);
+        Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id);
+        Optional<String> stranger = set.flatMap(declared -> notAnElement(declared, member, value));
         if (stranger.isPresent()) return stranger;
+        // An enum's constant is its name: the value was only checked, and nothing of it is written.
+        if (set.filter(ManagedValue::isEnum).isPresent()) return apply(ManagedSets.add(index(), id, member, null, null));
         Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
         Optional<JavaValue> initializer = PluginHost.grammar().spellAny(value);
         if (initializer.isEmpty()) {
@@ -268,13 +272,19 @@ public final class HostPluginValues implements PluginValues {
      * is not Studio's. A set no plugin declares with an element type is not checked here.
      */
     static Optional<String> notAnElement(List<ManagedValue<?>> declared, String id, String member, Object value) {
-        for (ManagedValue<?> set : declared) {
-            if (set == null || !set.isOpenSet() || !set.id().equals(id) || set.type() == null) continue;
-            if (isA(value.getClass(), set.type().getName())) return Optional.empty();
-            return Optional.of(member + " cannot join " + set.holder() + ": it is " + article(value.getClass())
-                    + ", and every constant there is " + article(set.type()) + ".");
-        }
-        return Optional.empty();
+        return openSet(declared, id).flatMap(set -> notAnElement(set, member, value));
+    }
+
+    /** The same, against the set already found. */
+    private static Optional<String> notAnElement(ManagedValue<?> set, String member, Object value) {
+        if (set.type() == null || isA(value.getClass(), set.type().getName())) return Optional.empty();
+        return Optional.of(member + " cannot join " + set.holder() + ": it is " + article(value.getClass())
+                + ", and every constant there is " + article(set.type()) + ".");
+    }
+
+    /** The open set {@code id} among what the plugins declare, or empty. */
+    private static Optional<ManagedValue<?>> openSet(List<ManagedValue<?>> declared, String id) {
+        return declared.stream().filter(set -> set != null && set.isOpenSet() && set.id().equals(id)).findFirst();
     }
 
     private static boolean isA(Class<?> cls, String name) {

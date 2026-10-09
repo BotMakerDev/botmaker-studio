@@ -13,6 +13,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ## [Unreleased]
 
 ### Added
+- **Enum open sets.** A plugin's set declared `ofEnum` is an enum in the bot: its members are the enum's
+  constants, and adding one writes a bare constant after the last. Rename, repoint and remove work by binding as
+  they do for a class's fields. A missing holder is written as an empty enum carrying the plugin's mark and
+  implementing the element type. A reference to a constant reads as the value the plugin makes of its name, and
+  a value equal to one is written as that constant (`ManagedSets`, `ManagedConstants`, `ManagedHolders`). A
+  marked enum is locked like a marked class (`LockResolver`).
 - **Values written as named chains.** A type its plugin declares with withers is written as its factory call
   followed by a link for each part that differs from what the factory makes —
   `Flow.activity(COLLECT, Collect::body).described("…").goesHome()` — and read back with the links in any

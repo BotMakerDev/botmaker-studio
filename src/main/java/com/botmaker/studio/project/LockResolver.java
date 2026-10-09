@@ -12,7 +12,7 @@ import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -187,7 +187,7 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
         // A @Managed type is the plugin's whole: adding a member to it, renaming one or deleting its
         // constructor is an edit to a class whose purpose is somebody else's window.
         for (ASTNode n = node; n != null; n = n.getParent()) {
-            if (!(n instanceof TypeDeclaration type)) continue;
+            if (!(n instanceof AbstractTypeDeclaration type)) continue;
             String reason = pluginReason(type, managed);
             if (reason != null) return reason;
         }

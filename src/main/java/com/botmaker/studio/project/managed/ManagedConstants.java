@@ -12,7 +12,10 @@ import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.EnumConstantDeclaration;
+import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.QualifiedName;
@@ -38,13 +41,26 @@ public final class ManagedConstants {
     private ManagedConstants() {}
 
     /**
-     * One {@code public static final} field of a {@code @Managed} type.
+     * One {@code public static final} field of a marked type, or one constant of a marked enum.
      *
      * @param owner       the declaring class, fully qualified
      * @param field       the field's name
-     * @param initializer its initialiser, as written
+     * @param initializer its initialiser, as written; null for an enum's constant
+     * @param member      what an enum's constant stands for, made by its plugin from the name
+     *                    ({@code ManagedValue.byName}); null for a field, whose initialiser says
      */
-    public record Constant(String owner, String field, String initializer) {
+    public record Constant(String owner, String field, String initializer, Object member) {
+
+        /** A field, read through its initialiser. */
+        public Constant(String owner, String field, String initializer) {
+            this(owner, field, initializer, null);
+        }
+
+        /** The value it holds, read through {@code grammar}; empty when its initialiser is not one it reads. */
+        Optional<Object> value(ValueGrammar grammar) {
+            return member != null ? Optional.of(member)
+                    : initializer == null ? Optional.empty() : grammar.valueOfAny(initializer);
+        }
 
         /** The declaring class's simple name. */
         public String simpleOwner() {
@@ -133,7 +149,7 @@ public final class ManagedConstants {
          * the way javac would, through the file's imports ({@link SourceNames}), not matched by its spelling.
          */
         public Optional<Object> read(QualifiedName name) {
-            return constant(name).flatMap(constant -> grammar.valueOfAny(constant.initializer()));
+            return constant(name).flatMap(constant -> constant.value(grammar));
         }
 
         /** The known constant {@code name} refers to, resolved as {@link #read} resolves it; empty for none. */
@@ -156,8 +172,7 @@ public final class ManagedConstants {
             Optional<JavaValue> canonical = value == null ? Optional.empty() : grammar.initializerOfAny(value);
             if (canonical.isEmpty()) return Optional.empty();
             for (Constant constant : constants) {
-                Optional<JavaValue> theirs = grammar.valueOfAny(constant.initializer())
-                        .flatMap(grammar::initializerOfAny);
+                Optional<JavaValue> theirs = constant.value(grammar).flatMap(grammar::initializerOfAny);
                 if (theirs.isPresent() && theirs.get().sameJava(canonical.get())) {
                     AST ast = AST.newAST(AST.getJLSLatest(), false);
                     QualifiedName reference = ast.newQualifiedName(
@@ -189,6 +204,26 @@ public final class ManagedConstants {
                         out.add(new Constant(owner, fragment.getName().getIdentifier(),
                                 JavaParameterSource.text(source, fragment.getInitializer())));
                     }
+                }
+                return false;
+            }
+
+            /** A marked enum's constants, each what its set's plugin makes of the name. */
+            @Override
+            public boolean visit(EnumDeclaration type) {
+                if (!type.isPackageMemberTypeDeclaration()) return false;
+                Annotation mark = ManagedIds.on(type, known);
+                if (mark == null) return false;
+                String id = ManagedIds.idOf(mark, known);
+                ManagedValue<?> set = known.stream()
+                        .filter(value -> value != null && value.isEnum() && value.id().equals(id))
+                        .findFirst().orElse(null);
+                if (set == null) return false;
+                String owner = pkg + type.getName().getIdentifier();
+                for (Object each : type.enumConstants()) {
+                    String name = ((EnumConstantDeclaration) each).getName().getIdentifier();
+                    Object member = set.byName(name);
+                    if (member != null) out.add(new Constant(owner, name, null, member));
                 }
                 return false;
             }
