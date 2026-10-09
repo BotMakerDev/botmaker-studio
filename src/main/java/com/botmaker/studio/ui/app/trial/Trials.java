@@ -41,7 +41,7 @@ import java.util.function.Supplier;
  * {@link MethodRunRequestedEvent}, wherever they were asked from ({@link TrialMenu}).
  *
  * <p>A statement is planned ({@link TrialPlan}), its earlier locals asked about when it reads any
- * ({@link TryDialog}), its caller written ({@link TrialCaller}) with the bot's {@code @Managed} holders, and the run
+ * ({@link TryDialog}), its caller written ({@link TrialCaller}) with the bot's managed holders, and the run
  * requested as {@link TrialRunRequestedEvent}, which {@code CodeExecutionService} runs as it runs the bot. A refusal
  * is told in a dialog, with the plan's sentence. The assistant asks through {@link #tryWith} and {@link #runOnItsOwn},
  * which take the values the dialog would ask for and throw the refusal instead. One project's; it keeps itself

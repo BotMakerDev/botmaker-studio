@@ -125,7 +125,7 @@ final class StudioActions {
         // plugin's emulator picker through Runs.setProperty.
         //
         // The Debug output toggle and 🖱 Input & Clicks stood here until 2026-09-27. Both edited
-        // botmaker-project.properties; the bot's settings are the SDK's @Managed("settings") value now, and
+        // botmaker-project.properties; the bot's settings are the SDK's @SdkValue(SdkValue.Id.SETTINGS) value now, and
         // ⚙ Bot Settings, the SDK plugin's item, edits them — debug output included.
         // ✂ Capture Templates stood here until 2026-08-31 and is the SDK plugin's item now, placed by the
         // same merge as the pilot's. Everything behind it — the capture target, the size to snap to, the

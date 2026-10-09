@@ -136,7 +136,7 @@ class LockResolverTest {
 
     /**
      * The file a plugin ships is ordinary user code. It was {@code FileRole.GENERATED} for one day, from the
-     * withdrawn design where the host wrote it whole; what is refused now is one {@code @Managed} body, by
+     * withdrawn design where the host wrote it whole; what is refused now is one managed body, by
      * the annotation rule below, and everything around it in the same file stays editable.
      */
     @Test

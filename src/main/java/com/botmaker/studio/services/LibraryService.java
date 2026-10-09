@@ -261,7 +261,7 @@ public final class LibraryService {
         onFx(() -> state.setResolvedClasspath(classpath));
         PluginHost.bind(classpath, HostServices.forProject(config),
                 StudioProjectSettings.devModeIn(config.projectPath()));
-        // A plugin just added brings its @Managed holders with it (2026-09-26): written from what the plugin
+        // A plugin just added brings its managed holders with it (2026-09-26): written from what the plugin
         // declares, never over a file, never into main. The explorer redraws on the event below.
         HostPluginValues.createMissing();
         typeIndex.refresh(classpath);

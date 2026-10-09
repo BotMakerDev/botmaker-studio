@@ -31,9 +31,9 @@ import java.util.function.Supplier;
  * value, and the one a plugin's editor could not reach until now.
  *
  * <p>{@link HostValueContext} is the other: a value with no call site behind it — a row of the Parameters
- * window, or the expression a {@code @Managed} method returns. The pair is the whole of the host's side of
+ * window, or the expression a managed method returns. The pair is the whole of the host's side of
  * the contract, and the one thing a slot has that the other does not is its <b>call site</b>, resolved.
- * It reads a constant of the bot's {@code @Managed} types ({@code Pictures.ORE}) as that constant's value, and
+ * It reads a constant of the bot's managed types ({@code Pictures.ORE}) as that constant's value, and
  * writes a value equal to one as the constant.
  *
  * <p><b>The slot is asked, never captured.</b> {@link ValueSlot} resolves its expression on every call, so an
@@ -113,7 +113,7 @@ public final class HostSlotContext implements SlotContext {
 
     /**
      * The value the slot holds: read by the grammar, or — for {@code Pictures.ORE} and its like — the value
-     * of the bot's {@code @Managed} constant the slot names.
+     * of the bot's managed constant the slot names.
      */
     @Override
     public <T> Optional<T> value(Class<T> type) {
@@ -122,7 +122,7 @@ public final class HostSlotContext implements SlotContext {
 
     /**
      * Writes {@code value} with every type by its simple name and the imports that needs — a bot's source is
-     * a file a person reads — or as the bot's {@code @Managed} constant holding it. A value the grammar
+     * a file a person reads — or as the bot's managed constant holding it. A value the grammar
      * cannot write is not written half-way, and the status line says so.
      *
      * <p>One rewrite for the tree and every import. It was one rewrite per import until 2026-09-23, which was
@@ -160,7 +160,7 @@ public final class HostSlotContext implements SlotContext {
     }
 
     /**
-     * The bot's {@code @Managed} constants as they stand now — a picture captured a moment ago is one of
+     * The bot's managed constants as they stand now — a picture captured a moment ago is one of
      * them. {@link ManagedConstants#scan} parses only a file whose text changed since it last did.
      */
     private static Supplier<List<ManagedConstants.Constant>> constants(CodeEditorService context) {
@@ -211,7 +211,7 @@ public final class HostSlotContext implements SlotContext {
 
     /**
      * Another argument of this slot's call, read by the grammar exactly as {@link #value} reads this one — a
-     * {@code @Managed} constant included. Asked, never captured: the invocation is found from the slot's live
+     * managed constant included. Asked, never captured: the invocation is found from the slot's live
      * node on every call. Empty for an index outside the call, a varargs position (several arguments are not
      * one value) and anything the grammar cannot read.
      */

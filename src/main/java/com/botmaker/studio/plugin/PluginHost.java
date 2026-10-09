@@ -685,7 +685,7 @@ public final class PluginHost {
 
     /**
      * The values the bound plugins maintain through their own windows — what {@code LockResolver} asks
-     * before letting the canvas edit a {@code @Managed} method or class. Empty with no project, so nothing
+     * before letting the canvas edit a managed method or class. Empty with no project, so nothing
      * is locked by it.
      */
     public static List<ManagedValue<?>> managedValues() {

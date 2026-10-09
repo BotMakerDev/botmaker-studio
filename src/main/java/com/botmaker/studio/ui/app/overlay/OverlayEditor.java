@@ -729,7 +729,7 @@ public final class OverlayEditor {
         return ProbeCalls.job(new ProbeKey(root, at), stmt.enclosingStatement(), declaredProbes, constants);
     }
 
-    /** The bot's {@code @Managed} constants now, which a probed argument may name. */
+    /** The bot's managed constants now, which a probed argument may name. */
     private ManagedConstants.Lookup constants() {
         return new ManagedConstants.Lookup(ManagedConstants.scan(context.getConfig(), state), PluginHost.grammar());
     }

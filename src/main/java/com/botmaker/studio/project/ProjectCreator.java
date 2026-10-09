@@ -146,8 +146,9 @@ public class ProjectCreator {
             seedSettings(cfg, template);
 
             // 5b. The runtime tuning was seeded here into botmaker-project.properties until 2026-09-27. It is
-            //     the SDK's @Managed("settings") value now, in the bot's own Sdk.java, which the template ships
-            //     and the host writes whole when a project has none; a project with no SDK has nothing to tune.
+            //     the SDK's @SdkValue(SdkValue.Id.SETTINGS) value now, in the bot's own Sdk.java, which the
+            //     template ships and the host writes whole when a project has none; a project with no SDK has
+            //     nothing to tune.
 
             // 6. Initialize local project history (linear VCS) with an initial commit.
             new ProjectVcs(projectPath).init();
@@ -346,8 +347,8 @@ public class ProjectCreator {
 
     // Every read and write of botmaker-project.properties stood here until 2026-09-27 — writeLaunchTarget,
     // readCaptureSource, writeDebug, the session keys, launch.supported and the load-modify-store under them.
-    // Nothing reads that file any more: a bot's tuning is its @Managed("settings") value, what it launches is
-    // this machine's run property (StudioProjectSettings.runProperties), and what it was tested on is the
+    // Nothing reads that file any more: a bot's tuning is its @SdkValue(SdkValue.Id.SETTINGS) value, what it
+    // launches is this machine's run property (StudioProjectSettings.runProperties), and what it was tested on is the
     // gallery entry's. An old project keeps its file untouched.
 
     public boolean projectExists(String projectName) {

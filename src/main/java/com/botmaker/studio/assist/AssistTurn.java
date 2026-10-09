@@ -212,7 +212,7 @@ public final class AssistTurn {
                 editor -> editor.replaceWithValue(slot.get(), written.get()));
     }
 
-    /** The bot's {@code @Managed} constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
+    /** The bot's managed constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
     private List<ManagedConstants.Constant> constantsNamed(String text) {
         int dot = text.lastIndexOf('.');
         if (dot <= 0 || dot == text.length() - 1) return List.of();

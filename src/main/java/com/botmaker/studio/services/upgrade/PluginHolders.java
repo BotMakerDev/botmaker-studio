@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * A plugin's files in a bot — the {@code plugins/<segment>/<Holder>.java} its {@code @Managed} values live in
+ * A plugin's files in a bot — the {@code plugins/<segment>/<Holder>.java} its managed values live in
  * ({@link PluginFiles}) — and every line of the bot's own code that names one: what removing the plugin offers
  * to delete (2026-10-05).
  *

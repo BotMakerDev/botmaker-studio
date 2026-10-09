@@ -33,7 +33,7 @@ import java.util.List;
  * denied  &lt;- SIGNATURE edits to {@code public static void main(String[])}
  * denied  &lt;- anything in the file the Parameters window owns, or a loaded plugin's file ({@link Managed})
  * denied  &lt;- a {@code @Param} field, wherever it is
- * denied  &lt;- a {@code @Managed} method's body, and all of a {@code @Managed} class ({@link ManagedValue})
+ * denied  &lt;- a marked method's body, and all of a marked class or enum ({@link ManagedValue})
  * allowed &lt;- otherwise, the BODY of {@code main} included
  * </pre>
  *
@@ -49,8 +49,8 @@ import java.util.List;
  * <p><b>The last two are matched on an annotation the author wrote.</b> A {@code @Param} field is the
  * Parameters window's wherever its author put it, so being in another file does not make it editable. A
  * plugin says which ids it keeps in step through its own window ({@code StudioPlugin.managedValues}, read
- * from {@code PluginHost}), and this class matches a {@code @Managed("id")} method or type against them
- * without knowing what any of them are.
+ * from {@code PluginHost}), and this class matches a marked method or type
+ * ({@code @SdkValue(SdkValue.Id.FLOW)}) against them without knowing what any of them are.
  *
  * <p>The third is the only rule left that is about a <em>member</em>, and it is the narrowest thing that
  * works: <b>{@code main}'s signature is fixed and its body is the user's.</b> The signature is not a
@@ -170,21 +170,21 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
      *
      * <p><b>An annotation, since 2026-09-20.</b> This matched a field's <em>declared type</em> until then,
      * which cannot tell two same-typed classes apart, and inferred that a class of nothing but such
-     * constants was managed whole. Both were guesses from shape. {@code @Managed("id")} is a statement, and
+     * constants was managed whole. Both were guesses from shape. A plugin's mark is a statement, and
      * it carries which of a plugin's values a method holds.
      */
     public static String managedReason(ASTNode node, List<ManagedValue<?>> managed) {
         FieldDeclaration field = enclosing(node, FieldDeclaration.class);
         if (field != null && JavaParameterSource.paramAnnotation(field) != null) return PARAM_REASON;
         if (managed.isEmpty()) return null;
-        // The method's own annotation first: a @Managed method inside a class that is not annotated is one
+        // The method's own annotation first: a marked method inside a class that is not annotated is one
         // value of many in an ordinary file, and only its body is the plugin's.
         MethodDeclaration method = enclosing(node, MethodDeclaration.class);
         if (method != null) {
             String reason = pluginReason(method, managed);
             if (reason != null) return reason;
         }
-        // A @Managed type is the plugin's whole: adding a member to it, renaming one or deleting its
+        // A marked type is the plugin's whole: adding a member to it, renaming one or deleting its
         // constructor is an edit to a class whose purpose is somebody else's window.
         for (ASTNode n = node; n != null; n = n.getParent()) {
             if (!(n instanceof AbstractTypeDeclaration type)) continue;
@@ -195,8 +195,8 @@ public record LockResolver(ProjectConfig config, Path file, boolean readerMode) 
     }
 
     /**
-     * The reason of the managed entry this declaration's mark names — a plugin's typed marker or
-     * {@code @Managed} ({@link ManagedIds}) — or {@code null}.
+     * The reason of the managed entry this declaration's mark names — a plugin's typed marker
+     * ({@link ManagedIds}) — or {@code null}.
      */
     private static String pluginReason(BodyDeclaration declaration, List<ManagedValue<?>> managed) {
         Annotation annotation = ManagedIds.on(declaration, managed);

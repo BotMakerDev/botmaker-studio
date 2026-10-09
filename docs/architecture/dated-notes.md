@@ -1,5 +1,18 @@
 # Dated notes — read these before the other files here
 
+> **A managed value is marked by its plugin's own annotation (2026-10-10).** `@Managed("id")` is gone. A
+> plugin declares an annotation meta-annotated `@ManagedMarker` whose `value()` is an enum nested in it
+> (`@SdkValue(SdkValue.Id.FLOW)`); the id is that enum's binary name plus the constant.
+> `project/managed/ManagedIds` reads and spells it through JDT bindings, or through imports in a unit without
+> them, and nothing reads a string id any more. An add to an open set two classes carry is refused with both
+> named (`ManagedSets.add`).
+> Values are written as chains of named calls (`Flow.activity(…).described("…").goesHome()`): the grammar's
+> `ValueWriter.linked` and `ExpressionReader.linked` read and write a type's declared withers and flags. An
+> open set declared `ofEnum` is an enum in the bot: `ManagedSets` adds, renames and removes its
+> `EnumConstantDeclaration`s by binding, `ManagedHolders` writes an empty marked enum implementing the
+> element type, and `ManagedConstants` reads a constant as what the plugin's `byName` makes of its name. Read
+> any older `@Managed("…")` text here and in the other files as history.
+
 > **A type chooser goes back (2026-10-06).** `TypeChooser`'s draft pushes the type before each change (pick,
 > wrap, unwrap). *↶* and Ctrl+Z with an empty search pop it. The stack is kept on the chooser across opens and
 > cleared by `setType`, because a caller setting the type means another value. A dialog that rebuilds its

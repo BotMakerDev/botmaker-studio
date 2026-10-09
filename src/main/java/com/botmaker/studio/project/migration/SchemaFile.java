@@ -17,8 +17,8 @@ import java.util.OptionalInt;
  *
  * <p><b>One file, since 2026-09-27.</b> {@code PROPERTIES} — {@code botmaker-project.properties}, the runtime
  * contract the SDK parsed inside the bot — went when nothing read it any more: a bot's tuning is its
- * {@code @Managed("settings")} value in its own Java, and what it launches is this machine's run property. An
- * old project keeps its file; nothing reads, writes or migrates it. {@code ACTIVITIES} went on 2026-09-11,
+ * {@code @SdkValue(SdkValue.Id.SETTINGS)} value in its own Java, and what it launches is this machine's run
+ * property. An old project keeps its file; nothing reads, writes or migrates it. {@code ACTIVITIES} went on 2026-09-11,
  * because {@code activities.json} was the SDK plugin's format and a host ledger over it would have been a
  * second writer. <b>Only a file this editor writes is listed here</b>, and {@link #SETTINGS} is the one left.
  *

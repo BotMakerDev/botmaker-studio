@@ -165,7 +165,7 @@ public final class HostPluginValues implements PluginValues {
 
     /**
      * Writes every holder a bound plugin declares and the open project lacks, and answers the files written
-     * (project-relative). Called on every bind (2026-09-26): a plugin's {@code @Managed} file exists the
+     * (project-relative). Called on every bind (2026-09-26): a plugin's managed file exists the
      * moment the plugin is in the project, rather than when the user finds the button that asks for it.
      *
      * <p>The rules {@link #create} keeps, plus two. A holder is <b>left alone</b> when any value it holds is
@@ -236,7 +236,7 @@ public final class HostPluginValues implements PluginValues {
     }
 
     /**
-     * The constant's initialiser as a value. No {@code @Managed} constants are offered to the context: a
+     * The constant's initialiser as a value. No managed constants are offered to the context: a
      * value equal to one would be written as that constant, and a constant's own initialiser naming itself
      * does not compile.
      */

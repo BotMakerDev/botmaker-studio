@@ -28,7 +28,7 @@ import java.util.List;
  * @param index   the library index a staged {@link ProjectAnalyzer} reads, or {@code null} in a test
  * @param journal where a refused rewrite is recorded, or {@code null} for the cache directory
  * @param grammar   the value grammar a slot's value is read and written with
- * @param constants the bot's {@code @Managed} constants, which a slot may be set to by name ({@code Pictures.ORE})
+ * @param constants the bot's managed constants, which a slot may be set to by name ({@code Pictures.ORE})
  */
 public record AssistWorkspace(ProjectConfig config,
                               Path file,

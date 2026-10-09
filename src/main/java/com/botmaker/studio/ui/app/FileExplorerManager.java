@@ -48,7 +48,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -136,7 +135,7 @@ public class FileExplorerManager {
         this.state = ctx.state();
         this.eventBus = ctx.eventBus();
 
-        // A rebind writes a newly added plugin's @Managed holder (HostPluginValues.createMissing) and
+        // A rebind writes a newly added plugin's managed holder (HostPluginValues.createMissing) and
         // announces itself with this event, so the tree is re-read.
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> refreshTree(), true);
         // Every edit re-renders the open file: its outline is re-read, and its row may now differ from the

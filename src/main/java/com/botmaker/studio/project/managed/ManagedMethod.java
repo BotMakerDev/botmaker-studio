@@ -4,7 +4,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 
 /**
- * One {@code @Managed} method, as a plugin's window needs it: where it is written, what it holds, and
+ * One managed method, as a plugin's window needs it: where it is written, what it holds, and
  * whether that may be replaced.
  *
  * <p>The twin of {@code JavaParameter}, and the differences are the whole design. A parameter is a
@@ -16,7 +16,7 @@ import java.nio.file.Path;
  * @param file       the source file the method is declared in
  * @param className  the class it is declared in — {@code Sdk}
  * @param methodName the method's own name, which is what an edit is addressed to
- * @param id         the {@code @Managed} id, which is what a plugin asks for
+ * @param id         the managed id its mark names, which is what a plugin asks for
  * @param form       the value type, derived from the declared return type
  * @param expression the expression the body returns, exactly as written, or {@code ""} when the body is not
  *                   a single {@code return}

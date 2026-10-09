@@ -12,7 +12,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * A value read and written through the grammar <em>and</em> the bot's {@code @Managed} constants — the one
+ * A value read and written through the grammar <em>and</em> the bot's managed constants — the one
  * rule a slot in the source ({@link HostSlotContext}, {@link HostSlotRun}) and a value with no call site
  * behind it ({@link HostValueContext}: a Parameters row, a plugin's managed value) both follow.
  *

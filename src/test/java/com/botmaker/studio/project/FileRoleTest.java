@@ -69,7 +69,7 @@ class FileRoleTest {
     /**
      * The file a plugin hands a bot is the user's. Locking it would fight the reason for handing it over —
      * that a developer with no BotMaker installed can read it, edit it and hand it to a compiler. What is
-     * refused is one {@code @Managed} method's body, which is {@link LockResolver}'s and not a file's.
+     * refused is one managed method's body, which is {@link LockResolver}'s and not a file's.
      */
     @Test
     void aPluginsOwnPackageBelongsToTheUser() {

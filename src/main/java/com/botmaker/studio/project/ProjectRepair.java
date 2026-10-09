@@ -1,19 +1,6 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.services.MavenService;
-import org.eclipse.jdt.core.dom.AST;
-import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
-import org.eclipse.jdt.core.dom.Block;
-import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
-import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
-import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
-import org.eclipse.jface.text.Document;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -233,7 +220,7 @@ public final class ProjectRepair {
         }
 
         // botmaker-project.properties was a row here until 2026-09-27. Nothing reads it any more — a bot's
-        // settings are its @Managed("settings") value — so its absence is not something to repair.
+        // settings are its @SdkValue(SdkValue.Id.SETTINGS) value — so its absence is not something to repair.
 
         Path settings = config.studioRoot().resolve(StudioProjectSettings.FILE_NAME);
         if (recorded != null && !Files.exists(settings)) {

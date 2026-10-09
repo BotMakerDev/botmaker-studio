@@ -21,7 +21,7 @@ import java.util.function.Supplier;
  * resolved signature (a varargs parameter), and nothing in the values says so.
  *
  * <p><b>Every element crosses as a value</b>, read and written as {@link HostSlotContext} reads and writes one
- * slot — the grammar, and the bot's {@code @Managed} constants. An element the host cannot read crosses as
+ * slot — the grammar, and the bot's managed constants. An element the host cannot read crosses as
  * its source, and handed back it is kept exactly as written. Until 2026-09-23 every element was Java text the
  * plugin split and wrote itself.
  *

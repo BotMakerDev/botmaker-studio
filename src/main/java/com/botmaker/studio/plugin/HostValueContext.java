@@ -20,7 +20,7 @@ import java.util.function.Supplier;
  * A {@link ValueContext} over one value the host is editing, with no call site behind it.
  *
  * <p>This is the half of "one editor, everywhere" that is not source code a plugin can point at: a row of
- * the Parameters window, and the expression a {@code @Managed} method returns. The value itself is Java in
+ * the Parameters window, and the expression a managed method returns. The value itself is Java in
  * all of them — {@code Duration.ofSeconds(3)} — so what distinguishes this from {@link HostSlotContext} is
  * only that there is no enclosing call to read or rewrite.
  *
@@ -59,7 +59,7 @@ public final class HostValueContext implements ValueContext {
     }
 
     /**
-     * @param constants the bot's {@code @Managed} constants, asked for when a value is read or written:
+     * @param constants the bot's managed constants, asked for when a value is read or written:
      *                  {@code Pictures.ORE} reads as the picture, and a picture equal to one is written as it
      */
     public HostValueContext(TypeRef type, Type form, ValueGrammar grammar, String source,
@@ -81,7 +81,7 @@ public final class HostValueContext implements ValueContext {
         return of(form, PluginHost.grammar(), source, services, onChange, ConstantValues.NONE);
     }
 
-    /** The same, reading and writing the bot's {@code @Managed} constants as the values they hold. */
+    /** The same, reading and writing the bot's managed constants as the values they hold. */
     public static HostValueContext of(Type form, String source, StudioServices services,
                                       Consumer<JavaValue> onChange,
                                       Supplier<List<ManagedConstants.Constant>> constants) {

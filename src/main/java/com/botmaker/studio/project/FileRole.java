@@ -28,7 +28,7 @@ import java.nio.file.Path;
  * plugin hands the user would fight the whole reason for handing it over, which is that a developer with no
  * BotMaker installed can read it, edit it and hand it to a compiler.
  *
- * <p>What replaced it is narrower by a whole file: {@code LockResolver} refuses a {@code @Managed} method's
+ * <p>What replaced it is narrower by a whole file: {@code LockResolver} refuses a managed method's
  * body, because another window owns that one expression, and everything around it in the same file stays
  * the user's.
  *

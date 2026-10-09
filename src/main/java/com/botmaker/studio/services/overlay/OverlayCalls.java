@@ -23,7 +23,7 @@ import java.util.Set;
  * A call a plugin names by reference, with argument values, written as a statement the host inserts — what an
  * overlay tool's {@code insert} asks for.
  *
- * <p>The values are spelled by the grammar, so the Java is the canvas's; a value equal to a {@code @Managed}
+ * <p>The values are spelled by the grammar, so the Java is the canvas's; a value equal to a managed
  * constant of the bot is written as that constant ({@code Pictures.COLLECT}). The plugin writes no Java.
  */
 public final class OverlayCalls {

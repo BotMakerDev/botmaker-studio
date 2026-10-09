@@ -24,12 +24,12 @@ import java.util.List;
  * A declaration's annotations, drawn as a row of pills above its header (2026-09-27).
  *
  * <p>The canvas drew none until then, except a count of review entries beside a function's name — so a
- * {@code @Managed("flow")}, an {@code @Override} or a hand-written {@code @SuppressWarnings} was invisible on
- * the one screen that claims to show the whole file. Each annotation is now a pill spelled as the source
- * spells it:
+ * {@code @SdkValue(SdkValue.Id.FLOW)}, an {@code @Override} or a hand-written {@code @SuppressWarnings} was
+ * invisible on the one screen that claims to show the whole file. Each annotation is now a pill spelled as the
+ * source spells it:
  *
  * <ul>
- *   <li><b>{@code @Param} and {@code @Managed} are the host's</b>: they are edited in the Parameters window and
+ *   <li><b>{@code @Param} and a plugin's managed mark are the host's</b>: they are edited in the Parameters window and
  *       the plugin's own window, so their pill says where and has no ✕.</li>
  *   <li><b>{@code @Refactor}</b> reads as what it records — how many guesses wait for review, or that it was
  *       reviewed (dimmed) — with each sentence in the tooltip. It is the user's to delete.</li>

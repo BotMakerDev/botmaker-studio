@@ -33,8 +33,9 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The constants of every {@code @Managed} type in the bot's own source — {@code Pictures.COLLECT} and its
- * siblings — so a value that equals one is written as its name rather than spelled out again.
+ * The constants of every managed type in the bot's own source — {@code Pictures.COLLECT} and its
+ * siblings, or an enum's {@code Outcomes.WON} — so a value that equals one is written as its name rather than
+ * spelled out again.
  */
 public final class ManagedConstants {
 

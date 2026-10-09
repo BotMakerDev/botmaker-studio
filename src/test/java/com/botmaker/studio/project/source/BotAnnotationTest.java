@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * {@code @Param} and {@code @Managed} are identified by class: through a binding when the unit has one,
+ * {@code @Param} and a plugin's managed mark are identified by class: through a binding when the unit has one,
  * through the unit's imports when it has none — never by a name that ends in {@code Param}.
  */
 class BotAnnotationTest {

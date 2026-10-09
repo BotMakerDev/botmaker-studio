@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A value with no call site behind it — a Parameters row, a plugin's managed value — reads and writes the
- * bot's {@code @Managed} constants the way a slot in the source does: {@code Pictures.ORE} is the picture,
+ * bot's managed constants the way a slot in the source does: {@code Pictures.ORE} is the picture,
  * and a picture equal to one is written as the constant.
  */
 class HostValueContextConstantsTest {

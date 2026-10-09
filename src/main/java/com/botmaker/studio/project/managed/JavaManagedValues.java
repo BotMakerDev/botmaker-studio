@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 /**
- * A plugin's own values: {@code @Managed} methods, read off the bot's sources and written back to them.
+ * A plugin's own values: managed methods, read off the bot's sources and written back to them.
  *
  * <p><b>The twin of {@code JavaParameters}, over the same walk and for the same reasons.</b> Buffers before
  * files, both written, so a scan does not miss the user's last ten minutes and a rewrite is not undone by
@@ -33,7 +33,7 @@ public final class JavaManagedValues {
 
     private JavaManagedValues() {}
 
-    /** Every {@code @Managed} method the bot declares, file by file, in the order the walk visits them. */
+    /** Every managed method the bot declares, file by file, in the order the walk visits them. */
     public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state) {
         return scan(config, state, PluginHost.grammar());
     }
@@ -45,7 +45,7 @@ public final class JavaManagedValues {
     }
 
     /**
-     * Every {@code @Managed} method in {@code index}, the bot's one parse. Two walks, as the parameters scan
+     * Every managed method in {@code index}, the bot's one parse. Two walks, as the parameters scan
      * does: a value may be typed with a record declared in a file the managed walk has not reached yet.
      */
     public static List<ManagedMethod> over(BotIndex index, ValueGrammar grammar) {

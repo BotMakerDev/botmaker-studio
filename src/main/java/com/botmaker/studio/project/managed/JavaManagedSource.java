@@ -27,8 +27,8 @@ import java.util.List;
  *
  * <p><b>The same shape as {@code JavaParameterSource}, deliberately.</b> Pure but for one input, so the reading
  * can be tested over source text headlessly; parsed by the caller's {@link BotParser} or handed a
- * {@code BotIndex} unit. A method is managed by its mark ({@link ManagedIds}): a plugin's typed marker, else
- * {@code @Managed}, identified by class, and — in a unit without bindings — matched against the bound plugins'
+ * {@code BotIndex} unit. A method is managed by its mark ({@link ManagedIds}): a plugin's typed marker, identified
+ * by class, and — in a unit without bindings — matched against the bound plugins'
  * declarations ({@code PluginHost.managedValues()}, the one input), so a bot whose dependencies do not resolve
  * still shows its plugin's values instead of an empty window. The form derivation is shared with that class —
  * asked rather than copied, so there is one rule to keep in step.
@@ -43,7 +43,7 @@ public final class JavaManagedSource {
 
     private JavaManagedSource() {}
 
-    /** Every {@code @Managed} method in {@code source}, in the order they are written. */
+    /** Every managed method in {@code source}, in the order they are written. */
     public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar) {
         return read(file, source, grammar, BotRecords.none());
     }
@@ -57,7 +57,7 @@ public final class JavaManagedSource {
         return read(file, source, grammar, records, BotParser.SYNTAX);
     }
 
-    /** The same, parsed by {@code parser} — the project's, so {@code @Managed} and its id are resolved. */
+    /** The same, parsed by {@code parser} — the project's, so a mark and its id are resolved. */
     public static List<ManagedMethod> read(Path file, String source, ValueGrammar grammar,
                                            BotRecords records, BotParser parser) {
         return read(file, source, parser.parse(file, source), grammar, records);
@@ -151,8 +151,8 @@ public final class JavaManagedSource {
     }
 
     /**
-     * The annotation marking this declaration as a managed value — a plugin's typed marker, else
-     * {@code @Managed} — or {@code null}; a unit without bindings is matched against the bound plugins'
+     * The annotation marking this declaration as a managed value — a plugin's typed marker — or
+     * {@code null}; a unit without bindings is matched against the bound plugins'
      * declarations ({@link ManagedIds}).
      *
      * <p>Takes a {@link BodyDeclaration} rather than a method because the annotation has two targets: a
@@ -166,9 +166,9 @@ public final class JavaManagedSource {
     /**
      * The id an annotation names, or {@code ""} for one that names nothing constant.
      *
-     * <p>A typed marker names {@link com.botmaker.plugin.api.source.ManagedValue#idOf} its constant. Of
-     * {@code @Managed}, a constant the classpath resolves is read as its value; without bindings only a string
-     * literal is, because a guessed id is a value edited under a name nobody wrote.
+     * <p>A typed marker names {@link com.botmaker.plugin.api.source.ManagedValue#idOf} its constant. Without
+     * bindings the constant is taken as written once the marker resolves through the imports to a bound
+     * plugin's annotation; a misspelt one makes an id no plugin declares, so nothing is read or edited under it.
      */
     public static String idOf(Annotation annotation) {
         return ManagedIds.idOf(annotation, PluginHost.managedValues());

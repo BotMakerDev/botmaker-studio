@@ -134,7 +134,8 @@ public final class SchemaMigrations {
 
     // PROPERTIES_STEPS stood here until 2026-09-27: one no-op step for botmaker-project.properties, whose 0 → 1
     // had moved a generated BotSettings.java into that file by regex until 2026-09-02. The file itself left the
-    // ledger on 2026-09-27 — a bot's settings are its @Managed("settings") value — so its steps went with it.
+    // ledger on 2026-09-27 — a bot's settings are its @SdkValue(SdkValue.Id.SETTINGS) value — so its steps went
+    // with it.
 
     /** The ordered steps for {@code file}. Index <i>i</i> migrates version <i>i</i> to <i>i+1</i>. */
     public static List<SchemaMigration> stepsFor(SchemaFile file) {

@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The bot's {@code @Managed} constants, both ways: a reference read as the constant's value, and a value
+ * The bot's managed constants, both ways: a reference read as the constant's value, and a value
  * written as the constant that holds it.
  */
 class ManagedConstantsTest {

@@ -84,7 +84,7 @@ public final class ValueEditors {
         }
 
         /**
-         * The bot's {@code @Managed} constants, so a row holding {@code Pictures.ORE} is edited as the picture
+         * The bot's managed constants, so a row holding {@code Pictures.ORE} is edited as the picture
          * and a picture equal to one is written back as the constant. Read from disk: a capture writes
          * {@code Pictures.java} to buffer and disk both, and a constant typed into the editor and not yet
          * saved is the one case this misses — the row then shows the name as written.

@@ -2,7 +2,6 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.toolbar.ActionContext;
-import com.botmaker.plugin.api.toolbar.EnabledWhen;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -16,7 +15,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
@@ -220,8 +218,8 @@ public class ToolbarManager {
 
         // 🐞 Debug output stood here at RUN/20 until 2026-09-27, toggling the `debug` key of
         // botmaker-project.properties, and came back on 2026-09-29 as the run property Runs.DEBUG_PROPERTY. What
-        // a bot does by default is still its own @Managed("settings") value; whether this machine's runs print
-        // and trace is a fact about running here, so it is a run property, and the host's to toggle
+        // a bot does by default is still its own @SdkValue(SdkValue.Id.SETTINGS) value; whether this machine's runs
+        // print and trace is a fact about running here, so it is a run property, and the host's to toggle
         // (docs/refactor/40-run-trace.md).
         place(placed, ctx, ToolbarItem.id("debug-output").label(() -> debugOutput().label())
                 .tooltip("Whether runs on this computer print and trace their debug lines: the bot's own "
@@ -240,7 +238,8 @@ public class ToolbarManager {
 
         // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
         // botmaker-project.properties. The action moved and the sentence moved with it, as this comment said
-        // it would: the settings are the SDK's @Managed("settings") value, and ⚙ Bot Settings is that plugin's.
+        // it would: the settings are the SDK's @SdkValue(SdkValue.Id.SETTINGS) value, and ⚙ Bot Settings is that
+        // plugin's.
 
         // ✂ Templates stood here at TOOLS/20 until 2026-08-31 and is the SDK plugin's ✂ Capture Templates
         // now, merged into this same slot. It is the second whole feature to leave through this surface, and

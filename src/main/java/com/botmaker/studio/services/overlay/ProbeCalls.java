@@ -44,7 +44,7 @@ public final class ProbeCalls {
     public record Declared(String pluginId, OverlayPart.ProbedCall probed) {}
 
     /**
-     * One argument as the bot writes it, and the initializer of the {@code @Managed} constant it names when it
+     * One argument as the bot writes it, and the initializer of the managed constant it names when it
      * names one: {@code Pictures.ORE} reads as what {@code Pictures.java} says it holds.
      *
      * @param text     the argument's Java

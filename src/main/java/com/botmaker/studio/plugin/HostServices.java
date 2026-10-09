@@ -109,7 +109,7 @@ public final class HostServices implements StudioServices {
     }
 
     /**
-     * The open project's {@code @Managed} values, or {@link PluginValues#NONE}
+     * The open project's managed values, or {@link PluginValues#NONE}
      * between projects.
      *
      * <p>Read from {@link HostPluginValues} rather than held, for the reason {@link #runs()} is: this class

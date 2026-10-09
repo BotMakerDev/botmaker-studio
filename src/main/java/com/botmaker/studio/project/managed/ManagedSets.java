@@ -75,7 +75,7 @@ public final class ManagedSets {
         }
     }
 
-    /** The class carrying {@code @Managed(id)}: where it is and what it is called. */
+    /** The class or enum carrying {@code id}'s mark: where it is and what it is called. */
     private record Holder(Path file, String className) {}
 
     /** The constants of the open set {@code id}, in the order they are written; empty when no class carries it. */

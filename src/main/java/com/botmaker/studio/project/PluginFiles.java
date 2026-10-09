@@ -21,7 +21,7 @@ import java.util.Set;
  * file the user put in {@code plugins/} themselves, or one whose plugin is not loaded, is an ordinary file of
  * theirs: nothing here guesses from a folder name alone, which is what {@code ExplorerModel} did until then.
  *
- * <p><b>Why the whole file is locked.</b> Such a file is the plugin's surface in the bot: its {@code @Managed}
+ * <p><b>Why the whole file is locked.</b> Such a file is the plugin's surface in the bot: its managed
  * values are edited through the plugin's own windows, its {@code @Param} fields through the Parameters window,
  * and a member added to it on the canvas is code nobody's window knows about. The file on disk is still the
  * user's — Studio writes only what those windows write.

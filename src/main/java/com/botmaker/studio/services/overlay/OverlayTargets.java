@@ -27,7 +27,7 @@ import java.util.Map;
  * library's method has no file in the bot and is left out, since there is nothing to open.
  *
  * <p>Replaces {@code ManagedTargets} (2026-10-06), which offered every method reference inside a
- * {@code @Managed} value and so could not tell an activity's body from any other reference a value held.
+ * managed value and so could not tell an activity's body from any other reference a value held.
  */
 public final class OverlayTargets {
 
