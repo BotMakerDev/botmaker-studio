@@ -31,10 +31,11 @@ public final class ConstantValues {
     public static Optional<Object> read(ValueGrammar grammar, Supplier<List<ManagedConstants.Constant>> constants,
                                         Type form, SourceNode node) {
         if (node == null || node.node() == null) return Optional.empty();
-        Optional<Object> read = grammar.read(form, node);
+        ManagedConstants.Lookup lookup = lookup(grammar, constants);
+        Optional<Object> read = grammar.read(form, node, lookup);
         // A constant reference is only ever written Owner.FIELD, qualified or not.
         if (read.isPresent() || !(node.node() instanceof QualifiedName name)) return read;
-        return lookup(grammar, constants).read(name);
+        return lookup.read(name);
     }
 
     /** {@link #read(ValueGrammar, Supplier, Type, SourceNode)} over stored text, parsed once. */
@@ -47,7 +48,8 @@ public final class ConstantValues {
     public static Optional<JavaValue> write(ValueGrammar grammar,
                                             Supplier<List<ManagedConstants.Constant>> constants,
                                             Type form, Object value) {
-        return lookup(grammar, constants).spell(value).or(() -> grammar.write(form, value));
+        ManagedConstants.Lookup lookup = lookup(grammar, constants);
+        return lookup.spell(value).or(() -> grammar.write(form, value, lookup));
     }
 
     /**

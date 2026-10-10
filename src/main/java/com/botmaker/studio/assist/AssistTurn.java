@@ -219,16 +219,16 @@ public final class AssistTurn {
         String owner = text.substring(0, dot);
         String field = text.substring(dot + 1);
         return workspace.constants().stream()
-                .filter(c -> c.field().equals(field) && (c.owner().equals(owner) || c.simpleOwner().equals(owner)))
+                .filter(c -> field.equals(c.field()) && (c.owner().equals(owner) || c.simpleOwner().equals(owner)))
                 .toList();
     }
 
-    /** {@code Owner.FIELD}, importing its owner. */
+    /** {@code Owner.FIELD} — {@code Activities.Collect.WON} for a nested enum's — importing its top-level class. */
     private static JavaValue reference(ManagedConstants.Constant constant) {
         AST ast = AST.newAST(AST.getJLSLatest(), false);
-        QualifiedName name = ast.newQualifiedName(ast.newSimpleName(constant.simpleOwner()),
+        QualifiedName name = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
                 ast.newSimpleName(constant.field()));
-        return JavaValue.built(name, List.of(constant.owner()));
+        return JavaValue.built(name, List.of(constant.topLevel()));
     }
 
     /** Deletes the statement {@code blockId}. */

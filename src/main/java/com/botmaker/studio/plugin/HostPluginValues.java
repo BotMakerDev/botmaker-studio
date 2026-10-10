@@ -14,6 +14,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
+import com.botmaker.studio.project.managed.BotMethods;
 import com.botmaker.studio.project.managed.JavaManagedValues;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
@@ -232,7 +233,106 @@ public final class HostPluginValues implements PluginValues {
 
     @Override
     public List<String> members(String id) {
-        return ManagedSets.members(index(), id, PluginHost.grammar()).stream().map(ManagedSets.Member::name).toList();
+        return ManagedSets.members(index(), id, PluginHost.grammar()).stream()
+                .map(ManagedSets.Member::memberName).toList();
+    }
+
+    // ── a set of nested enums ─────────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public List<String> groups(String id) {
+        return ManagedSets.groups(index(), id).stream().map(ManagedSets.Group::name).toList();
+    }
+
+    @Override
+    public Optional<String> addGroup(String id, String group, List<String> constants) {
+        Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id).filter(ManagedValue::isGrouped);
+        if (set.isEmpty()) return Optional.of(notGrouped(id));
+        return apply(ManagedSets.addGroup(index(), id, group, constants, set.get().type()));
+    }
+
+    @Override
+    public Optional<String> renameGroup(String id, String group, String newName) {
+        BotIndex index = index();
+        Optional<ManagedSets.Group> found = ManagedSets.group(index, id, group);
+        if (found.isEmpty()) return Optional.of(missing(id, group));
+        return apply(Refactor.rename(index, found.get().file(), found.get().start(), newName));
+    }
+
+    @Override
+    public Optional<String> removeGroup(String id, String group) {
+        BotIndex index = index();
+        Optional<ManagedSets.Group> found = ManagedSets.group(index, id, group);
+        if (found.isEmpty()) return Optional.of(missing(id, group));
+        return apply(ManagedSets.removeGroup(index, found.get()));
+    }
+
+    private static String notGrouped(String id) {
+        return "No plugin in this project declares " + ManagedIds.spelled(id, PluginHost.managedValues())
+                + " as a set of enums.";
+    }
+
+    // ── the bot's methods ─────────────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public List<String> methods(String id, String group) {
+        BotIndex index = index();
+        if (id == null && group == null) return BotMethods.returning(index, null);
+        return ManagedSets.group(index, id, group)
+                .map(found -> BotMethods.returning(index, canonical(index, found)))
+                .orElse(List.of());
+    }
+
+    @Override
+    public MethodWrite createMethod(String id, String group, String className, String method) {
+        BotIndex index = index();
+        String returns = null;
+        String imported = null;
+        String first = null;
+        if (id != null || group != null) {
+            Optional<ManagedSets.Group> found = ManagedSets.group(index, id, group);
+            if (found.isEmpty()) return new MethodWrite(null, missing(id, group));
+            if (found.get().members().isEmpty()) {
+                return new MethodWrite(null, found.get().qualified() + " has no constant to return.");
+            }
+            returns = found.get().qualified();
+            String canonical = canonical(index, found.get());
+            imported = canonical.substring(0, canonical.length() - group.length() - 1);
+            first = found.get().members().getFirst().name();
+        }
+        Path file = className == null ? null : config.mainPackageDir().resolve(className + ".java");
+        Refactor.Outcome planned = BotMethods.create(index, config.mainPackage(), file, className, method, returns,
+                imported, first);
+        if (planned instanceof Refactor.Planned plan && file != null && plan.rewrites().containsKey(file)
+                && !index.sources().containsKey(file)) {
+            // A new class: nothing in the bot has that file yet, so it is created rather than rewritten.
+            if (java.nio.file.Files.exists(file)) {
+                // A file the bot's sources do not declare the class in: never written over.
+                return new MethodWrite(null, className + ".java already exists but declares no class "
+                        + className + ", so nothing was written.");
+            }
+            Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, "Before: " + plan.summary());
+            try {
+                ProjectWrites.create(config, file, plan.rewrites().get(file), plan.summary());
+            } catch (java.io.UncheckedIOException e) {
+                return new MethodWrite(null, "Could not write " + className + ".java: " + e.getCause().getMessage());
+            }
+            redraw(java.util.Set.of(file.toAbsolutePath().normalize()));
+            return new MethodWrite(className + "::" + method, null);
+        }
+        Optional<String> refused = apply(planned);
+        return refused.isPresent() ? new MethodWrite(null, refused.get())
+                : new MethodWrite(className + "::" + method, null);
+    }
+
+    /** The canonical name of a nested enum — {@code com.bot.plugins.sdk.Activities.Collect}. */
+    private static String canonical(BotIndex index, ManagedSets.Group group) {
+        String pkg = index.read(units -> {
+            var unit = units.get(group.file());
+            return unit == null || unit.getPackage() == null ? ""
+                    : unit.getPackage().getName().getFullyQualifiedName();
+        });
+        return (pkg.isEmpty() ? "" : pkg + ".") + group.qualified();
     }
 
     /**
@@ -255,7 +355,9 @@ public final class HostPluginValues implements PluginValues {
         Optional<String> stranger = set.flatMap(declared -> notAnElement(declared, member, value));
         if (stranger.isPresent()) return stranger;
         // An enum's constant is its name: the value was only checked, and nothing of it is written.
-        if (set.filter(ManagedValue::isEnum).isPresent()) return apply(ManagedSets.add(index(), id, member, null, null));
+        if (set.filter(declared -> declared.isEnum() || declared.isGrouped()).isPresent()) {
+            return apply(ManagedSets.add(index(), id, member, null, null));
+        }
         Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
         Optional<JavaValue> initializer = PluginHost.grammar().spellAny(value);
         if (initializer.isEmpty()) {
@@ -313,7 +415,12 @@ public final class HostPluginValues implements PluginValues {
         BotIndex index = index();
         Optional<ManagedSets.Member> found = ManagedSets.member(index, id, member, PluginHost.grammar());
         if (found.isEmpty()) return Optional.of(missing(id, member));
-        return apply(Refactor.rename(index, found.get().file(), found.get().start(), newName));
+        // A nested enum's constant is named "Collect.WON", and its new name may be given the same way; it stays
+        // in its enum, so only the part after the group is the new identifier.
+        String group = found.get().group();
+        String name = group != null && newName != null && newName.startsWith(group + ".")
+                ? newName.substring(group.length() + 1) : newName;
+        return apply(Refactor.rename(index, found.get().file(), found.get().start(), name));
     }
 
     /** The mark is written only where the bot compiles {@code @Refactor}; elsewhere the repoint goes unmarked. */

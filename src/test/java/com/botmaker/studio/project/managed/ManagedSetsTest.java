@@ -224,6 +224,104 @@ class ManagedSetsTest {
         assertTrue(removed.contains("WON"), removed);
     }
 
+    private static final String ACTIVITIES = """
+            package com.bot.plugins.sdk;
+
+            import com.botmaker.studio.project.managed.TestOutcome;
+            import com.botmaker.studio.project.managed.TestValue;
+
+            @TestValue(TestValue.Id.OUTCOMES)
+            public final class Activities {
+                public enum Collect implements TestOutcome { NEXT, WON }
+            }
+            """;
+
+    private static final String COLLECT = """
+            package com.bot;
+
+            import com.bot.plugins.sdk.Activities;
+
+            public final class Collect {
+                public static Activities.Collect body() {
+                    return Activities.Collect.WON;
+                }
+
+                public static void home() {
+                }
+
+                public static void main(String[] args) {
+                }
+
+                static Activities.Collect hidden() {
+                    return Activities.Collect.NEXT;
+                }
+            }
+            """;
+
+    /** A grouped set: whole enums added, removed while unused, and each one's constants addressed "Group.NAME". */
+    @Test
+    void aGroupedSetsEnumsAndTheirConstantsAreAddedAndRemoved(@TempDir Path root) {
+        Path activities = root.resolve("com/bot/plugins/sdk/Activities.java");
+        Path collect = root.resolve("com/bot/Collect.java");
+        Map<Path, String> sources = new LinkedHashMap<>();
+        sources.put(activities, ACTIVITIES);
+        sources.put(collect, COLLECT);
+        BotIndex index = BotIndex.over(sources, List.of(contract(), testClasses()), root);
+
+        assertEquals(List.of("Collect.NEXT", "Collect.WON"), ManagedSets.members(index, OUTCOMES_ID, GRAMMAR)
+                .stream().map(ManagedSets.Member::memberName).toList());
+        assertEquals(List.of("Collect"), ManagedSets.groups(index, OUTCOMES_ID).stream()
+                .map(ManagedSets.Group::name).toList());
+
+        String added = assertInstanceOf(Refactor.Planned.class,
+                ManagedSets.addGroup(index, OUTCOMES_ID, "Battle", List.of("NEXT", "LOST"), TestOutcome.class))
+                .rewrites().get(activities);
+        assertTrue(added.contains("public enum Battle implements TestOutcome {"), added);
+        assertTrue(added.contains("NEXT, LOST"), added);
+        assertTrue(added.contains("    public enum Collect implements TestOutcome { NEXT, WON }"),
+                "what was there is kept as written: " + added);
+        assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.addGroup(index, OUTCOMES_ID, "Collect", List.of("NEXT"), TestOutcome.class));
+        assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.addGroup(index, OUTCOMES_ID, "Empty", List.of(), TestOutcome.class));
+
+        String constant = assertInstanceOf(Refactor.Planned.class,
+                ManagedSets.add(index, OUTCOMES_ID, "Collect.BAG_FULL", null, null)).rewrites().get(activities);
+        assertTrue(constant.contains("NEXT, WON, BAG_FULL"), constant);
+
+        ManagedSets.Group group = ManagedSets.group(index, OUTCOMES_ID, "Collect").orElseThrow();
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.removeGroup(index, group), "Collect is returned");
+        ManagedSets.Member next = ManagedSets.member(index, OUTCOMES_ID, "Collect.NEXT", GRAMMAR).orElseThrow();
+        assertInstanceOf(Refactor.Refused.class, ManagedSets.remove(index, next), "hidden() returns it");
+
+        assertEquals(List.of("Collect::body"), BotMethods.returning(index, "com.bot.plugins.sdk.Activities.Collect"));
+        assertEquals(List.of("Collect::home"), BotMethods.returning(index, null), "main is no way home");
+    }
+
+    @Test
+    void aMethodIsWrittenIntoAClassOrANewOne(@TempDir Path root) {
+        Path activities = root.resolve("com/bot/plugins/sdk/Activities.java");
+        Path collect = root.resolve("com/bot/Collect.java");
+        Map<Path, String> sources = new LinkedHashMap<>();
+        sources.put(activities, ACTIVITIES);
+        sources.put(collect, COLLECT);
+        BotIndex index = BotIndex.over(sources, List.of(contract(), testClasses()), root);
+
+        String into = assertInstanceOf(Refactor.Planned.class, BotMethods.create(index, "com.bot",
+                root.resolve("com/bot/Collect.java"), "Collect", "again", "Activities.Collect",
+                "com.bot.plugins.sdk.Activities", "NEXT")).rewrites().get(collect);
+        assertTrue(into.contains("public static Activities.Collect again() {"), into);
+        assertTrue(into.contains("return Activities.Collect.NEXT;"), into);
+        assertInstanceOf(Refactor.Refused.class, BotMethods.create(index, "com.bot", collect, "Collect", "body",
+                "Activities.Collect", "com.bot.plugins.sdk.Activities", "NEXT"), "body is taken");
+
+        Path rest = root.resolve("com/bot/Rest.java");
+        String created = assertInstanceOf(Refactor.Planned.class, BotMethods.create(index, "com.bot", rest, "Rest",
+                "home", null, null, null)).rewrites().get(rest);
+        assertTrue(created.startsWith("package com.bot;"), created);
+        assertTrue(created.contains("public static void home() {"), created);
+    }
+
     private static ManagedSets.Member member(BotIndex index, String name) {
         return ManagedSets.member(index, ID,name, GRAMMAR).orElseThrow();
     }

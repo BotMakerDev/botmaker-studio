@@ -103,7 +103,7 @@ public final class StatementMenu {
             for (BlockType block : languageBlocks(allowed)) {
                 if (matches(block, q)) matches.add(statementItem(block, b, true));
             }
-            for (FacadeCall call : facadeCalls(b.analyzer())) {
+            for (FacadeCall call : facadeCalls(b)) {
                 if (matches(call.block(), q)) matches.add(callItem(call, b, true));
             }
             // The bot's own functions, by name: searching "collect" finds collect(), not only "Call Function".
@@ -244,7 +244,7 @@ public final class StatementMenu {
     private static Menu facadeSubmenu(FacadeEntry facade, Build b) {
         if (b.analyzer() == null) return null;
         Menu sub = new Menu(facade.simpleName());
-        for (String method : facadeMethodNames(facade, b.analyzer())) {
+        for (String method : facadeMethodNames(facade, b)) {
             sub.getItems().add(callItem(new FacadeCall(facade, facadeCall(facade, method, method)), b, false));
         }
         return sub.getItems().isEmpty() ? null : MenuIcons.decorate(sub, MenuIcons.iconFor(facade));
@@ -259,7 +259,7 @@ public final class StatementMenu {
         if (facades.size() == 1) {
             FacadeEntry facade = facades.getFirst();
             if (b.analyzer() == null) return null;
-            for (String method : facadeMethodNames(facade, b.analyzer())) {
+            for (String method : facadeMethodNames(facade, b)) {
                 plugin.getItems().add(callItem(
                         new FacadeCall(facade, facadeCall(facade, method, facade.simpleName() + "." + method)), b, false));
             }
@@ -323,7 +323,7 @@ public final class StatementMenu {
         for (BlockType block : languageBlocks(b.allowed())) {
             if (block.id().equals(id)) return statementItem(block, b, false);
         }
-        for (FacadeCall call : facadeCalls(b.analyzer())) {
+        for (FacadeCall call : facadeCalls(b)) {
             if (call.block().id().equals(id)) return callItem(call, b, false);
         }
         return null;
@@ -333,11 +333,11 @@ public final class StatementMenu {
     private record FacadeCall(FacadeEntry facade, BlockType block) {}
 
     /** Every facade method as a flat list of class-qualified statement blocks, for the search view. */
-    private static List<FacadeCall> facadeCalls(ProjectAnalyzer analyzer) {
+    private static List<FacadeCall> facadeCalls(Build b) {
         List<FacadeCall> out = new ArrayList<>();
-        if (analyzer == null) return out;
+        if (b.analyzer() == null) return out;
         for (FacadeEntry facade : PluginHost.menuFacades()) {
-            for (String method : facadeMethodNames(facade, analyzer)) {
+            for (String method : facadeMethodNames(facade, b)) {
                 out.add(new FacadeCall(facade, facadeCall(facade, method, facade.simpleName() + "." + method)));
             }
         }
@@ -350,13 +350,18 @@ public final class StatementMenu {
      *
      * <p>A name survives when the SDK offers at least one of its overloads. Which overload the insert then
      * creates is {@code StatementFactory}'s business, and it applies the same set.
+     *
+     * <p>An entry point ({@code @EntryPoint}, the SDK's {@code Bot.runFlow}) is offered only inside {@code main};
+     * a menu with no insertion target says nothing about where it is, and offers it.
      */
-    private static List<String> facadeMethodNames(FacadeEntry facade, ProjectAnalyzer analyzer) {
+    private static List<String> facadeMethodNames(FacadeEntry facade, Build b) {
         PaletteCuration curation = PaletteCuration.current();
-        return analyzer.getMethods(facade.simpleName(), true).stream()
+        boolean inMain = b.targetBody() == null || StatementPlacement.inMain(b.targetBody());
+        return b.analyzer().getMethods(facade.simpleName(), true).stream()
                 .map(MethodSignature::name)
                 .distinct()
                 .filter(name -> curation.isOffered(facade.simpleName(), name))
+                .filter(name -> inMain || !facade.entryPoint(name))
                 .sorted()
                 .collect(Collectors.toList());
     }

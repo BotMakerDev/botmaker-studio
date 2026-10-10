@@ -46,9 +46,25 @@ final class ValueWriter {
         final AST ast = AST.newAST(AST.getJLSLatest(), false);
         private final boolean qualified;
         private final Set<String> imports = new LinkedHashSet<>();
+        private final BotNames bot;
 
         Names(boolean qualified) {
+            this(qualified, BotNames.NONE);
+        }
+
+        /** The same, writing a part one of the bot's {@code names} holds as that name. */
+        Names(boolean qualified, BotNames bot) {
             this.qualified = qualified;
+            this.bot = bot == null ? BotNames.NONE : bot;
+        }
+
+        /** {@code value} as the bot's name for it, copied into this write's tree; empty when the bot has none. */
+        Optional<Expression> botName(Object value) {
+            if (bot == BotNames.NONE || value == null) return Optional.empty();
+            return bot.spell(value).map(spelled -> {
+                imports.addAll(spelled.imports());
+                return spelled.copyInto(ast);
+            });
         }
 
         Name of(Class<?> type) {
@@ -92,6 +108,8 @@ final class ValueWriter {
      */
     Optional<Expression> ofClass(Class<?> type, Object value, Names names) {
         if (value == null) return Optional.empty();
+        Optional<Expression> named = names.botName(value);
+        if (named.isPresent()) return named;
         if (type == null) return any(value, names);
         if (JdkLiterals.handles(type)) return JdkLiterals.node(names.ast, type, value);
         ComponentType<?> component = grammar.canonical(type);
@@ -108,6 +126,8 @@ final class ValueWriter {
     /** {@code value} by its own runtime class — the untyped counterpart of reading by spelling. */
     Optional<Expression> any(Object value, Names names) {
         if (value == null) return Optional.empty();
+        Optional<Expression> named = names.botName(value);
+        if (named.isPresent()) return named;
         Optional<Expression> literal = JdkLiterals.nodeAny(names.ast, value);
         if (literal.isPresent()) return literal;
         if (value instanceof Enum<?> constant) return constant(constant.getDeclaringClass(), value, names);

@@ -11,6 +11,7 @@ import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ParenthesizedExpression;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.TypeLiteral;
 
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
@@ -51,12 +52,24 @@ final class ExpressionReader {
     private final List<Call> calls;
     private final List<Class<?>> enums;
     private final List<Class<?>> declared;
+    private final BotNames bot;
 
     ExpressionReader(ValueGrammar grammar, List<Call> calls, List<Class<?>> enums, List<Class<?>> declared) {
+        this(grammar, calls, enums, declared, BotNames.NONE);
+    }
+
+    private ExpressionReader(ValueGrammar grammar, List<Call> calls, List<Class<?>> enums, List<Class<?>> declared,
+                             BotNames bot) {
         this.grammar = grammar;
         this.calls = List.copyOf(calls);
         this.enums = List.copyOf(enums);
         this.declared = List.copyOf(declared);
+        this.bot = bot == null ? BotNames.NONE : bot;
+    }
+
+    /** This reader, also reading the bot's own constants and managed class literals wherever they appear. */
+    ExpressionReader with(BotNames names) {
+        return names == null || names == bot ? this : new ExpressionReader(grammar, calls, enums, declared, names);
     }
 
     // ---- by form -------------------------------------------------------------------------------------------
@@ -99,7 +112,7 @@ final class ExpressionReader {
 
     /** A value whose type is a class: a JDK literal, or one a plugin declares or a component builds. */
     private Optional<Object> readDeclared(Class<?> cls, SourceNode node) {
-        if (JdkLiterals.handles(cls)) return JdkLiterals.read(cls, unwrap(node.node()));
+        if (JdkLiterals.handles(cls)) return jdk(cls, node);
         PluginType<?> type = grammar.declaration(cls);
         if (type == null && grammar.canonical(cls) == null) return Optional.empty();
         Optional<Object> read = value(node, cls, true);
@@ -111,12 +124,22 @@ final class ExpressionReader {
     /** One part of a call, read as the class its declaration gives it. */
     private Optional<Object> readPart(Class<?> type, SourceNode node) {
         if (type == null || isHostContainer(type)) return readAny(node);
-        if (JdkLiterals.handles(type)) return JdkLiterals.read(type, unwrap(node.node()));
+        if (JdkLiterals.handles(type)) return jdk(type, node);
         Optional<Object> read = value(node, type, true);
         if (read.isPresent() || type.isEnum() || grammar.canonical(type) != null) return read;
         // The plugin said this part is a type nothing here writes — a flow's Collect::body — so it crosses
         // as it is written.
         return Optional.of(node.source());
+    }
+
+    /**
+     * A JDK literal, or one of the bot's constants holding one: the writer spells any value a constant holds as
+     * that constant, a {@code String} included, so reading has to accept what it wrote.
+     */
+    private Optional<Object> jdk(Class<?> type, SourceNode node) {
+        Expression written = unwrap(node.node());
+        return JdkLiterals.read(type, written).or(() -> written instanceof QualifiedName name
+                ? bot.named(name).filter(value -> boxed(type).isInstance(value)) : Optional.empty());
     }
 
     // ---- by spelling ---------------------------------------------------------------------------------------
@@ -137,7 +160,10 @@ final class ExpressionReader {
             case ClassInstanceCreation creation -> construct(node.child(creation), expected);
             case MethodInvocation call -> invoke(node.child(call), expected, bare);
             case QualifiedName qualified -> constant(qualified.getQualifier(),
-                    qualified.getName().getIdentifier(), expected);
+                    qualified.getName().getIdentifier(), expected).or(() -> bot.named(qualified));
+            // A managed enum's class literal stands for the plugin's value of it, which no Class<?> part could
+            // hold: it is handed to the declaration's own build as that value (the SDK's Activities.Collect.class).
+            case TypeLiteral literal -> bot.type(literal);
             case FieldAccess access when access.getExpression() instanceof Name owner ->
                     constant(owner, access.getName().getIdentifier(), expected);
             case SimpleName simple when bare && expected != null && expected.isEnum() ->
@@ -146,7 +172,9 @@ final class ExpressionReader {
                     ? JdkLiterals.read(expected, expression)
                     : JdkLiterals.readAny(expression);
         };
-        return read.filter(value -> expected == null || boxed(expected).isInstance(value));
+        // A Class<?> part a class literal fills holds the plugin's value of that enum, which no Class is.
+        boolean literal = expression instanceof TypeLiteral && expected == Class.class;
+        return read.filter(value -> expected == null || literal || boxed(expected).isInstance(value));
     }
 
     private Optional<Object> construct(SourceNode node, Class<?> expected) {

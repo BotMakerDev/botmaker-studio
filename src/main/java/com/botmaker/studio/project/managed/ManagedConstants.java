@@ -2,6 +2,7 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.BotNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -18,8 +19,11 @@ import org.eclipse.jdt.core.dom.EnumConstantDeclaration;
 import org.eclipse.jdt.core.dom.EnumDeclaration;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.QualifiedName;
+import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.TypeLiteral;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 import java.nio.file.Path;
@@ -42,19 +46,29 @@ public final class ManagedConstants {
     private ManagedConstants() {}
 
     /**
-     * One {@code public static final} field of a marked type, or one constant of a marked enum.
+     * One {@code public static final} field of a marked type, one constant of a marked enum, or — in a set of
+     * nested enums — one of those enums as a whole, which a bot names by its class literal
+     * ({@code Activities.Collect.class}).
      *
-     * @param owner       the declaring class, fully qualified
-     * @param field       the field's name
+     * @param owner       the declaring class, fully qualified — {@code com.bot.Activities.Collect} for a nested
+     *                    enum's constant, and for the nested enum itself
+     * @param field       the field's name; null for a whole nested enum
      * @param initializer its initialiser, as written; null for an enum's constant
      * @param member      what an enum's constant stands for, made by its plugin from the name
-     *                    ({@code ManagedValue.byName}); null for a field, whose initialiser says
+     *                    ({@code ManagedValue.byName}), or a nested enum ({@code ManagedValue.byGroup}); null for
+     *                    a field, whose initialiser says
+     * @param topLevel    the top-level class {@code owner} is in, fully qualified — what a bot imports
      */
-    public record Constant(String owner, String field, String initializer, Object member) {
+    public record Constant(String owner, String field, String initializer, Object member, String topLevel) {
 
         /** A field, read through its initialiser. */
         public Constant(String owner, String field, String initializer) {
-            this(owner, field, initializer, null);
+            this(owner, field, initializer, null, owner);
+        }
+
+        /** A top-level enum's constant. */
+        public Constant(String owner, String field, String initializer, Object member) {
+            this(owner, field, initializer, member, owner);
         }
 
         /** The value it holds, read through {@code grammar}; empty when its initialiser is not one it reads. */
@@ -63,9 +77,14 @@ public final class ManagedConstants {
                     : initializer == null ? Optional.empty() : grammar.valueOfAny(initializer);
         }
 
-        /** The declaring class's simple name. */
+        /** Whether this is a whole nested enum, written as its class literal, rather than a constant. */
+        public boolean isGroup() {
+            return field == null;
+        }
+
+        /** How a bot writes the owner once {@link #topLevel()} is imported: {@code Pictures}, {@code Activities.Collect}. */
         public String simpleOwner() {
-            return owner.substring(owner.lastIndexOf('.') + 1);
+            return owner.substring(topLevel.lastIndexOf('.') + 1);
         }
     }
 
@@ -139,10 +158,24 @@ public final class ManagedConstants {
      * <p>Two constants are the same value when the grammar writes their values the same way, which is the
      * comparison a plugin's own {@code equals} cannot be trusted to make.
      */
-    public record Lookup(List<Constant> constants, ValueGrammar grammar) {
+    public static final class Lookup implements BotNames {
 
-        public Lookup {
-            constants = constants == null ? List.of() : List.copyOf(constants);
+        private final List<Constant> constants;
+        private final ValueGrammar grammar;
+        /** Each constant's value as the grammar writes it, computed once: every part of every write asks. */
+        private List<Optional<JavaValue>> written;
+
+        public Lookup(List<Constant> constants, ValueGrammar grammar) {
+            this.constants = constants == null ? List.of() : List.copyOf(constants);
+            this.grammar = grammar;
+        }
+
+        public List<Constant> constants() {
+            return constants;
+        }
+
+        public ValueGrammar grammar() {
+            return grammar;
         }
 
         /**
@@ -151,6 +184,27 @@ public final class ManagedConstants {
          */
         public Optional<Object> read(QualifiedName name) {
             return constant(name).flatMap(constant -> constant.value(grammar));
+        }
+
+        @Override
+        public Optional<Object> named(QualifiedName written) {
+            return read(written);
+        }
+
+        /** What {@code Activities.Collect.class} stands for when {@code Activities.Collect} is a managed nested enum. */
+        @Override
+        public Optional<Object> type(TypeLiteral written) {
+            Name name = switch (written == null ? null : written.getType()) {
+                case SimpleType simple -> simple.getName();
+                case null, default -> null;
+            };
+            if (name == null) return Optional.empty();
+            for (Constant constant : constants) {
+                if (constant.isGroup() && SourceNames.refersTo(name, constant.owner())) {
+                    return Optional.ofNullable(constant.member());
+                }
+            }
+            return Optional.empty();
         }
 
         /** The known constant {@code name} refers to, resolved as {@link #read} resolves it; empty for none. */
@@ -166,22 +220,47 @@ public final class ManagedConstants {
         }
 
         /**
-         * {@code Owner.FIELD} and its import, for the first constant holding {@code value}; empty when none does.
-         * Two values are the same when the grammar writes them as the same tree.
+         * {@code Owner.FIELD} and its import, for the first constant holding {@code value} — or
+         * {@code Outer.Group.class} for a nested enum's value — empty when none does. Two values are the same
+         * when the grammar writes them as the same tree; a nested enum's value, which no grammar writes, when it
+         * equals the plugin's.
          */
+        @Override
         public Optional<JavaValue> spell(Object value) {
-            Optional<JavaValue> canonical = value == null ? Optional.empty() : grammar.initializerOfAny(value);
-            if (canonical.isEmpty()) return Optional.empty();
+            if (value == null) return Optional.empty();
+            AST ast = AST.newAST(AST.getJLSLatest(), false);
             for (Constant constant : constants) {
-                Optional<JavaValue> theirs = constant.value(grammar).flatMap(grammar::initializerOfAny);
-                if (theirs.isPresent() && theirs.get().sameJava(canonical.get())) {
-                    AST ast = AST.newAST(AST.getJLSLatest(), false);
-                    QualifiedName reference = ast.newQualifiedName(
-                            ast.newSimpleName(constant.simpleOwner()), ast.newSimpleName(constant.field()));
-                    return Optional.of(JavaValue.built(reference, List.of(constant.owner())));
+                if (constant.isGroup() && value.equals(constant.member())) {
+                    TypeLiteral literal = ast.newTypeLiteral();
+                    literal.setType(ast.newSimpleType(ast.newName(constant.simpleOwner())));
+                    return Optional.of(JavaValue.built(literal, List.of(constant.topLevel())));
                 }
             }
+            Optional<JavaValue> canonical = grammar.initializerOfAny(value);
+            if (canonical.isEmpty()) return Optional.empty();
+            List<Optional<JavaValue>> theirs = written();
+            for (int i = 0; i < constants.size(); i++) {
+                Constant constant = constants.get(i);
+                if (constant.isGroup() || theirs.get(i).isEmpty() || !theirs.get(i).get().sameJava(canonical.get())) {
+                    continue;
+                }
+                QualifiedName reference = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
+                        ast.newSimpleName(constant.field()));
+                return Optional.of(JavaValue.built(reference, List.of(constant.topLevel())));
+            }
             return Optional.empty();
+        }
+
+        private synchronized List<Optional<JavaValue>> written() {
+            if (written == null) {
+                List<Optional<JavaValue>> out = new ArrayList<>(constants.size());
+                for (Constant constant : constants) {
+                    out.add(constant.isGroup() ? Optional.empty()
+                            : constant.value(grammar).flatMap(grammar::initializerOfAny));
+                }
+                written = List.copyOf(out);
+            }
+            return written;
         }
     }
 
@@ -196,6 +275,7 @@ public final class ManagedConstants {
                 if (!type.isPackageMemberTypeDeclaration()
                         || ManagedIds.on(type, known) == null) return false;
                 String owner = pkg + type.getName().getIdentifier();
+                grouped(type, owner, known, out);
                 for (FieldDeclaration field : type.getFields()) {
                     int flags = field.getModifiers();
                     if (!Modifier.isPublic(flags) || !Modifier.isStatic(flags) || !Modifier.isFinal(flags)) continue;
@@ -230,5 +310,30 @@ public final class ManagedConstants {
             }
         });
         return out;
+    }
+
+    /**
+     * A grouped set's nested enums ({@code ManagedValue.isGrouped}): each enum as a whole, then each of its
+     * constants, every one what the set's plugin makes of the names. Nothing for a class of any other set.
+     */
+    private static void grouped(TypeDeclaration type, String owner, Collection<ManagedValue<?>> known,
+                                List<Constant> out) {
+        String id = ManagedIds.idOf(ManagedIds.on(type, known), known);
+        ManagedValue<?> set = known.stream()
+                .filter(value -> value != null && value.isGrouped() && value.id().equals(id))
+                .findFirst().orElse(null);
+        if (set == null) return;
+        for (Object body : type.bodyDeclarations()) {
+            if (!(body instanceof EnumDeclaration nested)) continue;
+            String group = nested.getName().getIdentifier();
+            String nestedOwner = owner + "." + group;
+            Object whole = set.byGroup(group);
+            if (whole != null) out.add(new Constant(nestedOwner, null, null, whole, owner));
+            for (Object each : nested.enumConstants()) {
+                String name = ((EnumConstantDeclaration) each).getName().getIdentifier();
+                Object member = set.byName(group, name);
+                if (member != null) out.add(new Constant(nestedOwner, name, null, member, owner));
+            }
+        }
     }
 }

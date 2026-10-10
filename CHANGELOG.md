@@ -12,7 +12,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-No source changes since v1.4.2; re-released for updated upstream pins.
+### Fixed
+
+- **A managed constant inside a value is read and written.** `Flow.edge(…, Outcomes.WON)` used to read as
+  nothing: the bot's constants were consulted only for a value that was itself one constant. They are now
+  consulted at every depth (`plugin/grammar/BotNames`), when reading and when writing.
+
+### Added
+
+- Open sets of nested enums (contract `ofEnums`): their constants and class literals are read and written, and
+  the holder is created as an empty class. Whole enums can be added, renamed and removed (`ManagedSets.addGroup`
+  and `removeGroup`). Constants inside a nested enum are named `Group.NAME`.
+- `PluginValues.methods` and `createMethod` (`project/managed/BotMethods`): the bot's methods that return a
+  nested enum, or `void`. A new one is written into an existing class, or into a new file next to the main
+  class.
+- The statement menu offers an `@EntryPoint` member only directly inside `main` (`StatementPlacement.inMain`).
 
 No source changes since v1.4.1; re-released for updated upstream pins.
 

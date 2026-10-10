@@ -4,6 +4,7 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
@@ -66,10 +67,40 @@ public final class ManagedSets {
      * @param start       where its name starts, the handle {@link Refactor} takes
      * @param form        its declared type, as a value's type; null for an enum's constant
      * @param initializer its initialiser, as written; null for an enum's constant, whose name is all it has
+     * @param group       the enum nested in the class that declares it — {@code Collect} — or null for a
+     *                    constant of the class itself
      */
-    public record Member(Path file, String className, String name, int start, Type form, String initializer) {
+    public record Member(Path file, String className, String name, int start, Type form, String initializer,
+                         String group) {
 
-        /** What a bot writes to reach it: {@code Pictures.ORE}. */
+        /** A constant of the class itself, or of a top-level enum. */
+        public Member(Path file, String className, String name, int start, Type form, String initializer) {
+            this(file, className, name, start, form, initializer, null);
+        }
+
+        /** What {@code PluginValues} calls it: {@code ORE}, or {@code Collect.WON} in a nested enum. */
+        public String memberName() {
+            return group == null ? name : group + "." + name;
+        }
+
+        /** What a bot writes to reach it: {@code Pictures.ORE}, {@code Activities.Collect.WON}. */
+        public String qualified() {
+            return className + "." + memberName();
+        }
+    }
+
+    /**
+     * One enum nested in a grouped set's class ({@code ManagedValue.isGrouped}).
+     *
+     * @param file      the file its class is declared in
+     * @param className the class's simple name — {@code Activities}
+     * @param name      the enum's simple name — {@code Collect}
+     * @param start     where its name starts, the handle {@link Refactor} takes
+     * @param members   its constants, in the order they are written
+     */
+    public record Group(Path file, String className, String name, int start, List<Member> members) {
+
+        /** What a bot writes to reach it: {@code Activities.Collect}. */
         public String qualified() {
             return className + "." + name;
         }
@@ -98,6 +129,10 @@ public final class ManagedSets {
                         return;
                     }
                     if (!(declared instanceof TypeDeclaration type)) return;
+                    // A class of constants may nest a helper enum of its own, which is no member of the set:
+                    // only a class holding no constant of its own is a set of nested enums.
+                    boolean grouped = java.util.Arrays.stream(type.getFields()).noneMatch(ManagedSets::isConstant);
+                    if (grouped) for (Group group : nested(file, type)) out.addAll(group.members());
                     for (FieldDeclaration field : type.getFields()) {
                         if (!isConstant(field)) continue;
                         for (Object f : field.fragments()) {
@@ -117,9 +152,81 @@ public final class ManagedSets {
         });
     }
 
-    /** The constant {@code name} of the set {@code id}, or empty. */
+    /** The constant {@code name} of the set {@code id} — {@code ORE}, or {@code Collect.WON} — or empty. */
     public static Optional<Member> member(BotIndex index, String id, String name, ValueGrammar grammar) {
-        return members(index, id, grammar).stream().filter(m -> m.name().equals(name)).findFirst();
+        return members(index, id, grammar).stream().filter(m -> m.memberName().equals(name)).findFirst();
+    }
+
+    /** The enums nested in the class carrying {@code id}, in the order they are written; empty when none does. */
+    public static List<Group> groups(BotIndex index, String id) {
+        if (id == null || id.isBlank()) return List.of();
+        return index.read(units -> {
+            for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
+                for (Object each : entry.getValue().types()) {
+                    if (each instanceof TypeDeclaration type && carries(type, id)) {
+                        return nested(entry.getKey(), type);
+                    }
+                }
+            }
+            return List.<Group>of();
+        });
+    }
+
+    /** The nested enum {@code name} of the set {@code id}, or empty. */
+    public static Optional<Group> group(BotIndex index, String id, String name) {
+        return groups(index, id).stream().filter(g -> g.name().equals(name)).findFirst();
+    }
+
+    /**
+     * {@code public enum name implements <element> { constants… }} after the class's last nested enum, or first
+     * in its body — refused when a name is not a Java name, the enum is taken, there is no constant, or the bot
+     * would not compile.
+     */
+    public static Refactor.Outcome addGroup(BotIndex index, String id, String name, List<String> constants,
+                                            Class<?> element) {
+        if (!isJavaName(name)) return new Refactor.Refused("“" + name + "” is not a name Java accepts.");
+        if (constants == null || constants.isEmpty()) {
+            return new Refactor.Refused(name + " needs a constant: a method returning it has to return one.");
+        }
+        for (String constant : constants) {
+            if (!isJavaName(constant)) return new Refactor.Refused("“" + constant + "” is not a name Java accepts.");
+        }
+        List<Holder> holders = holders(index, id);
+        String mark = ManagedIds.spelled(id, PluginHost.managedValues());
+        if (holders.size() != 1) {
+            return new Refactor.Refused(holders.isEmpty() ? "The project has no class marked " + mark + "."
+                    : "More than one class is marked " + mark + ", so which one gets " + name + " is not clear.");
+        }
+        Holder holder = holders.getFirst();
+        if (group(index, id, name).isPresent()) {
+            return new Refactor.Refused(holder.className() + "." + name + " already exists.");
+        }
+        String source = index.sources().get(holder.file());
+        String added = addedGroup(source, holder.className(), name, constants, element);
+        if (added.equals(source)) {
+            return new Refactor.Refused(holder.className() + "." + name + " could not be written.");
+        }
+        return Refactor.checked(index, new Refactor.Planned("Added " + holder.className() + "." + name,
+                Map.of(holder.file(), added)), "Adding " + holder.className() + "." + name);
+    }
+
+    /** The nested enum deleted — refused, with the uses, while anything uses it or one of its constants. */
+    public static Refactor.Outcome removeGroup(BotIndex index, Group group) {
+        List<Usages.Usage> uses = new ArrayList<>(Refactor.uses(index, group.file(), group.start()).orElse(List.of()));
+        for (Member member : group.members()) uses.addAll(uses(index, member));
+        uses.removeIf(Usages.Usage::declaration);
+        if (!uses.isEmpty()) {
+            List<String> where = uses.stream().map(use -> use.file().getFileName() + ":" + use.line())
+                    .distinct().limit(3).toList();
+            return new Refactor.Refused(group.qualified() + " is still used " + uses.size()
+                    + (uses.size() == 1 ? " time" : " times") + ", in " + String.join(", ", where)
+                    + (uses.size() > where.size() ? ", …" : "") + ".", uses, List.of());
+        }
+        String source = index.sources().get(group.file());
+        String removed = removedGroup(source, group.className(), group.name());
+        if (removed.equals(source)) return new Refactor.Refused(group.qualified() + " could not be removed.");
+        return Refactor.checked(index, new Refactor.Planned("Removed " + group.qualified(),
+                Map.of(group.file(), removed)), "Removing " + group.qualified());
     }
 
     /** Every use of {@code member} outside its declaration; empty when it cannot be resolved. */
@@ -135,7 +242,9 @@ public final class ManagedSets {
      */
     public static Refactor.Outcome add(BotIndex index, String id, String name, Class<?> type,
                                        JavaValue initializer) {
-        if (name == null || !SourceVersion.isIdentifier(name) || SourceVersion.isKeyword(name)) {
+        int dot = name == null ? -1 : name.indexOf('.');
+        if (dot > 0) return addToGroup(index, id, name.substring(0, dot), name.substring(dot + 1));
+        if (!isJavaName(name)) {
             return new Refactor.Refused("“" + name + "” is not a name Java accepts.");
         }
         List<Holder> holders = holders(index, id);
@@ -156,6 +265,27 @@ public final class ManagedSets {
                 Map.of(holder.file(), added)), "Adding " + holder.className() + "." + name);
     }
 
+    /** The bare constant {@code name} after the last one of the nested enum {@code group}. */
+    private static Refactor.Outcome addToGroup(BotIndex index, String id, String group, String name) {
+        if (!isJavaName(name)) return new Refactor.Refused("“" + name + "” is not a name Java accepts.");
+        Optional<Group> found = group(index, id, group);
+        if (found.isEmpty()) {
+            return new Refactor.Refused("The project has no " + group + " in the class marked "
+                    + ManagedIds.spelled(id, PluginHost.managedValues()) + ".");
+        }
+        Group into = found.get();
+        if (into.members().stream().anyMatch(m -> m.name().equals(name))) {
+            return new Refactor.Refused(into.qualified() + "." + name + " already exists.");
+        }
+        String source = index.sources().get(into.file());
+        CompilationUnit unit = BotParser.syntax(source);
+        EnumDeclaration nested = nestedEnum(topLevel(unit, into.className()), group);
+        String added = nested == null ? source : addedConstant(source, unit, nested, name);
+        if (added.equals(source)) return new Refactor.Refused(into.qualified() + "." + name + " could not be written.");
+        return Refactor.checked(index, new Refactor.Planned("Added " + into.qualified() + "." + name,
+                Map.of(into.file(), added)), "Adding " + into.qualified() + "." + name);
+    }
+
     /**
      * Every use of {@code from} pointed at {@code to}: the name at each use replaced, so {@code Pictures.ORE}
      * becomes {@code Pictures.GOLD} and a static import of it follows. Each function touched is marked
@@ -163,6 +293,11 @@ public final class ManagedSets {
      * mark. Refused when nothing uses it, or when the result would add a compile error.
      */
     public static Refactor.Outcome repoint(BotIndex index, Member from, Member to, String note) {
+        if (!java.util.Objects.equals(from.group(), to.group())) {
+            // Only the name at each use is replaced, so the enum it is qualified with would stay the old one.
+            return new Refactor.Refused(from.qualified() + " and " + to.qualified() + " are in different enums: "
+                    + "a method returning one cannot return the other.");
+        }
         String key = index.read(units -> {
             CompilationUnit unit = units.get(from.file());
             return unit == null ? null : Usages.keyOf(Usages.bindingAt(unit, from.start()));
@@ -199,7 +334,8 @@ public final class ManagedSets {
                     + (uses.size() > where.size() ? ", …" : "") + ".", uses, List.of());
         }
         String source = index.sources().get(member.file());
-        String removed = removed(source, member.className(), member.name());
+        String removed = member.group() == null ? removed(source, member.className(), member.name())
+                : removedFromGroup(source, member.className(), member.group(), member.name());
         if (removed.equals(source)) return new Refactor.Refused(member.qualified() + " could not be removed.");
         return Refactor.checked(index, new Refactor.Planned("Removed " + member.qualified(),
                 Map.of(member.file(), removed)), "Removing " + member.qualified());
@@ -273,7 +409,102 @@ public final class ManagedSets {
         return source;
     }
 
+    /**
+     * {@code source} with {@code public enum name implements <element> { constants… }} in {@code className},
+     * after its last nested enum or first in its body; unchanged when the class is not in it or the element type
+     * has no node.
+     */
+    static String addedGroup(String source, String className, String name, List<String> constants, Class<?> element) {
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        if (!(topLevel(unit, className) instanceof TypeDeclaration holder)) return source;
+        Set<String> imports = new LinkedHashSet<>();
+        EnumDeclaration nested = ast.newEnumDeclaration();
+        nested.setName(ast.newSimpleName(name));
+        @SuppressWarnings("unchecked")
+        List<Object> modifiers = nested.modifiers();
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        if (element != null) {
+            Optional<org.eclipse.jdt.core.dom.Type> face = ValueTypes.node(ast, element, imports);
+            if (face.isEmpty()) return source;
+            @SuppressWarnings("unchecked")
+            List<Object> supers = nested.superInterfaceTypes();
+            supers.add(face.get());
+        }
+        @SuppressWarnings("unchecked")
+        List<Object> enumConstants = nested.enumConstants();
+        for (String constant : constants) {
+            EnumConstantDeclaration declared = ast.newEnumConstantDeclaration();
+            declared.setName(ast.newSimpleName(constant));
+            enumConstants.add(declared);
+        }
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        ListRewrite body = rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        EnumDeclaration last = null;
+        for (Object each : holder.bodyDeclarations()) if (each instanceof EnumDeclaration e) last = e;
+        if (last == null) body.insertFirst(nested, null);
+        else body.insertAfter(nested, last, null);
+        for (String each : imports) ImportManager.addImport(unit, rewrite, each);
+        // The rewrite writes a new node flat, "implements Outcome{NEXT,WON}": only what it added is laid out.
+        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /** {@code source} with the enum {@code name} nested in {@code className} deleted; unchanged when absent. */
+    static String removedGroup(String source, String className, String name) {
+        CompilationUnit unit = BotParser.syntax(source);
+        EnumDeclaration nested = nestedEnum(topLevel(unit, className), name);
+        if (nested == null) return source;
+        ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+        rewrite.remove(nested, null);
+        return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
+    /** {@code source} with the constant {@code name} of the enum {@code group} nested in {@code className} deleted. */
+    static String removedFromGroup(String source, String className, String group, String name) {
+        CompilationUnit unit = BotParser.syntax(source);
+        EnumDeclaration nested = nestedEnum(topLevel(unit, className), group);
+        if (nested == null) return source;
+        for (Object each : nested.enumConstants()) {
+            EnumConstantDeclaration constant = (EnumConstantDeclaration) each;
+            if (!constant.getName().getIdentifier().equals(name)) continue;
+            ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+            rewrite.remove(constant, null);
+            return AstRewriteHelper.applyRewrite(rewrite, source);
+        }
+        return source;
+    }
+
     // --- reading -----------------------------------------------------------------------------------------------
+
+    /** The enums nested in {@code type}, each with its constants. */
+    private static List<Group> nested(Path file, TypeDeclaration type) {
+        String className = type.getName().getIdentifier();
+        List<Group> out = new ArrayList<>();
+        for (Object body : type.bodyDeclarations()) {
+            if (!(body instanceof EnumDeclaration nested)) continue;
+            String group = nested.getName().getIdentifier();
+            List<Member> members = new ArrayList<>();
+            for (Object c : nested.enumConstants()) {
+                SimpleName name = ((EnumConstantDeclaration) c).getName();
+                members.add(new Member(file, className, name.getIdentifier(), name.getStartPosition(), null, null,
+                        group));
+            }
+            out.add(new Group(file, className, group, nested.getName().getStartPosition(), List.copyOf(members)));
+        }
+        return List.copyOf(out);
+    }
+
+    private static EnumDeclaration nestedEnum(AbstractTypeDeclaration holder, String name) {
+        if (!(holder instanceof TypeDeclaration type)) return null;
+        for (Object body : type.bodyDeclarations()) {
+            if (body instanceof EnumDeclaration nested && nested.getName().getIdentifier().equals(name)) return nested;
+        }
+        return null;
+    }
+
+    private static boolean isJavaName(String name) {
+        return name != null && SourceVersion.isIdentifier(name) && !SourceVersion.isKeyword(name);
+    }
 
     /** Every class carrying {@code id}: one is the set's holder, two is a project nobody can add to safely. */
     private static List<Holder> holders(BotIndex index, String id) {

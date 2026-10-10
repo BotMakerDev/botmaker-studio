@@ -386,8 +386,23 @@ public final class ValueGrammar {
 
     /** {@link #read(Type, String)} over an expression already parsed. */
     public Optional<Object> read(Type type, SourceNode node) {
-        if (type instanceof ValueTypes.Unknown) return valueOfAny(node);
-        return valueOf(type, node);
+        return read(type, node, BotNames.NONE);
+    }
+
+    /** {@link #read(Type, SourceNode)}, reading the bot's own {@code names} wherever the value holds one. */
+    public Optional<Object> read(Type type, SourceNode node, BotNames names) {
+        ExpressionReader with = reader.with(names);
+        if (type instanceof ValueTypes.Unknown) return node == null || node.node() == null ? Optional.empty()
+                : with.readAny(node);
+        return with.read(type, node);
+    }
+
+    /** {@link #write(Type, Object)}, writing each part the bot's {@code names} hold as that name. */
+    public Optional<JavaValue> write(Type type, Object value, BotNames names) {
+        ValueWriter.Names spelled = new ValueWriter.Names(false, names);
+        if (type instanceof ValueTypes.Unknown) return writer.any(value, spelled).map(spelled::value);
+        if (type == null) return Optional.empty();
+        return writer.type(type, value, spelled).map(spelled::value);
     }
 
     /**

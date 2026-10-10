@@ -145,6 +145,119 @@ class ManagedConstantsTest {
         assertEquals(List.of(), ManagedConstants.read(outcomes, KNOWN), "an enum no plugin declares holds nothing");
     }
 
+    /** A value whose part is an outcome: {@code new Wire(Outcomes.WON)}. */
+    record Wire(TestOutcome on) {}
+
+    private static final ComponentType<TestOutcome.Named> NAMED_OUTCOME = new ComponentType<>() {
+        @Override public Class<TestOutcome.Named> type() { return TestOutcome.Named.class; }
+        @Override public List<Class<?>> componentTypes() { return List.of(String.class); }
+        @Override public List<Object> components(TestOutcome.Named o) { return List.of(o.name()); }
+        @Override public TestOutcome.Named build(List<Object> parts) {
+            return new TestOutcome.Named((String) parts.getFirst());
+        }
+    };
+
+    private static final ComponentType<Wire> WIRE = new ComponentType<>() {
+        @Override public Class<Wire> type() { return Wire.class; }
+        @Override public List<Class<?>> componentTypes() { return List.of(TestOutcome.class); }
+        @Override public List<Object> components(Wire w) { return List.of(w.on()); }
+        @Override public Wire build(List<Object> parts) { return new Wire((TestOutcome) parts.getFirst()); }
+    };
+
+    @Test
+    void aConstantInsideAPartReadsAsItsValueAndIsWrittenAsTheConstant() {
+        List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
+                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine."));
+        String outcomes = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestOutcome;
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.OUTCOMES)
+                public enum Outcomes implements TestOutcome { WON, LOST }
+                """;
+        ValueGrammar grammar = ValueGrammar.of(List.of(), List.of(NAMED_OUTCOME, WIRE));
+        List<ManagedConstants.Constant> constants = ManagedConstants.read(outcomes, known);
+        String wire = "new " + JavaNames.canonical(Wire.class) + "(com.bot.plugins.sdk.Outcomes.LOST)";
+
+        Object read = com.botmaker.studio.plugin.ConstantValues.read(grammar, () -> constants, Wire.class, wire)
+                .orElseThrow();
+        assertEquals(new Wire(new TestOutcome.Named("LOST")), read);
+        String written = com.botmaker.studio.plugin.ConstantValues.write(grammar, () -> constants, Wire.class,
+                new Wire(new TestOutcome.Named("WON"))).orElseThrow().source();
+        assertTrue(written.endsWith("(Outcomes.WON)"), written);
+    }
+
+    /** A whole nested enum as an editor holds it. */
+    record Group(String name) {}
+
+    public static TestOutcome inGroup(String group, String name) {
+        return new TestOutcome.Named(group + "." + name);
+    }
+
+    public static Group group(String name) {
+        return new Group(name);
+    }
+
+    /** {@code Step.of(Activities.Collect.class, Activities.Collect.WON)}: a class literal and a nested constant. */
+    record Step(Object activity, TestOutcome on) {
+
+        /** What a bot calls, which only javac sees: an editor never holds the bot's class. */
+        public static Step of(Class<?> activity, TestOutcome on) {
+            return new Step(activity, on);
+        }
+    }
+
+    private static final ComponentType<Step> STEP = new ComponentType<>() {
+        @Override public Class<Step> type() { return Step.class; }
+        @Override public java.lang.reflect.Executable factory() {
+            try {
+                return Step.class.getMethod("of", Class.class, TestOutcome.class);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+        @Override public List<Class<?>> componentTypes() { return List.of(Class.class, TestOutcome.class); }
+        @Override public List<Object> components(Step s) { return List.of(s.activity(), s.on()); }
+        @Override public Step build(List<Object> parts) {
+            return parts.get(0) instanceof Group g ? new Step(g, (TestOutcome) parts.get(1)) : null;
+        }
+    };
+
+    @Test
+    void aGroupedSetsEnumsAndTheirConstantsReadAndWriteAtAnyDepth() {
+        List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
+                .ofEnums(TestOutcome.class, ManagedConstantsTest::inGroup)
+                .groupedAs(Group.class, ManagedConstantsTest::group)
+                .in("Activities").because("Mine."));
+        String activities = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestOutcome;
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.OUTCOMES)
+                public final class Activities {
+                    public enum Collect implements TestOutcome { NEXT, WON }
+                    public enum Rest implements TestOutcome { NEXT }
+                }
+                """;
+        List<ManagedConstants.Constant> constants = ManagedConstants.read(activities, known);
+        assertEquals(5, constants.size(), "two enums and their three constants");
+        ValueGrammar grammar = ValueGrammar.of(List.of(), List.of(NAMED_OUTCOME, STEP));
+        String step = JavaNames.canonical(Step.class)
+                + ".of(com.bot.plugins.sdk.Activities.Collect.class, com.bot.plugins.sdk.Activities.Collect.WON)";
+
+        Object read = com.botmaker.studio.plugin.ConstantValues.read(grammar, () -> constants, Step.class, step)
+                .orElseThrow();
+        assertEquals(new Step(new Group("Collect"), new TestOutcome.Named("Collect.WON")), read);
+        JavaValue written = com.botmaker.studio.plugin.ConstantValues.write(grammar, () -> constants, Step.class,
+                new Step(new Group("Rest"), new TestOutcome.Named("Rest.NEXT"))).orElseThrow();
+        assertTrue(written.source().endsWith("(Activities.Rest.class, Activities.Rest.NEXT)"), written.source());
+        assertTrue(written.imports().contains("com.bot.plugins.sdk.Activities"), written.imports().toString());
+    }
+
     /** An unchanged file is not parsed again; a file whose text changed is, and its new constant is found. */
     @Test
     void aScanParsesOnlyWhatChanged(@TempDir Path root) throws IOException {

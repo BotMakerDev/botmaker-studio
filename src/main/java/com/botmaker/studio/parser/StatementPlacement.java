@@ -3,7 +3,13 @@ package com.botmaker.studio.parser;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockType;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ArrayType;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.PrimitiveType;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
+import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.BreakStatement;
 import org.eclipse.jdt.core.dom.LambdaExpression;
 import org.eclipse.jdt.core.dom.SwitchExpression;
@@ -117,5 +123,35 @@ public final class StatementPlacement {
     /** Convenience for the palette side: is this block type legal in this body? */
     public static boolean allows(BlockType type, ASTNode targetBodyNode) {
         return allows(jumpOf(type), targetBodyNode);
+    }
+
+    /**
+     * Whether {@code targetBodyNode} is directly in {@code public static void main(String[])}, not in a lambda
+     * or local class inside it — where a palette entry point ({@code @EntryPoint}) is offered.
+     */
+    public static boolean inMain(ASTNode targetBodyNode) {
+        for (ASTNode at = targetBodyNode; at != null; at = at.getParent()) {
+            if (at instanceof LambdaExpression) return false;
+            if (at instanceof MethodDeclaration method) return isMain(method);
+            if (at instanceof BodyDeclaration) return false;
+        }
+        return false;
+    }
+
+    private static boolean isMain(MethodDeclaration method) {
+        int flags = method.getModifiers();
+        if (!method.getName().getIdentifier().equals("main") || !Modifier.isPublic(flags) || !Modifier.isStatic(flags)
+                || !(method.getReturnType2() instanceof PrimitiveType primitive)
+                || primitive.getPrimitiveTypeCode() != PrimitiveType.VOID || method.parameters().size() != 1) {
+            return false;
+        }
+        SingleVariableDeclaration only = (SingleVariableDeclaration) method.parameters().getFirst();
+        Type type = only.getType();
+        // String[] args, String args[] and String... args are the three ways to write it.
+        Type element = type instanceof ArrayType arrayType ? arrayType.getElementType() : type;
+        int dimensions = (type instanceof ArrayType arrayType ? arrayType.getDimensions() : 0)
+                + only.getExtraDimensions() + (only.isVarargs() ? 1 : 0);
+        String name = element.toString();
+        return dimensions == 1 && (name.equals("String") || name.equals("java.lang.String"));
     }
 }

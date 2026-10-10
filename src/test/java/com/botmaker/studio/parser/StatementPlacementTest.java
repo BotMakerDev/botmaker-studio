@@ -194,4 +194,36 @@ class StatementPlacementTest {
         assertTrue(StatementPlacement.Jump.BREAK.rejectionMessage().contains("case"),
                 StatementPlacement.Jump.BREAK.rejectionMessage());
     }
+
+    /** Where an entry point ({@code @EntryPoint}) is offered: directly in {@code main}, nowhere else. */
+    private static ASTNode markerIn(String method) {
+        String source = """
+                package com.mybot;
+                public class Subject {
+                %s
+                }
+                """.formatted(method.indent(4));
+        CompilationUnit unit = SourceParser.parse(source);
+        ASTNode[] found = new ASTNode[1];
+        unit.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(ExpressionStatement node) {
+                if (node.toString().startsWith("marker()")) found[0] = node.getParent();
+                return true;
+            }
+        });
+        return found[0];
+    }
+
+    @Test
+    void anEntryPointBelongsDirectlyInMain() {
+        assertTrue(StatementPlacement.inMain(markerIn("public static void main(String[] args) { marker(); }")));
+        assertTrue(StatementPlacement.inMain(markerIn("public static void main(String... args) { if (true) { marker(); } }")));
+        assertTrue(StatementPlacement.inMain(markerIn("public static void main(String args[]) { marker(); }")));
+        assertFalse(StatementPlacement.inMain(markerIn("public static void main(MyString[] args) { marker(); }")));
+        assertFalse(StatementPlacement.inMain(markerIn("public static void run(String[] args) { marker(); }")));
+        assertFalse(StatementPlacement.inMain(markerIn("public void main(String[] args) { marker(); }")));
+        assertFalse(StatementPlacement.inMain(markerIn(
+                "public static void main(String[] args) { Runnable r = () -> { marker(); }; }")), "not in a lambda");
+    }
 }
