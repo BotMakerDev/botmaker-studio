@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.4.1] — 2026-10-10
 
 No changes since v1.4.0 but the SDK it falls back to: v1.4.0 named SDK v1.4.0, which never built on JitPack,
 so a project created by it could not resolve its SDK. This one names SDK v1.4.1.

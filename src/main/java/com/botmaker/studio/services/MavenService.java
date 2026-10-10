@@ -82,7 +82,7 @@ public final class MavenService {
      * make that bump silently stop working. What a <em>freshly created</em> pom pins is also a separate
      * question from what this build of the SDK is.
      */
-    public static final String SDK_FALLBACK_VERSION = "1.4.0";
+    public static final String SDK_FALLBACK_VERSION = "1.4.1";
 
     /**
      * The contract tag a dev build of Studio writes into a project ({@code config/HostContract}); a release
