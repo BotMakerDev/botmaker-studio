@@ -36,7 +36,7 @@
         <botmaker.contract.tag>${botmaker.studioapi.version}</botmaker.contract.tag>
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
-        <botmaker.pluginhost.version>0.4.1-SNAPSHOT</botmaker.pluginhost.version>
+        <botmaker.pluginhost.version>0.5.1-SNAPSHOT</botmaker.pluginhost.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
         <mcp.version>2.0.1</mcp.version>
