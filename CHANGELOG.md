@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.4.0] — 2026-10-10
 
 ### Added
 - **Enum open sets.** A plugin's set declared `ofEnum` is an enum in the bot: its members are the enum's
