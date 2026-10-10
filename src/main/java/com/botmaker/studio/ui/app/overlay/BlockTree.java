@@ -162,7 +162,7 @@ public final class BlockTree {
         /**
          * The caret inside {@code methodName}'s body: the slot just <em>before</em> a trailing {@code return},
          * so an inserted block lands where it will actually execute — an activity stub's body is only
-         * {@code return Outcome.NEXT;}, and inserting below that produces unreachable code, which the user
+         * {@code return Activities.Collect.NEXT;}, and inserting below that produces unreachable code, which the user
          * experiences as the insert having done nothing. Falls back to {@link CursorNavigator#defaultCursor}
          * for a file whose method was renamed or removed by hand, or whose body is read-only scaffolding.
          */

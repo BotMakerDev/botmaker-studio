@@ -15,7 +15,7 @@ import com.botmaker.studio.core.StatementBlock;
  * <p>{@code index} spans {@code -1 .. size}. Both ends are real positions rather than clamping artefacts:
  * {@code size} is "at the very end", and {@code -1} is "above every statement" — the only caret that puts an
  * inserted block <em>before</em> a body's first statement, since inserts go <em>below</em> the caret. An
- * activity stub whose body is nothing but {@code return Outcome.NEXT;} needs exactly that, or every recorded
+ * activity stub whose body is nothing but {@code return Activities.Collect.NEXT;} needs exactly that, or every recorded
  * block lands after the return and never runs.
  *
  * @param body  the body the caret sits in

@@ -71,9 +71,10 @@ public final class RuntimeDiagram {
     public static List<Node> chain() {
         return List.of(
                 new Node("start", "main() — your bot class",
-                        "Calls run(goHome, Sdk.class), which installs the flow and the capture source, "
-                        + "then supervises the whole run and gets the game back to a known screen through "
-                        + "your goHome if it crashes or gets stuck.",
+                        "Calls Bot.runFlow(Sdk.class) — \"Run activity flow\" in the insert menu — which "
+                        + "installs the flow and the capture source, then supervises the whole run and gets the "
+                        + "game back to a known screen through the flow's home method if it crashes or gets "
+                        + "stuck.",
                         Shape.TERMINAL),
                 new Node("launch", "Launch target",
                         "The game or app you declared is started if it isn't already running. Nothing is "

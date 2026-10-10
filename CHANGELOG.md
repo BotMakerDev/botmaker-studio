@@ -14,7 +14,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
-- **A managed constant inside a value is read and written.** `Flow.edge(…, Outcomes.WON)` used to read as
+- **A managed constant inside a value is read and written.** `Flow.edge(Activities.Battle.WON, …)` used to read as
   nothing: the bot's constants were consulted only for a value that was itself one constant. They are now
   consulted at every depth (`plugin/grammar/BotNames`), when reading and when writing.
 
@@ -30,6 +30,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   nested enum, or `void`. A new one is written into an existing class, or into a new file next to the main
   class.
 - The statement menu offers an `@EntryPoint` member only directly inside `main` (`StatementPlacement.inMain`).
+
+### Changed
+
+- **Getting Started and `WORKFLOW.md` describe the new activity flow:** each activity is an enum of its
+  outcomes, a body returns that enum and is picked or created under *Runs*, and `main` calls
+  `Bot.runFlow(Sdk.class)`.
 
 No source changes since v1.4.1; re-released for updated upstream pins.
 

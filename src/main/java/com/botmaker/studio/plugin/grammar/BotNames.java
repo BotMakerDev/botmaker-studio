@@ -7,12 +7,12 @@ import java.util.Optional;
 
 /**
  * The bot's own names a plugin's value may hold, at any depth of it: a managed constant —
- * {@code Outcomes.WON}, {@code Pictures.ORE} — and a class literal of a managed nested enum,
+ * {@code Activities.Battle.WON}, {@code Pictures.ORE} — and a class literal of a managed nested enum,
  * {@code Activities.Collect.class}.
  *
  * <p>The grammar knows only what plugins declare; these are declared by the bot, so whoever reads or writes a
  * value in a bot's file hands them in ({@code project/managed/ManagedConstants.Lookup}). Before 2026-10-10 they
- * were consulted only for a whole value, so {@code Flow.edge(…, Outcomes.WON)} read as nothing at all.
+ * were consulted only for a whole value, so {@code Flow.edge(Activities.Battle.WON, …)} read as nothing at all.
  */
 public interface BotNames {
 
