@@ -28,7 +28,7 @@
         <!-- botmaker-studio-api version: the plugin contract Studio hosts. Same contract again. Studio is
              the *host* side of it — it implements SlotContext/StudioServices and consumes what a plugin
              contributes. -->
-        <botmaker.studioapi.version>0.5.1-SNAPSHOT</botmaker.studioapi.version>
+        <botmaker.studioapi.version>0.6.1-SNAPSHOT</botmaker.studioapi.version>
         <!-- The contract version a project is given when Studio writes the first @Param into it
              (config/HostContract): the pin above. On a tag that is the released contract a user's project
              resolves from JitPack; on main it is a -SNAPSHOT, which HostContract replaces with
