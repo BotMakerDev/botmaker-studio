@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.plugin.api.catalog.FacadeEntry;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -7,6 +9,8 @@ import com.botmaker.studio.palette.Initializer;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.JdkType;
@@ -17,8 +21,10 @@ import org.eclipse.jdt.core.dom.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -348,7 +354,18 @@ public class StatementFactory {
             // CaptureSource slot gets the project-default target — see InitializerFactory). When no overload
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
             List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer());
-            if (params != null) {
+            List<String> holders = params != null && isClassVarargs(params) && isEntryPoint(l)
+                    ? valuesHolders(ctx.state()) : List.of();
+            if (!holders.isEmpty()) {
+                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed every
+                // plugin's holder of values: the one argument Studio knows and the author would otherwise look up.
+                for (String holder : holders) {
+                    TypeLiteral literal = ast.newTypeLiteral();
+                    literal.setType(ast.newSimpleType(ast.newSimpleName(holder)));
+                    mi.arguments().add(literal);
+                    ctx.addImportForSimpleName(holder);
+                }
+            } else if (params != null) {
                 // Each seed names its type by simple name (`new Point(0, 0)`, `Duration.ofSeconds(1)`), so the
                 // parameter types are imported as the facade is — MethodHandler's rule; without it Mouse ▸ click
                 // landed reading "Point cannot be resolved" (2026-09-30).
@@ -361,6 +378,51 @@ public class StatementFactory {
             }
         }
         return ast.newExpressionStatement(mi);
+    }
+
+    /** Whether the overload takes one parameter, a {@code Class<?>...} — the values classes of a bot. */
+    private static boolean isClassVarargs(List<ResolvedType> params) {
+        if (params.size() != 1) return false;
+        ResolvedType only = params.getFirst();
+        return only.isArray() && only.arrayDimensions() == 1 && "Class".equals(only.leafType().simpleName());
+    }
+
+    /** Whether {@code l}'s method is a plugin's {@code @EntryPoint}, offered inside {@code main} only. */
+    private static boolean isEntryPoint(BlockType.LibraryCall l) {
+        for (FacadeEntry facade : PluginHost.menuFacades()) {
+            // By class name, never by simple name: two plugins may each serve a class of one simple name.
+            if (facade.type().getName().equals(l.facade().getName())) return facade.entryPoint(l.method());
+        }
+        return false;
+    }
+
+    /**
+     * The bot's classes holding plugin values — each holder a loaded plugin's managed values name that holds a
+     * value rather than an open set's constants — that a file of {@code state} declares, by simple name, in plugin
+     * order. A holder the project lacks is left out: naming it would not compile.
+     */
+    static List<String> valuesHolders(ProjectState state) {
+        Set<String> declared = declaredTypes(state);
+        Set<String> holders = new LinkedHashSet<>();
+        for (ManagedValue<?> value : PluginHost.managedValues()) {
+            if (value == null || value.isOpenSet() || value.holder() == null) continue;
+            if (declared.contains(value.holder())) holders.add(value.holder());
+        }
+        return List.copyOf(holders);
+    }
+
+    /** The simple names of the top-level types {@code state}'s files declare. */
+    private static Set<String> declaredTypes(ProjectState state) {
+        Set<String> names = new LinkedHashSet<>();
+        if (state == null) return names;
+        for (ProjectFile file : state.getAllFiles()) {
+            CompilationUnit cu = file.getAst();
+            if (cu == null) continue;
+            for (Object type : cu.types()) {
+                if (type instanceof AbstractTypeDeclaration declaration) names.add(declaration.getName().getIdentifier());
+            }
+        }
+        return names;
     }
 
     /**

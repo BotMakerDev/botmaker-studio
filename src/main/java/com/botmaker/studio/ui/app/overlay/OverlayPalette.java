@@ -109,13 +109,18 @@ final class OverlayPalette {
         return mb;
     }
 
-    /** The project's favourite methods for this facade (Project Settings) first, then the rest alphabetically. */
+    /**
+     * The project's favourite methods for this facade (Project Settings) first, then the rest alphabetically. An
+     * entry point ({@code @EntryPoint}) is left out: it belongs in {@code main}, which this editor never edits.
+     */
     private List<String> orderedMethods(FacadeEntry facade, java.util.Set<String> available) {
+        java.util.Set<String> offered = new java.util.HashSet<>(available);
+        offered.removeIf(facade::entryPoint);
         List<String> ordered = new ArrayList<>();
         for (String f : settings.current().favoriteMethodsFor(facade.simpleName())) {
-            if (available.contains(f) && !ordered.contains(f)) ordered.add(f);
+            if (offered.contains(f) && !ordered.contains(f)) ordered.add(f);
         }
-        available.stream().filter(n -> !ordered.contains(n)).sorted().forEach(ordered::add);
+        offered.stream().filter(n -> !ordered.contains(n)).sorted().forEach(ordered::add);
         return ordered;
     }
 }

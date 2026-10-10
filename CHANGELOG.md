@@ -20,6 +20,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **An entry point names the bot's values classes for you.** Inserting a plugin's `@EntryPoint` that takes
+  `Class<?>...` — the SDK's *Run activity flow* — writes every values holder the project has:
+  `Bot.runFlow(Sdk.class)`, not `Bot.runFlow()`. The overlay editor's palette no longer offers entry points.
 - Open sets of nested enums (contract `ofEnums`): their constants and class literals are read and written, and
   the holder is created as an empty class. Whole enums can be added, renamed and removed (`ManagedSets.addGroup`
   and `removeGroup`). Constants inside a nested enum are named `Group.NAME`.
