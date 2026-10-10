@@ -19,7 +19,7 @@
         <javafx.version>25.0.4</javafx.version>
         <!-- botmaker-shared version. On main, shared's main -SNAPSHOT, which resolves the sibling module in
              the umbrella reactor; a release commit sets the released version (doc 43). -->
-        <botmaker.shared.version>0.2.2-SNAPSHOT</botmaker.shared.version>
+        <botmaker.shared.version>0.2.3-SNAPSHOT</botmaker.shared.version>
         <!-- botmaker-session version. Same contract as botmaker.shared.version above. -->
         <botmaker.session.version>0.1.3-SNAPSHOT</botmaker.session.version>
         <!-- botmaker.sdk.version was here and is gone with the dependency it versioned (2026-09-02).
