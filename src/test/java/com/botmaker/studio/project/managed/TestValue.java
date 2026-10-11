@@ -10,13 +10,13 @@ import java.lang.annotation.Target;
 /** A plugin's typed marker, as a test plugin would ship it: on the test classpath, so a bound parse resolves it. */
 @ManagedMarker
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE, ElementType.METHOD})
+@Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
 public @interface TestValue {
 
     Id value();
 
     enum Id {
         GREETING, FAREWELL, NAMES, REST_BETWEEN, PICTURES, FLOW, MINE, OPENED_ONLY, WORDS, WORDS_TOO, OUTCOMES,
-        GREETING_V1, OUTCOMES_V1, ACTIVITIES
+        GREETING_V1, OUTCOMES_V1, ACTIVITIES, DO_SETUP, PAUSE
     }
 }

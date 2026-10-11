@@ -125,6 +125,13 @@ public final class ManagedConversions {
         List<String> left = new ArrayList<>();
 
         for (Conversion conversion : conversions) {
+            // A parameter is a field the bot reads by name, which no conversion here reads or writes yet.
+            Optional<ManagedValue<?>> param = java.util.stream.Stream.concat(conversion.sources().stream(),
+                    conversion.targets().stream()).filter(ManagedValue::isParam).findFirst();
+            if (param.isPresent()) {
+                return new Refused(conversion.reason() + " names the parameter "
+                        + spelled(param.get(), declared) + ", and BotMaker does not convert a plugin's parameters.");
+            }
             Map<String, Object> read = new LinkedHashMap<>();
             Map<ManagedValue<?>, Held> held = new LinkedHashMap<>();
             for (ManagedValue<?> source : conversion.sources()) {
@@ -226,6 +233,11 @@ public final class ManagedConversions {
                         for (MethodDeclaration method : declared.getMethods()) {
                             String methodId = idOf(method);
                             if (!methodId.isEmpty()) ids.add(methodId);
+                        }
+                        // A plugin's parameter: a marked field (2026-10-11).
+                        for (org.eclipse.jdt.core.dom.FieldDeclaration field : declared.getFields()) {
+                            String fieldId = idOf(field);
+                            if (!fieldId.isEmpty()) ids.add(fieldId);
                         }
                     }
                 }

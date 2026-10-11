@@ -1,9 +1,12 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.plugin.grammar.BotNames;
 import com.botmaker.studio.plugin.grammar.JavaExpressions;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
@@ -15,7 +18,6 @@ import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.ParameterizedType;
 import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
@@ -24,7 +26,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Reads {@code @Param} fields out of <b>one</b> Java source, with no project, no filesystem and no host.
@@ -86,6 +87,17 @@ public final class JavaParameterSource {
     /** The same over {@code unit}, already parsed from {@code source} — one of a {@code BotIndex}'s. */
     public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
                                            BotRecords records) {
+        return read(file, source, unit, grammar, records, BotNames.NONE, List.of());
+    }
+
+    /**
+     * The same, reading the bot's own constants wherever an initialiser names one — {@code Flows.MAIN},
+     * {@code Activities.Rest.class} — so such a field's value is editable rather than kept as written, and told
+     * the plugins' declared values ({@code known}), which name a field's mark in a unit without bindings and say
+     * why a plugin owns it.
+     */
+    public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
+                                           BotRecords records, BotNames names, List<ManagedValue<?>> known) {
         List<JavaParameter> out = new ArrayList<>();
         unit.accept(new ASTVisitor() {
             @Override
@@ -96,7 +108,8 @@ public final class JavaParameterSource {
                 if (className == null) return false;
                 for (Object each : field.fragments()) {
                     VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
-                    out.add(read(file, source, grammar, records, className, field, annotation, fragment));
+                    out.add(read(file, source, grammar, records, names, className, field, annotation, fragment)
+                            .owned(owner(field, known)));
                 }
                 return false;
             }
@@ -106,7 +119,7 @@ public final class JavaParameterSource {
 
     /** One fragment of one field — {@code @Param public static int a = 1, b = 2;} declares two. */
     private static JavaParameter read(Path file, String source, ValueGrammar grammar, BotRecords records,
-                                      String className, FieldDeclaration field, Annotation annotation,
+                                      BotNames names, String className, FieldDeclaration field, Annotation annotation,
                                       VariableDeclarationFragment fragment) {
         Map<String, Object> members = BotAnnotation.PARAM.members(annotation);
         String name = fragment.getName().getIdentifier();
@@ -120,7 +133,7 @@ public final class JavaParameterSource {
         boolean readable = form instanceof ValueTypes.BotClass declared
                 ? records.partsOf(declared, initializer).isPresent()
                 : fragment.getInitializer() != null
-                        && grammar.valueOf(form, new SourceNode(fragment.getInitializer(), source)).isPresent();
+                        && grammar.read(form, new SourceNode(fragment.getInitializer(), source), names).isPresent();
 
         String note = whyNotEditable(grammar, field, form, records, readable, initializer);
         // The row's value is the initialiser *as the author wrote it*, readable or not. A cell that cannot
@@ -135,7 +148,19 @@ public final class JavaParameterSource {
                 .bounds(number(members, "min", Double.NEGATIVE_INFINITY),
                         number(members, "max", Double.POSITIVE_INFINITY))
                 .build();
-        return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note);
+        return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note, "");
+    }
+
+    /**
+     * Why {@code field}'s declaration is a plugin's — the reason its {@code ManagedValue.param} gives — when it
+     * carries a plugin's mark, {@code @SdkValue(SdkValue.Id.DO_SETUP)}; {@code ""} for the bot's own field. A
+     * mark no loaded plugin declares still locks it: the bot's code was written to read that field by name.
+     */
+    private static String owner(FieldDeclaration field, List<ManagedValue<?>> known) {
+        String id = ManagedIds.idOf(ManagedIds.on(field, known), known);
+        if (id.isEmpty()) return "";
+        return known.stream().filter(value -> value != null && value.id().equals(id)).map(ManagedValue::reason)
+                .findFirst().orElse("A plugin declared this parameter, and the bot's code reads it by name.");
     }
 
     /**

@@ -14,6 +14,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin's own parameters.** A `@Param` field that also carries a plugin's mark (`ManagedValue.param`) is the
+  plugin's. The Parameters window shows its name, type, category, note and audience as fixed, and changes its
+  value only; it cannot be removed. On every bind Studio writes such a field back into the plugin's holder when
+  it is missing.
+- **A parameter initialised with one of the bot's constants is editable.** `Sdk.flow = Flows.MAIN` and
+  `Set.of(Activities.Rest.class)` read as values in the Parameters window and the Runner, instead of being kept
+  as written.
+
+### Fixed
+
+- **"Run activity flow" writes every argument.** In `main` the insert menu fills each argument before the values
+  classes with the plugin parameter of that type: `Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip, Sdk.class)`. It
+  wrote `Bot.runFlow(null, false, null)` since the entry point gained them.
+
 - **Fewer calls for an assistant over MCP.** `run_bot`, `run_activity` and `try_statement` take `wait`
   (seconds, up to 50) and then answer with the run's end and its own trace, or say it never started. `read_trace` reads the latest run
   only unless `this_run` is false, and `errors_only` keeps warnings, errors and exceptions. An edit that adds,

@@ -2,7 +2,6 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.source.BotParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -56,6 +55,40 @@ class JavaParametersTest {
         assertEquals(Set.of("Parameters", "Tuning"),
                 rows.stream().map(JavaParameter::className).collect(Collectors.toSet()));
         assertEquals(List.of("Limits"), JavaParameters.categories(config, null, TestValues.GRAMMAR));
+    }
+
+    // ---- a plugin's parameter ---------------------------------------------------------------------------
+
+    /** A plugin's parameter keeps its declaration: only the value is written, and it is never removed. */
+    @Test
+    void aPluginsParameterChangesItsValueOnly(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param(category = "Run")
+                    public static int tries = 10;
+                """));
+        JavaParameter read = JavaParameters.scan(config, null, TestValues.GRAMMAR).getFirst();
+        JavaParameter plugins = new JavaParameter(read.file(), read.className(), read.row(), read.form(),
+                read.initializer(), read.editable(), read.note(), "The plugin reads it.");
+
+        JavaParameters.Outcome renamed = JavaParameters.declare(config, null, plugins,
+                ParameterRow.named("attempts", read.row().typeName()).value("10").category("Run").build(),
+                read.form(), TestValues.GRAMMAR);
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, renamed);
+        JavaParameters.Outcome retyped = JavaParameters.declare(config, null, plugins, read.row(), TestValues.TEXT,
+                TestValues.GRAMMAR);
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, retyped);
+        JavaParameters.Outcome refiled = JavaParameters.declare(config, null, plugins,
+                read.row().toBuilder().category("Limits").build(), read.form(), TestValues.GRAMMAR);
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, refiled);
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, JavaParameters.remove(config, null, plugins));
+
+        JavaParameters.Outcome valued = JavaParameters.declare(config, null, plugins,
+                read.row().toBuilder().value("3").build(), read.form(), TestValues.GRAMMAR);
+        assertInstanceOf(JavaParameters.Outcome.Stored.class, valued);
+        String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+        assertTrue(source.contains("public static int tries = 3;"), source);
+        assertTrue(source.contains("@Param(category = \"Run\")"), source);
     }
 
     // ---- adding -----------------------------------------------------------------------------------------

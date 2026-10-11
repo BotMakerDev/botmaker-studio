@@ -71,8 +71,8 @@ public final class RuntimeDiagram {
     public static List<Node> chain() {
         return List.of(
                 new Node("start", "main() — your bot class",
-                        "Calls Bot.runFlow(Sdk.class) — \"Run activity flow\" in the insert menu — which "
-                        + "installs the flow and the capture source, then supervises the whole run and gets the "
+                        "Calls Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip, Sdk.class) — \"Run activity flow\" in "
+                        + "the insert menu — which installs the flow and the capture source, then supervises the whole run and gets the "
                         + "game back to a known screen through the flow's home method if it crashes or gets "
                         + "stuck.",
                         Shape.TERMINAL),

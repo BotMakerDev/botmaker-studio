@@ -11,6 +11,7 @@ import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
+import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -111,11 +112,14 @@ public final class JavaParameters {
      * has not reached yet, so what the bot declares has to be known in full before the first field is read.
      */
     public static List<JavaParameter> over(BotIndex index, ValueGrammar grammar) {
+        // The bot's own constants, so Flows.MAIN or Activities.Rest.class in an initialiser reads as a value.
+        ManagedConstants.Lookup names = new ManagedConstants.Lookup(ManagedConstants.over(index), grammar);
         return index.read(units -> {
             BotRecords records = BotRecords.over(grammar, units.values());
             List<JavaParameter> out = new ArrayList<>();
             units.forEach((file, unit) -> out.addAll(
-                    JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records)));
+                    JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records, names,
+                            PluginHost.managedValues())));
             return List.copyOf(out);
         });
     }
@@ -238,6 +242,13 @@ public final class JavaParameters {
         String className = parameter.className();
         ParameterRow before = parameter.row();
         String name = before.name();
+        // A plugin's parameter keeps its declaration: the bot's own code reads the field by name and type.
+        boolean declarationKept = wanted.toBuilder().value(before.value()).build().equals(before)
+                && (wantedForm == null || wantedForm.equals(parameter.form()));
+        if (parameter.declaredByPlugin() && !declarationKept) {
+            return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter: only its value can be"
+                    + " changed. " + parameter.owner());
+        }
 
         if (!wanted.name().equals(name)) {
             Optional<String> refused = rename(config, state, parameter, wanted.name());
@@ -361,6 +372,10 @@ public final class JavaParameters {
      */
     public static Outcome remove(ProjectConfig config, ProjectState state, JavaParameter parameter) {
         if (parameter == null) return gone(null);
+        if (parameter.declaredByPlugin()) {
+            return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter, and BotMaker writes it"
+                    + " back while the plugin is in the project. " + parameter.owner());
+        }
         BotIndex index = BotIndex.of(config, state);
         int start = fieldStart(index, parameter);
         Optional<List<Usages.Usage>> uses = start < 0 ? Optional.empty()

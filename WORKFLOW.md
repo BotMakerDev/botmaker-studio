@@ -25,7 +25,7 @@ flowchart TD
     guard -. "before every vision step" .-> run
 ```
 
-- **main() — your bot class** — Calls Bot.runFlow(Sdk.class) — "Run activity flow" in the insert menu — which installs the flow and the capture source, then supervises the whole run and gets the game back to a known screen through the flow's home method if it crashes or gets stuck.
+- **main() — your bot class** — Calls Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip, Sdk.class) — "Run activity flow" in the insert menu — which installs the flow and the capture source, then supervises the whole run and gets the game back to a known screen through the flow's home method if it crashes or gets stuck.
 
 - **Launch target** — The game or app you declared is started if it isn't already running. Nothing is captured or clicked until it is up.
 

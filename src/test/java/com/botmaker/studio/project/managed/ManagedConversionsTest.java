@@ -224,6 +224,24 @@ class ManagedConversionsTest {
         assertTrue(refused.reason().contains("cannot"), refused.reason());
     }
 
+    /** A plugin's parameter is a marked field, which counts as held (2026-10-11). */
+    @Test
+    void aMarkedFieldIsHeld(@TempDir Path dir) {
+        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        BotIndex index = index(config, Map.of(holder(config, "Sdk"), """
+                package %s.plugins.test;
+
+                import %s;
+
+                public final class Sdk {
+                    @TestValue(TestValue.Id.DO_SETUP)
+                    public static boolean doSetup = true;
+                }
+                """.formatted(config.mainPackage(), TestValue.class.getCanonicalName())));
+
+        assertTrue(ManagedConversions.held(index).contains(ManagedValue.idOf(TestValue.Id.DO_SETUP)));
+    }
+
     @Test
     void aBotHoldingNoneOfItRunsNothing(@TempDir Path dir) {
         ProjectConfig config = ProjectConfig.forDirectory(dir);

@@ -175,6 +175,10 @@ public final class HostPluginValues implements PluginValues {
      * already declared anywhere in the bot, or when any source file already carries its class name — a user
      * who moved {@code Sdk.java} to another package has one, and a second would not compile. And a project
      * open read-only (an installed bot) is never written. Never over a file, never into {@code main}.
+     *
+     * <p>One edit inside a file that exists (2026-10-11): a plugin's parameter ({@code ManagedValue.param}) is
+     * kept as declared in the holder the bot has — written when missing, marked when a field of its name predates
+     * the declaration, its {@code @Param} members refreshed — after a safety snapshot.
      */
     public static List<String> createMissing() {
         HostPluginValues live = current;
@@ -214,6 +218,26 @@ public final class HostPluginValues implements PluginValues {
                 System.err.println("Warning: could not write " + write.relative() + ": "
                         + e.getCause().getMessage());
             }
+        }
+        // A plugin's parameter is kept as the plugin declares it (2026-10-11): one the holder lacks goes back in,
+        // since the bot's main reads it by name, and a changed category, note or audience is written over the
+        // old one. Each edit is made on the live buffer, after a snapshot an undo can return to.
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.paramsToKeep(index(), byPlugin);
+        java.util.Set<Path> changed = new java.util.LinkedHashSet<>();
+        if (!kept.isEmpty()) {
+            BotSources.forEach(config, state, (file, source) -> {
+                List<ManagedValue<?>> params = kept.get(file);
+                if (params == null) return null;
+                String after = ManagedHolders.keptParams(source, params, PluginHost.grammar());
+                if (after.equals(source)) return null;
+                if (changed.isEmpty()) snapshot();
+                changed.add(file);
+                return after;
+            });
+        }
+        if (!changed.isEmpty()) {
+            changed.forEach(file -> written.add(config.projectPath().relativize(file).toString()));
+            redraw(changed);
         }
         return List.copyOf(written);
     }

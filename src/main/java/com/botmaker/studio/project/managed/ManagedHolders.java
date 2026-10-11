@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.plugin.grammar.JavaValue;
@@ -8,22 +9,30 @@ import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
+import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.EnumDeclaration;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.Javadoc;
+import org.eclipse.jdt.core.dom.MarkerAnnotation;
+import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.PackageDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
 import org.eclipse.jdt.core.dom.Statement;
+import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TagElement;
 import org.eclipse.jdt.core.dom.TextElement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
@@ -32,6 +41,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -157,8 +167,23 @@ public final class ManagedHolders {
         @SuppressWarnings("unchecked")
         List<BodyDeclaration> members = type.bodyDeclarations();
         if (!typeLevel) {
+            // The plugin's parameters first, as fields go before methods in a class a person reads.
             for (ManagedValue<?> sibling : declared) {
-                if (!holder.equals(sibling.holder()) || sibling.isOpenSet() || sibling.isRetired()) continue;
+                if (!holder.equals(sibling.holder()) || !sibling.isParam() || sibling.isRetired()) continue;
+                FieldDeclaration field = field(ast, sibling, grammar, imports);
+                if (field == null) {
+                    // One parameter nobody can spell costs only itself: the holder's values are still written.
+                    System.err.println("Warning: BotMaker cannot write the parameter \"" + sibling.id() + "\": no"
+                            + " plugin in this project declares " + sibling.form().getTypeName() + ".");
+                    continue;
+                }
+                members.add(field);
+            }
+            for (ManagedValue<?> sibling : declared) {
+                if (!holder.equals(sibling.holder()) || sibling.shape() != ManagedValue.Shape.METHOD
+                        || sibling.isRetired()) {
+                    continue;
+                }
                 MethodDeclaration method = method(ast, sibling, grammar, imports);
                 if (method == null) {
                     throw new Unwritable("BotMaker cannot write a starting value for \"" + sibling.id()
@@ -289,9 +314,7 @@ public final class ManagedHolders {
         if (returnType == null) return null;
 
         MethodDeclaration method = ast.newMethodDeclaration();
-        // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
-        method.setName(ast.newSimpleName(methodName(ManagedIds.Typed.of(value).constant().toLowerCase(Locale.ROOT)
-                .replace('_', '-'))));
+        method.setName(ast.newSimpleName(memberName(value)));
         method.setReturnType2(returnType);
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> modifiers = method.modifiers();
@@ -309,6 +332,259 @@ public final class ManagedHolders {
         imports.addAll(needed);
         imports.addAll(fresh.imports());
         return method;
+    }
+
+    /**
+     * A plugin's parameter as a field — {@code @SdkValue(SdkValue.Id.DO_SETUP) @Param(category = "Run", …) public
+     * static boolean doSetup = true;} — its imports added to {@code imports}; null when its type has no node or
+     * its first value no spelling. A null first value is written {@code null}.
+     */
+    private static FieldDeclaration field(AST ast, ManagedValue<?> value, ValueGrammar grammar, Set<String> imports) {
+        Type type = value.form();
+        JavaValue first = null;
+        if (value.initial() != null) {
+            first = grammar.spell(type, value.initial()).orElse(null);
+            if (first == null) return null;
+        }
+        Set<String> needed = new LinkedHashSet<>();
+        org.eclipse.jdt.core.dom.Type fieldType = ValueTypes.node(ast, type, needed).orElse(null);
+        if (fieldType == null) return null;
+
+        VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
+        fragment.setName(ast.newSimpleName(memberName(value)));
+        fragment.setInitializer(first == null ? ast.newNullLiteral() : first.copyInto(ast));
+        FieldDeclaration field = ast.newFieldDeclaration(fragment);
+        field.setType(fieldType);
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = field.modifiers();
+        modifiers.add(mark(ast, value, imports));
+        modifiers.add(param(ast, value, imports));
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.STATIC_KEYWORD));
+        imports.addAll(needed);
+        if (first != null) imports.addAll(first.imports());
+        return field;
+    }
+
+    /** {@code @Param(…)} as the plugin declared it, each member only when it says something. */
+    private static Annotation param(AST ast, ManagedValue<?> value, Set<String> imports) {
+        imports.add(Param.class.getCanonicalName());
+        List<MemberValuePair> members = new ArrayList<>();
+        if (!value.category().isBlank()) members.add(member(ast, "category", string(ast, value.category())));
+        if (Param.PUBLIC.equals(value.visibility())) {
+            members.add(member(ast, "visibility", ast.newName(Param.class.getSimpleName() + ".PUBLIC")));
+        }
+        if (!value.description().isBlank()) {
+            members.add(member(ast, "description", string(ast, value.description())));
+        }
+        if (members.isEmpty()) {
+            MarkerAnnotation marker = ast.newMarkerAnnotation();
+            marker.setTypeName(ast.newSimpleName(Param.class.getSimpleName()));
+            return marker;
+        }
+        NormalAnnotation annotation = ast.newNormalAnnotation();
+        annotation.setTypeName(ast.newSimpleName(Param.class.getSimpleName()));
+        @SuppressWarnings("unchecked")
+        List<MemberValuePair> values = annotation.values();
+        values.addAll(members);
+        return annotation;
+    }
+
+    private static MemberValuePair member(AST ast, String name, Expression value) {
+        MemberValuePair pair = ast.newMemberValuePair();
+        pair.setName(ast.newSimpleName(name));
+        pair.setValue(value);
+        return pair;
+    }
+
+    private static StringLiteral string(AST ast, String text) {
+        StringLiteral string = ast.newStringLiteral();
+        string.setLiteralValue(text);
+        return string;
+    }
+
+    /**
+     * {@code source} with {@code value}'s field, a plugin's parameter, added after the last field of the class
+     * {@code className} — or first in it when it has none — and its imports: what a bind writes into a holder the
+     * bot already has when the field is missing (2026-10-11). Unchanged when the class is not in it or the field
+     * cannot be written.
+     */
+    public static String withField(String source, String className, ManagedValue<?> value, ValueGrammar grammar) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration holder = null;
+        for (Object each : unit.types()) {
+            if (each instanceof TypeDeclaration type && type.getName().getIdentifier().equals(className)) holder = type;
+        }
+        TreeSet<String> imports = new TreeSet<>();
+        FieldDeclaration field = holder == null ? null : field(ast, value, grammar, imports);
+        if (field == null) return source;
+        org.eclipse.jdt.core.dom.rewrite.ASTRewrite rewrite = org.eclipse.jdt.core.dom.rewrite.ASTRewrite.create(ast);
+        org.eclipse.jdt.core.dom.rewrite.ListRewrite body =
+                rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        FieldDeclaration[] fields = holder.getFields();
+        if (fields.length == 0) body.insertFirst(field, null);
+        else body.insertAfter(field, fields[fields.length - 1], null);
+        String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
+        for (String name : imports) {
+            if (!isImplicit(name, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, name);
+        }
+        return SourceFormatter.formatChanged(source,
+                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /**
+     * Which file each plugin parameter is kept in on a bind ({@link #keptParams}): the file whose field carries
+     * its mark, or else its holder — a class of that name in {@code plugins/<segment>/}. A parameter whose holder
+     * the bot does not have is left out: {@link #missing} writes it with the holder. Nothing here writes.
+     *
+     * @param byPlugin each plugin's id and every value it declares, retired ones left out
+     */
+    public static java.util.Map<Path, List<ManagedValue<?>>> paramsToKeep(
+            com.botmaker.studio.project.source.BotIndex index, java.util.Map<String, List<ManagedValue<?>>> byPlugin) {
+        List<ManagedValue<?>> known = byPlugin.values().stream().flatMap(List::stream).toList();
+        java.util.Map<String, Path> marked = new java.util.HashMap<>();
+        java.util.Map<String, Path> holders = new java.util.HashMap<>();
+        index.read(units -> {
+            units.forEach((file, unit) -> unit.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
+                @Override
+                public boolean visit(FieldDeclaration field) {
+                    String id = ManagedIds.idOf(ManagedIds.on(field, known), known);
+                    if (!id.isEmpty()) marked.putIfAbsent(id, file);
+                    return false;
+                }
+
+                @Override
+                public boolean visit(TypeDeclaration type) {
+                    Path folder = file.getParent();
+                    if (type.isPackageMemberTypeDeclaration() && folder != null && folder.getParent() != null
+                            && folder.getParent().getFileName().toString().equals("plugins")) {
+                        holders.putIfAbsent(folder.getFileName() + "/" + type.getName().getIdentifier(), file);
+                    }
+                    return true;
+                }
+            }));
+            return null;
+        });
+        java.util.Map<Path, List<ManagedValue<?>>> kept = new java.util.LinkedHashMap<>();
+        byPlugin.forEach((pluginId, declared) -> {
+            String segment = segment(pluginId);
+            for (ManagedValue<?> value : declared) {
+                if (value == null || !value.isParam() || value.isRetired()) continue;
+                Path file = marked.getOrDefault(value.id(), holders.get(segment + "/" + value.holder()));
+                if (file != null) kept.computeIfAbsent(file, f -> new ArrayList<>()).add(value);
+            }
+        });
+        return java.util.Map.copyOf(kept);
+    }
+
+    /**
+     * {@code source} with each of {@code params} as its plugin declares it (2026-10-11): a field carrying its mark
+     * gets the plugin's current {@code @Param} members back when they differ; else a field of its name in its
+     * holder — one written before the plugin declared it — is given the mark; else the field is appended
+     * ({@link #withField}). Unchanged when every one already is as declared.
+     */
+    public static String keptParams(String source, List<ManagedValue<?>> params, ValueGrammar grammar) {
+        String out = source;
+        for (ManagedValue<?> value : params) {
+            Optional<FieldDeclaration> field = markedField(out, value, params);
+            if (field.isEmpty()) {
+                String adopted = withMark(out, value, params);
+                if (adopted.equals(out)) {
+                    out = withField(out, value.holder(), value, grammar);
+                    continue;
+                }
+                out = adopted;
+                field = markedField(out, value, params);
+            }
+            if (field.isEmpty()) continue;
+            String className = com.botmaker.studio.project.params.JavaParameterSource.enclosingTypeName(field.get());
+            String name = ((VariableDeclarationFragment) field.get().fragments().getFirst()).getName().getIdentifier();
+            java.util.Map<String, String> drift = drift(field.get(), value);
+            if (className != null && !drift.isEmpty()) {
+                out = com.botmaker.studio.project.params.JavaParameterEdits.setMembers(out, className, name, drift);
+            }
+        }
+        return out;
+    }
+
+    /** The field of {@code source} carrying {@code value}'s mark, read against {@code known}. */
+    private static Optional<FieldDeclaration> markedField(String source, ManagedValue<?> value,
+                                                          List<ManagedValue<?>> known) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        FieldDeclaration[] found = {null};
+        unit.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
+            @Override
+            public boolean visit(FieldDeclaration field) {
+                if (found[0] == null && value.id().equals(ManagedIds.idOf(ManagedIds.on(field, known), known))) {
+                    found[0] = field;
+                }
+                return false;
+            }
+        });
+        return Optional.ofNullable(found[0]);
+    }
+
+    /**
+     * {@code source} with {@code value}'s mark put on the unmarked {@code @Param} field of its name in its holder,
+     * and its import; unchanged when there is no such field.
+     */
+    private static String withMark(String source, ManagedValue<?> value, List<ManagedValue<?>> known) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        AST ast = unit.getAST();
+        String name = memberName(value);
+        FieldDeclaration target = null;
+        for (Object each : unit.types()) {
+            if (!(each instanceof TypeDeclaration type) || !type.getName().getIdentifier().equals(value.holder())) {
+                continue;
+            }
+            for (FieldDeclaration field : type.getFields()) {
+                boolean named = field.fragments().stream().anyMatch(fragment ->
+                        ((VariableDeclarationFragment) fragment).getName().getIdentifier().equals(name));
+                if (named && field.fragments().size() == 1 && ManagedIds.on(field, known) == null
+                        && com.botmaker.studio.project.params.JavaParameterSource.paramAnnotation(field) != null) {
+                    target = field;
+                }
+            }
+        }
+        if (target == null) return source;
+        TreeSet<String> imports = new TreeSet<>();
+        org.eclipse.jdt.core.dom.rewrite.ASTRewrite rewrite = org.eclipse.jdt.core.dom.rewrite.ASTRewrite.create(ast);
+        rewrite.getListRewrite(target, FieldDeclaration.MODIFIERS2_PROPERTY).insertFirst(mark(ast, value, imports), null);
+        String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
+        for (String each : imports) {
+            if (!isImplicit(each, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, each);
+        }
+        return SourceFormatter.formatChanged(source,
+                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /**
+     * The {@code @Param} members of {@code field} that differ from what {@code value} declares, as
+     * {@code JavaParameterEdits.setMembers} takes them: a blank value removes a member.
+     */
+    private static java.util.Map<String, String> drift(FieldDeclaration field, ManagedValue<?> value) {
+        Annotation annotation = com.botmaker.studio.project.params.JavaParameterSource.paramAnnotation(field);
+        java.util.Map<String, Object> members = annotation == null ? java.util.Map.of()
+                : com.botmaker.studio.project.source.BotAnnotation.PARAM.members(annotation);
+        java.util.Map<String, String> drift = new java.util.LinkedHashMap<>();
+        if (!value.category().equals(String.valueOf(members.getOrDefault("category", "")))) {
+            drift.put("category", value.category());
+        }
+        if (!value.description().equals(String.valueOf(members.getOrDefault("description", "")))) {
+            drift.put("description", value.description());
+        }
+        boolean isPublic = Param.PUBLIC.equals(String.valueOf(members.getOrDefault("visibility", "")));
+        if (isPublic != Param.PUBLIC.equals(value.visibility())) {
+            drift.put("visibility", isPublic ? "" : Param.PUBLIC);
+        }
+        return drift;
+    }
+
+    /** The member a value is written as: its id constant camel-cased, {@code FLOW_LAYOUT} as {@code flowLayout}. */
+    public static String memberName(ManagedValue<?> value) {
+        // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
+        return methodName(ManagedIds.Typed.of(value).constant().toLowerCase(Locale.ROOT).replace('_', '-'));
     }
 
     /**

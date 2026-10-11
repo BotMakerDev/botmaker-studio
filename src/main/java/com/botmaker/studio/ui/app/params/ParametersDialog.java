@@ -65,11 +65,9 @@ import javafx.util.Duration;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -423,7 +421,8 @@ public final class ParametersDialog {
         String home = ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
         List<JavaParameter> inside = shown();
         List<JavaParameter> outside = rows.stream()
-                .filter(entry -> entry.className().equals(selectedSection) && !inside.contains(entry)).toList();
+                .filter(entry -> entry.className().equals(selectedSection) && !inside.contains(entry)
+                        && !entry.declaredByPlugin()).toList();
         if (outside.isEmpty()) {
             error("Every parameter of " + selectedSection + " is already filed under “" + selectedTag + "”.");
             return;
@@ -606,7 +605,9 @@ public final class ParametersDialog {
     /** One parameter: what it is called, what it holds, who it is for, where it is filed, what it is set to. */
     private Node buildParamCard(JavaParameter entry) {
         ParameterRow v = entry.row();
-        boolean mine = true;
+        // A plugin's parameter (2026-10-11): its name, type, category, note and audience are the plugin's, which
+        // the bot's code reads by name; only its value is the user's.
+        boolean mine = !entry.declaredByPlugin();
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
@@ -627,7 +628,8 @@ public final class ParametersDialog {
             name = field;
         } else {
             Label label = new Label(v.name());
-            label.setTooltip(new Tooltip("Declared by a plugin — its name and type are the plugin's."));
+            label.setTooltip(new Tooltip("Declared by a plugin — its name and type are the plugin's. "
+                    + entry.owner()));
             name = label;
         }
 
@@ -701,6 +703,12 @@ public final class ParametersDialog {
         grid.add(head, 0, 0, 2, 1);
 
         int row = 1;
+        if (!mine) {
+            // Said on the card, not only in a tooltip: every greyed part of it follows from this one fact.
+            Label locked = hintLabel("🔒 Declared by a plugin: only its value is yours. " + entry.owner());
+            grid.add(locked, 0, row, 2, 1);
+            row++;
+        }
         grid.add(new Label("Category"), 0, row);
         grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
         row++;

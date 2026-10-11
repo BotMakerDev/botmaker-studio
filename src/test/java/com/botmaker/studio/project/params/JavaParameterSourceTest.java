@@ -36,6 +36,31 @@ class JavaParameterSourceTest {
                 """.formatted(fields);
     }
 
+    /** An initialiser naming the bot's own constant is editable when the bot's names are handed in (2026-10-11). */
+    @Test
+    void aBotConstantInitialiserReadsThroughTheBotsNames() {
+        String source = wrap("""
+                    @Param
+                    public static int tries = Limits.TRIES;
+                """);
+        org.eclipse.jdt.core.dom.CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        com.botmaker.studio.plugin.grammar.BotNames names = new com.botmaker.studio.plugin.grammar.BotNames() {
+            @Override
+            public java.util.Optional<Object> named(org.eclipse.jdt.core.dom.QualifiedName written) {
+                return written.getFullyQualifiedName().equals("Limits.TRIES") ? java.util.Optional.of(3)
+                        : java.util.Optional.empty();
+            }
+        };
+
+        JavaParameter without = JavaParameterSource.read(null, source, unit, TestValues.GRAMMAR, BotRecords.none())
+                .getFirst();
+        assertFalse(without.editable());
+        JavaParameter with = JavaParameterSource.read(null, source, unit, TestValues.GRAMMAR, BotRecords.none(),
+                names, List.of()).getFirst();
+        assertTrue(with.editable(), with.note());
+        assertFalse(with.declaredByPlugin());
+    }
+
     @Test
     void aPlainParameterReadsAsItsNameTypeAndValue() {
         List<JavaParameter> found = read(wrap("""

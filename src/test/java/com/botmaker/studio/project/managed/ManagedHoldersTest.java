@@ -1,9 +1,12 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.studio.project.params.JavaParameter;
+import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.params.TestValues;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
@@ -181,6 +184,147 @@ class ManagedHoldersTest {
                 ProjectConfig.forDirectory(dir), "com.botmaker.sdk", greeting, declared, TestValues.GRAMMAR)).source();
         assertTrue(source.contains("TestValue.Id.GREETING)"), source);
         assertTrue(!source.contains("GREETING_V1"), source);
+    }
+
+    public static boolean setUpFirst() {
+        return true;
+    }
+
+    public static java.time.Duration noPause() {
+        return null;
+    }
+
+    private static final ManagedValue<Boolean> DO_SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in("Sdk")
+            .startsAs(ManagedHoldersTest::setUpFirst).shown("Run", "Set up first", Param.PUBLIC).because("Mine.");
+
+    private static final ManagedValue<java.time.Duration> PAUSE = ManagedValue.param(TestValue.Id.PAUSE).in("Sdk")
+            .startsAs(ManagedHoldersTest::noPause).shown("", "", Param.EDITOR).because("Mine.");
+
+    /** A plugin's parameters are marked {@code @Param} fields, written before the holder's methods (2026-10-11). */
+    @Test
+    void aParameterIsAMarkedParamFieldBeforeTheMethods() {
+        List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), DO_SETUP, PAUSE);
+        String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
+                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                TestValues.GRAMMAR)).source();
+
+        assertTrue(source.contains("    @TestValue(TestValue.Id.DO_SETUP)\n    @Param(category = \"Run\","
+                + " visibility = Param.PUBLIC, description = \"Set up first\")\n    public static boolean doSetup = true;"),
+                source);
+        assertTrue(source.contains("    @TestValue(TestValue.Id.PAUSE)\n    @Param\n    public static Duration pause"
+                + " = null;"), source);
+        assertTrue(source.indexOf("doSetup") < source.indexOf("greeting()"), source);
+        assertTrue(source.contains("import " + Param.class.getCanonicalName() + ";"), source);
+        assertEquals(0, parse(source).getProblems().length, source);
+
+        List<JavaParameter> read = JavaParameterSource.read(null, source, TestValues.GRAMMAR, BotRecords.none(), BOUND);
+        assertEquals(List.of("doSetup", "pause"), read.stream().map(JavaParameter::name).toList());
+        assertTrue(read.getFirst().declaredByPlugin(), read.getFirst().toString());
+        assertTrue(read.getFirst().editable(), read.getFirst().note());
+    }
+
+    /** A holder the bot has gets back a parameter it lacks; one it has, or a holder it lacks, is left alone. */
+    @Test
+    void onBindAMissingParameterIsAddedToTheHolderTheBotHas() {
+        Path sdk = dir.resolve("src/main/java/com/bot/plugins/sdk/Sdk.java");
+        String had = """
+                package com.bot.plugins.sdk;
+
+                import %s;
+
+                public final class Sdk {
+
+                    @TestValue(TestValue.Id.GREETING)
+                    public static String greeting() {
+                        return "hi";
+                    }
+                }
+                """.formatted(TestValue.class.getCanonicalName());
+        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+                java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
+                dir);
+        java.util.Map<String, List<ManagedValue<?>>> byPlugin = java.util.Map.of("com.botmaker.sdk",
+                List.of(DECLARED.getFirst(), DO_SETUP));
+
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.paramsToKeep(index, byPlugin);
+        assertEquals(List.of(DO_SETUP), kept.get(sdk));
+        String after = ManagedHolders.keptParams(had, kept.get(sdk), TestValues.GRAMMAR);
+        assertTrue(after.contains("public static boolean doSetup = true;"), after);
+        assertTrue(after.indexOf("doSetup") < after.indexOf("greeting()"), after);
+        assertTrue(after.contains("import " + Param.class.getCanonicalName() + ";"), after);
+        assertEquals(0, parse(after).getProblems().length, after);
+
+        // Kept as declared already: nothing to write.
+        assertEquals(after, ManagedHolders.keptParams(after, kept.get(sdk), TestValues.GRAMMAR));
+        assertTrue(ManagedHolders.paramsToKeep(index, java.util.Map.of("com.botmaker.other", List.of(DO_SETUP)))
+                .isEmpty());
+    }
+
+    /** A field of the parameter's name from before the plugin declared it is marked, never declared twice. */
+    @Test
+    void anUnmarkedFieldOfTheNameIsMarkedNotDuplicated() {
+        String had = """
+                package com.bot.plugins.sdk;
+
+                import %s;
+                import %s;
+
+                public final class Sdk {
+
+                    @Param(category = "Run", visibility = Param.PUBLIC, description = "Set up first")
+                    public static boolean doSetup = false;
+                }
+                """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
+
+        String after = ManagedHolders.keptParams(had, List.of(DO_SETUP), TestValues.GRAMMAR);
+
+        assertTrue(after.contains("@TestValue(TestValue.Id.DO_SETUP)"), after);
+        assertEquals(1, after.split("boolean doSetup", -1).length - 1, after);
+        assertTrue(after.contains("doSetup = false;"), "the user's value stays: " + after);
+        assertEquals(0, parse(after).getProblems().length, after);
+    }
+
+    /** A marked field whose category, note or audience the plugin since changed gets the plugin's back. */
+    @Test
+    void aMarkedFieldsDeclarationFollowsThePlugin() {
+        String had = """
+                package com.bot.plugins.sdk;
+
+                import %s;
+                import %s;
+
+                public final class Sdk {
+
+                    @TestValue(TestValue.Id.DO_SETUP)
+                    @Param(category = "Old", description = "Old words")
+                    public static boolean doSetup = false;
+                }
+                """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
+
+        String after = ManagedHolders.keptParams(had, List.of(DO_SETUP), TestValues.GRAMMAR);
+
+        assertTrue(after.contains("category = \"Run\""), after);
+        assertTrue(after.contains("description = \"Set up first\""), after);
+        assertTrue(after.contains("visibility = Param.PUBLIC") || after.contains("visibility = \"public\""), after);
+        assertTrue(after.contains("doSetup = false;"), after);
+        assertEquals(0, parse(after).getProblems().length, after);
+    }
+
+    public static java.awt.Point somewhere() {
+        return new java.awt.Point(1, 2);
+    }
+
+    /** A parameter no plugin's grammar can spell is left out; the holder's values are still written. */
+    @Test
+    void anUnwritableParameterCostsOnlyItself() {
+        ManagedValue<java.awt.Point> spot = ManagedValue.param(TestValue.Id.MINE).in("Sdk")
+                .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.EDITOR).because("Mine.");
+        List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), spot);
+        String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
+                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                TestValues.GRAMMAR)).source();
+        assertTrue(source.contains("greeting()"), source);
+        assertTrue(!source.contains("mine"), source);
     }
 
     @Test

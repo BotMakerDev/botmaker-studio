@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.palette.BlockType;
@@ -10,6 +11,7 @@ import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -354,11 +356,26 @@ public class StatementFactory {
             // CaptureSource slot gets the project-default target — see InitializerFactory). When no overload
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
             List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer());
-            List<String> holders = params != null && isClassVarargs(params) && isEntryPoint(l)
+            List<String> holders = params != null && endsInClassVarargs(params) && isEntryPoint(l)
                     ? valuesHolders(ctx.state()) : List.of();
             if (!holders.isEmpty()) {
-                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed every
-                // plugin's holder of values: the one argument Studio knows and the author would otherwise look up.
+                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip,
+                // Sdk.class) — is handed each plugin's parameter of the type an argument before them takes, then
+                // every plugin's holder of values: the arguments Studio knows and the author would look up.
+                List<ManagedValue<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
+                for (ResolvedType p : params.subList(0, params.size() - 1)) {
+                    ManagedValue<?> field = fields.stream().filter(f -> erased(f.form()).equals(erased(p))).findFirst()
+                            .orElse(null);
+                    if (field == null) {
+                        mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
+                        ctx.addImportForType(p);
+                        continue;
+                    }
+                    fields.remove(field);
+                    mi.arguments().add(ast.newQualifiedName(ast.newSimpleName(field.holder()),
+                            ast.newSimpleName(ManagedHolders.memberName(field))));
+                    ctx.addImportForSimpleName(field.holder());
+                }
                 for (String holder : holders) {
                     TypeLiteral literal = ast.newTypeLiteral();
                     literal.setType(ast.newSimpleType(ast.newSimpleName(holder)));
@@ -380,11 +397,44 @@ public class StatementFactory {
         return ast.newExpressionStatement(mi);
     }
 
-    /** Whether the overload takes one parameter, a {@code Class<?>...} — the values classes of a bot. */
-    private static boolean isClassVarargs(List<ResolvedType> params) {
-        if (params.size() != 1) return false;
-        ResolvedType only = params.getFirst();
-        return only.isArray() && only.arrayDimensions() == 1 && "Class".equals(only.leafType().simpleName());
+    /** Whether the overload's last parameter is a {@code Class<?>...} — the values classes of a bot. */
+    private static boolean endsInClassVarargs(List<ResolvedType> params) {
+        if (params.isEmpty()) return false;
+        ResolvedType last = params.getLast();
+        return last.isArray() && last.arrayDimensions() == 1 && "Class".equals(last.leafType().simpleName());
+    }
+
+    /**
+     * The parameters ({@code ManagedValue.param}) living in one of {@code holders} that the plugin serving
+     * {@code facade} declares, in its order — never another plugin's, whose {@code boolean} would fit as well.
+     * The serving plugin is the one whose class loader loaded the facade.
+     */
+    private static List<ManagedValue<?>> pluginParams(List<String> holders, Class<?> facade) {
+        for (StudioPlugin plugin : PluginHost.plugins()) {
+            if (plugin.getClass().getClassLoader() != facade.getClassLoader()) continue;
+            try {
+                List<ManagedValue<?>> declared = plugin.managedValues();
+                if (declared == null) return List.of();
+                return declared.stream()
+                        .filter(v -> v != null && v.isParam() && !v.isRetired() && holders.contains(v.holder()))
+                        .toList();
+            } catch (RuntimeException | LinkageError e) {
+                return List.of();
+            }
+        }
+        return List.of();
+    }
+
+    /** A type's class name without its arguments: {@code java.util.Set} for {@code Set<Class<?>>}. */
+    private static String erased(java.lang.reflect.Type type) {
+        return type instanceof java.lang.reflect.ParameterizedType generic ? generic.getRawType().getTypeName()
+                : type.getTypeName();
+    }
+
+    private static String erased(ResolvedType type) {
+        String name = type.qualifiedName();
+        int generic = name.indexOf('<');
+        return generic < 0 ? name : name.substring(0, generic);
     }
 
     /** Whether {@code l}'s method is a plugin's {@code @EntryPoint}, offered inside {@code main} only. */

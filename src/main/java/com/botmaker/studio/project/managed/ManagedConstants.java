@@ -121,16 +121,30 @@ public final class ManagedConstants {
 
     /** The same, its marks matched against {@code known} ({@link ManagedIds}). */
     static List<Constant> scan(ProjectConfig config, ProjectState state, Collection<ManagedValue<?>> known) {
-        List<Constant> out = new ArrayList<>();
-        if (config == null) return out;
+        if (config == null) return new ArrayList<>();
+        return walked(known, each -> BotSources.scan(config, state, each));
+    }
+
+    /**
+     * The same over {@code index}'s sources — the bot a parameter scan already holds, so a {@code @Param} field
+     * initialised with {@code Flows.MAIN} reads as that flow (2026-10-11).
+     */
+    public static List<Constant> over(com.botmaker.studio.project.source.BotIndex index) {
+        return walked(PluginHost.managedValues(), each -> index.sources().forEach(each));
+    }
+
+    /** Every constant of the sources {@code walk} hands over, each file read through the cache, against {@code known}. */
+    private static List<Constant> walked(Collection<ManagedValue<?>> known,
+                                         java.util.function.Consumer<java.util.function.BiConsumer<Path, String>> walk) {
         synchronized (PARSED) {
             if (readAgainst != known) {
                 PARSED.clear();
                 readAgainst = known;
             }
         }
+        List<Constant> out = new ArrayList<>();
         try {
-            BotSources.scan(config, state, (file, source) -> out.addAll(cached(file, source, known)));
+            walk.accept((file, source) -> out.addAll(cached(file, source, known)));
         } catch (RuntimeException unreadable) {
             // A project mid-save reads as having no constants: every value is then spelled out, which compiles.
             return List.of();
