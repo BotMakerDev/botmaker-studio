@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -108,6 +111,42 @@ public final class AssistTools {
         List<String> errors = current().errors();
         record("listErrors() → " + errors.size());
         return errors.isEmpty() ? "No errors." : String.join("\n", errors);
+    }
+
+    /**
+     * The methods whose statements were added, removed or moved since {@code before}, as {@code read_tree} gives
+     * them — so an edit that shifts ids answers with the ids it left, and the assistant need not read the tree
+     * again. Empty when no statement moved: a {@code set_slot} changes values, never ids.
+     */
+    synchronized String reshaped(List<BlockView.Method> before) {
+        Map<String, List<String>> was = new HashMap<>();
+        keyed(before).forEach((key, m) -> was.put(key, ids(m.body(), new ArrayList<>())));
+        List<BlockView.Method> changed = keyed(current().tree()).entrySet().stream()
+                .filter(e -> !ids(e.getValue().body(), new ArrayList<>()).equals(was.get(e.getKey())))
+                .map(Map.Entry::getValue)
+                .toList();
+        return changed.isEmpty() ? "" : json(changed);
+    }
+
+    /** Each method by {@code Owner.name#n}, {@code n} telling overloads apart in file order. */
+    private static Map<String, BlockView.Method> keyed(List<BlockView.Method> methods) {
+        Map<String, BlockView.Method> out = new LinkedHashMap<>();
+        for (BlockView.Method m : methods) {
+            String name = m.owner() + "." + m.name();
+            int n = 0;
+            while (out.containsKey(name + "#" + n)) n++;
+            out.put(name + "#" + n, m);
+        }
+        return out;
+    }
+
+    private static List<String> ids(BlockView.Body body, List<String> into) {
+        into.add(body.id());
+        for (BlockView.Statement s : body.statements()) {
+            into.add(s.id());
+            s.bodies().forEach(b -> ids(b, into));
+        }
+        return into;
     }
 
     /** The turn in progress. */

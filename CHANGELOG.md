@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Fewer calls for an assistant over MCP.** `run_bot`, `run_activity` and `try_statement` take `wait`
+  (seconds, up to 50) and then answer with the run's end and its own trace, or say it never started. `read_trace` reads the latest run
+  only unless `this_run` is false, and `errors_only` keeps warnings, errors and exceptions. An edit that adds,
+  removes or moves statements answers with the methods it reshaped and their ids, so `read_tree` is not called
+  again.
 - **An upgrade runs the plugin's conversions of its managed values.** When the target release declares a
   `Conversion` (studio-api), the upgrade loads that jar beside the bound one, reads each retired value the bot
   holds, writes what the plugin answers into the new holders, and deletes the retired holder once nothing names

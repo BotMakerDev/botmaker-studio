@@ -48,13 +48,17 @@ public final class McpTools {
                value. apply_edits makes several edits in one call, as one step. add_method, edit_signature,
                move_block, rename and find_usages shape the code.
             4. Try. try_statement runs one statement, run_activity one activity, run_bot the whole bot. They
-               act on the game: it is the only way you do.
-            5. Read. read_trace says what the run printed and traced; run_state whether it still runs; stop
-               ends it.
+               act on the game: it is the only way you do. Give `wait` (seconds) to get the run's end and its
+               trace in the same answer.
+            5. Read. read_trace says what the latest run printed and traced (errors_only for its failures);
+               run_state whether it still runs; stop ends it.
             6. Fix what the trace shows, and go round again.
 
-            - Every file tool takes `file`; leave it empty for the open file. Read the tree again after an
-              edit: ids below an insertion shift.
+            Spend few calls and few images: ask a plugin's text answers (which screen, where a picture matches)
+            before a screenshot, and a part of the screen before the whole. One apply_edits beats several edits.
+
+            - Every file tool takes `file`; leave it empty for the open file. An edit that adds, removes or
+              moves statements answers with the reshaped methods' ids as they are now; use those.
             - You cannot write Java. A slot takes a value of its type: a literal, one of the bot's constants,
               or a constant or factory call of that type.
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
@@ -82,6 +86,14 @@ public final class McpTools {
             return new Prop(name, "integer", description, true);
         }
     }
+
+    /**
+     * The longest a run tool waits for its run's end: below the 60 s an MCP client commonly gives a call (the
+     * TypeScript SDK's default), the settling of the output included.
+     */
+    private static final int MAX_WAIT_SECONDS = 50;
+    /** The latest run's last lines a waited run answers with. */
+    private static final int WAIT_TRACE_LINES = 40;
 
     private static final Prop FILE = Prop.optionalText("file",
             "the file, as list_files names it (its path, file name or class name); empty for the file open in Studio");
@@ -155,7 +167,7 @@ public final class McpTools {
                 edit(json, "read_tree",
                         "Read a file's methods: each body's id, the statements in each body in order and each "
                                 + "statement's value slots with the type they expect. Give `method` to read one. "
-                                + "Read it again after an edit: ids below an insertion shift.",
+                                + "An edit that shifts ids answers with the methods it reshaped.",
                         List.of(FILE, Prop.optionalText("method", "one method's name; empty for every method")),
                         bot, (tools, args) -> tools.readTree(text(args, "method")), false),
                 edit(json, "list_errors", "List the compile errors a file has now.",
@@ -311,6 +323,7 @@ public final class McpTools {
         if (turn.isEmpty()) return result(NO_PROJECT, true);
         AssistTools tools = new AssistTools();
         tools.begin(turn.get());
+        List<BlockView.Method> before = edits ? turn.get().tree() : List.of();
         String answer;
         try {
             answer = call.apply(tools, args);
@@ -319,7 +332,9 @@ public final class McpTools {
         }
         if (!edits) return result(answer, false);
         if (turn.get().acceptedEdits() == 0) return result(answer, true);
-        return result(answer + "\n" + bot.commit(turn.get(), "the assistant's change (MCP)"), false);
+        String reshaped = tools.reshaped(before);
+        return result(answer + "\n" + bot.commit(turn.get(), "the assistant's change (MCP)")
+                + (reshaped.isEmpty() ? "" : "\nThe methods it reshaped, ids as they are now: " + reshaped), false);
     }
 
     // ---- Studio --------------------------------------------------------------------------------------------
@@ -394,35 +409,68 @@ public final class McpTools {
     private static List<SyncToolSpecification> runTools(McpJsonMapper json, StudioDriver driver, RunLog log) {
         return List.of(
                 act(json, "run_bot", "Run the whole bot, as the toolbar's ▶ Run does. It acts on the game.",
-                        List.of(), args -> idle(log, driver::runBot)),
+                        List.of(WAIT), args -> started(log, args, driver::runBot)),
                 act(json, "run_activity",
                         "Run one target's method on its own, through the bot's plugin, without the rest of the bot. "
                                 + "It acts on the game.",
-                        List.of(Prop.text("target", "the target's key, or Label.method, from list_targets")),
-                        args -> idle(log, () -> driver.runActivity(text(args, "target")))),
+                        List.of(Prop.text("target", "the target's key, or Label.method, from list_targets"), WAIT),
+                        args -> started(log, args, () -> driver.runActivity(text(args, "target")))),
                 act(json, "try_statement",
                         "Run one statement on its own, with the earlier values it reads — taken from the last run, "
                                 + "computed when that only looks at the screen, or given in `values`. It acts on the "
                                 + "game. A value it needs and cannot find is refused by name.",
                         List.of(FILE, Prop.text("blockId", "the statement id, from read_tree"),
                                 new Prop("values", "object", "earlier locals the statement reads, by name, each a "
-                                        + "value of its type as set_slot takes it", false)),
-                        args -> idle(log, () -> driver.tryStatement(text(args, "file"), text(args, "blockId"),
-                                values(args)))),
+                                        + "value of its type as set_slot takes it", false), WAIT),
+                        args -> started(log, args, () -> driver.tryStatement(text(args, "file"),
+                                text(args, "blockId"), values(args)))),
                 act(json, "stop", "Stop the run, the try or the debug session.", List.of(), args -> driver.stop()),
                 act(json, "run_state", "Say whether something runs now, and for how long.", List.of(),
                         args -> log.state()),
                 act(json, "read_trace",
                         "Read the last lines the bot printed and traced, oldest first, with Studio's markers where a "
                                 + "run started and stopped.",
-                        List.of(new Prop("lines", "integer", "how many lines, 50 when not given", false)),
-                        args -> log.tail(args.get("lines") == null ? 50 : number(args, "lines"))));
+                        List.of(new Prop("lines", "integer", "how many lines, 50 when not given", false),
+                                new Prop("this_run", "boolean", "only the latest run's lines; true when not given",
+                                        false),
+                                new Prop("errors_only", "boolean", "only warnings, errors, exceptions and the run "
+                                        + "markers", false)),
+                        args -> log.read(new RunLog.Read(args.get("lines") == null ? 50 : number(args, "lines"),
+                                args.get("this_run") == null || flag(args, "this_run"), flag(args, "errors_only")))));
     }
+
+    private static final Prop WAIT = new Prop("wait", "integer", "seconds to wait for it to end, up to "
+            + MAX_WAIT_SECONDS + "; the answer then holds its trace. 0 or not given: answer once it starts", false);
 
     /** Runs {@code start} only while nothing is on the game, else refuses saying what is. */
     private static String idle(RunLog log, java.util.function.Supplier<String> start) {
         if (log.busy()) throw new IllegalArgumentException(log.state() + " Stop it first (stop), or wait for it.");
         return start.get();
+    }
+
+    /**
+     * {@link #idle}, then, given {@code wait}, the run's end and what it printed — one call where an assistant
+     * would otherwise poll {@code run_state} and then {@code read_trace}.
+     */
+    private static String started(RunLog log, Map<String, Object> args, java.util.function.Supplier<String> start) {
+        int wait = args.get("wait") == null ? 0 : Math.min(Math.max(number(args, "wait"), 0), MAX_WAIT_SECONDS);
+        RunLog.Mark before = log.mark();
+        String answer = idle(log, start);
+        if (wait == 0) return answer;
+        try {
+            return answer + "\n" + switch (log.awaitEnd(before, java.time.Duration.ofSeconds(wait))) {
+                case ENDED -> log.state() + "\n" + log.read(new RunLog.Read(WAIT_TRACE_LINES, true, false));
+                // The latest run's lines would be an earlier run's: the last lines are what the compile said.
+                case NEVER_STARTED -> "It did not start: the compile failed or the start was refused. The last "
+                        + "lines:\n" + log.read(new RunLog.Read(WAIT_TRACE_LINES / 2, false, false));
+                case TIMED_OUT -> "Still going after " + wait + "s: " + log.state()
+                        + " stop ends it; read_trace reads on.\n"
+                        + log.read(new RunLog.Read(WAIT_TRACE_LINES, true, false));
+            };
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return answer + "\nThe wait was interrupted. " + log.state();
+        }
     }
 
     // ---- versions, plugins and the project -----------------------------------------------------------------

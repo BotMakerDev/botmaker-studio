@@ -326,6 +326,9 @@ class McpEndpointTest {
                 + "\",\"index\":1,\"paletteId\":\"block:PRINT\"}");
         assertFalse(isError(insert), insert.toString());
         assertTrue(text(insert).contains("Applied."), text(insert));
+        // The ids it shifted come back with it, so the assistant need not read the tree again.
+        assertTrue(text(insert).contains("The methods it reshaped") && text(insert).contains("\"name\":\"run\""),
+                text(insert));
         assertEquals(List.of("Subject.java"), bot.commits);
         assertTrue(bot.files.get(SUBJECT).contains("System.out.println"), bot.files.get(SUBJECT));
     }
@@ -418,6 +421,39 @@ class McpEndpointTest {
 
         JsonNode wrong = call("fake_snap", "{\"size\":\"big\"}");
         assertTrue(isError(wrong), wrong.toString());
+    }
+
+    @Test
+    void aWaitedRunAnswersWithItsOwnTrace() throws Exception {
+        initialize();
+        bus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+        bus.publish(new CoreApplicationEvents.OutputAppendedEvent("an earlier run\n"));
+        bus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
+
+        Thread game = new Thread(() -> {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                return;
+            }
+            bus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+            bus.publish(new CoreApplicationEvents.OutputAppendedEvent("looking\njava.lang.IllegalStateException: no ore\n"));
+            bus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
+        });
+        game.start();
+        String run = text(call("run_bot", "{\"wait\":10}"));
+        game.join();
+        assertTrue(run.startsWith("running\nNothing runs"), run);
+        assertTrue(run.contains("looking") && run.contains("no ore"), run);
+        assertFalse(run.contains("an earlier run"), "only this run's lines: " + run);
+
+        // Asked for, and nothing started: the answer must not pass the earlier run off as this one.
+        String never = text(call("run_bot", "{\"wait\":5}"));
+        assertTrue(never.contains("It did not start"), never);
+
+        String errors = text(call("read_trace", "{\"errors_only\":true}"));
+        assertTrue(errors.contains("no ore") && !errors.contains("looking"), errors);
+        assertTrue(text(call("read_trace", "{\"this_run\":false}")).contains("an earlier run"));
     }
 
     @Test
