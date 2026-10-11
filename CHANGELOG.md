@@ -22,6 +22,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The updater picks the `-macos-arm64.dmg` on Apple Silicon (an Intel Mac is offered nothing), opens it in
   Finder and says to drag the app onto Applications. The macOS package leg is `continue-on-error` until a tag
   builds it green, so it cannot cost a release its Linux and Windows assets.
+- **The stop key and View ▸ Stop Key… work on macOS** (shared's event tap). A Mac has no Pause key, so its
+  default is F12 (fn+F12 on a laptop); the chooser says so. Key names come from shared's `KeyNames` where
+  there is no libX11. Studio needs Input Monitoring; without it the run says the stop key is unavailable.
 
 ### Fixed
 

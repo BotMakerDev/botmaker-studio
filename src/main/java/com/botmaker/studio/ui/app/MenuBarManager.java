@@ -428,9 +428,11 @@ public class MenuBarManager {
     }
 
     private static void chooseStopKey() {
+        String macNote = com.botmaker.shared.platform.Os.current().isMac()
+                ? "\n\nOn a Mac keyboard, hold fn to press F1–F12 instead of their brightness and volume keys." : "";
         javafx.scene.control.Alert prompt = ThemedWindows.alert(javafx.scene.control.Alert.AlertType.INFORMATION,
                 "Press the key that should stop a running bot: one key, not a combination. Esc cancels.\n\nThe key"
-                        + " also reaches whatever has focus, so pick one it does not use.",
+                        + " also reaches whatever has focus, so pick one it does not use." + macNote,
                 javafx.scene.control.ButtonType.CANCEL);
         prompt.setTitle("Stop Key");
         prompt.setHeaderText("Now: " + StopKeyPreference.name());
@@ -446,8 +448,9 @@ public class MenuBarManager {
                     });
                 }
             });
-        } catch (RuntimeException ex) {
-            // No DISPLAY, no RECORD extension: the key cannot be read here, and so could not be watched either.
+        } catch (RuntimeException | LinkageError ex) {
+            // No DISPLAY, no RECORD extension, no Input Monitoring on a Mac, a native call this macOS lacks: the
+            // key cannot be read here, and so could not be watched either.
             javafx.scene.control.Alert failed = ThemedWindows.alert(javafx.scene.control.Alert.AlertType.ERROR,
                     "Keys cannot be read on this desktop: " + ex.getMessage());
             failed.setTitle("Stop Key");

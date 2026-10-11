@@ -1,16 +1,18 @@
 package com.botmaker.studio.runtime;
 
 import com.botmaker.shared.capture.linux.X11;
-import com.botmaker.shared.input.InputListenerFactory;
+import com.botmaker.shared.input.KeyNames;
+import com.botmaker.shared.platform.Os;
 import javafx.beans.property.LongProperty;
 import javafx.beans.property.SimpleLongProperty;
 
 import java.util.prefs.Preferences;
 
 /**
- * The key that stops a running bot from anywhere on the desktop (View ▸ Stop Key…), as an X keysym. Pause by
- * default: it is on most keyboards and almost nothing binds it, and the listener is passive, so whatever has
- * focus receives the key too.
+ * The key that stops a running bot from anywhere on the desktop (View ▸ Stop Key…), as an X keysym — on macOS
+ * too, where the listener reports the same keysyms. Pause by default: it is on most keyboards and almost nothing
+ * binds it, and the listener is passive, so whatever has focus receives the key too. A Mac keyboard has no
+ * Pause, so there the default is F12, which macOS binds to nothing (a laptop sends it with fn held).
  *
  * <p>Static, like {@code NamingPreference}: the View menu and {@link StopKey} read one value.
  */
@@ -18,6 +20,10 @@ public final class StopKeyPreference {
 
     /** {@code XK_Pause}. */
     public static final long PAUSE = 0xFF13;
+    /** {@code XK_F12}. */
+    public static final long F12 = 0xFFC9;
+    /** The key a user who never chose one gets: Pause, or F12 on a Mac. */
+    public static final long DEFAULT = Os.current().isMac() ? F12 : PAUSE;
     /** {@code XK_Escape}: never offered, since most programs a bot drives use it. */
     public static final long ESCAPE = 0xFF1B;
 
@@ -60,26 +66,28 @@ public final class StopKeyPreference {
 
     /**
      * {@code XKeysymToString} — {@code Pause}, {@code F8}, {@code Scroll_Lock} — with underscores read as
-     * spaces; the hex code where X has no name or is not here.
+     * spaces; on macOS, or where libX11 is missing, the same names from {@link KeyNames}; the hex code where
+     * neither has one.
      */
     public static String nameOf(long keysym) {
-        if (InputListenerFactory.isSupported()) {
+        if (Os.current().isLinux()) {
             try {
                 String name = X11.INSTANCE.XKeysymToString((int) keysym);
                 if (name != null && !name.isBlank()) return name.replace('_', ' ');
             } catch (Throwable unavailable) {
-                // no libX11: fall through to the code
+                // no libX11: fall through to the table
             }
         }
-        return String.format("key 0x%X", keysym);
+        String name = KeyNames.name(keysym);
+        return name != null ? name : String.format("key 0x%X", keysym);
     }
 
     private static long load() {
         try {
-            long stored = Preferences.userRoot().node(PREFS_NODE).getLong(PREFS_KEY, PAUSE);
-            return offerable(stored) ? stored : PAUSE;
+            long stored = Preferences.userRoot().node(PREFS_NODE).getLong(PREFS_KEY, DEFAULT);
+            return offerable(stored) ? stored : DEFAULT;
         } catch (RuntimeException e) {
-            return PAUSE;
+            return DEFAULT;
         }
     }
 

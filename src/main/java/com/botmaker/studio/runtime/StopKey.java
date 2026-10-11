@@ -8,7 +8,6 @@ import com.botmaker.studio.events.EventBus;
 import javafx.application.Platform;
 
 import java.util.List;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -18,14 +17,17 @@ import java.util.function.Supplier;
  * run can be ended without bringing Studio back over whatever the bot drives.
  *
  * <p>It listens only while Studio has a run or a debug session going, through the same passive listener the
- * recorder uses ({@link InputListenerFactory}: X11 XRecord). The key press publishes the stop the toolbar's
+ * recorder uses ({@link InputListenerFactory}: X11 XRecord, or an event tap on macOS). The key press publishes
+ * the stop the toolbar's
  * button publishes, {@link CoreApplicationEvents.StopRunRequestedEvent} for a run and
  * {@link CoreApplicationEvents.DebugStopRequestedEvent} for a debug session, once per session however long
  * the key is held. A run started from the phone pilot goes through the same events, so the key stops it too.
  *
  * <p>Two limits come with the listener. It is passive, so the focused program receives the key as well; and
- * XRecord sees X11 and Xwayland windows only, so a key typed into a native Wayland window is not seen. A bot
- * that presses the stop key itself stops itself.
+ * XRecord sees X11 and Xwayland windows only, so a key typed into a native Wayland window is not seen. On macOS
+ * the tap needs Input Monitoring for Studio (without it this run says the stop key is unavailable), and sees no
+ * key while a password field has focus. A bot that presses the stop key itself stops itself (on a Mac surely in
+ * take-over mode; a background key, posted straight to the game's process, may never pass the tap).
  *
  * <p>One per open project: built with the project's {@link EventBus}, closed with the project.
  */

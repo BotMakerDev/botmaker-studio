@@ -154,8 +154,15 @@ class StopKeyTest {
     }
 
     @Test
-    void pauseIsNamedByXOrByItsCode() {
-        String name = StopKeyPreference.nameOf(StopKeyPreference.PAUSE);
-        assertTrue(name.equals("Pause") || name.equals("key 0xFF13"), name);
+    void keysAreNamedWithOrWithoutX() {
+        assertEquals("Pause", StopKeyPreference.nameOf(StopKeyPreference.PAUSE));
+        assertEquals("F12", StopKeyPreference.nameOf(StopKeyPreference.F12));
+        assertEquals("key 0x1234", StopKeyPreference.nameOf(0x1234), "a keysym neither X nor the table knows");
+    }
+
+    @Test
+    void bothDefaultsMayBeTheStopKey() {
+        assertTrue(StopKeyPreference.offerable(StopKeyPreference.F12));
+        assertTrue(StopKeyPreference.offerable(StopKeyPreference.DEFAULT));
     }
 }
