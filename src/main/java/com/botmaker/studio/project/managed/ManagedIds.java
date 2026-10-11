@@ -145,7 +145,9 @@ public final class ManagedIds {
                     return constant.getDeclaringClass().getBinaryName() + "." + constant.getName();
                 }
             }
-            return "";
+            // A constant the classpath no longer has — a bot read against the plugin version it is moving to,
+            // whose id enum dropped it — still marks the value it marked: the declarations decide below, else an
+            // upgrade would see nothing held and lose it unasked (2026-10-11).
         }
         // No binding, or one whose classpath lacks the contract's meta-annotation: the declarations decide.
         if (known == null) return "";

@@ -52,6 +52,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **An upgrade no longer drops a value the new plugin version lost.** A bot marking
+  `@SdkValue(SdkValue.Id.OUTCOMES)` was read against the version it moved to, which has no `OUTCOMES`, so the
+  mark read as none and the upgrade went ahead, leaving code that did not compile. Such a mark now still names
+  its value, and the upgrade is refused unless the new version converts it.
 - **A managed constant inside a value is read and written.** `Flow.edge(Activities.Battle.WON, …)` used to read as
   nothing: the bot's constants were consulted only for a value that was itself one constant. They are now
   consulted at every depth (`plugin/grammar/BotNames`), when reading and when writing.

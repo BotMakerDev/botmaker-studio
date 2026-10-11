@@ -85,6 +85,16 @@ class ManagedIdsTest {
         assertNull(idOfLast(BotParser.SYNTAX, QUALIFIED, List.of()), "no plugin declares the marker");
     }
 
+    /**
+     * A bot read against the plugin version it is moving to, whose id enum no longer has the bot's constant: the
+     * mark still names it, so an upgrade sees the value it would lose.
+     */
+    @Test
+    void aConstantTheClasspathNoLongerHasStillMarksItsValue() {
+        String source = QUALIFIED.replace("TestValue.Id.GREETING", "TestValue.Id.OUTCOMES");
+        assertEquals("com.botmaker.studio.project.managed.TestValue$Id.OUTCOMES", idOfLast(BOUND, source, KNOWN));
+    }
+
     @Test
     void aStaticallyImportedConstantReadsTheSame() {
         String source = """
