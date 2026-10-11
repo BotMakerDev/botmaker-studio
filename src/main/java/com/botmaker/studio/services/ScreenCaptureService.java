@@ -124,11 +124,6 @@ public final class ScreenCaptureService {
         target.raiseWindow(windowTarget);
     }
 
-    /** Resizes the matching window to {@code width}×{@code height} logical px. Call off the FX thread. */
-    public void resizeTarget(WindowRef windowTarget, int width, int height) {
-        target.resizeTarget(windowTarget, width, height);
-    }
-
     /** Enumerates the titles of the currently open windows (for the target chooser). Best-effort. */
     public static List<String> listWindowTitles() {
         return TargetCapture.listWindowTitles();

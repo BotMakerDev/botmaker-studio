@@ -277,28 +277,6 @@ public final class TargetCapture implements ShotSource {
         }
     }
 
-    /**
-     * Resizes the window matching {@code target} to {@code width}×{@code height} (logical px) and lets the
-     * compositor settle, so a template is captured at the project's canonical resolution rather than whatever
-     * size the window happens to be. Best-effort no-op when the window can't be found or is already that size.
-     * Runs synchronously; call it off the FX thread (it sleeps briefly).
-     */
-    public void resizeTarget(WindowRef target, int width, int height) {
-        if (width <= 0 || height <= 0) return;
-        GenericWindow win = resolveWindow(target);
-        if (win == null) return;
-        java.awt.Rectangle r = win.getRect();
-        if (r != null && r.width == width && r.height == height) return; // already canonical
-        try {
-            NativeControllerFactory.get().resizeWindow(win, width, height);
-            Thread.sleep(180);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Throwable t) {
-            System.err.println("Could not resize window: " + t.getMessage());
-        }
-    }
-
     /** Enumerates the titles of the currently open windows (for the target chooser). Best-effort. */
     public static List<String> listWindowTitles() {
         List<String> titles = new java.util.ArrayList<>();

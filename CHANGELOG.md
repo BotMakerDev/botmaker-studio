@@ -45,6 +45,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the terminal falls back to `/bin/zsh` when `$SHELL` is unset; and the program picker starts in the given
   folder and returns an `.app` as its path, without the trailing slash.
 
+### Removed
+
+- `ScreenCaptureService.resizeTarget`, `TargetCapture.resizeTarget` and `ResolutionChoices`, which nothing
+  called: the SDK's run resizes a game window to the bot's screen size itself.
+
 ### Fixed
 
 - **A managed constant inside a value is read and written.** `Flow.edge(Activities.Battle.WON, …)` used to read as

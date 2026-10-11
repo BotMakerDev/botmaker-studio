@@ -615,8 +615,8 @@ public final class ScreenOverlay {
     /**
      * A crop taken during a {@link #runSession} pass, together with the frame it was cut out of.
      *
-     * <p>The frame size and target title are what a template's sidecar records as its <em>reference
-     * resolution</em>, so a match can be scaled when the bot runs against a differently-sized surface. The
+     * <p>The frame size is what a picture's constant records as its frame ({@code .in(Size)}) when it is not
+     * the bot's screen size, so a match can be scaled when the bot runs against a differently-sized surface. The
      * crop alone cannot answer that — it is a sub-rectangle, and the numbers that matter belong to the whole
      * grab — which is why they travel with it rather than being re-derived by the caller.
      */
