@@ -62,7 +62,8 @@ public final class PluginFiles {
                 if (segment == null || values == null) continue;
                 Set<String> classes = new LinkedHashSet<>();
                 for (ManagedValue<?> value : values) {
-                    if (value != null && value.holder() != null && !value.holder().isBlank()) {
+                    // A retired holder left in a bot is the user's to delete, so it is never locked as the plugin's.
+                    if (value != null && !value.isRetired() && value.holder() != null && !value.holder().isBlank()) {
                         classes.add(value.holder());
                     }
                 }

@@ -171,6 +171,18 @@ class ManagedHoldersTest {
         return plans.stream().map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList();
     }
 
+    /** A retired shape sharing the holder is what an upgrade converts away from: it is never written (2026-10-11). */
+    @Test
+    void aRetiredSiblingIsNotWritten() {
+        ManagedValue<?> greeting = DECLARED.getFirst();
+        List<ManagedValue<?>> declared = List.of(greeting, ManagedValue.method(TestValue.Id.GREETING_V1).in("Sdk")
+                .holds(String.class, null).because("Old.").retired());
+        String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
+                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", greeting, declared, TestValues.GRAMMAR)).source();
+        assertTrue(source.contains("TestValue.Id.GREETING)"), source);
+        assertTrue(!source.contains("GREETING_V1"), source);
+    }
+
     @Test
     void anIdBecomesAMethodName() {
         assertEquals("flow", ManagedHolders.methodName("flow"));

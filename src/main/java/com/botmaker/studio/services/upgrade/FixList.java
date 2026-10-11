@@ -116,7 +116,16 @@ public final class FixList {
         // A gone type has no one site: it goes after every call.
         out.sort(Comparator.comparing((Issue i) -> i.site() == null ? "￿" : i.site().file())
                 .thenComparingInt(i -> i.site() == null ? Integer.MAX_VALUE : i.site().line()));
-        return List.copyOf(out);
+
+        // The plugin's conversions of its managed values (2026-10-11), first: nothing to pick, but written into
+        // the bot before any call is repaired, so the user reads them before anything is.
+        List<Issue> converted = new ArrayList<>();
+        for (String conversion : report.conversions()) {
+            converted.add(new Issue(null, conversion, "the plugin's files", "",
+                    List.of(new Fix("Understood", null)), 0));
+        }
+        converted.addAll(out);
+        return List.copyOf(converted);
     }
 
     /**

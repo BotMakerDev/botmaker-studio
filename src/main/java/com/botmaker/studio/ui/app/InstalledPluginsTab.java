@@ -878,6 +878,12 @@ public final class InstalledPluginsTab {
                         return;
                     }
                     status("");
+                    // A retired holder a conversion deleted: its buffer goes, and the editor moves off it.
+                    var active = state.getActiveFile();
+                    result.deleted().forEach(state::removeFile);
+                    if (active != null && result.deleted().contains(active.getPath())) {
+                        state.setActiveFile(config.entrySourceFile());
+                    }
                     showResult(result.summary(), result.touchedSources());
                     // The table is about versions that have just changed, so it is read again.
                     reload();

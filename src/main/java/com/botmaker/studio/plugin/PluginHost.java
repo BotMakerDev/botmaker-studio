@@ -513,6 +513,14 @@ public final class PluginHost {
     }
 
     /**
+     * The grammar {@code plugins} would compose if they were bound — what an upgrade reads a bot through with the
+     * target jar loaded beside the bound one (2026-10-11), so a value is read and written as that jar's classes.
+     */
+    public static ValueGrammar grammarOf(List<StudioPlugin> plugins) {
+        return compose(plugins).grammar();
+    }
+
+    /**
      * The loader the serving plugins came from — the open project's, or Studio's own for the bundled set. A
      * call or a type a plugin's editor asks about is loaded here, so the {@code Class} it compares against is
      * one that plugin could have named.
@@ -811,7 +819,11 @@ public final class PluginHost {
                 List<ManagedValue<?>> offered = plugin.managedValues();
                 if (offered == null) continue;
                 for (ManagedValue<?> value : offered) {
-                    if (value != null && value.id() != null && !value.id().isBlank()) merged.add(value);
+                    // A retired shape is read only by an upgrade's conversion (PluginUpgradeService), never
+                    // locked, created or offered: the bot holding one is a bot that has not converted yet.
+                    if (value != null && value.id() != null && !value.id().isBlank() && !value.isRetired()) {
+                        merged.add(value);
+                    }
                 }
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply manages nothing.

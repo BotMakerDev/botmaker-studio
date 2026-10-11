@@ -10,14 +10,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -150,6 +148,15 @@ class ProjectUpgradeTest {
         assertTrue(result.summary().contains("Nothing in this bot's own code had to change"),
                 result.summary());
         assertFalse(result.touchedSources(), "so the window offers no Review tab button");
+    }
+
+    /** A plugin's conversion of its values is said back in its own words (2026-10-11). */
+    @Test
+    void theConversionsThatRanAreNamed() {
+        String summary = new ProjectUpgrade.Result(List.of(new ProjectUpgrade.Moved("SDK", "1", "2")), 0, 0,
+                List.of(), List.of("Each activity is now its own enum of outcomes."), List.of()).summary();
+        assertTrue(summary.contains("Converted the plugin's values: Each activity is now its own enum of outcomes."),
+                summary);
     }
 
     @Test

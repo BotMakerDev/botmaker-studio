@@ -14,6 +14,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **An upgrade runs the plugin's conversions of its managed values.** When the target release declares a
+  `Conversion` (studio-api), the upgrade loads that jar beside the bound one, reads each retired value the bot
+  holds, writes what the plugin answers into the new holders, and deletes the retired holder once nothing names
+  it. A holder the bot still names, or one written by hand, is kept as the user's own code: its mark is removed,
+  it is listed, and it is renamed `<Holder>Retired` when the new holder needs its file. The fix list shows each
+  conversion first, before anything is written, and the success sentence names them. A move is refused before
+  the snapshot when a conversion fails, when the target cannot be loaded to check, or when the bot holds a value
+  the target neither declares nor converts.
+  This is the one refusal an upgrade has (`ManagedConversions`, `PluginUpgradeService.convertValues`).
+- **A retired managed value is never served.** It is not locked, not created on bind, and not written beside a
+  live sibling in a new holder.
 - **A macOS build (Apple Silicon), not yet runnable for bots.** CI's `package` job gains a `macos-14` leg
   that builds an unsigned `.dmg` and a zipped `BotMaker Studio.app`. The jar keeps only the arm64 macOS
   natives (`natives-mac`, `natives-mac-arm64`). The `.icns` is built from the PNGs by `iconutil`

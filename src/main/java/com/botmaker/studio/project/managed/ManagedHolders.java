@@ -158,7 +158,7 @@ public final class ManagedHolders {
         List<BodyDeclaration> members = type.bodyDeclarations();
         if (!typeLevel) {
             for (ManagedValue<?> sibling : declared) {
-                if (!holder.equals(sibling.holder()) || sibling.isOpenSet()) continue;
+                if (!holder.equals(sibling.holder()) || sibling.isOpenSet() || sibling.isRetired()) continue;
                 MethodDeclaration method = method(ast, sibling, grammar, imports);
                 if (method == null) {
                     throw new Unwritable("BotMaker cannot write a starting value for \"" + sibling.id()
@@ -309,6 +309,35 @@ public final class ManagedHolders {
         imports.addAll(needed);
         imports.addAll(fresh.imports());
         return method;
+    }
+
+    /**
+     * {@code source} with {@code value}'s marked method, returning its starting value, added after the last
+     * method of the class {@code className} — what an upgrade's conversion writes into a holder the bot already
+     * has (2026-10-11). Unchanged when the class is not in it or the value has no starting value to write.
+     */
+    static String withMethod(String source, String className, ManagedValue<?> value, ValueGrammar grammar) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration holder = null;
+        for (Object each : unit.types()) {
+            if (each instanceof TypeDeclaration type && type.getName().getIdentifier().equals(className)) holder = type;
+        }
+        TreeSet<String> imports = new TreeSet<>();
+        MethodDeclaration method = holder == null ? null : method(ast, value, grammar, imports);
+        if (method == null) return source;
+        org.eclipse.jdt.core.dom.rewrite.ASTRewrite rewrite = org.eclipse.jdt.core.dom.rewrite.ASTRewrite.create(ast);
+        org.eclipse.jdt.core.dom.rewrite.ListRewrite body =
+                rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        MethodDeclaration[] methods = holder.getMethods();
+        if (methods.length == 0) body.insertLast(method, null);
+        else body.insertAfter(method, methods[methods.length - 1], null);
+        String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
+        for (String name : imports) {
+            if (!isImplicit(name, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, name);
+        }
+        return SourceFormatter.formatChanged(source,
+                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** The id as a method name: itself when it is one, else its letters and digits in lower camel case. */

@@ -142,6 +142,19 @@ public final class BotIndex {
         return with(rewrites, Map.of());
     }
 
+    /**
+     * This bot's classpath and root over {@code sources} whole — a file this index lacks is added, one
+     * {@code sources} lacks is gone. Not cached, as {@link #with} is not.
+     */
+    public BotIndex replacing(Map<Path, String> sources) {
+        return build(sources, classpath, root);
+    }
+
+    /** These sources parsed against {@code classpath} instead — the jars a bot will compile with after a move. */
+    public BotIndex against(List<String> classpath) {
+        return build(sources, classpath, root);
+    }
+
     /** Every source, by absolute path, in walk order. */
     public Map<Path, String> sources() {
         return sources;
