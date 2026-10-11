@@ -51,7 +51,8 @@ public final class McpTools {
                act on the game: it is the only way you do. Give `wait` (seconds) to get the run's end and its
                trace in the same answer.
             5. Read. read_trace says what the latest run printed and traced (errors_only for its failures);
-               run_state whether it still runs; stop ends it.
+               run_state whether it still runs; stop ends it. A wait that timed out may name a frame it
+               saved: look at that with the plugin's tools rather than taking a new screenshot.
             6. Fix what the trace shows, and go round again.
 
             Spend few calls and few images: ask a plugin's text answers (which screen, where a picture matches)

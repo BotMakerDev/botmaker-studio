@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The assistant looks at a failed step's own frame.** Its instructions say that a wait which timed out may name
+  a frame the run saved, to be looked at with the plugin's tools instead of a fresh screenshot.
+
 - **A plugin's own parameters.** A `@Param` field that also carries a plugin's mark (`ManagedValue.param`) is the
   plugin's. The Parameters window shows its name, type, category, note and audience as fixed, and changes its
   value only; it cannot be removed. On every bind Studio writes such a field back into the plugin's holder when

@@ -51,15 +51,18 @@ class BundledFontsTest extends FxHeadlessTest {
     @Test
     void everyBundledCutRegistersUnderTheFamilyTheStylesheetNames() {
         interact(BlockFont::loadBundled);
-        var families = Font.getFamilies();
+        // Asked of the font, not Font.getFamilies(): that list is read once per JVM, so a test sharing the JVM
+        // that listed families before loadBundled would see it without the bundled faces.
         for (BlockFont.Bundled face : BlockFont.Bundled.values()) {
-            assertTrue(families.contains(face.family()), face.family() + " is registered");
-            assertTrue(families.contains(face.labelFamily()), face.labelFamily() + " is registered");
+            assertEquals(face.family(), Font.font(face.family(), 13).getFamily(), face.family() + " is registered");
+            assertEquals(face.labelFamily(), Font.font(face.labelFamily(), 13).getFamily(),
+                    face.labelFamily() + " is registered");
             Font bold = Font.font(face.family(), FontWeight.BOLD, 13);
             assertEquals(face.family(), bold.getFamily(), face + " bold stays in its family");
             assertTrue(bold.getName().contains("Bold"), face + " has a bold cut: " + bold.getName());
         }
-        assertTrue(families.contains(BlockFont.MONO_FAMILY), "the console's face is registered");
+        assertEquals(BlockFont.MONO_FAMILY, Font.font(BlockFont.MONO_FAMILY, 13).getFamily(),
+                "the console's face is registered");
     }
 
     @Test
