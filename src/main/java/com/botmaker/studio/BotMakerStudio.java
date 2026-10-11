@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
+import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.BotProject;
 import com.botmaker.studio.project.ProjectConfig;
@@ -184,6 +185,8 @@ public class BotMakerStudio extends Application {
                 // readString per file, and on FX it ran with the main window already shown — a project with a
                 // few dozen activities froze it for as long as the disk took.
                 updateProgress(-1, 1.0);
+                // A Claude Code session started in the bot's folder edits it only through Studio's tools.
+                BotGuard.ensure(projectDir);
                 updateMessage("Reading project files…");
                 return new OpenedProject(project, project.getCodeEditorService().readProjectSources());
             }

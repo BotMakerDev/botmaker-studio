@@ -137,12 +137,21 @@ final class AssistantPane {
         serve.setOnAction(e -> setServing(serve.isSelected()));
         mcpStatus.getStyleClass().add(StyleClasses.DIALOG_HINT);
         copySetup.getStyleClass().add(StyleClasses.DIALOG_COMPACT);
-        copySetup.setTooltip(new Tooltip("For a terminal outside Studio. Other clients take the same URL and header."));
+        copySetup.setTooltip(new Tooltip("Starts Claude Code in a terminal opened in the bot's folder, with file "
+                + "edits denied so it changes the bot only through Studio. Other clients take the same URL and "
+                + "header."));
         copySetup.setOnAction(e -> {
+            String command;
+            try {
+                command = mcpConfig.claudeCodeCommand(McpConfig.CLAUDE_FILE);
+            } catch (IOException ex) {
+                mcpStatus.setText("Could not write " + McpConfig.CLAUDE_FILE + ": " + ex.getMessage());
+                return;
+            }
             ClipboardContent content = new ClipboardContent();
-            content.putString(mcpConfig.claudeCodeCommand());
+            content.putString(command);
             Clipboard.getSystemClipboard().setContent(content);
-            mcpStatus.setText("Copied. It carries the token: paste it only in your own terminal.");
+            mcpStatus.setText("Copied. Run it in a terminal in the bot's folder.");
         });
         HBox mcpBar = new HBox(8, serve, mcpStatus, spacer(), copySetup);
         mcpBar.setAlignment(Pos.CENTER_LEFT);

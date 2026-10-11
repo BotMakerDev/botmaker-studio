@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Claude outside Studio changes the bot only through Studio.** Opening a project adds rules to its
+  `.claude/settings.json` (keeping yours) that deny Claude Code's file edits under `src/` and in-place shell
+  edits, and *Copy Claude Code setup* now copies a full `claude …` command that starts it as the Assistant tab
+  does, file edits denied, to run in the bot's folder. Its token stays in a private file, not on the command.
+
 - **The assistant looks at a failed step's own frame.** Its instructions say that a wait which timed out may name
   a frame the run saved, to be looked at with the plugin's tools instead of a fresh screenshot.
 

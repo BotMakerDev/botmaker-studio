@@ -125,14 +125,10 @@ public enum AiTool {
         String bearer = "Bearer " + connection.token();
         return switch (this) {
             case CLAUDE_CODE -> {
-                Path config = writePrivate(connection.configDir().resolve("claude-mcp.json"), Map.of("mcpServers",
-                        Map.of(SERVER, Map.of("type", "http", "url", connection.url(),
-                                "headers", Map.of("Authorization", bearer)))));
-                List<String> command = new ArrayList<>(List.of(exe, "--mcp-config", config.toString(),
-                        "--allowedTools", "mcp__" + SERVER, "--disallowedTools"));
-                command.addAll(CLAUDE_EDIT_TOOLS);
-                if (!allowShell) command.add("Bash");
-                command.addAll(List.of("--append-system-prompt", CLAUDE_PROMPT));
+                Path config = writeClaudeConfig(connection.configDir().resolve("claude-mcp.json"), connection.url(),
+                        connection.token());
+                List<String> command = new ArrayList<>(List.of(exe));
+                command.addAll(claudeArguments(config, allowShell ? List.of() : List.of("Bash")));
                 yield new Launch(command, Map.of());
             }
             case CODEX -> new Launch(List.of(exe, "--sandbox", "read-only",
@@ -235,6 +231,28 @@ public enum AiTool {
         String name = shell == null || shell.isBlank() ? "" : Path.of(shell).getFileName().toString();
         if (List.of("bash", "zsh", "sh", "ksh", "dash").contains(name)) return shell;
         return Os.current().isMac() ? "/bin/zsh" : "/bin/bash";
+    }
+
+    /**
+     * Claude Code's MCP config for the endpoint at {@code url}, written to {@code file} readable by the user only:
+     * the token stays out of the command line, where shell history and every process listing would show it.
+     */
+    static Path writeClaudeConfig(Path file, String url, String token) throws IOException {
+        return writePrivate(file, Map.of("mcpServers", Map.of(SERVER, Map.of("type", "http", "url", url,
+                "headers", Map.of("Authorization", "Bearer " + token)))));
+    }
+
+    /**
+     * Claude Code's arguments after its executable: the config at {@code config}, the MCP tools allowed without a
+     * prompt, the edit tools and {@code alsoDenied} denied, and the work rules appended to its prompt.
+     */
+    static List<String> claudeArguments(Path config, List<String> alsoDenied) {
+        List<String> args = new ArrayList<>(List.of("--mcp-config", config.toString(),
+                "--allowedTools", "mcp__" + SERVER, "--disallowedTools"));
+        args.addAll(CLAUDE_EDIT_TOOLS);
+        args.addAll(alsoDenied);
+        args.addAll(List.of("--append-system-prompt", CLAUDE_PROMPT));
+        return args;
     }
 
     /** Writes {@code value} as JSON to {@code file}, readable and writable by the user only where the OS says so. */

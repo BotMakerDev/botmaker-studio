@@ -61,13 +61,23 @@ public record McpConfig(boolean enabled, int port, String token) {
         }
     }
 
+    /** Where {@link #claudeCodeCommand} keeps the endpoint's Claude Code config, beside this file. */
+    public static final Path CLAUDE_FILE = FILE.resolveSibling("claude-mcp.json");
+
     /**
-     * The command that adds this endpoint to Claude Code. Other clients take the same URL and header in their
-     * own config format.
+     * The command that starts Claude Code on this endpoint, for a terminal in the bot's folder, as the Assistant
+     * tab starts it: the MCP tools allowed, every file-editing tool denied, and the in-place shell edits the bot's
+     * {@code .claude/settings.json} denies too ({@link BotGuard}). The endpoint and its token are written to
+     * {@code configFile}, readable by the user only, so the token never sits in the command, shell history or a
+     * process listing. Other clients take the same URL and header in their own config format.
      */
-    public String claudeCodeCommand() {
-        return "claude mcp add --transport http botmaker-studio http://127.0.0.1:" + port + McpEndpoint.PATH
-                + " --header \"Authorization: Bearer " + token + "\"";
+    public String claudeCodeCommand(Path configFile) throws IOException {
+        Path config = AiTool.writeClaudeConfig(configFile, "http://127.0.0.1:" + port + McpEndpoint.PATH, token);
+        StringBuilder command = new StringBuilder("claude");
+        for (String arg : AiTool.claudeArguments(config, BotGuard.SHELL)) {
+            command.append(' ').append(arg.matches("[A-Za-z0-9_./:=-]+") ? arg : '"' + arg + '"');
+        }
+        return command.toString();
     }
 
     private static String newToken() {

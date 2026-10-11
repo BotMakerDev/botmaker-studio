@@ -24,6 +24,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Clock;
@@ -494,6 +496,19 @@ class McpEndpointTest {
         McpConfig again = McpConfig.read(saved);
         assertTrue(again.enabled());
         assertEquals(fresh.token(), again.token());
-        assertTrue(again.claudeCodeCommand().contains("Authorization: Bearer " + fresh.token()));
+    }
+
+    @Test
+    void theCopiedCommandKeepsTheTokenInAPrivateFileAndDeniesEdits(@TempDir Path dir) throws IOException {
+        McpConfig config = McpConfig.read(dir.resolve("mcp.json"));
+        Path file = dir.resolve("claude-mcp.json");
+        String command = config.claudeCodeCommand(file);
+        assertFalse(command.contains(config.token()), "the token is not on the command line");
+        assertTrue(Files.readString(file).contains("Bearer " + config.token()));
+        assertTrue(command.startsWith("claude --mcp-config " + file + " --allowedTools mcp__botmaker-studio"),
+                command);
+        assertTrue(command.contains("--disallowedTools Edit MultiEdit Write NotebookEdit \"Bash(sed -i *)\""),
+                command);
+        assertTrue(command.contains("--append-system-prompt \"You are running inside BotMaker Studio."), command);
     }
 }
