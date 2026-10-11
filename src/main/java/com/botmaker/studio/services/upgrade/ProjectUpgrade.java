@@ -26,13 +26,12 @@ import java.util.concurrent.CompletableFuture;
  *   <li><b>Check every row first.</b> {@link PluginUpgradeService#compare} answers without writing. Nothing
  *       it finds refuses the pass since 2026-09-29: an unreadable file, a removed type the bot declares, or
  *       two plugins claiming one simple name each leave that part as written and say so in
- *       {@link Result#leftForYou()}. The user's rule is that an upgrade is never blocked — with one exception
- *       since 2026-10-11: a move that would lose a plugin's managed values ({@link Report#isRefused()}), which
- *       stops here with nothing written.</li>
+ *       {@link Result#leftForYou()}. The user's rule is that an upgrade is never blocked; a plugin's managed
+ *       values are repaired like the rest (2026-10-11), never a reason to stop.</li>
  *   <li><b>One snapshot.</b> A commit per plugin would describe a state the user never asked to be in, and
  *       reverting it would undo one plugin's repair while leaving another's.</li>
- *   <li><b>One conversion pass and one repair per row, committed to disk before the next row starts.</b> The
- *       plugin's conversions of its managed values run first ({@link PluginUpgradeService#convertValues}), so
+ *   <li><b>One repair of the values and one of the code per row, committed to disk before the next row
+ *       starts.</b> The plugin's managed values are repaired first ({@link PluginUpgradeService#repairValues}), so
  *       the repair reads the bot the new jar compiles. Each pass re-reads the
  *       project's current content, so plugin B is migrated against the files plugin A has already rewritten.
  *       Deferring every write to the end would have the second row plan its edits against text that no longer
@@ -92,12 +91,12 @@ public final class ProjectUpgrade {
      * reports found — and nothing here is a report of what <em>would</em> happen.
      */
     public record Result(List<Moved> moved, int filesRewritten, int callsRepaired, List<String> leftForYou,
-                         List<String> converted, List<java.nio.file.Path> deleted) {
+                         List<String> repaired, List<java.nio.file.Path> deleted) {
 
         public Result {
             moved = List.copyOf(moved);
             leftForYou = List.copyOf(leftForYou);
-            converted = List.copyOf(converted);
+            repaired = List.copyOf(repaired);
             deleted = List.copyOf(deleted);
         }
 
@@ -128,8 +127,8 @@ public final class ProjectUpgrade {
                     ? "Moved " + moved.getFirst() + "."
                     : "Moved " + moved.size() + " plugins: "
                             + String.join(", ", moved.stream().map(Moved::toString).toList()) + ".");
-            if (!converted.isEmpty()) {
-                text.append(" Converted the plugin's values: ").append(String.join("; ", converted)).append(".");
+            if (!repaired.isEmpty()) {
+                text.append(" Repaired the plugin's values: ").append(String.join(" ", repaired));
             }
             if (filesRewritten == 0) {
                 text.append(" Nothing in this bot's own code had to change.");
@@ -174,18 +173,13 @@ public final class ProjectUpgrade {
                     // coordinate to the same version are equal as records and would collapse into one.
                     List<Report> checked = new ArrayList<>();
                     for (Row row : moving) checked.add(report(row));
-                    // The one refusal (2026-10-11): a move that would lose a plugin's values stops before the
-                    // snapshot, with nothing written.
-                    for (int i = 0; i < moving.size(); i++) {
-                        if (checked.get(i).isRefused()) throw new IllegalStateException(checked.get(i).refusal());
-                    }
 
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
 
                     Map<String, String> versions = new LinkedHashMap<>();
                     List<Moved> moved = new ArrayList<>();
                     List<String> left = new ArrayList<>();
-                    List<String> converted = new ArrayList<>();
+                    List<String> repaired = new ArrayList<>();
                     List<java.nio.file.Path> deleted = new ArrayList<>();
                     int files = 0;
                     int calls = 0;
@@ -196,11 +190,10 @@ public final class ProjectUpgrade {
                         // pom write below moves it.
                         String from = row.upgrades().currentVersion();
                         // The plugin's values first, so the repair reads the bot the new jar compiles.
-                        PluginUpgradeService.Conversions conversions =
-                                row.upgrades().convertValues(row.targetVersion());
-                        converted.addAll(conversions.converted());
-                        left.addAll(conversions.left());
-                        deleted.addAll(conversions.deleted());
+                        PluginUpgradeService.Values values = row.upgrades().repairValues(row.targetVersion());
+                        repaired.addAll(values.repaired());
+                        left.addAll(values.left());
+                        deleted.addAll(values.deleted());
                         // What the check could not read does not stop the move (2026-09-29); it is said back.
                         report.problems().forEach(problem -> left.add(row.upgrades().displayName() + ": "
                                 + problem));
@@ -216,16 +209,16 @@ public final class ProjectUpgrade {
                                         carried(row.picks(), sitesOf(report), sitesOf(now)));
                                 report = now;
                             }
-                            PluginUpgradeService.Repaired repaired = row.upgrades().repairReporting(
+                            PluginUpgradeService.Repaired code = row.upgrades().repairReporting(
                                     row.targetVersion(), row.alsoModernise(), true, withDefaults(report, asked));
-                            files += repaired.files();
-                            left.addAll(repaired.leftAsWritten());
+                            files += code.files();
+                            left.addAll(code.leftAsWritten());
                             calls += report.breaks().size();
                         }
                         moved.add(new Moved(row.upgrades().displayName(), from, row.targetVersion()));
                         versions.put(row.upgrades().coordinate(), row.targetVersion());
                     }
-                    return new Pass(versions, new Result(moved, files, calls, left, converted, deleted));
+                    return new Pass(versions, new Result(moved, files, calls, left, repaired, deleted));
                 })
                 .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }

@@ -117,15 +117,14 @@ public final class FixList {
         out.sort(Comparator.comparing((Issue i) -> i.site() == null ? "￿" : i.site().file())
                 .thenComparingInt(i -> i.site() == null ? Integer.MAX_VALUE : i.site().line()));
 
-        // The plugin's conversions of its managed values (2026-10-11), first: nothing to pick, but written into
+        // What the repair does to the plugin's managed values (2026-10-11), first: nothing to pick, but written into
         // the bot before any call is repaired, so the user reads them before anything is.
-        List<Issue> converted = new ArrayList<>();
-        for (String conversion : report.conversions()) {
-            converted.add(new Issue(null, conversion, "the plugin's files", "",
-                    List.of(new Fix("Understood", null)), 0));
+        List<Issue> values = new ArrayList<>();
+        for (String value : report.values()) {
+            values.add(new Issue(null, value, "the plugin's files", "", List.of(new Fix("Understood", null)), 0));
         }
-        converted.addAll(out);
-        return List.copyOf(converted);
+        values.addAll(out);
+        return List.copyOf(values);
     }
 
     /**

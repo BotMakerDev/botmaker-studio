@@ -169,7 +169,7 @@ public final class ManagedHolders {
         if (!typeLevel) {
             // The plugin's parameters first, as fields go before methods in a class a person reads.
             for (ManagedValue<?> sibling : declared) {
-                if (!holder.equals(sibling.holder()) || !sibling.isParam() || sibling.isRetired()) continue;
+                if (!holder.equals(sibling.holder()) || !sibling.isParam()) continue;
                 FieldDeclaration field = field(ast, sibling, grammar, imports);
                 if (field == null) {
                     // One parameter nobody can spell costs only itself: the holder's values are still written.
@@ -180,10 +180,7 @@ public final class ManagedHolders {
                 members.add(field);
             }
             for (ManagedValue<?> sibling : declared) {
-                if (!holder.equals(sibling.holder()) || sibling.shape() != ManagedValue.Shape.METHOD
-                        || sibling.isRetired()) {
-                    continue;
-                }
+                if (!holder.equals(sibling.holder()) || sibling.shape() != ManagedValue.Shape.METHOD) continue;
                 MethodDeclaration method = method(ast, sibling, grammar, imports);
                 if (method == null) {
                     throw new Unwritable("BotMaker cannot write a starting value for \"" + sibling.id()
@@ -438,7 +435,7 @@ public final class ManagedHolders {
      * its mark, or else its holder — a class of that name in {@code plugins/<segment>/}. A parameter whose holder
      * the bot does not have is left out: {@link #missing} writes it with the holder. Nothing here writes.
      *
-     * @param byPlugin each plugin's id and every value it declares, retired ones left out
+     * @param byPlugin each plugin's id and every value it declares
      */
     public static java.util.Map<Path, List<ManagedValue<?>>> paramsToKeep(
             com.botmaker.studio.project.source.BotIndex index, java.util.Map<String, List<ManagedValue<?>>> byPlugin) {
@@ -470,7 +467,7 @@ public final class ManagedHolders {
         byPlugin.forEach((pluginId, declared) -> {
             String segment = segment(pluginId);
             for (ManagedValue<?> value : declared) {
-                if (value == null || !value.isParam() || value.isRetired()) continue;
+                if (value == null || !value.isParam()) continue;
                 Path file = marked.getOrDefault(value.id(), holders.get(segment + "/" + value.holder()));
                 if (file != null) kept.computeIfAbsent(file, f -> new ArrayList<>()).add(value);
             }
@@ -585,35 +582,6 @@ public final class ManagedHolders {
     public static String memberName(ManagedValue<?> value) {
         // FLOW_LAYOUT as flow-layout: no identifier, so methodName camel-cases it rather than keeping it.
         return methodName(ManagedIds.Typed.of(value).constant().toLowerCase(Locale.ROOT).replace('_', '-'));
-    }
-
-    /**
-     * {@code source} with {@code value}'s marked method, returning its starting value, added after the last
-     * method of the class {@code className} — what an upgrade's conversion writes into a holder the bot already
-     * has (2026-10-11). Unchanged when the class is not in it or the value has no starting value to write.
-     */
-    static String withMethod(String source, String className, ManagedValue<?> value, ValueGrammar grammar) {
-        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
-        AST ast = unit.getAST();
-        TypeDeclaration holder = null;
-        for (Object each : unit.types()) {
-            if (each instanceof TypeDeclaration type && type.getName().getIdentifier().equals(className)) holder = type;
-        }
-        TreeSet<String> imports = new TreeSet<>();
-        MethodDeclaration method = holder == null ? null : method(ast, value, grammar, imports);
-        if (method == null) return source;
-        org.eclipse.jdt.core.dom.rewrite.ASTRewrite rewrite = org.eclipse.jdt.core.dom.rewrite.ASTRewrite.create(ast);
-        org.eclipse.jdt.core.dom.rewrite.ListRewrite body =
-                rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
-        MethodDeclaration[] methods = holder.getMethods();
-        if (methods.length == 0) body.insertLast(method, null);
-        else body.insertAfter(method, methods[methods.length - 1], null);
-        String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
-        for (String name : imports) {
-            if (!isImplicit(name, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, name);
-        }
-        return SourceFormatter.formatChanged(source,
-                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** The id as a method name: itself when it is one, else its letters and digits in lower camel case. */

@@ -1,7 +1,6 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.plugin.api.StudioPlugin;
-import com.botmaker.plugin.api.source.Conversion;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
@@ -21,11 +20,11 @@ import java.util.stream.Stream;
 
 /**
  * The version an upgrade moves a plugin to, loaded beside the bound one for as long as the upgrade reads it
- * (2026-10-11) — what a {@link Conversion} runs in, since only the target jar declares it.
+ * (2026-10-11) — what the repair of the bot's managed values reads, since only the target jar declares them.
  *
  * <p><b>The bot's own classpath at the target version</b>, resolved from a copy of its pom with that one pin
- * moved, so the conversion's classes link against the dependencies they will run with, and the bot is checked
- * against the jars it will compile with. The pom itself is not touched: it moves last, after every write.
+ * moved, so the declarations link against the dependencies they will run with, and the bot is checked against
+ * the jars it will compile with. The pom itself is not touched: it moves last, after every write.
  *
  * <p>Closed after use: an open loader keeps every jar it read open, which on Windows makes them unreplaceable.
  */
@@ -81,7 +80,7 @@ final class StagedPlugin implements AutoCloseable {
         return plugins.getFirst().id();
     }
 
-    /** Every value the jar's plugins declare, retired ones included; a plugin that throws declares nothing. */
+    /** Every value the jar's plugins declare; a plugin that throws declares nothing. */
     List<ManagedValue<?>> declared() {
         List<ManagedValue<?>> out = new ArrayList<>();
         for (StudioPlugin plugin : plugins) {
@@ -93,38 +92,6 @@ final class StagedPlugin implements AutoCloseable {
             }
         }
         return List.copyOf(out);
-    }
-
-    /**
-     * Every conversion the jar's plugins declare, in the order they list them — only those whose values are all
-     * that plugin's own: a conversion naming another plugin's value is refused, since only the plugin that
-     * declares a value may say what it becomes.
-     */
-    List<Conversion> conversions() {
-        List<Conversion> out = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
-            try {
-                List<Conversion> declared = plugin.conversions();
-                List<ManagedValue<?>> own = plugin.managedValues() == null ? List.of() : plugin.managedValues();
-                if (declared == null) continue;
-                for (Conversion conversion : declared) {
-                    if (conversion == null) continue;
-                    if (!ownsAll(own, conversion)) {
-                        throw new IllegalStateException(plugin.id() + " declares " + conversion
-                                + ", which names a value it does not declare");
-                    }
-                    out.add(conversion);
-                }
-            } catch (LinkageError e) {
-                // Built against a contract with no conversions: it declares none.
-            }
-        }
-        return List.copyOf(out);
-    }
-
-    private static boolean ownsAll(List<ManagedValue<?>> own, Conversion conversion) {
-        return Stream.concat(conversion.sources().stream(), conversion.targets().stream())
-                .allMatch(value -> own.stream().anyMatch(o -> o != null && o.id().equals(value.id())));
     }
 
     /** The target classpath, for parsing the bot against what it will compile with. */

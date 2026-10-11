@@ -13,8 +13,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.project.managed.ManagedConversions;
-import com.botmaker.studio.project.managed.ManagedIds;
+import com.botmaker.studio.project.managed.ManagedRepairs;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -495,11 +494,9 @@ public final class PluginUpgradeService {
      * <em>sentence</em> above the lists differs, and a downgrade in particular reads as a suspiciously quiet
      * upgrade unless the window says why nothing could be pointed anywhere.
      *
-     * <p>{@code conversions} are the plugin's own conversions of this bot's managed values that the move runs
-     * (2026-10-11), one sentence each, then what they keep as written. {@code refusal} is why the move cannot run
-     * at all, blank when it can: a conversion that fails, or a value the bot holds that the target neither
-     * declares nor converts. It is the one refusal an upgrade has, because the alternative is the user's data
-     * silently gone.
+     * <p>{@code values} is what the move does to this bot's managed values (2026-10-11), one sentence each: what
+     * the repair removes or resets ({@link ManagedRepairs}), then what it keeps as written. Nothing converts them
+     * and nothing refuses the move over them.
      */
     public record Report(String from, String to,
                          Operation operation,
@@ -511,33 +508,26 @@ public final class PluginUpgradeService {
                          List<Choice> guesses,
                          List<String> scaffolding,
                          List<String> problems,
-                         List<String> conversions,
-                         String refusal) {
+                         List<String> values) {
 
         public Report {
-            conversions = List.copyOf(conversions);
-            refusal = refusal == null ? "" : refusal;
+            values = List.copyOf(values);
         }
 
-        /** A report converting nothing — every one the jars alone produce. */
+        /** A report touching no managed value — every one the jars alone produce. */
         public Report(String from, String to, Operation operation, List<Highlight> highlights,
                       Map<String, List<String>> addedBySince, List<Deprecation> deprecated, List<Break> breaks,
                       List<Choice> splits, List<Choice> guesses, List<String> scaffolding, List<String> problems) {
             this(from, to, operation, highlights, addedBySince, deprecated, breaks, splits, guesses, scaffolding,
-                    problems, List.of(), "");
+                    problems, List.of());
         }
 
-        /** Whether the move cannot run — see {@link #refusal()}. */
-        public boolean isRefused() {
-            return !refusal.isBlank();
-        }
-
-        /** This report, with what {@link ConversionPlan} says about the bot's managed values. */
-        Report with(ConversionPlan plan) {
+        /** This report, with what {@link ValuesPlan} says about the bot's managed values. */
+        Report with(ValuesPlan plan) {
             List<String> problems = new ArrayList<>(this.problems);
             problems.addAll(plan.problems());
             return new Report(from, to, operation, highlights, addedBySince, deprecated, breaks, splits, guesses,
-                    scaffolding, List.copyOf(problems), plan.sentences(), plan.refusal());
+                    scaffolding, List.copyOf(problems), plan.sentences());
         }
 
         /** Everything new, as one list — the exhaustive answer, for a reader that does not want the eras. */
@@ -693,95 +683,72 @@ public final class PluginUpgradeService {
 
         Report report = compare(oldJar.get(), newJar.get(), from, to, alsoModernise);
         // Modernising moves no version, so no value changes shape.
-        return from.equals(to) ? report : report.with(conversions(oldJar.get(), newJar.get(), to));
+        return from.equals(to) ? report : report.with(values(newJar.get(), to));
     }
 
     // =========================================================================
-    // CONVERSIONS OF THE BOT'S MANAGED VALUES (2026-10-11)
+    // REPAIR OF THE BOT'S MANAGED VALUES (2026-10-11)
     // =========================================================================
 
     /**
-     * What the target jar's conversions do to this bot, or why the move cannot run.
+     * What the move does to this bot's managed values: the repair, or why it could not be worked out. Never a
+     * refusal: what is not checked is left as written and said back, like the rest of the upgrade.
      *
-     * @param outcome  the plan, null when there was nothing to plan
-     * @param refusal  why the move cannot run, blank when it can
+     * @param planned  the repair, null when there was nothing to plan
      * @param problems what could not be checked
      */
-    record ConversionPlan(ManagedConversions.Outcome outcome, String refusal, List<String> problems) {
+    record ValuesPlan(ManagedRepairs.Planned planned, List<String> problems) {
 
-        static ConversionPlan refused(String reason) {
-            return new ConversionPlan(null, reason, List.of());
-        }
+        static final ValuesPlan NONE = new ValuesPlan(null, List.of());
 
-        /** The sentences a report shows: each conversion that runs, then what it keeps as written. */
+        /** The sentences a report shows: what the repair removes or resets, then what it keeps. */
         List<String> sentences() {
-            if (!(outcome instanceof ManagedConversions.Planned planned)) return List.of();
-            List<String> out = new ArrayList<>();
-            planned.steps().forEach(step -> out.add(step.display()));
-            out.addAll(planned.left());
-            return List.copyOf(out);
+            return planned == null ? List.of() : planned.sentences();
         }
     }
 
     /**
-     * What a conversion pass wrote.
+     * What a repair of the values wrote.
      *
-     * @param converted each conversion that ran, as {@link ManagedConversions.Step#display()}
-     * @param left      what it kept as written, one sentence each
-     * @param deleted   the files it deleted — the caller drops their buffers on the FX thread
+     * @param repaired what it removed or reset, one sentence each
+     * @param left     what it kept as written, one sentence each
+     * @param deleted  the files it deleted — the caller drops their buffers on the FX thread
      */
-    public record Conversions(int files, List<String> converted, List<String> left, List<Path> deleted) {
+    public record Values(int files, List<String> repaired, List<String> left, List<Path> deleted) {
 
-        public Conversions {
-            converted = List.copyOf(converted);
+        public Values {
+            repaired = List.copyOf(repaired);
             left = List.copyOf(left);
             deleted = List.copyOf(deleted);
         }
 
-        static final Conversions NOTHING = new Conversions(0, List.of(), List.of(), List.of());
+        static final Values NOTHING = new Values(0, List.of(), List.of(), List.of());
     }
 
     /**
-     * The target jar's conversions planned over this bot: the jar loaded beside the bound one, the bot parsed
-     * against the target classpath. <b>Blocking</b> — resolves the target classpath and parses the bot.
+     * The repair of this bot's values for the move to {@code to}: the target jar loaded beside the bound one, the
+     * bot parsed against the target classpath. <b>Blocking</b> — resolves the target classpath and parses the bot.
      */
-    ConversionPlan conversions(Path oldJar, Path newJar, String to) {
-        Map<String, com.botmaker.plugin.api.source.ManagedValue<?>> before = declaredBy(oldJar);
+    ValuesPlan values(Path newJar, String to) {
         Optional<StagedPlugin> opened = StagedPlugin.open(config.projectPath(), coordinate(), to, newJar);
         if (opened.isEmpty()) {
-            // Unchecked is not safe: once moved, Studio no longer offers what the old jar declared.
-            if (before.isEmpty()) return new ConversionPlan(null, "", List.of());
-            return ConversionPlan.refused("The " + name() + " " + to + " plugin could not be loaded, so whether "
-                    + "this bot's values in its files carry over could not be checked. Nothing was changed.");
+            if (!holdsOwnValues()) return ValuesPlan.NONE;
+            return new ValuesPlan(null, List.of("The " + name() + " " + to + " plugin could not be loaded, so this"
+                    + " bot's values in its files were not checked; they are left as written."));
         }
         try (StagedPlugin staged = opened.get()) {
-            List<com.botmaker.plugin.api.source.Conversion> declaredConversions;
-            try {
-                declaredConversions = staged.conversions();
-            } catch (RuntimeException refused) {
-                return ConversionPlan.refused(name() + " " + to + " cannot be moved to: " + refused.getMessage()
-                        + ".");
+            if (staged.declared().isEmpty() && holdsOwnValues()) {
+                return new ValuesPlan(null, List.of(name() + " " + to + " declares no values Studio could read, so"
+                        + " this bot's values in its files are left as written."));
             }
-            List<com.botmaker.plugin.api.source.ManagedValue<?>> declared = staged.declared();
             BotIndex index = BotIndex.of(config, state).against(staged.classpath());
-            List<String> unconverted = ManagedConversions.unconverted(index, before.keySet(), declared,
-                    declaredConversions);
-            if (!unconverted.isEmpty()) {
-                return ConversionPlan.refused("This bot holds " + String.join(", ", unconverted.stream()
-                        .map(id -> ManagedIds.spelled(id, before.values())).toList())
-                        + ", which " + name() + " " + to + " neither reads nor converts: moving would lose it. "
-                        + "Move to a version between the two that converts it first.");
-            }
-            ManagedConversions.Outcome outcome;
-            try {
-                outcome = ManagedConversions.plan(index, config, staged.pluginId(), declared, declaredConversions,
-                        staged.grammar());
-            } catch (RuntimeException | LinkageError e) {
-                // The plugin's own code is in this pass; whatever it throws refuses the move, never crashes it.
-                return ConversionPlan.refused(name() + " " + to + "'s conversion failed: " + e + ".");
-            }
-            return new ConversionPlan(outcome,
-                    outcome instanceof ManagedConversions.Refused refused ? refused.reason() : "", List.of());
+            String note = ReviewMarker.available(state)
+                    ? "Reset by the " + name() + " " + to + " upgrade: it no longer compiled." : null;
+            return new ValuesPlan(ManagedRepairs.plan(index, staged.declared(), staged.grammar(), note), List.of());
+        } catch (RuntimeException | LinkageError e) {
+            // The plugin's declarations are in this pass; whatever they throw leaves the values as written.
+            return new ValuesPlan(null, List.of(name() + " " + to + "'s values could not be read, so this bot's"
+                    + " values in its files are left as written: " + e + "."));
         }
     }
 
@@ -801,46 +768,27 @@ public final class PluginUpgradeService {
             }
         }
         if (own.isEmpty()) return false;
-        return ManagedConversions.held(BotIndex.of(config, state)).stream().anyMatch(own::contains);
-    }
-
-    /** What the plugins bound from {@code jar} declare, by id, retired ones included. */
-    private static Map<String, com.botmaker.plugin.api.source.ManagedValue<?>> declaredBy(Path jar) {
-        Map<String, com.botmaker.plugin.api.source.ManagedValue<?>> out = new LinkedHashMap<>();
-        for (StudioPlugin plugin : PluginHost.plugins()) {
-            if (!loadedFrom(plugin, jar)) continue;
-            try {
-                List<com.botmaker.plugin.api.source.ManagedValue<?>> values = plugin.managedValues();
-                if (values != null) values.stream().filter(v -> v != null).forEach(v -> out.put(v.id(), v));
-            } catch (RuntimeException | LinkageError e) {
-                // A plugin that cannot say what it manages: nothing of it is checked.
-            }
-        }
-        return out;
+        return ManagedRepairs.held(BotIndex.of(config, state)).stream().anyMatch(own::contains);
     }
 
     /**
-     * Runs this plugin's conversions for the move to {@code targetVersion} and writes them — buffers and disk,
-     * no snapshot (the caller took it) and no pom write (the caller makes it, last).
-     *
-     * @throws IllegalStateException when the move is refused, with nothing written
+     * Repairs this bot's managed values for the move to {@code targetVersion} and writes the repair — buffers and
+     * disk, no snapshot (the caller took it) and no pom write (the caller makes it, last). Never refuses: what
+     * cannot be checked is left as written (2026-09-29).
      */
-    public Conversions convertValues(String targetVersion) {
+    public Values repairValues(String targetVersion) {
         String from = currentVersion();
-        if (from.equals(targetVersion)) return Conversions.NOTHING;
-        Optional<Path> oldJar = resolve(from);
+        if (from.equals(targetVersion)) return Values.NOTHING;
         Optional<Path> newJar = resolve(targetVersion);
-        if (oldJar.isEmpty() || newJar.isEmpty()) {
-            // An unchecked move still moves (2026-09-29), unless it would leave this plugin's values unread.
-            if (!holdsOwnValues()) return Conversions.NOTHING;
-            throw new IllegalStateException("The " + name() + " jars could not be resolved again, so this bot's "
-                    + "values in its files could not be carried over. Nothing was changed.");
+        if (newJar.isEmpty()) {
+            return holdsOwnValues() ? new Values(0, List.of(), List.of(name() + " " + targetVersion + " could not be"
+                    + " resolved again, so this bot's values in its files are left as written."), List.of())
+                    : Values.NOTHING;
         }
-        ConversionPlan plan = conversions(oldJar.get(), newJar.get(), targetVersion);
-        if (!plan.refusal().isBlank()) throw new IllegalStateException(plan.refusal());
-        if (!(plan.outcome() instanceof ManagedConversions.Planned planned) || planned.isEmpty()) {
-            return Conversions.NOTHING;
-        }
+        ValuesPlan plan = values(newJar.get(), targetVersion);
+        if (plan.planned() == null) return new Values(0, List.of(), plan.problems(), List.of());
+        ManagedRepairs.Planned planned = plan.planned();
+        if (planned.isEmpty()) return new Values(0, planned.repaired(), planned.left(), List.of());
         Set<Path> written = new java.util.HashSet<>();
         BotSources.forEach(config, state, (file, source) -> {
             String after = planned.rewrites().get(file);
@@ -858,8 +806,7 @@ public final class PluginUpgradeService {
         } catch (IOException e) {
             throw new RuntimeException("Some files could not be written: " + e.getMessage(), e);
         }
-        return new Conversions(planned.rewrites().size() + planned.deleted().size(),
-                planned.steps().stream().map(ManagedConversions.Step::display).toList(), planned.left(),
+        return new Values(planned.rewrites().size() + planned.deleted().size(), planned.repaired(), planned.left(),
                 List.copyOf(planned.deleted()));
     }
 
@@ -1028,7 +975,7 @@ public final class PluginUpgradeService {
     }
 
     /**
-     * The whole upgrade, in one button: snapshot → convert the plugin's values ({@link #convertValues}) → repair
+     * The whole upgrade, in one button: snapshot → repair the plugin's values ({@link #repairValues}) → repair
      * the source → bump the pom.
      *
      * <p>The snapshot comes first so all of it is one revert away in the VCS panel — which is the point, since
@@ -1068,7 +1015,7 @@ public final class PluginUpgradeService {
                 .runAsync(() -> {
                     snapshot("Before " + name() + " upgrade to " + targetVersion);
                     // The values first, so the repair after them reads the bot the new jar will compile.
-                    convertValues(targetVersion);
+                    repairValues(targetVersion);
                     if (repairSources || alsoModernise) {
                         repair(targetVersion, alsoModernise, true, picks);
                     }

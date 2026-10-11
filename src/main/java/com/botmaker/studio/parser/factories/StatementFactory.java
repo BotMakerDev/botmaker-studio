@@ -416,7 +416,7 @@ public class StatementFactory {
                 List<ManagedValue<?>> declared = plugin.managedValues();
                 if (declared == null) return List.of();
                 return declared.stream()
-                        .filter(v -> v != null && v.isParam() && !v.isRetired() && holders.contains(v.holder()))
+                        .filter(v -> v != null && v.isParam() && holders.contains(v.holder()))
                         .toList();
             } catch (RuntimeException | LinkageError e) {
                 return List.of();

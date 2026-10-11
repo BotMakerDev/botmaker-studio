@@ -878,7 +878,7 @@ public final class InstalledPluginsTab {
                         return;
                     }
                     status("");
-                    // A retired holder a conversion deleted: its buffer goes, and the editor moves off it.
+                    // A holder the repair of the values deleted: its buffer goes, and the editor moves off it.
                     var active = state.getActiveFile();
                     result.deleted().forEach(state::removeFile);
                     if (active != null && result.deleted().contains(active.getPath())) {

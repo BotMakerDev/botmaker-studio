@@ -819,9 +819,7 @@ public final class PluginHost {
                 List<ManagedValue<?>> offered = plugin.managedValues();
                 if (offered == null) continue;
                 for (ManagedValue<?> value : offered) {
-                    // A retired shape is read only by an upgrade's conversion (PluginUpgradeService), never
-                    // locked, created or offered: the bot holding one is a bot that has not converted yet.
-                    if (value != null && value.id() != null && !value.id().isBlank() && !value.isRetired()) {
+                    if (value != null && value.id() != null && !value.id().isBlank()) {
                         merged.add(value);
                     }
                 }

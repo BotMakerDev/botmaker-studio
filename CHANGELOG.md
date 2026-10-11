@@ -33,17 +33,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   only unless `this_run` is false, and `errors_only` keeps warnings, errors and exceptions. An edit that adds,
   removes or moves statements answers with the methods it reshaped and their ids, so `read_tree` is not called
   again.
-- **An upgrade runs the plugin's conversions of its managed values.** When the target release declares a
-  `Conversion` (studio-api), the upgrade loads that jar beside the bound one, reads each retired value the bot
-  holds, writes what the plugin answers into the new holders, and deletes the retired holder once nothing names
-  it. A holder the bot still names, or one written by hand, is kept as the user's own code: its mark is removed,
-  it is listed, and it is renamed `<Holder>Retired` when the new holder needs its file. The fix list shows each
-  conversion first, before anything is written, and the success sentence names them. A move is refused before
-  the snapshot when a conversion fails, when the target cannot be loaded to check, or when the bot holds a value
-  the target neither declares nor converts.
-  This is the one refusal an upgrade has (`ManagedConversions`, `PluginUpgradeService.convertValues`).
-- **A retired managed value is never served.** It is not locked, not created on bind, and not written beside a
-  live sibling in a new holder.
+- **An upgrade repairs the plugin's managed values like the rest of the bot.** The upgrade loads the target jar
+  beside the bound one and reads the bot against it. A value whose id is gone, or that the plugin declares
+  another way now, is removed, with its file when nothing else is left in it; while the bot's own code still
+  names it, it is kept as the user's code with its mark removed. A value that no longer compiles takes its first
+  value and is marked `@Refactor` for the Review tab. The fix list shows each of these first, and the success
+  sentence names them. Nothing refuses the upgrade (`ManagedRepairs`, `PluginUpgradeService.repairValues`).
 - **A macOS build (Apple Silicon).** CI's `package` job gains a `macos-14` leg
   that builds an unsigned `.dmg` and a zipped `BotMaker Studio.app`. The jar keeps only the arm64 macOS
   natives (`natives-mac`, `natives-mac-arm64`). The `.icns` is built from the PNGs by `iconutil`

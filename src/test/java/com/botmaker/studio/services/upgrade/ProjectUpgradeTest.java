@@ -150,13 +150,14 @@ class ProjectUpgradeTest {
         assertFalse(result.touchedSources(), "so the window offers no Review tab button");
     }
 
-    /** A plugin's conversion of its values is said back in its own words (2026-10-11). */
+    /** What the repair did to a plugin's values is said back (2026-10-11). */
     @Test
-    void theConversionsThatRanAreNamed() {
+    void theRepairedValuesAreNamed() {
         String summary = new ProjectUpgrade.Result(List.of(new ProjectUpgrade.Moved("SDK", "1", "2")), 0, 0,
-                List.of(), List.of("Each activity is now its own enum of outcomes."), List.of()).summary();
-        assertTrue(summary.contains("Converted the plugin's values: Each activity is now its own enum of outcomes."),
-                summary);
+                List.of(), List.of("Outcomes (@SdkValue(SdkValue.Id.OUTCOMES)) is no longer one of the plugin's"
+                + " values, so it was removed."), List.of()).summary();
+        assertTrue(summary.contains("Repaired the plugin's values: Outcomes (@SdkValue(SdkValue.Id.OUTCOMES)) is no"
+                + " longer one of the plugin's values, so it was removed."), summary);
     }
 
     @Test

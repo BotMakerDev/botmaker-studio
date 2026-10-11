@@ -298,6 +298,8 @@ class GluedStackTest extends FxHeadlessTest {
     @Test
     void theBundledNunitoLoads() {
         interact(BlockFont::loadBundled);
-        assertTrue(javafx.scene.text.Font.getFamilies().contains("Nunito"), "Nunito is registered");
+        // Asked of the font, not of Font.getFamilies(): that list is read once per JVM, so another test asking it
+        // first, before the bundled files loaded, leaves Nunito out of it for good.
+        assertEquals("Nunito", javafx.scene.text.Font.font("Nunito", 13).getFamily(), "Nunito is registered");
     }
 }

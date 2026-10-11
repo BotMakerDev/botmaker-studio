@@ -146,8 +146,7 @@ public final class HostPluginValues implements PluginValues {
                 continue;
             }
             if (declared == null) continue;
-            // A retired shape is never written, neither as the value asked for nor beside it in its holder.
-            declared = declared.stream().filter(v -> v != null && !v.isRetired()).toList();
+            declared = declared.stream().filter(java.util.Objects::nonNull).toList();
             for (ManagedValue<?> value : declared) {
                 if (!id.equals(value.id())) continue;
                 ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.id(), value, declared,
@@ -190,10 +189,9 @@ public final class HostPluginValues implements PluginValues {
         java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
         for (StudioPlugin plugin : PluginHost.plugins()) {
             try {
-                // A retired shape is never created: it is what an upgrade converts away from.
                 List<ManagedValue<?>> offered = plugin.managedValues();
                 List<ManagedValue<?>> declared = offered == null ? List.of()
-                        : offered.stream().filter(v -> v != null && !v.isRetired()).toList();
+                        : offered.stream().filter(java.util.Objects::nonNull).toList();
                 if (!declared.isEmpty()) byPlugin.put(plugin.id(), declared);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.
