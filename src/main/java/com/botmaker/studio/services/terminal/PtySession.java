@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.terminal;
 
+import com.botmaker.shared.platform.Os;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import com.pty4j.WinSize;
@@ -65,13 +66,17 @@ public final class PtySession implements AutoCloseable {
         return session;
     }
 
-    /** The user's login shell: {@code $SHELL}, else {@code /bin/bash}; PowerShell on Windows. */
+    /**
+     * The user's login shell: {@code $SHELL}, else {@code /bin/zsh} on a Mac (its default since 10.15) and
+     * {@code /bin/bash} elsewhere; PowerShell on Windows.
+     */
     public static List<String> defaultShell() {
-        if (System.getProperty("os.name", "").toLowerCase().startsWith("windows")) {
+        Os os = Os.current();
+        if (os.isWindows()) {
             return List.of("powershell.exe", "-NoLogo");
         }
         String shell = System.getenv("SHELL");
-        return List.of(shell == null || shell.isBlank() ? "/bin/bash" : shell, "-l");
+        return List.of(shell != null && !shell.isBlank() ? shell : os.isMac() ? "/bin/zsh" : "/bin/bash", "-l");
     }
 
     private void pump(Consumer<byte[]> sink, IntConsumer exited) {

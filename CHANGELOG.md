@@ -25,7 +25,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   This is the one refusal an upgrade has (`ManagedConversions`, `PluginUpgradeService.convertValues`).
 - **A retired managed value is never served.** It is not locked, not created on bind, and not written beside a
   live sibling in a new holder.
-- **A macOS build (Apple Silicon), not yet runnable for bots.** CI's `package` job gains a `macos-14` leg
+- **A macOS build (Apple Silicon).** CI's `package` job gains a `macos-14` leg
   that builds an unsigned `.dmg` and a zipped `BotMaker Studio.app`. The jar keeps only the arm64 macOS
   natives (`natives-mac`, `natives-mac-arm64`). The `.icns` is built from the PNGs by `iconutil`
   (`installers-mac`). Capture and input come from shared's `MacController`, untried on a Mac. A manual
@@ -36,6 +36,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The stop key and View ▸ Stop Key… work on macOS** (shared's event tap). A Mac has no Pause key, so its
   default is F12 (fn+F12 on a laptop); the chooser says so. Key names come from shared's `KeyNames` where
   there is no libX11. Studio needs Input Monitoring; without it the run says the stop key is unavailable.
+- On a Mac opened from Finder, the Assistant finds Claude Code and the other AI tools in Homebrew's bin too;
+  the terminal falls back to `/bin/zsh` when `$SHELL` is unset; and the program picker starts in the given
+  folder and returns an `.app` as its path, without the trailing slash.
 
 ### Fixed
 

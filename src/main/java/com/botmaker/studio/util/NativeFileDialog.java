@@ -73,8 +73,15 @@ public final class NativeFileDialog {
 
     private static Choice runMac(String initialDir) throws Exception {
         // `choose file` errors (exit 1) on cancel — run() treats a non-zero exit with no output as cancel.
-        String script = "POSIX path of (choose file with prompt \"Choose a program to launch\")";
-        return run(List.of("osascript", "-e", script));
+        // An .app bundle is picked as one file, and its path is what an exe: target takes on a Mac.
+        // Only a folder that exists: AppleScript fails on any other before showing the dialog, which reads as cancel.
+        String from = initialDir == null || initialDir.isBlank() || !new File(initialDir).isDirectory() ? ""
+                : " default location (POSIX file \"" + initialDir.replace("\\", "\\\\").replace("\"", "\\\"") + "\")";
+        String script = "POSIX path of (choose file with prompt \"Choose a program to launch\"" + from + ")";
+        Choice choice = run(List.of("osascript", "-e", script));
+        // A bundle is a folder, so its POSIX path ends in a slash.
+        return choice.path().filter(p -> p.length() > 1 && p.endsWith("/"))
+                .map(p -> Choice.picked(p.substring(0, p.length() - 1))).orElse(choice);
     }
 
     // --- Linux -------------------------------------------------------------------------------------

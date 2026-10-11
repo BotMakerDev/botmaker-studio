@@ -1,5 +1,7 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.shared.Executables;
+import com.botmaker.shared.platform.Os;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
@@ -12,7 +14,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -175,8 +176,11 @@ public enum AiTool {
         for (String extra : List.of(".local/bin", ".opencode/bin", ".npm-global/bin", ".bun/bin", "bin")) {
             dirs.add(home.resolve(extra));
         }
-        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
-        List<String> names = windows ? List.of(executable + ".exe", executable + ".cmd") : List.of(executable);
+        // An app opened from Finder gets launchd's PATH, which has no Homebrew: an npm -g there lands in its bin.
+        if (Os.current().isMac()) {
+            for (String dir : Executables.MAC_EXTRA_DIRS) dirs.add(Path.of(dir));
+        }
+        List<String> names = Os.current().isWindows() ?List.of(executable + ".exe", executable + ".cmd") : List.of(executable);
         for (Path dir : dirs) {
             for (String name : names) {
                 Path candidate = dir.resolve(name);
@@ -217,17 +221,20 @@ public enum AiTool {
      * lacks. The shell {@code exec}s the tool, so the terminal's process is the tool. Unchanged on Windows.
      */
     public static List<String> viaLoginShell(String shell, List<String> command) {
-        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
-        if (windows) return command;
+        if (Os.current().isWindows()) return command;
         List<String> wrapped = new ArrayList<>(List.of(posixShell(shell), "-lc", "exec \"$0\" \"$@\""));
         wrapped.addAll(command);
         return wrapped;
     }
 
-    /** {@code shell} when it speaks POSIX {@code sh}; fish and nu do not, so they hand over to bash. */
+    /**
+     * {@code shell} when it speaks POSIX {@code sh}; fish, nu and an unset {@code $SHELL} hand over to bash, or on
+     * a Mac to zsh, whose {@code ~/.zprofile} is where {@code brew shellenv} puts Homebrew on {@code PATH}.
+     */
     static String posixShell(String shell) {
         String name = shell == null || shell.isBlank() ? "" : Path.of(shell).getFileName().toString();
-        return List.of("bash", "zsh", "sh", "ksh", "dash").contains(name) ? shell : "/bin/bash";
+        if (List.of("bash", "zsh", "sh", "ksh", "dash").contains(name)) return shell;
+        return Os.current().isMac() ? "/bin/zsh" : "/bin/bash";
     }
 
     /** Writes {@code value} as JSON to {@code file}, readable and writable by the user only where the OS says so. */
