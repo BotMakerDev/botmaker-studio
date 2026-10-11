@@ -62,7 +62,7 @@ release:
     changelog:
       external: release-notes.md
 
-# The assets. They are built by the `package` job on two runners and downloaded into artifacts/ by the
+# The assets. They are built by the `package` job on three runners and downloaded into artifacts/ by the
 # `release` job, so this section only has to name them.
 #
 # install.sh ships as a release asset as well as at the site root, so the one-command install is reviewable
@@ -76,4 +76,5 @@ files:
     - pattern: artifacts/*.rpm
     - pattern: artifacts/*.AppImage
     - pattern: artifacts/*.msi
+    - pattern: artifacts/*.dmg
     - pattern: packaging/linux/install.sh

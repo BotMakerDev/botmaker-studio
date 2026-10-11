@@ -732,7 +732,7 @@ public class MenuBarManager {
                         if (ex == null) {
                             showInfo("Installer started",
                                     "The installer for " + update.tag() + " has been launched.\n\n"
-                                            + "Please quit BotMaker Studio and reopen it to finish updating.");
+                                            + com.botmaker.studio.services.UpdateService.finishInstructions());
                         } else {
                             showError("Update failed", rootMessage(ex));
                         }

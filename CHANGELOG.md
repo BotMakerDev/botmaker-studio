@@ -12,6 +12,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **A macOS build (Apple Silicon), not yet runnable for bots.** CI's `package` job gains a `macos-14` leg
+  that builds an unsigned `.dmg` and a zipped `BotMaker Studio.app`. The jar keeps only the arm64 macOS
+  natives (`natives-mac`, `natives-mac-arm64`). The `.icns` is built from the PNGs by `iconutil`
+  (`installers-mac`). Capture and input still refuse on macOS. A manual `macos` CI job runs the suite there.
+- The updater picks the `-macos-arm64.dmg` on Apple Silicon (an Intel Mac is offered nothing), opens it in
+  Finder and says to drag the app onto Applications. The macOS package leg is `continue-on-error` until a tag
+  builds it green, so it cannot cost a release its Linux and Windows assets.
+
 ### Fixed
 
 - **A managed constant inside a value is read and written.** `Flow.edge(Activities.Battle.WON, …)` used to read as

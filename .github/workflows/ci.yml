@@ -99,6 +99,39 @@ jobs:
       - name: Build
         run: mvn -B -DskipTests package
 
+  # The suite on Apple Silicon, the one place it runs on macOS: the maintainer has no Mac. Off the push
+  # path like the rest of the suite — **run it from the Actions tab** (Run workflow). Monocle keeps it
+  # headless, as on Linux.
+  macos:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Install the four upstreams (their main -SNAPSHOT)
+        run: |
+          source .github/mvn-retry.sh
+          for repo in botmaker-studio-api botmaker-plugin-host botmaker-shared botmaker-session; do
+            git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
+            mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
+          done
+
+      - name: Test
+        run: mvn -B test
+
+      - name: Upload surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports-macos
+          path: target/surefire-reports/
+
   # Build self-contained, per-OS app-images. Runs on a version tag; a manual dispatch is a dry run that
   # produces artifacts but no Release (see the `release` job's condition).
   package:
@@ -113,7 +146,16 @@ jobs:
           - os: windows-latest
             platform: windows-x64
             javacpp: windows-x86_64
+          # Apple Silicon only; no Intel Mac leg. The .dmg is unsigned (no Apple Developer account).
+          - os: macos-14
+            platform: macos-arm64
+            javacpp: macosx-arm64
+            optional: true
     runs-on: ${{ matrix.os }}
+    # The macOS leg is unproven (no Mac to try it on), so its failure must not cost the Linux and Windows
+    # assets: `release` needs every leg, and a continue-on-error leg counts as passed. Drop `optional` once
+    # a tag has built it green.
+    continue-on-error: ${{ matrix.optional == true }}
     # Exposed as an env var (not read straight from secrets) so step `if:` conditions can gate on it — the
     # `secrets` context isn't available in `if`. Empty when the maintainer hasn't configured signing yet.
     env:
@@ -287,6 +329,18 @@ jobs:
             Copy-Item $_.FullName "BotMaker-Studio-${{ steps.ver.outputs.label }}-${{ matrix.platform }}.msi"
           }
 
+      # ditto, not zip: it keeps the bundle's symlinks and extended attributes, which a plain zip of a .app
+      # breaks.
+      - name: Package zip + collect installers (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          base="BotMaker-Studio-${{ steps.ver.outputs.label }}-${{ matrix.platform }}"
+          ditto -c -k --keepParent "target/dist/BotMaker Studio.app" "${base}.zip"
+          for f in target/dist/*.dmg; do
+            [ -e "$f" ] || continue
+            cp "$f" "${base}.dmg"
+          done
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -298,6 +352,7 @@ jobs:
             BotMaker-Studio-*-${{ matrix.platform }}.rpm
             BotMaker-Studio-*-${{ matrix.platform }}.AppImage
             BotMaker-Studio-*-${{ matrix.platform }}.msi
+            BotMaker-Studio-*-${{ matrix.platform }}.dmg
           if-no-files-found: error
 
   release:

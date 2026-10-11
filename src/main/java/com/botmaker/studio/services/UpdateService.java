@@ -4,6 +4,7 @@ import com.botmaker.shared.Executables;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.shared.github.SemVer;
+import com.botmaker.shared.platform.Os;
 import com.botmaker.studio.config.AppVersion;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -25,7 +26,7 @@ import java.util.function.DoubleConsumer;
 
 /**
  * Checks GitHub Releases for a newer BotMaker Studio and, when the user opts in, downloads the installer that
- * matches the host OS ({@code .msi} on Windows, {@code .deb}/{@code .rpm} on Linux) and hands it to the OS
+ * matches the host OS ({@code .msi} on Windows, {@code .deb}/{@code .rpm} on Linux, {@code .dmg} on macOS) and hands it to the OS
  * installer. All network work is async and best-effort; failures resolve to "no update" rather than throwing.
  *
  * <p>Reuses {@link GitHubClient} for the release JSON and {@link SemVer#isGreater} for the version comparison.
@@ -121,7 +122,8 @@ public final class UpdateService {
      *       package DB, no stale desktop entry). The user restarts to run the new version.</li>
      *   <li><b>Linux .rpm/.deb</b> — installs through the native package manager under a single {@code pkexec}
      *       (polkit) prompt, so the user no longer has to finish the install manually in the software store.</li>
-     *   <li>Otherwise falls back to handing the file to the desktop's default handler.</li>
+     *   <li>Otherwise falls back to handing the file to the desktop's default handler — on macOS that mounts
+     *       the {@code .dmg} in Finder.</li>
      * </ul>
      */
     public void launchInstaller(Path installer) throws IOException {
@@ -145,8 +147,16 @@ public final class UpdateService {
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
             Desktop.getDesktop().open(installer.toFile());
         } else {
-            new ProcessBuilder("xdg-open", file).start();
+            new ProcessBuilder(Os.current().openCommand(file)).start();
         }
+    }
+
+    /** What the user does after {@link #launchInstaller} to be on the new version. */
+    public static String finishInstructions() {
+        return Os.current().isMac()
+                ? "Drag BotMaker Studio from the opened disk image onto Applications, replacing the old one, "
+                        + "then quit and reopen BotMaker Studio."
+                : "Please quit BotMaker Studio and reopen it to finish updating.";
     }
 
     /** Replaces the running AppImage file in place; the OS keeps the already-mapped copy running until restart. */
@@ -200,6 +210,12 @@ public final class UpdateService {
     /** Installer extensions acceptable for this OS, in order of preference (lower-case; matched case-insensitively). */
     private static String[] preferredExtensions() {
         if (isWindows()) return new String[]{".msi", ".exe"};
+        // The .dmg opens in Finder and the user drags the app over the old one; checked before the Linux
+        // probes because Homebrew can put rpm or dpkg on a Mac's PATH. Only an Apple Silicon build is
+        // released, and Rosetta does not run arm64 on Intel, so an Intel Mac is offered nothing.
+        if (Os.current().isMac()) {
+            return "aarch64".equals(System.getProperty("os.arch")) ? new String[]{"-macos-arm64.dmg"} : new String[0];
+        }
         // Running as an AppImage → self-update by swapping the AppImage file (no root, no package DB).
         String appImage = System.getenv("APPIMAGE");
         if (appImage != null && !appImage.isBlank()) return new String[]{".appimage"};
@@ -210,6 +226,6 @@ public final class UpdateService {
     }
 
     private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        return Os.current().isWindows();
     }
 }

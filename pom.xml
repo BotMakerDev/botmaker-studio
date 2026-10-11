@@ -49,10 +49,13 @@
         <installer.skip.deb>true</installer.skip.deb>
         <installer.skip.rpm>true</installer.skip.rpm>
         <installer.skip.msi>true</installer.skip.msi>
+        <installer.skip.dmg>true</installer.skip.dmg>
+        <!-- `dist` flips it; read only by installers-mac's .icns build. -->
+        <installer.skip.icns>true</installer.skip.icns>
 
         <!-- jpackage app icon (rasterized from src/main/resources/icons/icon.svg; jpackage can't read SVG).
              Platform-specific format required: .png on Linux (default), overridden to .ico on Windows,
-             .icns on macOS by the OS profiles below. -->
+             .icns on macOS by the OS profiles below (the .icns is built from the PNGs by `installers-mac`). -->
         <installer.icon>${project.basedir}/src/main/resources/icons/icon.png</installer.icon>
 
         <!-- Empty default so surefire's <argLine>@{argLine} …</argLine> resolves on a plain build. An
@@ -457,9 +460,9 @@
                               Tess4J and JNA do the same thing on a smaller scale.
 
                               Everything listed HERE is excluded unconditionally, because no CI leg ever
-                              targets it: macOS is not built at all, and neither is ARM, 32-bit or any
-                              of the exotic Unixes JNA carries. The two platforms that ARE built exclude
-                              each other from the `natives-linux` / `natives-windows` profiles below —
+                              targets it: ARM Linux/Windows, 32-bit and the exotic Unixes JNA carries. The
+                              three platforms that ARE built (Linux, Windows, macOS) exclude each other
+                              from the `natives-linux` / `natives-windows` / `natives-mac` profiles below —
                               appended to this list, never replacing it.
 
                               Watch the dashes when editing: com/sun/jna/win32/ is a CLASS package
@@ -479,7 +482,6 @@
 
                                         <!-- OpenCV (org.openpnp:opencv), ~50 MB of never-built targets.
                                              The loader classes under nu/pattern/*.class stay. -->
-                                        <exclude>nu/pattern/opencv/osx/**</exclude>
                                         <exclude>nu/pattern/opencv/linux/ARMv7/**</exclude>
                                         <exclude>nu/pattern/opencv/linux/ARMv8/**</exclude>
                                         <exclude>nu/pattern/opencv/linux/x86_32/**</exclude>
@@ -493,7 +495,6 @@
                                         <!-- JNA ships 25 platform natives; one is used. These are the
                                              ones no leg could ever load. -->
                                         <exclude>com/sun/jna/aix-*/**</exclude>
-                                        <exclude>com/sun/jna/darwin-*/**</exclude>
                                         <exclude>com/sun/jna/freebsd-*/**</exclude>
                                         <exclude>com/sun/jna/openbsd-*/**</exclude>
                                         <exclude>com/sun/jna/sunos-*/**</exclude>
@@ -511,7 +512,6 @@
                                         <exclude>com/sun/jna/win32-x86/**</exclude>
 
                                         <!-- pty4j's natives for the same never-built targets. -->
-                                        <exclude>resources/com/pty4j/native/darwin/**</exclude>
                                         <exclude>resources/com/pty4j/native/freebsd/**</exclude>
                                         <exclude>resources/com/pty4j/native/linux/aarch64/**</exclude>
                                         <exclude>resources/com/pty4j/native/linux/riscv64/**</exclude>
@@ -637,6 +637,9 @@
         -->
         <profile>
             <id>dist</id>
+            <properties>
+                <installer.skip.icns>false</installer.skip.icns>
+            </properties>
             <build>
                 <plugins>
                     <!-- jpackage refuses to overwrite an existing app-image; clear any stale
@@ -803,6 +806,14 @@
                                     </jLinkOptions>
                                     <destination>${project.build.directory}/dist</destination>
                                     <icon>${installer.icon}</icon>
+                                    <!-- macOS bundle identity, baked into the .app's Info.plist. The plugin passes
+                                         mac* options only when it runs on a Mac, so the Linux and Windows legs
+                                         never see them. A stable identifier is what macOS keys the Screen
+                                         Recording and Accessibility grants on: change it and every user is
+                                         asked again. -->
+                                    <macPackageIdentifier>com.botmaker.studio</macPackageIdentifier>
+                                    <macPackageName>BotMaker Studio</macPackageName>
+                                    <macAppCategory>public.app-category.developer-tools</macAppCategory>
                                 </configuration>
                             </execution>
 
@@ -971,6 +982,25 @@
                                     <winUpgradeUuid>de0da915-fc1b-41fb-81d7-e4adae8cd8f9</winUpgradeUuid>
                                 </configuration>
                             </execution>
+                            <!-- On macOS the app-image is a bundle, `BotMaker Studio.app`, not a directory.
+                                 Unsigned: Gatekeeper blocks the first launch, and since macOS 15 right-click →
+                                 Open no longer bypasses it — the user clicks System Settings › Privacy &
+                                 Security › Open Anyway (or runs `xattr -dr com.apple.quarantine` on the app).
+                                 Signing and notarization need an Apple Developer account and are not set up. -->
+                            <execution>
+                                <id>build-dmg</id>
+                                <phase>package</phase>
+                                <goals><goal>jpackage</goal></goals>
+                                <configuration>
+                                    <skip>${installer.skip.dmg}</skip>
+                                    <type>DMG</type>
+                                    <name>BotMaker Studio</name>
+                                    <appVersion>${app.version}</appVersion>
+                                    <vendor>LiQiyeDev</vendor>
+                                    <appImage>${project.build.directory}/dist/BotMaker Studio.app</appImage>
+                                    <destination>${project.build.directory}/dist</destination>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>
@@ -980,7 +1010,8 @@
         <!--
           OS-activated companions to `dist`: they only flip the installer skip flags, so they have no effect
           unless `-Pdist` is also active (the installer executions live in `dist`). This lets a single
-          `mvn -Pdist package` produce the host OS's native installers: .deb + .rpm on Linux, .msi on Windows.
+          `mvn -Pdist package` produce the host OS's native installers: .deb + .rpm on Linux, .msi on Windows,
+          .dmg on macOS.
         -->
         <profile>
             <id>installers-linux</id>
@@ -994,10 +1025,10 @@
         </profile>
 
         <!--
-          `natives-linux` / `natives-windows`: drop the OTHER built platform's native binaries from the
-          shaded jar. Everything neither leg can use is excluded unconditionally in the shade filters up
-          in <build>; these two only resolve the one axis that genuinely varies — a Linux build must not
-          carry the Windows OpenCV/Tesseract/JNA natives, and vice versa.
+          `natives-linux` / `natives-windows` / `natives-mac`: drop the OTHER built platforms' native binaries
+          from the shaded jar. Everything no leg can use is excluded unconditionally in the shade filters up
+          in <build>; these only resolve the one axis that genuinely varies — a Linux build must not carry
+          the Windows or macOS OpenCV/Tesseract/JNA natives, and so on for each.
 
           They are separate from `installers-linux`/`installers-windows` above on purpose. Those gate the
           *installer type* and only bite under -Pdist; these change the jar itself and must apply to every
@@ -1030,6 +1061,9 @@
                                                 <exclude>win32-x86-64/**</exclude>
                                                 <exclude>com/sun/jna/win32-x86-64/**</exclude>
                                                 <exclude>resources/com/pty4j/native/win/**</exclude>
+                                                <exclude>nu/pattern/opencv/osx/**</exclude>
+                                                <exclude>com/sun/jna/darwin-*/**</exclude>
+                                                <exclude>resources/com/pty4j/native/darwin/**</exclude>
                                             </excludes>
                                         </filter>
                                     </filters>
@@ -1069,9 +1103,139 @@
                                                      com/sun/jna/linux-x86-64/ excluded just above. -->
                                                 <exclude>linux-x86-64/**</exclude>
                                                 <exclude>resources/com/pty4j/native/linux/**</exclude>
+                                                <exclude>nu/pattern/opencv/osx/**</exclude>
+                                                <exclude>com/sun/jna/darwin-*/**</exclude>
+                                                <exclude>resources/com/pty4j/native/darwin/**</exclude>
                                             </excludes>
                                         </filter>
                                     </filters>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+          `natives-mac` drops the Linux and Windows natives on any Mac. `natives-mac-arm64` also drops the Intel
+          ones on Apple Silicon (55 MB of OpenCV alone), which is what the macos-14 CI leg builds; an Intel Mac
+          keeps both arches, and no CI leg builds for it.
+        -->
+        <profile>
+            <id>natives-mac</id>
+            <activation>
+                <os><family>mac</family></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>default</id>
+                                <configuration>
+                                    <filters combine.children="append">
+                                        <filter>
+                                            <artifact>*:*</artifact>
+                                            <excludes>
+                                                <exclude>nu/pattern/opencv/linux/**</exclude>
+                                                <exclude>nu/pattern/opencv/windows/**</exclude>
+                                                <exclude>com/sun/jna/linux-x86-64/**</exclude>
+                                                <exclude>com/sun/jna/win32-x86-64/**</exclude>
+                                                <exclude>linux-x86-64/**</exclude>
+                                                <exclude>win32-x86-64/**</exclude>
+                                                <exclude>resources/com/pty4j/native/linux/**</exclude>
+                                                <exclude>resources/com/pty4j/native/win/**</exclude>
+                                            </excludes>
+                                        </filter>
+                                    </filters>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>natives-mac-arm64</id>
+            <activation>
+                <os><family>mac</family><arch>aarch64</arch></os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>default</id>
+                                <configuration>
+                                    <filters combine.children="append">
+                                        <filter>
+                                            <artifact>*:*</artifact>
+                                            <excludes>
+                                                <exclude>nu/pattern/opencv/osx/x86_64/**</exclude>
+                                                <exclude>com/sun/jna/darwin-x86-64/**</exclude>
+                                            </excludes>
+                                        </filter>
+                                    </filters>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+          The .dmg, and the .icns jpackage needs on macOS: iconutil (on every Mac) builds it from the PNGs
+          already in icons/, so no binary icon is kept in the repo for one platform.
+        -->
+        <profile>
+            <id>installers-mac</id>
+            <activation>
+                <os><family>mac</family></os>
+            </activation>
+            <properties>
+                <installer.skip.dmg>false</installer.skip.dmg>
+                <installer.icon>${project.build.directory}/icon.icns</installer.icon>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>build-icns</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <!-- Only under -Pdist, the one build that packages: a plain `mvn install`
+                                         on a Mac never needs the icon. -->
+                                    <skip>${installer.skip.icns}</skip>
+                                    <target>
+                                        <property name="icons" value="${project.basedir}/src/main/resources/icons"/>
+                                        <property name="iconset" value="${project.build.directory}/icon.iconset"/>
+                                        <mkdir dir="${iconset}"/>
+                                        <copy file="${icons}/icon-16.png" tofile="${iconset}/icon_16x16.png"/>
+                                        <copy file="${icons}/icon-32.png" tofile="${iconset}/icon_16x16@2x.png"/>
+                                        <copy file="${icons}/icon-32.png" tofile="${iconset}/icon_32x32.png"/>
+                                        <copy file="${icons}/icon-64.png" tofile="${iconset}/icon_32x32@2x.png"/>
+                                        <copy file="${icons}/icon-128.png" tofile="${iconset}/icon_128x128.png"/>
+                                        <copy file="${icons}/icon-256.png" tofile="${iconset}/icon_128x128@2x.png"/>
+                                        <copy file="${icons}/icon-256.png" tofile="${iconset}/icon_256x256.png"/>
+                                        <copy file="${icons}/icon-512.png" tofile="${iconset}/icon_256x256@2x.png"/>
+                                        <copy file="${icons}/icon-512.png" tofile="${iconset}/icon_512x512.png"/>
+                                        <exec executable="iconutil" failonerror="true">
+                                            <arg value="-c"/>
+                                            <arg value="icns"/>
+                                            <arg value="${iconset}"/>
+                                            <arg value="-o"/>
+                                            <arg value="${project.build.directory}/icon.icns"/>
+                                        </exec>
+                                    </target>
                                 </configuration>
                             </execution>
                         </executions>
