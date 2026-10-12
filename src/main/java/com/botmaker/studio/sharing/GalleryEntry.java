@@ -27,27 +27,14 @@ import java.util.Optional;
  *                    safe side; {@link GitHubGallery} marks the legacy index's entries Vetted itself, because
  *                    that file holds only Vetted bots and cannot say so
  * @param vettedVersion the release tag a maintainer looked at, for a Vetted bot; blank otherwise
- * @param requires    the plugins the bot's pom declares, by plugin-registry id. Empty for every entry written
- *                    before 2026-09-16, which means "unknown", not "none"
+ *
+ * <p>No {@code requires} since 2026-10-12: what a bot's pom declares is read off the pom of the release that is
+ * installed ({@link TemplatePlugins}), never a copy made at publish time. An entry that still carries one has it
+ * ignored.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
-                           SupportedTargets launchTargets, GalleryTier tier, String vettedVersion,
-                           List<Requirement> requires) {
-
-    /** A plugin a listed bot needs: its registry id and the version the bot's pom pins, which may be blank. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Requirement(String id, String version) {
-        public Requirement {
-            id = id == null ? "" : id.trim();
-            version = version == null ? "" : version.trim();
-        }
-
-        /** {@code com.botmaker.sdk 1.1.6}, or the id alone when no version is pinned. */
-        public String describe() {
-            return version.isEmpty() ? id : id + " " + version;
-        }
-    }
+                           SupportedTargets launchTargets, GalleryTier tier, String vettedVersion) {
 
     /**
      * The one reserved tag: an entry carrying it is a <b>starting template</b> rather than a bot to install.
@@ -75,13 +62,12 @@ public record GalleryEntry(String name, String owner, String repo, String descri
         launchTargets = launchTargets == null ? SupportedTargets.any() : launchTargets;
         tier = tier == null ? GalleryTier.COMMUNITY : tier;
         vettedVersion = vettedVersion == null ? "" : vettedVersion.trim();
-        requires = requires == null ? List.of() : List.copyOf(requires);
     }
 
-    /** An entry as a legacy index spells it: no tier, no vetted release, no requirements. */
+    /** An entry as a legacy index spells it: no tier, no vetted release. */
     public GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
                         SupportedTargets launchTargets) {
-        this(name, owner, repo, description, tags, launchTargets, null, null, null);
+        this(name, owner, repo, description, tags, launchTargets, null, null);
     }
 
     /**
@@ -101,8 +87,7 @@ public record GalleryEntry(String name, String owner, String repo, String descri
     }
 
     public GalleryEntry withTier(GalleryTier newTier) {
-        return new GalleryEntry(name, owner, repo, description, tags, launchTargets, newTier, vettedVersion,
-                requires);
+        return new GalleryEntry(name, owner, repo, description, tags, launchTargets, newTier, vettedVersion);
     }
 
     public boolean isVetted() {

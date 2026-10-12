@@ -19,9 +19,10 @@ rule is the CLI's; Studio reads the outcome.
   retry resumes at the failed step. Each step is safe to run twice: the repository is found, a release whose
   tag exists counts as cut, a listing identical to the gallery's entry is not resubmitted. ARCHIVE downloads
   the zipball **without** a token, because that is what the gallery's gate does and what an installer has.
-- **The entry is `PublishRequest.entry`: schema 2, the CLI's field order, and `requires`** — the pom's
-  dependencies the plugin registry knows, by id, properties interpolated. Keyed by the registry exactly as
-  `botmaker-cli`'s `Requirements` is, so Studio and `botmaker bot publish` write the same file.
+- **The entry is `PublishRequest.entry`: schema 2, the CLI's field order.** It held `requires` — the pom's
+  registry plugins at publish time — until 2026-10-12, when that copy told New Project gamebot needs SDK 1.2.3
+  while the release it copies pinned 1.4.4. The entry stores the repository; what its pom declares is read off
+  the installed release's pom (`sharing/TemplatePlugins`), and an old entry's `requires` is ignored.
 - **A listing is a pull request from `listing/<repo>` on the author's fork, reset to the gallery's tip.** Not
   from the fork's `main`: that diverges from the gallery the first time a listing is squash-merged, and a
   second pull request from it would carry the first listing again. An open pull request from the branch is

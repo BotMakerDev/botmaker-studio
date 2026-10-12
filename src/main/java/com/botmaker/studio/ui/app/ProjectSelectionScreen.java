@@ -580,8 +580,10 @@ public class ProjectSelectionScreen implements ProjectWindow {
                             : "This template brings its own plugins and libraries — change them later in "
                             + "Project ▸ Plugins & Libraries."));
         };
+        GitHubGallery templateRepos = new GitHubGallery(gitHubClient, gitHubAuth);
         plugins[0] = new NewProjectPlugins(
-                new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch()), describeChoice);
+                new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch()),
+                templateRepos::pomAtInstallTag, describeChoice);
         templateCombo.valueProperty().addListener((o, was, now) ->
                 plugins[0].lockFor(now == null ? null : now.entry()));
         plugins[0].lockFor(templateCombo.getValue().entry());

@@ -146,6 +146,18 @@ public final class GitHubGallery {
     }
 
     /**
+     * {@code pom.xml} at the release installing {@code entry} downloads ({@link #installTag}); {@code ""} when
+     * there is none or GitHub cannot be reached. What New Project reads a template's plugins from
+     * ({@link TemplatePlugins}).
+     */
+    public CompletableFuture<String> pomAtInstallTag(GalleryEntry entry) {
+        return installTag(entry).thenCompose(tag -> tag.isEmpty()
+                ? CompletableFuture.completedFuture("")
+                : client.getString("https://raw.githubusercontent.com/" + entry.owner() + "/" + entry.repo() + "/"
+                        + tag + "/pom.xml").thenApply(pom -> pom == null ? "" : pom));
+    }
+
+    /**
      * Live per-repo signals used for gallery sorting/badges: star count and last-push time (epoch seconds).
      * {@link #UNKNOWN} is the <em>display</em> placeholder for "not fetched yet" only — a failed fetch
      * resolves to {@code null}, so callers can tell "we don't know" from "genuinely zero stars" and never

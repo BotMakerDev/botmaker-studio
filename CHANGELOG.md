@@ -17,6 +17,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **New Project copies a template's newest release.** A template's gallery entry is vetted at one release, and
   New Project installed that one: gamebot v0.2.0 with v0.2.6 out. A template now installs its newest release,
   vetted or not; an ordinary vetted bot still installs its vetted one.
+- **New Project shows the plugin versions the copied template pins**, read off the pom of the release it copies.
+  It showed the gallery entry's `requires`, written when the template was last published: SDK 1.2.3 for a
+  gamebot pinning 1.4.4.
+
+### Changed
+
+- **Publishing writes no `requires`**, and the Publish sheet has no Requires row; a gallery card no longer shows
+  one. The gallery stores the repository, and an installed release's pom says what it needs.
 
 ## [1.4.4] — 2026-10-12
 

@@ -9,11 +9,9 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
-import java.util.stream.Collectors;
-
 /**
- * How one gallery listing reads: its name and tier, author and description, what it requires, what it was
- * tested on, and a link to its repository.
+ * How one gallery listing reads: its name and tier, author and description, what it was tested on, and a link
+ * to its repository.
  *
  * <p>One builder for two windows. Browse Bots draws a row from it, with its own star and install buttons
  * beside; the publish dialog draws its preview from it. Two copies would be a preview that promises one card
@@ -36,13 +34,6 @@ public final class GalleryCard {
         meta.setWrapText(true);
         VBox text = new VBox(2, title, meta);
 
-        // Only when the entry says: an empty list is every entry written before the field existed, and reads as
-        // "unknown", which is not worth a line saying "Requires: nothing".
-        if (!entry.requires().isEmpty()) {
-            text.getChildren().add(note("Requires: " + entry.requires().stream()
-                    .map(GalleryEntry.Requirement::describe)
-                    .collect(Collectors.joining(", "))));
-        }
         // Only when the author declared something: "tested on: any launch target" would be noise on every entry
         // published before the field existed. "Tested on" rather than "runs on" because installing never
         // restricts what you may launch — see LaunchTargetDialog.

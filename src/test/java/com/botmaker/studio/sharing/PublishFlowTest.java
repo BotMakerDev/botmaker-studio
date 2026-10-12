@@ -69,51 +69,32 @@ class PublishFlowTest {
     @Test
     void theEntryIsSchemaTwoInTheCliOrder() throws Exception {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala-bot", " Mines ", "1.0.0",
-                List.of("mining", "template"), SupportedTargets.fromIds(List.of("heroic")),
-                List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.1.6"),
-                        new GalleryEntry.Requirement("com.example.x", "")),
-                true);
+                List.of("mining", "template"), SupportedTargets.fromIds(List.of("heroic")), true);
 
         String json = new String(BotPublisher.entryJson(MAPPER, request.entry("alice")), StandardCharsets.UTF_8);
-        assertEquals(List.of("schemaVersion", "name", "owner", "repo", "description", "tags", "launchTargets",
-                "requires"), fieldNames(MAPPER.readTree(json)));
+        assertEquals(List.of("schemaVersion", "name", "owner", "repo", "description", "tags", "launchTargets"),
+                fieldNames(MAPPER.readTree(json)), "no requires: the installed release's pom says it");
         JsonNode node = MAPPER.readTree(json);
         assertEquals(2, node.get("schemaVersion").asInt());
         assertEquals("Mines", node.get("description").asText());
         assertEquals("heroic", node.get("launchTargets").get(0).asText());
-        assertEquals("1.1.6", node.get("requires").get(0).get("version").asText());
-        assertFalse(node.get("requires").get(1).has("version"), "a blank version is left out, not written empty");
         assertTrue(request.isTemplate());
     }
 
     @Test
-    void undeclaredTargetsAndNoRequirementsAreLeftOut() {
+    void undeclaredTargetsAreLeftOut() {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "", "1.0.0", List.of(),
-                SupportedTargets.any(), List.of(), true);
+                SupportedTargets.any(), true);
         Map<String, Object> entry = request.entry("alice");
         assertFalse(entry.containsKey("launchTargets"));
-        assertFalse(entry.containsKey("requires"));
         assertTrue(entry.containsKey("tags"));
-    }
-
-    @Test
-    void requiresNamesRegistryPluginsWithTheirInterpolatedVersion() {
-        List<UserLibrary> declared = List.of(
-                new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "${botmaker.sdk.version}"),
-                new UserLibrary("org.junit.jupiter", "junit-jupiter", "5.10.0"),
-                new UserLibrary("com.example", "unregistered-plugin", "1.0"));
-        List<PluginRegistry.Plugin> registry = List.of(new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
-                "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.1.6", ""));
-
-        assertEquals(List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.1.6")),
-                PublishRequest.requires(declared, Map.of("botmaker.sdk.version", "1.1.6"), registry));
         assertEquals("${missing}", PublishRequest.interpolate("${missing}", Map.of()));
     }
 
     @Test
     void thePreviewIsTheListingTheGalleryWouldShow() {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "d", "1.0.0", List.of("x"),
-                null, List.of(), true);
+                null, true);
         GalleryEntry preview = request.preview("alice", GalleryTier.COMMUNITY, "");
         assertEquals("alice/koala", preview.slug());
         assertEquals(GalleryTier.COMMUNITY, preview.tier());
@@ -151,7 +132,7 @@ class PublishFlowTest {
     @Test
     void anEntryIdenticalToTheGallerysIsNotResubmitted() throws Exception {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "", "1.0.0", List.of("a"),
-                null, List.of(), true);
+                null, true);
         Map<String, Object> entry = request.entry("alice");
         // The Contents API wraps base64 at 60 columns; the comparison must not care.
         String encoded = Base64.getMimeEncoder().encodeToString(BotPublisher.entryJson(MAPPER, entry));
@@ -159,7 +140,7 @@ class PublishFlowTest {
 
         assertTrue(BotPublisher.sameEntry(MAPPER, contents, entry));
         Map<String, Object> changed = new PublishRequest(Path.of("."), "Koala", "koala", "new", "1.0.0",
-                List.of("a"), null, List.of(), true).entry("alice");
+                List.of("a"), null, true).entry("alice");
         assertFalse(BotPublisher.sameEntry(MAPPER, contents, changed));
     }
 

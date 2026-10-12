@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.sharing.TemplatePlugins;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
@@ -14,32 +15,47 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * New Project's plugin checklist (2026-10-01): the rows <i>Plugins &amp; Libraries ▸ Browse</i> offers
  * ({@link PluginCatalog}), each a tick box.
  *
- * <p>The chosen template's own plugins are ticked and locked, read off its gallery entry's {@code requires}: its
- * code may call them, and creation offers no version choice, so there is nothing to decide about them. What
- * this hands back is only the user's extra ticks. Each row names the version the project gets ({@link #label}). Offline the list is empty with a sentence, and creating still
- * works — a plugin is one visit to Plugins &amp; Libraries away afterwards.
+ * <p>The chosen template's own plugins are ticked and locked, read off the pom of the release New Project copies
+ * ({@link TemplatePlugins}, since 2026-10-12; a gallery entry's {@code requires} said it until then, and went
+ * stale): its code may call them, and creation offers no version choice, so there is nothing to decide about
+ * them. What this hands back is only the user's extra ticks. Each row names the version the project gets
+ * ({@link #label}). Offline the list is empty with a sentence, and creating still works — a plugin is one visit
+ * to Plugins &amp; Libraries away afterwards.
  */
 final class NewProjectPlugins {
 
     private final ListView<PluginRegistry.Plugin> list = new ListView<>();
     private final Set<PluginRegistry.Plugin> ticked = new LinkedHashSet<>();
     private final Runnable onChange;
-    private Map<String, GalleryEntry.Requirement> locked = Map.of();
+    private final CompletableFuture<List<PluginRegistry.Plugin>> rows;
+    private final Function<GalleryEntry, CompletableFuture<String>> pomOf;
+    private Map<String, TemplatePlugins.Pin> locked = Map.of();
+    /** The entry {@link #lockFor} was last asked about; an older entry's pom that answers late is dropped. */
+    private GalleryEntry lockingFor;
 
-    NewProjectPlugins(PluginCatalog catalog, Runnable onChange) {
+    /**
+     * @param pomOf the pom of the release a template's copy is made from ({@code GitHubGallery.pomAtInstallTag}),
+     *              {@code ""} when it cannot be had
+     */
+    NewProjectPlugins(PluginCatalog catalog, Function<GalleryEntry, CompletableFuture<String>> pomOf,
+                      Runnable onChange) {
         this.onChange = onChange;
+        this.pomOf = pomOf;
         list.setPrefHeight(150);
         list.setCellFactory(view -> new Row());
         list.setPlaceholder(new Label("Loading plugins…"));
-        catalog.rows().whenComplete((rows, failure) -> Platform.runLater(() -> {
-            List<PluginRegistry.Plugin> installable = rows == null ? List.of()
-                    : rows.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
+        rows = catalog.rows();
+        rows.whenComplete((answered, failure) -> Platform.runLater(() -> {
+            List<PluginRegistry.Plugin> installable = answered == null ? List.of()
+                    : answered.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
             list.getItems().setAll(installable);
             list.setPlaceholder(new Label("No plugins listed — the registry could not be reached. Add them "
                     + "later from Project ▸ Plugins & Libraries."));
@@ -50,11 +66,25 @@ final class NewProjectPlugins {
         return list;
     }
 
-    /** Re-marks the rows for {@code entry}, or for Studio's own blank project when it is null. */
+    /**
+     * Re-marks the rows for {@code entry}, or for Studio's own blank project when it is null. A template's rows
+     * lock once its pom answers; until then, and when it cannot be read, nothing is locked — creation still skips
+     * a coordinate the copied pom declares.
+     */
     void lockFor(GalleryEntry entry) {
-        locked = lockedRequirements(entry);
+        lockingFor = entry;
+        locked = Map.of();
         list.refresh();
         onChange.run();
+        if (entry == null) return;
+        pomOf.apply(entry)
+                .thenCombine(rows.exceptionally(failure -> List.of()), TemplatePlugins::of)
+                .whenComplete((pins, failure) -> Platform.runLater(() -> {
+                    if (entry != lockingFor || pins == null) return;
+                    locked = locked(pins);
+                    list.refresh();
+                    onChange.run();
+                }));
     }
 
     /** The user's ticks, the template's own plugins left out. */
@@ -62,11 +92,10 @@ final class NewProjectPlugins {
         return ticked.stream().filter(p -> !locked.containsKey(p.id())).toList();
     }
 
-    /** What {@code entry} declares, by registry id: its rows to lock, with the version its pom pins. Pure. */
-    static Map<String, GalleryEntry.Requirement> lockedRequirements(GalleryEntry entry) {
-        if (entry == null) return Map.of();
-        return entry.requires().stream().collect(Collectors.toUnmodifiableMap(
-                GalleryEntry.Requirement::id, r -> r, (first, again) -> first));
+    /** A template's plugins by registry id: its rows to lock, with the version its pom pins. Pure. */
+    static Map<String, TemplatePlugins.Pin> locked(List<TemplatePlugins.Pin> pins) {
+        return pins.stream().collect(Collectors.toUnmodifiableMap(
+                TemplatePlugins.Pin::id, pin -> pin, (first, again) -> first));
     }
 
     /**
@@ -74,7 +103,7 @@ final class NewProjectPlugins {
      * plugins, the registry's verified version for the rest. A version nobody pinned is left out: an
      * unverified plugin resolves its newest release only at creation.
      */
-    static String label(PluginRegistry.Plugin plugin, GalleryEntry.Requirement own) {
+    static String label(PluginRegistry.Plugin plugin, TemplatePlugins.Pin own) {
         String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
         String version = own != null ? own.version() : plugin.verifiedVersion();
         String named = version.isBlank() ? name : name + "  " + displayVersion(version);
@@ -95,9 +124,9 @@ final class NewProjectPlugins {
                 setGraphic(null);
                 return;
             }
-            GalleryEntry.Requirement requirement = locked.get(plugin.id());
-            boolean own = requirement != null;
-            CheckBox box = new CheckBox(label(plugin, requirement));
+            TemplatePlugins.Pin pin = locked.get(plugin.id());
+            boolean own = pin != null;
+            CheckBox box = new CheckBox(label(plugin, pin));
             box.setSelected(own || ticked.contains(plugin));
             box.setDisable(own);
             box.setOnAction(e -> {

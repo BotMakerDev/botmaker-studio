@@ -37,8 +37,10 @@ Project work with no network — and is the only reason it composes any at all.
   `settings.json` and the capture resolution, and deletes the directory if anything fails — the unpack is a
   whole tree `Authoring` never sees, so the atomic pass on the blank path cannot cover it.
 - **New Project picks plugins for any starting point (2026-10-01).** `ui/app/NewProjectPlugins` lists
-  `sharing/PluginCatalog`'s rows (Browse's list); the template's own, by its entry's `requires` ids, are ticked
-  and locked. `ProjectCreator.installPlugins` declares the rest before the first commit — skipping a coordinate
+  `sharing/PluginCatalog`'s rows (Browse's list); the template's own are ticked and locked with the version
+  its pom pins — the pom of the release New Project copies (`GitHubGallery.pomAtInstallTag`,
+  `sharing/TemplatePlugins`), since 2026-10-12, when the entry's `requires` read SDK 1.2.3 for a release pinning
+  1.4.4. Nothing locks until the pom answers, or offline. `ProjectCreator.installPlugins` declares the rest before the first commit — skipping a coordinate
   the template's pom already declares — then `MavenService.dropShadowedPlugins`; a failure deletes the directory.
 - **The publish-time check is `TemplateProject.matches`**, run when *This is a starting template* is ticked.
   It is the only template mistake whose result still **compiles**: a declared package with no sources in it

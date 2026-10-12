@@ -1,9 +1,7 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.launch.SupportedTargets;
-import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.sharing.TemplatePlugins;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,7 +25,7 @@ class NewProjectPluginsLabelTest {
 
     @Test
     void aTemplatesOwnRowShowsItsPinNotTheRegistrys() {
-        GalleryEntry.Requirement pin = new GalleryEntry.Requirement("basics", "v0.0.8");
+        TemplatePlugins.Pin pin = new TemplatePlugins.Pin("basics", "v0.0.8");
 
         assertEquals("Basics  v0.0.8  — comes with the template",
                 NewProjectPlugins.label(plugin("basics", "Basics", "v0.1.1"), pin));
@@ -37,17 +35,14 @@ class NewProjectPluginsLabelTest {
     void aVersionNobodyPinnedIsLeftOut() {
         assertEquals("Extra", NewProjectPlugins.label(plugin("extra", "Extra", ""), null));
         assertEquals("Basics  — comes with the template", NewProjectPlugins.label(plugin("basics", "Basics", "v1"),
-                new GalleryEntry.Requirement("basics", "")));
+                new TemplatePlugins.Pin("basics", "")));
     }
 
     @Test
-    void theTemplatesRequirementsAreItsLockedRows() {
-        GalleryEntry base = new GalleryEntry("base", "LiQiyeDev", "botmaker-base", "", List.of("template"),
-                SupportedTargets.any(), GalleryTier.VETTED, "v1", List.of(
-                        new GalleryEntry.Requirement("basics", "v0.0.8")));
+    void theTemplatesPinsAreItsLockedRows() {
+        TemplatePlugins.Pin basics = new TemplatePlugins.Pin("basics", "v0.0.8");
 
-        assertEquals(Map.of("basics", new GalleryEntry.Requirement("basics", "v0.0.8")),
-                NewProjectPlugins.lockedRequirements(base));
-        assertEquals(Map.of(), NewProjectPlugins.lockedRequirements(null));
+        assertEquals(Map.of("basics", basics), NewProjectPlugins.locked(List.of(basics, basics)));
+        assertEquals(Map.of(), NewProjectPlugins.locked(List.of()));
     }
 }

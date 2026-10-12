@@ -34,22 +34,19 @@ class GalleryCatalogReadTest {
             """;
 
     @Test
-    void catalogCarriesTierVettedReleaseAndRequirements() {
+    void catalogCarriesTierAndVettedReleaseAndAnOldRequiresIsIgnored() {
         List<GalleryEntry> bots = GitHubGallery.parseCatalog(MAPPER, CATALOG).orElseThrow();
 
         assertEquals(2, bots.size());
         GalleryEntry gamebot = bots.get(0);
         assertEquals(GalleryTier.VETTED, gamebot.tier());
         assertEquals("v0.1.0", gamebot.vettedVersion());
-        assertEquals(List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.1.6")), gamebot.requires());
-        assertEquals("com.botmaker.sdk 1.1.6", gamebot.requires().get(0).describe());
         assertTrue(gamebot.launchTargets().declared());
         assertTrue(gamebot.isTemplate());
 
         GalleryEntry update = bots.get(1);
         assertEquals(GalleryTier.COMMUNITY, update.tier());
         assertEquals("", update.vettedVersion());
-        assertTrue(update.requires().isEmpty());
     }
 
     @Test
@@ -107,7 +104,7 @@ class GalleryCatalogReadTest {
     void aVettedTemplateInstallsItsNewestRelease() {
         // 2026-10-12: the gamebot was vetted at v0.2.0 and New Project kept copying it with v0.2.6 out.
         GalleryEntry template = new GalleryEntry("gamebot", "o", "gamebot", "", List.of("template"), null,
-                GalleryTier.VETTED, "v0.2.0", null);
+                GalleryTier.VETTED, "v0.2.0");
 
         assertEquals("v0.2.6", template.installTag("v0.2.6"));
         assertEquals(Optional.of("v0.2.6"), GalleryEntry.updateTarget(template, "v0.2.0", "v0.2.6"));
@@ -139,7 +136,7 @@ class GalleryCatalogReadTest {
         GalleryEntry vettedA = template("Alpha", GalleryTier.VETTED);
         GalleryEntry community = template("aardvark", GalleryTier.COMMUNITY);
         GalleryEntry bot = new GalleryEntry("bot", "o", "bot", "", List.of("game"), null, GalleryTier.VETTED,
-                null, null);
+                null);
         List<GalleryEntry> all = List.of(vettedZ, community, bot, vettedA);
 
         assertEquals(List.of(vettedA, vettedZ), GalleryEntry.templates(all, false));
@@ -154,10 +151,10 @@ class GalleryCatalogReadTest {
     }
 
     private static GalleryEntry entry(GalleryTier tier, String vettedVersion) {
-        return new GalleryEntry("bot", "owner", "bot", "", List.of(), null, tier, vettedVersion, null);
+        return new GalleryEntry("bot", "owner", "bot", "", List.of(), null, tier, vettedVersion);
     }
 
     private static GalleryEntry template(String name, GalleryTier tier) {
-        return new GalleryEntry(name, "o", name, "", List.of("template"), null, tier, null, null);
+        return new GalleryEntry(name, "o", name, "", List.of("template"), null, tier, null);
     }
 }

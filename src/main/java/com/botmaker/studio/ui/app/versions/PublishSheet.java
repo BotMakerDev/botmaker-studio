@@ -17,7 +17,6 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.ListingStatus;
-import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.PublishPlan;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
@@ -128,7 +127,6 @@ public final class PublishSheet {
     private final TextField tagsField = new TextField();
     private final FlowPane tagChips = new FlowPane(6, 4);
     private final Label targetsLabel = new Label();
-    private final Label requiresLabel = new Label("Reading the plugin registry…");
 
     private final ComboBox<String> versionCombo = new ComboBox<>();
     private final Label lastPublished = new Label();
@@ -160,7 +158,6 @@ public final class PublishSheet {
      * the release looked up, the listing read. Blank until both are read.
      */
     private volatile String repoOwner = "";
-    private volatile List<GalleryEntry.Requirement> requires = List.of();
     /** The pom's pins nobody else can resolve ({@link PublishRequest#unreleasedPins}); Publish waits on none. */
     private List<String> unreleased = List.of();
     /** The gallery's listing of this repo, when it has one: its tier is what the preview shows. */
@@ -234,7 +231,6 @@ public final class PublishSheet {
         root.getChildren().setAll(header, accountBar, scroll, buildButtonBar());
         renderChecklist(PublishPlan.start(true));
         readPins();
-        loadRequirements();
     }
 
     /** Re-reads the pom's unreleased pins — the pom may have changed since the sheet was last shown. */
@@ -289,7 +285,6 @@ public final class PublishSheet {
         FlowPane targets = new FlowPane(10, 4);
         targets.getChildren().addAll(targetBoxes.values());
         VBox targetsCell = new VBox(4, targets, targetsLabel);
-        requiresLabel.setWrapText(true);
 
         GridPane details = new GridPane();
         details.setHgap(10);
@@ -299,7 +294,6 @@ public final class PublishSheet {
         details.addRow(2, new Label("Tags:"), tagsField);
         details.add(tagChips, 1, 3);
         details.addRow(4, new Label("Tested on:"), targetsCell);
-        details.addRow(5, new Label("Requires:"), requiresLabel);
         GridPane.setHgrow(repoField, Priority.ALWAYS);
 
         versionCombo.setEditable(true);
@@ -569,24 +563,6 @@ public final class PublishSheet {
         refreshAll();
     }
 
-    /**
-     * The plugins this project's pom declares, named as the registry names them — what the entry's
-     * {@code requires} will say. An unreachable registry lists nothing, and says so, rather than blocking a
-     * publish: {@code requires} is information for a reader, not something the gallery checks strictly.
-     */
-    private void loadRequirements() {
-        new PluginRegistry(client).browse()
-                .thenApply(registry -> PublishRequest.requires(MavenService.readDeclaredLibraries(projectDir),
-                        MavenService.readProperties(projectDir), registry))
-                .whenComplete((found, err) -> Platform.runLater(() -> {
-                    requires = found == null ? List.of() : found;
-                    requiresLabel.setText(err != null ? "The plugin registry could not be read; none will be listed."
-                            : requires.isEmpty() ? "No plugins from the registry."
-                            : String.join(", ", requires.stream().map(GalleryEntry.Requirement::describe).toList()));
-                    refreshAll();
-                }));
-    }
-
     /** The gallery's word on this repo: its tier from the catalog, and the listing pull request's state. */
     private void refreshListing() {
         if (!auth.isAuthenticated()) {
@@ -760,7 +736,7 @@ public final class PublishSheet {
 
     private PublishRequest request(List<String> tags) {
         return new PublishRequest(projectDir, projectName, repoName(), descriptionField.getText(), currentVersion(),
-                tags, testedOn(), requires, true);
+                tags, testedOn(), true);
     }
 
     /** The ticked launch kinds; none ticked is undeclared. */

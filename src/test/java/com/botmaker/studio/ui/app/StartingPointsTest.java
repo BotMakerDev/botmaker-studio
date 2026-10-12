@@ -23,8 +23,7 @@ class StartingPointsTest {
 
     private static GalleryEntry template(String name) {
         return new GalleryEntry(name, "LiQiyeDev", "botmaker-" + name, "A " + name + " bot.",
-                List.of(GalleryEntry.TEMPLATE_TAG), SupportedTargets.any(), GalleryTier.VETTED, "v1.0.0",
-                List.of(new GalleryEntry.Requirement("com.botmaker.sdk", "1.2.3")));
+                List.of(GalleryEntry.TEMPLATE_TAG), SupportedTargets.any(), GalleryTier.VETTED, "v1.0.0");
     }
 
     private static List<Kind> kinds(List<TemplateChoice> rows) {
@@ -70,7 +69,7 @@ class StartingPointsTest {
     void thePickedTemplateSurvivesARefreshThatChangedIt() {
         GalleryEntry picked = template("gamebot");
         GalleryEntry refreshed = new GalleryEntry(picked.name(), picked.owner(), picked.repo(), "Newer words.",
-                picked.tags(), picked.launchTargets(), picked.tier(), "v2.0.0", picked.requires());
+                picked.tags(), picked.launchTargets(), picked.tier(), "v2.0.0");
         TemplateChoice remembered = StartingPoints.rows(List.of(picked), Fetch.PENDING).getFirst();
         List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base"), refreshed), Fetch.ANSWERED);
 
