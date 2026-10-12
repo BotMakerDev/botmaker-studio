@@ -12,12 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-No source changes since v1.4.4; re-released for updated upstream pins.
-
 ### Fixed
 
-- **A new project's SDK is 1.4.4.** SDK 1.4.3 never built on JitPack (it pinned a shared tag that never built), so
-  1.4.3's fallback SDK version named a release no bot could resolve. Studio 1.4.4 is 1.4.3 otherwise.
+- **New Project copies a template's newest release.** A template's gallery entry is vetted at one release, and
+  New Project installed that one: gamebot v0.2.0 with v0.2.6 out. A template now installs its newest release,
+  vetted or not; an ordinary vetted bot still installs its vetted one.
 
 ## [1.4.4] — 2026-10-12
 

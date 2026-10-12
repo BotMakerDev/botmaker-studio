@@ -113,10 +113,12 @@ public record GalleryEntry(String name, String owner, String repo, String descri
      * The release to install: the vetted one for a Vetted bot that names it, else {@code latest}.
      *
      * <p>A Vetted bot from the legacy index names no release, so it installs the newest, which is exactly what
-     * every Studio before tiers did.
+     * every Studio before tiers did. <b>A template installs its newest release, vetted or not</b> (2026-10-12):
+     * its releases are cut by the project's own release and gated there, and a vetted pin nobody moved left New
+     * Project copying gamebot v0.2.0 with v0.2.6 out.
      */
     public String installTag(String latest) {
-        return isVetted() && !vettedVersion.isEmpty() ? vettedVersion : (latest == null ? "" : latest);
+        return isVetted() && !isTemplate() && !vettedVersion.isEmpty() ? vettedVersion : (latest == null ? "" : latest);
     }
 
     /**

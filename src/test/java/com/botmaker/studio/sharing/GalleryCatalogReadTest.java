@@ -104,6 +104,16 @@ class GalleryCatalogReadTest {
     }
 
     @Test
+    void aVettedTemplateInstallsItsNewestRelease() {
+        // 2026-10-12: the gamebot was vetted at v0.2.0 and New Project kept copying it with v0.2.6 out.
+        GalleryEntry template = new GalleryEntry("gamebot", "o", "gamebot", "", List.of("template"), null,
+                GalleryTier.VETTED, "v0.2.0", null);
+
+        assertEquals("v0.2.6", template.installTag("v0.2.6"));
+        assertEquals(Optional.of("v0.2.6"), GalleryEntry.updateTarget(template, "v0.2.0", "v0.2.6"));
+    }
+
+    @Test
     void anUpdateOffersTheVettedReleaseAndNeverAnOlderOne() {
         GalleryEntry vetted = entry(GalleryTier.VETTED, "v0.2.0");
 

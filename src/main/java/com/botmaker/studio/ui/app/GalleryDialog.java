@@ -18,7 +18,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -286,7 +285,7 @@ public class GalleryDialog {
     private void installEntry(GalleryEntry entry, Button installBtn) {
         String vouched = entry.isVetted()
                 ? "A maintainer looked at "
-                        + (entry.vettedVersion().isEmpty()
+                        + (entry.vettedVersion().isEmpty() || entry.isTemplate()
                                 ? "a release of it" : "release " + entry.vettedVersion() + ", which is the one installed")
                         + ". That is not a security review."
                 : "It is a Community bot: it was listed automatically, and nobody reviewed its code.";

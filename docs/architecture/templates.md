@@ -6,6 +6,11 @@ and Community ones behind *Show community templates* since 2026-09-16), and
 `GalleryDialog` (Browse Bots) filters exactly those out. Nothing else about the gallery changes — same
 `index.json`, same `bots/<owner>-<repo>.json`, same release zip, same `BotInstaller`.
 
+**A template installs its newest release, vetted or not (2026-10-12).** `GalleryEntry.installTag` gives an
+ordinary Vetted bot its `vettedVersion`, and gave a template the same, so New Project kept copying gamebot
+v0.2.0 with v0.2.6 out: nothing moves a vetted pin but a maintainer. A template's release is the project's own
+`--gamebot`, gated by `TemplateGate` at the SDK tag it pins, so its newest tag is the one to copy.
+
 That reuse is the whole point, and it is what a Maven archetype or a bundled resource would have cost:
 **a new starting point needs no Studio release**, and the people who write bots are the people who write the
 templates. What Studio composes itself is one blank project (`StarterSources`), which is what makes New
