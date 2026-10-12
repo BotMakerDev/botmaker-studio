@@ -668,9 +668,10 @@ final class StudioBridge implements StudioDriver {
 
     @Override
     public String listTemplates() {
-        List<GalleryEntry> templates = vettedTemplates();
+        List<GalleryEntry> templates = vettedTemplatesOrNone();
         if (templates.isEmpty()) {
-            return "The gallery lists no vetted template. create_project without a template makes a blank project.";
+            return "The gallery cannot be read, or lists no vetted template. create_project without a template "
+                    + "makes a blank project.";
         }
         return String.join("\n", templates.stream().map(t -> t.name() + "  (" + t.slug() + ")"
                 + (t.description().isBlank() ? "" : " — " + t.description().strip())).toList());
@@ -683,12 +684,19 @@ final class StudioBridge implements StudioDriver {
         if (problem != null) throw new IllegalArgumentException(problem);
         String from = template == null ? "" : template.strip();
         // Vetted only, as New Project offers by default: a community template is code nobody reviewed, and the
-        // user would not see which one was picked.
-        GalleryEntry entry = from.isEmpty() ? null : vettedTemplates().stream()
+        // user would not see which one was picked. Blank only when the gallery cannot answer, as in the dialog:
+        // botmaker-base is what Blank became.
+        List<GalleryEntry> vetted = vettedTemplatesOrNone();
+        if (from.isEmpty() && !vetted.isEmpty()) {
+            throw new IllegalArgumentException("Name a template: " + String.join(", ", vetted.stream()
+                    .map(GalleryEntry::name).toList()) + ". list_templates says what each is.");
+        }
+        GalleryEntry entry = from.isEmpty() ? null : vetted.stream()
                 .filter(t -> t.name().equalsIgnoreCase(from) || t.slug().equalsIgnoreCase(from)
                         || t.repo().equalsIgnoreCase(from))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("No vetted template " + from
-                        + ". list_templates lists them."));
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(vetted.isEmpty()
+                        ? "The gallery cannot be read, so only a blank project can be made: leave template empty."
+                        : "No vetted template " + from + ". list_templates lists them."));
         List<PluginRegistry.Plugin> picks = List.of();
         if (!plugins.isEmpty()) {
             List<PluginRegistry.Plugin> entries = registryEntries();
@@ -701,16 +709,18 @@ final class StudioBridge implements StudioDriver {
                 throw new IllegalArgumentException("The user did not agree to add " + names + ".");
             }
         }
+        // From here to the switch nothing may start: a run or an edit begun while the template downloads would be
+        // torn down by the switch.
+        reloading = true;
         try {
             NewProjects.create(wanted, entry, picks, github, new GitHubAuth());
         } catch (IOException | RuntimeException e) {
+            reloading = false;
             Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null
                     ? e.getCause() : e;
             throw new IllegalArgumentException("Studio could not create " + wanted + ": " + cause.getMessage());
         }
         Path dir = Constants.PROJECTS_ROOT.resolve(wanted);
-        // From here to the switch the editor is this project's last word: nothing may run or save over it.
-        reloading = true;
         try {
             Checkpoints.flush(onFx(() -> ctx.state().snapshot()));
         } catch (IOException | RuntimeException e) {
@@ -726,9 +736,14 @@ final class StudioBridge implements StudioDriver {
                 + "back on the same address once it is open.";
     }
 
-    private List<GalleryEntry> vettedTemplates() {
-        return GalleryEntry.templates(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
-                "read the gallery"), false);
+    /** The gallery's vetted templates, or none when it cannot be read — the dialog's offline case. */
+    private List<GalleryEntry> vettedTemplatesOrNone() {
+        try {
+            return GalleryEntry.templates(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
+                    "read the gallery"), false);
+        } catch (IllegalArgumentException e) {
+            return List.of();
+        }
     }
 
     private List<PluginRegistry.Plugin> registryEntries() {

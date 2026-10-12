@@ -550,14 +550,20 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.botmaker.studio.BotMakerStudio</mainClass>
+                    <!-- The classpath, as the shaded jar and the app-image run, so through Launcher (an
+                         Application subclass cannot be the main class there). On the module path the plugin
+                         puts only javafx.* jars, so javafx.web's jdk.jsobject (a JDK module until 24, OpenJFX's
+                         own jar since) stays on the classpath and the boot layer fails on JDK 26+:
+                         "Module jdk.jsobject not found, required by javafx.web" (2026-10-12). -->
+                    <mainClass>com.botmaker.studio.Launcher</mainClass>
+                    <runtimePathOption>CLASSPATH</runtimePathOption>
                     <!-- Grant native access to the unnamed module so JavaFX's own System::load
                          (glass native libs) doesn't print the "restricted method" warning at startup;
                          also pre-empts the future release that blocks it outright. -->
                     <options>
-                        <!-- javafx.graphics is a named module on this classpath layout and loads its own
-                             natives; ALL-UNNAMED does not cover it. -->
-                        <option>--enable-native-access=ALL-UNNAMED,javafx.graphics</option>
+                        <!-- Every JavaFX jar is in the unnamed module on the classpath, so ALL-UNNAMED covers
+                             their natives too. -->
+                        <option>--enable-native-access=ALL-UNNAMED</option>
                         <!-- ClassGraph's invokeCleaner goes through sun.misc.Unsafe (JDK >= 23 warns). -->
                         <option>--sun-misc-unsafe-memory-access=allow</option>
                     </options>

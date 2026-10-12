@@ -549,13 +549,14 @@ public final class McpTools {
                         List.of(), args -> driver.listTemplates()),
                 act(json, "create_project",
                         "Create a new bot project, as New Project does, and open it in Studio in place of this one: "
-                                + "from a vetted template's release (list_templates), or blank without one. The "
+                                + "from a vetted template's release (list_templates), or blank when the gallery "
+                                + "cannot be read. The "
                                 + "template's own plugins come with it. The switch ends this connection; the "
                                 + "endpoint comes back on the same address once the new project is open, so "
                                 + "reconnect then. Say so to the user before calling it.",
                         List.of(Prop.text("name", "one word of letters and digits, starting with a letter: Firestone"),
-                                Prop.optionalText("template", "a template's name from list_templates; empty for a "
-                                        + "blank project"),
+                                Prop.optionalText("template", "a template's name from list_templates; empty only "
+                                        + "when the gallery cannot be read, for a blank project"),
                                 Prop.optionalText("plugins", "registry plugin ids to add besides the template's, "
                                         + "comma-separated (search_plugins); the user is asked on screen first")),
                         args -> idle(log, () -> driver.createProject(text(args, "name"), text(args, "template"),

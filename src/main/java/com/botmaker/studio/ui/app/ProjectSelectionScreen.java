@@ -619,6 +619,9 @@ public class ProjectSelectionScreen implements ProjectWindow {
             if (newValue.isEmpty()) projectNameField.setStyle("");
             else if (isValid) projectNameField.setStyle("-fx-border-color: green; -fx-border-width: 2px;");
             else projectNameField.setStyle("-fx-border-color: red; -fx-border-width: 2px;");
+            // Red alone does not say why: a keyword ("Class") is refused as well as a bad shape.
+            String problem = newValue.isEmpty() ? null : projectCreator.nameProblem(newValue);
+            projectNameField.setTooltip(problem == null ? null : new Tooltip(problem));
         });
 
         javafx.application.Platform.runLater(projectNameField::requestFocus);

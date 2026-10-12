@@ -19,6 +19,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   screen. Then Studio opens the project in place of the current one. The dialog and the tool share one
   creation path (`sharing/NewProjects`).
 
+### Fixed
+
+- **`mvn javafx:run` starts on JDK 26 and later.** The plugin put only `javafx.*` jars on the module path, so
+  `javafx.web` could not find OpenJFX's `jdk.jsobject` jar: "Module jdk.jsobject not found". It now runs on the
+  classpath through `Launcher`, as the shaded jar and the app-image do.
+
 ## [1.4.6] — 2026-10-12
 
 ### Fixed
