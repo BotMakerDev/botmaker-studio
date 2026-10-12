@@ -74,6 +74,12 @@ public final class ValueGrammar {
     /** The chains on part 0 that build each class, in declaration order: what writes a value its factory loses. */
     private final Map<String, List<ComponentType<?>>> chainsByName;
 
+    /**
+     * Every declaration that writes each class, in declaration order: a class written by several factories
+     * ({@code DeclaredCall.when}, 2026-10-12) is written by the first that accepts the value.
+     */
+    private final Map<String, List<ComponentType<?>>> writersByName;
+
     /** The read half, over parsed expressions. Built last, from the registries above. */
     private final ExpressionReader reader;
 
@@ -82,8 +88,8 @@ public final class ValueGrammar {
 
     private ValueGrammar(List<? extends PluginType<?>> types, List<? extends ComponentType<?>> components) {
         Map<String, PluginType<?>> byName = new LinkedHashMap<>();
-        Map<String, ComponentType<?>> componentsByName = new LinkedHashMap<>();
         Map<String, List<ComponentType<?>>> chains = new LinkedHashMap<>();
+        Map<String, List<ComponentType<?>>> alternatives = new LinkedHashMap<>();
         // Every enum a plugin mentions — declared, or a component's part — for reading an untyped constant.
         Set<Class<?>> enums = new LinkedHashSet<>();
         // Every class a plugin names as a type, the only classes whose constants are read.
@@ -96,7 +102,7 @@ public final class ValueGrammar {
             byName.putIfAbsent(JavaNames.canonical(cls), type);
             declared.add(cls);
             if (type instanceof ComponentType<?> component) {
-                register(component, cls, componentsByName, chains, calls);
+                register(component, cls, alternatives, chains, calls);
                 for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
             }
             if (cls.isEnum()) enums.add(cls);
@@ -105,32 +111,41 @@ public final class ValueGrammar {
             Class<?> cls = classOf(component);
             if (cls == null) continue;
             declared.add(cls);
-            register(component, cls, componentsByName, chains, calls);
+            register(component, cls, alternatives, chains, calls);
             for (Class<?> part : componentTypesOf(component)) if (part.isEnum()) enums.add(part);
         }
         this.types = List.copyOf(byName.values());
         this.typeByName = Map.copyOf(byName);
-        this.componentByName = Map.copyOf(componentsByName);
         Map<String, List<ComponentType<?>>> frozen = new LinkedHashMap<>();
         chains.forEach((name, list) -> frozen.put(name, List.copyOf(list)));
         this.chainsByName = Map.copyOf(frozen);
+        Map<String, List<ComponentType<?>>> writers = new LinkedHashMap<>();
+        Map<String, ComponentType<?>> firsts = new LinkedHashMap<>();
+        alternatives.forEach((name, list) -> {
+            writers.put(name, List.copyOf(list));
+            firsts.put(name, list.getFirst());
+        });
+        this.writersByName = Map.copyOf(writers);
+        this.componentByName = Map.copyOf(firsts);
         this.reader = new ExpressionReader(this, calls, List.copyOf(enums), List.copyOf(declared));
         this.writer = new ValueWriter(this);
     }
 
     /**
-     * {@code component} as the reader sees it, and — the first time its class is seen, when its factory is
-     * not a chain on part 0 — as the one the writer writes that class with. A chain on part 0 is kept for the
+     * {@code component} as the reader sees it, and — when its factory is not a chain on part 0 — as one the
+     * writer writes that class with, in declaration order: the first is the class's {@link #canonical}, and
+     * {@link #writerOf} picks among them by {@code ComponentType.writes}. A chain on part 0 is kept for the
      * writer too, as the way to write a value that one would lose part of.
      */
-    private static void register(ComponentType<?> component, Class<?> cls, Map<String, ComponentType<?>> writers,
+    private static void register(ComponentType<?> component, Class<?> cls,
+                                 Map<String, List<ComponentType<?>>> writers,
                                  Map<String, List<ComponentType<?>>> chains, List<ExpressionReader.Call> calls) {
         Optional<Factory> factory = Factory.of(component);
         if (factory.isEmpty()) return;
         calls.add(new ExpressionReader.Call(component, factory.get()));
         String name = JavaNames.canonical(cls);
         if (factory.get().kind() != Factory.Kind.RECEIVER) {
-            writers.putIfAbsent(name, component);
+            writers.computeIfAbsent(name, n -> new ArrayList<>()).add(component);
         } else {
             chains.computeIfAbsent(name, n -> new ArrayList<>()).add(component);
         }
@@ -509,7 +524,24 @@ public final class ValueGrammar {
      * class, so an interface-typed value ({@code CaptureSource}) answers the call it was read from.
      */
     public Optional<ComponentType<?>> componentOf(Object value) {
-        return value == null ? Optional.empty() : Optional.ofNullable(canonical(value.getClass()));
+        return value == null ? Optional.empty() : Optional.ofNullable(writerOf(value.getClass(), value));
+    }
+
+    /**
+     * The declaration that writes {@code value} as a {@code type}: the first of that class's that accepts it
+     * ({@code ComponentType.writes}), null when none does or the class has none.
+     */
+    ComponentType<?> writerOf(Class<?> type, Object value) {
+        List<ComponentType<?>> all = type == null ? List.of()
+                : writersByName.getOrDefault(JavaNames.canonical(type), List.of());
+        for (ComponentType<?> each : all) {
+            try {
+                if (each.writesAny(value)) return each;
+            } catch (RuntimeException | LinkageError declined) {
+                // A plugin's predicate that throws, or a plugin built against an older contract, declines.
+            }
+        }
+        return null;
     }
 
     /** The component that writes {@code type}, or {@code null}: the writer's registry. */

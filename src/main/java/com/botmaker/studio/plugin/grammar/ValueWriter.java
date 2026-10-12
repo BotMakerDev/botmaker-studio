@@ -112,8 +112,10 @@ final class ValueWriter {
         if (named.isPresent()) return named;
         if (type == null) return any(value, names);
         if (JdkLiterals.handles(type)) return JdkLiterals.node(names.ast, type, value);
-        ComponentType<?> component = grammar.canonical(type);
-        if (component != null) return call(component, value, names);
+        if (grammar.canonical(type) != null) {
+            ComponentType<?> component = grammar.writerOf(type, value);
+            return component == null ? Optional.empty() : call(component, value, names);
+        }
         if (type.isEnum()) return constant(type, value, names);
         if (isHostContainer(type)) return any(value, names);
         if (value instanceof String source) {
@@ -141,11 +143,14 @@ final class ValueWriter {
             }
             return Optional.of(call.node());
         }
-        ComponentType<?> exact = grammar.canonical(value.getClass());
+        ComponentType<?> exact = grammar.writerOf(value.getClass(), value);
         if (exact != null) return call(exact, value, names);
         for (ComponentType<?> component : grammar.components()) {
             Class<?> type = ValueGrammar.classOf(component);
-            if (type != null && type.isInstance(value)) return call(component, value, names);
+            if (type == null || !type.isInstance(value)) continue;
+            // The class's declaration that accepts the value, not merely its first: none accepting writes nothing.
+            ComponentType<?> chosen = grammar.writerOf(type, value);
+            return chosen == null ? Optional.empty() : call(chosen, value, names);
         }
         return Optional.empty();
     }

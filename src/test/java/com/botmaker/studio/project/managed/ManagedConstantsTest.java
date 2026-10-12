@@ -102,6 +102,28 @@ class ManagedConstantsTest {
         return (QualifiedName) fragment.getInitializer();
     }
 
+    /** What a reference to the picture {@code name} stands for, in a set referred to by name. */
+    public static Picture referenced(String name) {
+        return new Picture("→" + name);
+    }
+
+    /**
+     * A set referred to by name: a reference reads as the plugin's value for the name, not as the initialiser,
+     * and that value is written back as the same reference — even where two constants hold equal values.
+     */
+    @Test
+    void aSetReferredToByNameReadsAndWritesEachReferenceByItsName() {
+        List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.PICTURES).of(Picture.class)
+                .referredToAs(ManagedConstantsTest::referenced).in("Pictures").because("Mine."));
+        String twins = PICTURES.replace("images/gold.png", "images/ore.png");
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(twins, known), GRAMMAR);
+
+        assertEquals(new Picture("→GOLD"), lookup.read(name("Pictures.GOLD")).orElseThrow());
+        assertEquals("Pictures.GOLD", lookup.spell(new Picture("→GOLD")).orElseThrow().source(),
+                "GOLD, though ORE holds the same picture");
+        assertEquals("Pictures.ORE", lookup.spell(new Picture("→ORE")).orElseThrow().source());
+    }
+
     @Test
     void aValueEqualToAConstantIsWrittenAsTheConstant() {
         JavaValue written = lookup().spell(new Picture("images/gold.png")).orElseThrow();

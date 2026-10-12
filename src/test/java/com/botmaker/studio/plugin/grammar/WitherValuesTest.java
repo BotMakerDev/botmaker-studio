@@ -90,6 +90,62 @@ class WitherValuesTest {
                 GRAMMAR.valueOf(Step.class, "(Step.of(\"Collect\").goesHome()).described((\"x\"))"));
     }
 
+    /** A card that is one task or a numbered group of them: one class, two factories, one link taking either. */
+    public record Card(String task, Integer group, String next, Integer nextGroup) {
+        public static Card ofTask(String task) {
+            return new Card(task, null, null, null);
+        }
+
+        public static Card ofGroup(Integer group) {
+            return new Card(null, group, null, null);
+        }
+
+        public Card then(String task) {
+            return new Card(this.task, group, task, null);
+        }
+
+        public Card then(Integer group) {
+            return new Card(task, this.group, null, group);
+        }
+
+        /** A link whose part nothing here reads as a value — kept as its source, as the SDK's Class part is. */
+        public Card then(Class<?> kind) {
+            return new Card(task, group, kind.getSimpleName(), null);
+        }
+    }
+
+    private static final ValueGrammar CARDS = ValueGrammar.of(List.of(), List.of(
+            ComponentType.part(Card.class).writtenAs(Card::ofTask, Card::task)
+                    .<Class<?>>with(Card::then, card -> null)
+                    .<String>with(Card::then, Card::next).<Integer>with(Card::then, Card::nextGroup)
+                    .when(card -> card.task() != null),
+            ComponentType.part(Card.class).writtenAs(Card::ofGroup, Card::group)
+                    .<Class<?>>with(Card::then, card -> null)
+                    .<String>with(Card::then, Card::next).<Integer>with(Card::then, Card::nextGroup)
+                    .when(card -> card.group() != null)));
+
+    /**
+     * A class written by two factories is written by the first declaration that accepts the value, and read
+     * from either; a link of one name taking two part types is read as the one whose part reads (2026-10-12, a
+     * flow's card and wire naming an activity or a sub-flow).
+     */
+    @Test
+    void aClassWrittenByTwoFactoriesRoundTripsThroughEach() {
+        String owner = JavaNames.canonical(Card.class);
+        for (Card card : List.of(Card.ofTask("Collect"), Card.ofTask("Collect").then("Rest"),
+                Card.ofTask("Collect").then(4), Card.ofGroup(3), Card.ofGroup(3).then("Rest"), Card.ofGroup(3).then(4))) {
+            String source = CARDS.initializer(Card.class, card).map(JavaValue::source)
+                    .orElseThrow(() -> new AssertionError(card.toString()));
+            assertEquals(Optional.of(card), CARDS.valueOf(Card.class, source), source);
+        }
+        assertEquals(Optional.of(owner + ".ofGroup(3).then(4)"),
+                CARDS.initializer(Card.class, Card.ofGroup(3).then(4)).map(JavaValue::source));
+        assertEquals(Optional.of(owner + ".ofTask(\"Collect\").then(\"Rest\")"),
+                CARDS.initializer(Card.class, Card.ofTask("Collect").then("Rest")).map(JavaValue::source));
+        assertTrue(CARDS.initializer(Card.class, new Card(null, null, null, null)).isEmpty(),
+                "no declaration accepts it, so nothing is written");
+    }
+
     /** A walk the factory sends home, with a constant the type names. */
     public record Walk(String name, boolean home, String note) {
         public static final Walk PLAIN = of("Plain");

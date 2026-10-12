@@ -14,6 +14,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A reference to a constant can cross by its name** (`ManagedValue.referredToAs`, read in
+  `project/managed/ManagedConstants`). In a set declared so, `Flows.DAILY` inside another value reads as the
+  plugin's value for "DAILY" and is written back as `Flows.DAILY`. Its initialiser is no longer read, so an empty
+  flow, or one equal to another, keeps its name, and one flow naming another never reads the other's contents.
+
+- **A class written by several factories** (`DeclaredCall.when`, `plugin/grammar/ValueGrammar.writerOf`). The
+  host writes a value with the first declaration of its class that accepts it, and reads a call of any of them.
+  A link declared twice under one name (`.whenOff(Class)`, `.whenOff(Flow)`) is read as the one whose part
+  reads (`ExpressionReader`).
+
 - **A plugin can move one constant of its open set above another** (`PluginValues.moveBefore`, done in
   `project/managed/ManagedSets.moveBefore`). The declaration moves whole, javadoc and annotations included,
   after one Project History snapshot. The move is refused when it would stop the bot compiling, when the

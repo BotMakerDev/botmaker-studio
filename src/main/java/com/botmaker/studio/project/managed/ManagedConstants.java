@@ -56,8 +56,9 @@ public final class ManagedConstants {
      * @param field       the field's name; null for a whole nested enum
      * @param initializer its initialiser, as written; null for an enum's constant
      * @param member      what an enum's constant stands for, made by its plugin from the name
-     *                    ({@code ManagedValue.byName}), or a nested enum ({@code ManagedValue.byGroup}); null for
-     *                    a field, whose initialiser says
+     *                    ({@code ManagedValue.byName}), a nested enum ({@code ManagedValue.byGroup}), or a field of a
+     *                    set referred to by name ({@code ManagedValue.byReference}); null for any other field,
+     *                    whose initialiser says
      * @param topLevel    the top-level class {@code owner} is in, fully qualified — what a bot imports
      * @param set         the id of the open set whose mark {@code topLevel} carries; null when not known
      */
@@ -266,6 +267,11 @@ public final class ManagedConstants {
                     literal.setType(ast.newSimpleType(ast.newName(constant.simpleOwner())));
                     return Optional.of(JavaValue.built(literal, List.of(constant.topLevel())));
                 }
+                // A field of a set referred to by name: the plugin's value for the name is that field, whatever
+                // its initialiser holds.
+                if (constant.initializer() != null && constant.member() != null && value.equals(constant.member())) {
+                    return Optional.of(reference(constant));
+                }
             }
             Optional<JavaValue> canonical = grammar.initializerOfAny(value);
             if (canonical.isEmpty()) return Optional.empty();
@@ -313,7 +319,9 @@ public final class ManagedConstants {
             if (written == null) {
                 List<Optional<JavaValue>> out = new ArrayList<>(constants.size());
                 for (Constant constant : constants) {
-                    out.add(constant.isGroup() ? Optional.empty()
+                    // A field referred to by name is matched by its member, never by what the grammar writes.
+                    boolean referred = constant.member() != null && constant.initializer() != null;
+                    out.add(constant.isGroup() || referred ? Optional.empty()
                             : constant.value(grammar).flatMap(grammar::initializerOfAny));
                 }
                 written = List.copyOf(out);
@@ -335,14 +343,21 @@ public final class ManagedConstants {
                 String owner = pkg + type.getName().getIdentifier();
                 String id = ManagedIds.idOf(ManagedIds.on(type, known), known);
                 grouped(type, owner, known, out);
+                // A set referred to by name (ManagedValue.referredToAs, 2026-10-12): a reference to one of its
+                // constants reads as what the plugin makes of the name, and its initialiser is never read for it.
+                ManagedValue<?> referred = known.stream()
+                        .filter(value -> value != null && value.isReferredByName() && value.id().equals(id))
+                        .findFirst().orElse(null);
                 for (FieldDeclaration field : type.getFields()) {
                     int flags = field.getModifiers();
                     if (!Modifier.isPublic(flags) || !Modifier.isStatic(flags) || !Modifier.isFinal(flags)) continue;
                     for (Object each : field.fragments()) {
                         VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
                         if (fragment.getInitializer() == null) continue;
-                        out.add(new Constant(owner, fragment.getName().getIdentifier(),
-                                JavaParameterSource.text(source, fragment.getInitializer())).inSet(id));
+                        String name = fragment.getName().getIdentifier();
+                        Object member = referred == null ? null : referred.byReference(name);
+                        out.add(new Constant(owner, name, JavaParameterSource.text(source, fragment.getInitializer()),
+                                member).inSet(id));
                     }
                 }
                 return false;

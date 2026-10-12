@@ -259,14 +259,31 @@ final class ExpressionReader {
         int fixed = parts.size() - withers.size();
         if (fixed < 0) return Optional.empty();
         for (Map.Entry<Integer, MethodInvocation> link : links.entrySet()) {
-            Wither<?> wither = withers.get(link.getKey());
+            int index = link.getKey();
+            Wither<?> wither = withers.get(index);
             Object part = Boolean.TRUE;
             if (!wither.flag()) {
-                Optional<Object> read = readPart(wither.partType(), node.child(arguments(link.getValue()).getFirst()));
+                // One link name may be several withers, one per part type — .whenOff(Class), .whenOff(Flow)
+                // (2026-10-12): the first whose part reads as a value is the one written. A part kept as its
+                // source is the last resort, the first wither's, since another may read it as a value.
+                SourceNode argument = node.child(arguments(link.getValue()).getFirst());
+                Optional<Object> read = Optional.empty();
+                for (int i = index; i < withers.size() && read.isEmpty(); i++) {
+                    Wither<?> each = withers.get(i);
+                    if (each.flag() || !each.method().getName().equals(wither.method().getName())) continue;
+                    Optional<Object> candidate = readPart(each.partType(), argument);
+                    boolean asSource = candidate.isPresent() && candidate.get() instanceof String
+                            && !each.partType().isAssignableFrom(String.class);
+                    if (candidate.isPresent() && !asSource) {
+                        read = candidate;
+                        index = i;
+                    }
+                }
+                if (read.isEmpty()) read = readPart(wither.partType(), argument);
                 if (read.isEmpty()) return Optional.empty();
                 part = read.get();
             }
-            parts.set(fixed + link.getKey(), part);
+            parts.set(fixed + index, part);
         }
         try {
             return Optional.ofNullable(call.component().build(Collections.unmodifiableList(parts)));
