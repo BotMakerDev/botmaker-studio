@@ -383,7 +383,7 @@ class BlockSpecDeclarationTest {
                 + "}\n";
         ComponentSpec spec = blockOf(decl, "DeclareEnumBlock").componentSpec(null);
 
-        assertEquals(List.of("kind", "name", "add-value"), ids(spec));
+        assertEquals(List.of("kind", "name", "implements", "add-value"), ids(spec));
     }
 
     @Test

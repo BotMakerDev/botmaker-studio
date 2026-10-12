@@ -70,23 +70,21 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
      * reads first, but its superclass is no longer invisible.
      */
     private Node createHeader() {
-        Label name = new Label("Class: " + className);
+        TypeDeclaration type = (TypeDeclaration) astNode;
+        // An interface says so, and what it extends (2026-10-12: it read "Class: … implements …").
+        Label name = new Label(TypeClauses.kind(type) + ": " + className + TypeClauses.typeParameters(type));
         name.getStyleClass().add("class-block-title");
 
         HBox header = new HBox(8, name);
         header.setAlignment(Pos.BASELINE_LEFT);
         header.setPadding(new Insets(0, 0, 15, 0));
 
-        if (superClassName != null) {
-            header.getChildren().add(inheritanceLabel("extends " + superClassName));
-        }
-        if (!interfaceNames.isEmpty()) {
-            header.getChildren().add(inheritanceLabel("implements " + String.join(", ", interfaceNames)));
-        }
+        for (String clause : TypeClauses.inheritance(type)) header.getChildren().add(inheritanceLabel(clause));
         return header;
     }
 
-    private Label inheritanceLabel(String text) {
+    /** One inheritance clause, de-emphasised so the type's own name reads first. */
+    public static Label inheritanceLabel(String text) {
         Label l = new Label(text);
         l.getStyleClass().add("class-inheritance");
         l.getStyleClass().add("class-block-subtitle");

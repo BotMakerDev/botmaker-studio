@@ -1,6 +1,8 @@
 package com.botmaker.studio.blocks.var;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.studio.blocks.ClassBlock;
+import com.botmaker.studio.blocks.TypeClauses;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
@@ -91,6 +93,12 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
                         }
                     });
                     return field[0];
+                })
+                // What it implements (2026-10-12): an activity is the enum that implements Outcome, and the block
+                // drew it as a plain enum. Null, so skipped, when it implements nothing.
+                .custom("implements", () -> {
+                    List<String> clauses = TypeClauses.inheritance(enumDeclaration);
+                    return clauses.isEmpty() ? null : ClassBlock.inheritanceLabel(String.join(" ", clauses));
                 })
                 // Null on a locked enum, and every renderer skips a null: an activity's generated Outcome enum
                 // is edited on the flow canvas, so offering "+ Add Value" here was an invitation the write
