@@ -12,6 +12,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A plugin's set constant and its own parameter are read and written with the bot's names.** An open-set constant
+  opened for a plugin (`PluginValues.open(set, member)`) had no bot constants behind it, so a flow naming
+  `Activities.Collect.class` read as nothing and every write of one was refused: the SDK's flows stayed `Flow.NONE`.
+
+### Added
+
+- **`PluginValues.classes()`**: the bot's own top-level classes, the plugins' holders under `plugins/` left out,
+  for a plugin's *Create method* to offer.
+
 ### Changed
 
 - **Studio hosts contract 0.9.0**: `HostPluginValues`, `HostValueContext` and `HostRuns` implement the typed

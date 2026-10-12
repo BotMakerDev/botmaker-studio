@@ -128,8 +128,7 @@ public final class HostPluginValues implements PluginValues {
         if (found.isEmpty() || !found.get().editable()) return Optional.empty();
         ManagedMethod value = found.get();
         return Optional.of(HostValueContext.of(value.form(), value.expression(), services,
-                expression -> write(value, expression),
-                () -> ManagedConstants.scan(config, state)));
+                expression -> write(value, expression), this::constants));
     }
 
     /**
@@ -290,12 +289,6 @@ public final class HostPluginValues implements PluginValues {
         return value.isParam() ? openParam(value) : open(value.id());
     }
 
-    /**
-     * A plugin's own parameter, the {@code @Param} field carrying its mark, as a value — read and written as a row
-     * of the Parameters window is (2026-10-12: the SDK's {@code launchTargets} and {@code vm}, which its game dialog
-     * and ⚙ Bot Settings write). Empty when the bot has no such field, or its initialiser is not one the grammar
-     * rewrites.
-     */
     /** A plugin's parameter field: the file it is in and its class and name. */
     private record MarkedParam(Path file, ManagedHolders.FieldName field) {}
 
@@ -313,6 +306,12 @@ public final class HostPluginValues implements PluginValues {
         return Optional.ofNullable(found[0]);
     }
 
+    /**
+     * A plugin's own parameter, the {@code @Param} field carrying its mark, as a value — read and written as a row
+     * of the Parameters window is (2026-10-12: the SDK's {@code launchTargets} and {@code vm}, which its game dialog
+     * and ⚙ Bot Settings write). Empty when the bot has no such field, or its initialiser is not one the grammar
+     * rewrites.
+     */
     private Optional<ValueContext> openParam(ManagedValue<?> value) {
         Optional<MarkedParam> marked = markedParam(value);
         if (marked.isEmpty()) return Optional.empty();
@@ -325,7 +324,12 @@ public final class HostPluginValues implements PluginValues {
                             snapshot();
                             JavaParameters.setValue(config, state, parameter, expression);
                             redraw(java.util.Set.of(file[0]));
-                        }));
+                        }, this::constants));
+    }
+
+    /** The bot's managed constants as they stand now, which a value of one of them is read and written as. */
+    private List<ManagedConstants.Constant> constants() {
+        return ManagedConstants.scan(config, state);
     }
 
     @Override
@@ -422,6 +426,11 @@ public final class HostPluginValues implements PluginValues {
     public MethodWrite createMethod(ManagedValue<?> set, String group, String className, String method) {
         if (set == null || group == null) return new MethodWrite(null, "No enum was named.");
         return createMethod(set.id(), group, className, method);
+    }
+
+    @Override
+    public List<String> classes() {
+        return BotMethods.classes(index(), config.mainPackageDir().resolve("plugins"));
     }
 
     @Override
@@ -536,8 +545,10 @@ public final class HostPluginValues implements PluginValues {
     public Optional<ValueContext> open(String id, String member) {
         return ManagedSets.member(index(), id, member, PluginHost.grammar())
                 .filter(found -> found.initializer() != null)
+                // The bot's constants too (2026-10-12): a flow names its activities as Activities.Collect.class,
+                // which nothing but them spells, so without them every flow with an activity was refused.
                 .map(found -> HostValueContext.of(found.form(), found.initializer(), services,
-                        expression -> writeInitializer(found, expression)));
+                        expression -> writeInitializer(found, expression), this::constants));
     }
 
     public Optional<String> add(String id, String member, Object value) {

@@ -306,8 +306,10 @@ class ManagedSetsTest {
         sources.put(activities, ACTIVITIES);
         sources.put(collect, COLLECT);
         BotIndex index = BotIndex.over(sources, List.of(contract(), testClasses()), root);
+        assertEquals(List.of("Collect"), BotMethods.classes(index, root.resolve("com/bot/plugins")),
+                "the classes a method can go in, the plugins' holders left out");
 
-        String into = assertInstanceOf(Refactor.Planned.class, BotMethods.create(index, "com.bot",
+        String into =assertInstanceOf(Refactor.Planned.class, BotMethods.create(index, "com.bot",
                 root.resolve("com/bot/Collect.java"), "Collect", "again", "Activities.Collect",
                 "com.bot.plugins.sdk.Activities", "NEXT")).rewrites().get(collect);
         assertTrue(into.contains("public static Activities.Collect again() {"), into);

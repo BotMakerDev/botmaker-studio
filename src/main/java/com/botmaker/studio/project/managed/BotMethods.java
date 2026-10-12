@@ -62,6 +62,26 @@ public final class BotMethods {
         });
     }
 
+    /**
+     * The simple names of the top-level classes a method can be written into, in file order: every class but an
+     * interface, and none in a file under {@code holders} — the plugins' value holders, {@code plugins/}.
+     */
+    public static List<String> classes(BotIndex index, Path holders) {
+        Path skipped = holders == null ? null : holders.toAbsolutePath().normalize();
+        return index.read(units -> {
+            List<String> out = new ArrayList<>();
+            units.forEach((file, unit) -> {
+                if (skipped != null && file.toAbsolutePath().normalize().startsWith(skipped)) return;
+                for (Object each : unit.types()) {
+                    if (each instanceof TypeDeclaration type && !type.isInterface()) {
+                        out.add(type.getName().getIdentifier());
+                    }
+                }
+            });
+            return List.copyOf(out);
+        });
+    }
+
     private static boolean eligible(MethodDeclaration method, String canonical) {
         int flags = method.getModifiers();
         if (method.isConstructor() || !Modifier.isPublic(flags) || !Modifier.isStatic(flags)
