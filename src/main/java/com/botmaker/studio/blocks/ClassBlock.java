@@ -1,19 +1,14 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
-import com.botmaker.studio.blocks.misc.AnnotationRow;
-import com.botmaker.studio.core.AbstractCodeBlock;
-import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.ui.app.AddFunctionDialog;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -23,30 +18,26 @@ import org.eclipse.jdt.core.dom.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
+/** A class, the file's own or nested in another, and the toolbar and drop targets that add its members. */
+public class ClassBlock extends TypeBlock {
 
     private final String className;
     /** The {@code extends} superclass, or null when the class extends nothing. */
     private final String superClassName;
     /** The {@code implements} interfaces, in source order; empty when there are none. */
     private final List<String> interfaceNames = new ArrayList<>();
-    private final List<CodeBlock> bodyDeclarations = new ArrayList<>();
     private final BlockDragAndDropManager dragAndDropManager;
 
-    /** A class is not a line the bot stops on; its members' statements are. */
-    @Override
-    public boolean canHoldBreakpoint() { return false; }
-
+    /** A class; an interface is an {@link InterfaceBlock}, a record a {@link RecordBlock}. */
     public ClassBlock(String id, TypeDeclaration astNode, BlockDragAndDropManager manager) {
         super(id, astNode);
+        if (astNode.isInterface()) throw new IllegalArgumentException(astNode.getName() + " is an interface");
         this.className = astNode.getName().getIdentifier();
         // Inheritance is part of what the class *is* — an activity stub is generated as
         // `class Mine extends Activity`, and hiding that made every stub look like a plain class.
         Type superType = astNode.getSuperclassType();
         this.superClassName = (superType == null) ? null : superType.toString();
-        for (Object t : astNode.superInterfaceTypes()) {
-            interfaceNames.add(t.toString());
-        }
+        for (Object t : astNode.superInterfaceTypes()) interfaceNames.add(t.toString());
         this.dragAndDropManager = manager;
     }
 
@@ -56,62 +47,11 @@ public class ClassBlock extends AbstractCodeBlock implements BlockWithChildren {
     /** The interfaces this class implements, in source order. Never null. */
     public List<String> getInterfaceNames() { return new ArrayList<>(interfaceNames); }
 
-    /** The class header as it reads in source: {@code Foo extends Bar implements Baz}. */
-    public String headerText() {
-        StringBuilder sb = new StringBuilder(className);
-        if (superClassName != null) sb.append(" extends ").append(superClassName);
-        if (!interfaceNames.isEmpty()) sb.append(" implements ").append(String.join(", ", interfaceNames));
-        return sb.toString();
-    }
-
-    /**
-     * The class header: {@code Class: Name}, followed by {@code extends Super} / {@code implements ...} when
-     * present. The inheritance clause is rendered as its own de-emphasised run so the class's own name still
-     * reads first, but its superclass is no longer invisible.
-     */
-    private Node createHeader() {
-        TypeDeclaration type = (TypeDeclaration) astNode;
-        // An interface says so, and what it extends (2026-10-12: it read "Class: … implements …").
-        Label name = new Label(TypeClauses.kind(type) + ": " + className + TypeClauses.typeParameters(type));
-        name.getStyleClass().add("class-block-title");
-
-        HBox header = new HBox(8, name);
-        header.setAlignment(Pos.BASELINE_LEFT);
-        header.setPadding(new Insets(0, 0, 15, 0));
-
-        for (String clause : TypeClauses.inheritance(type)) header.getChildren().add(inheritanceLabel(clause));
-        return header;
-    }
-
-    /** One inheritance clause, de-emphasised so the type's own name reads first. */
-    public static Label inheritanceLabel(String text) {
-        Label l = new Label(text);
-        l.getStyleClass().add("class-inheritance");
-        l.getStyleClass().add("class-block-subtitle");
-        return l;
-    }
-
-    public void addBodyDeclaration(CodeBlock block) {
-        bodyDeclarations.add(block);
-    }
-
-    @Override
-    public List<CodeBlock> getChildren() {
-        return new ArrayList<>(bodyDeclarations);
-    }
-
-// In ClassBlock.java
-
     @Override
     protected Node createUINode(CodeEditorService context) {
-        VBox container = new VBox(10);
-        container.setPadding(new Insets(15));
-
-        container.getStyleClass().add("class-block");
-
-        Node annotations = AnnotationRow.of((TypeDeclaration) astNode, context, !isReadOnly());
-        if (annotations != null) container.getChildren().add(annotations);
-        container.getChildren().add(createHeader());
+        // Annotations, then Class: Name<T> extends … implements … (TypeHeader).
+        VBox container = frame(context);
+        List<CodeBlock> bodyDeclarations = getChildren();
 
         // A read-only class is inert: no "Add Function", no drop targets between members, no drag-to-reorder.
         // The members still render — reading is the whole point of opening bundled library source, or someone

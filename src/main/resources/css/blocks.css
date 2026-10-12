@@ -1770,6 +1770,16 @@
     -fx-border-radius: 10;
     -fx-background-radius: 10;
 }
+/* InterfaceBlock and RecordBlock — the class card (they carry .class-block too), told apart by its edge. An
+   interface is a shape other types fill in: dashed, in the Functions colour, its members being signatures. A
+   record is a value: solid, in the Variables colour, its components being its fields. */
+.interface-block {
+    -fx-border-color: -bm-cat-functions;
+    -fx-border-style: dashed;
+}
+.record-block {
+    -fx-border-color: -bm-cat-variables;
+}
 .class-block-title {
     -fx-font-size: 20px;
     -fx-font-weight: bold;
@@ -2723,9 +2733,11 @@
     -fx-font-family: "monospace";
 }
 
-/* Class header inheritance clause (`extends Activity`) — ClassBlock.createHeader. */
+/* A type header's inheritance clause (`extends Activity`, `implements Outcome`) — TypeHeader.clause. No colour of
+   its own (2026-10-12; it was #5d6d7e, 2.08:1 on Dark's card and 2.42:1 on the enum's orange): .class-block-subtitle
+   gives it the theme's text on a card, and inside a painted block that text is the block's on-colour. */
 .class-inheritance {
-    -fx-text-fill: #5d6d7e;
+    -fx-font-style: italic;
 }
 
 /* ============================================================================================================

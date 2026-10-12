@@ -1,6 +1,9 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.blocks.ClassBlock;
+import com.botmaker.studio.blocks.InterfaceBlock;
+import com.botmaker.studio.blocks.RecordBlock;
+import com.botmaker.studio.blocks.TypeBlock;
 import com.botmaker.studio.blocks.expr.*;
 import com.botmaker.studio.blocks.flow.*;
 import com.botmaker.studio.blocks.func.ConstructorBlock;
@@ -185,28 +188,9 @@ public class BlockConverter {
 
     private AbstractCodeBlock parseRoot(AbstractTypeDeclaration rootNode, ParseContext rootCtx,
                                         List<String> problems) {
-        // --- CASE A: Standard Class File ---
-        if (rootNode instanceof TypeDeclaration typeDecl) {
-            // A class another window owns whole (only a plugin's managed constants in it) draws every member
-            // read-only, the same way a file open for reading does — LockResolver says which.
-            ParseContext ctx = signatureEditable(typeDecl, rootCtx) ? rootCtx : rootCtx.withReadOnly(true);
-            ClassBlock classBlock = new ClassBlock(
-                    BlockId.of(typeDecl), typeDecl, ctx.manager());
-            applyReadOnly(classBlock, ctx);
-            ctx.nodeToBlockMap().put(typeDecl, classBlock);
-
-            for (Object obj : typeDecl.bodyDeclarations()) {
-                // One member that cannot be drawn costs that member, not the file. Until 2026-09-19 the throw
-                // reached convert()'s outer catch, which answered "no root" — so one `60000L` drew the whole
-                // file as an empty canvas and said nothing. The member is left out and named instead.
-                try {
-                    parseMember(obj, classBlock, ctx);
-                } catch (RuntimeException e) {
-                    problems.add(memberName(obj) + " could not be drawn ("
-                            + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")");
-                }
-            }
-            return classBlock;
+        // --- CASE A: Standard Class File (a class, an interface or a record) ---
+        if (rootNode instanceof TypeDeclaration || rootNode instanceof RecordDeclaration) {
+            return typeBlock(rootNode, rootCtx, problems);
         }
         // --- CASE B: Standalone Enum File ---
         else if (rootNode instanceof EnumDeclaration enumDecl) {
@@ -219,20 +203,51 @@ public class BlockConverter {
         return null;
     }
 
+    /**
+     * A class, an interface or a record, and its members: the file's own type, or one nested in it (2026-10-12: an
+     * interface drew as a class, and a nested type or a record file drew nothing).
+     */
+    private TypeBlock typeBlock(AbstractTypeDeclaration typeDecl, ParseContext outer, List<String> problems) {
+        // A class another window owns whole (only a plugin's managed constants in it) draws every member
+        // read-only, the same way a file open for reading does — LockResolver says which.
+        ParseContext ctx = signatureEditable(typeDecl, outer) ? outer : outer.withReadOnly(true);
+        TypeBlock classBlock = switch (typeDecl) {
+            case TypeDeclaration type when type.isInterface() -> new InterfaceBlock(BlockId.of(type), type);
+            case TypeDeclaration type -> new ClassBlock(BlockId.of(type), type, ctx.manager());
+            case RecordDeclaration record -> new RecordBlock(BlockId.of(record), record);
+            default -> throw new IllegalArgumentException(typeDecl.getName() + " is not a class, interface or record");
+        };
+        applyReadOnly(classBlock, ctx);
+        ctx.nodeToBlockMap().put(typeDecl, classBlock);
+
+        for (Object obj : typeDecl.bodyDeclarations()) {
+            // One member that cannot be drawn costs that member, not the file. Until 2026-09-19 the throw
+            // reached convert()'s outer catch, which answered "no root" — so one `60000L` drew the whole
+            // file as an empty canvas and said nothing. The member is left out and named instead.
+            try {
+                parseMember(obj, classBlock, ctx, problems);
+            } catch (RuntimeException e) {
+                problems.add(memberName(obj) + " could not be drawn ("
+                        + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()) + ")");
+            }
+        }
+        return classBlock;
+    }
+
     /** What a member is called in a status line — {@code Parameters.restBetween}, {@code run()}. */
     private static String memberName(Object member) {
         return switch (member) {
             case MethodDeclaration method -> method.getName().getIdentifier() + "()";
             case FieldDeclaration field when !field.fragments().isEmpty() ->
                     ((VariableDeclarationFragment) field.fragments().getFirst()).getName().getIdentifier();
-            case EnumDeclaration enumDecl -> enumDecl.getName().getIdentifier();
+            case AbstractTypeDeclaration type -> type.getName().getIdentifier();
             case Initializer ignored -> "an initializer block";
             default -> "a member";
         };
     }
 
     /** One member of a class, added to {@code classBlock}. */
-    private void parseMember(Object obj, ClassBlock classBlock, ParseContext ctx) {
+    private void parseMember(Object obj, TypeBlock classBlock, ParseContext ctx, List<String> problems) {
         // Every member of every file is the user's since 2026-08-29, so none is filtered out of the
         // tree. What used to be dropped here — an activity's Outcome enum, its INSTANCE static, its
         // isEnabled() wiring — was dropped because BotMaker wrote it and rewrote it; nothing does.
@@ -278,6 +293,9 @@ public class BlockConverter {
             if (!signatureEditable(enumDecl, ctx)) enumBlock.setReadOnly(true);
             ctx.nodeToBlockMap().put(enumDecl, enumBlock);
             classBlock.addBodyDeclaration(enumBlock);
+        } else if (obj instanceof TypeDeclaration || obj instanceof RecordDeclaration) {
+            // A nested class, interface or record, drawn as a file's own type is, inside its outer one.
+            classBlock.addBodyDeclaration(typeBlock((AbstractTypeDeclaration) obj, ctx, problems));
         } else if (obj instanceof FieldDeclaration field) {
             // A @Param field, or a constant a plugin manages, is drawn read-only — its value included, which
             // is why the initializer is parsed under the field's verdict and not the file's.

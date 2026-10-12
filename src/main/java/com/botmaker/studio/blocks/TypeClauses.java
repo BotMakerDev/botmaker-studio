@@ -40,6 +40,14 @@ public final class TypeClauses {
         return "<" + String.join(", ", written) + ">";
     }
 
+    /** A record's components as written, {@code (int x, int y)}; {@code ""} for any other type. */
+    public static String components(AbstractTypeDeclaration type) {
+        if (!(type instanceof RecordDeclaration record)) return "";
+        List<String> written = new ArrayList<>();
+        for (Object each : record.recordComponents()) written.add(each.toString());
+        return "(" + String.join(", ", written) + ")";
+    }
+
     /**
      * The inheritance clauses, each one run of text in source order: {@code extends Bar}, then
      * {@code implements A, B}. An interface's super-interfaces are what it {@code extends}. Empty when there are none.

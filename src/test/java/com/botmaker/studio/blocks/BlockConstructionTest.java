@@ -110,6 +110,39 @@ class BlockConstructionTest {
                 () -> assertProduces("field--;", "AssignmentBlock"));
     }
 
+    /** The simple names of every block class in the tree built from the whole file {@code source}. */
+    private static List<String> fileKinds(String source) {
+        return flatten(new EditorFixture(source).root).stream().map(b -> b.getClass().getSimpleName()).toList();
+    }
+
+    /**
+     * Each kind of type has its block, the file's own or nested (2026-10-12): an interface drew as a class, and a
+     * record or any nested type drew nothing at all.
+     */
+    @Test
+    void everyKindOfTypeHasItsBlockAtTheTopOrNested() {
+        assertEquals("InterfaceBlock", fileKinds("package com.mybot;\npublic interface Step extends Runnable {\n"
+                + "    int LIMIT = 3;\n    void go();\n}\n").getFirst());
+        assertEquals("RecordBlock", fileKinds("package com.mybot;\npublic record Spot(int x, int y) {\n"
+                + "    public int sum() { return x + y; }\n}\n").getFirst());
+
+        List<String> nested = fileKinds("package com.mybot;\npublic class Outer {\n"
+                + "    static class Inner extends Thread { void a() {} }\n"
+                + "    interface Shape { double area(); }\n"
+                + "    record Pair(int a, int b) {}\n"
+                + "}\n");
+        assertEquals(List.of("ClassBlock", "ClassBlock", "MethodDeclarationBlock"), nested.subList(0, 3));
+        assertTrue(nested.contains("InterfaceBlock") && nested.contains("RecordBlock"), nested.toString());
+    }
+
+    @Test
+    void aTypesHeaderReadsAsItsSource() {
+        TypeBlock root = (TypeBlock) new EditorFixture("package com.mybot;\n"
+                + "public record Spot(int x, int y) implements Comparable<Spot> {\n"
+                + "    public int compareTo(Spot o) { return 0; }\n}\n").root;
+        assertEquals("Spot(int x, int y) implements Comparable<Spot>", root.headerText());
+    }
+
     /** A field is a class-level member, so it hangs off the root rather than off a body. */
     @Test
     void aFieldBecomesAClassVariableBlock() {

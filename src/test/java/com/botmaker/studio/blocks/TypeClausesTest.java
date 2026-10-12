@@ -50,6 +50,7 @@ class TypeClausesTest {
     void aRecordSaysWhatItImplements() {
         AbstractTypeDeclaration type = first("record Spot(int x, int y) implements Point {}");
         assertEquals("Record", TypeClauses.kind(type));
+        assertEquals("(int x, int y)", TypeClauses.components(type));
         assertEquals(List.of("implements Point"), TypeClauses.inheritance(type));
     }
 
