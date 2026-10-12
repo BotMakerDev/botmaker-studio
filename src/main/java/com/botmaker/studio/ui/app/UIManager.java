@@ -526,10 +526,17 @@ public class UIManager implements ProjectWindow {
 
             @Override
             public void redraw(Path file) {
-                Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
-                if (file.equals(active)) codeEditorService.switchToFile(file);
+                redrawIfActive(file);
+            }
+
+            @Override
+            public void migrate(Class<?> from, Class<?> to) {
+                openMigration(from, to);
             }
         });
+        // A managed value's right-click Migrate type…: the same window, the plugin's replacement preselected.
+        eventBus.subscribe(CoreApplicationEvents.MigrateTypeRequestedEvent.class,
+                e -> openMigration(e.from(), null), true);
 
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
@@ -687,6 +694,20 @@ public class UIManager implements ProjectWindow {
     private void openReview() {
         if (reviewPanel != null) reviewPanel.refresh();
         selectBottomTab(BottomTab.REVIEW);
+    }
+
+    /** The migration window on {@code from}'s values; once applied, the Review list re-read. */
+    private void openMigration(Class<?> from, Class<?> to) {
+        if (from == null || reviewPanel == null) return;
+        javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
+                : reviewPanel.node().getScene().getWindow();
+        MigrationWindow.open(owner, config, state, from, to, this::redrawIfActive, reviewPanel::refresh);
+    }
+
+    /** Draws {@code file} again from its buffer when it is the one on screen, after a rewrite underneath it. */
+    private void redrawIfActive(Path file) {
+        Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
+        if (file.equals(active)) codeEditorService.switchToFile(file);
     }
 
     /**

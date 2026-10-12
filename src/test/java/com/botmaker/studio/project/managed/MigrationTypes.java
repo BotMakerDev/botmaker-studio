@@ -7,8 +7,8 @@ import java.util.List;
 
 /**
  * A plugin's types before and after it moved its values to new classes, as {@link ManagedMigrationsTest} needs
- * them on the test classpath: a plain call, a call holding another type that moved, and one holding an enum that
- * moved.
+ * them on the test classpath: a plain call, a call holding another type that moved, one holding an enum that
+ * moved, one whose part is now built from its old one, and one gaining a part of the same type as an old one.
  */
 @SuppressWarnings("DeprecatedIsStillUsed")
 public final class MigrationTypes {
@@ -40,6 +40,18 @@ public final class MigrationTypes {
 
     public record Paint(Tint tint) {}
 
+    @Deprecated(forRemoval = true)
+    public record OldBadge(String name) {}
+
+    public record Tag(String text) {}
+
+    public record Badge(Tag tag) {}
+
+    @Deprecated(forRemoval = true)
+    public record OldLabel(String name) {}
+
+    public record Label(String title, String name) {}
+
     private static final Drawn NONE = () -> ctx -> null;
 
     /** Every declaration, the old ones pointing at their replacements. */
@@ -60,6 +72,13 @@ public final class MigrationTypes {
                 PluginType.value(Tint.class).firstConstant().editor(NONE).writtenAsConstant(),
                 PluginType.value(OldPaint.class).fresh(() -> new OldPaint(OldTint.RED)).editor(NONE).writtenAsRecord()
                         .replacedBy(Paint.class),
-                PluginType.value(Paint.class).fresh(() -> new Paint(Tint.CRIMSON)).editor(NONE).writtenAsRecord());
+                PluginType.value(Paint.class).fresh(() -> new Paint(Tint.CRIMSON)).editor(NONE).writtenAsRecord(),
+                PluginType.value(OldBadge.class).fresh(() -> new OldBadge("")).editor(NONE).writtenAsRecord()
+                        .replacedBy(Badge.class),
+                PluginType.value(Tag.class).fresh(() -> new Tag("")).editor(NONE).writtenAsRecord(),
+                PluginType.value(Badge.class).fresh(() -> new Badge(new Tag(""))).editor(NONE).writtenAsRecord(),
+                PluginType.value(OldLabel.class).fresh(() -> new OldLabel("")).editor(NONE).writtenAsRecord()
+                        .replacedBy(Label.class),
+                PluginType.value(Label.class).fresh(() -> new Label("", "")).editor(NONE).writtenAsRecord());
     }
 }

@@ -1,7 +1,11 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.ReviewService;
@@ -38,6 +42,9 @@ import java.util.function.BooleanSupplier;
  * mark it reviewed ({@code done = true}, which keeps the record in the code and drops the row), remove the
  * mark, undo the change from the version taken before it, or rename or delete the function.
  *
+ * <p>Above the marks, one row per type a plugin retired that the bot still has values of (2026-10-12), with
+ * <i>Migrate…</i> opening {@link MigrationWindow}. The values keep working until the plugin drops the type.
+ *
  * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}, and the tab
  * refreshes when it is opened. Four different code paths write marks, two of them without the editor
  * involved, so a panel holding its own copy would be wrong more often than right — see
@@ -61,6 +68,9 @@ final class ReviewPanel {
 
         /** Draws {@code file} again from its buffer, after a rewrite from here. */
         void redraw(Path file);
+
+        /** Opens the migration window on {@code from}'s values, {@code to} preselected ({@code null}: none named). */
+        void migrate(Class<?> from, Class<?> to);
     }
 
     private final ProjectConfig config;
@@ -69,6 +79,14 @@ final class ReviewPanel {
 
     private final ListView<ReviewService.Item> list = new ListView<>();
     private final Label summary = new Label();
+    /** One row per retired type the bot still has values of, above the marks; hidden when there is none. */
+    private final VBox migrations = new VBox(4);
+    /**
+     * The retired types last shown, and the refresh that asked: they are read on a worker — only when a plugin
+     * retired an open set's type, so a project with none pays nothing — and an older answer is dropped.
+     */
+    private List<MigrationSteps.Pending> pendingShown = List.of();
+    private long pendingAsked;
     private final VBox node;
 
     ReviewPanel(ProjectConfig config, ProjectState state, Actions actions) {
@@ -90,7 +108,11 @@ final class ReviewPanel {
         bar.getStyleClass().add("diagnostics-filter-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
 
-        this.node = new VBox(bar, list);
+        migrations.setPadding(new javafx.geometry.Insets(6, 8, 6, 8));
+        migrations.managedProperty().bind(migrations.visibleProperty());
+        migrations.setVisible(false);
+
+        this.node = new VBox(bar, migrations, list);
     }
 
     VBox node() {
@@ -101,16 +123,70 @@ final class ReviewPanel {
     void refresh() {
         List<ReviewService.Item> items = ReviewService.scan(config, state);
         list.getItems().setAll(items);
-        long files = items.stream().map(ReviewService.Item::file).distinct().count();
-        summary.setText(items.isEmpty()
-                ? "Nothing to review."
-                : items.size() + (items.size() == 1 ? " thing" : " things") + " to look at in "
-                        + files + (files == 1 ? " file." : " files."));
+        summarise(items, pendingShown);
+        List<ManagedValue<?>> declared = PluginHost.managedValues();
+        long asked = ++pendingAsked;
+        if (config == null || !MigrationSteps.anyRetired(declared)) {
+            pendingShown(List.of(), items);
+            return;
+        }
+        // The buffers are read here; the parse, which a large bot pays for, on a worker.
+        java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Thread worker = new Thread(() -> {
+            List<MigrationSteps.Pending> pending;
+            try {
+                pending = MigrationSteps.pending(index.get(), PluginHost.grammar(), declared);
+            } catch (RuntimeException | LinkageError e) {
+                pending = List.of();
+            }
+            List<MigrationSteps.Pending> found = pending;
+            Platform.runLater(() -> {
+                if (asked == pendingAsked) pendingShown(found, list.getItems());
+            });
+        }, "review-retired-types");
+        worker.setDaemon(true);
+        worker.start();
     }
 
-    /** True when the project holds at least one mark — what decides whether the tab raises itself. */
+    /** The retired types found, as rows above the marks, and the summary over both. */
+    private void pendingShown(List<MigrationSteps.Pending> pending, List<ReviewService.Item> items) {
+        pendingShown = List.copyOf(pending);
+        migrations.getChildren().setAll(pending.stream().map(this::migrationRow).toList());
+        migrations.setVisible(!pending.isEmpty());
+        summarise(items, pendingShown);
+    }
+
+    private void summarise(List<ReviewService.Item> items, List<MigrationSteps.Pending> pending) {
+        long files = items.stream().map(ReviewService.Item::file).distinct().count();
+        String marks = items.isEmpty() ? "" : items.size() + (items.size() == 1 ? " thing" : " things")
+                + " to look at in " + files + (files == 1 ? " file." : " files.");
+        String retired = pending.isEmpty() ? "" : pending.size() + (pending.size() == 1 ? " retired type" : " retired types")
+                + " to migrate.";
+        summary.setText(items.isEmpty() && pending.isEmpty() ? "Nothing to review." : (retired + " " + marks).strip());
+    }
+
+    /** True when the project holds at least one mark or retired type — what decides whether the tab raises itself. */
     boolean hasItems() {
-        return !list.getItems().isEmpty();
+        return !list.getItems().isEmpty() || migrations.isVisible();
+    }
+
+    /** {@code 312 values of ImageTemplate, which its plugin replaced with Picture}, and Migrate…. */
+    private HBox migrationRow(MigrationSteps.Pending pending) {
+        String what = pending.values() + (pending.values() == 1 ? " value" : " values") + " of "
+                + pending.from().getSimpleName() + ", which its plugin retired"
+                + (pending.to() == null ? "." : " for " + pending.to().getSimpleName() + ".");
+        Label label = new Label(what);
+        label.getStyleClass().add("review-cell-where");
+        label.setWrapText(true);
+        Button migrate = new Button("Migrate…");
+        migrate.setDisable(state.isReaderMode() || actions == null);
+        migrate.setOnAction(e -> actions.migrate(pending.from(), pending.to()));
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox row = new HBox(8, label, spacer, migrate);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("review-cell");
+        return row;
     }
 
     /** What a click on {@code item}'s row offers: every item a decision about that one function. */

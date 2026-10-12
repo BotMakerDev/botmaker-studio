@@ -4,6 +4,7 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.ui.app.MigrationMenu;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
@@ -12,8 +13,9 @@ import org.eclipse.jdt.core.dom.IMethodBinding;
 
 /**
  * Wires the per-block right-click menu (copy / paste after / breakpoint, Go to Definition on a call, ▶ Try on a
- * statement and ▶ Run on a method that takes nothing — {@link TrialMenu}). A read-only block gets Go to Definition
- * and ▶ Try alone, since neither edits anything.
+ * statement and ▶ Run on a method that takes nothing — {@link TrialMenu}, Migrate type… on a managed value —
+ * {@link MigrationMenu}). A read-only block gets Go to Definition, ▶ Try and Migrate type… alone, since none edits
+ * it.
  */
 public final class InteractionDecorator implements BlockDecorator {
 
@@ -23,10 +25,13 @@ public final class InteractionDecorator implements BlockDecorator {
         // Trying a statement edits nothing, so a read-only block offers it as it offers Go to Definition.
         MenuItem trial = TrialMenu.item(block, context.getEventBus(),
                 () -> node.getScene() == null ? null : node.getScene().getWindow()).orElse(null);
+        // A migration copies the values and edits none, and an open set's holder is locked: offered either way.
+        MenuItem migrate = MigrationMenu.item(block, context.getEventBus()).orElse(null);
         if (block.isReadOnly()) {
             ContextMenu reading = new ContextMenu();
             if (definition != null) reading.getItems().add(definition);
             if (trial != null) reading.getItems().add(trial);
+            if (migrate != null) reading.getItems().add(migrate);
             if (!reading.getItems().isEmpty()) show(node, com.botmaker.studio.ui.render.menu.MenuTracker.track(reading));
             return;
         }
@@ -35,7 +40,10 @@ public final class InteractionDecorator implements BlockDecorator {
 
         if (definition != null) menu.getItems().add(definition);
         if (trial != null) menu.getItems().add(trial);
-        if (definition != null || trial != null) menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+        if (migrate != null) menu.getItems().add(migrate);
+        if (definition != null || trial != null || migrate != null) {
+            menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
+        }
 
         var blockItems = block.blockMenuItems(context);
         if (!blockItems.isEmpty()) {

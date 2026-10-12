@@ -421,6 +421,39 @@ final class ValueWriter {
 
     // ---- plumbing ----------------------------------------------------------------------------------------
 
+    /**
+     * {@code component}'s factory over parts that are already written, each copied into the new tree, its
+     * imports carried. Empty for a receiver's factory, or a count the factory does not take.
+     */
+    Optional<JavaValue> call(ComponentType<?> component, List<JavaValue> parts) {
+        Class<?> type = ValueGrammar.classOf(component);
+        Optional<Factory> factory = Factory.of(component);
+        if (type == null || factory.isEmpty() || factory.get().kind() == Factory.Kind.RECEIVER || parts == null
+                || parts.stream().anyMatch(Objects::isNull) || !factory.get().fits(parts.size())) {
+            return Optional.empty();
+        }
+        Names names = new Names(false);
+        Expression call;
+        List<Expression> arguments;
+        if (factory.get().kind() == Factory.Kind.CONSTRUCTOR) {
+            ClassInstanceCreation creation = names.ast.newClassInstanceCreation();
+            creation.setType(names.ast.newSimpleType(names.of(type)));
+            @SuppressWarnings("unchecked")
+            List<Expression> list = creation.arguments();
+            call = creation;
+            arguments = list;
+        } else {
+            MethodInvocation invocation = factoryCall(factory.get(), names);
+            call = invocation;
+            arguments = arguments(invocation);
+        }
+        for (JavaValue part : parts) {
+            arguments.add(part.copyInto(names.ast));
+            names.addAll(part.imports());
+        }
+        return Optional.of(names.value(call));
+    }
+
     /** A container's call and the argument list its parts go into. */
     private record ContainerCall(Expression node, List<Expression> arguments) {
     }

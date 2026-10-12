@@ -21,7 +21,6 @@ import com.botmaker.studio.project.source.ValueTypeResolver;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
-import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
@@ -538,7 +537,7 @@ public final class ManagedMigrations {
     }
 
     /** Whether {@code type} is {@code cls}, by name, a primitive and its box alike. */
-    private static boolean named(Type type, Class<?> cls) {
+    static boolean named(Type type, Class<?> cls) {
         return type instanceof Class<?> declared && cls != null
                 && JavaNames.boxed(JavaNames.canonical(declared)).equals(JavaNames.boxed(JavaNames.canonical(cls)));
     }

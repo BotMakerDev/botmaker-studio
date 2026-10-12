@@ -177,6 +177,9 @@ public class CoreApplicationEvents {
     /** A block's right-click Go to Definition: the highlighted block names what to go to. */
     public record GoToDefinitionRequestedEvent() implements ApplicationEvent {}
 
+    /** A managed value's right-click Migrate type…: open the migration window on its type's values. */
+    public record MigrateTypeRequestedEvent(Class<?> from) implements ApplicationEvent {}
+
     // --- Breakpoints ---
 
     public record BreakpointToggledEvent(CodeBlock block, boolean enabled) implements ApplicationEvent {}

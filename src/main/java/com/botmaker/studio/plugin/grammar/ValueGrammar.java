@@ -202,6 +202,11 @@ public final class ValueGrammar {
         return type == null ? Optional.empty() : Optional.ofNullable(typeByName.get(JavaNames.canonical(type)));
     }
 
+    /** The component that writes {@code type} as a call, or empty when it is written some other way. */
+    public Optional<ComponentType<?>> component(Class<?> type) {
+        return Optional.ofNullable(canonical(type));
+    }
+
     /**
      * Whether every leaf in {@code type} is one this grammar can read or a plugin declares. A type with an
      * unknown leaf anywhere is displayed and never rewritten.
@@ -339,6 +344,43 @@ public final class ValueGrammar {
      */
     public Optional<JavaValue> compose(Type type, List<JavaValue> parts) {
         return writer.compose(type, parts);
+    }
+
+    /**
+     * {@link #compose} for a type written as a call: its component's factory over parts already written, which
+     * may be any expression — a migration's parameter. Empty when the factory is not a static method or a
+     * constructor, or takes another count; a wither's part is not one of them.
+     */
+    public Optional<JavaValue> call(Class<?> type, List<JavaValue> parts) {
+        return writer.call(canonical(type), parts);
+    }
+
+    /**
+     * What a person reads each of {@code component}'s parts as: the factory's parameter names when the class was
+     * compiled with them, else each part's simple type name; a wither's part, after the factory's, by the
+     * wither's own name ({@code described}, {@code goesHome}).
+     */
+    public static List<String> partLabels(ComponentType<?> component) {
+        List<Class<?>> types = componentTypesOf(component);
+        List<String> out = new ArrayList<>();
+        java.lang.reflect.Parameter[] named = new java.lang.reflect.Parameter[0];
+        try {
+            java.lang.reflect.Executable factory = component.factory();
+            if (factory != null) named = factory.getParameters();
+        } catch (RuntimeException | LinkageError e) {
+            // labels are a courtesy; the type names below still say what each part is
+        }
+        List<? extends Wither<?>> withers = withersOf(component);
+        if (withers.size() > types.size()) withers = List.of();
+        int fixed = types.size() - withers.size();
+        boolean useNames = named.length == fixed
+                && java.util.Arrays.stream(named).allMatch(java.lang.reflect.Parameter::isNamePresent);
+        for (int i = 0; i < types.size(); i++) {
+            Wither<?> wither = i < fixed ? null : withers.get(i - fixed);
+            if (wither != null) out.add(wither.method().getName());
+            else out.add(useNames ? named[i].getName() : types.get(i).getSimpleName());
+        }
+        return out;
     }
 
     // ---- a fresh value ---------------------------------------------------------------------------------

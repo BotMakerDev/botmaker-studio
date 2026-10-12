@@ -20,8 +20,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   constant shares its declaration with another field, and always for an enum's constant, whose `ordinal()`
   would change. A constant already above is left alone and takes no snapshot.
 
-- **A migration copies a deprecated type's values into its replacement** (`project/managed/ManagedMigrations`,
-  no window yet). The author's `@Migrate(Old.class) static New m(parts…)` methods are read off the bot and
+- **Migrate a retired type's values in guided steps.** The Review tab lists each type a plugin retired that the
+  bot still has values of ("312 values of ImageTemplate, which its plugin retired for Picture") with
+  *Migrate…*; a managed value's right-click offers *Migrate type…* for any type that fits. The window
+  (`ui/app/MigrationWindow`, model `project/managed/MigrationSteps`) lists the new type's parts. Each part comes
+  from an old part, is built from one by its type's one-part factory (`Path.of(file)`), or is a fixed value in
+  the type's own editor. Parts are matched by name, then type, at first. A part of another type opens its own
+  step; an enum pairs its constants. *Preview* shows each value before and after. *Apply* writes the steps as
+  `@Migrate` methods (in `Migrations.java`, or over the method already mapping the pair) and the copies as one
+  version, and creates the new type's holder when the bot lost it. A method written by hand is said, and
+  replaced on Apply.
+- **A migration copies a deprecated type's values into its replacement** (`project/managed/ManagedMigrations`).
+  The author's `@Migrate(Old.class) static New m(parts…)` methods are read off the bot and
   substituted, never run: each constant of `Old`'s open set is taken apart, its parts put where the parameters
   stand, and the result written into `New`'s open set under the same name, marked `@Migrated`. A part whose type
   moved too goes through its own `@Migrate` method; an enum's is a `switch` over the constant. Originals are
