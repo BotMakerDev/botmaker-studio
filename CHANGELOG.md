@@ -41,12 +41,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   does it for that one value. Only a copy the migration wrote counts — still marked `@Migrated`; one the author
   made or edited is switched to by hand. A use the copy does not fit (held as the old type) is left as it is, and its
   function is marked `@Refactor` so it shows in Review; the bot never stops compiling. *Remove originals…*
-  deletes, after asking, each old value that has a copy and that nothing uses. Once no value of a migrated type is
-  left, Review offers to remove the `@Migrate` methods nothing needs, and `Migrations.java` with them when it
-  holds nothing else (`project/managed/MigrationCleanup`, `ui/app/MigrationActions`). Each step is one version
-  after a safety one.
+  deletes, after asking, each old value that nothing uses and whose copy is still marked `@Migrated`. Once no value
+  of a migrated type is left, Review offers to remove the `@Migrate` methods nothing needs, and `Migrations.java`
+  with them when it holds nothing else (`project/managed/MigrationCleanup`, `ui/app/MigrationActions`). A method
+  is kept while its old type cannot be read (its plugin not loaded) or is named anywhere outside the `@Migrate`
+  methods, its own file included. Each step is one version after a safety one.
 - **Migrate a retired type's values in guided steps.** The Review tab lists each type a plugin retired that the
-  bot still has values of ("312 values of ImageTemplate, which its plugin retired for Picture") with
+  bot still has values of ("312 values of ImageTemplate, which its plugin retired for Picture; 12 copied.") with
   *Migrate…*; a managed value's right-click offers *Migrate type…* for any type that fits. The window
   (`ui/app/MigrationWindow`, model `project/managed/MigrationSteps`) lists the new type's parts. Each part comes
   from an old part, is built from one by its type's one-part factory (`Path.of(file)`), or is a fixed value in
@@ -54,7 +55,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   step; an enum pairs its constants. *Preview* shows each value before and after. *Apply* writes the steps as
   `@Migrate` methods (in `Migrations.java`, or over the method already mapping the pair) and the copies as one
   version, and creates the new type's holder when the bot lost it. A method written by hand is said, and
-  replaced on Apply.
+  replaced on Apply; two mapping the same pair are refused until one is deleted. A file edited while Apply
+  worked is never overwritten: nothing is written and Apply asks again.
 - **A migration copies a deprecated type's values into its replacement** (`project/managed/ManagedMigrations`).
   The author's `@Migrate(Old.class) static New m(parts…)` methods are read off the bot and
   substituted, never run: each constant of `Old`'s open set is taken apart, its parts put where the parameters

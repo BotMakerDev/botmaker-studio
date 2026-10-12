@@ -217,6 +217,18 @@ class MigrationStepsTest {
         String migrations = again.rewrites().get(file(root, "Migrations"));
         assertEquals(1, migrations.split("@Migrate\\(", -1).length - 1, migrations);
         assertTrue(migrations.contains("return new MigrationTypes.Shot(file, threshold, true);"), migrations);
+
+        // Two methods mapping the pair: the migration refuses both, so applying asks for one to go.
+        String twins = after.get(file(root, "Migrations")).replace("public static MigrationTypes.Shot shot(",
+                "public static MigrationTypes.Shot shot2(String file, int threshold) {\n"
+                        + "        return new MigrationTypes.Shot(file, threshold, false);\n    }\n\n"
+                        + "    @Migrate(MigrationTypes.OldShot.class)\n    public static MigrationTypes.Shot shot(");
+        Map<Path, String> doubled = new LinkedHashMap<>(after);
+        doubled.put(file(root, "Migrations"), twins);
+        Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class, MigrationSteps.plan(
+                index.replacing(doubled), GRAMMAR, DECLARED, file(root, "Migrations"), "com.bot", List.of(changed),
+                OldShot.class, Shot.class).outcome());
+        assertTrue(refused.reason().contains("both migrate OldShot to Shot"), refused.reason());
     }
 
     @Test
@@ -239,7 +251,7 @@ class MigrationStepsTest {
     void theBotsRetiredTypesArePendingWithTheirReplacement(@TempDir Path root) {
         BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldShots"), OLD_SHOTS,
                 file(root, "plugins/sdk/Shots"), SHOTS));
-        assertEquals(List.of(new MigrationSteps.Pending(OldShot.class, Shot.class, 2)),
+        assertEquals(List.of(new MigrationSteps.Pending(OldShot.class, Shot.class, 2, 0)),
                 MigrationSteps.pending(index, GRAMMAR, DECLARED));
         assertEquals(List.of(Shot.class, Frame.class), MigrationSteps.targets(GRAMMAR, DECLARED, OldShot.class),
                 "any pair of calls, the plugin's replacement first and the retired left out");

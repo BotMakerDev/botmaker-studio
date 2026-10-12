@@ -192,10 +192,7 @@ final class MigrationActions {
                 return;
             }
         }
-        List<String> changed = new ArrayList<>();
-        BotSources.scan(config, state, (file, source) -> {
-            if (basis.containsKey(file) && !source.equals(basis.get(file))) changed.add(file.getFileName().toString());
-        });
+        List<String> changed = changedSince(config, state, basis);
         if (!changed.isEmpty()) {
             told.finished(String.join(", ", changed) + " changed while this was worked out, so nothing was changed."
                     + " Try again.");
@@ -208,6 +205,15 @@ final class MigrationActions {
         told.finished(change.summary() + "." + planned.note()
                 + (undeleted.isEmpty() ? "" : " " + String.join("; ", undeleted) + "."));
         after.run();
+    }
+
+    /** The names of the files whose text is no longer what {@code basis} holds for them: edited while planned. */
+    static List<String> changedSince(ProjectConfig config, ProjectState state, Map<Path, String> basis) {
+        List<String> changed = new ArrayList<>();
+        BotSources.scan(config, state, (file, source) -> {
+            if (basis.containsKey(file) && !source.equals(basis.get(file))) changed.add(file.getFileName().toString());
+        });
+        return changed;
     }
 
     /**

@@ -233,7 +233,7 @@ public final class ProjectUpgrade {
      * takes the default ({@link #withDefaults}).
      */
     private static Report report(Row row) {
-        return row.upgrades().compare(row.targetVersion(), row.alsoModernise());
+        return row.upgrades().compare(row.targetVersion(), row.alsoModernise(), false);
     }
 
     /**

@@ -204,11 +204,13 @@ final class ReviewPanel {
         return !list.getItems().isEmpty() || migrations.isVisible();
     }
 
-    /** {@code 312 values of ImageTemplate, which its plugin replaced with Picture}, and Migrate…. */
+    /** {@code 312 values of ImageTemplate, which its plugin retired for Picture; 12 copied.}, and Migrate…. */
     private HBox migrationRow(MigrationSteps.Pending pending) {
         String what = pending.values() + (pending.values() == 1 ? " value" : " values") + " of "
                 + pending.from().getSimpleName() + ", which its plugin retired"
-                + (pending.to() == null ? "." : " for " + pending.to().getSimpleName() + ".");
+                + (pending.to() == null ? "" : " for " + pending.to().getSimpleName())
+                + (pending.copied() == 0 ? "." : pending.copied() == pending.values() ? "; all copied."
+                        : "; " + pending.copied() + " copied.");
         Label label = new Label(what);
         label.getStyleClass().add("review-cell-where");
         label.setWrapText(true);

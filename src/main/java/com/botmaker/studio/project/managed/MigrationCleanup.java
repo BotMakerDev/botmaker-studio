@@ -20,6 +20,7 @@ import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.QualifiedType;
@@ -31,6 +32,7 @@ import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -271,20 +273,20 @@ public final class MigrationCleanup {
     // --- removing methods nothing needs --------------------------------------------------------------------
 
     /**
-     * The bot's {@code @Migrate} methods whose old type nothing in the bot names any more — outside the files of
-     * the migration methods, and an import aside — and that no method still needed migrates a part through. Any
-     * value of the type, in an open set, a grouped one, a parameter or a field, is written with its type's name, so
-     * a value left anywhere keeps its method.
+     * The bot's {@code @Migrate} methods whose old type nothing in the bot names any more — outside the migration
+     * methods, and an import aside — and that no method still needed migrates a part through. Any value of the
+     * type, in an open set, a grouped one, a parameter or a field, is written with its type's name, so a value left
+     * anywhere keeps its method. A method whose old type cannot be read (its plugin not loaded), or whose name the
+     * bot writes where it cannot be resolved, is kept: unneeded is offered only when known.
      */
     public static List<ManagedMigrations.Method> unneeded(BotIndex index, ValueGrammar grammar) {
         List<ManagedMigrations.Method> methods = ManagedMigrations.methods(index, grammar);
-        Set<Path> migrationFiles = new HashSet<>();
-        methods.forEach(method -> migrationFiles.add(method.file()));
-        Set<String> named = typesNamed(index, migrationFiles);
+        Set<String> named = typesNamed(index);
         Set<ManagedMigrations.Method> needed = new LinkedHashSet<>();
         List<ManagedMigrations.Method> queue = new ArrayList<>();
         for (ManagedMigrations.Method method : methods) {
-            if (method.source() instanceof Class<?> from && named.contains(from.getCanonicalName())) {
+            if (!(method.source() instanceof Class<?> from) || named.contains(from.getCanonicalName())
+                    || named.contains(UNRESOLVED + from.getSimpleName())) {
                 queue.add(method);
             }
         }
@@ -389,17 +391,27 @@ public final class MigrationCleanup {
      */
     public static Optional<Class<?>> copyTarget(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
                                                 Class<?> from, String name) {
+        return Optional.ofNullable(copies(index, grammar, declared, from).get(name));
+    }
+
+    /** {@link #copyTarget} for every constant of {@code from} at once: each name with a copy, and the copy's type. */
+    public static Map<String, Class<?>> copies(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
+                                               Class<?> from) {
         List<Class<?>> types = new ArrayList<>();
         Class<?> pointed = MigrationSteps.replacementOf(grammar, from);
         if (pointed != null) types.add(pointed);
         for (ManagedValue<?> set : declared) {
             if (set != null && set.type() != null && !types.contains(set.type())) types.add(set.type());
         }
-        return types.stream().filter(type -> !ManagedMigrations.named(type, from))
-                .filter(type -> single(declared, type).map(set -> ManagedSets.holders(index, set.id()))
-                        .filter(holders -> holders.size() == 1)
-                        .map(holders -> migrated(index, holders.getFirst()).contains(name)).orElse(false))
-                .findFirst();
+        Map<String, Class<?>> out = new HashMap<>();
+        for (Class<?> type : types) {
+            if (ManagedMigrations.named(type, from)) continue;
+            single(declared, type).map(set -> ManagedSets.holders(index, set.id()))
+                    .filter(holders -> holders.size() == 1)
+                    .ifPresent(holders -> migrated(index, holders.getFirst()).forEach(name -> out.putIfAbsent(name,
+                            type)));
+        }
+        return out;
     }
 
     private static Optional<ManagedValue<?>> single(List<ManagedValue<?>> declared, Class<?> type) {
@@ -465,30 +477,43 @@ public final class MigrationCleanup {
         return rewritten == null ? source : rewritten;
     }
 
-    /** Every type the bot names in a declaration, a creation or a literal, by canonical name, outside {@code skip}. */
-    private static Set<String> typesNamed(BotIndex index, Set<Path> skip) {
+    /** What {@link #typesNamed} puts before the simple name of a type it could not resolve. */
+    private static final String UNRESOLVED = "?";
+
+    /**
+     * Every type the bot names in a declaration, a creation or a literal, by canonical name, outside its
+     * {@code @Migrate} methods; one that does not resolve by {@link #UNRESOLVED} and its simple name.
+     */
+    private static Set<String> typesNamed(BotIndex index) {
         return index.read(units -> {
             Set<String> out = new HashSet<>();
-            units.forEach((file, unit) -> {
-                if (skip.contains(file)) return;
-                unit.accept(new ASTVisitor() {
-                    @Override
-                    public boolean visit(SimpleType type) {
-                        add(type.resolveBinding());
-                        return true;
-                    }
+            units.forEach((file, unit) -> unit.accept(new ASTVisitor() {
+                @Override
+                public boolean visit(MethodDeclaration method) {
+                    return BotAnnotation.MIGRATE.on(method) == null;
+                }
 
-                    @Override
-                    public boolean visit(QualifiedType type) {
-                        add(type.resolveBinding());
-                        return true;
-                    }
+                @Override
+                public boolean visit(SimpleType type) {
+                    add(type.resolveBinding(), type.getName());
+                    return true;
+                }
 
-                    private void add(ITypeBinding binding) {
-                        if (binding != null) out.add(binding.getErasure().getQualifiedName());
+                @Override
+                public boolean visit(QualifiedType type) {
+                    add(type.resolveBinding(), type.getName());
+                    return true;
+                }
+
+                private void add(ITypeBinding binding, Name name) {
+                    if (binding != null && !binding.isRecovered()) {
+                        out.add(binding.getErasure().getQualifiedName());
+                    } else {
+                        String written = name.getFullyQualifiedName();
+                        out.add(UNRESOLVED + written.substring(written.lastIndexOf('.') + 1));
                     }
-                });
-            });
+                }
+            }));
             return out;
         });
     }

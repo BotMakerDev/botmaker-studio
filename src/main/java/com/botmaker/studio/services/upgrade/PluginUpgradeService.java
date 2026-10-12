@@ -671,6 +671,11 @@ public final class PluginUpgradeService {
      * a deprecation with nothing beside it — which is the honest answer, since it still compiles.
      */
     public Report compare(String targetVersion, boolean alsoModernise) {
+        return compare(targetVersion, alsoModernise, true);
+    }
+
+    /** The same report; {@code strand} false leaves {@link Report#stranded} empty, for the pass that writes. */
+    Report compare(String targetVersion, boolean alsoModernise, boolean strand) {
         String from = currentVersion();
         String to = targetVersion == null ? "" : targetVersion.trim();
         if (to.isEmpty()) {
@@ -691,7 +696,7 @@ public final class PluginUpgradeService {
 
         Report report = compare(oldJar.get(), newJar.get(), from, to, alsoModernise);
         // Modernising moves no version, so no value changes shape.
-        return from.equals(to) ? report : report.with(values(newJar.get(), to, true));
+        return from.equals(to) ? report : report.with(values(newJar.get(), to, strand));
     }
 
     // =========================================================================

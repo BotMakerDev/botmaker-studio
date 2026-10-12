@@ -138,8 +138,11 @@ public final class MigrationSteps {
         record Arms(Class<?> from, Class<?> to, Map<String, String> arms) implements Step {}
     }
 
-    /** A deprecated type whose values the bot still has, and what its plugin says replaces it ({@code null}: nothing). */
-    public record Pending(Class<?> from, Class<?> to, int values) {}
+    /**
+     * A deprecated type whose values the bot still has, what its plugin says replaces it ({@code null}: nothing), and
+     * how many of the values have an {@code @Migrated} copy.
+     */
+    public record Pending(Class<?> from, Class<?> to, int values, int copied) {}
 
     /**
      * An open set a plugin's next version drops, as the bot holds it now.
@@ -160,16 +163,23 @@ public final class MigrationSteps {
 
     // --- what the bot has to migrate -----------------------------------------------------------------------
 
-    /** Every deprecated type the bot's open sets still hold values of, with how many, in declaration order. */
+    /**
+     * Every deprecated type the bot's open sets still hold values of, with how many and how many of those have an
+     * {@code @Migrated} copy — counted as {@link #stranded} counts them — in declaration order.
+     */
     public static List<Pending> pending(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared) {
-        Map<Class<?>, Integer> counts = new LinkedHashMap<>();
+        Map<Class<?>, int[]> counts = new LinkedHashMap<>();
         for (ManagedValue<?> set : declared) {
             if (!migratable(set) || !ValueGrammar.retired(set.type())) continue;
-            int members = ManagedSets.members(index, set.id(), grammar).size();
-            if (members > 0) counts.merge(set.type(), members, Integer::sum);
+            List<ManagedSets.Member> members = ManagedSets.members(index, set.id(), grammar);
+            if (members.isEmpty()) continue;
+            Map<String, Class<?>> copies = MigrationCleanup.copies(index, grammar, declared, set.type());
+            int[] count = counts.computeIfAbsent(set.type(), type -> new int[2]);
+            count[0] += members.size();
+            count[1] += (int) members.stream().filter(member -> copies.containsKey(member.name())).count();
         }
         List<Pending> out = new ArrayList<>();
-        counts.forEach((type, count) -> out.add(new Pending(type, replacementOf(grammar, type), count)));
+        counts.forEach((type, count) -> out.add(new Pending(type, replacementOf(grammar, type), count[0], count[1])));
         return List.copyOf(out);
     }
 
@@ -190,8 +200,9 @@ public final class MigrationSteps {
             if (set == null || !set.isOpenSet() || kept.contains(key(set))) continue;
             List<ManagedSets.Member> members = ManagedSets.members(index, set.id(), grammar);
             boolean migratable = migratable(set) && !targets(grammar, declared, set.type()).isEmpty();
-            long left = !migratable ? members.size() : members.stream().filter(member -> MigrationCleanup
-                    .copyTarget(index, grammar, declared, set.type(), member.name()).isEmpty()).count();
+            Map<String, Class<?>> copies = migratable ? MigrationCleanup.copies(index, grammar, declared, set.type())
+                    : Map.of();
+            long left = members.stream().filter(member -> !copies.containsKey(member.name())).count();
             if (left > 0) {
                 out.add(new Stranded(set.id(), set.type(), migratable ? replacementOf(grammar, set.type()) : null,
                         (int) left, migratable));
@@ -666,8 +677,15 @@ public final class MigrationSteps {
         Map<Path, String> written = new LinkedHashMap<>();
         List<ManagedMigrations.Method> existing = ManagedMigrations.methods(index, grammar);
         for (Step step : steps) {
-            Optional<ManagedMigrations.Method> over = existing.stream()
-                    .filter(method -> method.maps(step.from(), step.to())).findFirst();
+            List<ManagedMigrations.Method> mapping = existing.stream()
+                    .filter(method -> method.maps(step.from(), step.to())).toList();
+            if (mapping.size() > 1) {
+                return new Draft(new Refactor.Refused(String.join(" and ", mapping.stream()
+                        .map(ManagedMigrations.Method::qualified).toList()) + " both migrate "
+                        + step.from().getSimpleName() + " to " + step.to().getSimpleName()
+                        + ": delete one, then apply again."), none, List.of());
+            }
+            Optional<ManagedMigrations.Method> over = mapping.stream().findFirst();
             Path file = over.map(ManagedMigrations.Method::file).orElse(migrations);
             String source = written.getOrDefault(file, index.sources().get(file));
             if (source == null) source = skeleton(mainPackage);

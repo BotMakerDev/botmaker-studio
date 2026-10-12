@@ -295,6 +295,14 @@ final class MigrationWindow {
         switch (draft.outcome()) {
             case Refactor.Refused refused -> status.setText(refused.reason() + kept + failed);
             case Refactor.Planned plan when write -> {
+                List<String> changed = MigrationActions.changedSince(config, state, index.sources());
+                if (!changed.isEmpty()) {
+                    applied = false;
+                    state();
+                    status.setText(String.join(", ", changed) + " changed while this was worked out, so nothing"
+                            + " was changed. Apply again.");
+                    return;
+                }
                 written(plan, index);
                 // What the steps are seeded from is now in the bot.
                 methods = ManagedMigrations.methods(BotIndex.of(config, state), grammar);

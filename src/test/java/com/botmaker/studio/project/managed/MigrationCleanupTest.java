@@ -162,6 +162,27 @@ class MigrationCleanupTest {
     }
 
     @Test
+    void aMethodBesideTheOldValuesItMapsIsStillNeeded(@TempDir Path root) {
+        String beside = OLD_SHOTS.replace("    private OldShots() {}", """
+                    private OldShots() {}
+
+                    @com.botmaker.plugin.api.meta.Migrate(OldShot.class)
+                    public static com.botmaker.studio.project.managed.MigrationTypes.Shot shot(String file,
+                                                                                         int threshold) {
+                        return new com.botmaker.studio.project.managed.MigrationTypes.Shot(file, threshold, false);
+                    }
+                """);
+        Map<Path, String> sources = new LinkedHashMap<>(index(root, MINER).sources());
+        sources.put(file(root, "plugins/sdk/OldShots"), beside);
+        sources.remove(file(root, "Migrations"));
+        sources.remove(file(root, "Miner"));
+        BotIndex index = index(root, MINER).replacing(sources);
+
+        assertEquals(1, ManagedMigrations.methods(index, GRAMMAR).size());
+        assertEquals(List.of(), MigrationCleanup.unneeded(index, GRAMMAR), "ORE and GOLD are still in its file");
+    }
+
+    @Test
     void aValueOfTheSameNameTheAuthorMadeIsNoCopy(@TempDir Path root) {
         Map<Path, String> sources = new LinkedHashMap<>(index(root, MINER).sources());
         sources.put(file(root, "plugins/sdk/Shots"), SHOTS.replace("@Migrated public static final Shot ORE",
