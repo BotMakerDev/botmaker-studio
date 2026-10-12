@@ -533,10 +533,20 @@ public class UIManager implements ProjectWindow {
             public void migrate(Class<?> from, Class<?> to) {
                 openMigration(from, to);
             }
+
+            @Override
+            public void removeMigrationMethods() {
+                migrationActions().removeMethods(toldInADialog());
+            }
         });
         // A managed value's right-click Migrate type…: the same window, the plugin's replacement preselected.
         eventBus.subscribe(CoreApplicationEvents.MigrateTypeRequestedEvent.class,
                 e -> openMigration(e.from(), null), true);
+        // …and Switch uses to its copy, for that one value: what happened is said in a dialog, the canvas's own
+        // status having no room for the uses left.
+        eventBus.subscribe(CoreApplicationEvents.SwitchUsesRequestedEvent.class,
+                e -> migrationActions().switchUses(e.from(), null, java.util.Set.of(e.name()), toldInADialog()),
+                true);
 
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
@@ -702,6 +712,18 @@ public class UIManager implements ProjectWindow {
         javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
                 : reviewPanel.node().getScene().getWindow();
         MigrationWindow.open(owner, config, state, from, to, this::redrawIfActive, reviewPanel::refresh);
+    }
+
+    /** The steps after a migration, owned by the main window, the Review list re-read after each. */
+    private MigrationActions migrationActions() {
+        return new MigrationActions(config, state, () -> reviewPanel.node().getScene() == null ? null
+                : reviewPanel.node().getScene().getWindow(), this::redrawIfActive, reviewPanel::refresh);
+    }
+
+    /** What a step after a migration did, in a dialog once it is done. */
+    private static MigrationActions.Told toldInADialog() {
+        return MigrationActions.Told.atTheEnd(told -> ThemedWindows.alert(
+                javafx.scene.control.Alert.AlertType.INFORMATION, told).show());
     }
 
     /** Draws {@code file} again from its buffer when it is the one on screen, after a rewrite underneath it. */

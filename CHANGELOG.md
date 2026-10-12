@@ -20,6 +20,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   constant shares its declaration with another field, and always for an enum's constant, whose `ordinal()`
   would change. A constant already above is left alone and takes no snapshot.
 
+- **After a migration: switch uses, remove originals, remove the migration.** In the migration window,
+  *Switch uses to the copies* points each use of `OldShots.ORE` at `Shots.ORE`; a retired value's right-click
+  does it for that one value. Only a copy the migration wrote counts — still marked `@Migrated`; one the author
+  made or edited is switched to by hand. A use the copy does not fit (held as the old type) is left as it is, and its
+  function is marked `@Refactor` so it shows in Review; the bot never stops compiling. *Remove originals…*
+  deletes, after asking, each old value that has a copy and that nothing uses. Once no value of a migrated type is
+  left, Review offers to remove the `@Migrate` methods nothing needs, and `Migrations.java` with them when it
+  holds nothing else (`project/managed/MigrationCleanup`, `ui/app/MigrationActions`). Each step is one version
+  after a safety one.
 - **Migrate a retired type's values in guided steps.** The Review tab lists each type a plugin retired that the
   bot still has values of ("312 values of ImageTemplate, which its plugin retired for Picture") with
   *Migrate…*; a managed value's right-click offers *Migrate type…* for any type that fits. The window

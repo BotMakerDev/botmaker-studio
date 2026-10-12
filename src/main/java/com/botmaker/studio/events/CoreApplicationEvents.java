@@ -180,6 +180,9 @@ public class CoreApplicationEvents {
     /** A managed value's right-click Migrate type…: open the migration window on its type's values. */
     public record MigrateTypeRequestedEvent(Class<?> from) implements ApplicationEvent {}
 
+    /** A retired value's right-click Switch uses: point the bot's uses of {@code name} at its migrated copy. */
+    public record SwitchUsesRequestedEvent(Class<?> from, String name) implements ApplicationEvent {}
+
     // --- Breakpoints ---
 
     public record BreakpointToggledEvent(CodeBlock block, boolean enabled) implements ApplicationEvent {}

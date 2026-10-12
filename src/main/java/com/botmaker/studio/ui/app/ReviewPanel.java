@@ -4,14 +4,18 @@ import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.managed.ManagedMigrations;
+import com.botmaker.studio.project.managed.MigrationCleanup;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.ReviewService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -28,6 +32,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
@@ -43,7 +48,8 @@ import java.util.function.BooleanSupplier;
  * mark, undo the change from the version taken before it, or rename or delete the function.
  *
  * <p>Above the marks, one row per type a plugin retired that the bot still has values of (2026-10-12), with
- * <i>Migrate…</i> opening {@link MigrationWindow}. The values keep working until the plugin drops the type.
+ * <i>Migrate…</i> opening {@link MigrationWindow}. The values keep working until the plugin drops the type. Once
+ * no value of a migrated type is left, one more row offers to remove the {@code @Migrate} methods nothing needs.
  *
  * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}, and the tab
  * refreshes when it is opened. Four different code paths write marks, two of them without the editor
@@ -71,6 +77,12 @@ final class ReviewPanel {
 
         /** Opens the migration window on {@code from}'s values, {@code to} preselected ({@code null}: none named). */
         void migrate(Class<?> from, Class<?> to);
+
+        /**
+         * Removes the migration methods nothing needs, once confirmed, and says what happened in a dialog: the
+         * summary line is the list's own, and the refresh after the removal rewrites it.
+         */
+        void removeMigrationMethods();
     }
 
     private final ProjectConfig config;
@@ -85,7 +97,7 @@ final class ReviewPanel {
      * The retired types last shown, and the refresh that asked: they are read on a worker — only when a plugin
      * retired an open set's type, so a project with none pays nothing — and an older answer is dropped.
      */
-    private List<MigrationSteps.Pending> pendingShown = List.of();
+    private Migrations shown = Migrations.NONE;
     private long pendingAsked;
     private final VBox node;
 
@@ -123,46 +135,68 @@ final class ReviewPanel {
     void refresh() {
         List<ReviewService.Item> items = ReviewService.scan(config, state);
         list.getItems().setAll(items);
-        summarise(items, pendingShown);
+        summarise(items, shown);
         List<ManagedValue<?>> declared = PluginHost.managedValues();
         long asked = ++pendingAsked;
-        if (config == null || !MigrationSteps.anyRetired(declared)) {
-            pendingShown(List.of(), items);
+        boolean[] methods = {false};
+        if (config != null) {
+            // "@Migrate(", not "@Migrate": every copy a migration wrote carries @Migrated.
+            BotSources.scan(config, state, (file, source) -> methods[0] |= source.contains("@Migrate("));
+        }
+        if (config == null || !MigrationSteps.anyRetired(declared) && !methods[0]) {
+            shown(Migrations.NONE, items);
             return;
         }
         // The buffers are read here; the parse, which a large bot pays for, on a worker.
         java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
         Thread worker = new Thread(() -> {
-            List<MigrationSteps.Pending> pending;
+            Migrations found;
             try {
-                pending = MigrationSteps.pending(index.get(), PluginHost.grammar(), declared);
+                BotIndex bot = index.get();
+                found = new Migrations(MigrationSteps.pending(bot, PluginHost.grammar(), declared),
+                        methods[0] ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of());
             } catch (RuntimeException | LinkageError e) {
-                pending = List.of();
+                found = Migrations.NONE;
             }
-            List<MigrationSteps.Pending> found = pending;
+            Migrations done = found;
             Platform.runLater(() -> {
-                if (asked == pendingAsked) pendingShown(found, list.getItems());
+                if (asked == pendingAsked) shown(done, list.getItems());
             });
         }, "review-retired-types");
         worker.setDaemon(true);
         worker.start();
     }
 
-    /** The retired types found, as rows above the marks, and the summary over both. */
-    private void pendingShown(List<MigrationSteps.Pending> pending, List<ReviewService.Item> items) {
-        pendingShown = List.copyOf(pending);
-        migrations.getChildren().setAll(pending.stream().map(this::migrationRow).toList());
-        migrations.setVisible(!pending.isEmpty());
-        summarise(items, pendingShown);
+    /** What the bot still has to migrate, and the migration methods nothing needs any more. */
+    private record Migrations(List<MigrationSteps.Pending> pending, List<ManagedMigrations.Method> unneeded) {
+
+        static final Migrations NONE = new Migrations(List.of(), List.of());
+
+        boolean isEmpty() {
+            return pending.isEmpty() && unneeded.isEmpty();
+        }
     }
 
-    private void summarise(List<ReviewService.Item> items, List<MigrationSteps.Pending> pending) {
+    /** What was found, as rows above the marks, and the summary over both. */
+    private void shown(Migrations found, List<ReviewService.Item> items) {
+        shown = found;
+        List<Node> rows = new ArrayList<>(found.pending().stream().map(this::migrationRow).toList());
+        if (!found.unneeded().isEmpty()) rows.add(unneededRow(found.unneeded()));
+        migrations.getChildren().setAll(rows);
+        migrations.setVisible(!found.isEmpty());
+        summarise(items, shown);
+    }
+
+    private void summarise(List<ReviewService.Item> items, Migrations found) {
         long files = items.stream().map(ReviewService.Item::file).distinct().count();
         String marks = items.isEmpty() ? "" : items.size() + (items.size() == 1 ? " thing" : " things")
                 + " to look at in " + files + (files == 1 ? " file." : " files.");
-        String retired = pending.isEmpty() ? "" : pending.size() + (pending.size() == 1 ? " retired type" : " retired types")
+        int pending = found.pending().size();
+        String retired = pending == 0 ? "" : pending + (pending == 1 ? " retired type" : " retired types")
                 + " to migrate.";
-        summary.setText(items.isEmpty() && pending.isEmpty() ? "Nothing to review." : (retired + " " + marks).strip());
+        String done = found.unneeded().isEmpty() ? "" : "Migration methods to remove.";
+        summary.setText(items.isEmpty() && found.isEmpty() ? "Nothing to review."
+                : String.join(" ", List.of(retired, done, marks)).strip().replaceAll(" +", " "));
     }
 
     /** True when the project holds at least one mark or retired type — what decides whether the tab raises itself. */
@@ -184,6 +218,25 @@ final class ReviewPanel {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox row = new HBox(8, label, spacer, migrate);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("review-cell");
+        return row;
+    }
+
+    /** {@code Migrations.picture is no longer needed…}, and Remove…. */
+    private HBox unneededRow(List<ManagedMigrations.Method> unneeded) {
+        String names = String.join(", ", unneeded.stream().map(ManagedMigrations.Method::qualified).limit(4).toList())
+                + (unneeded.size() > 4 ? ", …" : "");
+        Label label = new Label(names + (unneeded.size() == 1 ? " is" : " are") + " no longer needed: no value of"
+                + " the type migrated is left.");
+        label.getStyleClass().add("review-cell-where");
+        label.setWrapText(true);
+        Button remove = new Button("Remove…");
+        remove.setDisable(state.isReaderMode() || actions == null);
+        remove.setOnAction(e -> actions.removeMigrationMethods());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox row = new HBox(8, label, spacer, remove);
         row.setAlignment(Pos.CENTER_LEFT);
         row.getStyleClass().add("review-cell");
         return row;

@@ -26,12 +26,12 @@ public final class InteractionDecorator implements BlockDecorator {
         MenuItem trial = TrialMenu.item(block, context.getEventBus(),
                 () -> node.getScene() == null ? null : node.getScene().getWindow()).orElse(null);
         // A migration copies the values and edits none, and an open set's holder is locked: offered either way.
-        MenuItem migrate = MigrationMenu.item(block, context.getEventBus()).orElse(null);
+        java.util.List<MenuItem> migrate = MigrationMenu.items(block, context.getEventBus());
         if (block.isReadOnly()) {
             ContextMenu reading = new ContextMenu();
             if (definition != null) reading.getItems().add(definition);
             if (trial != null) reading.getItems().add(trial);
-            if (migrate != null) reading.getItems().add(migrate);
+            reading.getItems().addAll(migrate);
             if (!reading.getItems().isEmpty()) show(node, com.botmaker.studio.ui.render.menu.MenuTracker.track(reading));
             return;
         }
@@ -40,8 +40,8 @@ public final class InteractionDecorator implements BlockDecorator {
 
         if (definition != null) menu.getItems().add(definition);
         if (trial != null) menu.getItems().add(trial);
-        if (migrate != null) menu.getItems().add(migrate);
-        if (definition != null || trial != null || migrate != null) {
+        menu.getItems().addAll(migrate);
+        if (definition != null || trial != null || !migrate.isEmpty()) {
             menu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
         }
 

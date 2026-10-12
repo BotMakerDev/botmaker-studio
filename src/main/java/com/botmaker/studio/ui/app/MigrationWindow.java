@@ -51,6 +51,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -66,7 +67,8 @@ import java.util.function.Consumer;
  *
  * <p><b>Preview</b> runs the whole migration on a copy of the bot and lists each value before and after;
  * <b>Apply</b> writes the methods and the copies as one version, after a safety one. The originals are never
- * touched. Planning compiles the bot, so it runs off the FX thread; the buffers are read before and written
+ * touched by it: <b>Switch uses</b> and <b>Remove originals…</b> are the author's next steps
+ * ({@link MigrationActions}). Planning compiles the bot, so it runs off the FX thread; the buffers are read before and written
  * after on it.
  */
 final class MigrationWindow {
@@ -166,7 +168,21 @@ final class MigrationWindow {
         buttons.setAlignment(Pos.CENTER_RIGHT);
         HBox.setHgrow(status, Priority.SOMETIMES);
 
-        VBox root = new VBox(10, top, explain, scroll, rows, buttons);
+        // Once copied: the bot's uses moved over, then the originals nothing uses any more removed.
+        MigrationActions then = new MigrationActions(config, state, () -> stage, redraw, after);
+        Button switchUses = new Button("Switch uses to the copies");
+        switchUses.setOnAction(e -> then.switchUses(from, target.getValue(), Set.of(), status::setText));
+        Button removeOriginals = new Button("Remove originals…");
+        removeOriginals.setOnAction(e -> then.removeOriginals(from, target.getValue(), status::setText));
+        for (Button each : List.of(switchUses, removeOriginals)) {
+            each.disableProperty().bind(target.valueProperty().isNull());
+        }
+        Label thenLabel = new Label("Then:");
+        HBox afterwards = new HBox(8, thenLabel, switchUses, removeOriginals);
+        afterwards.setAlignment(Pos.CENTER_LEFT);
+        afterwards.setDisable(state.isReaderMode());
+
+        VBox root = new VBox(10, top, explain, scroll, rows, buttons, afterwards);
         root.setPadding(new Insets(14));
 
         target.valueProperty().addListener((o, was, now) -> {

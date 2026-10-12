@@ -724,7 +724,7 @@ public final class MigrationSteps {
     }
 
     /** The declaration of {@code method} in {@code holder}: its name and its mark. */
-    private static MethodDeclaration declared(TypeDeclaration holder, ManagedMigrations.Method method) {
+    static MethodDeclaration declared(TypeDeclaration holder, ManagedMigrations.Method method) {
         MethodDeclaration[] found = {null};
         holder.accept(new ASTVisitor() {
             @Override
