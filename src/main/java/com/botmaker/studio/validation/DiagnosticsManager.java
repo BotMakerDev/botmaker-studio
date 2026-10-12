@@ -147,6 +147,30 @@ public class DiagnosticsManager {
         return out;
     }
 
+    /**
+     * One {@link DiagnosticSeverity#Information} line when this file's {@code main} calls no plugin entry point
+     * while a bound plugin offers one (2026-10-12): such a {@code main} runs, and never starts the bot. Advisory
+     * like {@link #deprecationWarnings()}, and nothing is written for the user.
+     */
+    public List<Diagnostic> entryPointHints() {
+        if (nodeToBlockMap == null || sourceCode == null) return List.of();
+        org.eclipse.jdt.core.dom.CompilationUnit unit = nodeToBlockMap.keySet().stream()
+                .map(ASTNode::getRoot)
+                .filter(org.eclipse.jdt.core.dom.CompilationUnit.class::isInstance)
+                .map(org.eclipse.jdt.core.dom.CompilationUnit.class::cast)
+                .findFirst().orElse(null);
+        var main = com.botmaker.studio.plugin.EntryPoints.main(unit);
+        if (main.isEmpty() || com.botmaker.studio.plugin.EntryPoints.calledIn(main.get())) return List.of();
+        List<com.botmaker.studio.plugin.EntryPoints.Entry> offered = com.botmaker.studio.plugin.EntryPoints.offered();
+        if (offered.isEmpty()) return List.of();
+        int start = main.get().getName().getStartPosition();
+        Diagnostic d = new Diagnostic();
+        d.setSeverity(DiagnosticSeverity.Information);
+        d.setRange(new Range(positionOf(start), positionOf(start + main.get().getName().getLength())));
+        d.setMessage("main never starts the bot: add ▶ " + offered.getFirst().label() + " from the + menu inside main.");
+        return List.of(d);
+    }
+
     /** Inverse of {@link #getOffsetFromPosition}: source character offset → LSP (line, character) position. */
     private Position positionOf(int offset) {
         if (sourceCode == null || offset < 0) return new Position(0, 0);

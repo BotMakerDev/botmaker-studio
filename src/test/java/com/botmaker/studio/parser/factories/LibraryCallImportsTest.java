@@ -6,6 +6,7 @@ import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.parser.EditContext;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -86,11 +87,18 @@ class LibraryCallImportsTest {
                 }
                 """.formatted(PKG));
 
+        Files.writeString(src.resolve("Bot.java"), """
+                package %s;
+                public class Bot {
+                    public static void runFlow(String flow, boolean doSetup, Class<?>... values) {}
+                }
+                """.formatted(PKG));
+
         Path classes = dir.resolve("classes");
         Files.createDirectories(classes);
         int rc = compiler.run(null, null, null, "-d", classes.toString(),
                 src.resolve("geo/Point.java").toString(), src.resolve("Mouse.java").toString(),
-                src.resolve("Wait.java").toString());
+                src.resolve("Wait.java").toString(), src.resolve("Bot.java").toString());
         assertEquals(0, rc, "the fixture sources must compile");
         return classes;
     }
@@ -134,6 +142,53 @@ class LibraryCallImportsTest {
     void aSeededPluginTypeArgumentIsImported(@TempDir Path tmp) throws Exception {
         String source = insert(tmp, "Mouse", "click");
         assertTrue(source.contains("import " + PKG + ".geo.Point;"), source);
+    }
+
+    /**
+     * The index holds a {@code Class<?>...} parameter as {@code Class} with {@code varargs} set; the entry-point
+     * fill looked for an array and so seeded every entry point as a plain call, {@code new Class()} included
+     * (2026-10-12, egezg's "Run activity flow").
+     */
+    @Test
+    void anEntryPointsClassVarargsIsSeenThroughTheIndex(@TempDir Path tmp) throws Exception {
+        Path jar = jar(compile(tmp), tmp);
+        TypeSummaryManager index = new TypeSummaryManager(Set.of(PKG));
+        index.refresh(List.of(jar.toString()));
+        ProjectAnalyzer analyzer = new ProjectAnalyzer(index, new ProjectState());
+
+        var runFlow = analyzer.getMethods("Bot", true).stream()
+                .filter(sig -> sig.name().equals("runFlow")).findFirst().orElseThrow();
+        var click = analyzer.getMethods("Mouse", true).stream()
+                .filter(sig -> sig.name().equals("click")).findFirst().orElseThrow();
+
+        assertTrue(StatementFactory.endsInClassVarargs(runFlow), runFlow.toString());
+        assertTrue(!StatementFactory.endsInClassVarargs(click), click.toString());
+    }
+
+    /**
+     * The bot's holder of values counts, is read and is imported by its own file's package even when no editor
+     * ever parsed that file — {@code Sdk.java}, which a user rarely opens (2026-10-12).
+     */
+    @Test
+    void aHolderNobodyOpenedIsFoundReadAndImportedByItsPackage() {
+        ProjectState state = new ProjectState();
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/sdk/Sdk.java"), """
+                package com.mybot.plugins.sdk;
+                public final class Sdk {
+                    public static String flow = "";
+                }
+                """));
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), HOST, TestSupport.SOURCE_ROOT);
+        EditContext ctx = EditContext.of(cu, new ProjectAnalyzer(new TypeSummaryManager(Set.of(PKG)), state), state);
+
+        assertTrue(StatementFactory.declaredTypes(state).contains("Sdk"));
+        CompilationUnit sdk = StatementFactory.holderUnit(state, "Sdk").orElseThrow();
+        assertTrue(StatementFactory.declaresField(sdk, "Sdk", "flow"));
+        assertTrue(!StatementFactory.declaresField(sdk, "Sdk", "skip"), "a field the holder lacks is not named");
+
+        StatementFactory.importHolder(ctx, "Sdk", java.util.Optional.of(sdk));
+        assertTrue(ctx.applyTo(HOST).contains("import com.mybot.plugins.sdk.Sdk;"), ctx.applyTo(HOST));
     }
 
     @Test

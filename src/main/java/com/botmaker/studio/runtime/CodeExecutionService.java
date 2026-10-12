@@ -119,6 +119,7 @@ public class CodeExecutionService {
         // today, and the warning IS the deprecation cycle (see DiagnosticsManager.deprecationWarnings).
         List<org.eclipse.lsp4j.Diagnostic> published = new java.util.ArrayList<>(emptySlotIssues);
         published.addAll(diagnosticsManager.deprecationWarnings());
+        published.addAll(diagnosticsManager.entryPointHints());
         eventBus.publish(new CoreApplicationEvents.DiagnosticsUpdatedEvent(published));
         if (!emptySlotIssues.isEmpty()) {
             status("Run aborted: choose a variable for the highlighted slot(s) — see the Errors tab.");

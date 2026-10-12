@@ -7,6 +7,7 @@ import com.botmaker.studio.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.parser.StatementPlacement;
 import com.botmaker.studio.parser.factories.StatementFactory;
+import com.botmaker.studio.plugin.EntryPoints;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -122,6 +123,23 @@ public final class StatementMenu {
             if (matches.isEmpty()) menu.getItems().add(MenuBuilders.disabledItem("No matching blocks"));
             else menu.getItems().addAll(matches);
             return;
+        }
+
+        // The bot's way in, first, while main calls none (2026-10-12): a new bot's main only prints, and the entry
+        // point otherwise sits in its plugin's submenu, where nobody looks for it. It stays there as well.
+        if (b.targetBody() != null && b.analyzer() != null && StatementPlacement.inMain(b.targetBody())
+                && !EntryPoints.calledIn(EntryPoints.enclosingMethod(b.targetBody()))) {
+            List<MenuItem> starts = new ArrayList<>();
+            for (EntryPoints.Entry entry : EntryPoints.offered()) {
+                if (!facadeMethodNames(entry.facade(), b).contains(entry.method())) continue;
+                starts.add(callItem(new FacadeCall(entry.facade(),
+                        facadeCall(entry.facade(), entry.method(), "▶ " + entry.label())), b, false));
+            }
+            if (!starts.isEmpty()) {
+                menu.getItems().add(MenuBuilders.sectionHeader("START THE BOT"));
+                menu.getItems().addAll(starts);
+                menu.getItems().add(new SeparatorMenuItem());
+            }
         }
 
         // What the user pinned, in pin order — offered only where the menu would offer it anyway.

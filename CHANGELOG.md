@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **▶ Start the bot from main.** Inside `main`, the + menu leads with *START THE BOT* and the plugins' entry
+  points (*▶ Run activity flow*) while `main` calls none; they stay in their plugin's submenu too. Running a bot
+  whose `main` starts nothing shows a Problems line: "main never starts the bot: add ▶ Run activity flow".
 - **Claude outside Studio changes the bot only through Studio.** Opening a project adds rules to its
   `.claude/settings.json` (keeping yours) that deny Claude Code's file edits under `src/` and in-place shell
   edits, and *Copy Claude Code setup* now copies a full `claude …` command that starts it as the Assistant tab
@@ -32,6 +35,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Run activity flow inserts a call that compiles.** It landed as `Bot.runFlow(new Flow(), false, new Set(),
+  new Class())`, refused with "The constructor Flow() is undefined". The index holds `Class<?>...` as `Class`
+  with varargs set, so the entry-point fill never ran, and the bot's `Sdk.java` counted only once an editor had
+  parsed it. Now it inserts `Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip, Sdk.class)`, imports `Sdk` from its
+  own package, and writes a parameter's first value (`Set.of()`) where the holder lacks the field.
 - **A constant picked by name stays that name.** A Parameters row writes the constant an editor names
   (`ValueContext.writeMember`) and says which one it holds (`member`), so `Sdk.flow = Flows.EZF` is written and
   shown as EZF even when another flow is equal to it. A field that only holds a value with a name of its own

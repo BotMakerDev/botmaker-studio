@@ -355,14 +355,19 @@ public class StatementFactory {
             // fewest arguments (the simplest starting point). Seed a default value per parameter (a
             // CaptureSource slot gets the project-default target — see InitializerFactory). When no overload
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
-            List<ResolvedType> params = defaultOverloadParams(l, ctx.state(), ctx.analyzer());
-            List<String> holders = params != null && endsInClassVarargs(params) && isEntryPoint(l)
+            MethodSignature overload = defaultOverload(l, ctx.state(), ctx.analyzer());
+            List<ResolvedType> params = overload == null ? null : overload.paramTypes();
+            List<String> holders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l)
                     ? valuesHolders(ctx.state()) : List.of();
             if (!holders.isEmpty()) {
                 // An entry point taking the bot's values classes — Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip,
                 // Sdk.class) — is handed each plugin's parameter of the type an argument before them takes, then
                 // every plugin's holder of values: the arguments Studio knows and the author would look up.
                 List<ManagedValue<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
+                // Each holder's file read once per insert: one nobody opened is parsed here.
+                java.util.Map<String, Optional<CompilationUnit>> units = new java.util.HashMap<>();
+                java.util.function.Function<String, Optional<CompilationUnit>> unitOf =
+                        name -> units.computeIfAbsent(name, each -> holderUnit(ctx.state(), each));
                 for (ResolvedType p : params.subList(0, params.size() - 1)) {
                     ManagedValue<?> field = fields.stream().filter(f -> erased(f.form()).equals(erased(p))).findFirst()
                             .orElse(null);
@@ -372,15 +377,23 @@ public class StatementFactory {
                         continue;
                     }
                     fields.remove(field);
+                    String member = ManagedHolders.memberName(field);
+                    Optional<CompilationUnit> holder = unitOf.apply(field.holder());
+                    if (holder.isEmpty() || !declaresField(holder.get(), field.holder(), member)) {
+                        // A holder an older plugin wrote may lack the field until the next bind: its first value
+                        // compiles where naming the field would not.
+                        mi.arguments().add(freshValue(ctx, field));
+                        continue;
+                    }
                     mi.arguments().add(ast.newQualifiedName(ast.newSimpleName(field.holder()),
-                            ast.newSimpleName(ManagedHolders.memberName(field))));
-                    ctx.addImportForSimpleName(field.holder());
+                            ast.newSimpleName(member)));
+                    importHolder(ctx, field.holder(), holder);
                 }
                 for (String holder : holders) {
                     TypeLiteral literal = ast.newTypeLiteral();
                     literal.setType(ast.newSimpleType(ast.newSimpleName(holder)));
                     mi.arguments().add(literal);
-                    ctx.addImportForSimpleName(holder);
+                    importHolder(ctx, holder, unitOf.apply(holder));
                 }
             } else if (params != null) {
                 // Each seed names its type by simple name (`new Point(0, 0)`, `Duration.ofSeconds(1)`), so the
@@ -397,11 +410,17 @@ public class StatementFactory {
         return ast.newExpressionStatement(mi);
     }
 
-    /** Whether the overload's last parameter is a {@code Class<?>...} — the values classes of a bot. */
-    private static boolean endsInClassVarargs(List<ResolvedType> params) {
+    /**
+     * Whether the overload's last parameter is a {@code Class<?>...} — the values classes of a bot. A signature
+     * holds a varargs parameter as its element type with {@code varargs} set, never as the array, which this
+     * expected until 2026-10-12: every entry point was seeded as a plain call.
+     */
+    static boolean endsInClassVarargs(MethodSignature overload) {
+        List<ResolvedType> params = overload.paramTypes();
         if (params.isEmpty()) return false;
         ResolvedType last = params.getLast();
-        return last.isArray() && last.arrayDimensions() == 1 && "Class".equals(last.leafType().simpleName());
+        boolean array = overload.varargs() ? !last.isArray() : last.isArray() && last.arrayDimensions() == 1;
+        return array && "Class".equals(last.leafType().simpleName());
     }
 
     /**
@@ -437,6 +456,65 @@ public class StatementFactory {
         return generic < 0 ? name : name.substring(0, generic);
     }
 
+    /**
+     * The tree of the bot's file declaring {@code holder}, by its name: parsed here when nobody opened it, so the
+     * insert does not depend on which files the editor happened to show.
+     */
+    static Optional<CompilationUnit> holderUnit(ProjectState state, String holder) {
+        if (state == null) return Optional.empty();
+        for (ProjectFile file : state.getAllFiles()) {
+            if (!holder.equals(file.getClassName())) continue;
+            if (file.getAst() != null) return Optional.of(file.getAst());
+            try {
+                return Optional.of(com.botmaker.studio.project.source.BotParser.syntax(file.getContent()));
+            } catch (RuntimeException unreadable) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Whether {@code unit}'s class {@code holder} declares a field {@code name}. */
+    static boolean declaresField(CompilationUnit unit, String holder, String name) {
+        for (Object type : unit.types()) {
+            if (!(type instanceof TypeDeclaration declaration) || !declaration.getName().getIdentifier().equals(holder)) {
+                continue;
+            }
+            for (FieldDeclaration field : declaration.getFields()) {
+                for (Object fragment : field.fragments()) {
+                    if (((VariableDeclarationFragment) fragment).getName().getIdentifier().equals(name)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Imports the bot's class {@code holder} by its file's package — {@code com.egezg.plugins.sdk.Sdk} from
+     * {@code com.egezg.Base}. Found by simple name it depended on the index knowing the bot's own sources, which
+     * it did not for a file never opened, and the call landed naming an unimported {@code Sdk}.
+     */
+    static void importHolder(EditContext ctx, String holder, Optional<CompilationUnit> unit) {
+        Optional<String> pkg = unit.map(CompilationUnit::getPackage)
+                .map(declared -> declared.getName().getFullyQualifiedName());
+        if (pkg.isPresent()) ctx.addImport(pkg.get() + "." + holder);
+        else ctx.addImportForSimpleName(holder);
+    }
+
+    /**
+     * {@code field}'s first value as the holder would be written with it ({@code Set.of()}, imports added), the
+     * way {@code ManagedHolders} spells it — or {@code null} when the grammar writes none. Never the parameter
+     * type's default: that is what wrote {@code new Flow()}.
+     */
+    private static Expression freshValue(EditContext ctx, ManagedValue<?> field) {
+        var grammar = PluginHost.grammar();
+        Optional<com.botmaker.studio.plugin.grammar.JavaValue> fresh = field.initial() != null
+                ? grammar.spell(field.form(), field.initial()) : grammar.freshSpelling(field.form());
+        if (fresh.isEmpty()) return ctx.ast().newNullLiteral();
+        fresh.get().imports().forEach(ctx::addImport);
+        return fresh.get().copyInto(ctx.ast());
+    }
+
     /** Whether {@code l}'s method is a plugin's {@code @EntryPoint}, offered inside {@code main} only. */
     private static boolean isEntryPoint(BlockType.LibraryCall l) {
         for (FacadeEntry facade : PluginHost.menuFacades()) {
@@ -461,13 +539,20 @@ public class StatementFactory {
         return List.copyOf(holders);
     }
 
-    /** The simple names of the top-level types {@code state}'s files declare. */
-    private static Set<String> declaredTypes(ProjectState state) {
+    /**
+     * The simple names of the top-level types {@code state}'s files declare. A file nobody opened has no tree yet
+     * — {@code Sdk.java} never had, so Run activity flow was seeded {@code new Flow()} (2026-10-12) — and counts
+     * by its name, the class it is named after.
+     */
+    static Set<String> declaredTypes(ProjectState state) {
         Set<String> names = new LinkedHashSet<>();
         if (state == null) return names;
         for (ProjectFile file : state.getAllFiles()) {
             CompilationUnit cu = file.getAst();
-            if (cu == null) continue;
+            if (cu == null) {
+                names.add(file.getClassName());
+                continue;
+            }
             for (Object type : cu.types()) {
                 if (type instanceof AbstractTypeDeclaration declaration) names.add(declaration.getName().getIdentifier());
             }
@@ -476,11 +561,11 @@ public class StatementFactory {
     }
 
     /**
-     * Parameter types of the default overload for {@code l}: the project's favorite overload when set and it
+     * The default overload for {@code l}: the project's favorite overload when set and it
      * still resolves, otherwise the overload with the fewest parameters. {@code null} only when no overload of
      * the method resolves at all (an unknown method) — callers then use a single empty slot.
      */
-    private static List<ResolvedType> defaultOverloadParams(BlockType.LibraryCall l, ProjectState state,
+    private static MethodSignature defaultOverload(BlockType.LibraryCall l, ProjectState state,
                                                             ProjectAnalyzer analyzer) {
         if (analyzer == null) return null;
         List<MethodSignature> sigs = analyzer.getMethods(l.facade().getSimpleName(), true).stream()
@@ -498,7 +583,7 @@ public class StatementFactory {
         // intended degradation — a stale preference must not resurrect a hidden overload.
         MethodSignature chosen = MethodSignature.bestForKey(sigs, favKey);
         if (chosen == null) chosen = MethodSignature.fewestParams(sigs);
-        return chosen != null ? chosen.paramTypes() : null;
+        return chosen;
     }
 
     private static Statement buildLambdaCall(EditContext ctx, BlockType.LambdaCall l) {
