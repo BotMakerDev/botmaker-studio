@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin can move one constant of its open set above another** (`PluginValues.moveBefore`, done in
+  `project/managed/ManagedSets.moveBefore`). The declaration moves whole, javadoc and annotations included,
+  after one Project History snapshot. The move is refused when it would stop the bot compiling, when the
+  constant shares its declaration with another field, and always for an enum's constant, whose `ordinal()`
+  would change. A constant already above is left alone and takes no snapshot.
+
 - **A migration copies a deprecated type's values into its replacement** (`project/managed/ManagedMigrations`,
   no window yet). The author's `@Migrate(Old.class) static New m(parts…)` methods are read off the bot and
   substituted, never run: each constant of `Old`'s open set is taken apart, its parts put where the parameters

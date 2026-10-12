@@ -41,8 +41,8 @@ import java.util.Set;
 
 /**
  * A plugin's open sets — a class carrying {@code @SdkValue(SdkValue.Id.PICTURES)} whose {@code public static
- * final} constants the plugin adds, renames, repoints and removes (2026-09-28), or an enum carrying one whose
- * bare constants it does the same to ({@code ManagedValue.isEnum}, 2026-10-10).
+ * final} constants the plugin adds, renames, repoints, removes (2026-09-28) and moves (2026-10-12), or an enum
+ * carrying one whose bare constants it does the same to but move ({@code ManagedValue.isEnum}, 2026-10-10).
  *
  * <p><b>Pure, over the bot's one parse.</b> A {@link BotIndex} in, a {@link Refactor.Planned plan} or a
  * {@link Refactor.Refused refusal} out, nothing written — the shape {@link Refactor} has, and for the same
@@ -341,7 +341,70 @@ public final class ManagedSets {
                 Map.of(member.file(), removed)), "Removing " + member.qualified());
     }
 
+    /**
+     * {@code member} declared just above {@code before}, so {@code before}'s initialiser may read it: javac refuses
+     * a static field read above its declaration (2026-10-12, a flow running another flow as one card). A plan
+     * that rewrites nothing when it is already above. Refused when they are one constant, when {@code member}
+     * shares its declaration with another field, or when the bot would not compile after — {@code member}'s own
+     * initialiser reading a constant declared between the two. Always refused for an enum's constant: it reads
+     * no other, and moving it changes its {@code ordinal()} and {@code values()}.
+     *
+     * <p>Only the compile is checked: a {@code static {}} block the move jumps over runs in a new order unseen.
+     */
+    public static Refactor.Outcome moveBefore(BotIndex index, Member member, Member before) {
+        if (member.initializer() == null || before.initializer() == null) {
+            return new Refactor.Refused(member.qualified() + " is an enum's constant: moving it would change the "
+                    + "order the enum lists its constants in, and it reads no other constant.");
+        }
+        if (member.qualified().equals(before.qualified())) {
+            return new Refactor.Refused(member.qualified() + " cannot move above itself.");
+        }
+        if (!member.file().equals(before.file())) {
+            return new Refactor.Refused(member.qualified() + " and " + before.qualified()
+                    + " are not declared side by side, so neither can move above the other.");
+        }
+        String summary = "Moved " + member.qualified() + " above " + before.qualified();
+        if (member.start() < before.start()) return new Refactor.Planned(summary, Map.of());
+        String source = index.sources().get(member.file());
+        String moved = movedBefore(source, member.className(), member.name(), before.name());
+        if (moved == null) {
+            return new Refactor.Refused(member.qualified() + " could not be moved: it is declared together with "
+                    + "another field. Give it a declaration of its own first.");
+        }
+        if (moved.equals(source)) return new Refactor.Refused(member.qualified() + " could not be moved.");
+        return Refactor.checked(index, new Refactor.Planned(summary, Map.of(member.file(), moved)),
+                "Moving " + member.qualified() + " above " + before.qualified());
+    }
+
     // --- pure edits --------------------------------------------------------------------------------------------
+
+    /**
+     * {@code source} with the constant {@code name} of the class {@code className} moved just above
+     * {@code before}, its javadoc and annotations with it; unchanged when either is absent, null when
+     * {@code name}'s field declares another one too.
+     */
+    static String movedBefore(String source, String className, String name, String before) {
+        CompilationUnit unit = BotParser.syntax(source);
+        if (!(topLevel(unit, className) instanceof TypeDeclaration holder)) return source;
+        FieldDeclaration moving = field(holder, name);
+        FieldDeclaration anchor = field(holder, before);
+        if (moving == null || anchor == null) return source;
+        if (moving.fragments().size() > 1) return null;
+        ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+        rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY)
+                .insertBefore(rewrite.createMoveTarget(moving), anchor, null);
+        return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
+    /** The field declaring {@code name} in {@code holder}, or null. */
+    private static FieldDeclaration field(TypeDeclaration holder, String name) {
+        for (FieldDeclaration field : holder.getFields()) {
+            for (Object each : field.fragments()) {
+                if (((VariableDeclarationFragment) each).getName().getIdentifier().equals(name)) return field;
+            }
+        }
+        return null;
+    }
 
     /** {@code source} with the constant declared in {@code className}; unchanged when the class is not in it. */
     static String added(String source, String className, String name, Class<?> type, JavaValue initializer) {

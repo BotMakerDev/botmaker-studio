@@ -322,6 +322,71 @@ class ManagedSetsTest {
         assertTrue(created.contains("public static void home() {"), created);
     }
 
+    private static final String ROUTES = """
+            package com.bot.plugins.sdk;
+
+            import com.botmaker.studio.project.managed.TestValue;
+
+            @TestValue(TestValue.Id.PICTURES)
+            public final class Pictures {
+                public static final String MAIN = "main";
+
+                public static final String A = "a", B = "b";
+
+                public static final String MORE = "more";
+
+                /** The daily round. */
+                @Deprecated
+                public static final String DAILY = "daily";
+
+                public static final String GOLD = MORE + "/gold";
+
+                private Pictures() {}
+            }
+            """;
+
+    /**
+     * A constant moved above another, so the other may read it: the declaration moves whole, javadoc and
+     * annotation with it, and nothing is written when it is already above. A move that would make its own
+     * initialiser read a constant below it is refused, as is one out of a shared declaration.
+     */
+    @Test
+    void aConstantMovesAboveAnotherWithItsJavadoc(@TempDir Path root) {
+        BotIndex index = BotIndex.over(Map.of(pictures(root), ROUTES), List.of(contract(), testClasses()), root);
+
+        String moved = assertInstanceOf(Refactor.Planned.class,
+                ManagedSets.moveBefore(index, member(index, "DAILY"), member(index, "MAIN")))
+                .rewrites().get(pictures(root));
+        int daily = moved.indexOf("/** The daily round. */");
+        assertTrue(daily >= 0 && daily < moved.indexOf("@Deprecated") && moved.indexOf("@Deprecated")
+                < moved.indexOf("DAILY = ") && moved.indexOf("DAILY = ") < moved.indexOf("MAIN = "), moved);
+        assertEquals(1, moved.split("DAILY = ", -1).length - 1, "moved, not copied: " + moved);
+
+        assertTrue(assertInstanceOf(Refactor.Planned.class,
+                ManagedSets.moveBefore(index, member(index, "MAIN"), member(index, "DAILY")))
+                .rewrites().isEmpty(), "already above: nothing to write");
+
+        Refactor.Refused forward = assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.moveBefore(index, member(index, "GOLD"), member(index, "MAIN")));
+        assertTrue(forward.reason().contains("would stop the bot compiling"), forward.reason());
+        assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.moveBefore(index, member(index, "B"), member(index, "MAIN")), "B shares A's declaration");
+        assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.moveBefore(index, member(index, "MAIN"), member(index, "MAIN")));
+    }
+
+    /** An enum constant stays where it is: moving it would change its ordinal, and it reads no other constant. */
+    @Test
+    void anEnumConstantIsNeverMoved(@TempDir Path root) {
+        Path outcomes = root.resolve("com/bot/plugins/sdk/Outcomes.java");
+        BotIndex index = BotIndex.over(Map.of(outcomes, OUTCOMES), List.of(contract(), testClasses()), root);
+        List<ManagedSets.Member> members = ManagedSets.members(index, OUTCOMES_ID, GRAMMAR);
+
+        Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class,
+                ManagedSets.moveBefore(index, members.get(1), members.getFirst()));
+        assertTrue(refused.reason().contains("enum's constant"), refused.reason());
+    }
+
     private static ManagedSets.Member member(BotIndex index, String name) {
         return ManagedSets.member(index, ID,name, GRAMMAR).orElseThrow();
     }

@@ -490,6 +490,20 @@ public final class HostPluginValues implements PluginValues {
         return apply(ManagedSets.remove(index, found.get()));
     }
 
+    @Override
+    public Optional<String> moveBefore(String id, String member, String before) {
+        BotIndex index = index();
+        List<ManagedSets.Member> members = ManagedSets.members(index, id, PluginHost.grammar());
+        Optional<ManagedSets.Member> moving = members.stream().filter(m -> m.memberName().equals(member)).findFirst();
+        Optional<ManagedSets.Member> anchor = members.stream().filter(m -> m.memberName().equals(before)).findFirst();
+        if (moving.isEmpty()) return Optional.of(missing(id, member));
+        if (anchor.isEmpty()) return Optional.of(missing(id, before));
+        Refactor.Outcome planned = ManagedSets.moveBefore(index, moving.get(), anchor.get());
+        // Already above: nothing to write, and no snapshot either.
+        if (planned instanceof Refactor.Planned plan && plan.rewrites().isEmpty()) return Optional.empty();
+        return apply(planned);
+    }
+
     private BotIndex index() {
         return BotIndex.of(config, state);
     }
