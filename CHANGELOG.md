@@ -17,6 +17,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **A plugin installs at its newest release.** New Project, Browse and Installed offered the SDK at v1.4.2,
   the registry's verified version, while v1.4.4 was out: the registry's update for it never merged. Studio now
   asks JitPack for each plugin's newest build, and Installed marks it *(newest)*.
+- **A template whose pom has a self-referencing property no longer exhausts Studio's memory** in New Project:
+  property substitution stops after 32 replacements.
 
 ## [1.4.5] — 2026-10-12
 

@@ -91,6 +91,14 @@ class PublishFlowTest {
         assertEquals("${missing}", PublishRequest.interpolate("${missing}", Map.of()));
     }
 
+    /** A property naming itself stops instead of growing until memory runs out. */
+    @Test
+    void interpolationStopsOnASelfReference() {
+        assertEquals("v1.4.4", PublishRequest.interpolate("v${sdk}", Map.of("sdk", "1.4.4")));
+        String cycle = PublishRequest.interpolate("${a}", Map.of("a", "x${a}"));
+        assertEquals(PublishRequest.MAX_SUBSTITUTIONS + "${a}".length(), cycle.length(), cycle);
+    }
+
     @Test
     void thePreviewIsTheListingTheGalleryWouldShow() {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "d", "1.0.0", List.of("x"),

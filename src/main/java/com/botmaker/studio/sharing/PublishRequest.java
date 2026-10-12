@@ -83,18 +83,31 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         return List.copyOf(out);
     }
 
-    /** {@code ${name}} replaced from {@code properties}; a property nobody defines is left as written. */
+    /**
+     * {@code ${name}} replaced from {@code properties}; a property nobody defines is left as written.
+     *
+     * <p><b>At most {@value #MAX_SUBSTITUTIONS} replacements.</b> The scan goes on inside a replaced value, so a
+     * self-referencing property ({@code <a>x${a}</a>}) grew the text without end.
+     * Since 2026-10-12 the pom is a template's, fetched from its repository by New Project, so that was any
+     * gallery author's way to exhaust Studio's memory.
+     */
     static String interpolate(String text, Map<String, String> properties) {
         if (text == null) return "";
         String out = text;
-        for (int start = out.indexOf("${"); start >= 0; start = out.indexOf("${", start + 1)) {
+        int replaced = 0;
+        for (int start = out.indexOf("${"); start >= 0 && replaced < MAX_SUBSTITUTIONS;
+             start = out.indexOf("${", start + 1)) {
             int end = out.indexOf('}', start);
             if (end < 0) break;
             String value = properties.get(out.substring(start + 2, end));
             if (value != null) {
                 out = out.substring(0, start) + value + out.substring(end + 1);
+                replaced++;
             }
         }
         return out;
     }
+
+    /** Ample for a version: a pom pin names one property. */
+    static final int MAX_SUBSTITUTIONS = 32;
 }
