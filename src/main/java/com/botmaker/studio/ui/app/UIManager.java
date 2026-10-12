@@ -146,6 +146,7 @@ public class UIManager implements ProjectWindow {
     private final EnumMap<BottomTab, Tab> bottomTabs = new EnumMap<>(BottomTab.class);
     /** Restores the dividers and the open tab at open, and writes them back from {@link #dispose()}. */
     private WorkspaceLayoutStore workspaceLayout;
+    private CenterTabs centerTabs;
 
     private Label statusLabel;
     /**
@@ -467,13 +468,17 @@ public class UIManager implements ProjectWindow {
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.
-        CenterTabs centerTabs = new CenterTabs(editorCanvas.node());
+        // Since 2026-10-13 one tab per open Java file, the canvas drawn into the selected one: selecting a tab
+        // switches the file, and a switch made anywhere else brings its tab forward.
+        centerTabs = new CenterTabs(editorCanvas.node());
+        centerTabs.setEditor(codeEditorService::switchToFile,
+                () -> state.getActiveFile() == null ? null : state.getActiveFile().getPath());
         fileExplorerManager.setOnOpen(centerTabs::showCanvas, centerTabs::openResource);
         eventBus.subscribe(CoreApplicationEvents.BlockHighlightEvent.class, e -> {
             if (e.block() != null) centerTabs.showCanvas();
         }, true);
-        eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> centerTabs.setCanvasTitle(
-                state.getActiveFile() == null ? null : state.getActiveFile().getPath().getFileName().toString()),
+        eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> centerTabs.follow(), true);
+        eventBus.subscribe(CoreApplicationEvents.ProjectFilesChangedEvent.class, e -> centerTabs.closeMissing(),
                 true);
 
         // Navigate ▸ — the popups land on blocks through this canvas, so they are wired once it exists. Find
@@ -595,8 +600,11 @@ public class UIManager implements ProjectWindow {
         // Both splits and every tab exist by now, so the remembered arrangement can go straight over the
         // defaults set above — before the scene is shown, so nothing is seen to jump into place.
         workspaceLayout = new WorkspaceLayoutStore(
-                projectSettingsService, mainSplit, verticalSplit, bottomTabPane, bottomTabs);
+                projectSettingsService, mainSplit, verticalSplit, bottomTabPane, bottomTabs, centerTabs,
+                config.projectPath());
         workspaceLayout.restore();
+        // The project opens on the file its tabs were left showing, so it is parsed once, not after the entry point.
+        codeEditorService.openFirst(centerTabs.restoredFront());
 
         // "Ready" unless the open had something to report — the migrations and the restore pass changed the
         // project on disk, and a change made on the user's behalf that nobody is told about is indistinguishable

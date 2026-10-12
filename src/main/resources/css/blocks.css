@@ -2860,14 +2860,11 @@
     -fx-border-radius: 8px;
 }
 
-/* The centre column's tabs (CenterTabs): the canvas, and what was opened beside it to be read. With the canvas
-   alone the strip takes no room, so nothing moves for a project that never opens anything else. */
-.center-tabs--single > .tab-header-area {
-    visibility: hidden;
-    -fx-pref-height: 0;
-    -fx-min-height: 0;
-    -fx-max-height: 0;
-    -fx-padding: 0;
+/* The centre column's tabs (CenterTabs): one per open Java file, the canvas in the selected one, and what was
+   opened beside them to be read. The strip always shows since 2026-10-13: it is where files are switched. */
+.center-tabs-empty {
+    -fx-font-size: 13px;
+    -fx-text-fill: -bm-muted;
 }
 
 .resource-viewer-text {

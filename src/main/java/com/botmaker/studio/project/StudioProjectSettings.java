@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Per-project editor settings, persisted as {@code settings.json} under the project's {@code .botmaker}
@@ -127,15 +128,21 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
      * @param publishDivider  the Versions tab's history/Publish split, {@code 0..1}, or {@code null}
      */
     public record WorkspaceLayout(Double explorerDivider, Double bottomDivider, String bottomTab,
-                                  Double publishDivider) {
+                                  Double publishDivider, List<String> openFiles, String shownFile) {
 
         /** Dividers this close to an edge have hidden a pane, so they are treated as never saved. */
         private static final double EDGE = 0.02;
 
+        /**
+         * {@code openFiles}: the Java files open in the centre's tabs, relative to the project (2026-10-13);
+         * null when never saved, which opens the entry point's tab, and empty when the user closed them all.
+         * {@code shownFile}: the one selected, or null.
+         */
         public WorkspaceLayout {
             explorerDivider = usable(explorerDivider);
             bottomDivider = usable(bottomDivider);
             publishDivider = usable(publishDivider);
+            openFiles = openFiles == null ? null : openFiles.stream().filter(Objects::nonNull).toList();
         }
 
         /** The main window's three, with the Versions tab's publish divider never moved. */
@@ -143,12 +150,22 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
             this(explorerDivider, bottomDivider, bottomTab, null);
         }
 
+        public WorkspaceLayout(Double explorerDivider, Double bottomDivider, String bottomTab,
+                               Double publishDivider) {
+            this(explorerDivider, bottomDivider, bottomTab, publishDivider, null, null);
+        }
+
         /**
          * The same layout with the Versions tab's history/publish divider at {@code position} (2026-09-26:
          * the Publish sheet is the right pane of a split, so it can be widened).
          */
         public WorkspaceLayout withPublishDivider(Double position) {
-            return new WorkspaceLayout(explorerDivider, bottomDivider, bottomTab, position);
+            return new WorkspaceLayout(explorerDivider, bottomDivider, bottomTab, position, openFiles, shownFile);
+        }
+
+        /** The same layout with these files open in tabs, {@code shown} selected. */
+        public WorkspaceLayout withOpenFiles(List<String> files, String shown) {
+            return new WorkspaceLayout(explorerDivider, bottomDivider, bottomTab, publishDivider, files, shown);
         }
 
         public double publishDividerOr(double fallback) {

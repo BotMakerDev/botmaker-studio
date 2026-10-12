@@ -27,6 +27,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   row to right-click. The assistant gets the same through `services/ClassFiles`: `add_file` takes `kind` and
   `package`, `rename` of a class moves its file instead of refusing, and `delete_file` is new. The tree
   follows a file the assistant adds.
+- **Java files open in tabs.** Each Java file you open gets a tab above the canvas, beside the pictures and
+  data files; clicking a tab switches to that file, and a file opened from anywhere else (Project Files, a
+  usage, the assistant) brings its tab forward. A tab's menu offers Close, Close Others, Close All and Close
+  Tabs to the Left / Right; with every tab closed the centre says how to open one. The open tabs come back
+  when the project is reopened, and a renamed or deleted file's tab closes.
 - **Parameters.java has its own package, `<bot>.params`.** Studio owns it there: the Parameters window writes
   it, and Project Files lists it apart and neither renames nor deletes it. New bots and the game-bot template
   have it there; a bot made before keeps its file beside its classes, an ordinary class the window still reads.

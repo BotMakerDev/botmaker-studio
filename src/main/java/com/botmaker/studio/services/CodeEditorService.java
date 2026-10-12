@@ -58,6 +58,7 @@ public class CodeEditorService {
 
     private final ProjectConfig config;
     private final ProjectState state;
+    private Path firstFile;
     private final EventBus eventBus;
     private final BlockConverter blockConverter;
     private final CodeEditor codeEditor;
@@ -591,7 +592,15 @@ public class CodeEditorService {
     }
 
     /**
-     * Adopts the files {@link #readProjectSources()} read and renders the entry point. <b>FX thread only</b> —
+     * The file {@link #openInitialFile} renders instead of the entry point — the one the project's tabs were
+     * left showing — or null for the entry point. FX thread, before the open.
+     */
+    public void openFirst(Path file) {
+        firstFile = file;
+    }
+
+    /**
+     * Adopts the files {@link #readProjectSources()} read and renders the entry point, or {@link #openFirst}'s. <b>FX thread only</b> —
      * it writes {@link ProjectState} and publishes, and the parse of the main file it ends with is the one
      * genuinely slow step of project open.
      */
@@ -602,7 +611,7 @@ public class CodeEditorService {
                         .anyMatch(f -> f.getPath().equals(file.getPath()));
                 if (!alreadyLoaded) state.addFile(file);
             }
-            switchToFile(config.entrySourceFile());
+            switchToFile(firstFile != null && Files.isRegularFile(firstFile) ? firstFile : config.entrySourceFile());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -619,8 +628,9 @@ public class CodeEditorService {
      * readable file is an actual error.
      */
     public void switchToFile(Path path) {
+        Path at = path.toAbsolutePath().normalize();
         ProjectFile file = state.getAllFiles().stream()
-                .filter(f -> f.getPath().equals(path))
+                .filter(f -> f.getPath().toAbsolutePath().normalize().equals(at))
                 .findFirst().orElseGet(() -> loadFromDisk(path));
 
         if (file == null) return;

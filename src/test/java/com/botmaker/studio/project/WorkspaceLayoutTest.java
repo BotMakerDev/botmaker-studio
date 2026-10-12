@@ -88,4 +88,25 @@ class WorkspaceLayoutTest {
         assertEquals(0.28, read.explorerDivider());
         assertEquals(0.6, new WorkspaceLayout(null, null, null, 0.99).publishDividerOr(0.6), "an edge is unusable");
     }
+
+    @Test
+    void theOpenTabsSurviveARoundTripThroughDiskAndNoneIsNotNeverSaved(@TempDir Path dir) throws Exception {
+        StudioProjectSettings.empty()
+                .withWorkspaceLayout(new WorkspaceLayout(0.28, 0.75, "ERRORS").withPublishDivider(0.55)
+                        .withOpenFiles(List.of("src/main/java/com/bot/A.java", "src/main/java/com/bot/B.java"),
+                                "src/main/java/com/bot/B.java"))
+                .write(dir);
+        WorkspaceLayout read = StudioProjectSettings.read(dir).workspaceLayout();
+        assertEquals(List.of("src/main/java/com/bot/A.java", "src/main/java/com/bot/B.java"),
+                read.openFiles());
+        assertEquals("src/main/java/com/bot/B.java", read.shownFile());
+        assertEquals(0.55, read.withPublishDivider(0.55).publishDivider());
+        assertEquals(read.openFiles(), read.withPublishDivider(0.4).openFiles(), "moving a divider keeps the tabs");
+
+        StudioProjectSettings.empty()
+                .withWorkspaceLayout(new WorkspaceLayout(0.28, 0.75, null).withOpenFiles(List.of(), null))
+                .write(dir);
+        assertEquals(List.of(), StudioProjectSettings.read(dir).workspaceLayout().openFiles(),
+                "every tab closed is remembered as none, not as never saved");
+    }
 }
