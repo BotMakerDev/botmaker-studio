@@ -147,9 +147,40 @@ public final class HostValueContext implements ValueContext {
 
     @Override
     public <T> Optional<T> value(Class<T> type) {
-        Optional<Object> value = written != null ? Optional.of(held)
+        Optional<Object> value = written != null ? Optional.ofNullable(held)
                 : seed == null ? Optional.empty() : ConstantValues.read(grammar, constants, form, seed);
         return value.flatMap(v -> ValueGrammar.as(v, type));
+    }
+
+    /** The constant of the open set {@code id} the value as it stands names, {@code Flows.DAILY} → {@code DAILY}. */
+    @Override
+    public Optional<String> member(String id) {
+        Optional<JavaValue> now = current();
+        if (now.isEmpty()) return Optional.empty();
+        return lookup().member(id, now.get().node()).map(ManagedConstants.Constant::memberName);
+    }
+
+    /**
+     * Writes {@code Owner.MEMBER}, by name (2026-10-12): {@link #set} spells a value as the first constant equal
+     * to it, so of two equal flows it could only ever write the first.
+     */
+    @Override
+    public Optional<String> writeMember(String id, String member) {
+        ManagedConstants.Lookup lookup = lookup();
+        Optional<ManagedConstants.Constant> constant = lookup.member(id, member);
+        if (constant.isEmpty()) return Optional.of("The bot declares no " + member + " to write.");
+        Object value = constant.get().value(grammar).orElse(null);
+        if (value != null && form instanceof Class<?> cls && !cls.isPrimitive() && !cls.isInstance(value)) {
+            return Optional.of(member + " is not a " + cls.getSimpleName() + "; the field keeps what it had.");
+        }
+        held = value;
+        written = ManagedConstants.Lookup.reference(constant.get());
+        if (onChange != null) onChange.accept(written);
+        return Optional.empty();
+    }
+
+    private ManagedConstants.Lookup lookup() {
+        return new ManagedConstants.Lookup(constants.get(), grammar);
     }
 
     /**

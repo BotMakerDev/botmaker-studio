@@ -53,6 +53,26 @@ class HostValueContextConstantsTest {
         assertEquals(List.of("Pictures.ORE", "com.bot.Pictures"), written);
     }
 
+    /** Of two equal constants, the one written by name is the one the row names afterwards. */
+    @Test
+    void aMemberWrittenByNameIsTheOneTheRowNames() {
+        String ore = "new " + JavaNames.canonical(Picture.class) + "(\"images/ore.png\")";
+        List<ManagedConstants.Constant> twins = List.of(
+                new ManagedConstants.Constant("com.bot.Pictures", "ORE", ore, null, "com.bot.Pictures", "pictures"),
+                new ManagedConstants.Constant("com.bot.Pictures", "COPY", ore, null, "com.bot.Pictures", "pictures"));
+        List<String> written = new ArrayList<>();
+        HostValueContext context = HostValueContext.of(FORM, GRAMMAR, "Pictures.ORE", null,
+                value -> written.add(value.source()), () -> twins);
+
+        assertEquals("ORE", context.member("pictures").orElseThrow());
+        assertTrue(context.writeMember("pictures", "COPY").isEmpty());
+
+        assertEquals(List.of("Pictures.COPY"), written);
+        assertEquals("COPY", context.member("pictures").orElseThrow());
+        assertEquals(new Picture("images/ore.png"), context.value(Picture.class).orElseThrow());
+        assertTrue(context.writeMember("pictures", "SILVER").isPresent(), "no such constant: refused");
+    }
+
     @Test
     void withNoConstantsANameStaysUnread() {
         HostValueContext context = HostValueContext.of(FORM, GRAMMAR, "Pictures.ORE", null, null);

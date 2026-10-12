@@ -17,6 +17,7 @@ import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.EnumConstantDeclaration;
 import org.eclipse.jdt.core.dom.EnumDeclaration;
+import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.Name;
@@ -58,21 +59,37 @@ public final class ManagedConstants {
      *                    ({@code ManagedValue.byName}), or a nested enum ({@code ManagedValue.byGroup}); null for
      *                    a field, whose initialiser says
      * @param topLevel    the top-level class {@code owner} is in, fully qualified — what a bot imports
+     * @param set         the id of the open set whose mark {@code topLevel} carries; null when not known
      */
-    public record Constant(String owner, String field, String initializer, Object member, String topLevel) {
+    public record Constant(String owner, String field, String initializer, Object member, String topLevel,
+                           String set) {
 
         /** A field, read through its initialiser. */
         public Constant(String owner, String field, String initializer) {
-            this(owner, field, initializer, null, owner);
+            this(owner, field, initializer, null, owner, null);
         }
 
         /** A top-level enum's constant. */
         public Constant(String owner, String field, String initializer, Object member) {
-            this(owner, field, initializer, member, owner);
+            this(owner, field, initializer, member, owner, null);
+        }
+
+        /** The same, as a constant of the open set {@code id}. */
+        Constant inSet(String id) {
+            return new Constant(owner, field, initializer, member, topLevel, id);
+        }
+
+        /**
+         * What {@code PluginValues} calls it: {@code ORE}, or {@code Collect.WON} in a nested enum; null for a
+         * whole nested enum.
+         */
+        public String memberName() {
+            if (isGroup()) return null;
+            return owner.equals(topLevel) ? field : owner.substring(topLevel.length() + 1) + "." + field;
         }
 
         /** The value it holds, read through {@code grammar}; empty when its initialiser is not one it reads. */
-        Optional<Object> value(ValueGrammar grammar) {
+        public Optional<Object> value(ValueGrammar grammar) {
             return member != null ? Optional.of(member)
                     : initializer == null ? Optional.empty() : grammar.valueOfAny(initializer);
         }
@@ -252,17 +269,44 @@ public final class ManagedConstants {
             }
             Optional<JavaValue> canonical = grammar.initializerOfAny(value);
             if (canonical.isEmpty()) return Optional.empty();
+            // A value with a name of its own (Flow.NONE) keeps it: a bot field that merely holds it
+            // (EZF = Flow.NONE) is a name for something else that happens to start equal.
+            boolean named = canonical.get().node() instanceof Name;
             List<Optional<JavaValue>> theirs = written();
             for (int i = 0; i < constants.size(); i++) {
                 Constant constant = constants.get(i);
-                if (constant.isGroup() || theirs.get(i).isEmpty() || !theirs.get(i).get().sameJava(canonical.get())) {
+                if (constant.isGroup() || (named && constant.member() == null)
+                        || theirs.get(i).isEmpty() || !theirs.get(i).get().sameJava(canonical.get())) {
                     continue;
                 }
-                QualifiedName reference = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
-                        ast.newSimpleName(constant.field()));
-                return Optional.of(JavaValue.built(reference, List.of(constant.topLevel())));
+                return Optional.of(reference(constant));
             }
             return Optional.empty();
+        }
+
+        /**
+         * The constant of the open set {@code id} that {@code written} names — {@code Flows.DAILY}, resolved as
+         * {@link #read} resolves it — or empty when it names none of that set's.
+         */
+        public Optional<Constant> member(String id, Expression written) {
+            if (id == null || !(written instanceof QualifiedName name)) return Optional.empty();
+            return constant(name).filter(constant -> id.equals(constant.set()));
+        }
+
+        /** The constant {@code member} of the open set {@code id}, by {@link Constant#memberName()}. */
+        public Optional<Constant> member(String id, String member) {
+            if (id == null || member == null) return Optional.empty();
+            return constants.stream()
+                    .filter(constant -> id.equals(constant.set()) && member.equals(constant.memberName()))
+                    .findFirst();
+        }
+
+        /** {@code Owner.FIELD} for {@code constant}, with the import of its top-level class. */
+        public static JavaValue reference(Constant constant) {
+            AST ast = AST.newAST(AST.getJLSLatest(), false);
+            QualifiedName reference = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
+                    ast.newSimpleName(constant.field()));
+            return JavaValue.built(reference, List.of(constant.topLevel()));
         }
 
         private synchronized List<Optional<JavaValue>> written() {
@@ -289,6 +333,7 @@ public final class ManagedConstants {
                 if (!type.isPackageMemberTypeDeclaration()
                         || ManagedIds.on(type, known) == null) return false;
                 String owner = pkg + type.getName().getIdentifier();
+                String id = ManagedIds.idOf(ManagedIds.on(type, known), known);
                 grouped(type, owner, known, out);
                 for (FieldDeclaration field : type.getFields()) {
                     int flags = field.getModifiers();
@@ -297,7 +342,7 @@ public final class ManagedConstants {
                         VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
                         if (fragment.getInitializer() == null) continue;
                         out.add(new Constant(owner, fragment.getName().getIdentifier(),
-                                JavaParameterSource.text(source, fragment.getInitializer())));
+                                JavaParameterSource.text(source, fragment.getInitializer())).inSet(id));
                     }
                 }
                 return false;
@@ -318,7 +363,7 @@ public final class ManagedConstants {
                 for (Object each : type.enumConstants()) {
                     String name = ((EnumConstantDeclaration) each).getName().getIdentifier();
                     Object member = set.byName(name);
-                    if (member != null) out.add(new Constant(owner, name, null, member));
+                    if (member != null) out.add(new Constant(owner, name, null, member).inSet(id));
                 }
                 return false;
             }
@@ -342,11 +387,11 @@ public final class ManagedConstants {
             String group = nested.getName().getIdentifier();
             String nestedOwner = owner + "." + group;
             Object whole = set.byGroup(group);
-            if (whole != null) out.add(new Constant(nestedOwner, null, null, whole, owner));
+            if (whole != null) out.add(new Constant(nestedOwner, null, null, whole, owner, id));
             for (Object each : nested.enumConstants()) {
                 String name = ((EnumConstantDeclaration) each).getName().getIdentifier();
                 Object member = set.byName(group, name);
-                if (member != null) out.add(new Constant(nestedOwner, name, null, member, owner));
+                if (member != null) out.add(new Constant(nestedOwner, name, null, member, owner, id));
             }
         }
     }

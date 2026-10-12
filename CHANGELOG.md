@@ -32,6 +32,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A constant picked by name stays that name.** A Parameters row writes the constant an editor names
+  (`ValueContext.writeMember`) and says which one it holds (`member`), so `Sdk.flow = Flows.EZF` is written and
+  shown as EZF even when another flow is equal to it. A field that only holds a value with a name of its own
+  (`EZF = Flow.NONE`) no longer takes that name over: `Flow.NONE` is written as `Flow.NONE`.
 - **A holder the bot has gets back the values it lacks.** A plugin's method-shaped value missing from a holder
   the bot already has is written into it, with its starting value, when a plugin window asks for it. It is not
   written on bind, because the user may have deleted it. A method of that name already in the class is left

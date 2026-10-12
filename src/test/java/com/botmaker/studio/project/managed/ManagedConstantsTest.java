@@ -112,6 +112,47 @@ class ManagedConstantsTest {
     }
 
     /**
+     * Two constants holding equal values are still two names: the one picked is the one written, and a reference
+     * is read back as the one it names (2026-10-12, a fresh flow equal to {@code Flow.NONE}).
+     */
+    @Test
+    void ofTwoEqualConstantsThePickedNameIsWrittenAndRead() {
+        String twins = PICTURES.replace("static final Picture HIDDEN",
+                "public static final Picture ALSO_GOLD = new " + name() + "(\"images/gold.png\");\n    static final Picture HIDDEN");
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(twins, KNOWN), GRAMMAR);
+        String id = KNOWN.getFirst().id();
+
+        JavaValue written = ManagedConstants.Lookup.reference(lookup.member(id, "ALSO_GOLD").orElseThrow());
+
+        assertEquals("Pictures.ALSO_GOLD", written.source());
+        assertEquals(List.of("com.bot.plugins.sdk.Pictures"), written.imports());
+        assertEquals("ALSO_GOLD", lookup.member(id, name("Pictures.ALSO_GOLD")).orElseThrow().memberName());
+        assertTrue(lookup.member("another", name("Pictures.ALSO_GOLD")).isEmpty(), "another set's name is not its");
+        assertTrue(lookup.member(id, "SILVER").isEmpty());
+    }
+
+    /**
+     * A field that only holds a value with a name of its own ({@code EZF = Flow.NONE}) does not take that name
+     * over: the value is still written as itself.
+     */
+    @Test
+    void aFieldHoldingANamedValueDoesNotStandForIt() {
+        String days = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.PICTURES)
+                public final class Pictures {
+                    public static final java.time.DayOfWeek FIRST = java.time.DayOfWeek.MONDAY;
+                }
+                """;
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(days, KNOWN), GRAMMAR);
+
+        assertTrue(lookup.spell(java.time.DayOfWeek.MONDAY).isEmpty());
+    }
+
+    /**
      * A marked enum's constants are what its set's plugin makes of each name, so a reference reads as that
      * value and the value is written back as the constant.
      */
