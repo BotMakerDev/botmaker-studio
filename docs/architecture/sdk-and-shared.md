@@ -169,7 +169,7 @@ point of it.**
     that arrives transitively is something another plugin brought, so writing a pin for it would overrule
     Maven's own mediation. The list is `LibraryService.declaredLibraries()` ∩ three sources, tried in order
     of how much each knows — `REGISTRY` (name, description, `editorDependencies`, and `available` =
-    **`verifiedVersion`**, not JitPack's newest, since the newest tag may be one nothing has ever loaded),
+    the entry's `version`, JitPack's newest since 2026-10-12 — `plugins.md`),
     `LOCAL_BUILD` (a `*SNAPSHOT` in `~/.m2`; it wins the version and keeps the registry entry's editor
     dependencies, exactly as `ManagePluginsDialog.merge` already does), `UNLISTED` (the pom declares a
     plugin nothing else accounts for). **What makes a dependency a plugin is `MavenService.declaresPlugin`**

@@ -34,7 +34,7 @@ class TemplatePluginsTest {
             """;
 
     private static final List<PluginRegistry.Plugin> REGISTRY = List.of(new PluginRegistry.Plugin("com.botmaker.sdk",
-            "SDK", "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.4.2", ""));
+            "SDK", "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "v1.4.2"));
 
     @Test
     void theRegistrysPluginsInThePomWithTheirInterpolatedVersion() {

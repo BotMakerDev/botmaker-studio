@@ -137,7 +137,7 @@ final class LibrariesTab {
         List<com.botmaker.studio.plugin.PluginHost.LoadedPlugin> loaded =
                 com.botmaker.studio.plugin.PluginHost.loaded();
         int asked = ++unneededAsked;
-        registry.browse().thenAccept(entries -> {
+        registry.entries().thenAccept(entries -> {
             java.util.Set<String> found = PluginCatalog.unneededEditorDependencies(rows, entries,
                     entry -> entry.isInstalledIn(plugins)
                             || loaded.stream().anyMatch(l -> l.isOf(entry.groupId(), entry.artifactId())));

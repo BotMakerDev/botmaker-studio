@@ -92,7 +92,7 @@ public final class EditorCompanions {
         if (allowed.isEmpty()) return false;
         List<UserLibrary> declared = MavenService.readDeclaredLibraries(projectDir);
         progress.message("Checking the libraries your plugins need…");
-        List<PluginRegistry.Plugin> registry = new PluginRegistry(new GitHubClient()).browse()
+        List<PluginRegistry.Plugin> registry = new PluginRegistry(new GitHubClient()).entries()
                 .completeOnTimeout(List.of(), REGISTRY_TIMEOUT_S, TimeUnit.SECONDS)
                 .exceptionally(failure -> List.of())
                 .join();

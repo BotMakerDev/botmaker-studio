@@ -30,8 +30,11 @@ plugin has and a third party's plugin does not — the back door the platform ex
 - **Studio only ever reads the registry.** A plugin is submitted with `botmaker publish`, whose validator is
   the same code the registry's CI runs; those checks need the plugin's build, which a bot's editor has not
   got. There is no publish path here and there should not be one.
-- **The version installed is the entry's `verifiedVersion`, not the newest tag** — the version the gate
-  actually loaded and checked. Only an entry carrying none falls back to JitPack's newest.
+- **The version installed is JitPack's newest for the entry's coordinate (2026-10-12)** —
+  `maven-metadata.xml`'s `<release>`, which `PluginRegistry.browse` puts in each `Plugin.version`. It was the
+  entry's `verifiedVersion` until the registry pull requests moving it to SDK v1.4.3/v1.4.4 failed the
+  registry's gate (its CI pinned an old cli, whose contract lacked members 1.4.4 links) and sat unmerged,
+  leaving Studio on v1.4.2. The registry stores coordinates; the index's `verifiedVersion` is read past.
 - **Installed is decided by coordinate, never by version**, so a plugin pinned to an older version reads as
   installed; changing that version is Manage Libraries' job, and this dialog does not duplicate it.
 - **Everything degrades to a sentence.** An unreachable registry is an empty catalog with a message in the

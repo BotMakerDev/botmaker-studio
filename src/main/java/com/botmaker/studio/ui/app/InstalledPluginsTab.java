@@ -581,9 +581,8 @@ public final class InstalledPluginsTab {
         }
 
         /**
-         * The upgrade on offer, {@code ""} for none: for a refused dev build, a release; else the registry's
-         * verified version, when newer. Only a verified version is ever offered unasked: a tag JitPack lists is
-         * in the menu, to be picked by hand, but nobody checked it loads in this Studio.
+         * The upgrade on offer, {@code ""} for none: for a refused dev build, a release; else JitPack's newest
+         * build ({@code available}, since 2026-10-12 — the registry's verified one before), when newer.
          */
         String newer() {
             if (twinned || heldDev()) return "";
@@ -593,8 +592,8 @@ public final class InstalledPluginsTab {
         }
 
         /**
-         * What <i>Upgrade all</i> moves this row to, {@code ""} for nothing: the verified upgrade alone, never a
-         * pick and never a tag only JitPack names (a refused dev row's fallback included).
+         * What <i>Upgrade all</i> moves this row to, {@code ""} for nothing: the newest build alone, never a
+         * pick (a refused dev row's fallback included).
          */
         String upgrade() {
             if (busy || versions.isDisable()) return "";
@@ -607,7 +606,7 @@ public final class InstalledPluginsTab {
             return actionTarget(upgrades.currentVersion(), versions.getValue(), newer(), heldDev());
         }
 
-        /** The release a dev row moves to: the registry's verified one, else the newest JitPack lists, else "". */
+        /** The release a dev row moves to: the newest build the registry read found, else the menu's, else "". */
         String released() {
             if (!plugin.available().isBlank()) return plugin.available();
             return versions.getItems().stream().filter(v -> !ReleasedPlugins.isDevVersion(v)).findFirst().orElse("");
@@ -623,7 +622,7 @@ public final class InstalledPluginsTab {
         /**
          * Fills the menu, opened on the installed version.
          *
-         * <p>Seeded with what is already known — the installed version, the registry's verified one, the
+         * <p>Seeded with what is already known — the installed version, the newest build, the
          * local build — so a row is usable before JitPack answers and stays usable if it never does. The list
          * is then every version JitPack can build, which is what makes a downgrade reachable.
          */
@@ -656,7 +655,7 @@ public final class InstalledPluginsTab {
             if (refused()) chip("dev build — not loaded", "partial");
         }
 
-        /** A version, with which one is installed, which one is local and which one the registry verified. */
+        /** A version, with which one is installed, which one is local and which one is the newest build. */
         private final class VersionCell extends javafx.scene.control.ListCell<String> {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -668,7 +667,7 @@ public final class InstalledPluginsTab {
                 String tag = item.equals(installed.getText())
                         ? (isDev() ? "  (installed, dev build)" : "  (installed)")
                         : item.equals(localVersion()) ? "  (local build)"
-                        : item.equals(plugin.available()) ? "  (verified)" : "";
+                        : item.equals(plugin.available()) ? "  (newest)" : "";
                 setText(item + tag);
             }
         }

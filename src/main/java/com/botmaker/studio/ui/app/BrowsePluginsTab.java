@@ -48,9 +48,9 @@ import java.util.function.Supplier;
  * Installed tab's checked removal, so the same plugin could leave a project two ways and only one of them
  * repaired the bot's calls into it. Its row sends the user to Installed instead.
  *
- * <p><b>The version installed is the registry's {@code verifiedVersion}, not the newest tag.</b> That is
- * the version the registry's gate actually loaded and checked; a newer tag may be one nothing has ever
- * run. Only an entry with no verified version falls back to asking JitPack for the newest.
+ * <p><b>The version installed is JitPack's newest build (2026-10-12)</b>, which {@code PluginRegistry.browse}
+ * puts in each entry; until then it was the registry's {@code verifiedVersion}, which stopped moving when the
+ * registry's pull requests did.
  *
  * <p>Everything about the network here degrades to a sentence: an unreachable registry shows a message in
  * the empty list and nothing else changes, matching how {@code JitPackSearch} already treats a failure. A
@@ -346,7 +346,7 @@ final class BrowsePluginsTab {
             name.setStyle("-fx-font-weight: bold;");
             boolean localBuild = localCoordinates.contains(plugin.coordinate());
             Label coordinate = new Label(plugin.coordinate()
-                    + (localBuild ? "  " + plugin.verifiedVersion() + " (local build)" : ""));
+                    + (localBuild ? "  " + plugin.version() + " (local build)" : ""));
             coordinate.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
             Label description = new Label(plugin.description());
             description.setWrapText(true);

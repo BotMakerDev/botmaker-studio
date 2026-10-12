@@ -4,6 +4,7 @@ import com.botmaker.studio.project.UserLibrary;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,8 +41,21 @@ class PluginRegistryTest {
         assertEquals("com.example.discord", plugin.id());
         assertEquals("com.github.someone", plugin.groupId());
         assertEquals("botmaker-discord-plugin", plugin.artifactId());
-        assertEquals("v0.1.0", plugin.verifiedVersion());
+        assertEquals("", plugin.version(), "the index's verifiedVersion is read past: JitPack says the version");
         assertEquals("https://github.com/someone/botmaker-discord-plugin", plugin.htmlUrl());
+    }
+
+    /** Each entry installs JitPack's newest; one JitPack would not answer is blank, never a lost catalog. */
+    @Test
+    void each_entry_takes_jitpacks_newest_and_a_failure_is_blank() {
+        List<PluginRegistry.Plugin> entries = PluginRegistry.parse("""
+                [{"id":"a","coordinate":"g:a","verifiedVersion":"v1.4.2"}, {"id":"b","coordinate":"g:b"}]""");
+
+        List<PluginRegistry.Plugin> resolved = PluginRegistry.withNewest(entries, plugin -> plugin.id().equals("a")
+                ? CompletableFuture.completedFuture("v1.4.4")
+                : CompletableFuture.failedFuture(new IllegalStateException("offline"))).join();
+
+        assertEquals(List.of("v1.4.4", ""), resolved.stream().map(PluginRegistry.Plugin::version).toList());
     }
 
     /** This Studio is the reader that lags, so a field a newer `botmaker publish` writes must not break it. */
@@ -81,7 +95,7 @@ class PluginRegistryTest {
     @Test
     void installed_counts_botmakers_former_group_id() {
         PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
-                "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "1.3.0", "");
+                "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "1.3.0");
 
         assertTrue(sdk.isInstalledIn(List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "v1.2.3"))));
         assertFalse(sdk.isInstalledIn(List.of(new UserLibrary("com.github.someone", "botmaker-sdk", "1"))));

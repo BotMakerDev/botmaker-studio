@@ -554,7 +554,7 @@ final class StudioBridge implements StudioDriver {
         for (PluginRegistry.Plugin plugin : entries) {
             if (!plugin.matches(query) || !plugin.isInstallable()) continue;
             lines.add(plugin.id() + "  " + plugin.name()
-                    + (plugin.verifiedVersion().isBlank() ? "" : " " + plugin.verifiedVersion())
+                    + (plugin.version().isBlank() ? "" : " " + plugin.version())
                     + (plugin.isInstalledIn(declared) ? "  (in the bot)" : "")
                     + (plugin.description().isBlank() ? "" : " — " + plugin.description().strip()));
         }

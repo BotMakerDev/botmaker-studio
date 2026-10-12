@@ -100,12 +100,12 @@ final class NewProjectPlugins {
 
     /**
      * A row's text: the plugin's name and the version the project gets — the template's pin for its own
-     * plugins, the registry's verified version for the rest. A version nobody pinned is left out: an
-     * unverified plugin resolves its newest release only at creation.
+     * plugins, JitPack's newest build for the rest. A version JitPack did not give is left out: the plugin
+     * resolves its newest release only at creation.
      */
     static String label(PluginRegistry.Plugin plugin, TemplatePlugins.Pin own) {
         String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
-        String version = own != null ? own.version() : plugin.verifiedVersion();
+        String version = own != null ? own.version() : plugin.version();
         String named = version.isBlank() ? name : name + "  " + displayVersion(version);
         return own != null ? named + "  — comes with the template" : named;
     }

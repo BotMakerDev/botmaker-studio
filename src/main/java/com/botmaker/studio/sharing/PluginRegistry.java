@@ -3,10 +3,12 @@ package com.botmaker.studio.sharing;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.services.JitPackSearch;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 /**
  * Read side of the plugin registry — the answer to "which plugins exist?", which
@@ -22,13 +24,22 @@ import java.util.concurrent.CompletableFuture;
  * {@code index.json} on the raw CDN — no API rate limit, no account — and any failure resolving to an empty
  * catalog rather than throwing. The dialog degrades to a message; a registry nobody can reach must never
  * stop somebody editing their bot.
+ *
+ * <p><b>The registry names a plugin; JitPack says its version (2026-10-12).</b> An entry's
+ * {@code verifiedVersion} was what got installed, moved by a pull request each release opened; the ones moving
+ * the SDK to v1.4.3 and v1.4.4 failed the registry's gate (its CI pinned a cli whose contract lacked members
+ * 1.4.4 links) and sat unmerged, so Studio kept installing v1.4.2. {@link #browse} now fills each entry's
+ * {@link Plugin#version} with JitPack's newest build of its coordinate — the same rule as a template, which
+ * copies its newest release — and the index's {@code verifiedVersion} is read past.
  */
 public final class PluginRegistry {
 
     private final GitHubClient client;
+    private final JitPackSearch jitpack;
 
     public PluginRegistry(GitHubClient client) {
         this.client = client;
+        this.jitpack = new JitPackSearch();
     }
 
     /**
@@ -40,8 +51,8 @@ public final class PluginRegistry {
      *
      * @param coordinate {@code groupId:artifactId}, with no version — the index names a plugin, not a
      *                   release
-     * @param verifiedVersion the version the registry's own checks last ran against, which is what gets
-     *                        installed: the newest tag may be one nothing has ever loaded
+     * @param version what gets installed: JitPack's newest build, filled by {@link #browse}; blank when JitPack
+     *                did not answer, and creation then resolves the newest itself
      * @param editorDependencies {@code groupId:artifactId:version} of everything this plugin needs on the
      *                           <em>editor's</em> classpath and does not bring itself — the dependencies it
      *                           declares {@code optional}, which is exactly the set a resolve does not reach.
@@ -51,7 +62,7 @@ public final class PluginRegistry {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Plugin(String id, String name, String coordinate, String repo, String description,
                          List<String> tags, String minContractVersion,
-                         List<String> editorDependencies, String verifiedVersion, String verifiedAt) {
+                         List<String> editorDependencies, String version) {
 
         public Plugin {
             editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
@@ -62,8 +73,13 @@ public final class PluginRegistry {
             description = description == null ? "" : description;
             tags = tags == null ? List.of() : List.copyOf(tags);
             minContractVersion = minContractVersion == null ? "" : minContractVersion.trim();
-            verifiedVersion = verifiedVersion == null ? "" : verifiedVersion.trim();
-            verifiedAt = verifiedAt == null ? "" : verifiedAt.trim();
+            version = version == null ? "" : version.trim();
+        }
+
+        /** This entry installing {@code newVersion}. */
+        public Plugin withVersion(String newVersion) {
+            return new Plugin(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies,
+                    newVersion);
         }
 
         public String groupId() {
@@ -138,12 +154,40 @@ public final class PluginRegistry {
                         .findFirst());
     }
 
-    /** Fetches the whole catalog. Empty when the registry is unset, unreachable or malformed. */
+    /**
+     * Fetches the whole catalog, each entry at JitPack's newest build. Empty when the registry is unset,
+     * unreachable or malformed.
+     */
     public CompletableFuture<List<Plugin>> browse() {
+        return entries().thenCompose(entries -> withNewest(entries,
+                plugin -> jitpack.fetchLatestVersion(plugin.groupId(), plugin.artifactId())));
+    }
+
+    /**
+     * The index alone, every {@link Plugin#version} blank: for a reader that needs names and editor dependencies
+     * and must not wait on JitPack, like opening a project. Empty when the registry is unset, unreachable or
+     * malformed.
+     */
+    public CompletableFuture<List<Plugin>> entries() {
         if (!GitHubConfig.isRegistryConfigured()) {
             return CompletableFuture.completedFuture(List.of());
         }
         return client.getFirstString(GitHubConfig.registryIndexRawUrls()).thenApply(PluginRegistry::parse);
+    }
+
+    /**
+     * {@code entries}, each installable one at the version {@code newest} answers, asked side by side; an
+     * answer that fails is blank. Package-private and static so it can be tested without a network.
+     */
+    static CompletableFuture<List<Plugin>> withNewest(List<Plugin> entries,
+                                                      Function<Plugin, CompletableFuture<String>> newest) {
+        List<CompletableFuture<Plugin>> asked = entries.stream()
+                .map(plugin -> plugin.isInstallable()
+                        ? newest.apply(plugin).exceptionally(failure -> "").thenApply(plugin::withVersion)
+                        : CompletableFuture.completedFuture(plugin))
+                .toList();
+        return CompletableFuture.allOf(asked.toArray(CompletableFuture[]::new))
+                .thenApply(done -> asked.stream().map(CompletableFuture::join).toList());
     }
 
     /** Package-private and static so the parse can be tested without a network or a client. */

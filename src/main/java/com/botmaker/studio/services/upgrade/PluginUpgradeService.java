@@ -636,15 +636,15 @@ public final class PluginUpgradeService {
     }
 
     /**
-     * The version a row starts on and <i>Update all</i> moves to: the registry's verified one only when it is
-     * newer than what the pom pins, the installed one otherwise. A verified version behind the installed one
-     * is still offered, never preselected — that would make opening the window propose a downgrade
+     * The version a row starts on and <i>Update all</i> moves to: the newest build only when it is newer than
+     * what the pom pins, the installed one otherwise. A newest behind the installed one (a pin JitPack has not
+     * built yet) is still offered, never preselected — that would make opening the window propose a downgrade
      * (2026-10-01: gamebot on 1.2.3 opened on the registry's 1.1.7).
      */
-    public static String recommended(String installed, String verified) {
-        if (verified.isBlank()) return installed;
-        if (installed.isBlank()) return verified;
-        return ApiModel.compareVersions(ApiModel.strip(verified), ApiModel.strip(installed)) > 0 ? verified : installed;
+    public static String recommended(String installed, String newest) {
+        if (newest.isBlank()) return installed;
+        if (installed.isBlank()) return newest;
+        return ApiModel.compareVersions(ApiModel.strip(newest), ApiModel.strip(installed)) > 0 ? newest : installed;
     }
 
     /** Every version JitPack can build of it, newest first. Best-effort: an empty list on any failure. */

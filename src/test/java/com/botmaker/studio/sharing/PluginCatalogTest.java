@@ -13,7 +13,7 @@ class PluginCatalogTest {
 
     private static PluginRegistry.Plugin published(String id, String coordinate, String version) {
         return new PluginRegistry.Plugin(id, id, coordinate, "", "", List.of(), "",
-                List.of("g:companion:1"), version, "");
+                List.of("g:companion:1"), version);
     }
 
     private static LocalBuilds.Build build(String artifactId, String version) {
@@ -26,7 +26,7 @@ class PluginCatalogTest {
                 List.of(published("sdk", "g:sdk", "2.0.0")), List.of(build("sdk", "2.0.1-SNAPSHOT")));
 
         assertEquals(1, rows.size(), "one row per coordinate, never two versions");
-        assertEquals("2.0.1-SNAPSHOT", rows.getFirst().verifiedVersion());
+        assertEquals("2.0.1-SNAPSHOT", rows.getFirst().version());
         assertEquals(List.of("g:companion:1"), rows.getFirst().editorDependencies());
     }
 

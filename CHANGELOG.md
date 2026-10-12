@@ -10,6 +10,14 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A plugin installs at its newest release.** New Project, Browse and Installed offered the SDK at v1.4.2,
+  the registry's verified version, while v1.4.4 was out: the registry's update for it never merged. Studio now
+  asks JitPack for each plugin's newest build, and Installed marks it *(newest)*.
+
 ## [1.4.5] — 2026-10-12
 
 ### Fixed

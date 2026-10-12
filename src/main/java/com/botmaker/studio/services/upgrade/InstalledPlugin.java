@@ -41,7 +41,7 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
      * stops the upgrade window inventing a fourth.
      */
     public enum Source {
-        /** The plugin registry lists it. {@code available} is the entry's {@code verifiedVersion}. */
+        /** The plugin registry lists it. {@code available} is the entry's version, JitPack's newest build. */
         REGISTRY,
         /** The pom declares a plugin nothing else accounts for — published by hand, or not published. */
         UNLISTED
@@ -96,11 +96,11 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
             PluginRegistry.Plugin entry = PluginRegistry.entryFor(registry, library).orElse(null);
 
             if (entry != null) {
-                // The verified version is a tag under the entry's groupId; offered under the other one, it
+                // The entry's version is a tag under the entry's groupId; offered under the other one, it
                 // would pin a coordinate that tag was never released at.
                 boolean sameGroup = entry.groupId().equals(library.groupId());
                 rows.add(new InstalledPlugin(library, entry.name(), library.version(),
-                        sameGroup ? entry.verifiedVersion() : "", Source.REGISTRY, entry.editorLibraries()));
+                        sameGroup ? entry.version() : "", Source.REGISTRY, entry.editorLibraries()));
             } else if (isPlugin.test(library)) {
                 // No entry to read a name, a description or an editor-dependency list from. The coordinate
                 // is the whole of what is known, and an empty `available` is the truthful answer until

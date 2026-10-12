@@ -52,14 +52,11 @@ public final class PluginCatalog {
                 if (rows.get(i).coordinate().equals(build.coordinate())) at = i;
             }
             if (at >= 0) {
-                PluginRegistry.Plugin entry = rows.get(at);
-                rows.set(at, new PluginRegistry.Plugin(entry.id(), entry.name(), entry.coordinate(), entry.repo(),
-                        entry.description(), entry.tags(), entry.minContractVersion(), entry.editorDependencies(),
-                        build.version(), entry.verifiedAt()));
+                rows.set(at, rows.get(at).withVersion(build.version()));
             } else {
                 // Nothing lists its optional dependencies, so installing it declares the plugin alone.
                 rows.add(unlisted++, new PluginRegistry.Plugin(build.coordinate(), build.artifactId(), build.coordinate(),
-                        "", LOCAL_BUILD_DESCRIPTION, List.of(), "", List.of(), build.version(), ""));
+                        "", LOCAL_BUILD_DESCRIPTION, List.of(), "", List.of(), build.version()));
             }
         }
         return List.copyOf(rows);
@@ -88,10 +85,10 @@ public final class PluginCatalog {
     /** What a local build's own row says about it. */
     public static final String LOCAL_BUILD_DESCRIPTION = "Built on this computer into ~/.m2 — not published.";
 
-    /** The verified version, or — only when the entry carries none — JitPack's newest. */
+    /** The version {@link PluginRegistry#browse} found, or — when JitPack did not answer then — JitPack's newest. */
     public CompletableFuture<String> version(PluginRegistry.Plugin plugin) {
-        if (!plugin.verifiedVersion().isBlank()) {
-            return CompletableFuture.completedFuture(plugin.verifiedVersion());
+        if (!plugin.version().isBlank()) {
+            return CompletableFuture.completedFuture(plugin.version());
         }
         return jitpack.fetchLatestVersion(plugin.groupId(), plugin.artifactId());
     }

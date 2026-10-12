@@ -14,7 +14,7 @@ class NewProjectPluginsLabelTest {
 
     private static PluginRegistry.Plugin plugin(String id, String name, String verified) {
         return new PluginRegistry.Plugin(id, name, "com.github.BotMakerDev:" + id, "LiQiyeDev/" + id, "", null,
-                null, null, verified, null);
+                null, null, verified);
     }
 
     @Test
