@@ -374,15 +374,26 @@ public final class McpTools {
                         args -> driver.showArea(new Area(number(args, "x"), number(args, "y"),
                                 number(args, "width"), number(args, "height")), text(args, "label"))),
                 act(json, "add_file",
-                        "Add an empty class to the bot's main package, for methods to go in. It is saved as a "
-                                + "version the user can go back to.",
-                        List.of(Prop.text("name", "the class's name: Helpers")), args -> driver.addFile(text(args, "name"))),
+                        "Add an empty class, interface, record or enum to the bot, for methods to go in. It is "
+                                + "saved as a version the user can go back to.",
+                        List.of(Prop.text("name", "the class's name: Helpers"),
+                                Prop.optionalText("kind", "class (the default), interface, record or enum"),
+                                Prop.optionalText("package", "the package, com.mybot.util; the bot's main package "
+                                        + "when left out")),
+                        args -> driver.addFile(text(args, "name"), text(args, "kind"), text(args, "package"))),
+                act(json, "delete_file",
+                        "Delete one of the bot's files. Refused, with every place that still uses it, while anything "
+                                + "uses what it declares; never the entry point or a plugin's file. A safety version "
+                                + "is saved first.",
+                        List.of(Prop.text("file", "the file, as list_files names it")),
+                        args -> driver.deleteFile(text(args, "file"))),
                 act(json, "find_usages", "List every use of a declaration of the bot, by binding: file, line, "
                                 + "the method it is in, and the line's text.",
                         List.of(SYMBOL), args -> driver.findUsages(text(args, "symbol"))),
                 act(json, "rename",
-                        "Rename a declaration and every use of it across the bot, as one step the user can undo. "
-                                + "Refused, with why, when the bot would stop compiling.",
+                        "Rename a declaration and every use of it across the bot, as one step the user can undo; "
+                                + "a class takes its file with it, after a safety version. Refused, with why, when the "
+                                + "bot would stop compiling, and for a plugin's file.",
                         List.of(SYMBOL, Prop.text("to", "the new name")),
                         args -> driver.rename(text(args, "symbol"), text(args, "to"))),
                 act(json, "open", "Open a declaration in Studio's editor, so the user sees it.",

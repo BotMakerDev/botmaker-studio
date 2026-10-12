@@ -5,7 +5,6 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.TypeRename;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -16,6 +15,7 @@ import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
+import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.ui.app.viewers.ResourceViewers;
@@ -50,7 +50,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -68,9 +67,11 @@ import java.util.function.Supplier;
  *
  * <p>A row's icon says what the file is ({@link ExplorerModel.Kind}), its colour whether it differs from the
  * last saved version — git's answer plus the editor's unsaved buffers, read on a worker. A right-click offers
- * <i>Show in file manager</i>, <i>Copy path</i> and, for a class of the user's, <i>Rename…</i>
- * ({@link TypeRename}: the class and every use of it, after a safety version). Deleting, creating and moving
- * are still the file manager's: an explorer that half-does them is the worst of both.
+ * <i>Show in file manager</i>, <i>Copy path</i>, in the user's packages <i>New ▸ Class / Interface / Record /
+ * Enum…</i>, and for a class of theirs <i>Rename…</i> (the class and every use of it) and <i>Delete…</i>
+ * (refused while anything uses it). Those three are {@link ClassFiles}', which the assistant's tools share; they
+ * were the file manager's until 2026-10-13, when a user building a bot found no way to add a class. Moving a
+ * file between packages still is.
  *
  * <p>Roles come from {@link FileRole#of} — this class must not re-derive them from paths.
  */
@@ -84,6 +85,7 @@ public class FileExplorerManager {
     private final CodeEditorService codeEditorService;
     private final ProjectState state;
     private final EventBus eventBus;
+    private final ClassFiles classFiles;
     private final TreeView<ExplorerNode> fileTree = new TreeView<>();
     private final TextField filter = new TextField();
     private final ListView<Entry> structure = new ListView<>();
@@ -134,10 +136,13 @@ public class FileExplorerManager {
         this.codeEditorService = ctx.codeEditorService();
         this.state = ctx.state();
         this.eventBus = ctx.eventBus();
+        this.classFiles = new ClassFiles(ctx);
 
         // A rebind writes a newly added plugin's managed holder (HostPluginValues.createMissing) and
         // announces itself with this event, so the tree is re-read.
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> refreshTree(), true);
+        // A file created, renamed or deleted, here or by the assistant.
+        eventBus.subscribe(CoreApplicationEvents.ProjectFilesChangedEvent.class, e -> refreshTree(), true);
         // Every edit re-renders the open file: its outline is re-read, and its row may now differ from the
         // last saved version — re-read after a pause, as a burst of typing is one change, not twenty.
         eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> {
@@ -215,7 +220,8 @@ public class FileExplorerManager {
                 if (item.group()) {
                     setGraphic(null);
                     getStyleClass().add("tree-group");
-                    setContextMenu(null);
+                    setContextMenu(GROUP_USER.equals(item.label())
+                            ? new ContextMenu(newMenu(config.mainPackageDir())) : null);
                     return;
                 }
                 setGraphic(icon(item.kind()));
@@ -450,23 +456,63 @@ public class FileExplorerManager {
             Clipboard.getSystemClipboard().setContent(content);
         });
         ContextMenu menu = new ContextMenu(show, copy);
-        if (node.opens() && node.role() == FileRole.EDITABLE) {
+        Path folder = node.isFolder() ? node.path() : node.path().getParent();
+        boolean userCode = node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE;
+        if (userCode && classFiles.folderProblem(folder).isEmpty()) {
+            menu.getItems().addAll(new SeparatorMenuItem(), newMenu(folder));
+        }
+        if (node.opens() && node.role() == FileRole.EDITABLE && classFiles.lockedProblem(node.path()).isEmpty()) {
             MenuItem rename = new MenuItem("Rename…");
+            MenuItem delete = new MenuItem("Delete…");
             if (state.isReaderMode()) {
                 rename.setDisable(true);
                 rename.setText("Rename… (this bot is open for reading)");
+                delete.setDisable(true);
+                delete.setText("Delete… (this bot is open for reading)");
             }
             rename.setOnAction(e -> rename(node.path()));
-            menu.getItems().addAll(new SeparatorMenuItem(), rename);
+            delete.setOnAction(e -> delete(node.path()));
+            menu.getItems().addAll(new SeparatorMenuItem(), rename, delete);
         }
         return menu;
     }
 
+    /** <i>New ▸ Class / Interface / Record / Enum…</i>, each made in {@code folder}'s package. */
+    private javafx.scene.control.Menu newMenu(Path folder) {
+        javafx.scene.control.Menu menu = new javafx.scene.control.Menu("New");
+        for (ClassFiles.Kind kind : ClassFiles.Kind.values()) {
+            MenuItem item = new MenuItem(kind.displayName() + "…");
+            item.setOnAction(e -> create(folder, kind));
+            menu.getItems().add(item);
+        }
+        // Read when it opens: the group row's menu outlives a switch to or from reading.
+        menu.setOnShowing(e -> menu.getItems().forEach(item -> item.setDisable(state.isReaderMode())));
+        return menu;
+    }
+
+    private void create(Path folder, ClassFiles.Kind kind) {
+        String what = kind.displayName().toLowerCase(java.util.Locale.ROOT);
+        TextInputDialog dialog = new TextInputDialog();
+        ThemedWindows.apply(dialog);
+        if (fileTree.getScene() != null) dialog.initOwner(fileTree.getScene().getWindow());
+        dialog.setTitle("New " + what);
+        dialog.setHeaderText("A new " + what + " in " + classFiles.packageOf(folder));
+        dialog.setContentText("Name:");
+        String name = dialog.showAndWait().map(String::strip).orElse("");
+        if (name.isEmpty()) return;
+        try {
+            Path file = classFiles.create(folder, kind, name);
+            codeEditorService.switchToFile(file);
+            onCanvas.run();
+            status("Created " + file.getFileName() + ".");
+        } catch (IllegalArgumentException refused) {
+            RefusalDialog.show(window(), name + " wasn't created", refused.getMessage(), List.of(), List.of(), null);
+        }
+    }
+
     /**
-     * Renames {@code file} and its class, and every use of the class in the bot. The plan is made on a worker
-     * (it parses the bot with bindings), with a safety version taken first — the rename changes files the user
-     * is not looking at, and the editor's ↶ reaches only the open one — and applied on the FX thread to the
-     * open buffers and the disk alike.
+     * Renames {@code file} and its class, and every use of the class in the bot ({@link ClassFiles}): planned on
+     * a worker, as it parses the bot with bindings, and applied on the FX thread.
      */
     private void rename(Path file) {
         String oldName = file.getFileName().toString().replaceFirst("\\.java$", "");
@@ -479,24 +525,17 @@ public class FileExplorerManager {
         String newName = dialog.showAndWait().map(String::strip).orElse("");
         if (newName.isEmpty() || newName.equals(oldName)) return;
 
-        Path target = file.resolveSibling(newName.replaceFirst("\\.java$", "") + ".java");
-        Set<Path> existing = Files.exists(target) ? Set.of(target) : Set.of();
         Supplier<BotIndex> index = BotIndex.prepare(config, state);
         ProjectState.Snapshot before = state.snapshot();
         status("Renaming " + oldName + "…");
-        Thread worker = new Thread(() -> {
-            Refactor.Outcome outcome = TypeRename.plan(index.get(), file, newName, existing);
-            if (outcome instanceof Refactor.Planned) {
-                Checkpoints.take(config.projectPath(), before, VersionOrigin.SAFETY,
-                        "Before renaming " + oldName + " to " + newName);
-            }
+        onWorker("explorer-rename", () -> {
+            Refactor.Outcome outcome = classFiles.planRename(index.get(), before, file, newName);
             Platform.runLater(() -> {
                 switch (outcome) {
                     case Refactor.Refused refused -> {
                         status("");
-                        RefusalDialog.show(fileTree.getScene() == null ? null : fileTree.getScene().getWindow(),
-                                oldName + " wasn't renamed", refused, Refactors.reveal(codeEditorService),
-                                fix -> {
+                        RefusalDialog.show(window(), oldName + " wasn't renamed", refused,
+                                Refactors.reveal(codeEditorService), fix -> {
                                     Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY,
                                             "Before: " + fix.summary());
                                     apply(fix);
@@ -505,41 +544,63 @@ public class FileExplorerManager {
                     case Refactor.Planned plan -> apply(plan);
                 }
             });
-        }, "explorer-rename");
-        worker.setDaemon(true);
-        worker.start();
+        });
     }
 
-    /** Writes a rename's plan to the buffers and the disk, moving the file with its class. FX thread. */
+    /** Writes a rename's plan to the buffers and the disk. FX thread. */
     private void apply(Refactor.Planned plan) {
-        Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
         try {
-            for (Map.Entry<Path, String> rewrite : plan.rewrites().entrySet()) {
-                Path path = rewrite.getKey();
-                Path to = plan.moves().get(path);
-                if (to != null) {
-                    Files.writeString(to, rewrite.getValue());
-                    Files.delete(path);
-                    state.removeFile(path);
-                    continue;
-                }
-                state.getFile(path).ifPresent(buffer -> buffer.setContent(rewrite.getValue()));
-                if (Files.isRegularFile(path)) Files.writeString(path, rewrite.getValue());
-            }
+            status(classFiles.applyRename(plan));
         } catch (IOException failed) {
             status("Rename stopped part-way: " + failed.getMessage()
                     + " — Versions has the project as it was before.");
-            refreshTree();
-            return;
         }
-        // The open file is re-drawn from its (possibly rewritten) buffer; a moved one opens under its new name.
-        Path movedTo = active == null ? null : plan.moves().get(active.toAbsolutePath().normalize());
-        if (movedTo != null) codeEditorService.switchToFile(movedTo);
-        else if (active != null && plan.rewrites().containsKey(active.toAbsolutePath().normalize())) {
-            codeEditorService.switchToFile(active);
-        }
-        refreshTree();
-        status(plan.summary() + ". Versions has a safety copy from before.");
+    }
+
+    /**
+     * Deletes {@code file} once the user confirms and nothing uses what it declares ({@link ClassFiles}); a
+     * refusal lists the uses, each a place to go.
+     */
+    private void delete(Path file) {
+        javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                "Versions keeps a copy from before, to bring it back.",
+                javafx.scene.control.ButtonType.CANCEL, javafx.scene.control.ButtonType.OK);
+        ThemedWindows.apply(confirm);
+        if (fileTree.getScene() != null) confirm.initOwner(fileTree.getScene().getWindow());
+        confirm.setTitle("Delete");
+        confirm.setHeaderText("Delete " + file.getFileName() + "?");
+        if (confirm.showAndWait().filter(javafx.scene.control.ButtonType.OK::equals).isEmpty()) return;
+
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        ProjectState.Snapshot before = state.snapshot();
+        status("Checking what uses " + file.getFileName() + "…");
+        onWorker("explorer-delete", () -> {
+            java.util.Optional<Refactor.Refused> refused = classFiles.planDelete(index.get(), before, file);
+            Platform.runLater(() -> {
+                if (refused.isPresent()) {
+                    status("");
+                    RefusalDialog.show(window(), file.getFileName() + " wasn't deleted", refused.get().reason(),
+                            refused.get().uses(), List.of(), Refactors.reveal(codeEditorService));
+                    return;
+                }
+                try {
+                    status(classFiles.delete(file));
+                } catch (IOException failed) {
+                    status(file.getFileName() + " could not be deleted: " + failed.getMessage());
+                }
+            });
+        });
+    }
+
+    private javafx.stage.Window window() {
+        return fileTree.getScene() == null ? null : fileTree.getScene().getWindow();
+    }
+
+    private static void onWorker(String name, Runnable work) {
+        Thread worker = new Thread(work, name);
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void status(String message) {

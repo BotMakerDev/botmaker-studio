@@ -18,6 +18,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   project as New Project does, from a vetted template or blank, with registry plugins the user agrees to on
   screen. Then Studio opens the project in place of the current one. The dialog and the tool share one
   creation path (`sharing/NewProjects`).
+- **New, Rename and Delete in Project Files.** A right-click in the user's packages offers *New ▸ Class /
+  Interface / Record / Enum…*; a class of theirs, *Rename…* and *Delete…*. A delete is refused while another file
+  uses what the file declares (each use listed, a link to it) or while the bot would stop compiling without it,
+  and never touches the entry point or a plugin's file; a rename or a delete takes a safety version first. A
+  plugin's file is no longer offered for renaming: the plugin finds it by its name. The assistant gets the same
+  through `services/ClassFiles`: `add_file` takes `kind` and `package`, `rename` of a class moves its file
+  instead of refusing, and `delete_file` is new. The tree follows a file the assistant adds.
 
 ### Fixed
 

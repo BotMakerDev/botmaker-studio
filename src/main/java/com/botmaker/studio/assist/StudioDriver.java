@@ -62,9 +62,17 @@ public interface StudioDriver {
 
     // ---- structure, navigation and review (phase 8) — each refused here unless the implementation offers it
 
-    /** Writes an empty class {@code name} in the bot's main package, as one version the user can go back to. */
-    default String addFile(String name) {
+    /**
+     * Writes an empty {@code kind} (class, interface, record, enum; empty for a class) named {@code name} in
+     * {@code packageName} (empty for the bot's main package), as one version the user can go back to.
+     */
+    default String addFile(String name, String kind, String packageName) {
         throw new IllegalArgumentException("Studio cannot add a file here.");
+    }
+
+    /** Deletes the bot's file {@code file}; refused while anything uses what it declares. */
+    default String deleteFile(String file) {
+        throw new IllegalArgumentException("Studio cannot delete a file here.");
     }
 
     /** Every use of {@code symbol} ({@link SymbolNames}), one line each: file, line, enclosing method, text. */

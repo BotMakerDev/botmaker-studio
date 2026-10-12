@@ -687,35 +687,10 @@ public class CodeEditorService {
     // since 2026-08-29, and the flow dialog is the SDK plugin's and writes JSON only, so the events that
     // called them stopped existing before the methods did.
 
-    public void createFile(String className) {
-        try {
-            String packageName = config.mainClassName().substring(0, config.mainClassName().lastIndexOf('.'));
-            Path dir = config.mainSourceFile().getParent();
-            Path newPath = dir.resolve(className + ".java");
-
-            String template = "package " + packageName + ";\n\n" +
-                    "public class " + className + " {\n" +
-                    "    // Add functions here\n" +
-                    "    public static void action() {\n" +
-                    "        System.out.println(\"Action from " + className + "\");\n" +
-                    "    }\n" +
-                    "}";
-
-            Files.writeString(newPath, template);
-            ProjectFile pf = new ProjectFile(newPath, template);
-            state.addFile(pf);
-            switchToFile(newPath);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    // There is no deleteFile here any more, and that is deliberate rather than an omission. Its only caller was
-    // the file explorer's context menu, and a file in a bot project is never just a file: an activity's stub is
-    // half of a pair with generated code that names it, and everything else is scaffolding the build needs.
-    // Removing an activity is the SDK plugin's Activity Flow, which edits its own JSON and leaves whatever
-    // the user wrote exactly where it is, and nothing else here should go.
+    // createFile and deleteFile went from here: creating, renaming and deleting a file of the bot are
+    // ClassFiles' since 2026-10-13, which refuses a delete while anything uses what the file declares and
+    // never touches a plugin's file. deleteFile had gone earlier because an activity's stub was then half of a
+    // pair with generated code; nothing generates code any more, and a use the flow makes is a use like any other.
 
     /**
      * A whole-file render with <b>no reuse</b>, and the {@code NONE} is load-bearing rather than cautious:

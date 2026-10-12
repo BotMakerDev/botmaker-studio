@@ -272,7 +272,7 @@ class McpEndpointTest {
         tools.forEach(t -> names.add(t.path("name").asText()));
         assertEquals(List.of("list_files", "list_methods", "list_palette", "read_tree", "list_errors", "insert_block",
                 "set_slot", "delete_block", "apply_edits", "add_method", "move_block", "edit_signature",
-                "list_targets", "set_target", "move_caret", "show_area", "add_file", "find_usages", "rename", "open",
+                "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
                 "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "list_params", "set_param_default",

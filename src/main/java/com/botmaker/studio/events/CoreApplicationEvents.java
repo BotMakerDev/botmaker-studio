@@ -116,6 +116,12 @@ public class CoreApplicationEvents {
      */
     public record OpenProjectRequestedEvent(java.nio.file.Path projectDir) implements ApplicationEvent {}
 
+    /**
+     * A source file of the bot was created, renamed or deleted ({@code ClassFiles}), from the explorer or the
+     * assistant. The explorer re-reads its tree.
+     */
+    public record ProjectFilesChangedEvent() implements ApplicationEvent {}
+
     // --- Status / output ---
 
     public record StatusMessageEvent(String message) implements ApplicationEvent {}

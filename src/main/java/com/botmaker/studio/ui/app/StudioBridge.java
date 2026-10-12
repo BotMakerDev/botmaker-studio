@@ -14,8 +14,6 @@ import com.botmaker.studio.assist.SymbolNames;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import com.botmaker.studio.core.CodeBlock;
@@ -29,6 +27,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
+import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.overlay.OverlayTargets;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
@@ -106,6 +105,7 @@ import static com.botmaker.studio.ui.app.LiveEditorBot.onFx;
 final class StudioBridge implements StudioDriver {
 
     private final StudioContext ctx;
+    private final ClassFiles classFiles;
     private final Trials trials;
     private final RunLog log;
     private final Supplier<Window> owner;
@@ -116,6 +116,7 @@ final class StudioBridge implements StudioDriver {
 
     StudioBridge(StudioContext ctx, Trials trials, RunLog log, Supplier<Window> owner) {
         this.ctx = ctx;
+        this.classFiles = new ClassFiles(ctx);
         this.trials = trials;
         this.log = log;
         this.owner = owner;
@@ -254,27 +255,44 @@ final class StudioBridge implements StudioDriver {
     // ---- structure and navigation --------------------------------------------------------------------------
 
     @Override
-    public String addFile(String name) {
-        String className = name == null ? "" : name.strip();
-        FunctionDraft.identifierProblem(className, "class").ifPresent(problem -> {
-            throw new IllegalArgumentException(problem);
-        });
-        Path file = ctx.config().mainPackageDir().resolve(className + ".java");
-        if (java.nio.file.Files.exists(file)) {
-            throw new IllegalArgumentException(className + ".java already exists. read_tree reads it.");
+    public String addFile(String name, String kind, String packageName) {
+        ClassFiles.Kind what = kind == null || kind.isBlank() ? ClassFiles.Kind.CLASS : ClassFiles.Kind.fromId(kind)
+                .orElseThrow(() -> new IllegalArgumentException("kind is class, interface, record or enum."));
+        notReading();
+        String pkg = packageName == null ? "" : packageName.strip();
+        if (!pkg.isEmpty() && !javax.lang.model.SourceVersion.isName(pkg)) {
+            throw new IllegalArgumentException("“" + pkg + "” is not a package name: "
+                    + ctx.config().mainPackage() + ".util.");
         }
-        String source = """
-                package %s;
-
-                public final class %s {
-
-                    private %s() {}
-                }
-                """.formatted(ctx.config().mainPackage(), className, className);
-        if (!ProjectWrites.create(ctx.config(), file, source, "Create " + className)) {
-            throw new IllegalArgumentException("Studio could not write " + className + ".java.");
-        }
+        Path folder = pkg.isEmpty() ? ctx.config().mainPackageDir()
+                : ctx.config().sourceRoot().resolve(pkg.replace('.', '/'));
+        Path file = classFiles.create(folder, what, name);
         return "Added " + LiveBot.relative(ctx.config().sourceRoot(), file) + ". add_method puts methods in it.";
+    }
+
+    @Override
+    public String deleteFile(String file) {
+        notReading();
+        Path at = onFx(() -> path(file));
+        ProjectState.Snapshot before = onFx(() -> ctx.state().snapshot());
+        Optional<Refactor.Refused> refused = classFiles.planDelete(index(), before, at);
+        if (refused.isPresent()) {
+            Path root = ctx.config().sourceRoot();
+            List<String> lines = new ArrayList<>();
+            lines.add(refused.get().reason());
+            for (Usages.Usage use : refused.get().uses()) {
+                lines.add(LiveBot.relative(root, use.file()) + ":" + use.line()
+                        + (use.enclosing().isEmpty() ? "" : " in " + use.enclosing()) + "  " + use.text().strip());
+            }
+            throw new IllegalArgumentException(String.join("\n", lines));
+        }
+        return onFx(() -> {
+            try {
+                return classFiles.delete(at);
+            } catch (java.io.IOException failed) {
+                throw new IllegalArgumentException(at.getFileName() + " could not be deleted: " + failed.getMessage());
+            }
+        });
     }
 
     @Override
@@ -300,25 +318,24 @@ final class StudioBridge implements StudioDriver {
     public String rename(String symbol, String to) {
         BotIndex index = index();
         SymbolNames.Located at = index.read(units -> SymbolNames.locate(units, symbol));
-        Refactor.Planned plan = switch (Refactor.rename(index, at.file(), at.start(), to)) {
-            case Refactor.Refused refused -> throw new IllegalArgumentException(refused.reason()
-                    + (refused.fixes().isEmpty() ? "" : " Names that would work: "
-                    + refused.fixes().stream().map(Refactor.Fix::label).toList() + "."));
-            case Refactor.Planned planned -> planned;
-        };
-        if (!plan.moves().isEmpty()) {
-            throw new IllegalArgumentException("Renaming " + at.what() + " renames its file too; the user does that "
-                    + "in Studio's file explorer.");
-        }
-        return onFx(() -> {
-            // The plan was made from the sources as they were read; a file typed in since would be overwritten.
-            Map<Path, String> now = new LinkedHashMap<>();
-            BotSources.scan(ctx.config(), ctx.state(), now::put);
-            for (Path file : plan.rewrites().keySet()) {
-                if (!java.util.Objects.equals(now.get(file), index.sources().get(file))) {
-                    throw new IllegalArgumentException(file.getFileName() + " changed meanwhile. Try again.");
+        if (!symbol.contains(".") && at.file().getFileName().toString().equals(symbol + ".java")) {
+            // A class whose file is named after it: the explorer's rename, which moves the file with it.
+            notReading();
+            ProjectState.Snapshot before = onFx(() -> ctx.state().snapshot());
+            Refactor.Planned moved = planned(classFiles.planRename(index, before, at.file(), to));
+            return onFx(() -> {
+                unchangedSince(index, moved);
+                try {
+                    return classFiles.applyRename(moved);
+                } catch (java.io.IOException failed) {
+                    throw new IllegalArgumentException("The rename stopped part-way (" + failed.getMessage()
+                            + "); revert goes back to the safety version from before.");
                 }
-            }
+            });
+        }
+        Refactor.Planned plan = planned(Refactor.rename(index, at.file(), at.start(), to));
+        return onFx(() -> {
+            unchangedSince(index, plan);
             openFile(at.file());
             CompilationUnit unit = ctx.state().getCompilationUnit().orElseThrow(() ->
                     new IllegalArgumentException("Studio has not drawn " + at.file().getFileName() + " yet."));
@@ -333,6 +350,37 @@ final class StudioBridge implements StudioDriver {
             }
             return plan.summary() + " — " + plan.rewrites().size() + " file(s), one undo step.";
         });
+    }
+
+    /** {@code outcome}'s plan, or its refusal as the tool's answer with the names that would work. */
+    private static Refactor.Planned planned(Refactor.Outcome outcome) {
+        return switch (outcome) {
+            case Refactor.Refused refused -> throw new IllegalArgumentException(refused.reason()
+                    + (refused.fixes().isEmpty() ? "" : " Names that would work: "
+                    + refused.fixes().stream().map(Refactor.Fix::label).toList() + "."));
+            case Refactor.Planned planned -> planned;
+        };
+    }
+
+    /**
+     * Refuses {@code plan} when a file it rewrites was typed in since {@code index} read it, which the plan would
+     * overwrite. FX thread.
+     */
+    private void unchangedSince(BotIndex index, Refactor.Planned plan) {
+        Map<Path, String> now = new LinkedHashMap<>();
+        BotSources.scan(ctx.config(), ctx.state(), now::put);
+        for (Path file : plan.rewrites().keySet()) {
+            if (!java.util.Objects.equals(now.get(file), index.sources().get(file))) {
+                throw new IllegalArgumentException(file.getFileName() + " changed meanwhile. Try again.");
+            }
+        }
+    }
+
+    /** Refuses a change to the bot's files while it is open for reading, as the explorer does. */
+    private void notReading() {
+        if (onFx(() -> ctx.state().isReaderMode())) {
+            throw new IllegalArgumentException("This bot is open for reading, so its files are not changed.");
+        }
     }
 
     @Override
