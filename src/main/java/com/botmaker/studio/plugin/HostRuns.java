@@ -2,12 +2,14 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.TraceLine;
+import com.botmaker.plugin.api.run.RunProperty;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.ProjectSettingsService;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -164,8 +166,19 @@ public final class HostRuns implements Runs {
         }
     }
 
-    /** This checkout's run property {@code name}, kept in {@code .botmaker/settings.json}; null when unset. */
+    /** This checkout's {@code property}, kept in {@code .botmaker/settings.json}, read as its type. */
     @Override
+    public <T> Optional<T> get(RunProperty<T> property) {
+        return property == null ? Optional.empty() : property.read(property(property.name()));
+    }
+
+    /** Writes {@code property} as its text; see {@link #setProperty}. {@code null} clears it. */
+    @Override
+    public <T> void set(RunProperty<T> property, T value) {
+        if (property != null) setProperty(property.name(), property.write(value));
+    }
+
+    /** This checkout's run property {@code name}, kept in {@code .botmaker/settings.json}; null when unset. */
     public String property(String name) {
         if (settings == null || name == null) return null;
         return settings.current().runProperties().get(name);
@@ -177,7 +190,6 @@ public final class HostRuns implements Runs {
      * emulator picker, then the setup checklist) sees what it wrote. Then announced, so a toolbar label that
      * reads the property (the SDK's game button) is refreshed.
      */
-    @Override
     public void setProperty(String name, String value) {
         if (settings == null || name == null || name.isBlank()) return;
         settings.saveAndPublish(settings.current().withRunProperty(name.trim(), value));

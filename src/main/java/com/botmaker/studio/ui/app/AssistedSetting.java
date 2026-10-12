@@ -10,7 +10,7 @@ import java.util.List;
  */
 enum AssistedSetting {
 
-    /** The toolbar's 🐞 Debug choice: this checkout's {@code Runs.DEBUG_PROPERTY}. */
+    /** The toolbar's 🐞 Debug choice: this checkout's {@code Runs.DEBUG}. */
     DEBUG_OUTPUT("debug_output", "Debug output",
             "bot, on or off — whether every run here prints and traces its debug lines; bot lets the bot's own "
                     + "setting decide"),

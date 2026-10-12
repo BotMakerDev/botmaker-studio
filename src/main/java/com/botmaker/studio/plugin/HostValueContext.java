@@ -4,6 +4,8 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -152,8 +154,18 @@ public final class HostValueContext implements ValueContext {
         return value.flatMap(v -> ValueGrammar.as(v, type));
     }
 
-    /** The constant of the open set {@code id} the value as it stands names, {@code Flows.DAILY} → {@code DAILY}. */
     @Override
+    public Optional<PluginValues.Member> member(ManagedValue<?> set) {
+        return set == null ? Optional.empty() : member(set.id()).flatMap(PluginValues.Member::read);
+    }
+
+    @Override
+    public Optional<String> writeMember(ManagedValue<?> set, PluginValues.Member member) {
+        if (set == null || member == null) return Optional.of("No constant to write.");
+        return writeMember(set.id(), member.toString());
+    }
+
+    /** The constant of the open set {@code id} the value as it stands names, {@code Flows.DAILY} → {@code DAILY}. */
     public Optional<String> member(String id) {
         Optional<JavaValue> now = current();
         if (now.isEmpty()) return Optional.empty();
@@ -164,7 +176,6 @@ public final class HostValueContext implements ValueContext {
      * Writes {@code Owner.MEMBER}, by name (2026-10-12): {@link #set} spells a value as the first constant equal
      * to it, so of two equal flows it could only ever write the first.
      */
-    @Override
     public Optional<String> writeMember(String id, String member) {
         ManagedConstants.Lookup lookup = lookup();
         Optional<ManagedConstants.Constant> constant = lookup.member(id, member);

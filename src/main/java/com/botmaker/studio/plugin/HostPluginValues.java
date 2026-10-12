@@ -121,7 +121,6 @@ public final class HostPluginValues implements PluginValues {
      * value itself is untouched and the user has lost nothing; what to tell them about it is the host's, and
      * {@code ManagedMethod.note} is the sentence.
      */
-    @Override
     public Optional<ValueContext> open(String id) {
         Optional<ManagedMethod> found = JavaManagedValues.find(config, state, id);
         if (found.isEmpty() || !found.get().editable()) return Optional.empty();
@@ -137,7 +136,6 @@ public final class HostPluginValues implements PluginValues {
      * {@code Sdk.java} an older SDK wrote had no {@code run()}, and the flow editor had nowhere to save). The
      * declaring plugin is found among the bound ones by the id it declared.
      */
-    @Override
     public Optional<String> create(String id) {
         if (id == null || id.isBlank()) return Optional.of("No value was named.");
         if (JavaManagedValues.find(config, state, id).isPresent()) return Optional.empty();
@@ -276,9 +274,107 @@ public final class HostPluginValues implements PluginValues {
         Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, HISTORY_LABEL);
     }
 
-    // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────
+    // ── the contract's operations, by declaration: each the spelled one below ────────────────────────────
 
     @Override
+    public Optional<ValueContext> open(ManagedValue<?> value) {
+        return value == null ? Optional.empty() : open(value.id());
+    }
+
+    @Override
+    public Optional<String> create(ManagedValue<?> value) {
+        return create(value == null ? null : value.id());
+    }
+
+    @Override
+    public List<Member> members(ManagedValue<?> set) {
+        if (set == null) return List.of();
+        return members(set.id()).stream().flatMap(spelled -> Member.read(spelled).stream()).toList();
+    }
+
+    @Override
+    public Optional<ValueContext> open(ManagedValue<?> set, Member member) {
+        return set == null || member == null ? Optional.empty() : open(set.id(), member.toString());
+    }
+
+    @Override
+    public <E> Optional<String> add(ManagedValue<E> set, Member member, E value) {
+        if (set == null || member == null) return Optional.of("No constant was named.");
+        return add(set.id(), member.toString(), value);
+    }
+
+    @Override
+    public List<Use> uses(ManagedValue<?> set, Member member) {
+        return set == null || member == null ? List.of() : uses(set.id(), member.toString());
+    }
+
+    @Override
+    public Optional<String> rename(ManagedValue<?> set, Member member, String newName) {
+        if (set == null || member == null) return Optional.of("No constant was named.");
+        return rename(set.id(), member.toString(), newName);
+    }
+
+    @Override
+    public Optional<String> repoint(ManagedValue<?> set, Member member, Member replacement, String note) {
+        if (set == null || member == null || replacement == null) return Optional.of("No constant was named.");
+        return repoint(set.id(), member.toString(), replacement.toString(), note);
+    }
+
+    @Override
+    public Optional<String> remove(ManagedValue<?> set, Member member) {
+        if (set == null || member == null) return Optional.of("No constant was named.");
+        return remove(set.id(), member.toString());
+    }
+
+    @Override
+    public Optional<String> moveBefore(ManagedValue<?> set, Member member, Member before) {
+        if (set == null || member == null || before == null) return Optional.of("No constant was named.");
+        return moveBefore(set.id(), member.toString(), before.toString());
+    }
+
+    @Override
+    public List<String> groups(ManagedValue<?> set) {
+        return set == null ? List.of() : groups(set.id());
+    }
+
+    @Override
+    public Optional<String> addGroup(ManagedValue<?> set, String group, List<String> constants) {
+        return set == null ? Optional.of("No set was named.") : addGroup(set.id(), group, constants);
+    }
+
+    @Override
+    public Optional<String> renameGroup(ManagedValue<?> set, String group, String newName) {
+        return set == null ? Optional.of("No set was named.") : renameGroup(set.id(), group, newName);
+    }
+
+    @Override
+    public Optional<String> removeGroup(ManagedValue<?> set, String group) {
+        return set == null ? Optional.of("No set was named.") : removeGroup(set.id(), group);
+    }
+
+    @Override
+    public List<String> methods(ManagedValue<?> set, String group) {
+        return set == null || group == null ? List.of() : methods(set.id(), group);
+    }
+
+    @Override
+    public List<String> voidMethods() {
+        return methods((String) null, null);
+    }
+
+    @Override
+    public MethodWrite createMethod(ManagedValue<?> set, String group, String className, String method) {
+        if (set == null || group == null) return new MethodWrite(null, "No enum was named.");
+        return createMethod(set.id(), group, className, method);
+    }
+
+    @Override
+    public MethodWrite createVoidMethod(String className, String method) {
+        return createMethod((String) null, null, className, method);
+    }
+
+    // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────
+
     public List<String> members(String id) {
         return ManagedSets.members(index(), id, PluginHost.grammar()).stream()
                 .map(ManagedSets.Member::memberName).toList();
@@ -286,19 +382,16 @@ public final class HostPluginValues implements PluginValues {
 
     // ── a set of nested enums ─────────────────────────────────────────────────────────────────────────────
 
-    @Override
     public List<String> groups(String id) {
         return ManagedSets.groups(index(), id).stream().map(ManagedSets.Group::name).toList();
     }
 
-    @Override
     public Optional<String> addGroup(String id, String group, List<String> constants) {
         Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id).filter(ManagedValue::isGrouped);
         if (set.isEmpty()) return Optional.of(notGrouped(id));
         return apply(ManagedSets.addGroup(index(), id, group, constants, set.get().type()));
     }
 
-    @Override
     public Optional<String> renameGroup(String id, String group, String newName) {
         BotIndex index = index();
         Optional<ManagedSets.Group> found = ManagedSets.group(index, id, group);
@@ -306,7 +399,6 @@ public final class HostPluginValues implements PluginValues {
         return apply(Refactor.rename(index, found.get().file(), found.get().start(), newName));
     }
 
-    @Override
     public Optional<String> removeGroup(String id, String group) {
         BotIndex index = index();
         Optional<ManagedSets.Group> found = ManagedSets.group(index, id, group);
@@ -321,7 +413,6 @@ public final class HostPluginValues implements PluginValues {
 
     // ── the bot's methods ─────────────────────────────────────────────────────────────────────────────────
 
-    @Override
     public List<String> methods(String id, String group) {
         BotIndex index = index();
         if (id == null && group == null) return BotMethods.returning(index, null);
@@ -330,7 +421,6 @@ public final class HostPluginValues implements PluginValues {
                 .orElse(List.of());
     }
 
-    @Override
     public MethodWrite createMethod(String id, String group, String className, String method) {
         BotIndex index = index();
         String returns = null;
@@ -387,7 +477,6 @@ public final class HostPluginValues implements PluginValues {
      * value equal to one would be written as that constant, and a constant's own initialiser naming itself
      * does not compile.
      */
-    @Override
     public Optional<ValueContext> open(String id, String member) {
         return ManagedSets.member(index(), id, member, PluginHost.grammar())
                 .filter(found -> found.initializer() != null)
@@ -395,7 +484,6 @@ public final class HostPluginValues implements PluginValues {
                         expression -> writeInitializer(found, expression)));
     }
 
-    @Override
     public Optional<String> add(String id, String member, Object value) {
         if (value == null) return Optional.of("No value was given for " + member + ".");
         Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id);
@@ -448,7 +536,6 @@ public final class HostPluginValues implements PluginValues {
         return ("AEIOU".indexOf(name.charAt(0)) >= 0 ? "an " : "a ") + name;
     }
 
-    @Override
     public List<Use> uses(String id, String member) {
         BotIndex index = index();
         return ManagedSets.member(index, id, member, PluginHost.grammar())
@@ -457,7 +544,6 @@ public final class HostPluginValues implements PluginValues {
                 .orElse(List.of());
     }
 
-    @Override
     public Optional<String> rename(String id, String member, String newName) {
         BotIndex index = index();
         Optional<ManagedSets.Member> found = ManagedSets.member(index, id, member, PluginHost.grammar());
@@ -471,7 +557,6 @@ public final class HostPluginValues implements PluginValues {
     }
 
     /** The mark is written only where the bot compiles {@code @Refactor}; elsewhere the repoint goes unmarked. */
-    @Override
     public Optional<String> repoint(String id, String member, String replacement, String note) {
         BotIndex index = index();
         Optional<ManagedSets.Member> from = ManagedSets.member(index, id, member, PluginHost.grammar());
@@ -482,7 +567,6 @@ public final class HostPluginValues implements PluginValues {
                 ReviewMarker.available(state) ? note : null));
     }
 
-    @Override
     public Optional<String> remove(String id, String member) {
         BotIndex index = index();
         Optional<ManagedSets.Member> found = ManagedSets.member(index, id, member, PluginHost.grammar());
@@ -490,7 +574,6 @@ public final class HostPluginValues implements PluginValues {
         return apply(ManagedSets.remove(index, found.get()));
     }
 
-    @Override
     public Optional<String> moveBefore(String id, String member, String before) {
         BotIndex index = index();
         List<ManagedSets.Member> members = ManagedSets.members(index, id, PluginHost.grammar());

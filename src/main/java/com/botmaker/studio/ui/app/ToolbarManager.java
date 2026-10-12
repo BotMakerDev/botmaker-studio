@@ -217,7 +217,7 @@ public class ToolbarManager {
         // where the host owns the bar and the plugin owns everything the press opens.
 
         // 🐞 Debug output stood here at RUN/20 until 2026-09-27, toggling the `debug` key of
-        // botmaker-project.properties, and came back on 2026-09-29 as the run property Runs.DEBUG_PROPERTY. What
+        // botmaker-project.properties, and came back on 2026-09-29 as the run property Runs.DEBUG. What
         // a bot does by default is still its own @SdkValue(SdkValue.Id.SETTINGS) value; whether this machine's runs
         // print and trace is a fact about running here, so it is a run property, and the host's to toggle
         // (docs/refactor/40-run-trace.md).
@@ -405,14 +405,14 @@ public class ToolbarManager {
     /** This checkout's debug output choice, read from its run properties at every refresh. */
     private DebugOutput debugOutput() {
         if (settings == null || settings.current() == null) return DebugOutput.BOT;
-        return DebugOutput.fromProperty(settings.current().runProperties().get(Runs.DEBUG_PROPERTY));
+        return DebugOutput.fromProperty(settings.current().runProperties().get(Runs.DEBUG.name()));
     }
 
     /** Moves to the next choice; the settings write publishes the change that relabels the button. */
     private void cycleDebugOutput() {
         if (settings == null || settings.current() == null) return;
         settings.update(settings.current()
-                .withRunProperty(Runs.DEBUG_PROPERTY, debugOutput().next().propertyValue()));
+                .withRunProperty(Runs.DEBUG.name(), debugOutput().next().propertyValue()));
     }
 
     /** Runs a wired callback, or does nothing when the bar was built before that callback was set. */

@@ -183,10 +183,10 @@ class ManagedHoldersTest {
     }
 
     private static final ManagedValue<Boolean> DO_SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in("Sdk")
-            .startsAs(ManagedHoldersTest::setUpFirst).shown("Run", "Set up first", Param.PUBLIC).because("Mine.");
+            .startsAs(ManagedHoldersTest::setUpFirst).shown("Run", "Set up first", Param.Visibility.PUBLIC).because("Mine.");
 
     private static final ManagedValue<java.time.Duration> PAUSE = ManagedValue.param(TestValue.Id.PAUSE).in("Sdk")
-            .startsAs(ManagedHoldersTest::noPause).shown("", "", Param.EDITOR).because("Mine.");
+            .startsAs(ManagedHoldersTest::noPause).shown("", "", Param.Visibility.EDITOR).because("Mine.");
 
     /** A plugin's parameters are marked {@code @Param} fields, written before the holder's methods (2026-10-11). */
     @Test
@@ -306,7 +306,7 @@ class ManagedHoldersTest {
     @Test
     void anUnwritableParameterCostsOnlyItself() {
         ManagedValue<java.awt.Point> spot = ManagedValue.param(TestValue.Id.MINE).in("Sdk")
-                .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.EDITOR).because("Mine.");
+                .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.Visibility.EDITOR).because("Mine.");
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), spot);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
                 ProjectConfig.forDirectory(dir), "com.botmaker.sdk", DECLARED.getFirst(), declared,
@@ -323,7 +323,7 @@ class ManagedHoldersTest {
     @Test
     void anEmptySetOfClassesParameterIsWritten() {
         ManagedValue<java.util.Set<Class<? extends TestOutcome>>> skip = ManagedValue.param(TestValue.Id.NAMES)
-                .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.PUBLIC)
+                .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.Visibility.PUBLIC)
                 .because("Mine.");
         String had = """
                 package com.bot.plugins.sdk;

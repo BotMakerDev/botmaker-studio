@@ -815,7 +815,7 @@ final class StudioBridge implements StudioDriver {
                 DebugOutput output = java.util.Arrays.stream(DebugOutput.values())
                         .filter(o -> o.name().equalsIgnoreCase(text)).findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("debug_output is bot, on or off."));
-                yield now.withRunProperty(Runs.DEBUG_PROPERTY, output.propertyValue());
+                yield now.withRunProperty(Runs.DEBUG.name(), output.propertyValue());
             }
             case HIDDEN_TRACE -> now.withHiddenTraceWriters(text.isEmpty() ? List.of()
                     : java.util.Arrays.stream(text.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList());
@@ -827,7 +827,7 @@ final class StudioBridge implements StudioDriver {
 
     private static String valueOf(AssistedSetting setting, StudioProjectSettings settings) {
         return switch (setting) {
-            case DEBUG_OUTPUT -> DebugOutput.fromProperty(settings.runProperties().get(Runs.DEBUG_PROPERTY))
+            case DEBUG_OUTPUT -> DebugOutput.fromProperty(settings.runProperties().get(Runs.DEBUG.name()))
                     .name().toLowerCase(java.util.Locale.ROOT);
             case HIDDEN_TRACE -> String.join(", ", settings.hiddenTraceWriters());
             case UNKNOWN -> "";

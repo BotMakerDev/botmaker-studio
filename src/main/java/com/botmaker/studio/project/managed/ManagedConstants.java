@@ -401,7 +401,7 @@ public final class ManagedConstants {
             if (!(body instanceof EnumDeclaration nested)) continue;
             String group = nested.getName().getIdentifier();
             String nestedOwner = owner + "." + group;
-            Object whole = set.byGroup(group);
+            Object whole = set.byGroup(Object.class, group).orElse(null);
             if (whole != null) out.add(new Constant(nestedOwner, null, null, whole, owner, id));
             for (Object each : nested.enumConstants()) {
                 String name = ((EnumConstantDeclaration) each).getName().getIdentifier();

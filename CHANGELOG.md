@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **Studio hosts contract 0.9.0**: `HostPluginValues`, `HostValueContext` and `HostRuns` implement the typed
+  operations — a plugin's value addressed by its `ManagedValue`, an open set's constant by a `Member`, a run property
+  by a `RunProperty` — over the same spelled lookups as before. The debug toggle reads and writes `Runs.DEBUG`.
+
 ### Added
 
 - **A reference to a constant can cross by its name** (`ManagedValue.referredToAs`, read in

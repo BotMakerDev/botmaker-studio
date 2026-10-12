@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.api.Runs;
 
 /**
- * What the toolbar's 🐞 Debug output button says about {@link Runs#DEBUG_PROPERTY}, the one run property the host
+ * What the toolbar's 🐞 Debug output button says about {@link Runs#DEBUG}, the one run property the host
  * names ({@code docs/refactor/40-run-trace.md}).
  *
  * <p>Three states, because the property has three: {@code true}, {@code false}, and unset, where the bot's own
