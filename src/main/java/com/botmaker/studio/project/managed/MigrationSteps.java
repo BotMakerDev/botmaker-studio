@@ -141,6 +141,17 @@ public final class MigrationSteps {
     /** A deprecated type whose values the bot still has, and what its plugin says replaces it ({@code null}: nothing). */
     public record Pending(Class<?> from, Class<?> to, int values) {}
 
+    /**
+     * An open set a plugin's next version drops, as the bot holds it now.
+     *
+     * @param type       what its values are, {@code null} when its declaration names no class
+     * @param to         what its plugin says replaces {@code type}, {@code null} for nothing
+     * @param values     how many of its values have no {@code @Migrated} copy
+     * @param migratable whether the migration window can copy them: a set of {@code public static final} values,
+     *                   and a type the version bound now has for them
+     */
+    public record Stranded(String id, Class<?> type, Class<?> to, int values, boolean migratable) {}
+
     /** One value as it is and as the migration would write it. */
     public record Row(String name, String before, String after) {}
 
@@ -160,6 +171,37 @@ public final class MigrationSteps {
         List<Pending> out = new ArrayList<>();
         counts.forEach((type, count) -> out.add(new Pending(type, replacementOf(grammar, type), count)));
         return List.copyOf(out);
+    }
+
+    /**
+     * Each of {@code own}'s open sets the bot holds values of that {@code target} — the plugin's next version —
+     * does not declare with the same id and type, compared by name: the move's repair removes its values (the id is
+     * gone) or resets them (the type is). A value with an {@code @Migrated} copy is not counted, and a set with none
+     * left is not listed. {@code declared} is every bound plugin's, what the migration window offers types from.
+     */
+    public static List<Stranded> stranded(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
+                                          List<ManagedValue<?>> own, List<ManagedValue<?>> target) {
+        Set<String> kept = new HashSet<>();
+        for (ManagedValue<?> set : target) {
+            if (set != null && set.isOpenSet()) kept.add(key(set));
+        }
+        List<Stranded> out = new ArrayList<>();
+        for (ManagedValue<?> set : own) {
+            if (set == null || !set.isOpenSet() || kept.contains(key(set))) continue;
+            List<ManagedSets.Member> members = ManagedSets.members(index, set.id(), grammar);
+            boolean migratable = migratable(set) && !targets(grammar, declared, set.type()).isEmpty();
+            long left = !migratable ? members.size() : members.stream().filter(member -> MigrationCleanup
+                    .copyTarget(index, grammar, declared, set.type(), member.name()).isEmpty()).count();
+            if (left > 0) {
+                out.add(new Stranded(set.id(), set.type(), migratable ? replacementOf(grammar, set.type()) : null,
+                        (int) left, migratable));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private static String key(ManagedValue<?> set) {
+        return set.id() + " " + (set.type() == null ? "" : set.type().getName());
     }
 
     /** Whether any open set of the bot is of a type a plugin retired — the cheap question before {@link #pending}. */

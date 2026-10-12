@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.docs.StudioAction;
+import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -182,7 +183,8 @@ final class StudioActions {
      */
     void openPlugins(PluginsWindow.Section section) {
         new PluginsWindow(primaryStage, config, state, libraryService, pluginRegistry, jitPackSearch,
-                mavenCentralSearch, menuBar::reviewChanges).show(section);
+                mavenCentralSearch, menuBar::reviewChanges,
+                from -> eventBus.publish(new CoreApplicationEvents.MigrateTypeRequestedEvent(from))).show(section);
     }
 
     /**

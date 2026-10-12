@@ -2,9 +2,11 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ReleasedPlugins;
+import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
@@ -22,6 +24,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
@@ -41,6 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -112,6 +117,7 @@ public final class InstalledPluginsTab {
     private final Runnable onAddPlugin;
     private final Runnable onOpenReview;
     private final Runnable onChanged;
+    private final Consumer<Class<?>> onMigrate;
     private final VBox root = new VBox(12);
 
     /** Shown while a row pins a dev build Studio refused; see {@link #showDevBar}. */
@@ -136,11 +142,14 @@ public final class InstalledPluginsTab {
      * @param onOpenReview the result block's <i>Open Review tab</i>; the tab is the shell's, so the shell
      *                     supplies the verb, and the window closes behind it
      * @param onChanged    after a pass or a removal wrote the pom, so the window's other tabs read it again
+     * @param onMigrate    <i>Migrate first</i>: the migration window on a type the move would strand, which the
+     *                     shell owns, so the window closes behind it
      */
     InstalledPluginsTab(ProjectConfig config, ProjectState state, LibraryService libraryService,
                         PluginRegistry registry, JitPackSearch jitpack,
                         Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds,
-                        Runnable onAddPlugin, Runnable onOpenReview, Runnable onChanged) {
+                        Runnable onAddPlugin, Runnable onOpenReview, Runnable onChanged,
+                        Consumer<Class<?>> onMigrate) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
@@ -150,6 +159,7 @@ public final class InstalledPluginsTab {
         this.onAddPlugin = onAddPlugin;
         this.onOpenReview = onOpenReview;
         this.onChanged = onChanged;
+        this.onMigrate = onMigrate;
         build();
     }
 
@@ -806,6 +816,65 @@ public final class InstalledPluginsTab {
                 + "review, and anything outside a function is listed afterwards. Their imports are removed.";
     }
 
+    /** An open set one plugin's move drops while the bot still has values in it. */
+    record Dropped(String plugin, String target, MigrationSteps.Stranded set) {
+
+        /** What the set's values are, as a sentence names them. */
+        String typeName() {
+            return set.type() == null ? set.id() : JavaNames.simple(set.type());
+        }
+    }
+
+    /** What the user does about the dropped values. */
+    enum DroppedChoice { MIGRATE_FIRST, UPGRADE_ANYWAY, CANCEL }
+
+    /**
+     * Asks before a move that removes or resets values with their set (2026-10-12): migrate them first, on the
+     * version the bot has now — offered only when one of them can be — or upgrade anyway, which runs the repair
+     * after the version it saves first.
+     */
+    private DroppedChoice askDropped(List<Dropped> dropped) {
+        ButtonType migrate = new ButtonType("Migrate first", ButtonBar.ButtonData.OK_DONE);
+        ButtonType anyway = new ButtonType("Upgrade anyway", ButtonBar.ButtonData.OTHER);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = firstMigratable(dropped).isPresent()
+                ? ThemedWindows.alert(Alert.AlertType.WARNING, droppedText(dropped), migrate, anyway, cancel)
+                : ThemedWindows.alert(Alert.AlertType.WARNING, droppedText(dropped), anyway, cancel);
+        alert.setHeaderText("Some values would be lost");
+        Optional<ButtonType> answer = alert.showAndWait();
+        if (answer.isEmpty() || answer.get() == cancel) return DroppedChoice.CANCEL;
+        return answer.get() == migrate ? DroppedChoice.MIGRATE_FIRST : DroppedChoice.UPGRADE_ANYWAY;
+    }
+
+    /** The first set the migration window can copy, which <i>Migrate first</i> opens on. */
+    static Optional<Dropped> firstMigratable(List<Dropped> dropped) {
+        return dropped.stream().filter(d -> d.set().migratable()).findFirst();
+    }
+
+    /** The warning's text: each dropped set, then what each answer does. Pure, for the test. */
+    static String droppedText(List<Dropped> dropped) {
+        StringBuilder out = new StringBuilder();
+        for (Dropped each : dropped) {
+            MigrationSteps.Stranded set = each.set();
+            out.append("• ").append(set.values()).append(set.values() == 1 ? " value of " : " values of ")
+                    .append(each.typeName()).append(": ").append(each.plugin()).append(' ').append(each.target())
+                    .append(" drops their set")
+                    .append(set.to() != null ? "; it points to " + JavaNames.simple(set.to())
+                            : set.migratable() ? "" : "; nothing in the version you have now can take them")
+                    .append(".\n");
+        }
+        out.append("\nUpgrading removes or resets those values; a removed value your code names is kept, unmarked."
+                + " The version saved before the upgrade still has them.");
+        Optional<Dropped> first = firstMigratable(dropped);
+        if (first.isPresent()) {
+            out.append("\n\nMigrate first copies them to another type on the version you have now, starting with ")
+                    .append(first.get().typeName())
+                    .append(dropped.size() > 1 ? "; migrate the others the same way, from the Review tab or a"
+                            + " value's menu, then upgrade again." : ", then upgrade again.");
+        }
+        return out.toString();
+    }
+
     // -------------------------------------------------------------------------
     // A pass
     // -------------------------------------------------------------------------
@@ -824,9 +893,8 @@ public final class InstalledPluginsTab {
                 : "moving " + moving.size() + " plugins") + " would break…");
 
         CompletableFuture.supplyAsync(() -> moving.stream()
-                .map(row -> new FixSheet.Part(row.upgrades().displayName(), row.targetVersion(),
-                        FixList.of(row.upgrades().compare(row.targetVersion(), row.alsoModernise()))))
-                .toList()).whenComplete((parts, error) -> Platform.runLater(() -> {
+                .map(row -> row.upgrades().compare(row.targetVersion(), row.alsoModernise()))
+                .toList()).whenComplete((reports, error) -> Platform.runLater(() -> {
                     if (error != null) {
                         endBusy();
                         Throwable cause = error.getCause() != null ? error.getCause() : error;
@@ -834,6 +902,29 @@ public final class InstalledPluginsTab {
                         return;
                     }
                     try {
+                        List<Dropped> dropped = new ArrayList<>();
+                        for (int i = 0; i < moving.size(); i++) {
+                            for (MigrationSteps.Stranded set : reports.get(i).stranded()) {
+                                dropped.add(new Dropped(moving.get(i).upgrades().displayName(),
+                                        moving.get(i).targetVersion(), set));
+                            }
+                        }
+                        if (!dropped.isEmpty()) {
+                            DroppedChoice choice = askDropped(dropped);
+                            if (choice != DroppedChoice.UPGRADE_ANYWAY) {
+                                endBusy();
+                                status("Nothing was changed.");
+                                if (choice == DroppedChoice.MIGRATE_FIRST) {
+                                    firstMigratable(dropped).ifPresent(d -> onMigrate.accept(d.set().type()));
+                                }
+                                return;
+                            }
+                        }
+                        List<FixSheet.Part> parts = new ArrayList<>();
+                        for (int i = 0; i < moving.size(); i++) {
+                            parts.add(new FixSheet.Part(moving.get(i).upgrades().displayName(),
+                                    moving.get(i).targetVersion(), FixList.of(reports.get(i))));
+                        }
                         if (parts.stream().allMatch(p -> p.issues().isEmpty())) {
                             apply(moving);
                             return;

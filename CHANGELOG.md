@@ -30,6 +30,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   constant shares its declaration with another field, and always for an enum's constant, whose `ordinal()`
   would change. A constant already above is left alone and takes no snapshot.
 
+- **An upgrade warns before it loses values with their set.** When the plugin's target version no longer
+  declares an open set the bot has values in, under the same id and type, *Upgrade* lists each set: how many of
+  its values have no `@Migrated` copy yet, and what its plugin points to. It then asks *Migrate first*, which
+  closes the window and opens the migration window on the version the bot has now, or *Upgrade anyway*, which
+  runs today's repair after its safety version. *Migrate first* is offered only when the version bound now has
+  a type to copy them into (`project/managed/MigrationSteps.stranded`, `PluginUpgradeService.Report.stranded`).
 - **After a migration: switch uses, remove originals, remove the migration.** In the migration window,
   *Switch uses to the copies* points each use of `OldShots.ORE` at `Shots.ORE`; a retired value's right-click
   does it for that one value. Only a copy the migration wrote counts — still marked `@Migrated`; one the author

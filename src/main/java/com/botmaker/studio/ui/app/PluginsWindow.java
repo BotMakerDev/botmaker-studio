@@ -30,6 +30,7 @@ import javafx.stage.Window;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -67,6 +68,7 @@ public final class PluginsWindow {
     private final JitPackSearch jitpack;
     private final MavenCentralSearch mavenCentral;
     private final Runnable onOpenReview;
+    private final Consumer<Class<?>> onMigrate;
 
     private final TabPane tabs = new TabPane();
     private final Label loadProblems = new Label();
@@ -83,10 +85,13 @@ public final class PluginsWindow {
     private LibrariesTab libraries;
     private Stage stage;
 
-    /** @param onOpenReview raises the shell's Review tab; offered after a pass rewrote the bot's code */
+    /**
+     * @param onOpenReview raises the shell's Review tab; offered after a pass rewrote the bot's code
+     * @param onMigrate    opens the shell's migration window on a type; offered before a move that strands its values
+     */
     public PluginsWindow(Window owner, ProjectConfig config, ProjectState state, LibraryService libraryService,
                          PluginRegistry registry, JitPackSearch jitpack, MavenCentralSearch mavenCentral,
-                         Runnable onOpenReview) {
+                         Runnable onOpenReview, Consumer<Class<?>> onMigrate) {
         this.owner = owner;
         this.config = config;
         this.state = state;
@@ -95,6 +100,7 @@ public final class PluginsWindow {
         this.jitpack = jitpack;
         this.mavenCentral = mavenCentral;
         this.onOpenReview = onOpenReview;
+        this.onMigrate = onMigrate;
     }
 
     public void show(Section section) {
@@ -108,7 +114,11 @@ public final class PluginsWindow {
                     stage.close();
                     onOpenReview.run();
                 },
-                this::afterInstalledChanged);
+                this::afterInstalledChanged,
+                from -> {
+                    stage.close();
+                    onMigrate.accept(from);
+                });
         browse = new BrowsePluginsTab(libraryService, registry, jitpack, this::localBuilds,
                 () -> select(Section.INSTALLED), this::afterBrowseChanged);
         libraries = new LibrariesTab(libraryService, mavenCentral, jitpack,

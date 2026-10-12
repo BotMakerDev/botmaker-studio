@@ -247,6 +247,39 @@ class MigrationStepsTest {
                 .reversed(), "the replacement first");
     }
 
+    @Test
+    void aSetTheNextVersionDropsIsStrandedWithItsValues(@TempDir Path root) {
+        BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldShots"), OLD_SHOTS,
+                file(root, "plugins/sdk/Shots"), SHOTS));
+        List<ManagedValue<?>> next = List.of(DECLARED.get(1), DECLARED.get(3));
+
+        assertEquals(List.of(new MigrationSteps.Stranded(DECLARED.getFirst().id(), OldShot.class, Shot.class, 2,
+                        true)),
+                MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, next),
+                "OldFrames holds nothing; Shots none yet");
+        assertEquals(List.of(), MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, DECLARED),
+                "a version that still declares the set strands nothing");
+        List<ManagedValue<?>> renamed = List.of(ManagedValue.openSet(TestValue.Id.SHOTS).of(OldShot.class)
+                .in("Shots").because("Renamed."));
+        assertEquals(1, MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, renamed).size(),
+                "the same type under another id loses the values too");
+    }
+
+    @Test
+    void aValueWithAMigratedCopyIsNotStranded(@TempDir Path root) {
+        String copied = SHOTS.replace("public final class Shots {", """
+                public final class Shots {
+                    @com.botmaker.plugin.api.meta.Migrated
+                    public static final Shot ORE = new Shot("ore.png", 80, false);
+                """);
+        BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldShots"), OLD_SHOTS,
+                file(root, "plugins/sdk/Shots"), copied));
+
+        List<MigrationSteps.Stranded> stranded = MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED,
+                List.of(DECLARED.get(1)));
+        assertEquals(1, stranded.getFirst().values(), "ORE has its copy; GOLD has none");
+    }
+
     private static String written(Step step) {
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         return MigrationSteps.method(GRAMMAR, ast, step, Character.toLowerCase(step.to().getSimpleName().charAt(0))

@@ -6,6 +6,7 @@ import com.botmaker.studio.parser.refactor.ApiReferences;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.PluginFiles;
@@ -14,6 +15,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.managed.ManagedRepairs;
+import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -497,6 +499,10 @@ public final class PluginUpgradeService {
      * <p>{@code values} is what the move does to this bot's managed values (2026-10-11), one sentence each: what
      * the repair removes or resets ({@link ManagedRepairs}), then what it keeps as written. Nothing converts them
      * and nothing refuses the move over them.
+     *
+     * <p>{@code stranded} is the open sets the bot holds values of that the target no longer declares
+     * ({@link MigrationSteps#stranded}, 2026-10-12): the repair removes or resets those values, so the window
+     * offers to migrate them first, on the current version.
      */
     public record Report(String from, String to,
                          Operation operation,
@@ -508,10 +514,12 @@ public final class PluginUpgradeService {
                          List<Choice> guesses,
                          List<String> scaffolding,
                          List<String> problems,
-                         List<String> values) {
+                         List<String> values,
+                         List<MigrationSteps.Stranded> stranded) {
 
         public Report {
             values = List.copyOf(values);
+            stranded = List.copyOf(stranded);
         }
 
         /** A report touching no managed value — every one the jars alone produce. */
@@ -519,7 +527,7 @@ public final class PluginUpgradeService {
                       Map<String, List<String>> addedBySince, List<Deprecation> deprecated, List<Break> breaks,
                       List<Choice> splits, List<Choice> guesses, List<String> scaffolding, List<String> problems) {
             this(from, to, operation, highlights, addedBySince, deprecated, breaks, splits, guesses, scaffolding,
-                    problems, List.of());
+                    problems, List.of(), List.of());
         }
 
         /** This report, with what {@link ValuesPlan} says about the bot's managed values. */
@@ -527,7 +535,7 @@ public final class PluginUpgradeService {
             List<String> problems = new ArrayList<>(this.problems);
             problems.addAll(plan.problems());
             return new Report(from, to, operation, highlights, addedBySince, deprecated, breaks, splits, guesses,
-                    scaffolding, List.copyOf(problems), plan.sentences());
+                    scaffolding, List.copyOf(problems), plan.sentences(), plan.stranded());
         }
 
         /** Everything new, as one list — the exhaustive answer, for a reader that does not want the eras. */
@@ -683,7 +691,7 @@ public final class PluginUpgradeService {
 
         Report report = compare(oldJar.get(), newJar.get(), from, to, alsoModernise);
         // Modernising moves no version, so no value changes shape.
-        return from.equals(to) ? report : report.with(values(newJar.get(), to));
+        return from.equals(to) ? report : report.with(values(newJar.get(), to, true));
     }
 
     // =========================================================================
@@ -696,10 +704,11 @@ public final class PluginUpgradeService {
      *
      * @param planned  the repair, null when there was nothing to plan
      * @param problems what could not be checked
+     * @param stranded the open sets whose values the target leaves nowhere to live ({@link Report#stranded})
      */
-    record ValuesPlan(ManagedRepairs.Planned planned, List<String> problems) {
+    record ValuesPlan(ManagedRepairs.Planned planned, List<String> problems, List<MigrationSteps.Stranded> stranded) {
 
-        static final ValuesPlan NONE = new ValuesPlan(null, List.of());
+        static final ValuesPlan NONE = new ValuesPlan(null, List.of(), List.of());
 
         /** The sentences a report shows: what the repair removes or resets, then what it keeps. */
         List<String> sentences() {
@@ -728,47 +737,72 @@ public final class PluginUpgradeService {
     /**
      * The repair of this bot's values for the move to {@code to}: the target jar loaded beside the bound one, the
      * bot parsed against the target classpath. <b>Blocking</b> — resolves the target classpath and parses the bot.
+     *
+     * @param strand also what the move strands ({@link Report#stranded}): asked before the move, not during it
      */
-    ValuesPlan values(Path newJar, String to) {
+    ValuesPlan values(Path newJar, String to, boolean strand) {
         Optional<StagedPlugin> opened = StagedPlugin.open(config.projectPath(), coordinate(), to, newJar);
         if (opened.isEmpty()) {
             if (!holdsOwnValues()) return ValuesPlan.NONE;
             return new ValuesPlan(null, List.of("The " + name() + " " + to + " plugin could not be loaded, so this"
-                    + " bot's values in its files were not checked; they are left as written."));
+                    + " bot's values in its files were not checked; they are left as written."), List.of());
         }
         try (StagedPlugin staged = opened.get()) {
             if (staged.declared().isEmpty() && holdsOwnValues()) {
                 return new ValuesPlan(null, List.of(name() + " " + to + " declares no values Studio could read, so"
-                        + " this bot's values in its files are left as written."));
+                        + " this bot's values in its files are left as written."), List.of());
             }
             BotIndex index = BotIndex.of(config, state).against(staged.classpath());
             String note = ReviewMarker.available(state)
                     ? "Reset by the " + name() + " " + to + " upgrade: it no longer compiled." : null;
-            return new ValuesPlan(ManagedRepairs.plan(index, staged.declared(), staged.grammar(), note), List.of());
+            return new ValuesPlan(ManagedRepairs.plan(index, staged.declared(), staged.grammar(), note), List.of(),
+                    strand ? stranded(staged.declared()) : List.of());
         } catch (RuntimeException | LinkageError e) {
             // The plugin's declarations are in this pass; whatever they throw leaves the values as written.
             return new ValuesPlan(null, List.of(name() + " " + to + "'s values could not be read, so this bot's"
-                    + " values in its files are left as written: " + e + "."));
+                    + " values in its files are left as written: " + e + "."), List.of());
         }
     }
 
     /** Whether the bot marks any value the plugins bound from this coordinate declare. */
     private boolean holdsOwnValues() {
         Set<String> own = new LinkedHashSet<>();
+        ownDeclared().forEach(v -> own.add(v.id()));
+        if (own.isEmpty()) return false;
+        return ManagedRepairs.held(BotIndex.of(config, state)).stream().anyMatch(own::contains);
+    }
+
+    /** Every value the plugins bound from this coordinate declare now; a plugin that throws declares nothing. */
+    private List<ManagedValue<?>> ownDeclared() {
+        List<ManagedValue<?>> own = new ArrayList<>();
         Set<String> ids = PluginHost.loaded().stream()
                 .filter(l -> l.isOf(artifact.groupId(), artifact.artifactId()))
                 .map(PluginHost.LoadedPlugin::id).collect(java.util.stream.Collectors.toSet());
         for (StudioPlugin plugin : PluginHost.plugins()) {
             if (!ids.contains(plugin.id())) continue;
             try {
-                List<com.botmaker.plugin.api.source.ManagedValue<?>> values = plugin.managedValues();
-                if (values != null) values.stream().filter(v -> v != null).forEach(v -> own.add(v.id()));
+                List<ManagedValue<?>> values = plugin.managedValues();
+                if (values != null) values.stream().filter(v -> v != null).forEach(own::add);
             } catch (RuntimeException | LinkageError e) {
                 // Declares nothing it can say.
             }
         }
-        if (own.isEmpty()) return false;
-        return ManagedRepairs.held(BotIndex.of(config, state)).stream().anyMatch(own::contains);
+        return own;
+    }
+
+    /**
+     * This coordinate's open sets the bot holds values of, as bound now, that {@code target}'s declarations drop —
+     * read with the bound grammar on the bot as it compiles now, so the migration window opens on them as they
+     * are. Never throws: what cannot be read strands nothing. A plugin that is not bound declares nothing to
+     * compare, so nothing is stranded; its values are then the repair's alone, as before this check.
+     */
+    private List<MigrationSteps.Stranded> stranded(List<ManagedValue<?>> target) {
+        try {
+            return MigrationSteps.stranded(BotIndex.of(config, state), PluginHost.grammar(),
+                    PluginHost.managedValues(), ownDeclared(), target);
+        } catch (RuntimeException | LinkageError e) {
+            return List.of();
+        }
     }
 
     /**
@@ -785,7 +819,7 @@ public final class PluginUpgradeService {
                     + " resolved again, so this bot's values in its files are left as written."), List.of())
                     : Values.NOTHING;
         }
-        ValuesPlan plan = values(newJar.get(), targetVersion);
+        ValuesPlan plan = values(newJar.get(), targetVersion, false);
         if (plan.planned() == null) return new Values(0, List.of(), plan.problems(), List.of());
         ManagedRepairs.Planned planned = plan.planned();
         if (planned.isEmpty()) return new Values(0, planned.repaired(), planned.left(), List.of());
