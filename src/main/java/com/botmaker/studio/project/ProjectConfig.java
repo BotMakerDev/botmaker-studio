@@ -209,13 +209,27 @@ public record ProjectConfig(
     // (Flow.activity(…)), inside the value the SDK plugin's window writes.
 
     /**
-     * The generated {@code Parameters.java} sidecar: every configured value the bot reads.
+     * {@code Parameters.java}, the class <i>Project ▸ Parameters</i> reads and writes: every configured value the
+     * bot reads.
      *
-     * <p>Its own file since 2026-08-25 — the flags and the values used to be one class, which is why a project
-     * created before then has none until it is opened and migrated.
+     * <p>Its own file since 2026-08-25 — the flags and the values used to be one class. In its own package,
+     * {@link #parametersPackage()}, since 2026-10-13: beside the user's classes it read as one of theirs, to
+     * rename or delete. Studio owns it there. A bot made before keeps its file beside its classes, an ordinary
+     * class of the user's that the window still reads (any class's {@code @Param} fields are rows); nothing
+     * moves it, as Studio writes a bot's Java only when asked.
      */
     public Path parametersSourceFile() {
-        return mainPackageDir().resolve("Parameters.java");
+        return parametersPackageDir().resolve("Parameters.java");
+    }
+
+    /** {@code com.<pkg>.params}, the package {@link #parametersSourceFile()} declares. */
+    public String parametersPackage() {
+        return mainPackage() + ".params";
+    }
+
+    /** {@code src/main/java/com/<pkg>/params}. */
+    public Path parametersPackageDir() {
+        return mainPackageDir().resolve("params");
     }
 
     // templatesSourceFile() went on 2026-09-01 with no caller and none since the SDK stopped writing source

@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ImportManager {
 
@@ -53,6 +55,9 @@ public class ImportManager {
 
     /** Sentinel for a cached miss — {@link ConcurrentHashMap} cannot hold a null value. */
     private static final String NOT_FOUND = "";
+
+    /** A source file's {@code package} line, its name in group 1. */
+    private static final Pattern PACKAGE_LINE = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
 
     /**
      * Ensures that the specific class is imported.
@@ -211,6 +216,11 @@ public class ImportManager {
                     if (cu != null && cu.getPackage() != null) {
                         return cu.getPackage().getName().getFullyQualifiedName() + "." + className;
                     }
+                    // A file never drawn has no tree yet; its package line says the same. Parameters.java is
+                    // one (2026-10-13): in its own package, a block naming it needs this import.
+                    String text = file.getContent() == null ? "" : file.getContent();
+                    Matcher declared = PACKAGE_LINE.matcher(text.replaceAll("(?s)/\\*.*?\\*/|//[^\\n]*", ""));
+                    if (declared.find()) return declared.group(1) + "." + className;
                 }
             }
         }

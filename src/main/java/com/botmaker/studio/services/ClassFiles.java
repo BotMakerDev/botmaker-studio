@@ -108,6 +108,10 @@ public final class ClassFiles {
         if (at.startsWith(config.mainPackageDir().resolve("plugins").toAbsolutePath().normalize())) {
             return Optional.of("plugins/ holds the plugins' own files. Put yours in another package.");
         }
+        if (at.startsWith(config.parametersPackageDir().toAbsolutePath().normalize())) {
+            return Optional.of("params/ holds Parameters.java, which Project ▸ Parameters writes. "
+                    + "Put yours in another package.");
+        }
         return Optional.empty();
     }
 

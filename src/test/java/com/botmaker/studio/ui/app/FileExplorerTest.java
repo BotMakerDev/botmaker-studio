@@ -51,7 +51,7 @@ class FileExplorerTest extends FxHeadlessTest {
         Path main = config.mainSourceFile();
         write(main, MAIN);
         write(config.mainPackageDir().resolve("plugins/sdk/Sdk.java"), "package com.mybot.plugins.sdk;\nclass Sdk {}\n");
-        write(config.parametersSourceFile(), "package com.mybot;\npublic final class Parameters {}\n");
+        write(config.parametersSourceFile(), "package com.mybot.params;\npublic final class Parameters {}\n");
         write(config.resourcesRoot().resolve("images/ore.png"), "not really a picture");
 
         EditorFixture fixture = new EditorFixture(MAIN, main);
@@ -73,7 +73,7 @@ class FileExplorerTest extends FxHeadlessTest {
                 "      Sdk.java",
                 "    MyBot.java",
                 "Managed by Studio",
-                "  com.mybot",
+                "  com.mybot.params",
                 "    Parameters.java",
                 "Resources",
                 "  images",

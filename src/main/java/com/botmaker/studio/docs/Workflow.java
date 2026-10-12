@@ -119,7 +119,8 @@ public final class Workflow {
                         + "wait for is one variable they both read, rather than a copy each. A category says "
                         + "where it is filed in the window and nothing more — a variable filed under "
                         + "\"Mining\" is still readable from anywhere.",
-                        "Each one is a field in your own Parameters.java, marked @Param — so your blocks say "
+                        "Each one is a field in Parameters.java, marked @Param, in the package Studio keeps "
+                        + "for it (params) — so your blocks say "
                         + "Parameters.maxAttempts, the compiler checks the type, and deleting a variable "
                         + "something still reads is a compile error rather than a surprise at run time. The "
                         + "window writes back into that file: changing a value rewrites one initialiser, "

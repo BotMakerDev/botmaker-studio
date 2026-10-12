@@ -9,6 +9,7 @@ import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.ManagedConstants;
@@ -38,7 +39,9 @@ import org.eclipse.jdt.core.dom.TextBlock;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -353,8 +356,18 @@ public final class JavaParameters {
                                              String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
-        if (!classes(config, state).contains(className) && !createClass(config, className)) {
-            return Optional.empty();
+        if (!classes(config, state).contains(className)) {
+            Optional<Path> holder = createClass(config, className);
+            if (holder.isEmpty()) return Optional.empty();
+            // Known to the editor at once: a block naming it imports it from its package by this file.
+            Path created = holder.get();
+            if (state != null && state.getFile(created).isEmpty()) {
+                try {
+                    state.addFile(new ProjectFile(created, Files.readString(created)));
+                } catch (IOException unreadable) {
+                    // Read from disk by the next walk instead; only the import is lost meanwhile.
+                }
+            }
         }
         rewriteAll(config, state, source -> JavaParameterEdits.add(
                 source, grammar, className, name, form, value, category, description));
@@ -508,7 +521,9 @@ public final class JavaParameters {
     }
 
     /**
-     * Writes an empty {@code @Param} holder class into the bot's package, and answers whether it is there.
+     * Writes an empty {@code @Param} holder class into the parameters' package
+     * ({@link ProjectConfig#parametersPackage()}, since 2026-10-13), and answers where it is; empty when it
+     * could not be written.
      *
      * <p>A file appearing in a project is a bigger event than a field appearing in a file, so this is called
      * only when a person asks for a parameter and there is nowhere to put it. An existing file is never
@@ -516,8 +531,12 @@ public final class JavaParameters {
      * write goes through {@link ProjectWrites}, which takes the history snapshot that makes a file the user
      * did not type undoable.
      */
-    public static boolean createClass(ProjectConfig config, String className) {
-        Path file = config.mainPackageDir().resolve(className + ".java");
+    public static Optional<Path> createClass(ProjectConfig config, String className) {
+        // A bot made before 2026-10-13 has its Parameters.java beside its classes: a class with no field left
+        // is still the one a field goes into, never a second of the same name in params.
+        Path beside = config.mainPackageDir().resolve(className + ".java");
+        if (Files.isRegularFile(beside)) return Optional.of(beside);
+        Path file = config.parametersPackageDir().resolve(className + ".java");
         String source = """
                 package %s;
 
@@ -532,9 +551,9 @@ public final class JavaParameters {
 
                     private %s() {}
                 }
-                """.formatted(config.mainPackage(), Param.class.getCanonicalName(), className,
+                """.formatted(config.parametersPackage(), Param.class.getCanonicalName(), className,
                 className, className);
-        return ProjectWrites.create(config, file, source, "Create " + className);
+        return ProjectWrites.create(config, file, source, "Create " + className) ? Optional.of(file) : Optional.empty();
     }
 
     /**

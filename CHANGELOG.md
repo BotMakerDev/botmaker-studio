@@ -27,6 +27,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   row to right-click. The assistant gets the same through `services/ClassFiles`: `add_file` takes `kind` and
   `package`, `rename` of a class moves its file instead of refusing, and `delete_file` is new. The tree
   follows a file the assistant adds.
+- **Parameters.java has its own package, `<bot>.params`.** Studio owns it there: the Parameters window writes
+  it, and Project Files lists it apart and neither renames nor deletes it. New bots and the game-bot template
+  have it there; a bot made before keeps its file beside its classes, an ordinary class the window still reads.
+  A block naming a parameter imports its class.
 - **Project Files tells your code from Studio's.** *My code* lists only the files you write; Parameters.java
   and the plugins' files sit in a closed *Managed by Studio* group, each row's tooltip saying which window
   changes it.

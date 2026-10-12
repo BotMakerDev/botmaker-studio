@@ -102,7 +102,8 @@ class JavaParametersTest {
 
         assertTrue(stored.isPresent());
         assertEquals("10", stored.get().value());
-        String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+        String source = Files.readString(config.parametersSourceFile());
+        assertTrue(source.startsWith("package com.refbot.params;"), "its own package, which Studio keeps");
         assertTrue(source.contains("import com.botmaker.plugin.api.params.Param;"), source);
         assertTrue(source.contains("public static int maxAttempts = 10;"), source);
         assertTrue(source.contains("category = \"Limits\""), source);

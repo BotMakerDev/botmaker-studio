@@ -42,9 +42,13 @@ public class NodeCreator {
                     yield ast.newQualifiedName(ast.newSimpleName(e.typeName()), ast.newSimpleName(e.constantName()));
                 }
                 case ExpressionChoice.Variable v -> ast.newSimpleName(v.variableName());
-                case ExpressionChoice.Field f -> f.scope() == null || f.scope().isEmpty()
-                        ? ast.newSimpleName(f.fieldName())
-                        : ast.newQualifiedName(ast.newName(f.scope()), ast.newSimpleName(f.fieldName()));
+                case ExpressionChoice.Field f -> {
+                    if (f.scope() == null || f.scope().isEmpty()) yield ast.newSimpleName(f.fieldName());
+                    // A class's static field — Parameters.maxAttempts, whose class is in its own package since
+                    // 2026-10-13 — needs its class imported; a variable's field does not.
+                    if (Character.isUpperCase(f.scope().charAt(0))) ctx.addImportForSimpleName(f.scope());
+                    yield ast.newQualifiedName(ast.newName(f.scope()), ast.newSimpleName(f.fieldName()));
+                }
                 // NewVariable is handled specially (declaration + reference) in applyExpressionSelection and
                 // does not flow through here; yield just the reference as a safe fallback.
                 case ExpressionChoice.NewVariable nv -> ast.newSimpleName(nv.name());
