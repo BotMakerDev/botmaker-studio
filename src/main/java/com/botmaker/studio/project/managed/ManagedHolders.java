@@ -431,13 +431,61 @@ public final class ManagedHolders {
     }
 
     /**
-     * Which file each plugin parameter is kept in on a bind ({@link #keptParams}): the file whose field carries
-     * its mark, or else its holder — a class of that name in {@code plugins/<segment>/}. A parameter whose holder
+     * {@code source} with {@code value}'s marked method, its fresh value inside, added after the last method of
+     * the class {@code className} — before its constructor when it has no other — and its imports: what a bind
+     * writes into a holder the bot already has when the method is missing (2026-10-12). Unchanged when the class
+     * is not in it, already declares a method of that name, or the value cannot be written.
+     */
+    public static String withMethod(String source, String className, ManagedValue<?> value, ValueGrammar grammar) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration holder = null;
+        for (Object each : unit.types()) {
+            if (each instanceof TypeDeclaration type && type.getName().getIdentifier().equals(className)) holder = type;
+        }
+        // A method of the name already there, unmarked (an upgrade keeps a removed id's method while the bot names
+        // it), is the user's: a second one would not compile.
+        String name = memberName(value);
+        if (holder == null || java.util.Arrays.stream(holder.getMethods())
+                .anyMatch(each -> each.getName().getIdentifier().equals(name))) {
+            return source;
+        }
+        TreeSet<String> imports = new TreeSet<>();
+        MethodDeclaration method = method(ast, value, grammar, imports);
+        if (method == null) return source;
+        org.eclipse.jdt.core.dom.rewrite.ASTRewrite rewrite = org.eclipse.jdt.core.dom.rewrite.ASTRewrite.create(ast);
+        org.eclipse.jdt.core.dom.rewrite.ListRewrite body =
+                rewrite.getListRewrite(holder, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        MethodDeclaration lastMethod = null;
+        MethodDeclaration constructor = null;
+        for (MethodDeclaration each : holder.getMethods()) {
+            if (each.isConstructor()) {
+                if (constructor == null) constructor = each;
+            } else {
+                lastMethod = each;
+            }
+        }
+        if (lastMethod != null) body.insertAfter(method, lastMethod, null);
+        else if (constructor != null) body.insertBefore(method, constructor, null);
+        else body.insertLast(method, null);
+        String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
+        for (String each : imports) {
+            if (!isImplicit(each, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, each);
+        }
+        return SourceFormatter.formatChanged(source,
+                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /**
+     * Which file each plugin value is kept in on a bind ({@link #keptValues}): every parameter, in the file whose
+     * field carries its mark or else in its holder — a class of that name in {@code plugins/<segment>/} — and
+     * every method-shaped value no declaration in the bot carries the mark of, in its holder (2026-10-12: a
+     * {@code Sdk.java} an older plugin wrote lacked {@code run()}, and nothing ever wrote it). A value whose holder
      * the bot does not have is left out: {@link #missing} writes it with the holder. Nothing here writes.
      *
      * @param byPlugin each plugin's id and every value it declares
      */
-    public static java.util.Map<Path, List<ManagedValue<?>>> paramsToKeep(
+    public static java.util.Map<Path, List<ManagedValue<?>>> valuesToKeep(
             com.botmaker.studio.project.source.BotIndex index, java.util.Map<String, List<ManagedValue<?>>> byPlugin) {
         List<ManagedValue<?>> known = byPlugin.values().stream().flatMap(List::stream).toList();
         java.util.Map<String, Path> marked = new java.util.HashMap<>();
@@ -447,6 +495,13 @@ public final class ManagedHolders {
                 @Override
                 public boolean visit(FieldDeclaration field) {
                     String id = ManagedIds.idOf(ManagedIds.on(field, known), known);
+                    if (!id.isEmpty()) marked.putIfAbsent(id, file);
+                    return false;
+                }
+
+                @Override
+                public boolean visit(MethodDeclaration method) {
+                    String id = ManagedIds.idOf(ManagedIds.on(method, known), known);
                     if (!id.isEmpty()) marked.putIfAbsent(id, file);
                     return false;
                 }
@@ -467,7 +522,9 @@ public final class ManagedHolders {
         byPlugin.forEach((pluginId, declared) -> {
             String segment = segment(pluginId);
             for (ManagedValue<?> value : declared) {
-                if (value == null || !value.isParam()) continue;
+                if (value == null) continue;
+                boolean method = value.shape() == ManagedValue.Shape.METHOD;
+                if (!value.isParam() && !(method && !marked.containsKey(value.id()))) continue;
                 Path file = marked.getOrDefault(value.id(), holders.get(segment + "/" + value.holder()));
                 if (file != null) kept.computeIfAbsent(file, f -> new ArrayList<>()).add(value);
             }
@@ -476,23 +533,30 @@ public final class ManagedHolders {
     }
 
     /**
-     * {@code source} with each of {@code params} as its plugin declares it (2026-10-11): a field carrying its mark
-     * gets the plugin's current {@code @Param} members back when they differ; else a field of its name in its
-     * holder — one written before the plugin declared it — is given the mark; else the field is appended
-     * ({@link #withField}). Unchanged when every one already is as declared.
+     * {@code source} with each of {@code values} as its plugin declares it. A parameter (2026-10-11): a field
+     * carrying its mark gets the plugin's current {@code @Param} members back when they differ; else a field of
+     * its name in its holder — one written before the plugin declared it — is given the mark; else the field is
+     * appended ({@link #withField}). A method-shaped value no method of the source carries the mark of is appended
+     * with its fresh value ({@link #withMethod}, 2026-10-12); one that is there is never touched. Unchanged when
+     * every one already is as declared.
      */
-    public static String keptParams(String source, List<ManagedValue<?>> params, ValueGrammar grammar) {
+    public static String keptValues(String source, List<ManagedValue<?>> values, ValueGrammar grammar) {
         String out = source;
-        for (ManagedValue<?> value : params) {
-            Optional<FieldDeclaration> field = markedField(out, value, params);
+        for (ManagedValue<?> value : values) {
+            if (value.shape() == ManagedValue.Shape.METHOD) {
+                if (!hasMarkedMethod(out, value, values)) out = withMethod(out, value.holder(), value, grammar);
+                continue;
+            }
+            if (!value.isParam()) continue;
+            Optional<FieldDeclaration> field = markedField(out, value, values);
             if (field.isEmpty()) {
-                String adopted = withMark(out, value, params);
+                String adopted = withMark(out, value, values);
                 if (adopted.equals(out)) {
                     out = withField(out, value.holder(), value, grammar);
                     continue;
                 }
                 out = adopted;
-                field = markedField(out, value, params);
+                field = markedField(out, value, values);
             }
             if (field.isEmpty()) continue;
             String className = com.botmaker.studio.project.params.JavaParameterSource.enclosingTypeName(field.get());
@@ -503,6 +567,20 @@ public final class ManagedHolders {
             }
         }
         return out;
+    }
+
+    /** Whether a method of {@code source} carries {@code value}'s mark, read against {@code known}. */
+    private static boolean hasMarkedMethod(String source, ManagedValue<?> value, List<ManagedValue<?>> known) {
+        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        boolean[] found = {false};
+        unit.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
+            @Override
+            public boolean visit(MethodDeclaration method) {
+                if (value.id().equals(ManagedIds.idOf(ManagedIds.on(method, known), known))) found[0] = true;
+                return false;
+            }
+        });
+        return found[0];
     }
 
     /** The field of {@code source} carrying {@code value}'s mark, read against {@code known}. */

@@ -234,17 +234,17 @@ class ManagedHoldersTest {
         java.util.Map<String, List<ManagedValue<?>>> byPlugin = java.util.Map.of("com.botmaker.sdk",
                 List.of(DECLARED.getFirst(), DO_SETUP));
 
-        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.paramsToKeep(index, byPlugin);
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
         assertEquals(List.of(DO_SETUP), kept.get(sdk));
-        String after = ManagedHolders.keptParams(had, kept.get(sdk), TestValues.GRAMMAR);
+        String after = ManagedHolders.keptValues(had, kept.get(sdk), TestValues.GRAMMAR);
         assertTrue(after.contains("public static boolean doSetup = true;"), after);
         assertTrue(after.indexOf("doSetup") < after.indexOf("greeting()"), after);
         assertTrue(after.contains("import " + Param.class.getCanonicalName() + ";"), after);
         assertEquals(0, parse(after).getProblems().length, after);
 
         // Kept as declared already: nothing to write.
-        assertEquals(after, ManagedHolders.keptParams(after, kept.get(sdk), TestValues.GRAMMAR));
-        assertTrue(ManagedHolders.paramsToKeep(index, java.util.Map.of("com.botmaker.other", List.of(DO_SETUP)))
+        assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
+        assertTrue(ManagedHolders.valuesToKeep(index, java.util.Map.of("com.botmaker.other", List.of(DO_SETUP)))
                 .isEmpty());
     }
 
@@ -264,7 +264,7 @@ class ManagedHoldersTest {
                 }
                 """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
 
-        String after = ManagedHolders.keptParams(had, List.of(DO_SETUP), TestValues.GRAMMAR);
+        String after = ManagedHolders.keptValues(had, List.of(DO_SETUP), TestValues.GRAMMAR);
 
         assertTrue(after.contains("@TestValue(TestValue.Id.DO_SETUP)"), after);
         assertEquals(1, after.split("boolean doSetup", -1).length - 1, after);
@@ -289,7 +289,7 @@ class ManagedHoldersTest {
                 }
                 """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
 
-        String after = ManagedHolders.keptParams(had, List.of(DO_SETUP), TestValues.GRAMMAR);
+        String after = ManagedHolders.keptValues(had, List.of(DO_SETUP), TestValues.GRAMMAR);
 
         assertTrue(after.contains("category = \"Run\""), after);
         assertTrue(after.contains("description = \"Set up first\""), after);
@@ -313,6 +313,87 @@ class ManagedHoldersTest {
                 TestValues.GRAMMAR)).source();
         assertTrue(source.contains("greeting()"), source);
         assertTrue(!source.contains("mine"), source);
+    }
+
+    public static java.util.Set<Class<? extends TestOutcome>> skipNothing() {
+        return java.util.Set.of();
+    }
+
+    /** The SDK's {@code skip}: an empty set of class literals is written {@code Set.of()} (2026-10-12). */
+    @Test
+    void anEmptySetOfClassesParameterIsWritten() {
+        ManagedValue<java.util.Set<Class<? extends TestOutcome>>> skip = ManagedValue.param(TestValue.Id.NAMES)
+                .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.PUBLIC)
+                .because("Mine.");
+        String had = """
+                package com.bot.plugins.sdk;
+
+                public final class Sdk {
+                }
+                """;
+        String after = ManagedHolders.keptValues(had, List.of(skip), TestValues.GRAMMAR);
+        assertTrue(after.contains("public static Set<Class<? extends TestOutcome>> names = Set.of();"), after);
+        assertEquals(0, parse(after).getProblems().length, after);
+    }
+
+    /** A holder the bot has gets back a method value it lacks, its fresh value inside (2026-10-12). */
+    @Test
+    void onBindAMissingMethodIsAddedToTheHolderTheBotHas() {
+        Path sdk = dir.resolve("src/main/java/com/bot/plugins/sdk/Sdk.java");
+        String had = """
+                package com.bot.plugins.sdk;
+
+                import %s;
+
+                public final class Sdk {
+
+                    @TestValue(TestValue.Id.DO_SETUP)
+                    public static boolean doSetup = false;
+
+                    @TestValue(TestValue.Id.GREETING)
+                    public static String greeting() {
+                        return "hi";
+                    }
+
+                    private Sdk() {
+                    }
+                }
+                """.formatted(TestValue.class.getCanonicalName());
+        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+                java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
+                dir);
+        ManagedValue<?> rest = DECLARED.get(1);
+        java.util.Map<String, List<ManagedValue<?>>> byPlugin = java.util.Map.of("com.botmaker.sdk",
+                List.of(DECLARED.getFirst(), rest, DO_SETUP));
+
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
+        assertEquals(List.of(rest, DO_SETUP), kept.get(sdk));
+        String after = ManagedHolders.keptValues(had, kept.get(sdk), TestValues.GRAMMAR);
+        assertTrue(after.contains("@TestValue(TestValue.Id.REST_BETWEEN)"), after);
+        assertTrue(after.contains("public static Duration restBetween()"), after);
+        assertTrue(after.contains("import java.time.Duration;"), after);
+        assertTrue(after.indexOf("greeting()") < after.indexOf("restBetween()"), after);
+        assertTrue(after.indexOf("restBetween()") < after.indexOf("private Sdk()"), after);
+        assertEquals(1, after.split("String greeting\\(", -1).length - 1, "a method present is kept: " + after);
+        assertTrue(after.contains("return \"hi\";"), after);
+        assertEquals(0, parse(after).getProblems().length, after);
+        assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
+    }
+
+    /** An unmarked method of the value's name is the user's: no second one is written beside it. */
+    @Test
+    void anUnmarkedMethodOfTheNameIsLeftAlone() {
+        String had = """
+                package com.bot.plugins.sdk;
+
+                public final class Sdk {
+
+                    public static java.time.Duration restBetween() {
+                        return java.time.Duration.ZERO;
+                    }
+                }
+                """;
+        assertEquals(had, ManagedHolders.keptValues(had, List.of(DECLARED.get(1)), TestValues.GRAMMAR));
     }
 
     @Test

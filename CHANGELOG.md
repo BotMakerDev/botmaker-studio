@@ -32,6 +32,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A holder the bot has gets back the values it lacks.** A plugin's method-shaped value missing from a holder
+  the bot already has is written into it, with its starting value, when a plugin window asks for it. It is not
+  written on bind, because the user may have deleted it. A method of that name already in the class is left
+  alone. A `Sdk.java` an older SDK wrote had no `run()`, so the Activity Flow window could not save,
+  and reopening the project never fixed it.
+- **A generic plugin parameter is written.** A parameter typed `Set<Class<? extends Outcome>>`, the SDK's `skip`,
+  was skipped with a warning when its holder was written or kept. Its type now reaches the grammar as a set.
 - **"Run activity flow" writes every argument.** In `main` the insert menu fills each argument before the values
   classes with the plugin parameter of that type: `Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip, Sdk.class)`. It
   wrote `Bot.runFlow(null, false, null)` since the entry point gained them.

@@ -132,7 +132,9 @@ public final class HostPluginValues implements PluginValues {
 
     /**
      * Writes the holder of {@code id} when the project has none ({@link ManagedHolders}), never over a file
-     * that exists. The declaring plugin is found among the bound ones by the id it declared.
+     * that exists; when the bot has the holder but not the value, adds the value to it (2026-10-12: a
+     * {@code Sdk.java} an older SDK wrote had no {@code run()}, and the flow editor had nowhere to save). The
+     * declaring plugin is found among the bound ones by the id it declared.
      */
     @Override
     public Optional<String> create(String id) {
@@ -149,6 +151,14 @@ public final class HostPluginValues implements PluginValues {
             declared = declared.stream().filter(java.util.Objects::nonNull).toList();
             for (ManagedValue<?> value : declared) {
                 if (!id.equals(value.id())) continue;
+                java.util.Map<Path, List<ManagedValue<?>>> kept = value.shape() != ManagedValue.Shape.METHOD
+                        ? java.util.Map.of()
+                        : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.id(), List.of(value)));
+                if (!kept.isEmpty()) {
+                    if (state.isReaderMode()) return Optional.of("This project is open read-only.");
+                    return keep(kept).isEmpty() ? Optional.of("BotMaker cannot write a starting value for "
+                            + ManagedIds.spelled(id, PluginHost.managedValues()) + ".") : Optional.empty();
+                }
                 ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.id(), value, declared,
                         PluginHost.grammar());
                 if (plan instanceof ManagedHolders.Plan.Refused refused) return Optional.of(refused.reason());
@@ -219,25 +229,34 @@ public final class HostPluginValues implements PluginValues {
         }
         // A plugin's parameter is kept as the plugin declares it (2026-10-11): one the holder lacks goes back in,
         // since the bot's main reads it by name, and a changed category, note or audience is written over the
-        // old one. Each edit is made on the live buffer, after a snapshot an undo can return to.
-        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.paramsToKeep(index(), byPlugin);
-        java.util.Set<Path> changed = new java.util.LinkedHashSet<>();
-        if (!kept.isEmpty()) {
-            BotSources.forEach(config, state, (file, source) -> {
-                List<ManagedValue<?>> params = kept.get(file);
-                if (params == null) return null;
-                String after = ManagedHolders.keptParams(source, params, PluginHost.grammar());
-                if (after.equals(source)) return null;
-                if (changed.isEmpty()) snapshot();
-                changed.add(file);
-                return after;
-            });
-        }
-        if (!changed.isEmpty()) {
-            changed.forEach(file -> written.add(config.projectPath().relativize(file).toString()));
-            redraw(changed);
-        }
+        // old one. A method value the holder lacks is not: the user may have deleted it, and create() writes it
+        // when a plugin window asks for it (2026-10-12).
+        java.util.Map<String, List<ManagedValue<?>>> params = new java.util.LinkedHashMap<>();
+        byPlugin.forEach((plugin, declared) ->
+                params.put(plugin, declared.stream().filter(ManagedValue::isParam).toList()));
+        keep(ManagedHolders.valuesToKeep(index(), params))
+                .forEach(file -> written.add(config.projectPath().relativize(file).toString()));
         return List.copyOf(written);
+    }
+
+    /**
+     * Writes each file's values as their plugins declare them ({@code ManagedHolders.keptValues}), on the live
+     * buffer, after one snapshot an undo can return to, and answers the files changed.
+     */
+    private java.util.Set<Path> keep(java.util.Map<Path, List<ManagedValue<?>>> kept) {
+        java.util.Set<Path> changed = new java.util.LinkedHashSet<>();
+        if (kept.isEmpty()) return changed;
+        BotSources.forEach(config, state, (file, source) -> {
+            List<ManagedValue<?>> values = kept.get(file);
+            if (values == null) return null;
+            String after = ManagedHolders.keptValues(source, values, PluginHost.grammar());
+            if (after.equals(source)) return null;
+            if (changed.isEmpty()) snapshot();
+            changed.add(file);
+            return after;
+        });
+        if (!changed.isEmpty()) redraw(changed);
+        return changed;
     }
 
     /**

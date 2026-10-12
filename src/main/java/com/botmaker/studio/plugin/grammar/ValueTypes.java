@@ -140,9 +140,11 @@ public final class ValueTypes {
 
     /** The host container {@code type} is, or empty — {@code List<…>}, {@code Map<…>}, {@code Map.Entry<…>}. */
     public static Optional<ValueContainer<?>> container(Type type) {
-        if (!(type instanceof Parameterized parameterized)) return Optional.empty();
+        // Any ParameterizedType, not only this class's: a plugin's parameter is typed by its method's generic
+        // return type, which the JDK reads as its own (the SDK's skip, Set<Class<? extends Outcome>>, 2026-10-12).
+        if (!(type instanceof ParameterizedType parameterized)) return Optional.empty();
         for (ValueContainer<?> candidate : ValueContainer.ALL) {
-            if (candidate.type() == parameterized.raw()) return Optional.of(candidate);
+            if (candidate.type() == parameterized.getRawType()) return Optional.of(candidate);
         }
         return Optional.empty();
     }
@@ -152,6 +154,8 @@ public final class ValueTypes {
         return switch (type) {
             case Parameterized parameterized -> parameterized.arguments();
             case BotClass bot -> bot.arguments();
+            case ParameterizedType generic when container(generic).isPresent() ->
+                    List.of(generic.getActualTypeArguments());
             case null, default -> List.of();
         };
     }
@@ -221,8 +225,27 @@ public final class ValueTypes {
                     ast.newSimpleType(name(ast, parameterized.raw(), imports)), parameterized.arguments(), imports);
             case BotClass bot -> generic(ast, ast.newSimpleType(ast.newName(bot.qualifiedName())),
                     bot.arguments(), imports);
+            // A plugin's parameter is declared by its method's return type, which the JDK reads as its own
+            // generic types — the SDK's skip is Set<Class<? extends Outcome>> (2026-10-12).
+            case ParameterizedType generic when generic.getRawType() instanceof Class<?> raw -> generic(ast,
+                    ast.newSimpleType(name(ast, raw, imports)), List.of(generic.getActualTypeArguments()), imports);
+            case java.lang.reflect.WildcardType wildcard -> wildcard(ast, wildcard, imports);
             case null, default -> Optional.empty();
         };
+    }
+
+    /** {@code ?}, {@code ? extends Outcome} or {@code ? super Point}; empty when its bound has no node. */
+    private static Optional<org.eclipse.jdt.core.dom.Type> wildcard(AST ast, java.lang.reflect.WildcardType wildcard,
+                                                                    Set<String> imports) {
+        org.eclipse.jdt.core.dom.WildcardType out = ast.newWildcardType();
+        Type[] lower = wildcard.getLowerBounds();
+        Type[] upper = wildcard.getUpperBounds();
+        Type bound = lower.length > 0 ? lower[0] : upper.length > 0 && upper[0] != Object.class ? upper[0] : null;
+        if (bound == null) return Optional.of(out);
+        Optional<org.eclipse.jdt.core.dom.Type> node = node(ast, bound, imports);
+        if (node.isEmpty()) return Optional.empty();
+        out.setBound(node.get(), lower.length == 0);
+        return Optional.of(out);
     }
 
     private static Optional<org.eclipse.jdt.core.dom.Type> generic(AST ast, org.eclipse.jdt.core.dom.Type raw,
