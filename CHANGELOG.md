@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v1.4.4; re-released for updated upstream pins.
+
+### Fixed
+
+- **A new project's SDK is 1.4.4.** SDK 1.4.3 never built on JitPack (it pinned a shared tag that never built), so
+  1.4.3's fallback SDK version named a release no bot could resolve. Studio 1.4.4 is 1.4.3 otherwise.
+
 ## [1.4.4] — 2026-10-12
 
 ### Fixed
