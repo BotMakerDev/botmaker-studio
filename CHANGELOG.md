@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A type's block says what it extends or implements.** An enum block now shows `implements Outcome` (an
+  activity), an interface reads *Interface: Step extends Runnable* instead of *Class: … implements …*, and a
+  class shows its type parameters (`Box<T>`). One reading of the header, `blocks/TypeClauses`.
 - **A plugin's set constant and its own parameter are read and written with the bot's names.** An open-set constant
   opened for a plugin (`PluginValues.open(set, member)`) had no bot constants behind it, so a flow naming
   `Activities.Collect.class` read as nothing and every write of one was refused: the SDK's flows stayed `Flow.NONE`.
