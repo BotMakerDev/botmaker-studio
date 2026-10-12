@@ -357,6 +357,26 @@ public class ProjectCreator {
     }
 
     /**
+     * Why {@code projectName} cannot be a new project here, or null when it can: New Project's rules, which the
+     * dialog and the assistant's {@code create_project} both apply — {@link #validateProjectName}'s, a length
+     * from 2 to 50, and no project of that name yet.
+     */
+    public String nameProblem(String projectName) {
+        if (!isWord(projectName)) return "A project name is one word of letters and digits, starting with a letter.";
+        if (projectName.length() < 2 || projectName.length() > 50) return "A project name is 2 to 50 characters.";
+        // The name lowercased is the package: com.class does not compile.
+        if (javax.lang.model.SourceVersion.isKeyword(projectName.toLowerCase(java.util.Locale.ROOT))) {
+            return projectName + " lowercased is a Java keyword, and the name becomes the package.";
+        }
+        if (projectExists(projectName)) return "There is a project named " + projectName + " already.";
+        return null;
+    }
+
+    private static boolean isWord(String projectName) {
+        return projectName != null && projectName.matches("^[A-Za-z][a-zA-Z0-9]*$");
+    }
+
+    /**
      * The project name must be a single word of letters and digits, starting with a letter.
      *
      * <p>The first letter no longer has to be uppercase: the name is the user's, and the Java class name is
@@ -364,7 +384,7 @@ public class ProjectCreator {
      * start with a letter, because it also becomes the package name — {@code com.7bot} is not a package.
      */
     private void validateProjectName(String projectName) {
-        if (projectName == null || projectName.trim().isEmpty() || !projectName.matches("^[A-Za-z][a-zA-Z0-9]*$")) {
+        if (!isWord(projectName)) {
             throw new IllegalArgumentException("Invalid project name: " + projectName);
         }
     }

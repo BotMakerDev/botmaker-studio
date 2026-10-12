@@ -252,6 +252,9 @@ public class BotMakerStudio extends Application {
             currentProject.getEventBus().subscribe(
                     com.botmaker.studio.events.CoreApplicationEvents.ProjectReloadRequestedEvent.class,
                     e -> openProject(primaryStage, projectDir, false), true);
+            currentProject.getEventBus().subscribe(
+                    com.botmaker.studio.events.CoreApplicationEvents.OpenProjectRequestedEvent.class,
+                    e -> openProject(primaryStage, e.projectDir(), true), true);
 
             // The audience decides the whole window, not a set of hidden controls — so the branch is here,
             // before anything editor-shaped is constructed. The Runner needs no parsed source at all, which

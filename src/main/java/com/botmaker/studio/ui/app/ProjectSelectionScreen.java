@@ -7,13 +7,13 @@ import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectInfo;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.project.ProjectManager;
-import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.app.StartingPoints.TemplateChoice;
@@ -705,18 +705,14 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Mirrors {@code ProjectCreator.validateProjectName}, plus the length/uniqueness rules the dialog owns.
+     * {@link ProjectCreator#nameProblem}'s rules, which the assistant's {@code create_project} applies too.
      *
      * <p>A lowercase first letter is fine: the Java class name is derived from the project name
      * ({@code ProjectConfig.toClassName}) rather than being it, so {@code myBot} yields {@code class MyBot}
      * while the project stays called what the user called it.
      */
     private boolean isValidProjectName(String name) {
-        if (name == null || name.trim().isEmpty()) return false;
-        if (!name.matches("^[A-Za-z][a-zA-Z0-9]*$")) return false;
-        if (name.length() < 2 || name.length() > 50) return false;
-        if (projectCreator.projectExists(name)) return false;
-        return true;
+        return projectCreator.nameProblem(name) == null;
     }
 
     /**
@@ -729,41 +725,14 @@ public class ProjectSelectionScreen implements ProjectWindow {
      *
      * <p>Both shapes run off the FX thread since 2026-10-01: a ticked plugin's version may be a JitPack lookup,
      * and the download, the unpack and the check for a plugin another one brings are slow and failable too.
-     * The versions are resolved before anything is created, so a lookup that fails leaves nothing behind;
-     * everything the user sees about a failure is one dialog, because a failed creation deletes its own
-     * directory (see {@code ProjectCreator}).
+     * Everything the user sees about a failure is one dialog, because a creation that fails leaves nothing
+     * behind ({@link NewProjects#create}).
      */
     private void create(CreateRequest req) {
         String projectName = req.projectName();
-        GalleryEntry entry = req.template().entry();
-        PluginCatalog catalog = new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch());
         new Thread(() -> {
             try {
-                List<ProjectCreator.PluginPick> picks = new ArrayList<>();
-                for (PluginRegistry.Plugin plugin : req.plugins()) {
-                    String version = catalog.version(plugin).exceptionally(failure -> null).join();
-                    if (version == null || version.isBlank()) {
-                        throw new java.io.IOException("Could not resolve a version for " + plugin.coordinate()
-                                + ". Untick it, or add it later from Project ▸ Plugins & Libraries.");
-                    }
-                    picks.add(new ProjectCreator.PluginPick(
-                            new UserLibrary(plugin.groupId(), plugin.artifactId(), version),
-                            plugin.editorLibraries()));
-                }
-                if (entry == null) {
-                    projectCreator.createProject(projectName,
-                            com.botmaker.studio.project.ProjectTemplate.EMPTY, picks);
-                } else {
-                    GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-                    BotInstaller installer = new BotInstaller(gitHubClient, gallery);
-                    String tag = gallery.installTag(entry).join();
-                    if (tag == null || tag.isBlank()) {
-                        throw new java.io.IOException(entry.name() + " has no published release yet, so there "
-                                + "is nothing to start from. Ask its author to cut one.");
-                    }
-                    projectCreator.createFromTemplate(projectName,
-                            dest -> installer.unpackTemplate(entry, tag, dest), picks);
-                }
+                NewProjects.create(projectName, req.template().entry(), req.plugins(), gitHubClient, gitHubAuth);
                 Platform.runLater(() -> onProjectSelected.open(
                         Constants.PROJECTS_ROOT.resolve(projectName), false, true));
             } catch (Exception e) {

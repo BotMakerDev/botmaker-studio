@@ -36,7 +36,13 @@ import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.trial.Trials;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.Runs;
+import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.studio.config.Constants;
+import com.botmaker.studio.project.ProjectCreator;
+import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectState;
@@ -104,8 +110,9 @@ final class StudioBridge implements StudioDriver {
     private final RunLog log;
     private final Supplier<Window> owner;
     private final JitPackSearch jitpack = new JitPackSearch();
+    private final GitHubClient github = new GitHubClient();
     // The plugin index, read off the same raw CDN as Plugins & Libraries, with no account.
-    private final PluginRegistry registry = new PluginRegistry(new GitHubClient());
+    private final PluginRegistry registry = new PluginRegistry(github);
 
     StudioBridge(StudioContext ctx, Trials trials, RunLog log, Supplier<Window> owner) {
         this.ctx = ctx;
@@ -565,12 +572,7 @@ final class StudioBridge implements StudioDriver {
     public String addPlugin(String id) {
         List<PluginRegistry.Plugin> entries = registryEntries();
         if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
-        String wanted = id == null ? "" : id.strip();
-        PluginRegistry.Plugin plugin = entries.stream().filter(PluginRegistry.Plugin::isInstallable)
-                .filter(p -> p.id().equalsIgnoreCase(wanted) || p.name().equalsIgnoreCase(wanted)
-                        || p.artifactId().equalsIgnoreCase(wanted))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
-                        + ". search_plugins lists them."));
+        PluginRegistry.Plugin plugin = registryPlugin(entries, id);
         String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
         List<UserLibrary> declared = ctx.libraryService().declaredLibraries();
         if (plugin.isInstalledIn(declared)) throw new IllegalArgumentException(name + " is in the bot already.");
@@ -650,6 +652,83 @@ final class StudioBridge implements StudioDriver {
         }
         lines.add("A version of the bot is saved first.");
         return String.join("\n", lines);
+    }
+
+    /** The installable registry plugin {@code id} names — by its id, name or artifactId. */
+    private static PluginRegistry.Plugin registryPlugin(List<PluginRegistry.Plugin> entries, String id) {
+        String wanted = id == null ? "" : id.strip();
+        return entries.stream().filter(PluginRegistry.Plugin::isInstallable)
+                .filter(p -> p.id().equalsIgnoreCase(wanted) || p.name().equalsIgnoreCase(wanted)
+                        || p.artifactId().equalsIgnoreCase(wanted))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
+                        + ". search_plugins lists them."));
+    }
+
+    // ---- new projects --------------------------------------------------------------------------------------
+
+    @Override
+    public String listTemplates() {
+        List<GalleryEntry> templates = vettedTemplates();
+        if (templates.isEmpty()) {
+            return "The gallery lists no vetted template. create_project without a template makes a blank project.";
+        }
+        return String.join("\n", templates.stream().map(t -> t.name() + "  (" + t.slug() + ")"
+                + (t.description().isBlank() ? "" : " — " + t.description().strip())).toList());
+    }
+
+    @Override
+    public String createProject(String name, String template, List<String> plugins) {
+        String wanted = name == null ? "" : name.strip();
+        String problem = new ProjectCreator().nameProblem(wanted);
+        if (problem != null) throw new IllegalArgumentException(problem);
+        String from = template == null ? "" : template.strip();
+        // Vetted only, as New Project offers by default: a community template is code nobody reviewed, and the
+        // user would not see which one was picked.
+        GalleryEntry entry = from.isEmpty() ? null : vettedTemplates().stream()
+                .filter(t -> t.name().equalsIgnoreCase(from) || t.slug().equalsIgnoreCase(from)
+                        || t.repo().equalsIgnoreCase(from))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("No vetted template " + from
+                        + ". list_templates lists them."));
+        List<PluginRegistry.Plugin> picks = List.of();
+        if (!plugins.isEmpty()) {
+            List<PluginRegistry.Plugin> entries = registryEntries();
+            if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
+            picks = plugins.stream().map(id -> registryPlugin(entries, id)).toList();
+            String names = String.join(", ", picks.stream().map(p -> p.name().isBlank() ? p.id() : p.name()).toList());
+            if (!userAgrees("Create a project with plugins?", "The assistant wants to create " + wanted + " with "
+                    + names + ".\n\nA plugin runs with Studio's own permissions. Registry plugins are checked for "
+                    + "loading, not reviewed for safety.")) {
+                throw new IllegalArgumentException("The user did not agree to add " + names + ".");
+            }
+        }
+        try {
+            NewProjects.create(wanted, entry, picks, github, new GitHubAuth());
+        } catch (IOException | RuntimeException e) {
+            Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null
+                    ? e.getCause() : e;
+            throw new IllegalArgumentException("Studio could not create " + wanted + ": " + cause.getMessage());
+        }
+        Path dir = Constants.PROJECTS_ROOT.resolve(wanted);
+        // From here to the switch the editor is this project's last word: nothing may run or save over it.
+        reloading = true;
+        try {
+            Checkpoints.flush(onFx(() -> ctx.state().snapshot()));
+        } catch (IOException | RuntimeException e) {
+            reloading = false;
+            throw new IllegalArgumentException("Created " + wanted + ", but Studio could not save this project to "
+                    + "switch to it: " + e.getMessage());
+        }
+        CompletableFuture.delayedExecutor(RELOAD_DELAY_MS, TimeUnit.MILLISECONDS).execute(() -> Platform.runLater(() ->
+                ctx.eventBus().publish(new CoreApplicationEvents.OpenProjectRequestedEvent(dir))));
+        say("The assistant created " + wanted + ".");
+        return "Created " + wanted + (entry == null ? " (blank)" : " from " + entry.name()) + " in " + dir
+                + ". Studio opens it in place of this project now, which ends this connection: the endpoint comes "
+                + "back on the same address once it is open.";
+    }
+
+    private List<GalleryEntry> vettedTemplates() {
+        return GalleryEntry.templates(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
+                "read the gallery"), false);
     }
 
     private List<PluginRegistry.Plugin> registryEntries() {

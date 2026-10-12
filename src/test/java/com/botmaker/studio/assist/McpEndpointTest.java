@@ -136,6 +136,11 @@ class McpEndpointTest {
         volatile boolean reloading;
         @Override public boolean reloading() { return reloading; }
         @Override public String checkpoint(String label) { asked.add("checkpoint " + label); return "saved"; }
+        @Override public String createProject(String name, String template, List<String> plugins) {
+            asked.add("create " + name + " " + template + " " + plugins);
+            return "created";
+        }
+
         @Override public String addPlugin(String id) {
             asked.add("add " + id);
             more = true;
@@ -271,10 +276,20 @@ class McpEndpointTest {
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
                 "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "list_params", "set_param_default",
-                "get_settings", "set_setting", "fake_snap"), names, "a plugin's list_files does not shadow Studio's");
+                "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
+                "a plugin's list_files does not shadow Studio's");
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
+    }
+
+    @Test
+    void createProjectSplitsItsPluginsAndTakesNoTemplateAsBlank() throws Exception {
+        initialize();
+        assertEquals("created", text(call("create_project",
+                "{\"name\":\"Firestone\",\"template\":\"gamebot\",\"plugins\":\" a, b ,\"}")));
+        assertEquals("created", text(call("create_project", "{\"name\":\"Plain\"}")));
+        assertEquals(List.of("create Firestone gamebot [a, b]", "create Plain  []"), driver.asked);
     }
 
     @Test
@@ -309,7 +324,7 @@ class McpEndpointTest {
                 new String[] {"fake_snap", "{\"size\":1}"},
                 new String[] {"insert_block", "{\"bodyId\":\"b\",\"index\":0,\"paletteId\":\"block:PRINT\"}"})) {
             JsonNode after = call(tool[0], tool[1]);
-            assertTrue(isError(after) && text(after).contains("reloading"), tool[0] + " before the reload: " + after);
+            assertTrue(isError(after) && text(after).contains("switching the project"), tool[0] + " before the reload: " + after);
         }
         assertTrue(bot.commits.isEmpty(), "no edit lands over the restored files");
         assertEquals(List.of("checkpoint Before the loop", "param Parameters.rounds=3", "revert abc1234"), driver.asked);

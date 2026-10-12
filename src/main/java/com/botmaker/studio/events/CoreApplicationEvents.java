@@ -110,6 +110,12 @@ public class CoreApplicationEvents {
      */
     public record ProjectReloadRequestedEvent() implements ApplicationEvent {}
 
+    /**
+     * Request to close the current project and open the new one at {@code projectDir} in its place, as New
+     * Project does — raised by the assistant's {@code create_project}. Handled by {@code BotMakerStudio}.
+     */
+    public record OpenProjectRequestedEvent(java.nio.file.Path projectDir) implements ApplicationEvent {}
+
     // --- Status / output ---
 
     public record StatusMessageEvent(String message) implements ApplicationEvent {}

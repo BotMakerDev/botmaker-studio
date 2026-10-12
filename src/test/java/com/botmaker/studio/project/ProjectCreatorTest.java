@@ -107,6 +107,21 @@ class ProjectCreatorTest {
                 "nothing may be written before every file has been rendered");
     }
 
+    /** New Project's name rules, which the assistant's create_project applies too. */
+    @Test
+    void aNameProblemIsSaid(@TempDir Path root) throws IOException {
+        ProjectCreator creator = new ProjectCreator(root, dir -> List.of());
+        assertNull(creator.nameProblem("Firestone"));
+        assertNotNull(creator.nameProblem("7bot"));
+        assertNotNull(creator.nameProblem("two words"));
+        assertNotNull(creator.nameProblem("A"));
+        assertNotNull(creator.nameProblem(null));
+        assertNotNull(creator.nameProblem("Class"), "com.class is no package");
+        ProjectConfig config = ProjectConfig.forProject("Taken", root);
+        ProjectCreator.writeProject(config, ProjectTemplate.EMPTY, POM.apply(config));
+        assertNotNull(creator.nameProblem("Taken"));
+    }
+
     /** An existing project is refused rather than written over. */
     @Test
     void anExistingProjectIsRefused(@TempDir Path root) throws IOException {

@@ -123,8 +123,8 @@ public final class McpTools {
     /** {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}). */
     private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
         return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> driver.reloading()
-                ? result("REFUSED: Studio is reloading the project after a revert. Call again once it has "
-                + "reopened.", true)
+                ? result("REFUSED: Studio is switching the project (after a revert, or to a project create_project "
+                + "made). Reconnect and call again once it is open.", true)
                 : tool.callHandler().apply(exchange, request)).build();
     }
 
@@ -543,7 +543,24 @@ public final class McpTools {
                 act(json, "set_setting", "Change a project setting, one get_settings lists.",
                         List.of(Prop.text("key", "the setting's key, from get_settings"),
                                 Prop.text("value", "its new value")),
-                        args -> driver.setSetting(text(args, "key"), text(args, "value"))));
+                        args -> driver.setSetting(text(args, "key"), text(args, "value"))),
+                act(json, "list_templates", "List the vetted templates create_project starts a bot from, each with "
+                                + "what it is.",
+                        List.of(), args -> driver.listTemplates()),
+                act(json, "create_project",
+                        "Create a new bot project, as New Project does, and open it in Studio in place of this one: "
+                                + "from a vetted template's release (list_templates), or blank without one. The "
+                                + "template's own plugins come with it. The switch ends this connection; the "
+                                + "endpoint comes back on the same address once the new project is open, so "
+                                + "reconnect then. Say so to the user before calling it.",
+                        List.of(Prop.text("name", "one word of letters and digits, starting with a letter: Firestone"),
+                                Prop.optionalText("template", "a template's name from list_templates; empty for a "
+                                        + "blank project"),
+                                Prop.optionalText("plugins", "registry plugin ids to add besides the template's, "
+                                        + "comma-separated (search_plugins); the user is asked on screen first")),
+                        args -> idle(log, () -> driver.createProject(text(args, "name"), text(args, "template"),
+                                java.util.Arrays.stream(text(args, "plugins").split(",")).map(String::strip)
+                                        .filter(s -> !s.isEmpty()).toList()))));
     }
 
     /** {@code answer}, after telling the endpoint the plugins may have changed. */
