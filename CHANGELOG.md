@@ -21,13 +21,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **New, Rename and Delete in Project Files.** A right-click in the user's packages offers *New ▸ Class /
   Interface / Record / Enum…*; a class of theirs, *Rename…* and *Delete…*. A delete is refused while another file
   uses what the file declares (each use listed, a link to it) or while the bot would stop compiling without it,
-  and never touches the entry point or a plugin's file; a rename or a delete takes a safety version first. A
-  plugin's file is no longer offered for renaming: the plugin finds it by its name. The assistant gets the same
-  through `services/ClassFiles`: `add_file` takes `kind` and `package`, `rename` of a class moves its file
-  instead of refusing, and `delete_file` is new. The tree follows a file the assistant adds.
+  and never touches the entry point, Parameters.java or a plugin's file; a rename or a delete takes a safety
+  version first. A plugin's file and Parameters.java are no longer offered for renaming: they are found by
+  their names. The header's **+** makes a class in the selected row's package without hunting for the right
+  row to right-click. The assistant gets the same through `services/ClassFiles`: `add_file` takes `kind` and
+  `package`, `rename` of a class moves its file instead of refusing, and `delete_file` is new. The tree
+  follows a file the assistant adds.
+- **Project Files tells your code from Studio's.** *My code* lists only the files you write; Parameters.java
+  and the plugins' files sit in a closed *Managed by Studio* group, each row's tooltip saying which window
+  changes it.
 
 ### Fixed
 
+- **Show in file manager no longer freezes the desktop on Linux.** It opened through AWT on the UI thread while
+  the right-click menu held the mouse, so no window took a click until Studio was killed. Every link and
+  folder Studio opens now goes to the system opener (`xdg-open`, `open`, `rundll32`) from a background thread.
 - **`mvn javafx:run` starts on JDK 26 and later.** The plugin put only `javafx.*` jars on the module path, so
   `javafx.web` could not find OpenJFX's `jdk.jsobject` jar: "Module jdk.jsobject not found". It now runs on the
   classpath through `Launcher`, as the shaded jar and the app-image do.

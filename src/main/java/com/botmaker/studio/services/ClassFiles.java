@@ -5,9 +5,8 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.TypeDelete;
 import com.botmaker.studio.nav.TypeRename;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
-import com.botmaker.studio.project.PluginFiles;
+import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
@@ -30,8 +29,9 @@ import java.util.Set;
  * a file deleted. The explorer's menu and the MCP tools both come here, so they refuse the same things.
  *
  * <p><b>What is refused.</b> Nothing outside the user's own packages: a library class, and the {@code plugins}
- * folder, whose files a plugin writes and finds by name. A plugin's holder file is neither renamed nor deleted
- * — the plugin would write it again under its old name. The entry point is not deleted. A delete is refused
+ * folder, whose files a plugin writes and finds by name. A plugin's holder file and Parameters.java are neither
+ * renamed nor deleted — the plugin or the Parameters window would write it again under its old name. The entry
+ * point is not deleted. A delete is refused
  * while anything still uses what the file declares ({@link TypeDelete}); a rename while the bot would stop
  * compiling ({@link TypeRename}).
  *
@@ -149,8 +149,16 @@ public final class ClassFiles {
     /** Why {@code file} is not the user's to rename or delete, or empty when it is. */
     public Optional<String> lockedProblem(Path file) {
         if (FileRole.of(file) != FileRole.EDITABLE) return Optional.of(file.getFileName() + " is read only.");
-        return PluginFiles.owner(file, PluginHost.pluginFiles()).map(holder -> file.getFileName()
-                + " belongs to the " + holder.pluginName() + " plugin, which finds it by its name and path.");
+        // A plugin's holder, and Parameters.java since 2026-10-13 (a user deleted it): each found by its path.
+        return managed(file).map(managed -> managed.reason() + " Studio finds it by its name and path.");
+    }
+
+    /**
+     * Which window keeps {@code file}, or empty for a file of the user's: Parameters.java, or a plugin's holder.
+     * The explorer files these apart from the user's own code.
+     */
+    public Optional<LockResolver.Managed> managed(Path file) {
+        return Optional.ofNullable(new LockResolver(config, file).managed());
     }
 
     /**

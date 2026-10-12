@@ -6,6 +6,7 @@ import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.project.FileRole;
+import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
@@ -23,10 +24,12 @@ import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.geometry.Pos;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
@@ -38,6 +41,7 @@ import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.SVGPath;
@@ -47,9 +51,11 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -62,8 +68,11 @@ import java.util.function.Supplier;
  * 2026-08-29, on the grounds that {@code com → <bot> → …} is three rows of Java ceremony between the user and
  * the only thing they open. Folding keeps that point and gives back the folders a bot now really has — the
  * plugin files under {@code plugins/sdk}, the user's own sub-packages — so {@code com.mybot} is one row.
- * Groups: <b>My code</b> ({@link FileRole#EDITABLE} Java), <b>Resources</b> ({@code src/main/resources}, to
- * see the pictures and data files, which open nowhere here) and <b>Library</b> (read-only bundled source).
+ * Groups: <b>My code</b> ({@link FileRole#EDITABLE} Java the user writes), <b>Managed by Studio</b> (closed:
+ * Parameters.java and the plugins' files, which their windows change — apart since 2026-10-13, when a user
+ * could not tell which files were theirs), <b>Resources</b> ({@code src/main/resources}, to see the pictures
+ * and data files, which open nowhere here) and <b>Library</b> (read-only bundled source). The header's <i>+</i>
+ * makes a class in the selected row's package.
  *
  * <p>A row's icon says what the file is ({@link ExplorerModel.Kind}), its colour whether it differs from the
  * last saved version — git's answer plus the editor's unsaved buffers, read on a worker. A right-click offers
@@ -78,6 +87,7 @@ import java.util.function.Supplier;
 public class FileExplorerManager {
 
     private static final String GROUP_USER = "My code";
+    private static final String GROUP_MANAGED = "Managed by Studio";
     private static final String GROUP_RESOURCES = "Resources";
     private static final String GROUP_LIBRARY = "Library";
 
@@ -94,6 +104,8 @@ public class FileExplorerManager {
     /** Whether each row was open, by {@link ExplorerNode#key()}, so a refresh keeps what the user folded. */
     private final Map<String, Boolean> expansion = new HashMap<>();
     private Map<Path, VcsFileStatus> status = Map.of();
+    /** Which window keeps each file of the last refresh, its reason; empty for the user's own. */
+    private Map<Path, Optional<String>> keptBy = Map.of();
     private int statusRun;
     private Consumer<CodeBlock> onReveal = block -> { };
     private Runnable onCanvas = () -> { };
@@ -170,9 +182,19 @@ public class FileExplorerManager {
         VBox container = new VBox();
         container.getStyleClass().add("file-explorer");
 
-        Label header = new Label("Project Files");
-        header.getStyleClass().add("sidebar-header");
-        header.setMaxWidth(Double.MAX_VALUE);
+        Label title = new Label("Project Files");
+        title.getStyleClass().add("sidebar-header");
+        title.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(title, Priority.ALWAYS);
+        // In sight, not only on a right-click of the right row (2026-10-13, a user looked for it): makes the file
+        // in the selected row's package, or the bot's.
+        MenuButton add = new MenuButton("+");
+        add.getStyleClass().add("sidebar-button");
+        add.setTooltip(new Tooltip("New class, interface, record or enum"));
+        add.getItems().setAll(newItems(this::newFileFolder));
+        add.setOnShowing(e -> add.getItems().forEach(item -> item.setDisable(state.isReaderMode())));
+        HBox header = new HBox(4, title, add);
+        header.setAlignment(Pos.CENTER_LEFT);
 
         filter.setPromptText("Filter files…");
         filter.getStyleClass().add("file-filter");
@@ -222,11 +244,14 @@ public class FileExplorerManager {
                     getStyleClass().add("tree-group");
                     setContextMenu(GROUP_USER.equals(item.label())
                             ? new ContextMenu(newMenu(config.mainPackageDir())) : null);
+                    if (GROUP_MANAGED.equals(item.label())) setTooltip(new Tooltip(
+                            "Files Studio and the plugins write. Change them in their windows, not here."));
                     return;
                 }
                 setGraphic(icon(item.kind()));
-                setTooltip(new Tooltip(item.kind().displayName()));
-                setContextMenu(contextMenu(item));
+                String what = keptBy.getOrDefault(item.path(), Optional.empty()).orElse(item.kind().displayName());
+                setTooltip(new Tooltip(what));
+                setContextMenu(contextMenu(item, inGroup(getTreeItem(), GROUP_MANAGED)));
                 if (item.isFolder()) {
                     getStyleClass().add("tree-dir");
                     return;
@@ -235,7 +260,7 @@ public class FileExplorerManager {
                 if (item.role() != null && item.role().isReadOnly()) getStyleClass().add("tree-lib");
                 VcsFileStatus changed = status.get(item.path().toAbsolutePath().normalize());
                 if (changed != null && changed != VcsFileStatus.DELETED) getStyleClass().add("vcs-" + changed.label());
-                if (changed != null) setTooltip(new Tooltip(item.kind().displayName() + " · " + changed.label()
+                if (changed != null) setTooltip(new Tooltip(what + " · " + changed.label()
                         + " since the last saved version"));
                 if (state.getActiveFile() != null && item.path().equals(state.getActiveFile().getPath())) {
                     getStyleClass().add("tree-active");
@@ -296,15 +321,24 @@ public class FileExplorerManager {
         TreeItem<ExplorerNode> root = new TreeItem<>(ExplorerNode.group("root"));
         root.setExpanded(true);
         Predicate<Path> java = p -> p.getFileName().toString().endsWith(".java");
-        TreeItem<ExplorerNode> user = group(GROUP_USER, true, filtering, ExplorerModel.tree(javaRoot,
-                java.and(p -> FileRole.of(p) == FileRole.EDITABLE).and(matches)), entryPoint);
+        Predicate<Path> editable = java.and(p -> FileRole.of(p) == FileRole.EDITABLE).and(matches);
+        // Asked once per file, though both trees walk every file: the cells read the answers too.
+        Map<Path, Optional<String>> keeper = new HashMap<>();
+        Predicate<Path> kept = p -> keeper.computeIfAbsent(p,
+                q -> classFiles.managed(q).map(LockResolver.Managed::reason)).isPresent();
+        TreeItem<ExplorerNode> user = group(GROUP_USER, true, filtering,
+                ExplorerModel.tree(javaRoot, editable.and(kept.negate())), entryPoint);
+        TreeItem<ExplorerNode> managed = group(GROUP_MANAGED, false, filtering,
+                ExplorerModel.tree(javaRoot, editable.and(kept)), entryPoint);
         TreeItem<ExplorerNode> resources = group(GROUP_RESOURCES, false, filtering,
                 ExplorerModel.tree(config.resourcesRoot(), matches), entryPoint);
         TreeItem<ExplorerNode> library = group(GROUP_LIBRARY, false, filtering, ExplorerModel.tree(javaRoot,
                 java.and(p -> FileRole.of(p) == FileRole.LIBRARY).and(matches)), entryPoint);
+        keptBy = keeper;
 
         // Each group only when it has anything: an ordinary project reads as one list plus its resources.
         if (!user.getChildren().isEmpty() || !filtering) root.getChildren().add(user);
+        if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
         fileTree.setRoot(root);
@@ -445,7 +479,16 @@ public class FileExplorerManager {
     // the context menu
     // ------------------------------------------------------------------
 
-    private ContextMenu contextMenu(ExplorerNode node) {
+    /** Whether {@code item} sits under the group row labelled {@code label}. */
+    private static boolean inGroup(TreeItem<ExplorerNode> item, String label) {
+        for (TreeItem<ExplorerNode> at = item; at != null; at = at.getParent()) {
+            if (at.getValue() != null && at.getValue().group() && label.equals(at.getValue().label())) return true;
+        }
+        return false;
+    }
+
+    /** A row's menu; {@code managed} for a row of <i>Managed by Studio</i>, where nothing new is made. */
+    private ContextMenu contextMenu(ExplorerNode node, boolean managed) {
         MenuItem show = new MenuItem("Show in file manager");
         show.setOnAction(e -> BrowserLauncher.open((node.isFolder() ? node.path() : node.path().getParent())
                 .toUri().toString()));
@@ -457,7 +500,7 @@ public class FileExplorerManager {
         });
         ContextMenu menu = new ContextMenu(show, copy);
         Path folder = node.isFolder() ? node.path() : node.path().getParent();
-        boolean userCode = node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE;
+        boolean userCode = !managed && (node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE);
         if (userCode && classFiles.folderProblem(folder).isEmpty()) {
             menu.getItems().addAll(new SeparatorMenuItem(), newMenu(folder));
         }
@@ -480,14 +523,32 @@ public class FileExplorerManager {
     /** <i>New ▸ Class / Interface / Record / Enum…</i>, each made in {@code folder}'s package. */
     private javafx.scene.control.Menu newMenu(Path folder) {
         javafx.scene.control.Menu menu = new javafx.scene.control.Menu("New");
-        for (ClassFiles.Kind kind : ClassFiles.Kind.values()) {
-            MenuItem item = new MenuItem(kind.displayName() + "…");
-            item.setOnAction(e -> create(folder, kind));
-            menu.getItems().add(item);
-        }
+        menu.getItems().setAll(newItems(() -> folder));
         // Read when it opens: the group row's menu outlives a switch to or from reading.
         menu.setOnShowing(e -> menu.getItems().forEach(item -> item.setDisable(state.isReaderMode())));
         return menu;
+    }
+
+    /** One item per kind, each made in the package of the folder {@code folder} answers when it is clicked. */
+    private List<MenuItem> newItems(Supplier<Path> folder) {
+        List<MenuItem> items = new ArrayList<>();
+        for (ClassFiles.Kind kind : ClassFiles.Kind.values()) {
+            MenuItem item = new MenuItem(kind.displayName() + "…");
+            item.setOnAction(e -> create(folder.get(), kind));
+            items.add(item);
+        }
+        return items;
+    }
+
+    /** Where the header's <i>+</i> makes a file: the selected row's package when a class may go there. */
+    private Path newFileFolder() {
+        TreeItem<ExplorerNode> selected = fileTree.getSelectionModel().getSelectedItem();
+        if (selected != null && selected.getValue() != null && !selected.getValue().group()) {
+            ExplorerNode node = selected.getValue();
+            Path folder = node.isFolder() ? node.path() : node.path().getParent();
+            if (classFiles.folderProblem(folder).isEmpty()) return folder;
+        }
+        return config.mainPackageDir();
     }
 
     private void create(Path folder, ClassFiles.Kind kind) {

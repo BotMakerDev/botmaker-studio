@@ -6,6 +6,7 @@ import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -50,6 +51,7 @@ class FileExplorerTest extends FxHeadlessTest {
         Path main = config.mainSourceFile();
         write(main, MAIN);
         write(config.mainPackageDir().resolve("plugins/sdk/Sdk.java"), "package com.mybot.plugins.sdk;\nclass Sdk {}\n");
+        write(config.parametersSourceFile(), "package com.mybot;\npublic final class Parameters {}\n");
         write(config.resourcesRoot().resolve("images/ore.png"), "not really a picture");
 
         EditorFixture fixture = new EditorFixture(MAIN, main);
@@ -70,9 +72,17 @@ class FileExplorerTest extends FxHeadlessTest {
                 "    plugins.sdk",
                 "      Sdk.java",
                 "    MyBot.java",
+                "Managed by Studio",
+                "  com.mybot",
+                "    Parameters.java",
                 "Resources",
                 "  images",
                 "    ore.png"), explorer.get().rows());
+
+        ClassFiles files = new ClassFiles(ctx);
+        assertTrue(files.lockedProblem(config.parametersSourceFile()).isPresent(),
+                "the Parameters window finds its file by path: neither renamed nor deleted");
+        assertTrue(files.lockedProblem(main).isEmpty());
 
         interact(() -> explorer.get().filter().setText("ore"));
         assertEquals(List.of("Resources", "  images", "    ore.png"), explorer.get().rows(),
