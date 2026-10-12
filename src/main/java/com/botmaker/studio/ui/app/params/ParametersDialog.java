@@ -13,6 +13,8 @@ import com.botmaker.studio.project.params.ChoiceMode;
 import com.botmaker.studio.project.params.ClockSwitch;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.studio.plugin.HostParamScope;
+import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -249,7 +251,9 @@ public final class ParametersDialog {
      */
     private void reload() {
         rows.clear();
-        rows.addAll(JavaParameters.scan(config, state));
+        // A plugin's conditional parameter is listed only while it applies (ManagedValue.Reason.when, 2026-10-12).
+        HostParamScope scope = HostParamScope.over(HostPluginValues.live());
+        JavaParameters.scan(config, state).stream().filter(scope::shown).forEach(rows::add);
         // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of
         // the bot's own records needs that record's components, and a per-cell scan would read every source
         // file once per row on screen.

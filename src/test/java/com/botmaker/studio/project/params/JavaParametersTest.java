@@ -69,7 +69,7 @@ class JavaParametersTest {
                 """));
         JavaParameter read = JavaParameters.scan(config, null, TestValues.GRAMMAR).getFirst();
         JavaParameter plugins = new JavaParameter(read.file(), read.className(), read.row(), read.form(),
-                read.initializer(), read.editable(), read.note(), "The plugin reads it.");
+                read.initializer(), read.editable(), read.note(), "The plugin reads it.", "");
 
         JavaParameters.Outcome renamed = JavaParameters.declare(config, null, plugins,
                 ParameterRow.named("attempts", read.row().typeName()).value("10").category("Run").build(),

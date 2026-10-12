@@ -22,7 +22,9 @@ import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.managed.ManagedMethod;
 import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.ManagedSets;
+import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameterEdits;
+import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -150,7 +152,9 @@ public final class HostPluginValues implements PluginValues {
             declared = declared.stream().filter(java.util.Objects::nonNull).toList();
             for (ManagedValue<?> value : declared) {
                 if (!id.equals(value.id())) continue;
-                java.util.Map<Path, List<ManagedValue<?>>> kept = value.shape() != ManagedValue.Shape.METHOD
+                // A method value its holder lacks, or a parameter (2026-10-12: a conditional one, now that its
+                // condition holds), is written into the holder the bot has.
+                java.util.Map<Path, List<ManagedValue<?>>> kept = value.isOpenSet()
                         ? java.util.Map.of()
                         : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.id(), List.of(value)));
                 if (!kept.isEmpty()) {
@@ -196,11 +200,15 @@ public final class HostPluginValues implements PluginValues {
 
     private List<String> writeMissing() {
         java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
+        // A conditional parameter that does not apply to this bot is not written (2026-10-12):
+        // ManagedValue.Reason.when, read against the bot as it stands, once for every plugin.
+        HostParamScope scope = HostParamScope.over(this);
         for (StudioPlugin plugin : PluginHost.plugins()) {
             try {
                 List<ManagedValue<?>> offered = plugin.managedValues();
                 List<ManagedValue<?>> declared = offered == null ? List.of()
-                        : offered.stream().filter(java.util.Objects::nonNull).toList();
+                        : offered.stream().filter(java.util.Objects::nonNull)
+                                .filter(value -> !value.isParam() || value.appliesIn(scope)).toList();
                 if (!declared.isEmpty()) byPlugin.put(plugin.id(), declared);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.
@@ -278,11 +286,59 @@ public final class HostPluginValues implements PluginValues {
 
     @Override
     public Optional<ValueContext> open(ManagedValue<?> value) {
-        return value == null ? Optional.empty() : open(value.id());
+        if (value == null) return Optional.empty();
+        return value.isParam() ? openParam(value) : open(value.id());
+    }
+
+    /**
+     * A plugin's own parameter, the {@code @Param} field carrying its mark, as a value — read and written as a row
+     * of the Parameters window is (2026-10-12: the SDK's {@code launchTargets} and {@code vm}, which its game dialog
+     * and ⚙ Bot Settings write). Empty when the bot has no such field, or its initialiser is not one the grammar
+     * rewrites.
+     */
+    /** A plugin's parameter field: the file it is in and its class and name. */
+    private record MarkedParam(Path file, ManagedHolders.FieldName field) {}
+
+    /** The field carrying the parameter {@code value}'s mark, editable or not; empty when the bot has none. */
+    private Optional<MarkedParam> markedParam(ManagedValue<?> value) {
+        List<ManagedValue<?>> known = PluginHost.managedValues();
+        MarkedParam[] found = {null};
+        BotSources.forEach(config, state, (visited, source) -> {
+            if (found[0] == null) {
+                ManagedHolders.markedParam(source, value, known)
+                        .ifPresent(field -> found[0] = new MarkedParam(visited, field));
+            }
+            return null;
+        });
+        return Optional.ofNullable(found[0]);
+    }
+
+    private Optional<ValueContext> openParam(ManagedValue<?> value) {
+        Optional<MarkedParam> marked = markedParam(value);
+        if (marked.isEmpty()) return Optional.empty();
+        Path[] file = {marked.get().file()};
+        ManagedHolders.FieldName[] named = {marked.get().field()};
+        return JavaParameters.find(config, state, named[0].className(), named[0].name(), PluginHost.grammar())
+                .filter(JavaParameter::editable)
+                .map(parameter -> HostValueContext.of(parameter.form(), parameter.initializer(), services,
+                        expression -> {
+                            snapshot();
+                            JavaParameters.setValue(config, state, parameter, expression);
+                            redraw(java.util.Set.of(file[0]));
+                        }));
     }
 
     @Override
     public Optional<String> create(ManagedValue<?> value) {
+        // A parameter the bot already declares is there to open, or written by hand and left alone; only a missing
+        // one is written. create(String) finds methods only.
+        if (value != null && value.isParam()) {
+            if (openParam(value).isPresent()) return Optional.empty();
+            if (markedParam(value).isPresent()) {
+                return Optional.of(ManagedIds.spelled(value.id(), PluginHost.managedValues())
+                        + " is written by hand, so BotMaker leaves it alone.");
+            }
+        }
         return create(value == null ? null : value.id());
     }
 

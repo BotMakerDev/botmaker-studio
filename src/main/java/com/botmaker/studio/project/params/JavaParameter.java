@@ -28,15 +28,18 @@ import java.nio.file.Path;
  * @param owner       why the declaration is a plugin's — the sentence its {@code ManagedValue.param} gave —
  *                    when the field also carries that plugin's mark, {@code @SdkValue(SdkValue.Id.DO_SETUP)};
  *                    blank for the bot's own parameter (2026-10-11)
+ * @param managedId   the id of the plugin's mark on the field, {@code …SdkValue$Id.VM}, which names the
+ *                    declaration (and its condition, {@code ManagedValue.appliesIn}); blank for the bot's own
  */
 public record JavaParameter(Path file, String className, ParameterRow row, Type form, String initializer,
-                            boolean editable, String note, String owner) {
+                            boolean editable, String note, String owner, String managedId) {
 
     public JavaParameter {
         form = form == null ? ValueTypes.NONE : form;
         initializer = initializer == null ? "" : initializer;
         note = note == null ? "" : note;
         owner = owner == null ? "" : owner;
+        managedId = managedId == null ? "" : managedId;
     }
 
     /**
@@ -74,16 +77,19 @@ public record JavaParameter(Path file, String className, ParameterRow row, Type 
      * a field is still in would be a walk that can only confirm what is here.
      */
     public JavaParameter withRow(ParameterRow newRow) {
-        return new JavaParameter(file, className, newRow, form, initializer, editable, note, owner);
+        return new JavaParameter(file, className, newRow, form, initializer, editable, note, owner, managedId);
     }
 
-    /** The same field, owned by a plugin for the reason {@code why}, or the bot's own with {@code ""}. */
-    public JavaParameter owned(String why) {
-        return new JavaParameter(file, className, row, form, initializer, editable, note, why);
+    /**
+     * The same field, owned by a plugin for the reason {@code why} through its mark {@code id}, or the bot's own
+     * with {@code ""} and {@code ""}.
+     */
+    public JavaParameter owned(String why, String id) {
+        return new JavaParameter(file, className, row, form, initializer, editable, note, why, id);
     }
 
     /** The same field, retyped to {@code newForm}. */
     public JavaParameter withForm(Type newForm) {
-        return new JavaParameter(file, className, row, newForm, initializer, editable, note, owner);
+        return new JavaParameter(file, className, row, newForm, initializer, editable, note, owner, managedId);
     }
 }

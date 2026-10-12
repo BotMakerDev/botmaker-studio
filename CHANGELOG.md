@@ -17,6 +17,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Studio hosts contract 0.9.0**: `HostPluginValues`, `HostValueContext` and `HostRuns` implement the typed
   operations — a plugin's value addressed by its `ManagedValue`, an open set's constant by a `Member`, a run property
   by a `RunProperty` — over the same spelled lookups as before. The debug toggle reads and writes `Runs.DEBUG`.
+- **A plugin's conditional parameter** (`ManagedValue.Reason.when`): written into a bot on bind only while it
+  applies, listed in the Parameters window and the Runner only while it applies, read against the bot through
+  `HostParamScope`. A plugin opens its own parameter (`PluginValues.open(param)`, the field carrying its mark,
+  written as a Parameters row is) and asks for one its bot lacks (`create(param)`).
 
 ### Added
 

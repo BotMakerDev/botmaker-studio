@@ -4,6 +4,8 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.HostParamScope;
+import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -295,8 +297,10 @@ public final class RunnerWindow implements ProjectWindow {
      */
     private void reload() {
         rows.clear();
+        HostParamScope scope = HostParamScope.over(HostPluginValues.live());
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
-            if (entry.row().isPublic() && entry.editable()) rows.add(entry);
+            // A plugin's conditional parameter only while it applies (ManagedValue.Reason.when, 2026-10-12).
+            if (entry.row().isPublic() && entry.editable() && scope.shown(entry)) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.grammar());
     }

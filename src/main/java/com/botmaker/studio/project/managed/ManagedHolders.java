@@ -583,6 +583,22 @@ public final class ManagedHolders {
         return found[0];
     }
 
+    /** A field by the class that declares it and its name. */
+    public record FieldName(String className, String name) {}
+
+    /**
+     * The class and name of the field of {@code source} carrying the parameter {@code value}'s mark, read against
+     * {@code known}; empty when {@code source} has none. What a plugin opening its own parameter is found by.
+     */
+    public static Optional<FieldName> markedParam(String source, ManagedValue<?> value, List<ManagedValue<?>> known) {
+        if (source == null || value == null || !value.isParam()) return Optional.empty();
+        return markedField(source, value, known).flatMap(field -> {
+            String className = com.botmaker.studio.project.params.JavaParameterSource.enclosingTypeName(field);
+            String name = ((VariableDeclarationFragment) field.fragments().getFirst()).getName().getIdentifier();
+            return className == null ? Optional.empty() : Optional.of(new FieldName(className, name));
+        });
+    }
+
     /** The field of {@code source} carrying {@code value}'s mark, read against {@code known}. */
     private static Optional<FieldDeclaration> markedField(String source, ManagedValue<?> value,
                                                           List<ManagedValue<?>> known) {

@@ -109,7 +109,7 @@ public final class JavaParameterSource {
                 for (Object each : field.fragments()) {
                     VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
                     out.add(read(file, source, grammar, records, names, className, field, annotation, fragment)
-                            .owned(owner(field, known)));
+                            .owned(owner(field, known), ManagedIds.idOf(ManagedIds.on(field, known), known)));
                 }
                 return false;
             }
@@ -148,7 +148,7 @@ public final class JavaParameterSource {
                 .bounds(number(members, "min", Double.NEGATIVE_INFINITY),
                         number(members, "max", Double.POSITIVE_INFINITY))
                 .build();
-        return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note, "");
+        return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note, "", "");
     }
 
     /**
