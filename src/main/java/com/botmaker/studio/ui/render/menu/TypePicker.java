@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.studio.parser.helpers.JavaSnippets;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.PrimitiveKind;
@@ -179,6 +180,7 @@ public final class TypePicker {
 
             List<ResolvedType> plugins = new ArrayList<>();
             for (String name : pluginNames) {
+                if (PluginHost.grammar().named(name).filter(ValueGrammar::retired).isPresent()) continue;
                 ResolvedType type = ResolvedType.named(name);
                 if (filter.accepts(type) && seen.add(name)) plugins.add(type);
             }

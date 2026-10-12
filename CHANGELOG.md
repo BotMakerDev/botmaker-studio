@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A migration copies a deprecated type's values into its replacement** (`project/managed/ManagedMigrations`,
+  no window yet). The author's `@Migrate(Old.class) static New m(parts…)` methods are read off the bot and
+  substituted, never run: each constant of `Old`'s open set is taken apart, its parts put where the parameters
+  stand, and the result written into `New`'s open set under the same name, marked `@Migrated`. A part whose type
+  moved too goes through its own `@Migrate` method; an enum's is a `switch` over the constant. Originals are
+  never touched; a rerun rewrites only constants still marked, and editing one through its window takes the
+  mark off. The plan compiles as the whole bot before it is offered. Deprecated types leave the type menus.
 - **▶ Start the bot from main.** Inside `main`, the + menu leads with *START THE BOT* and the plugins' entry
   points (*▶ Run activity flow*) while `main` calls none; they stay in their plugin's submenu too. Running a bot
   whose `main` starts nothing shows a Problems line: "main never starts the bot: add ▶ Run activity flow".

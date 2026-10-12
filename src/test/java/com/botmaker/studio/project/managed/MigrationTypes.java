@@ -1,0 +1,65 @@
+package com.botmaker.studio.project.managed;
+
+import com.botmaker.plugin.api.value.Drawn;
+import com.botmaker.plugin.api.value.PluginType;
+
+import java.util.List;
+
+/**
+ * A plugin's types before and after it moved its values to new classes, as {@link ManagedMigrationsTest} needs
+ * them on the test classpath: a plain call, a call holding another type that moved, and one holding an enum that
+ * moved.
+ */
+@SuppressWarnings("DeprecatedIsStillUsed")
+public final class MigrationTypes {
+
+    private MigrationTypes() {}
+
+    @Deprecated(forRemoval = true)
+    public record OldShot(String file, int threshold) {}
+
+    public record Shot(String file, int threshold, boolean grey) {}
+
+    @Deprecated(forRemoval = true)
+    public record OldArea(int x, int y) {}
+
+    public record Area(int x, int y, int w) {}
+
+    @Deprecated(forRemoval = true)
+    public record OldFrame(String file, OldArea area) {}
+
+    public record Frame(String file, Area area) {}
+
+    @Deprecated(forRemoval = true)
+    public enum OldTint { RED, BLUE }
+
+    public enum Tint { CRIMSON, NAVY }
+
+    @Deprecated(forRemoval = true)
+    public record OldPaint(OldTint tint) {}
+
+    public record Paint(Tint tint) {}
+
+    private static final Drawn NONE = () -> ctx -> null;
+
+    /** Every declaration, the old ones pointing at their replacements. */
+    @SuppressWarnings("removal")
+    static List<PluginType<?>> types() {
+        return List.of(
+                PluginType.value(OldShot.class).fresh(() -> new OldShot("", 0)).editor(NONE).writtenAsRecord()
+                        .replacedBy(Shot.class),
+                PluginType.value(Shot.class).fresh(() -> new Shot("", 0, false)).editor(NONE).writtenAsRecord(),
+                PluginType.value(OldArea.class).fresh(() -> new OldArea(0, 0)).editor(NONE).writtenAsRecord()
+                        .replacedBy(Area.class),
+                PluginType.value(Area.class).fresh(() -> new Area(0, 0, 0)).editor(NONE).writtenAsRecord(),
+                PluginType.value(OldFrame.class).fresh(() -> new OldFrame("", new OldArea(0, 0))).editor(NONE)
+                        .writtenAsRecord().replacedBy(Frame.class),
+                PluginType.value(Frame.class).fresh(() -> new Frame("", new Area(0, 0, 0))).editor(NONE)
+                        .writtenAsRecord(),
+                PluginType.value(OldTint.class).firstConstant().editor(NONE).writtenAsConstant().replacedBy(Tint.class),
+                PluginType.value(Tint.class).firstConstant().editor(NONE).writtenAsConstant(),
+                PluginType.value(OldPaint.class).fresh(() -> new OldPaint(OldTint.RED)).editor(NONE).writtenAsRecord()
+                        .replacedBy(Paint.class),
+                PluginType.value(Paint.class).fresh(() -> new Paint(Tint.CRIMSON)).editor(NONE).writtenAsRecord());
+    }
+}

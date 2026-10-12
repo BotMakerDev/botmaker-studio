@@ -188,6 +188,15 @@ public final class ValueGrammar {
         return List.copyOf(out);
     }
 
+    /**
+     * Whether a plugin retired {@code type}: its class carries the standard {@link Deprecated}, which the
+     * contract requires of any type that names a replacement. Its values still read and write; no menu offers it
+     * for a new one.
+     */
+    public static boolean retired(Class<?> type) {
+        return type != null && type.isAnnotationPresent(Deprecated.class);
+    }
+
     /** The declaration of {@code type}, or empty when no plugin declares it. */
     public Optional<PluginType<?>> type(Class<?> type) {
         return type == null ? Optional.empty() : Optional.ofNullable(typeByName.get(JavaNames.canonical(type)));

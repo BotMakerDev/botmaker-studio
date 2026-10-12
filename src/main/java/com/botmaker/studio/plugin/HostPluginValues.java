@@ -20,6 +20,7 @@ import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.managed.ManagedMethod;
+import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.ManagedSets;
 import com.botmaker.studio.project.params.JavaParameterEdits;
 import com.botmaker.studio.project.source.BotIndex;
@@ -518,8 +519,10 @@ public final class HostPluginValues implements PluginValues {
     private void writeInitializer(ManagedSets.Member member, JavaValue expression) {
         snapshot();
         Path file = member.file().toAbsolutePath().normalize();
+        // An edit makes a migrated value the author's: a rerun of the migration leaves it alone from now on.
         BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
-                ? JavaParameterEdits.setValue(source, member.className(), member.name(), expression) : null);
+                ? ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(), member.name(),
+                        expression), member.className(), member.name()) : null);
         redraw(java.util.Set.of(file));
     }
 

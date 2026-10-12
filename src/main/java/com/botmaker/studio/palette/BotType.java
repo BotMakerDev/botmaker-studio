@@ -279,7 +279,8 @@ public final class BotType {
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
-            if (cls == null) continue;
+            // A deprecated type keeps its values working; only its replacement is offered for new ones.
+            if (cls == null || ValueGrammar.retired(cls)) continue;
             String qualified = JavaNames.canonical(cls);
             boolean known = all.stream().anyMatch(t -> simple(t.typeName).equals(simple(qualified)));
             if (known) continue;

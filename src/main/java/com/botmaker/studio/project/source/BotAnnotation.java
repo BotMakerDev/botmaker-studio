@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.source;
 
+import com.botmaker.plugin.api.meta.Migrate;
+import com.botmaker.plugin.api.meta.Migrated;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
@@ -50,7 +52,11 @@ public enum BotAnnotation {
 
     PARAM(Param.class, "com.botmaker.plugin.basics.params.Param"),
     /** A refactor that guessed, on a bot's function (2026-09-27). No earlier name: it began in the contract. */
-    REFACTOR(Refactor.class);
+    REFACTOR(Refactor.class),
+    /** The author's mapping from one type's values to another's, on a bot's method (2026-10-12). */
+    MIGRATE(Migrate.class),
+    /** A value a {@link #MIGRATE} method wrote and nobody edited since, on an open set's constant (2026-10-12). */
+    MIGRATED(Migrated.class);
 
     private final Class<? extends java.lang.annotation.Annotation> type;
     private final Set<String> names;

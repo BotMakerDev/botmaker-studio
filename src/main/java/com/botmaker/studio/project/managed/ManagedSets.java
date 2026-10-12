@@ -107,7 +107,7 @@ public final class ManagedSets {
     }
 
     /** The class or enum carrying {@code id}'s mark: where it is and what it is called. */
-    private record Holder(Path file, String className) {}
+    record Holder(Path file, String className) {}
 
     /** The constants of the open set {@code id}, in the order they are written; empty when no class carries it. */
     public static List<Member> members(BotIndex index, String id, ValueGrammar grammar) {
@@ -507,7 +507,7 @@ public final class ManagedSets {
     }
 
     /** Every class carrying {@code id}: one is the set's holder, two is a project nobody can add to safely. */
-    private static List<Holder> holders(BotIndex index, String id) {
+    static List<Holder> holders(BotIndex index, String id) {
         return index.read(units -> {
             List<Holder> found = new ArrayList<>();
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
@@ -531,7 +531,7 @@ public final class ManagedSets {
         return Modifier.isPublic(flags) && Modifier.isStatic(flags) && Modifier.isFinal(flags);
     }
 
-    private static AbstractTypeDeclaration topLevel(CompilationUnit unit, String className) {
+    static AbstractTypeDeclaration topLevel(CompilationUnit unit, String className) {
         for (Object each : unit.types()) {
             if (each instanceof AbstractTypeDeclaration type && type.getName().getIdentifier().equals(className)) {
                 return type;
