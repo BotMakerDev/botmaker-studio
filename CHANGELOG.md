@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **The assistant is told to look in text.** The MCP server's instructions name the SDK's `describe`, `click`, `key`
+  and `scroll`: find a step by acting and reading what changed, and take a screenshot only to cut a picture or
+  when text cannot answer, a part at a low scale.
+
 ### Added
 
 - **An assistant can move a plugin to another version.** `set_plugin_version` is the Installed tab's version

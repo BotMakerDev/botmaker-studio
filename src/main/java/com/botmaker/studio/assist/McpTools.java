@@ -41,22 +41,24 @@ public final class McpTools {
             Work in this loop, one small step at a time:
             1. Look. list_targets says where each activity's blocks go and set_target opens one; list_files
                and list_methods say where the rest is. A plugin's own tools (named <plugin>_<tool>) see the
-               game: a screenshot, its pictures, what matches where.
+               game and act on it: describe says in text which pictures are on it and its text; click, key
+               and scroll act and say what changed. Find a step with them before writing it.
             2. Pictures. Make the pictures and places the bot looks for with the plugin's tools; each becomes
                one of the bot's constants (Pictures.ORE).
             3. Blocks. read_tree a method, then insert what list_palette offers, by its id, and set_slot each
                value. apply_edits makes several edits in one call, as one step. add_method, edit_signature,
                move_block, rename and find_usages shape the code.
-            4. Try. try_statement runs one statement, run_activity one activity, run_bot the whole bot. They
-               act on the game: it is the only way you do. Give `wait` (seconds) to get the run's end and its
-               trace in the same answer.
+            4. Try. try_statement runs one statement, run_activity one activity, run_bot the whole bot: the
+               bot's own code on the game. Give `wait` (seconds) to get the run's end and its trace in the
+               same answer.
             5. Read. read_trace says what the latest run printed and traced (errors_only for its failures);
                run_state whether it still runs; stop ends it. A wait that timed out may name a frame it
                saved: look at that with the plugin's tools rather than taking a new screenshot.
             6. Fix what the trace shows, and go round again.
 
-            Spend few calls and few images: ask a plugin's text answers (which screen, where a picture matches)
-            before a screenshot, and a part of the screen before the whole. One apply_edits beats several edits.
+            Spend few calls and few images: look with the text answers (describe, which screen, where a picture
+            matches, what an action changed); take a screenshot only to cut a picture or when text cannot
+            answer, and then a part of the screen at a low scale. One apply_edits beats several edits.
 
             - Every file tool takes `file`; leave it empty for the open file. An edit that adds, removes or
               moves statements answers with the reshaped methods' ids as they are now; use those.
