@@ -2,9 +2,10 @@ package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.studio.parser.EditContext;
 import org.eclipse.jdt.core.dom.*;
-import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Builds and recognises a "static call whose trailing argument is a body lambda" —
@@ -42,6 +43,48 @@ public final class LambdaCallHandler {
         List<String> params = (lambdaParam != null && !lambdaParam.isBlank()) ? List.of(lambdaParam) : List.of();
         mi.arguments().add(emptyBlockLambda(ast, params));
         return mi;
+    }
+
+    /**
+     * Renames each parameter of a lambda in {@code created} that a variable visible at {@code at} already
+     * declares — {@code it} becomes {@code it2}, then {@code it3}. Java refuses a lambda parameter that redeclares
+     * an enclosing local, so a lambda call dropped into another lambda's body would not compile with both named
+     * {@code it}. A sibling lambda's {@code it} is not visible there and keeps the new one {@code it}. Run on a
+     * freshly built node, before it is inserted, while its lambdas' bodies are still empty.
+     */
+    public static void freshenParams(ASTNode created, ASTNode at) {
+        if (created == null || at == null) return;
+        Set<String> taken = new HashSet<>();
+        for (ASTNode scope = at; scope != null && !(scope instanceof AbstractTypeDeclaration);
+             scope = scope.getParent()) {
+            switch (scope) {
+                case LambdaExpression lambda -> lambda.parameters()
+                        .forEach(p -> taken.add(((VariableDeclaration) p).getName().getIdentifier()));
+                case MethodDeclaration method -> method.parameters()
+                        .forEach(p -> taken.add(((VariableDeclaration) p).getName().getIdentifier()));
+                case EnhancedForStatement loop -> taken.add(loop.getParameter().getName().getIdentifier());
+                case CatchClause clause -> taken.add(clause.getException().getName().getIdentifier());
+                case Block block -> block.statements().forEach(s -> {
+                    if (s instanceof VariableDeclarationStatement declaration) {
+                        declaration.fragments().forEach(f ->
+                                taken.add(((VariableDeclaration) f).getName().getIdentifier()));
+                    }
+                });
+                default -> { }
+            }
+        }
+        created.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(LambdaExpression lambda) {
+                for (Object parameter : lambda.parameters()) {
+                    SimpleName name = ((VariableDeclaration) parameter).getName();
+                    String fresh = name.getIdentifier();
+                    for (int n = 2; taken.contains(fresh); n++) fresh = name.getIdentifier() + n;
+                    name.setIdentifier(fresh);
+                }
+                return true;
+            }
+        });
     }
 
     /**

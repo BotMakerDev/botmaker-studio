@@ -39,7 +39,7 @@ public class StatementFactory {
      * {@link BlockType.LibraryCall}) are built generically from their fields, so new variants are pure data.
      */
     public static Statement createStatement(EditContext ctx, BlockType type, ASTNode context) {
-        return switch (type) {
+        Statement statement = switch (type) {
             case BlockType.ControlFlow cf -> createControlFlow(ctx, cf.kind(), context);
             case BlockType.VarDecl v -> buildVarDecl(ctx, v, context);
             case BlockType.LibraryCall l -> buildLibraryCall(ctx, l);
@@ -49,6 +49,8 @@ public class StatementFactory {
             case BlockType.OwnCall call -> createOwnCall(ctx, context, call);
             case BlockType.AssignTo assign -> createAssignTo(ctx, context, assign);
         };
+        LambdaCallHandler.freshenParams(statement, context);
+        return statement;
     }
 
     /** The picked variable given its type's default; null when it is not visible here any more. */

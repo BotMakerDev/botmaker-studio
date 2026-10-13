@@ -5,11 +5,14 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.LambdaExpression;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.VariableDeclaration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -162,5 +165,49 @@ class LambdaParameterScopeTest {
                 ifFindAny(OTHER, found -> {
                                 ImageClicker.click(found.best());"""),
                 "the inner body binds to the inner parameter and must not be rewritten: " + result);
+    }
+
+    // ---- A new lambda call's parameter ----
+
+    private static final String TWO_LOOPS = """
+            package test;
+            public class Subject {
+                void run() {
+                    ImageFinder.whileFindAny(SLOTS, it -> {
+                        ImageClicker.clickLast();
+                    });
+                    ImageFinder.whileFindAny(CLAIMS, it -> {
+                    });
+                }
+            }
+            """;
+
+    /** The new call's lambda parameter, after {@code freshenParams} placed it at {@code at}. */
+    private static String freshNameAt(CompilationUnit cu, ASTNode at) {
+        AST ast = cu.getAST();
+        MethodInvocation call = ast.newMethodInvocation();
+        call.setName(ast.newSimpleName("ifFindAny"));
+        call.arguments().add(LambdaCallHandler.emptyBlockLambda(ast, List.of("it")));
+        LambdaCallHandler.freshenParams(call, at);
+        return ((VariableDeclaration) ((LambdaExpression) call.arguments().getFirst()).parameters().getFirst())
+                .getName().getIdentifier();
+    }
+
+    @Test
+    void aLambdaCallDroppedInsideAnotherLambdaTakesAFreeParameterName() {
+        CompilationUnit cu = parse(TWO_LOOPS);
+        // The first loop's body, where the inner call lands.
+        ASTNode body = callNamed(cu, "clickLast").getParent().getParent();
+
+        assertEquals("it2", freshNameAt(cu, body),
+                "a second `it` inside the first loop's lambda redeclares its parameter, which javac refuses");
+    }
+
+    @Test
+    void aLambdaCallBesideAnotherKeepsItsName() {
+        CompilationUnit cu = parse(TWO_LOOPS);
+        ASTNode methodBody = callNamed(cu, "whileFindAny").getParent().getParent();
+
+        assertEquals("it", freshNameAt(cu, methodBody), "a sibling loop's `it` is not in scope there");
     }
 }

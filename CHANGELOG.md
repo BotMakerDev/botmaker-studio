@@ -44,6 +44,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   and `scroll`: find a step by acting and reading what changed, and take a screenshot only to cut a picture or
   when text cannot answer, a part at a low scale.
 
+### Fixed
+
+- **A loop dropped inside another loop compiles.** Its lambda's value takes a free name (`it2`, `it3`) when the
+  name it would get is already in scope there; a loop beside another keeps `it`.
+
 ### Added
 
 - **An assistant can move a plugin to another version.** `set_plugin_version` is the Installed tab's version

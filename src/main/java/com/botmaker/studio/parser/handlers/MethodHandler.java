@@ -47,6 +47,7 @@ public class MethodHandler {
     public static String addMethodCallStatement(EditContext ctx, String originalCode, BodyBlock targetBody,
                                                 ExpressionChoice.Method choice, int index) {
         ExpressionStatement stmt = ctx.ast().newExpressionStatement(createMethodInvocation(ctx, choice));
+        LambdaCallHandler.freshenParams(stmt, targetBody.getAstNode());
 
         // Insert into body
         AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody).insertAt(stmt, index, null);
