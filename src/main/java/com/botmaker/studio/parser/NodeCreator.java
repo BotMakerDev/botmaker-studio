@@ -38,8 +38,10 @@ public class NodeCreator {
                     yield creation;
                 }
                 case ExpressionChoice.EnumConstant e -> {
-                    ctx.addImportForSimpleName(e.typeName());
-                    yield ast.newQualifiedName(ast.newSimpleName(e.typeName()), ast.newSimpleName(e.constantName()));
+                    // Activities.Collect for a nested enum: its outer class is what gets imported.
+                    int dot = e.typeName().indexOf('.');
+                    ctx.addImportForSimpleName(dot < 0 ? e.typeName() : e.typeName().substring(0, dot));
+                    yield ast.newQualifiedName(ast.newName(e.typeName()), ast.newSimpleName(e.constantName()));
                 }
                 case ExpressionChoice.Variable v -> ast.newSimpleName(v.variableName());
                 case ExpressionChoice.Field f -> {

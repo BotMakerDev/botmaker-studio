@@ -2,6 +2,7 @@ package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
@@ -21,14 +22,28 @@ public class EnumManipulationHandler {
                                                  Expression toReplace, String enumType, String constantName) {
         AST ast = ctx.ast();
 
+        // A nested enum is named through its outer class (Activities.Collect), which is what gets imported.
         QualifiedName newConst = ast.newQualifiedName(
-                ast.newSimpleName(enumType),
+                ast.newName(enumType),
                 ast.newSimpleName(constantName)
         );
 
         ctx.rewriter().replace(toReplace, newConst, null);
-        ctx.addImportForSimpleName(enumType);
+        int dot = enumType.indexOf('.');
+        ctx.addImportForSimpleName(dot < 0 ? enumType : enumType.substring(0, dot));
         return ctx.applyTo(originalCode);
+    }
+
+    /** How code names {@code enumType}: its simple name, or {@code Activities.Collect} for a type nested in a class. */
+    public static String referableName(ResolvedType enumType) {
+        if (enumType instanceof ResolvedType.Bound bound && bound.binding().isMember()) {
+            StringBuilder name = new StringBuilder(bound.binding().getErasure().getName());
+            for (ITypeBinding outer = bound.binding().getDeclaringClass(); outer != null; outer = outer.getDeclaringClass()) {
+                name.insert(0, outer.getErasure().getName() + ".");
+            }
+            return name.toString();
+        }
+        return enumType.simpleName();
     }
 
     // ... [Previous methods omitted for brevity, ensure they are kept]

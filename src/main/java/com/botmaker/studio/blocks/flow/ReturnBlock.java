@@ -10,18 +10,15 @@ import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
-import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ReturnBlock extends AbstractStatementBlock {
 
@@ -57,21 +54,22 @@ public class ReturnBlock extends AbstractStatementBlock {
     public ComponentSpec componentSpec(CodeEditorService context) {
         String methodReturnType = findParentMethodReturnType();
         boolean isVoid = "void".equals(methodReturnType);
+        ResolvedType returned = returnedType(methodReturnType);
 
         ComponentSpec.Builder spec = ComponentSpec.builder()
                 .label("kw", () -> SentenceLayoutBuilder.keywordNode("return"));
 
         if (expression != null) {
             spec.slot("value", () -> SentenceLayoutBuilder.expressionSlotNode(
-                            expression, context, ResolvedType.named(methodReturnType)))
+                            expression, context, returned))
                     .picker("change", () -> createChangeButton(e ->
                             showExpressionMenuAndReplace((Button) e.getSource(), context,
-                                    ResolvedType.named(methodReturnType),
+                                    returned,
                                     (org.eclipse.jdt.core.dom.Expression) expression.getAstNode())));
         } else if (!isVoid) {
             spec.picker("add", () -> createAddButton(e ->
                     ExpressionMenu.create(
-                            ResolvedType.named(methodReturnType), false, context, this.astNode, x -> true,
+                            returned, false, context, this.astNode, x -> true,
                             selection -> context.getCodeEditor().setReturnExpression((ReturnStatement) this.astNode, selection)
                     ).show((Button) e.getSource(), javafx.geometry.Side.BOTTOM, 0, 0)));
         } else {
@@ -142,6 +140,20 @@ public class ReturnBlock extends AbstractStatementBlock {
             if (n instanceof MethodDeclaration method) return method;
         }
         return null;
+    }
+
+    /**
+     * The enclosing method's return type, bound where the file resolved it: a name alone never reads as an enum,
+     * so an activity's {@code Activities.Collect} offered none of its outcomes (2026-10-13).
+     */
+    private ResolvedType returnedType(String sourceName) {
+        for (ASTNode at = this.astNode.getParent(); at != null; at = at.getParent()) {
+            if (at instanceof MethodDeclaration md) {
+                ITypeBinding binding = md.getReturnType2() == null ? null : md.getReturnType2().resolveBinding();
+                return binding != null && !binding.isRecovered() ? ResolvedType.of(binding) : ResolvedType.named(sourceName);
+            }
+        }
+        return ResolvedType.named(sourceName);
     }
 
     private String findParentMethodReturnType() {

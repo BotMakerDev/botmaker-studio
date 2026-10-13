@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.studio.parser.EditContext;
+import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;
 import com.botmaker.studio.plugin.PluginHost;
@@ -79,13 +80,18 @@ public class InitializerFactory {
             return LambdaCallHandler.emptyBlockLambda(ast, params);
         }
 
+        // A Class has no constructor to call, and which class a slot wants (an activity's) is the slot editor's to
+        // pick: null compiles until then, where `new Class()` did not.
+        if (raw.equals("java.lang.Class") || raw.equals("Class")) return ast.newNullLiteral();
+
         // 1. Enum Handling (Now works because richType has binding)
         if (richType.isEnum()) {
             List<String> constants = richType.enumConstants();
             String constName = constants.isEmpty() ? "VALUE" : constants.getFirst();
 
+            // Activities.Collect.NEXT for a nested enum: Collect.NEXT would name the activity's class.
             return ast.newQualifiedName(
-                    ast.newSimpleName(richType.simpleName()),
+                    ast.newName(EnumManipulationHandler.referableName(richType)),
                     ast.newSimpleName(constName)
             );
         }
@@ -166,7 +172,13 @@ public class InitializerFactory {
             boolean noConstructor = richType instanceof ResolvedType.Bound bound
                     ? !hasPublicConstructor(bound.binding())
                     : analyzer != null && analyzer.getConstructors(richType.leafType().simpleName()).isEmpty();
-            if (noConstructor) {
+            // Constructors only of arguments nothing seeds (a record's List component: ImageTemplateGroup) write
+            // the same uncompilable `new T()` as none at all.
+            List<MethodSignature> constructors = noConstructor || analyzer == null ? List.of()
+                    : analyzer.getConstructors(richType.leafType().simpleName());
+            boolean noneSeedable = !constructors.isEmpty() && constructors.stream().noneMatch(c ->
+                    c.paramTypes().stream().allMatch(p -> DefaultValueHelper.createDefaultForPrimitive(ast, p) != null));
+            if (noConstructor || noneSeedable) {
                 if (analyzer == null) return ast.newNullLiteral();
                 return analyzer.constantOf(richType)
                         .map(constant -> parseExpr(ast, constant))

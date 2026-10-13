@@ -1,6 +1,7 @@
 package com.botmaker.studio.blocks.flow;
 
 import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractStatementBlock;
@@ -281,7 +282,8 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
             for (String constant : remaining) {
                 MenuItem item = new MenuItem(constant);
                 item.setOnAction(e -> context.getCodeEditor().replaceWithEnumConstant(
-                        (Expression) caseExpression.getAstNode(), enumType.simpleName(), constant));
+                        (Expression) caseExpression.getAstNode(),
+                        EnumManipulationHandler.referableName(enumType), constant));
                 menu.getItems().add(item);
             }
 

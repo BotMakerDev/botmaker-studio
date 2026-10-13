@@ -1,6 +1,7 @@
 package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
@@ -55,7 +56,7 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
                         }
                         context.getCodeEditor().replaceWithEnumConstant(
                                 (Expression) this.astNode,
-                                newType.simpleName(),
+                                EnumManipulationHandler.referableName(newType),
                                 defaultConst
                         );
                     });

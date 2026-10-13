@@ -164,6 +164,61 @@ class AssistTurnTest {
     }
 
     @Test
+    void aSlotTakesAVariableInScopeOfItsType() {
+        AssistTurn turn = turn(SOURCE.replace("System.out.println(count);",
+                "java.util.List.of(name).forEach(each -> {\n            System.out.println(count);\n        });"));
+        String printed = statement(turn, "java.util.List").bodies().getFirst().statements().getFirst()
+                .slots().getFirst().id();
+
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(printed, "var:missing"), "out of scope");
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(printed, "var:count + 1"), "a name, not Java");
+        Outcome set = turn.setSlot(printed, "var:each");
+        assertInstanceOf(Outcome.Accepted.class, set, set.toString());
+        assertTrue(turn.source().contains("System.out.println(each)"), turn.source());
+    }
+
+    @Test
+    void aVariableIsRenamedAndRetypedAsTheDialogDoes() {
+        AssistTurn turn = turn(SOURCE);
+        String declared = statement(turn, "String name").id();
+
+        Outcome renamed = turn.editVariable(declared, "label", "");
+        assertInstanceOf(Outcome.Accepted.class, renamed, renamed.toString());
+        assertTrue(turn.source().contains("String label = \"a\""), turn.source());
+
+        String counted = statement(turn, "int count").id();
+        Outcome retyped = turn.editVariable(counted, "", "double");
+        assertInstanceOf(Outcome.Accepted.class, retyped, retyped.toString());
+        assertTrue(turn.source().contains("double count"), turn.source());
+        assertInstanceOf(Outcome.Refused.class, turn.editVariable(counted, "", "Runtime"));
+        assertInstanceOf(Outcome.Refused.class, turn.editVariable(counted, "class", ""));
+    }
+
+    @Test
+    void aRetypeIsNotKeptWhenTheRenameAfterItIsRefused() {
+        AssistTurn turn = turn(SOURCE);
+        Outcome both = turn.editVariable(statement(turn, "int count").id(), "name", "double");
+
+        assertInstanceOf(Outcome.Refused.class, both, "name is taken: " + both);
+        assertEquals(SOURCE, turn.source());
+        assertEquals(0, turn.acceptedEdits());
+    }
+
+    @Test
+    void aVarargsCallTakesOneMoreArgumentAndANestedCallsArgumentsAreSlots() {
+        AssistTurn turn = turn(SOURCE.replace("System.out.println(count);",
+                "System.out.println(String.format(\"%d\", Math.max(count, 2)));"));
+        List<BlockView.Slot> slots = statement(turn, "System.out.println").slots();
+        assertTrue(slots.stream().anyMatch(s -> s.value().equals("2")), "a nested call's arguments are slots: " + slots);
+
+        String max = slots.stream().filter(s -> s.value().startsWith("Math.max")).findFirst().orElseThrow().id();
+        assertInstanceOf(Outcome.Refused.class, turn.addArgument(max), "Math.max takes two");
+        Outcome added = turn.addArgument(slots.getFirst().id());
+        assertInstanceOf(Outcome.Accepted.class, added, added.toString());
+        assertTrue(turn.source().contains("Math.max(count, 2), "), turn.source());
+    }
+
+    @Test
     void aManagedValueTakesNoOperator() {
         String source = SOURCE.replace("public class Subject {", """
                 public class Subject {

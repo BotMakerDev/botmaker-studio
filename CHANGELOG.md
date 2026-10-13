@@ -20,7 +20,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The assistant can write a test into a condition.** `set_slot` takes a palette call whose result fits the
   slot (`call:ImageFinder.find(ImageTemplate)`) or an operator (`op:NOT`, `op:AND`, `op:LESS`…), and `read_tree`
   lists the slots inside it, so an If or While can check the screen. `op:LAMBDA` writes the action a call such
-  as `ImageFinder.whileFindAny` runs, its body a body to insert into.
+  as `ImageFinder.whileFindAny` runs, its body a body to insert into; `var:<name>` passes a variable in scope (a
+  lambda's value), and `op:NEGATE`/`op:CHOOSE` write `-x` and `?:`. New tools `edit_variable` (rename, retype a
+  declared variable) and `add_argument` (one more argument to a call taking any number); `read_tree` lists the
+  slots inside a call's arguments, casts and `?:` too.
 
 ### Changed
 
@@ -89,6 +92,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **`read_tree` lists a plugin call statement's arguments as slots**, and `delete_block`/`move_block` take the id
   it gives that statement.
+- **Every palette call inserts code that compiles.** Calls taking a `Class` (`ActivitySwitch.active`), an
+  `ImageTemplateGroup`, `Combo`, `KeySequence` or `OcrOptions` were seeded with a constructor the type does not
+  have and were refused; such a value now starts `null`, cast to its type so an overloaded call
+  (`ImageClicker.click(MatchResult)`) stays unambiguous.
+- **A return slot typed by an activity's outcomes offers them.** `return Activities.Collect.NEXT` showed no
+  values to pick: the slot took the return type by name, which never reads as an enum. A nested enum's constant
+  is written `Activities.Collect.NEXT`, not `Collect.NEXT` (which named the activity's class).
 - **An assistant reads each traced line once.** A bot's trace line is also printed, so `read_trace` and a run
   tool's answer showed it twice (`[Debug Source] …` and `[Source] …`). The trace copy stays, with its source
   line; the level is named only when it is not debug detail (`[Warning Vision] …`).

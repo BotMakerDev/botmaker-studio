@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.studio.palette.BotType;
+import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionCategory;
 import com.botmaker.studio.palette.ExpressionType;
@@ -12,7 +13,6 @@ import com.botmaker.studio.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.util.DefaultNames;
 import com.botmaker.studio.util.MethodSignature;
 import com.botmaker.studio.util.VariableScopeVisitor;
@@ -489,7 +489,8 @@ public final class ExpressionMenu {
         Menu enumMenu = MenuIcons.decorate(new Menu("Enum Values"), MenuIcons.ENUM);
         for (String constName : constants) {
             MenuItem item = new MenuItem(constName);
-            item.setOnAction(e -> onSelect.accept(new ExpressionChoice.EnumConstant(enumType.simpleName(), constName)));
+            item.setOnAction(e -> onSelect.accept(new ExpressionChoice.EnumConstant(
+                    EnumManipulationHandler.referableName(enumType), constName)));
             enumMenu.getItems().add(item);
         }
         return enumMenu;
@@ -503,7 +504,8 @@ public final class ExpressionMenu {
             Menu enumSub = new Menu(enumType.simpleName());
             for (String c : enumType.enumConstants()) {
                 MenuItem item = new MenuItem(c);
-                item.setOnAction(e -> onSelect.accept(new ExpressionChoice.EnumConstant(enumType.simpleName(), c)));
+                item.setOnAction(e -> onSelect.accept(new ExpressionChoice.EnumConstant(
+                        EnumManipulationHandler.referableName(enumType), c)));
                 enumSub.getItems().add(item);
             }
             if (!enumSub.getItems().isEmpty()) enumRoot.getItems().add(enumSub);

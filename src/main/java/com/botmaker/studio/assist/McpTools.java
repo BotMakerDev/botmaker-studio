@@ -68,7 +68,8 @@ public final class McpTools {
             - You cannot write Java. A slot takes a value of its type: a literal, one of the bot's constants,
               or a constant or factory call of that type. A test is built in its slot: set_slot a palette
               call (call:ImageFinder.find(ImageTemplate)) or an operator (op:NOT) whose result fits, then
-              read_tree and set the slots it brings.
+              read_tree and set the slots it brings; var:<name> passes a variable in scope (a lambda's
+              value).
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
             - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
               before a large change saves a version to go back to with revert.
@@ -235,6 +236,8 @@ public final class McpTools {
                                 + String.join(", ", AssistTurn.operatorIds()) + "); the call's arguments and the "
                                 + "operator's operands are then slots of their own, which read_tree lists, and "
                                 + "op:LAMBDA's body (the action of ImageFinder.whileFindAny…) a body to insert into. "
+                                + "Or a variable in scope there, its type the slot's: var:value names a lambda's "
+                                + "parameter, a local or a parameter. "
                                 + "Anything else is refused.",
                         List.of(FILE, Prop.text("slotId", "the slot id, from read_tree"), Prop.text("value", "the value")),
                         bot, (tools, args) -> tools.setSlot(text(args, "slotId"), text(args, "value")), true),
@@ -243,8 +246,8 @@ public final class McpTools {
                         bot, (tools, args) -> tools.deleteBlock(text(args, "blockId")), true),
                 spec(json, "apply_edits",
                         "Apply several edits to one file in one call, in order, as one undo step: each is an insert, "
-                                + "a set or a delete, taking the same fields as insert_block, set_slot and "
-                                + "delete_block. Each is compiled as it is applied; if any is refused, none is kept "
+                                + "a set, a delete, an add_argument or an edit_variable, taking the same fields as "
+                                + "insert_block, set_slot, delete_block, add_argument and edit_variable. Each is compiled as it is applied; if any is refused, none is kept "
                                 + "and the answer says which. Ids are those of the tree as the earlier edits left "
                                 + "it: an insert shifts the statements below it, so insert from the bottom up, or "
                                 + "count the shift.",
@@ -258,6 +261,20 @@ public final class McpTools {
                                 "name":{"type":"string","description":"the method's name"},""", "[\"name\"]"),
                         request -> run(bot, request, (tools, args) -> tools.addMethod(text(args, "class"),
                                 text(args, "name"), text(args, "returns"), list(args, "params")), true)),
+                edit(json, "edit_variable",
+                        "Rename or retype a variable a Declare Variable statement declares, as the Edit Variable "
+                                + "dialog does: its uses follow a new name, and a new type resets its value to "
+                                + "that type's fresh one. What is not given is kept.",
+                        List.of(FILE, Prop.text("blockId", "the declaring statement's id, from read_tree"),
+                                Prop.text("name", "its new name"),
+                                Prop.text("type", "its new type, as the dialog names it: int, String, Point…")),
+                        bot, (tools, args) -> tools.editVariable(text(args, "blockId"), text(args, "name"),
+                                text(args, "type")), true),
+                edit(json, "add_argument",
+                        "Add one more argument to a call that takes any number (ImageTemplateGroup.of, "
+                                + "Keyboard.sequence…), seeded with a default; read_tree then lists its slot.",
+                        List.of(FILE, Prop.text("callId", "the call: a call statement's id or a slot holding the call")),
+                        bot, (tools, args) -> tools.addArgument(text(args, "callId")), true),
                 edit(json, "move_block",
                         "Move a statement into a body of the same file, before the statement now at index.",
                         List.of(FILE, Prop.text("blockId", "the statement id, from read_tree"),
@@ -318,9 +335,10 @@ public final class McpTools {
             {"type":"object","properties":{
               "file":{"type":"string","description":"the file, as list_files names it; empty for the file open in Studio"},
               "edits":{"type":"array","minItems":1,"items":{"type":"object","properties":{
-                "op":{"type":"string","enum":["insert","set","delete"]},
+                "op":{"type":"string","enum":["insert","set","delete","add_argument","edit_variable"]},
                 "bodyId":{"type":"string"},"index":{"type":"integer"},"paletteId":{"type":"string"},
-                "slotId":{"type":"string"},"value":{"type":"string"},"blockId":{"type":"string"}},
+                "slotId":{"type":"string"},"value":{"type":"string"},"blockId":{"type":"string"},
+                "callId":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"}},
                 "required":["op"],"additionalProperties":false}}},
              "required":["edits"],"additionalProperties":false}""";
 
@@ -341,8 +359,10 @@ public final class McpTools {
                 case "insert" -> tools.insertBlock(text(edit, "bodyId"), number(edit, "index"), text(edit, "paletteId"));
                 case "set" -> tools.setSlot(text(edit, "slotId"), text(edit, "value"));
                 case "delete" -> tools.deleteBlock(text(edit, "blockId"));
-                default -> throw new IllegalArgumentException("edit " + (i + 1) + ": op is insert, set or delete, not "
-                        + text(edit, "op") + ".");
+                case "add_argument" -> tools.addArgument(text(edit, "callId"));
+                case "edit_variable" -> tools.editVariable(text(edit, "blockId"), text(edit, "name"), text(edit, "type"));
+                default -> throw new IllegalArgumentException("edit " + (i + 1) + ": op is insert, set, delete, "
+                        + "add_argument or edit_variable, not " + text(edit, "op") + ".");
             };
             if (answer.startsWith("REFUSED")) {
                 throw new IllegalArgumentException("edit " + (i + 1) + " of " + edits.size() + " was refused, so none "

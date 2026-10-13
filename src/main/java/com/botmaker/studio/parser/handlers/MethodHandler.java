@@ -79,7 +79,17 @@ public class MethodHandler {
         // Arguments (Defaults). Each default initializer references its type by simple name
         // (`Color.RED`, `new Color()`), so the parameter types need importing just as the scope does.
         for (ResolvedType paramType : choice.paramTypes()) {
-            mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, paramType));
+            Expression seed = InitializerFactory.createDefaultInitializer(ctx, paramType);
+            // A bare null would leave an overloaded call ambiguous (ImageClicker.click(ImageTemplate) beside
+            // click(MatchResult)); cast, it names the overload picked.
+            if (seed instanceof NullLiteral && !paramType.isUnknown() && !paramType.isPrimitive()
+                    && !paramType.isArray() && paramType.qualifiedName().indexOf('<') < 0) {
+                CastExpression cast = ast.newCastExpression();
+                cast.setType(ast.newSimpleType(ast.newName(EnumManipulationHandler.referableName(paramType))));
+                cast.setExpression(seed);
+                seed = cast;
+            }
+            mi.arguments().add(seed);
             ctx.addImportForType(paramType);
         }
         return mi;

@@ -26,13 +26,16 @@ import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedIds;
+import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.util.MethodSignature;
 import org.eclipse.jdt.core.dom.*;
 
+import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -181,11 +184,12 @@ public final class AssistTurn {
         ITypeBinding expected = expectedType(slot.get());
         String given = value == null ? "" : value.strip();
         String callKey = PaletteEntry.Kind.CALL.restOf(given);
-        if ((callKey != null || given.startsWith(OPERATOR)) && inManagedValue(slot.get())) {
+        if ((callKey != null || given.startsWith(OPERATOR) || given.startsWith(VARIABLE)) && inManagedValue(slot.get())) {
             return Outcome.Refused.because("Slot " + slotId + " is a plugin's managed value: it takes a value, "
-                    + "never a call or an operator.");
+                    + "never a call, an operator or a variable.");
         }
         if (callKey != null) return setCall(stage, slotId, slot.get(), expected, callKey);
+        if (given.startsWith(VARIABLE)) return setVariable(stage, slotId, slot.get(), given.substring(VARIABLE.length()));
         if (given.startsWith(OPERATOR)) {
             return setOperator(stage, slotId, slot.get(), expected, given.substring(OPERATOR.length()));
         }
@@ -278,6 +282,100 @@ public final class AssistTurn {
         return false;
     }
 
+    /**
+     * Writes the variable {@code name} into a slot: a local, a parameter, a lambda's parameter or a field in
+     * scope there. Only a name is written; the compile check refuses one out of scope or of another type.
+     */
+    private Outcome setVariable(Stage stage, String slotId, Expression slot, String name) {
+        String wanted = name.strip();
+        if (!SourceVersion.isIdentifier(wanted) || SourceVersion.isKeyword(wanted)) {
+            return Outcome.Refused.because("`" + wanted + "` is not a variable's name.");
+        }
+        return apply(stage, "set " + slotId + " to " + wanted, editor -> editor.replaceWithVariable(slot, wanted));
+    }
+
+    /**
+     * Retypes and renames the variable {@code blockId} declares, as the Edit Variable dialog does: {@code type}
+     * one the dialog's chooser offers (its initialiser reset to the type's fresh value), {@code name} carried to
+     * its uses. A blank one is kept.
+     */
+    public Outcome editVariable(String blockId, String name, String type) {
+        Stage stage = stage();
+        Optional<VariableDeclarationStatement> declared = stage.statement(blockId)
+                .filter(VariableDeclarationStatement.class::isInstance).map(VariableDeclarationStatement.class::cast);
+        if (declared.isEmpty() || declared.get().fragments().size() != 1) {
+            return Outcome.Refused.because("Statement " + blockId + " declares no single variable.");
+        }
+        String newName = name == null ? "" : name.strip();
+        String newType = type == null ? "" : type.strip();
+        if (newName.isEmpty() && newType.isEmpty()) return Outcome.Refused.because("Give a name, a type or both.");
+        if (!newName.isEmpty() && (!SourceVersion.isIdentifier(newName) || SourceVersion.isKeyword(newName))) {
+            return Outcome.Refused.because("`" + newName + "` is not a variable's name.");
+        }
+        List<String> done = new ArrayList<>();
+        // Both or neither: a rename refused after the retype must not leave the retype for the turn to commit.
+        String before = source;
+        int acceptedBefore = accepted;
+        if (!newType.isEmpty()) {
+            List<TypeCatalog.Entry> offered = TypeCatalog.current(TypeCatalog.Purpose.DECLARATION,
+                    BotRecords.scan(workspace.config(), stage.state, workspace.grammar())).groups().stream()
+                    .flatMap(g -> g.entries().stream()).toList();
+            Optional<Type> chosen = offered.stream()
+                    .filter(e -> e.label().equals(newType) || simpleName(e.type()).equals(newType))
+                    .map(TypeCatalog.Entry::type).findFirst();
+            if (chosen.isEmpty()) {
+                return Outcome.Refused.because("A variable cannot be declared as " + newType + ". The types are "
+                        + offered.stream().map(e -> simpleName(e.type())).distinct().toList() + ".");
+            }
+            Outcome typed = apply(stage, "retyped to " + newType,
+                    editor -> editor.replaceVariableType(declared.get(), chosen.get()));
+            if (!(typed instanceof Outcome.Accepted accepted)) return typed;
+            done.add(accepted.summary());
+        }
+        if (!newName.isEmpty()) {
+            Stage again = newType.isEmpty() ? stage : stage();
+            Optional<VariableDeclarationStatement> fresh = again.statement(blockId)
+                    .filter(VariableDeclarationStatement.class::isInstance).map(VariableDeclarationStatement.class::cast);
+            if (fresh.isEmpty()) {
+                source = before;
+                accepted = acceptedBefore;
+                return Outcome.Refused.because("Statement " + blockId + " moved. Read the tree again.");
+            }
+            SimpleName declaredName = ((VariableDeclarationFragment) fresh.get().fragments().getFirst()).getName();
+            Outcome renamed = apply(again, "renamed to " + newName, editor -> editor.renameLocal(declaredName, newName));
+            if (!(renamed instanceof Outcome.Accepted kept)) {
+                source = before;
+                accepted = acceptedBefore;
+                return renamed;
+            }
+            done.add(kept.summary());
+        }
+        return new Outcome.Accepted(String.join("; ", done));
+    }
+
+    private static String simpleName(Type type) {
+        String name = type.getTypeName();
+        return name.substring(name.lastIndexOf('.') + 1);
+    }
+
+    /** Adds an argument to the varargs call {@code callId} — a call statement's id, or a slot holding a call. */
+    public Outcome addArgument(String callId) {
+        Stage stage = stage();
+        Optional<MethodInvocation> call = stage.findNode(callId, MethodInvocation.class);
+        if (call.isEmpty()) return Outcome.Refused.because("No call has the id " + callId + ". Read the tree again.");
+        IMethodBinding binding = call.get().resolveMethodBinding();
+        if (binding == null || !binding.isVarargs()) {
+            return Outcome.Refused.because(call.get().getName().getIdentifier() + " takes no more arguments.");
+        }
+        ITypeBinding[] params = binding.getParameterTypes();
+        ResolvedType element = ResolvedType.of(params[params.length - 1].getElementType());
+        return apply(stage, "added an argument to " + call.get().getName().getIdentifier()
+                + "; read the tree for its slot", editor -> editor.addVarargsArgument(call.get(), element));
+    }
+
+    /** What set_slot takes before a variable's name: {@code var:value}. */
+    static final String VARIABLE = "var:";
+
     /** What set_slot takes before an operator's id: {@code op:NOT}. */
     static final String OPERATOR = "op:";
 
@@ -289,7 +387,7 @@ public final class AssistTurn {
     /** An operator, or a lambda — the code a call such as {@code ImageFinder.whileFindAny} runs, its body a body. */
     private static boolean isOperator(ExpressionType type) {
         return type instanceof ExpressionType.InfixOp || type instanceof ExpressionType.PrefixOp
-                || type == ExpressionCatalog.LAMBDA;
+                || type == ExpressionCatalog.LAMBDA || type == ExpressionCatalog.NEGATE || type == ExpressionCatalog.CHOOSE;
     }
 
     /** The bot's managed constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
@@ -684,23 +782,33 @@ public final class AssistTurn {
     private static void within(Expression expression, List<Expression> out) {
         out.add(expression);
         switch (expression) {
-            case PrefixExpression p when p.getOperator() == PrefixExpression.Operator.NOT -> within(p.getOperand(), out);
+            case PrefixExpression p when p.getOperator() == PrefixExpression.Operator.NOT
+                    || p.getOperator() == PrefixExpression.Operator.MINUS -> within(p.getOperand(), out);
             case InfixExpression i -> {
                 within(i.getLeftOperand(), out);
                 within(i.getRightOperand(), out);
                 for (Object more : i.extendedOperands()) within((Expression) more, out);
             }
             case ParenthesizedExpression p -> within(p.getExpression(), out);
+            // A seeded `(T) null` is one slot, the cast: its null is no place of its own.
+            case CastExpression c when !(c.getExpression() instanceof NullLiteral) -> within(c.getExpression(), out);
+            case ConditionalExpression c -> {
+                within(c.getExpression(), out);
+                within(c.getThenExpression(), out);
+                within(c.getElseExpression(), out);
+            }
             default -> arguments(expression, out);
         }
     }
 
+    /** Each argument of the call {@code expression} is, and the positions inside each, a call's in a call too. */
     private static void arguments(Expression expression, List<Expression> out) {
-        if (expression instanceof MethodInvocation call) {
-            for (Object argument : call.arguments()) out.add((Expression) argument);
-        } else if (expression instanceof ClassInstanceCreation creation) {
-            for (Object argument : creation.arguments()) out.add((Expression) argument);
-        }
+        List<?> arguments = switch (expression) {
+            case MethodInvocation call -> call.arguments();
+            case ClassInstanceCreation creation -> creation.arguments();
+            default -> List.of();
+        };
+        for (Object argument : arguments) within((Expression) argument, out);
     }
 
     // ---- types -------------------------------------------------------------------------------------------

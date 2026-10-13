@@ -1,11 +1,11 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
-import org.eclipse.jdt.core.dom.Expression;
 
 /**
  * A dropdown editor for any enum-typed argument (including SDK enums like {@code Direction}). Picking a
@@ -52,7 +52,7 @@ public final class EnumPicker {
             String constant = combo.getValue();
             if (constant == null) return;
             context.getCodeEditor().replaceWithEnumConstant(
-                    arg.node(), enumType.simpleName(), constant);
+                    arg.node(), EnumManipulationHandler.referableName(enumType), constant);
         });
         return combo;
     }

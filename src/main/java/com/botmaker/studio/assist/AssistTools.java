@@ -95,6 +95,14 @@ public final class AssistTools {
         return outcome("addMethod(" + name + ")", current().addMethod(className, name, returns, params));
     }
 
+    public synchronized String editVariable(String blockId, String name, String type) {
+        return outcome("editVariable(" + blockId + ")", current().editVariable(blockId, name, type));
+    }
+
+    public synchronized String addArgument(String callId) {
+        return outcome("addArgument(" + callId + ")", current().addArgument(callId));
+    }
+
     public synchronized String moveBlock(String blockId, String bodyId, int index) {
         return outcome("moveBlock(" + blockId + " to " + index + ")", current().moveBlock(blockId, bodyId, index));
     }

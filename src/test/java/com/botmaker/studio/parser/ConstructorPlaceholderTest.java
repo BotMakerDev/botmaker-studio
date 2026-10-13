@@ -41,12 +41,20 @@ class ConstructorPlaceholderTest {
     /**
      * A constructor whose parameters aren't literals is left alone, because this factory can add no imports:
      * filling {@code new Holder(Template)} would trade "no such constructor" for "cannot find symbol Template".
-     * The bare {@code new T()} that comes back is the old behaviour — still uncompilable for this type, but no
-     * worse, and honest about what we can see.
+     * Until 2026-10-13 a bare {@code new Holder()} came back, which never compiles (the SDK's
+     * {@code ImageTemplateGroup}, {@code Combo}, {@code KeySequence}, {@code OcrOptions} — every palette call
+     * taking one was refused); {@code null} does, and a call seeds it cast, naming its overload.
      */
     @Test
     void aConstructorNeedingAnImportedArgumentIsNotGuessedAt() {
-        assertEquals("new Holder()", seed("Holder"));
+        assertEquals("null", seed("Holder"));
+    }
+
+    /** {@code ActivitySwitch.active(Class)} was seeded {@code new Class()}: the slot's editor picks the class. */
+    @Test
+    void aClassIsSeededNull() {
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        assertEquals("null", seedOf(ast, "java.lang.Class", analyzer()));
     }
 
     /**
