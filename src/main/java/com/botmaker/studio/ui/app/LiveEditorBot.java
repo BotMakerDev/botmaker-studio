@@ -7,10 +7,13 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.services.BotSources;
 import javafx.application.Platform;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,9 +69,12 @@ final class LiveEditorBot implements LiveBot {
         });
     }
 
+    /** What committing a turn on FX came to: the answer, and the editor's sources to save when it was applied. */
+    private record Committed(String answer, ProjectState.Snapshot saved) {}
+
     @Override
     public String commit(AssistTurn turn, String label) {
-        return onFx(() -> {
+        Committed committed = onFx(() -> {
             ProjectFile active = ctx.state().getActiveFile();
             boolean opened = active == null || !active.getPath().equals(turn.file());
             // What the turn must have started from: the open file's text, or — for a file opened now — its text
@@ -78,16 +84,28 @@ final class LiveEditorBot implements LiveBot {
             if (opened) ctx.codeEditorService().switchToFile(turn.file());
             active = ctx.state().getActiveFile();
             if (active == null || !active.getPath().equals(turn.file())) {
-                return "Not applied: Studio could not open " + turn.file().getFileName() + ".";
+                return new Committed("Not applied: Studio could not open " + turn.file().getFileName() + ".", null);
             }
             Optional<CoreApplicationEvents.CodeUpdatedEvent> event = turn.commit(live, label);
-            if (event.isEmpty()) return "Not applied: the file changed in Studio meanwhile. Read the tree again.";
+            if (event.isEmpty()) {
+                return new Committed("Not applied: the file changed in Studio meanwhile. Read the tree again.", null);
+            }
             ctx.eventBus().publish(event.get());
             ctx.eventBus().publish(new CoreApplicationEvents.StatusMessageEvent("An MCP client changed "
                     + turn.file().getFileName() + "."));
-            return "Applied to " + turn.file().getFileName() + (opened ? ", now open" : "")
-                    + " in Studio; Undo takes it back.";
+            return new Committed("Applied to " + turn.file().getFileName() + (opened ? ", now open" : "")
+                    + " in Studio", ctx.state().snapshot());
         });
+        if (committed.saved() == null) return committed.answer();
+        // On disk at once, not at the next run: Studio closed in between lost every edit a client was told was
+        // applied (2026-10-13). Off FX, as Checkpoints asks.
+        try {
+            Checkpoints.flush(committed.saved());
+        } catch (IOException | RuntimeException e) {
+            // Still an answer, not an error: the edit was applied, and a client told it failed would make it again.
+            return committed.answer() + ", but not saved to disk (" + e.getMessage() + "); Undo takes it back.";
+        }
+        return committed.answer() + " and saved; Undo takes it back.";
     }
 
     @Override

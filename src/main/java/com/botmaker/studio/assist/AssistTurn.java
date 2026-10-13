@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * One assistant turn over one file: the tools a model calls, each run as a transaction against a private working
@@ -436,9 +437,10 @@ public final class AssistTurn {
                     : "This file declares no class " + className + ".");
         }
         FunctionDraft draft;
+        Supplier<List<String>> botTypes = () -> SignatureNames.botTypes(workspace.config(), stage.state);
         try {
-            draft = new FunctionDraft(name == null ? "" : name.strip(), SignatureNames.type(returns, true),
-                    SignatureNames.parameters(params == null ? List.of() : params, List.of()));
+            draft = new FunctionDraft(name == null ? "" : name.strip(), SignatureNames.type(returns, true, botTypes),
+                    SignatureNames.parameters(params == null ? List.of() : params, List.of(), botTypes));
         } catch (IllegalArgumentException e) {
             return Outcome.Refused.because(e.getMessage());
         }
@@ -504,10 +506,12 @@ public final class AssistTurn {
         if (current.isEmpty()) return Outcome.Refused.because(method + "'s signature is not one Studio can edit.");
         List<String> names = current.get().parameters().stream().map(FunctionDraft.Parameter::name).toList();
         FunctionDraft draft;
+        Supplier<List<String>> botTypes = () -> SignatureNames.botTypes(workspace.config(), stage.state);
         try {
             draft = new FunctionDraft(name == null || name.isBlank() ? current.get().name() : name.strip(),
-                    returns == null || returns.isBlank() ? current.get().returnType() : SignatureNames.type(returns, true),
-                    params == null ? current.get().parameters() : SignatureNames.parameters(params, names));
+                    returns == null || returns.isBlank() ? current.get().returnType()
+                            : SignatureNames.type(returns, true, botTypes),
+                    params == null ? current.get().parameters() : SignatureNames.parameters(params, names, botTypes));
         } catch (IllegalArgumentException e) {
             return Outcome.Refused.because(e.getMessage());
         }

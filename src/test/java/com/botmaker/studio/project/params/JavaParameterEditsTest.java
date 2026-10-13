@@ -156,7 +156,9 @@ class JavaParameterEditsTest {
         String edited = JavaParameterEdits.retype(SOURCE, TestValues.GRAMMAR, "Parameters", "maxAttempts",
                 new ValueTypes.BotClass("com.example.bot.Point", List.of()));
 
-        assertTrue(edited.contains("public static com.example.bot.Point maxAttempts;"), edited);
+        // The bot's own class by its simple name; the same package needs no import (2026-10-13).
+        assertTrue(edited.contains("public static Point maxAttempts;"), edited);
+        assertFalse(edited.contains("import com.example.bot.Point;"), edited);
     }
 
     /**

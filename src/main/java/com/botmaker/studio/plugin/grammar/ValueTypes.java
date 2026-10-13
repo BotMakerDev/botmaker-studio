@@ -223,7 +223,7 @@ public final class ValueTypes {
             case Class<?> cls -> Optional.of(ast.newSimpleType(name(ast, cls, imports)));
             case Parameterized parameterized -> generic(ast,
                     ast.newSimpleType(name(ast, parameterized.raw(), imports)), parameterized.arguments(), imports);
-            case BotClass bot -> generic(ast, ast.newSimpleType(ast.newName(bot.qualifiedName())),
+            case BotClass bot -> generic(ast, ast.newSimpleType(botName(ast, bot.qualifiedName(), imports)),
                     bot.arguments(), imports);
             // A plugin's parameter is declared by its method's return type, which the JDK reads as its own
             // generic types — the SDK's skip is Set<Class<? extends Outcome>> (2026-10-12).
@@ -270,6 +270,22 @@ public final class ValueTypes {
         String importName = JavaNames.importName(cls);
         if (!importName.isEmpty()) imports.add(importName);
         return ast.newName(JavaNames.simple(cls));
+    }
+
+    /**
+     * A class the bot declares, by its outermost type and an import of that: {@code Activities.Research} for
+     * {@code com.bot.plugins.sdk.Activities.Research}. The package ends before the first capitalised name, as the
+     * bot's packages are lowercase; a name with no such split is written as it is (2026-10-13).
+     */
+    static Name botName(AST ast, String canonical, Set<String> imports) {
+        String[] parts = canonical.split("\\.");
+        int outer = 0;
+        while (outer < parts.length && (parts[outer].isEmpty() || !Character.isUpperCase(parts[outer].charAt(0)))) {
+            outer++;
+        }
+        if (outer == 0 || outer == parts.length) return ast.newName(canonical);
+        imports.add(String.join(".", Arrays.copyOfRange(parts, 0, outer + 1)));
+        return ast.newName(String.join(".", Arrays.copyOfRange(parts, outer, parts.length)));
     }
 
     /** The class a file declaring a field of {@code type} imports for each class in it, first reached first. */

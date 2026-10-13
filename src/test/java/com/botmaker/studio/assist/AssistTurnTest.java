@@ -392,6 +392,31 @@ public class AssistTurnTest {
                 List.of(Map.of("name", "seconds", "type", "int"))), "the same signature twice");
     }
 
+    /** An activity's body returns its own enum, which no plugin declares (2026-10-13). */
+    @Test
+    void aMethodReturnsATypeTheBotDeclares() {
+        AssistTurn turn = turn("""
+                package com.bot.flow;
+
+                public class Subject {
+                    public enum Outcomes { NEXT, DONE }
+
+                    void run() {
+                    }
+                }
+                """);
+        Outcome added = turn.addMethod("", "body", "Subject.Outcomes", List.of());
+
+        assertInstanceOf(Outcome.Accepted.class, added, added.toString());
+        assertTrue(turn.source().contains("Subject.Outcomes body()"), turn.source());
+        assertFalse(turn.source().contains("com.bot.flow.Subject.Outcomes"), "written as the file names it");
+
+        Outcome changed = turn.editSignature("body", null, "void", null);
+        assertInstanceOf(Outcome.Accepted.class, changed, changed.toString());
+        Outcome back = turn.editSignature("body", null, "Outcomes", null);
+        assertInstanceOf(Outcome.Accepted.class, back, "a member type by its own name too: " + back);
+    }
+
     @Test
     void aStatementMovesWithinItsFile() {
         AssistTurn turn = turn(SOURCE);
