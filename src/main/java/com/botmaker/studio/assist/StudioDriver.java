@@ -179,6 +179,14 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio cannot move a plugin here.");
     }
 
+    /**
+     * What the bot has to migrate: the values of each type a plugin retired, with its replacement and how many are
+     * copied, and the bot's {@code @Migrate} methods, those nothing needs any more marked.
+     */
+    default String listMigrations() {
+        throw new IllegalArgumentException("Studio cannot read migrations here.");
+    }
+
     /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
     default String listParams() {
         throw new IllegalArgumentException("Studio reads no parameters here.");

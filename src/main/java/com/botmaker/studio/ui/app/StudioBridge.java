@@ -64,7 +64,10 @@ import com.botmaker.studio.services.upgrade.ProjectUpgrade;
 import com.botmaker.studio.services.upgrade.FixList;
 import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.plugin.ReleasedPlugins;
+import com.botmaker.studio.project.managed.ManagedMigrations;
+import com.botmaker.studio.project.managed.MigrationCleanup;
 import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.managed.MigrationSummary;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -790,6 +793,23 @@ final class StudioBridge implements StudioDriver {
     /** The assistant's last plugin move, in flight or ended; null before the first. */
     private final AtomicReference<PluginMove> move = new AtomicReference<>();
 
+    /** The Review tab's retired rows and the migration window's methods, as {@link MigrationSummary} says them. */
+    @Override
+    public String listMigrations() {
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index = prepared.get();
+        ValueGrammar grammar = PluginHost.grammar();
+        try {
+            List<ManagedMigrations.Method> methods = ManagedMigrations.methods(index, grammar);
+            return MigrationSummary.listing(MigrationSteps.pending(index, grammar, PluginHost.managedValues()),
+                    methods, methods.isEmpty() ? List.of() : MigrationCleanup.unneeded(index, grammar));
+        } catch (RuntimeException | LinkageError e) {
+            // As the Review tab: a plugin type that cannot load leaves the migrations unread, not Studio broken.
+            throw new IllegalArgumentException("The bot's migrations could not be read: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
     @Override
     public String pluginMoving() {
         PluginMove now = move.get();
@@ -814,9 +834,7 @@ final class StudioBridge implements StudioDriver {
         }
         lines.addAll(report.values());
         for (MigrationSteps.Stranded set : report.stranded()) {
-            lines.add(set.values() + " value(s) of " + set.type().getSimpleName() + " are ones " + to + " no longer "
-                    + "declares: they are removed or reset. To keep them, the user migrates them first in Plugins "
-                    + "& Libraries.");
+            lines.add(MigrationSummary.stranded(set, plugin.displayName() + " " + to));
         }
         if (!report.leftForYou().isEmpty()) {
             lines.add("Left as written and marked, for the user to change: " + String.join(", ", report.leftForYou()
