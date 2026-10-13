@@ -3,8 +3,10 @@ package com.botmaker.studio.ui.app.run;
 import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.run.RunOverlayPart;
+import com.botmaker.shared.capture.GenericWindow;
 import com.botmaker.shared.capture.NativeController;
 import com.botmaker.shared.capture.NativeControllerFactory;
+import com.botmaker.shared.platform.Os;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.HostServices;
@@ -157,6 +159,10 @@ public final class DesktopLayer {
         stage.setY(space.y());
         stage.setWidth(1);
         stage.setHeight(1);
+        NativeController controller = NativeControllerFactory.get();
+        // X11 only: there the layer took the focus. Windows' focusWindow restores a maximised window and the Mac's
+        // foreground is the top of the z-order (the layer itself), so a hand-back there would do harm.
+        GenericWindow before = Os.current().isLinux() ? controller.getForegroundWindow() : null;
         stage.show();
 
         // Emptied rather than hidden: hiding unmaps the window, and shown again it would catch clicks until the
@@ -166,7 +172,6 @@ public final class DesktopLayer {
             @Override public void onHidden() { root.setVisible(true); }
         });
 
-        NativeController controller = NativeControllerFactory.get();
         int[] ticks = {0};
         int[] madeInARow = {0};
         boolean[] through = {false};
@@ -175,6 +180,7 @@ public final class DesktopLayer {
             // The first promotion remaps the window, and the window manager frames it again later, unshaped: so
             // promote alone on the first tick, and grow only after two passes that both came after the remap.
             if (ticks[0] % 3 == 1) controller.promoteOverlayAboveFullscreen(TITLE);
+            if (!through[0] && before != null) handFocusBack(controller, before);
             if (ticks[0] == 1) return;
             boolean made = controller.makeInputTransparent(TITLE);
             madeInARow[0] = made ? madeInARow[0] + 1 : 0;
@@ -188,6 +194,18 @@ public final class DesktopLayer {
         }));
         keeper.setCycleCount(Animation.INDEFINITE);
         keeper.play();
+    }
+
+    /**
+     * Gives the focus back to {@code before}, the window that had it when the layer was shown, while the layer
+     * holds it or no window does. Showing the layer takes the focus, and the first promotion's remap then drops it
+     * to no window at all, so the game, or the window the user was typing in, lost it at every run (2026-10-13).
+     * Asked on each tick until the layer lets clicks through, which covers the show and the remap.
+     */
+    static void handFocusBack(NativeController controller, GenericWindow before) {
+        if (before == null || TITLE.equals(before.getTitle())) return;
+        GenericWindow now = controller.getForegroundWindow();
+        if (now == null || TITLE.equals(now.getTitle())) controller.focusWindow(before);
     }
 
     /** The screens as {@link DesktopSpace} reads them, the primary first. */

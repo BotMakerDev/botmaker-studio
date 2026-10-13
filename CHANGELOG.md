@@ -67,6 +67,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Starting a run no longer takes the focus away (Linux, X11).** The run layer over the desktop took the focus when it was
+  shown, and its first remap dropped it to no window at all, so the game (or the window you were typing in) lost
+  it. While the layer is not yet click-through, focus goes back to the window that had it
+  (`DesktopLayer.handFocusBack`).
 - **A `for` loop reads as written.** `for (int attempt = 0; attempt < 5; attempt++)` was drawn "while Off each
   time 0": a value editor claimed the condition and the step by their type and showed a default. A slot holding
   a computation (`attempt < 5`, `attempt++`, `!found`, a local's name) is now drawn as its own block.
