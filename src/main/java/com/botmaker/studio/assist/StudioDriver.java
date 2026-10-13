@@ -187,6 +187,15 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio cannot read migrations here.");
     }
 
+    /**
+     * How the values of the type named {@code from} become the type named {@code to} (blank: its replacement, else
+     * the first that fits), as the migration window shows the pair: each part's or constant's pick, saved or first
+     * guessed, what else it can be, the pairs it goes through and why it cannot be written yet.
+     */
+    default String readMigration(String from, String to) {
+        throw new IllegalArgumentException("Studio cannot read migrations here.");
+    }
+
     /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
     default String listParams() {
         throw new IllegalArgumentException("Studio reads no parameters here.");

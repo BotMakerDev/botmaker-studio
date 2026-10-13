@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.assist.PluginMove;
@@ -91,9 +92,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -806,6 +809,40 @@ final class StudioBridge implements StudioDriver {
         } catch (RuntimeException | LinkageError e) {
             // As the Review tab: a plugin type that cannot load leaves the migrations unread, not Studio broken.
             throw new IllegalArgumentException("The bot's migrations could not be read: "
+                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
+    /** One pair's steps, as the migration window seeds them, by {@link MigrationSummary#mapping}. */
+    @Override
+    public String readMigration(String from, String to) {
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        try {
+            BotIndex index = prepared.get();
+            ValueGrammar grammar = PluginHost.grammar();
+            List<ManagedValue<?>> declared = PluginHost.managedValues();
+            // A simple name resolves among the types the bot's sets hold and what replaces them; a nested pair's
+            // part types by their full names, as read_migration says them.
+            Set<Class<?>> known = new LinkedHashSet<>();
+            for (ManagedValue<?> set : declared) {
+                if (set == null || set.type() == null) continue;
+                known.add(set.type());
+                Class<?> replacement = MigrationSteps.replacementOf(grammar, set.type());
+                if (replacement != null) known.add(replacement);
+            }
+            Class<?> source = MigrationSummary.named(from, PluginHost.classLoader(), known)
+                    .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + from
+                            + "\"; give its full name, as list_migrations names the retired ones and "
+                            + "read_migration the pairs they go through."));
+            Class<?> target = to == null || to.isBlank() ? null
+                    : MigrationSummary.named(to, PluginHost.classLoader(), known)
+                    .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + to
+                            + "\"; give its full name."));
+            return MigrationSummary.mapping(grammar, declared, ManagedMigrations.methods(index, grammar), source,
+                    target);
+        } catch (RuntimeException | LinkageError e) {
+            if (e instanceof IllegalArgumentException refused) throw refused;
+            throw new IllegalArgumentException("The migration could not be read: "
                     + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
     }

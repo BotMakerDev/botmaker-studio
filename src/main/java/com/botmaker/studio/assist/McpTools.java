@@ -68,7 +68,8 @@ public final class McpTools {
             - list_params and set_param_default are the values the bot's user sets; list_plugins,
               search_plugins, add_plugin, set_plugin_version and remove_plugin what it is built from.
               set_setting dev_mode on, then set_plugin_version to the local build, tries a fix before its release.
-              list_migrations says which values a plugin retired, to migrate before a move drops them.
+              list_migrations says which values a plugin retired, to migrate before a move drops them;
+              read_migration how one type's values become another's.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -583,6 +584,16 @@ public final class McpTools {
                                 + "set_plugin_version to a version that drops a set, migrate its values on the "
                                 + "version the bot has now.",
                         List.of(), args -> driver.listMigrations()),
+                act(json, "read_migration",
+                        "Read how one type's values are copied into another: each part of the new type and what it "
+                                + "is made of (from an old part, built from one, or a fixed value), or each old "
+                                + "constant and the new one it becomes — as the bot's @Migrate method has it, else "
+                                + "a first guess — with what else each can be, the pairs of part types it goes "
+                                + "through and why it cannot be written yet.",
+                        List.of(Prop.text("from", "the old type, as list_migrations names it"),
+                                Prop.optionalText("to", "the new type; empty for the one its plugin names, else "
+                                        + "the first that fits")),
+                        args -> driver.readMigration(text(args, "from"), text(args, "to"))),
                 act(json, "list_params",
                         "List the bot's parameters — its @Param fields, the values its user can set — with each "
                                 + "one's type and value.",

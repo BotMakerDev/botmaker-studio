@@ -21,7 +21,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `list_plugins` says where the move is; until it ends, the tools that write the bot refuse.
 - **An assistant can see what the bot has to migrate.** `list_migrations` lists the values of each type a plugin
   retired, with its replacement and how many are copied, and the bot's `@Migrate` methods. A move's preview names
-  each set the new version drops and whether its values can be migrated first.
+  each set the new version drops and whether its values can be migrated first. `read_migration` shows one pair as
+  the migration window seeds it: each part of the new type and what it is made of (or each old constant and what it
+  becomes), as the bot's `@Migrate` method has it or first guessed, what else each can be, the pairs it goes
+  through and why it cannot be written yet.
 - **`list_plugins` gives a template's SDK version**, not the pom property (`${botmaker.sdk.version}`) that pins it.
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.

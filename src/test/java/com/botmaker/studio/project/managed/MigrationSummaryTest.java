@@ -1,12 +1,20 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.project.managed.MigrationTypes.Area;
+import com.botmaker.studio.project.managed.MigrationTypes.Frame;
+import com.botmaker.studio.project.managed.MigrationTypes.OldArea;
+import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
+import com.botmaker.studio.project.managed.MigrationTypes.OldTint;
 import com.botmaker.studio.project.managed.MigrationTypes.Shot;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,9 +25,18 @@ class MigrationSummaryTest {
     private static final String OLD = "OldShot (com.botmaker.studio.project.managed.MigrationTypes.OldShot)";
     private static final String NEW = "Shot (com.botmaker.studio.project.managed.MigrationTypes.Shot)";
 
+    private static final ValueGrammar GRAMMAR = ValueGrammar.of(MigrationTypes.types(), List.of());
+
+    private static final List<ManagedValue<?>> DECLARED = List.of(
+            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in("OldShots").because("Old."),
+            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in("Shots").because("New."));
+
+    private static final List<ManagedMigrations.Param> PARAMS = List.of(new ManagedMigrations.Param("file",
+            String.class), new ManagedMigrations.Param("threshold", int.class));
+
     private static ManagedMigrations.Method method(String name, String problem) {
         return new ManagedMigrations.Method(Path.of("Migrations.java"), "Migrations", name, OldShot.class, Shot.class,
-                List.of(), "new Shot(old.file(), old.threshold(), false)", Map.of(), problem);
+                PARAMS, "new MigrationTypes.Shot(file, threshold, true)", Map.of(), problem);
     }
 
     @Test
@@ -50,6 +67,61 @@ class MigrationSummaryTest {
                 "SDK 2.0.0");
         assertTrue(lost.startsWith("1 value of the set SHOTS not copied yet: "), lost);
         assertTrue(lost.endsWith("They cannot be migrated; the version saved before the move keeps them."), lost);
+    }
+
+    @Test
+    void aTypeNamedBackResolvesByFullOrUniqueSimpleName() {
+        ClassLoader loader = getClass().getClassLoader();
+        assertEquals(Optional.of(OldShot.class), MigrationSummary.named(OLD, loader, List.of()));
+        assertEquals(Optional.of(OldShot.class), MigrationSummary.named(OldShot.class.getCanonicalName(), loader,
+                List.of()));
+        assertEquals(Optional.of(Shot.class), MigrationSummary.named(" Shot ", loader, List.of(OldShot.class,
+                Shot.class)));
+        assertEquals(Optional.empty(), MigrationSummary.named("Shot", loader, List.of()));
+        assertEquals(Optional.empty(), MigrationSummary.named("com.bot.Nothing", loader, List.of()));
+    }
+
+    @Test
+    void aPairIsReadAsTheWindowSeedsIt() {
+        String text = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldShot.class, null);
+        List<String> lines = text.lines().toList();
+        assertEquals(OLD + " → " + NEW + ", the replacement its plugin names.", lines.getFirst());
+        assertTrue(lines.contains("- file (String): from file — or: fixed <String>"), text);
+        assertTrue(lines.contains("- grey (boolean): fixed false — or: fixed <boolean>"), text);
+        assertTrue(lines.contains("Not in the bot yet: the mapping above is a first guess."), text);
+        assertEquals("Ready to write.", lines.getLast());
+
+        String area = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldShot.class, Area.class);
+        assertTrue(area.contains("The migration window does not offer Area for OldShot's values."), area);
+    }
+
+    @Test
+    void aSavedMethodSeedsThePairAndOneByHandIsSaidSo() {
+        String saved = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(method("shot", null)), OldShot.class,
+                Shot.class);
+        assertTrue(saved.contains("- grey (boolean): fixed true — or: fixed <boolean>"), saved);
+        assertTrue(saved.contains("Saved in the bot as Migrations.shot."), saved);
+
+        ManagedMigrations.Method byHand = new ManagedMigrations.Method(Path.of("Migrations.java"), "Migrations",
+                "shot", OldShot.class, Shot.class, PARAMS, "Shots.make(file)", Map.of(), null);
+        String hand = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(byHand), OldShot.class, Shot.class);
+        assertTrue(hand.contains("Migrations.shot maps them, written by hand, so it is not shown; writing this "
+                + "mapping replaces it."), hand);
+        assertTrue(hand.contains("- grey (boolean): fixed false"), hand);
+    }
+
+    @Test
+    void aPairNamesThePairsItGoesThroughAndEnumsTheirArms() {
+        String frame = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldFrame.class, Frame.class);
+        assertTrue(frame.contains("It goes through " + MigrationSummary.type(OldArea.class) + " → "
+                + MigrationSummary.type(Area.class) + ", each a mapping of its own (read_migration)."), frame);
+
+        String tint = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, null);
+        assertTrue(tint.contains("each can become CRIMSON, NAVY:\n- RED → CRIMSON\n- BLUE → NAVY"), tint);
+
+        String refused = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, Shot.class);
+        assertTrue(refused.endsWith("It cannot be mapped: An enum migrates only to another enum: each of its "
+                + "constants is paired with one of the new type's."), refused);
     }
 
     @Test
