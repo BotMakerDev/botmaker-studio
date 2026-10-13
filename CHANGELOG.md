@@ -43,6 +43,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The assistant is told to look in text.** The MCP server's instructions name the SDK's `describe`, `click`, `key`
   and `scroll`: find a step by acting and reading what changed, and take a screenshot only to cut a picture or
   when text cannot answer, a part at a low scale.
+- **A game frame reaches the assistant as a JPEG.** A plugin tool's large opaque image goes out over MCP as a
+  JPEG when that is smaller than its PNG; an image under 32 KB (most pictures and crops) stays an exact PNG.
 
 ### Fixed
 

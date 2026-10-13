@@ -65,7 +65,8 @@ public final class McpTools {
 
             Spend few calls and few images: look with the text answers (describe, which screen, where a picture
             matches, what an action changed); take a screenshot only to cut a picture or when text cannot
-            answer, and then a part of the screen at a low scale. One apply_edits beats several edits.
+            answer, and then a part of the screen at a low scale. A find's places are in its text; ask it to
+            show its boxes only to check one by eye. One apply_edits beats several edits.
 
             - Every file tool takes `file`; leave it empty for the open file. An edit that adds, removes or
               moves statements answers with the reshaped methods' ids as they are now; use those.
@@ -814,14 +815,17 @@ public final class McpTools {
         return out;
     }
 
-    /** A plugin's reply as MCP content: its text and its PNGs, in order. */
+    /** A plugin's reply as MCP content: its text and its images, in order, a large frame as a JPEG. */
     static CallToolResult reply(AgentReply reply) {
         CallToolResult.Builder out = CallToolResult.builder().isError(reply.isRefused());
         for (AgentReply.Part part : reply.parts()) {
             switch (part.kind()) {
                 case TEXT -> out.addTextContent(part.text());
-                case IMAGE -> out.addContent(new McpSchema.ImageContent(null,
-                        Base64.getEncoder().encodeToString(part.png()), "image/png"));
+                case IMAGE -> {
+                    McpImage image = McpImage.of(part.png());
+                    out.addContent(new McpSchema.ImageContent(null,
+                            Base64.getEncoder().encodeToString(image.bytes()), image.mimeType()));
+                }
             }
         }
         return out.build();
