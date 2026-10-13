@@ -513,6 +513,11 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
+    public Optional<Path> projectDir() {
+        return Optional.ofNullable(ctx.config()).map(c -> c.projectPath());
+    }
+
+    @Override
     public String checkpoint(String label) {
         String name = label == null ? "" : label.strip();
         if (name.isEmpty()) throw new IllegalArgumentException("A version needs a label: what it is.");

@@ -12,6 +12,7 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.Tool;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -58,6 +59,9 @@ public final class McpTools {
                run_state whether it still runs; stop ends it. A wait that timed out may name a frame it
                saved: look at that with the plugin's tools rather than taking a new screenshot.
             6. Fix what the trace shows, and go round again.
+            7. Note. What you learn about the game on the way — how to reach a screen, a hotkey, what Escape
+               does, how long a screen takes, a trap — write_notes keeps in the bot, so the next session does
+               not explore it again. Start from the notes at the end of these instructions, when there are some.
 
             Spend few calls and few images: look with the text answers (describe, which screen, where a picture
             matches, what an action changed); take a screenshot only to cut a picture or when text cannot
@@ -84,10 +88,13 @@ public final class McpTools {
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
-    /** {@link #INSTRUCTIONS}, then each plugin's guide under its name. */
-    static String instructions(List<StudioDriver.PluginGuide> guides) {
-        return guides.isEmpty() ? INSTRUCTIONS
+    /** {@link #INSTRUCTIONS}, then each plugin's guide under its name, then the bot's notes on its game. */
+    static String instructions(List<StudioDriver.PluginGuide> guides, String notes) {
+        String out = guides.isEmpty() ? INSTRUCTIONS
                 : INSTRUCTIONS + "\nThe plugins' guides as they were at connect:\n\n" + guides(guides);
+        return notes.isBlank() ? out
+                : out + "\nThe bot's notes on its game (" + GameNotes.FILE + ") as they were at connect:\n\n" + notes
+                        + "\n";
     }
 
     /** Each guide under its plugin's name, or a sentence saying there is none. */
@@ -585,6 +592,20 @@ public final class McpTools {
                         "Read how the bot's plugins lay a bot out, each in its own words: where each kind of work "
                                 + "goes and how to name it, as the bound plugins say it now: read it again after a plugin changes.",
                         List.of(), args -> guides(driver.pluginGuides())),
+                act(json, "read_notes",
+                        "Read the bot's notes on its game (" + GameNotes.FILE + "): what earlier sessions learnt "
+                                + "exploring it. The instructions carry them as they were at connect.",
+                        List.of(Prop.optionalText("section", "one section's heading: Hotkeys; empty for all")),
+                        args -> GameNotes.read(project(driver), text(args, "section"))),
+                act(json, "write_notes",
+                        "Save what you learnt about the game in the bot's notes (" + GameNotes.FILE + "), one "
+                                + "section at a time, so the next session starts from it: how to reach a screen, a "
+                                + "hotkey, what Escape does, how long a screen takes to draw, a trap. Short lines, "
+                                + "one fact each. The section's whole text is replaced: read_notes it first to "
+                                + "keep what holds.",
+                        List.of(Prop.text("section", "the section's heading, one line: Hotkeys"),
+                                Prop.text("text", "its whole new text, Markdown; empty removes the section")),
+                        args -> GameNotes.write(project(driver), text(args, "section"), text(args, "text"))),
                 act(json, "search_plugins", "Search the plugin registry, by a word of a plugin's name, id, "
                                 + "description or tags.",
                         List.of(Prop.optionalText("query", "the word; empty for every plugin")),
@@ -847,6 +868,10 @@ public final class McpTools {
 
     private static Map<String, Object> arguments(CallToolRequest request) {
         return request.arguments() == null ? Map.of() : request.arguments();
+    }
+
+    private static Path project(StudioDriver driver) {
+        return driver.projectDir().orElseThrow(() -> new IllegalArgumentException(NO_PROJECT));
     }
 
     private static CallToolResult result(String text, boolean error) {

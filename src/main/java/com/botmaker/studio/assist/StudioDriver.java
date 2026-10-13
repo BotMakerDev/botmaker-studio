@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +35,11 @@ public interface StudioDriver {
 
     /** How a bot built on a plugin is laid out, in the plugin's own words ({@code StudioPlugin.assistantGuide}). */
     record PluginGuide(String pluginName, String text) {}
+
+    /** The open project's folder, where {@link GameNotes} keeps the bot's notes; empty with none open. */
+    default Optional<Path> projectDir() {
+        return Optional.empty();
+    }
 
     /** The bound plugins' guides that say something, in plugin order. */
     default List<PluginGuide> pluginGuides() {

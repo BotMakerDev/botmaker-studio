@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The assistant keeps what it learns about the game.** `write_notes` saves it in the bot's `GAME.md`, one
+  section at a time (how to reach a screen, a hotkey, what Escape does, how slow a screen is), `read_notes` reads
+  it, and the MCP instructions carry it at connect, so the next session starts from it instead of exploring
+  again. The file is plain Markdown in the bot, versioned and published with it.
 - **The assistant is told how each plugin lays a bot out.** A plugin's guide (`StudioPlugin.assistantGuide()`)
   is added to the MCP instructions under the plugin's name, and the new `plugin_guide` tool reads it again after
   a plugin changes.

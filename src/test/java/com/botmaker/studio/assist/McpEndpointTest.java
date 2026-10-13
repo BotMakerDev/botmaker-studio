@@ -300,7 +300,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
+                "list_plugins", "plugin_guide", "read_notes", "write_notes", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
                 "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "
@@ -323,7 +323,11 @@ class McpEndpointTest {
         assertTrue(text(call("plugin_guide", "{}")).endsWith("How a bot on More is laid out:\nTwo.\n"),
                 "plugin_guide reads the plugins bound now, not the connect's");
         assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
-        assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
+        assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of(), ""), "no guide, nothing added");
+        assertTrue(McpTools.instructions(List.of(), "# The game\n\n## Hotkeys\n\nQ opens Quests.")
+                .endsWith("(GAME.md) as they were at connect:\n\n# The game\n\n## Hotkeys\n\nQ opens Quests.\n"));
+        assertTrue(text(call("read_notes", "{}")).startsWith("REFUSED: No project is open"),
+                "notes need a project to live in");
     }
 
     @Test
