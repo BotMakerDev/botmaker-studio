@@ -8,6 +8,7 @@ import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.assist.LiveBot;
+import com.botmaker.studio.assist.PluginMove;
 import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.assist.StudioDriver;
 import com.botmaker.studio.assist.SymbolNames;
@@ -591,11 +592,18 @@ final class StudioBridge implements StudioDriver {
     public String listPlugins() {
         List<InstalledPlugin> declared = installed(registryEntries());
         List<String> lines = new ArrayList<>();
+        PluginMove last = move.get();
+        if (last != null) lines.add(last.line());
         if (declared.isEmpty()) lines.add("The bot's pom declares no plugin.");
+        Path dir = ctx.config().projectPath();
         for (InstalledPlugin plugin : declared) {
-            lines.add(plugin.displayName() + "  " + plugin.coordinate() + "  " + plugin.installed()
+            // A template pins its SDK through a property: the version is the property's value, not ${…}.
+            String version = MavenService.readDependencyVersion(dir, plugin.artifact().groupId(),
+                    plugin.artifact().artifactId()).orElse(plugin.installed());
+            lines.add(plugin.displayName() + "  " + plugin.coordinate() + "  " + version
                     + (plugin.source() == InstalledPlugin.Source.UNLISTED ? "  (not in the registry)"
-                    : plugin.canChange() ? "  (the registry checked " + plugin.available() + ")" : ""));
+                    : !plugin.available().isBlank() && !plugin.available().equals(version)
+                    ? "  (the registry checked " + plugin.available() + ")" : ""));
         }
         List<StudioPlugin> bound = PluginHost.plugins();
         lines.add(bound.isEmpty() ? "No plugin is loaded." : "Loaded: "
@@ -679,10 +687,11 @@ final class StudioBridge implements StudioDriver {
     /**
      * The Installed tab's version menu and its button, as one call (2026-10-13): the same pass, every fix the
      * plugin suggests taken as the tab's fix sheet would preselect it, and the user asked on screen first, as
-     * for adding a plugin — another version is other code running with Studio's permissions.
+     * for adding a plugin — another version is other code running with Studio's permissions. A confirmed call
+     * answers once the question is on screen ({@link PluginMove}): the answer and the pass outlast a client's call.
      */
     @Override
-    public String setPluginVersion(String id, String version, boolean confirm) {
+    public String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
         List<InstalledPlugin> declared = installed(registryEntries());
         InstalledPlugin plugin = declaredPlugin(declared, id);
         String name = plugin.displayName();
@@ -720,24 +729,71 @@ final class StudioBridge implements StudioDriver {
                 PLUGIN_WRITE_SECONDS, "read what moving " + name + " changes");
         String preview = movePreview(plugin, from, to, to.equals(local), report);
         if (!confirm) return preview + "\nset_plugin_version with confirm moves it.";
-        if (!userAgrees("Move a plugin?", "The assistant wants to move " + name + ".\n\n" + preview + "\n\nThe "
-                + "version moved to runs with Studio's own permissions.")) {
-            throw new IllegalArgumentException("The user did not agree to move " + name + ".");
+        PluginMove asked = PluginMove.asked(name, from, to);
+        PluginMove before = move.get();
+        if (before != null && before.busy() || !move.compareAndSet(before, asked)) {
+            throw new IllegalArgumentException("Another plugin move is under way; list_plugins says where it is.");
         }
-        // No picks: every place with a choice takes the plugin's own suggestion, and is marked for review.
-        ProjectUpgrade.Result result = waitFor(ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(upgrades, to)),
-                ctx.libraryService()::updateVersions), PLUGIN_WRITE_SECONDS, "move " + name);
-        onFx(() -> {
-            // A holder the repair of the values deleted: its buffer goes, and the editor moves off it.
-            ProjectFile active = ctx.state().getActiveFile();
-            result.deleted().forEach(ctx.state()::removeFile);
-            if (active != null && result.deleted().contains(active.getPath())) {
-                ctx.state().setActiveFile(ctx.config().entrySourceFile());
+        String question = "The assistant wants to move " + name + ".\n\n" + preview + "\n\nThe version moved to runs "
+                + "with Studio's own permissions.";
+        // Its own thread: the question waits up to ASK_MINUTES and the pass up to PLUGIN_WRITE_SECONDS.
+        try {
+            Thread.ofVirtual().name("plugin-move").start(() -> carryMove(asked, upgrades, question, moved));
+        } catch (RuntimeException | Error e) {
+            move.set(asked.declined("Studio could not start it."));
+            throw e;
+        }
+        return asked.started();
+    }
+
+    /** Asks {@code question} and, once the user agrees, moves the plugin; {@link #move} follows it to its end. */
+    private void carryMove(PluginMove asked, PluginUpgradeService upgrades, String question, Runnable moved) {
+        // The end is published last: until the plugins' tools are served anew, every tool still waits.
+        PluginMove ended = asked.failed("it stopped unexpectedly.");
+        boolean wrote = false;
+        try {
+            if (!userAgrees("Move a plugin?", question)) {
+                ended = asked.declined("the user did not agree.");
+                return;
             }
-            return null;
-        });
-        say("The assistant moved " + name + " from " + from + " to " + to + ".");
-        return result.summary();
+            move.set(asked.moving());
+            wrote = true;
+            // No picks: every place with a choice takes the plugin's own suggestion, and is marked for review.
+            ProjectUpgrade.Result result = waitFor(ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(upgrades,
+                    asked.to())), ctx.libraryService()::updateVersions), PLUGIN_WRITE_SECONDS, "move " + asked.plugin());
+            onFx(() -> {
+                // A holder the repair of the values deleted: its buffer goes, and the editor moves off it.
+                ProjectFile active = ctx.state().getActiveFile();
+                result.deleted().forEach(ctx.state()::removeFile);
+                if (active != null && result.deleted().contains(active.getPath())) {
+                    ctx.state().setActiveFile(ctx.config().entrySourceFile());
+                }
+                return null;
+            });
+            say("The assistant moved " + asked.plugin() + " from " + asked.from() + " to " + asked.to() + ".");
+            ended = asked.moved(result.summary());
+        } catch (RuntimeException e) {
+            String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            // userAgrees' unanswered question lands here too, before anything was written.
+            ended = wrote ? asked.failed(why) : asked.declined(why);
+        } finally {
+            // An Error passes the catch and ends it as stopped unexpectedly: every tool would wait for it otherwise.
+            try {
+                // A failed pass may have written the pom before it stopped: the tools are served anew either way.
+                if (wrote) moved.run();
+            } finally {
+                move.set(ended);
+            }
+        }
+    }
+
+    /** The assistant's last plugin move, in flight or ended; null before the first. */
+    private final AtomicReference<PluginMove> move = new AtomicReference<>();
+
+    @Override
+    public String pluginMoving() {
+        PluginMove now = move.get();
+        return now != null && now.busy() ? now.line() : "";
     }
 
     /** What moving {@code plugin} from {@code from} to {@code to} would change, as the question says it. */

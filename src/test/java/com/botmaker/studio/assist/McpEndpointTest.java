@@ -151,11 +151,23 @@ class McpEndpointTest {
             if (confirm) more = false;
             return confirm ? "removed" : "would remove";
         }
-        @Override public String setPluginVersion(String id, String version, boolean confirm) {
+        @Override public String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
             asked.add("move " + id + " " + version + " " + confirm);
-            // The version moved to brings the tool, so it shows only once the tools are served anew.
-            if (confirm) more = true;
-            return confirm ? "moved" : "would move";
+            if (!confirm) return "would move";
+            // The answer comes while the user is asked; the move ends later, in finishMove.
+            moving = "Moving " + id + ": the user is asked on screen.";
+            whenMoved = moved;
+            return "asked";
+        }
+        volatile String moving = "";
+        volatile Runnable whenMoved;
+        @Override public String pluginMoving() { return moving; }
+
+        /** The user agreed and the pass ended: the version moved to brings the tool. */
+        void finishMove() {
+            more = true;
+            moving = "";
+            whenMoved.run();
         }
         @Override public String setParamDefault(String param, String value) {
             asked.add("param " + param + "=" + value);
@@ -284,6 +296,8 @@ class McpEndpointTest {
                 "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_params", "set_param_default",
                 "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
+        assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "
+                + McpTools.WHILE_MOVING);
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
@@ -319,10 +333,22 @@ class McpEndpointTest {
         initialize();
         assertEquals("would move", text(call("set_plugin_version", "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\"}")));
         assertFalse(toolNames().contains("more_snap"), "a preview changes nothing");
-        assertEquals("moved", text(call("set_plugin_version",
+        assertEquals("asked", text(call("set_plugin_version",
                 "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\",\"confirm\":true}")));
+        assertFalse(toolNames().contains("more_snap"), "nothing moved while the user is asked");
+
+        JsonNode edit = call("checkpoint", "{\"label\":\"x\"}");
+        assertTrue(isError(edit) && text(edit).contains("Moving sdk: the user is asked on screen.")
+                && text(edit).contains("list_plugins"), "a tool that writes the bot waits for the move: " + edit);
+        JsonNode again = call("set_plugin_version", "{\"id\":\"sdk\",\"version\":\"1.4.4\",\"confirm\":true}");
+        assertTrue(isError(again), "one move at a time: " + again);
+        assertEquals("stopped", text(call("stop", "{}")), "a tool that touches neither answers");
+
+        driver.finishMove();
         assertTrue(toolNames().contains("more_snap"), "the moved plugin's tools are served without a restart");
-        assertEquals(List.of("move sdk 1.4.5-SNAPSHOT false", "move sdk 1.4.5-SNAPSHOT true"), driver.asked);
+        assertEquals("saved", text(call("checkpoint", "{\"label\":\"x\"}")));
+        assertEquals(List.of("move sdk 1.4.5-SNAPSHOT false", "move sdk 1.4.5-SNAPSHOT true", "checkpoint x"),
+                driver.asked);
     }
 
     @Test

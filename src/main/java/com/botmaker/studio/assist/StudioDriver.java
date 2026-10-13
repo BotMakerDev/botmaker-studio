@@ -138,6 +138,14 @@ public interface StudioDriver {
         return false;
     }
 
+    /**
+     * Where a {@link #setPluginVersion} move is while the user is asked or it runs, empty otherwise: the tools
+     * that touch the bot's files or its plugins wait for it.
+     */
+    default String pluginMoving() {
+        return "";
+    }
+
     /** The plugins the bot's pom declares, each with its version and whether it loaded. */
     default String listPlugins() {
         throw new IllegalArgumentException("Studio has no plugins here.");
@@ -162,10 +170,12 @@ public interface StudioDriver {
     }
 
     /**
-     * What moving the declared plugin {@code id} to {@code version} would change, or, when {@code confirm}, moves
-     * it once the user agrees on screen: a version first, the calls into it repaired, the pom written.
+     * What moving the declared plugin {@code id} to {@code version} would change, or, when {@code confirm}, asks
+     * the user on screen and answers at once; once they agree the move runs in the background — a version first,
+     * the calls into it repaired, the pom written — and {@code moved} runs when it ends, whether or not it wrote.
+     * {@link #listPlugins} says where it is.
      */
-    default String setPluginVersion(String id, String version, boolean confirm) {
+    default String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
         throw new IllegalArgumentException("Studio cannot move a plugin here.");
     }
 

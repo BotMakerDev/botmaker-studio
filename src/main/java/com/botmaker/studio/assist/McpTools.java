@@ -121,13 +121,27 @@ public final class McpTools {
         return tools.stream().map(t -> guarded(driver, t)).toList();
     }
 
-    /** {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}). */
+    /**
+     * {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}), and, but for
+     * the tools in {@link #WHILE_MOVING}, while a plugin move is asked or runs ({@link StudioDriver#pluginMoving}):
+     * the move rewrites the bot's files and the pom under them.
+     */
     private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
-        return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> driver.reloading()
-                ? result("REFUSED: Studio is switching the project (after a revert, or to a project create_project "
-                + "made). Reconnect and call again once it is open.", true)
-                : tool.callHandler().apply(exchange, request)).build();
+        boolean passes = WHILE_MOVING.contains(tool.tool().name());
+        return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> {
+            if (driver.reloading()) {
+                return result("REFUSED: Studio is switching the project (after a revert, or to a project "
+                        + "create_project made). Reconnect and call again once it is open.", true);
+            }
+            String moving = passes ? "" : driver.pluginMoving();
+            return moving.isEmpty() ? tool.callHandler().apply(exchange, request)
+                    : result("REFUSED: " + moving + " Wait for it: list_plugins says when it is done.", true);
+        }).build();
     }
+
+    /** The tools that touch neither the bot's files nor its plugins, so they answer while a plugin moves. */
+    static final java.util.Set<String> WHILE_MOVING = java.util.Set.of("list_plugins", "search_plugins",
+            "list_versions", "list_templates", "get_settings", "run_state", "read_trace", "stop");
 
     /**
      * The bound plugins' tools, but one whose name is in {@code taken}: a name that is Studio's own or an earlier
@@ -508,8 +522,9 @@ public final class McpTools {
                         List.of(Prop.text("version", "the version's id, from list_versions")),
                         args -> idle(log, () -> driver.revert(text(args, "version")))),
                 act(json, "list_plugins",
-                        "List the plugins the bot uses, each with its version and whether it loaded. A plugin brings "
-                                + "the palette's calls and the types slots take, and may bring tools of its own.",
+                        "List the plugins the bot uses, each with its version and whether it loaded, and where a "
+                                + "set_plugin_version move is. A plugin brings the palette's calls and the types "
+                                + "slots take, and may bring tools of its own.",
                         List.of(), args -> driver.listPlugins()),
                 act(json, "search_plugins", "Search the plugin registry, by a word of a plugin's name, id, "
                                 + "description or tags.",
@@ -543,9 +558,10 @@ public final class McpTools {
                 spec(json, "set_plugin_version",
                         "Move a plugin the bot uses to another version: a release, or in dev mode this computer's "
                                 + "own build (set_setting dev_mode on). Without confirm it only says what would "
-                                + "change, or which versions there are. With confirm the user is asked on screen, "
-                                + "a version of the bot is saved, the calls into it are repaired and marked for "
-                                + "review, and its tools are served anew.",
+                                + "change, or which versions there are. With confirm it answers once the user is "
+                                + "asked on screen; when they agree a version of the bot is saved, the calls into it "
+                                + "are repaired and marked for review, and its tools are served anew. list_plugins "
+                                + "says when the move is done.",
                         """
                                 {"type":"object","properties":{
                                   "id":{"type":"string","description":"the plugin, as list_plugins names it"},
@@ -554,15 +570,10 @@ public final class McpTools {
                                  "required":["id","version"],"additionalProperties":false}""",
                         request -> {
                             Map<String, Object> args = arguments(request);
-                            boolean confirm = flag(args, "confirm");
-                            // A confirmed move may have written the pom before it failed: serve the tools anew anyway.
-                            return answer(() -> {
-                                try {
-                                    return driver.setPluginVersion(text(args, "id"), text(args, "version"), confirm);
-                                } finally {
-                                    if (confirm) pluginsChanged.run();
-                                }
-                            });
+                            // The move ends after the answer; a failed one may have written the pom, so its end
+                            // serves the tools anew either way.
+                            return answer(() -> driver.setPluginVersion(text(args, "id"), text(args, "version"),
+                                    flag(args, "confirm"), pluginsChanged));
                         }),
                 act(json, "list_params",
                         "List the bot's parameters — its @Param fields, the values its user can set — with each "
