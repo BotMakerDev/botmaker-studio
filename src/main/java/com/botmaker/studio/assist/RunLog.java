@@ -18,7 +18,10 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
@@ -53,8 +56,16 @@ public final class RunLog implements AutoCloseable {
     /** How {@link #read} picks lines. */
     public record Read(int count, boolean thisRun, boolean problemsOnly) {}
 
-    /** One line kept, numbered from the endpoint's start; {@code problem} when a filter for failures keeps it. */
-    private record Line(long seq, String text, boolean problem) {}
+    /** How far back a trace line looks for the printed copy of itself that came first. */
+    private static final int PAIR_REACH = 128;
+    /** At most this many trace lines wait for their printed copy; past it the oldest is forgotten, and shows twice. */
+    private static final int MOST_UNPAIRED = 256;
+
+    /**
+     * One line kept, numbered from the endpoint's start; {@code problem} when a filter for failures keeps it,
+     * {@code printed} when it is the bot's output rather than its trace.
+     */
+    private record Line(long seq, String text, boolean problem, boolean printed) {}
 
     private final Clock clock;
     private final BooleanSupplier launching;
@@ -62,6 +73,11 @@ public final class RunLog implements AutoCloseable {
     private final Deque<Line> lines = new ArrayDeque<>();
     /** Output not yet ended by a newline. */
     private final StringBuilder partial = new StringBuilder();
+    /**
+     * Trace lines whose printed copy has not come yet, by that copy's text ({@code [Source] text}) and how many: a
+     * traced line is also printed, and the copy that comes second is not kept — the assistant reads each line once.
+     */
+    private final Map<String, Integer> unpaired = new LinkedHashMap<>();
 
     /** What the next run that starts is: the bot, unless a try asked for it. */
     private String requested;
@@ -222,6 +238,7 @@ public final class RunLog implements AutoCloseable {
         since = clock.instant();
         runStart = nextSeq;
         starts++;
+        unpaired.clear();
         mark("── started " + running + " ──");
     }
 
@@ -248,34 +265,79 @@ public final class RunLog implements AutoCloseable {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c == '\n') {
-                add(partial.toString(), problem(partial));
-                partial.setLength(0);
+                flushPrinted();
             } else if (c != '\r') {
                 partial.append(c);
             }
         }
     }
 
+    /**
+     * A trace line, as {@code [Source] text (×n) @Class:line} — its level named only when it is not debug detail,
+     * which is what nearly every line is. Its printed copy, when that came first, is taken out.
+     */
     private synchronized void trace(TraceLine line) {
-        String source = line.source().isEmpty() ? "" : " " + line.source();
+        String label = line.level() == TraceLine.Level.DEBUG ? line.source()
+                : line.source().isEmpty() ? line.level().displayName()
+                : line.level().displayName() + " " + line.source();
         String count = line.count() > 1 ? " (×" + line.count() + ")" : "";
         String at = line.className().isEmpty() || line.line().isEmpty() ? ""
                 : " @" + line.className().substring(line.className().lastIndexOf('.') + 1) + ":" + line.line().getAsInt();
-        boolean problem = line.level() == TraceLine.Level.WARN || line.level() == TraceLine.Level.ERROR;
-        add("[" + line.level().displayName() + source + "] " + line.text() + count + at, problem);
+        boolean problem = line.level() == TraceLine.Level.WARN || line.level() == TraceLine.Level.ERROR
+                || problem(line.text());
+        String copy = printedCopy(line);
+        if (!dropPrinted(copy)) {
+            if (unpaired.size() >= MOST_UNPAIRED) unpaired.remove(unpaired.keySet().iterator().next());
+            unpaired.merge(copy, 1, Integer::sum);
+        }
+        add((label.isEmpty() ? "" : "[" + label + "] ") + line.text() + count + at, problem, false);
+    }
+
+    /**
+     * The line the bot printed for {@code line}, as shared's {@code Diag} prints it: {@code [Source] text}, the
+     * count after two spaces, and of a text carrying a stack trace its first line only — the stack is printed
+     * apart, line by line, and stays.
+     */
+    private static String printedCopy(TraceLine line) {
+        String text = line.text().lines().findFirst().orElse("");
+        String printed = line.source().isEmpty() ? text : "[" + line.source() + "] " + text;
+        return line.count() > 1 ? printed + "  (×" + line.count() + ")" : printed;
+    }
+
+    /** Takes out the latest printed line reading {@code copy}, among the last few; whether there was one. */
+    private boolean dropPrinted(String copy) {
+        Iterator<Line> back = lines.descendingIterator();
+        for (int i = 0; i < PAIR_REACH && back.hasNext(); i++) {
+            Line line = back.next();
+            if (line.printed() && line.text().equals(copy)) {
+                back.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Ends the output line in progress: kept, unless it is the printed copy of a trace line already kept. */
+    private void flushPrinted() {
+        String text = partial.toString();
+        partial.setLength(0);
+        Integer waiting = unpaired.get(text);
+        if (waiting != null) {
+            if (waiting == 1) unpaired.remove(text);
+            else unpaired.put(text, waiting - 1);
+            return;
+        }
+        add(text, problem(text), true);
     }
 
     /** A line of Studio's own, ending any output line it interrupts. Kept by a filter for failures too. */
     private void mark(String text) {
-        if (!partial.isEmpty()) {
-            add(partial.toString(), problem(partial));
-            partial.setLength(0);
-        }
-        add(text, true);
+        if (!partial.isEmpty()) flushPrinted();
+        add(text, true, false);
     }
 
-    private void add(String text, boolean problem) {
-        lines.addLast(new Line(nextSeq++, text, problem));
+    private void add(String text, boolean problem, boolean printed) {
+        lines.addLast(new Line(nextSeq++, text, problem, printed));
         while (lines.size() > LIMIT) lines.removeFirst();
     }
 

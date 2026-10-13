@@ -67,6 +67,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **An assistant reads each traced line once.** A bot's trace line is also printed, so `read_trace` and a run
+  tool's answer showed it twice (`[Debug Source] …` and `[Source] …`). The trace copy stays, with its source
+  line; the level is named only when it is not debug detail (`[Warning Vision] …`).
 - **A window's title never matches Studio's own window.** The screen a plugin watches is found by title, and
   "Firestone" found "BotMaker Blocks - Firestone" while the game ran in a private display: the assistant was shown
   Studio. BotMaker's own windows now match only a title that names BotMaker, as shared's `WindowMatch` does.
