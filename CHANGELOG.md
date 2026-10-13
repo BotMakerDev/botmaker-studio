@@ -24,7 +24,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   each set the new version drops and whether its values can be migrated first. `read_migration` shows one pair as
   the migration window seeds it: each part of the new type and what it is made of (or each old constant and what it
   becomes), as the bot's `@Migrate` method has it or first guessed, what else each can be, the pairs it goes
-  through and why it cannot be written yet.
+  through and why it cannot be written yet. `set_migration` is the window's Apply: lines in the same words change
+  that mapping (`grey: fixed true`, `Area.w: fixed 0`, `RED: NAVY`); without `confirm` it lists each value before
+  and after, with it the `@Migrate` methods and `@Migrated` copies are written as one version, the new type's
+  holder too when the bot lacks it. A mapping that would not compile writes nothing.
 - **`list_plugins` gives a template's SDK version**, not the pom property (`${botmaker.sdk.version}`) that pins it.
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.

@@ -67,6 +67,7 @@ import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.MigrationCleanup;
+import com.botmaker.studio.project.managed.MigrationMapping;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.managed.MigrationSummary;
 import com.botmaker.studio.sharing.PluginCatalog;
@@ -821,30 +822,106 @@ final class StudioBridge implements StudioDriver {
             BotIndex index = prepared.get();
             ValueGrammar grammar = PluginHost.grammar();
             List<ManagedValue<?>> declared = PluginHost.managedValues();
-            // A simple name resolves among the types the bot's sets hold and what replaces them; a nested pair's
-            // part types by their full names, as read_migration says them.
-            Set<Class<?>> known = new LinkedHashSet<>();
-            for (ManagedValue<?> set : declared) {
-                if (set == null || set.type() == null) continue;
-                known.add(set.type());
-                Class<?> replacement = MigrationSteps.replacementOf(grammar, set.type());
-                if (replacement != null) known.add(replacement);
-            }
-            Class<?> source = MigrationSummary.named(from, PluginHost.classLoader(), known)
-                    .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + from
-                            + "\"; give its full name, as list_migrations names the retired ones and "
-                            + "read_migration the pairs they go through."));
-            Class<?> target = to == null || to.isBlank() ? null
-                    : MigrationSummary.named(to, PluginHost.classLoader(), known)
-                    .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + to
-                            + "\"; give its full name."));
+            Set<Class<?>> known = knownTypes(grammar, declared);
+            Class<?> source = migrated(from, known, true);
+            Class<?> target = to == null || to.isBlank() ? null : migrated(to, known, false);
             return MigrationSummary.mapping(grammar, declared, ManagedMigrations.methods(index, grammar), source,
                     target);
         } catch (RuntimeException | LinkageError e) {
-            if (e instanceof IllegalArgumentException refused) throw refused;
-            throw new IllegalArgumentException("The migration could not be read: "
-                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+            throw unread("The migration could not be read: ", e);
         }
+    }
+
+    /**
+     * The window's Apply for one pair: its steps and those its parts go through, seeded and changed by
+     * {@code mapping} ({@link MigrationMapping}), planned with the new type's holder when the bot lacks it. Without
+     * {@code confirm}, what it would write and each value before and after; with it, written as one version.
+     */
+    @Override
+    public String setMigration(String from, String to, String mapping, boolean confirm) {
+        if (confirm) notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        MigrationSteps.Draft draft;
+        try {
+            index = prepared.get();
+            ValueGrammar grammar = PluginHost.grammar();
+            List<ManagedValue<?>> declared = PluginHost.managedValues();
+            Set<Class<?>> known = knownTypes(grammar, declared);
+            Class<?> source = migrated(from, known, true);
+            Class<?> target = migrated(to, known, false);
+            MigrationMapping.Asked asked = MigrationMapping.steps(grammar, ManagedMigrations.methods(index, grammar),
+                    source, target, mapping);
+            if (asked.problem() != null) throw new IllegalArgumentException(asked.problem());
+            // On FX, as the window works it out: it asks every plugin how it writes the holder.
+            Map<Path, String> created = onFx(() -> MigrationWindow.holderFor(ctx.config(), grammar, declared, index,
+                    target));
+            Path migrations = ctx.config().mainPackageDir().resolve(MigrationSteps.CLASS + ".java");
+            draft = MigrationSteps.plan(index, grammar, declared, migrations, ctx.config().mainPackage(),
+                    asked.steps(), source, target, created);
+        } catch (RuntimeException | LinkageError e) {
+            // Plugin code runs under the plan (factories, parts): a throw answers, as the window's status does.
+            throw unread("The migration could not be worked out: ", e);
+        }
+        String said = MigrationSummary.draft(draft);
+        if (!(draft.outcome() instanceof Refactor.Planned plan)) throw new IllegalArgumentException(said);
+        if (!confirm) {
+            return "Would write: " + plan.summary() + ".\n" + said + "\nCall again with confirm to write it; a "
+                    + "version of the bot is saved before it.";
+        }
+        return onFx(() -> {
+            List<String> changed = MigrationActions.changedSince(ctx.config(), ctx.state(), index.sources());
+            if (!changed.isEmpty()) {
+                throw new IllegalArgumentException(String.join(", ", changed) + " changed while this was worked "
+                        + "out, so nothing was changed. Try again.");
+            }
+            for (Path file : plan.rewrites().keySet()) {
+                // A file the plan creates (Migrations, the new type's holder) made meanwhile would be overwritten.
+                if (!index.sources().containsKey(file) && java.nio.file.Files.exists(file)) {
+                    throw new IllegalArgumentException(file.getFileName() + " was made while this was worked out, "
+                            + "so nothing was changed. Try again.");
+                }
+            }
+            try {
+                MigrationWindow.written(ctx.config(), ctx.state(), plan, index, this::redrawIfActive);
+            } catch (RuntimeException failed) {
+                throw new IllegalArgumentException("The migration stopped part-way (" + failed.getMessage()
+                        + "); revert goes back to the safety version from before it.");
+            }
+            return plan.summary() + ". The version before it is in list_versions.\n" + said;
+        });
+    }
+
+    /** Redraws {@code file} when it is the one on the canvas, after a write past the editor. FX thread. */
+    private void redrawIfActive(Path file) {
+        ProjectFile active = ctx.state().getActiveFile();
+        if (active != null && file.equals(active.getPath())) ctx.codeEditorService().switchToFile(file);
+    }
+
+    /** The types a migration's simple names resolve among: the bot's sets' types and what replaces each. */
+    private static Set<Class<?>> knownTypes(ValueGrammar grammar, List<ManagedValue<?>> declared) {
+        Set<Class<?>> known = new LinkedHashSet<>();
+        for (ManagedValue<?> set : declared) {
+            if (set == null || set.type() == null) continue;
+            known.add(set.type());
+            Class<?> replacement = MigrationSteps.replacementOf(grammar, set.type());
+            if (replacement != null) known.add(replacement);
+        }
+        return known;
+    }
+
+    /** The type {@code name} names, or a refusal saying to give its full name. */
+    private static Class<?> migrated(String name, Set<Class<?>> known, boolean old) {
+        return MigrationSummary.named(name, PluginHost.classLoader(), known)
+                .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + name + "\"; give its "
+                        + "full name" + (old ? ", as list_migrations names the retired ones and read_migration the "
+                        + "pairs they go through." : ".")));
+    }
+
+    private static IllegalArgumentException unread(String what, Throwable e) {
+        if (e instanceof IllegalArgumentException refused) return refused;
+        return new IllegalArgumentException(what + (e.getMessage() == null ? e.getClass().getSimpleName()
+                : e.getMessage()));
     }
 
     @Override

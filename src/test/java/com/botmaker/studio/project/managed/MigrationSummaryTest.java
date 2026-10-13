@@ -89,7 +89,7 @@ class MigrationSummaryTest {
         assertTrue(lines.contains("- file (String): from file — or: fixed <String>"), text);
         assertTrue(lines.contains("- grey (boolean): fixed false — or: fixed <boolean>"), text);
         assertTrue(lines.contains("Not in the bot yet: the mapping above is a first guess."), text);
-        assertEquals("Ready to write.", lines.getLast());
+        assertEquals("Ready to write (set_migration).", lines.getLast());
 
         String area = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldShot.class, Area.class);
         assertTrue(area.contains("The migration window does not offer Area for OldShot's values."), area);

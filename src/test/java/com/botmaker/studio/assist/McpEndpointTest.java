@@ -293,7 +293,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "list_params", "set_param_default",
+                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "list_params", "set_param_default",
                 "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "

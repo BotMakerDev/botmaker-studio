@@ -196,6 +196,15 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio cannot read migrations here.");
     }
 
+    /**
+     * The migration window's Apply for the pair: its {@code @Migrate} methods and the {@code @Migrated} copies, the
+     * pair's steps seeded as {@link #readMigration} says them and changed by {@code mapping}'s lines. Without
+     * {@code confirm}, what it would write and each value before and after; with it, written as one version.
+     */
+    default String setMigration(String from, String to, String mapping, boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot migrate values here.");
+    }
+
     /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
     default String listParams() {
         throw new IllegalArgumentException("Studio reads no parameters here.");

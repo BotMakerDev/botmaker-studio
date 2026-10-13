@@ -313,8 +313,16 @@ final class MigrationWindow {
         }
     }
 
-    /** {@code plan} as one version: a safety one first, new files created, the rest through the buffers. */
     private void written(Refactor.Planned plan, BotIndex index) {
+        written(config, state, plan, index, redraw);
+    }
+
+    /**
+     * {@code plan} as one version: a safety one first, new files created, the rest through the buffers; each file
+     * told to {@code redraw}. The window's Apply and the assistant's {@code set_migration}. FX thread.
+     */
+    static void written(ProjectConfig config, ProjectState state, Refactor.Planned plan, BotIndex index,
+                        Consumer<Path> redraw) {
         Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY, "Before: " + plan.summary());
         plan.rewrites().forEach((file, source) -> {
             if (!index.sources().containsKey(file)) ProjectWrites.create(config, file, source, plan.summary());
@@ -323,8 +331,13 @@ final class MigrationWindow {
         plan.rewrites().keySet().forEach(redraw);
     }
 
-    /** The holder of {@code to}'s open set as its plugin writes it, when the bot has none; else nothing. */
     private Map<Path, String> holderFor(BotIndex index, Class<?> to) {
+        return holderFor(config, grammar, declared, index, to);
+    }
+
+    /** The holder of {@code to}'s open set as its plugin writes it, when the bot has none; else nothing. */
+    static Map<Path, String> holderFor(ProjectConfig config, ValueGrammar grammar, List<ManagedValue<?>> declared,
+                                       BotIndex index, Class<?> to) {
         Optional<ManagedValue<?>> missing = MigrationSteps.missingHolder(index, declared, to);
         if (missing.isEmpty()) return Map.of();
         for (StudioPlugin plugin : PluginHost.plugins()) {

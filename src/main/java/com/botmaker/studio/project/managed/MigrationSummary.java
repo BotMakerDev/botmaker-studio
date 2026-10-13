@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
 import java.util.ArrayList;
@@ -135,9 +136,7 @@ public final class MigrationSummary {
                 return String.join("\n", lines);
             }
             case MigrationSteps.Shape.Parts parts -> {
-                List<MigrationSteps.Choice> choices = saved.filter(MigrationSteps.Step.Calls.class::isInstance)
-                        .map(step -> ((MigrationSteps.Step.Calls) step).choices())
-                        .orElseGet(() -> MigrationSteps.matched(grammar, parts));
+                List<MigrationSteps.Choice> choices = MigrationMapping.seeded(grammar, methods, parts, from, made);
                 lines.add("Each part of " + to.getSimpleName() + " and what it is made of, then what else it could "
                         + "be:");
                 for (MigrationSteps.Part part : parts.to()) {
@@ -153,9 +152,7 @@ public final class MigrationSummary {
                 nested = MigrationSteps.nested(parts, choices);
             }
             case MigrationSteps.Shape.Constants constants -> {
-                Map<String, String> arms = saved.filter(MigrationSteps.Step.Arms.class::isInstance)
-                        .map(step -> ((MigrationSteps.Step.Arms) step).arms())
-                        .orElseGet(() -> MigrationSteps.matched(constants));
+                Map<String, String> arms = MigrationMapping.seeded(grammar, methods, constants, from, made);
                 lines.add("Each constant of " + from.getSimpleName() + ", and what it becomes — each can become "
                         + String.join(", ", constants.to()) + ":");
                 arms.forEach((old, now) -> lines.add("- " + old + " → " + (now == null ? "nothing yet" : now)));
@@ -177,7 +174,30 @@ public final class MigrationSummary {
                     .map(pair -> type(pair.getKey()) + " → " + type(pair.getValue())).toList())
                     + ", each a mapping of its own (read_migration).");
         }
-        lines.add(problem == null ? "Ready to write." : "Not ready: " + problem);
+        lines.add(problem == null ? "Ready to write (set_migration)." : "Not ready: " + problem);
+        return String.join("\n", lines);
+    }
+
+    /** The most values {@link #draft} lists one by one. */
+    static final int DRAFT_ROWS = 40;
+
+    /**
+     * What applying {@code draft} would do, as the window's preview table and status say it: each value as it is
+     * and as copied, those kept as the author made them and those not migrated.
+     */
+    public static String draft(MigrationSteps.Draft draft) {
+        List<String> lines = new ArrayList<>();
+        if (draft.outcome() instanceof Refactor.Refused refused) lines.add("Refused: " + refused.reason());
+        if (!draft.rows().isEmpty()) {
+            lines.add(draft.rows().size() + (draft.rows().size() == 1 ? " value, as it is → as copied:"
+                    : " values, each as it is → as copied:"));
+            draft.rows().stream().limit(DRAFT_ROWS)
+                    .forEach(row -> lines.add("- " + row.name() + ": " + row.before() + " → " + row.after()));
+            if (draft.rows().size() > DRAFT_ROWS) lines.add("… and " + (draft.rows().size() - DRAFT_ROWS) + " more.");
+        }
+        ManagedMigrations.Report report = draft.report();
+        if (!report.kept().isEmpty()) lines.add("Kept as you made them: " + String.join(", ", report.kept()) + ".");
+        if (!report.failed().isEmpty()) lines.add("Not migrated: " + String.join("; ", report.failed()) + ".");
         return String.join("\n", lines);
     }
 

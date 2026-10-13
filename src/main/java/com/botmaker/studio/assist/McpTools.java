@@ -69,7 +69,7 @@ public final class McpTools {
               search_plugins, add_plugin, set_plugin_version and remove_plugin what it is built from.
               set_setting dev_mode on, then set_plugin_version to the local build, tries a fix before its release.
               list_migrations says which values a plugin retired, to migrate before a move drops them;
-              read_migration how one type's values become another's.
+              read_migration how one type's values become another's, set_migration copies them.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -594,6 +594,26 @@ public final class McpTools {
                                 Prop.optionalText("to", "the new type; empty for the one its plugin names, else "
                                         + "the first that fits")),
                         args -> driver.readMigration(text(args, "from"), text(args, "to"))),
+                spec(json, "set_migration",
+                        "Copy one type's values into another, as the migration window's Apply: the bot keeps the "
+                                + "mapping as @Migrate methods and gets each value's copy, marked @Migrated, under "
+                                + "the same name beside the old one; nothing is deleted. The mapping starts as "
+                                + "read_migration says it; each line of mapping changes one part or constant, in "
+                                + "its words. Without confirm it only says what would be written and each value "
+                                + "before and after; with confirm a version is saved first. A mapping that would "
+                                + "not compile writes nothing and says why.",
+                        """
+                                {"type":"object","properties":{
+                                  "from":{"type":"string","description":"the old type, as list_migrations names it"},
+                                  "to":{"type":"string","description":"the new type, as read_migration names it"},
+                                  "mapping":{"type":"string","description":"changes to read_migration's mapping, one per line: 'part: from <old part>', 'part: built from <old part>', 'part: fixed <value>', or 'OLD: NEW' for a constant; a pair the parts go through prefixed by its type's simple name ('Area.w: fixed 0'); empty to take it as it is"},
+                                  "confirm":{"type":"boolean","description":"true to write it; false or absent to only see what would be written"}},
+                                 "required":["from","to"],"additionalProperties":false}""",
+                        request -> {
+                            Map<String, Object> args = arguments(request);
+                            return answer(() -> driver.setMigration(text(args, "from"), text(args, "to"),
+                                    text(args, "mapping"), flag(args, "confirm")));
+                        }),
                 act(json, "list_params",
                         "List the bot's parameters — its @Param fields, the values its user can set — with each "
                                 + "one's type and value.",

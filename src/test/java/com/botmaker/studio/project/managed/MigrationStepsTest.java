@@ -195,6 +195,20 @@ class MigrationStepsTest {
     }
 
     @Test
+    void theAssistantsLinesPlanAsTheWindowsPicksDo(@TempDir Path root) {
+        BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldFrames"), OLD_FRAMES,
+                file(root, "plugins/sdk/Frames"), FRAMES));
+        MigrationMapping.Asked asked = MigrationMapping.steps(GRAMMAR, ManagedMigrations.methods(index, GRAMMAR),
+                OldFrame.class, Frame.class, "Area.w: fixed 7");
+        MigrationSteps.Draft draft = MigrationSteps.plan(index, GRAMMAR, DECLARED, file(root, "Migrations"), "com.bot",
+                asked.steps(), OldFrame.class, Frame.class);
+
+        assertInstanceOf(Refactor.Planned.class, draft.outcome(), draft.outcome()::toString);
+        assertTrue(flat(draft.rows().getFirst().after()).contains("new MigrationTypes.Area(3, 4, 7)"),
+                draft.rows().getFirst().after());
+    }
+
+    @Test
     void aMethodTheWindowWroteReadsBackAsItsSteps(@TempDir Path root) {
         BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldShots"), OLD_SHOTS,
                 file(root, "plugins/sdk/Shots"), SHOTS));
