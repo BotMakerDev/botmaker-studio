@@ -97,6 +97,11 @@ public final class ConsoleBatcher implements AutoCloseable {
         flush();
     }
 
+    /** Hands over what is held now rather than at the next tick: a warm try's end, whose pipes stay open. */
+    public void flushNow() {
+        flush();
+    }
+
     /** Stops the timer. What is still held is dropped, unless {@link #finish()} is what called this. */
     @Override
     public void close() {

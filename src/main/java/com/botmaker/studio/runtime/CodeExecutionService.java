@@ -8,6 +8,7 @@ import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.runtime.tryhost.TryHost;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.session.launch.BackgroundLauncher;
 import com.botmaker.studio.util.ClassPathManager;
@@ -35,6 +36,10 @@ public class CodeExecutionService {
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     /** Stop was pressed while the run was still compiling: it ends before starting the bot. */
     private final AtomicBoolean cancelled = new AtomicBoolean(false);
+    /** A try runs in {@link #tries}: a stop interrupts it there rather than killing a process. */
+    private volatile boolean trying;
+    private WarmTries tries;
+    private ConsoleBatcher tryConsole;
 
     /**
      * Kills the bot when this JVM exits. The bot runs as its own OS process, so it outlives the Studio unless
@@ -44,7 +49,7 @@ public class CodeExecutionService {
      * <p>{@link #close()} is the ordinary path and unregisters this. The hook exists for the paths that skip
      * it — {@code File ▸ Exit}, a crash, a kill signal — where there is no orderly close to hang the cleanup on.
      */
-    private final Thread shutdownHook = new Thread(this::killRunningProcess, "bot-process-reaper");
+    private final Thread shutdownHook = new Thread(this::killAll, "bot-process-reaper");
 
     public CodeExecutionService(
             DiagnosticsManager diagnosticsManager,
@@ -78,7 +83,7 @@ public class CodeExecutionService {
      * a server.
      */
     public boolean answer(long id, String value) {
-        return RunTelemetry.answer(telemetryServer, id, value);
+        return RunTelemetry.answer(trying ? tries().telemetry() : telemetryServer, id, value);
     }
 
     private void status(String message) {
@@ -150,26 +155,37 @@ public class CodeExecutionService {
                     status("Stopped before it started.");
                     return;
                 }
-                String classpath = buildRuntimeClasspath(snapshot);
-                String mainClass;
-                if (trial == null) {
-                    // The version that ran, so "go back to when it worked" has somewhere to go.
-                    Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
-                    // entryClassName(), not mainClassName(): the entry class is named after the project only in a
-                    // project Studio created and the user has not renamed. One made from a published template
-                    // keeps its author's class name, which is the whole point of a template arriving as shipped.
-                    mainClass = config.entryClassName();
-                    status("Running... (Press Stop to terminate)");
-                } else {
+                if (trial != null) {
                     Path classes = compileTrial(snapshot, trial);
                     if (classes == null) {
                         status("Try aborted: Studio's caller for it did not compile — see the Run tab.");
                         return;
                     }
-                    classpath = classes + java.io.File.pathSeparator + classpath;
-                    mainClass = trial.className();
+                    if (cancelled.get()) {
+                        status("Stopped before it started.");
+                        return;
+                    }
                     status("Trying " + label + "… (Press Stop to end it)");
+                    trying = true;
+                    eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+                    // The bot's classes load per try, beside the caller; the warm JVM holds the dependencies.
+                    int code = tries().run(tryHostCommand(snapshot), tracePlanText(), config.projectPath(),
+                            List.of(classes, config.compiledOutputPath()), trial.className());
+                    status(switch (code) {
+                        case 0 -> "Tried " + label + ".";
+                        case 130, -1 -> "Try stopped.";
+                        default -> "Try failed — see the Run tab.";
+                    });
+                    return;
                 }
+                String classpath = buildRuntimeClasspath(snapshot);
+                // The version that ran, so "go back to when it worked" has somewhere to go.
+                Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
+                // entryClassName(), not mainClassName(): the entry class is named after the project only in a
+                // project Studio created and the user has not renamed. One made from a published template
+                // keeps its author's class name, which is the whole point of a template arriving as shipped.
+                String mainClass = config.entryClassName();
+                status("Running... (Press Stop to terminate)");
                 if (cancelled.get()) {
                     status("Stopped before it started.");
                     return;
@@ -204,7 +220,7 @@ public class CodeExecutionService {
                 // output that arrived in the last <100ms.
                 console.finish();
 
-                if (exitCode == 0) status(trial == null ? "Program completed successfully." : "Tried " + label + ".");
+                if (exitCode == 0) status("Program completed successfully.");
                 else if (exitCode == 143 || exitCode == 130 || exitCode == 1 || exitCode == -1)
                     status("Program stopped.");
                 else status("Program exited with code: " + exitCode);
@@ -215,6 +231,7 @@ public class CodeExecutionService {
                 e.printStackTrace();
                 status("Error: " + e.getMessage());
             } finally {
+                trying = false;
                 isRunning.set(false);
                 currentRunningProcess = null;
                 closeConsole();
@@ -223,6 +240,43 @@ public class CodeExecutionService {
                 eventBus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
             }
         }, "CodeRunner").start();
+    }
+
+    /** The project's warm try JVM, made at the first try. */
+    private synchronized WarmTries tries() {
+        if (tries == null) {
+            // One console for the JVM's life: its pipes stay open between tries.
+            ConsoleBatcher console = console();
+            tryConsole = console;
+            tries = new WarmTries(console::append, console::flushNow, pb -> RunTelemetry.start(eventBus, pb));
+        }
+        return tries;
+    }
+
+    /**
+     * What starts the warm try JVM: a run's options, trace agent and session hand-off, with the dependencies and
+     * the resources on its classpath but not the bot's classes, which each try loads afresh.
+     */
+    private List<String> tryHostCommand(ProjectState.Snapshot snapshot) throws IOException {
+        StringBuilder cp = new StringBuilder(TryHostJar.path().toString());
+        cp.append(java.io.File.pathSeparator).append(config.resourcesRoot().toString());
+        for (String jar : snapshot.resolvedClasspath()) cp.append(java.io.File.pathSeparator).append(jar);
+        List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
+        command.addAll(BotJvm.options(state.getSettings()));
+        command.addAll(BotJvm.traceAgent(config, state.getSettings()));
+        command.addAll(sessionHandoffArguments());
+        command.addAll(List.of("-cp", cp.toString(), TryHost.class.getName()));
+        return command;
+    }
+
+    /** The trace plan the agent read at the JVM's start: a JVM started with another one is started again. */
+    private String tracePlanText() {
+        try {
+            Path plan = BotJvm.tracePlan(config);
+            return Files.isRegularFile(plan) ? Files.readString(plan) : "";
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     /**
@@ -359,6 +413,12 @@ public class CodeExecutionService {
     }
 
     public void stopRunningProgram() {
+        if (trying) {
+            // The try's thread ends it, its events with it; the warm JVM stays unless the try ignores the stop.
+            tries().stop();
+            status("Stopping the try…");
+            return;
+        }
         // While it still compiles there is no process to kill: the run ends itself before starting one, and its
         // own finally says it stopped — resetting the claim here would let a second run start beside it.
         if (isRunning.get() && currentRunningProcess == null) {
@@ -403,6 +463,19 @@ public class CodeExecutionService {
         } catch (IllegalStateException alreadyShuttingDown) {
             // The hook is running (or about to); it does the same work, so there is nothing left to do here.
         }
+        killAll();
+        synchronized (this) {
+            if (tryConsole != null) tryConsole.close();
+        }
+    }
+
+    /** The bot's process and the warm try JVM: what a closing project or a quitting Studio leaves nothing of. */
+    private void killAll() {
+        WarmTries warm;
+        synchronized (this) {
+            warm = tries;
+        }
+        if (warm != null) warm.close();
         killRunningProcess();
     }
 
@@ -439,6 +512,7 @@ public class CodeExecutionService {
      * usable for out-of-band control such as the pilot's {@code SIGSTOP}/{@code SIGCONT} pause/resume.
      */
     public java.util.OptionalLong runningBotPid() {
+        if (trying) return tries().runningPid();
         Process p = currentRunningProcess;
         return (p != null && p.isAlive()) ? java.util.OptionalLong.of(p.pid()) : java.util.OptionalLong.empty();
     }

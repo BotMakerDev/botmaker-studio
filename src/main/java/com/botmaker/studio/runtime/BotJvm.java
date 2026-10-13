@@ -52,7 +52,7 @@ public final class BotJvm {
         List<String> offered = PluginHost.menuFacades().stream().map(f -> f.type().getName()).toList();
         if (config == null || offered.isEmpty()) return List.of();
         try {
-            Path plan = config.compiledOutputPath().resolveSibling("botmaker-trace.properties");
+            Path plan = tracePlan(config);
             new TracePlan(Set.of(config.compiledOutputPath()), Set.copyOf(offered),
                     settings == null ? Set.of() : Set.copyOf(settings.hiddenTraceWriters())).write(plan);
             return List.of("-javaagent:" + TraceAgentJar.path() + "=" + plan);
@@ -60,6 +60,11 @@ public final class BotJvm {
             System.err.println("Runs this time without the call trace: " + e.getMessage());
             return List.of();
         }
+    }
+
+    /** Where {@link #traceAgent} writes the plan the agent reads once, at the JVM's start. */
+    static Path tracePlan(ProjectConfig config) {
+        return config.compiledOutputPath().resolveSibling("botmaker-trace.properties");
     }
 
     static List<String> options(Map<String, String> runProperties) {

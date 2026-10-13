@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A try runs in a warm JVM.** ▶ Try and the assistant's `try_statement` run in one JVM the project keeps
+  between tries, with the bot's classes loaded afresh each time: a try no longer pays a JVM's start, the SDK's and
+  the private display's join, and its start-up lines come once. The JVM starts again when the dependencies, the run
+  properties, the trace or the display change. Stop interrupts the try; one that ignores it ends the JVM.
 - **The assistant is told to look in text.** The MCP server's instructions name the SDK's `describe`, `click`, `key`
   and `scroll`: find a step by acting and reading what changed, and take a screenshot only to cut a picture or
   when text cannot answer, a part at a low scale.
