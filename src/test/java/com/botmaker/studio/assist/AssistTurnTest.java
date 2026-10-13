@@ -415,6 +415,21 @@ public class AssistTurnTest {
         assertInstanceOf(Outcome.Accepted.class, changed, changed.toString());
         Outcome back = turn.editSignature("body", null, "Outcomes", null);
         assertInstanceOf(Outcome.Accepted.class, back, "a member type by its own name too: " + back);
+
+        // Its seeded `return null;` takes one of the enum's constants, by the method's return type.
+        BlockView.Statement returned = turn.tree().stream().filter(m -> m.name().equals("body")).findFirst()
+                .orElseThrow().body().statements().getFirst();
+        BlockView.Slot result = returned.slots().getFirst();
+        assertEquals("com.bot.flow.Subject.Outcomes", result.type());
+        assertTrue(result.writable(), result.toString());
+        Outcome set = turn.setSlot(result.id(), "NEXT");
+        assertInstanceOf(Outcome.Accepted.class, set, set.toString());
+        assertTrue(turn.source().contains("return Subject.Outcomes.NEXT;"), turn.source());
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(result.id(), "LATER"), "not one of its constants");
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(result.id(), "Other.NEXT"), "another type's name");
+        Outcome qualified = turn.setSlot(result.id(), "Outcomes.DONE");
+        assertInstanceOf(Outcome.Accepted.class, qualified, qualified.toString());
+        assertTrue(turn.source().contains("return Subject.Outcomes.DONE;"), turn.source());
     }
 
     @Test

@@ -39,6 +39,7 @@ import org.eclipse.jdt.core.dom.*;
 import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -196,6 +197,15 @@ public final class AssistTurn {
             return setOperator(stage, slotId, slot.get(), expected, given.substring(OPERATOR.length()));
         }
         Optional<Type> type = valueType(expected);
+        if (type.isEmpty() && expected != null && expected.isEnum()) {
+            Optional<JavaValue> constant = enumConstant(expected, given);
+            if (constant.isEmpty()) {
+                return Outcome.Refused.because("`" + given + "` is none of " + nameOf(expected) + "'s constants: "
+                        + enumConstants(expected) + ".");
+            }
+            return apply(stage, "set " + slotId + " to " + constant.get().source(),
+                    editor -> editor.replaceWithValue(slot.get(), constant.get()));
+        }
         if (type.isEmpty()) {
             return Outcome.Refused.because("No loaded plugin declares " + nameOf(expected)
                     + ", so a value of it cannot be written here.");
@@ -407,6 +417,39 @@ public final class AssistTurn {
     }
 
     /** {@code Owner.FIELD} — {@code Activities.Collect.WON} for a nested enum's — importing its top-level class. */
+    /**
+     * One of the enum {@code type}'s constants, named bare ({@code NEXT}) or after any part of the type's name
+     * ({@code Research.NEXT}, {@code Activities.Research.NEXT}), written as a file names it with the top-level
+     * type imported: an activity's outcome, an enum no plugin declares (2026-10-13).
+     */
+    static Optional<JavaValue> enumConstant(ITypeBinding type, String given) {
+        int dot = given.lastIndexOf('.');
+        String name = given.substring(dot + 1);
+        String qualifier = dot < 0 ? "" : given.substring(0, dot);
+        List<String> chain = new ArrayList<>();
+        ITypeBinding top = type.getErasure();
+        for (ITypeBinding at = top; at != null; at = at.getDeclaringClass()) {
+            chain.addFirst(at.getName());
+            top = at;
+        }
+        String written = String.join(".", chain);
+        if (!qualifier.isEmpty() && !(written.equals(qualifier) || written.endsWith("." + qualifier)
+                || type.getErasure().getQualifiedName().equals(qualifier))) {
+            return Optional.empty();
+        }
+        if (!enumConstants(type).contains(name)) return Optional.empty();
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        QualifiedName constant = ast.newQualifiedName(ast.newName(written), ast.newSimpleName(name));
+        // A local enum has no name to import; it is in scope where it is used.
+        String imported = top.getQualifiedName();
+        return Optional.of(JavaValue.built(constant, imported.isEmpty() || top.isLocal() ? List.of() : List.of(imported)));
+    }
+
+    private static List<String> enumConstants(ITypeBinding type) {
+        return Arrays.stream(type.getDeclaredFields()).filter(IVariableBinding::isEnumConstant)
+                .map(IVariableBinding::getName).toList();
+    }
+
     private static JavaValue reference(ManagedConstants.Constant constant) {
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         QualifiedName name = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
@@ -777,7 +820,7 @@ public final class AssistTurn {
         for (Expression position : positions) {
             ITypeBinding expected = expectedType(position);
             slots.add(new BlockView.Slot(BlockId.of(position), nameOf(expected), oneLine(position, source),
-                    valueType(expected).isPresent()));
+                    valueType(expected).isPresent() || expected != null && expected.isEnum()));
         }
         return slots;
     }
@@ -848,6 +891,21 @@ public final class AssistTurn {
         if (parent instanceof VariableDeclarationFragment fragment
                 && fragment.getParent() instanceof VariableDeclarationStatement declaration) {
             ITypeBinding declared = declaration.getType().resolveBinding();
+            if (declared != null) return declared;
+        }
+        // A return gives what its method declares: a seeded `return null;` is typed null otherwise (2026-10-13).
+        if (parent instanceof ReturnStatement) {
+            ASTNode at = parent;
+            while (at != null && !(at instanceof MethodDeclaration) && !(at instanceof LambdaExpression)) {
+                at = at.getParent();
+            }
+            ITypeBinding declared = switch (at) {
+                case MethodDeclaration method when method.getReturnType2() != null ->
+                        method.getReturnType2().resolveBinding();
+                case LambdaExpression lambda when lambda.resolveMethodBinding() != null ->
+                        lambda.resolveMethodBinding().getReturnType();
+                case null, default -> null;
+            };
             if (declared != null) return declared;
         }
         return expression.resolveTypeBinding();

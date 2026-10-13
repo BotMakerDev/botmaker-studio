@@ -94,6 +94,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `Activities.Research`, so an activity's body could not be written over MCP. They now take any type the bot
   declares, enums and member types too. A class the bot declares is written as its file names it, its outer
   type imported, never as `com.bot.….Activities.Research` (Parameters, migrations and signatures alike).
+- **`set_slot` writes an activity's outcome.** A seeded `return null;` read as a slot of type `null`, and an
+  enum no plugin declares had no value form, so a body could not return `Activities.Research.NEXT`. A return's
+  slot now expects its method's type, and an enum slot takes one of its constants (`NEXT`, `Research.NEXT`).
 - **An edit an MCP client makes is saved at once.** It stayed in the editor until the next run, so closing
   Studio lost edits the client had been told were applied. The answer now says "and saved".
 - **A palette call's plugin-typed argument starts as the plugin's fresh value**: `ImageTemplateGroup.of(<the
