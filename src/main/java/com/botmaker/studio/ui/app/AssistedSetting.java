@@ -4,7 +4,8 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * The project settings an assistant may read and set over MCP (2026-10-06): the two that change what a run says.
+ * The project settings an assistant may read and set over MCP (2026-10-06): the two that change what a run says,
+ * and, since 2026-10-13, dev mode, which changes which plugin builds load.
  * The rest of {@code settings.json} is the windows' own — layouts, remembered titles, favourites — and no tool
  * reaches it.
  */
@@ -19,6 +20,11 @@ enum AssistedSetting {
     HIDDEN_TRACE("hidden_trace", "Hidden trace writers",
             "the writers whose lines the Trace tab hides, comma-separated, each a class's binary name or "
                     + "class#method; empty for none"),
+
+    /** *Plugins & Libraries*' Dev mode (2026-10-13): try a plugin's local build before its release. */
+    DEV_MODE("dev_mode", "Dev mode",
+            "on or off — whether this project, on this computer, loads its plugins' local -SNAPSHOT builds (what "
+                    + "mvn install put in ~/.m2); the plugins reload at once, so their tools may change"),
 
     UNKNOWN("", "", "");
 

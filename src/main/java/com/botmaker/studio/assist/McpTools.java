@@ -66,7 +66,8 @@ public final class McpTools {
             - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
               before a large change saves a version to go back to with revert.
             - list_params and set_param_default are the values the bot's user sets; list_plugins,
-              search_plugins, add_plugin and remove_plugin what it is built from.
+              search_plugins, add_plugin and remove_plugin what it is built from. set_setting dev_mode on
+              loads the plugins' local builds, to try a fix before its release.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -554,7 +555,16 @@ public final class McpTools {
                 act(json, "set_setting", "Change a project setting, one get_settings lists.",
                         List.of(Prop.text("key", "the setting's key, from get_settings"),
                                 Prop.text("value", "its new value")),
-                        args -> driver.setSetting(text(args, "key"), text(args, "value"))),
+                        args -> {
+                            // dev_mode reloads the plugins, whose tools may differ after it — even when the
+                            // reload failed after the setting was written.
+                            boolean reloads = "dev_mode".equals(text(args, "key").strip());
+                            try {
+                                return driver.setSetting(text(args, "key"), text(args, "value"));
+                            } finally {
+                                if (reloads) pluginsChanged.run();
+                            }
+                        }),
                 act(json, "list_templates", "List the vetted templates create_project starts a bot from, each with "
                                 + "what it is.",
                         List.of(), args -> driver.listTemplates()),

@@ -951,6 +951,16 @@ final class StudioBridge implements StudioDriver {
         AssistedSetting setting = AssistedSetting.fromId(key == null ? "" : key.strip());
         String text = value == null ? "" : value.strip();
         ProjectSettingsService service = ctx.projectSettingsService();
+        if (setting == AssistedSetting.DEV_MODE) {
+            boolean on = switch (text.toLowerCase(java.util.Locale.ROOT)) {
+                case "on", "true" -> true;
+                case "off", "false" -> false;
+                default -> throw new IllegalArgumentException("dev_mode is on or off.");
+            };
+            // The Plugins window's own toggle: writes the setting, then reloads the plugins over it.
+            waitFor(ctx.libraryService().setDevMode(on), 120, "reload the plugins");
+            return "Set dev_mode to " + (on ? "on" : "off") + "; the plugins reloaded.";
+        }
         StudioProjectSettings now = onFx(service::current);
         StudioProjectSettings next = switch (setting) {
             case DEBUG_OUTPUT -> {
@@ -961,6 +971,7 @@ final class StudioBridge implements StudioDriver {
             }
             case HIDDEN_TRACE -> now.withHiddenTraceWriters(text.isEmpty() ? List.of()
                     : java.util.Arrays.stream(text.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList());
+            case DEV_MODE -> throw new IllegalStateException("dev_mode is set above");
             case UNKNOWN -> throw new IllegalArgumentException("No setting " + key + ". get_settings lists them.");
         };
         waitFor(service.update(next), 30, "save the settings");
@@ -972,6 +983,7 @@ final class StudioBridge implements StudioDriver {
             case DEBUG_OUTPUT -> DebugOutput.fromProperty(settings.runProperties().get(Runs.DEBUG.name()))
                     .name().toLowerCase(java.util.Locale.ROOT);
             case HIDDEN_TRACE -> String.join(", ", settings.hiddenTraceWriters());
+            case DEV_MODE -> settings.devMode() ? "on" : "off";
             case UNKNOWN -> "";
         };
     }
