@@ -957,6 +957,12 @@ final class StudioBridge implements StudioDriver {
                 case "off", "false" -> false;
                 default -> throw new IllegalArgumentException("dev_mode is on or off.");
             };
+            // On loads jars no release vetted, with Studio's permissions: the user agrees on screen, as to an add.
+            if (on && !ctx.libraryService().devMode() && !userAgrees("Turn on dev mode?", "The assistant wants to "
+                    + "turn on dev mode for this project.\n\nIts plugins then load from local -SNAPSHOT builds in "
+                    + "~/.m2, which no release checked, and run with Studio's own permissions.")) {
+                throw new IllegalArgumentException("The user did not agree to turn on dev mode.");
+            }
             // The Plugins window's own toggle: writes the setting, then reloads the plugins over it.
             waitFor(ctx.libraryService().setDevMode(on), 120, "reload the plugins");
             return "Set dev_mode to " + (on ? "on" : "off") + "; the plugins reloaded.";

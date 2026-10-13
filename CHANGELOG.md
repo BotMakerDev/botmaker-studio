@@ -16,6 +16,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.
+  Turning it on asks the user on screen first, as adding a plugin does.
 - **An assistant can start a bot.** The MCP endpoint serves `list_templates` and `create_project`. They make a
   project as New Project does, from a vetted template or blank, with registry plugins the user agrees to on
   screen. Then Studio opens the project in place of the current one. The dialog and the tool share one

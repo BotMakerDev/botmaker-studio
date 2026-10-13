@@ -24,7 +24,8 @@ enum AssistedSetting {
     /** *Plugins & Libraries*' Dev mode (2026-10-13): try a plugin's local build before its release. */
     DEV_MODE("dev_mode", "Dev mode",
             "on or off — whether this project, on this computer, loads its plugins' local -SNAPSHOT builds (what "
-                    + "mvn install put in ~/.m2); the plugins reload at once, so their tools may change"),
+                    + "mvn install put in ~/.m2); the user is asked on screen before it turns on; the plugins "
+                    + "reload at once, so their tools may change"),
 
     UNKNOWN("", "", "");
 
