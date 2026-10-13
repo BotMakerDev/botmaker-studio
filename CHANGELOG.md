@@ -67,6 +67,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A window's title never matches Studio's own window.** The screen a plugin watches is found by title, and
+  "Firestone" found "BotMaker Blocks - Firestone" while the game ran in a private display: the assistant was shown
+  Studio. BotMaker's own windows now match only a title that names BotMaker, as shared's `WindowMatch` does.
 - **Starting a run no longer takes the focus away (Linux, X11).** The run layer over the desktop took the focus when it was
   shown, and its first remap dropped it to no window at all, so the game (or the window you were typing in) lost
   it. While the layer is not yet click-through, focus goes back to the window that had it

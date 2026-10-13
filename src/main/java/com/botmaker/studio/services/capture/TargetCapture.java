@@ -3,6 +3,7 @@ package com.botmaker.studio.services.capture;
 import com.botmaker.shared.capture.GenericWindow;
 import com.botmaker.shared.capture.NativeController;
 import com.botmaker.shared.capture.NativeControllerFactory;
+import com.botmaker.shared.capture.WindowMatch;
 
 import javafx.stage.Screen;
 import javafx.stage.Window;
@@ -236,15 +237,19 @@ public final class TargetCapture implements ShotSource {
 
     /**
      * First window (case-insensitive) whose title contains {@code titleSubstring}, or {@code null}. Includes
-     * currently-minimized windows so a minimized target can be found and then de-iconified/raised.
+     * currently-minimized windows so a minimized target can be found and then de-iconified/raised. One of
+     * BotMaker's own windows matches only a needle that names BotMaker: "Firestone" found Studio's "BotMaker
+     * Blocks - Firestone" while the game ran in a private display, and the assistant was shown Studio
+     * (2026-10-13; shared's {@code WindowMatch} skips them the same way).
      */
     private static GenericWindow resolveWindow(String titleSubstring) {
         if (titleSubstring == null) return null;
         String needle = titleSubstring.toLowerCase();
+        boolean own = needle.trim().startsWith(WindowMatch.OWN_TITLE_PREFIX);
         try {
             for (GenericWindow w : NativeControllerFactory.get().getAllWindows(true)) {
                 String t = w.getTitle();
-                if (t != null && t.toLowerCase().contains(needle)) return w;
+                if (t != null && t.toLowerCase().contains(needle) && (own || !WindowMatch.isOwn(w))) return w;
             }
         } catch (Throwable t) {
             System.err.println("Window enumeration failed: " + t.getMessage());
