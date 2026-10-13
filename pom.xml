@@ -212,6 +212,13 @@
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+        <!-- Markdown read as a tree, not by line: the bot's GAME.md, edited a section at a time by the assistant
+             (its source spans), and drawn as HTML in a WebView. -->
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.21.0</version>
+        </dependency>
         <!-- The Terminal tab: xterm.js (vendored under resources/terminal/) drawn in a WebView. -->
         <dependency>
             <groupId>org.openjfx</groupId>

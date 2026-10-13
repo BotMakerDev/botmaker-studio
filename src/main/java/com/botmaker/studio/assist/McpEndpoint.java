@@ -76,8 +76,7 @@ public final class McpEndpoint implements AutoCloseable {
         tools.addAll(theirs);
         McpSyncServer mcp = McpServer.sync(transport)
                 .serverInfo("botmaker-studio", "1")
-                .instructions(McpTools.instructions(driver.pluginGuides(),
-                        driver.projectDir().map(GameNotes::atConnect).orElse("")))
+                .instructions(McpTools.instructions(driver.pluginGuides()))
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tools(tools)
                 .build();

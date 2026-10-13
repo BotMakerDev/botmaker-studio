@@ -323,9 +323,7 @@ class McpEndpointTest {
         assertTrue(text(call("plugin_guide", "{}")).endsWith("How a bot on More is laid out:\nTwo.\n"),
                 "plugin_guide reads the plugins bound now, not the connect's");
         assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
-        assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of(), ""), "no guide, nothing added");
-        assertTrue(McpTools.instructions(List.of(), "# The game\n\n## Hotkeys\n\nQ opens Quests.")
-                .endsWith("(GAME.md) as they were at connect:\n\n# The game\n\n## Hotkeys\n\nQ opens Quests.\n"));
+        assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
         assertTrue(text(call("read_notes", "{}")).startsWith("REFUSED: No project is open"),
                 "notes need a project to live in");
     }
