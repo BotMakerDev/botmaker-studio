@@ -49,6 +49,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A plugin parameter whose type changed is repaired on upgrade.** A field such as `List<String> launchTargets`
+  left behind after the SDK made it `List<Launcher>` still compiled, so the upgrade kept it and the plugin read
+  nothing from it. It is now removed like any value declared another way, and written again with its new type.
 - **Show in file manager no longer freezes the desktop on Linux.** It opened through AWT on the UI thread while
   the right-click menu held the mouse, so no window took a click until Studio was killed. Every link and
   folder Studio opens now goes to the system opener (`xdg-open`, `open`, `rundll32`) from a background thread.

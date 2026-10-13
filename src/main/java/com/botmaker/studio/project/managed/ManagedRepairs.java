@@ -19,6 +19,8 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,7 +38,8 @@ import java.util.Set;
  * <ul>
  *   <li><b>Still the plugin's, and it compiles</b>: left as written.</li>
  *   <li><b>No longer the plugin's</b> — its id is gone, or it is declared another way now (a method that became
- *       a parameter, an enum that became a class of enums): the declaration is removed, its file with it when
+ *       a parameter, an enum that became a class of enums, a parameter whose field has another type now —
+ *       {@code List<String>} for {@code List<Launcher>}, 2026-10-13): the declaration is removed, its file with it when
  *       nothing else is left there. While the bot's own code still names it, it is kept instead, <em>unmarked</em>
  *       — the user's code from then on — and said back in {@link Planned#left()}; a kept class whose name the
  *       plugin's own holder takes is renamed {@code <Class>Retired}, every use with it.</li>
@@ -92,7 +95,8 @@ public final class ManagedRepairs {
      *
      * @param enumType whether a marked type is an enum
      * @param member   the marked method or field, null for a marked type
-     * @param returns  a marked method's return type, by binary name with a primitive boxed; null when it does not
+     * @param returns  a marked method's return type, by binary name with a primitive boxed, or a marked field's
+     *                 whole type ({@link #spelled(org.eclipse.jdt.core.dom.ITypeBinding)}); null when it does not
      *                 resolve against the target classpath
      * @param start    the declaration's offset in its file
      * @param length   the declaration's length
@@ -226,7 +230,8 @@ public final class ManagedRepairs {
                                 method.getName().getIdentifier(), returns(method));
                     }
                     for (FieldDeclaration field : declared.getFields()) {
-                        add(out, known, markers, field, Kind.FIELD, false, file, className, fieldName(field), null);
+                        add(out, known, markers, field, Kind.FIELD, false, file, className, fieldName(field),
+                                spelled(fieldType(field)));
                     }
                 }
             });
@@ -255,19 +260,7 @@ public final class ManagedRepairs {
         org.eclipse.jdt.core.dom.IMethodBinding binding = method.resolveBinding();
         org.eclipse.jdt.core.dom.ITypeBinding type = binding == null ? null : binding.getReturnType();
         if (type == null || type.isRecovered()) return null;
-        if (type.isPrimitive()) {
-            return switch (type.getName()) {
-                case "boolean" -> Boolean.class.getName();
-                case "int" -> Integer.class.getName();
-                case "long" -> Long.class.getName();
-                case "double" -> Double.class.getName();
-                case "float" -> Float.class.getName();
-                case "short" -> Short.class.getName();
-                case "byte" -> Byte.class.getName();
-                case "char" -> Character.class.getName();
-                default -> type.getName();
-            };
-        }
+        if (type.isPrimitive()) return boxed(type.getName());
         return type.getErasure().getBinaryName();
     }
 
@@ -282,7 +275,69 @@ public final class ManagedRepairs {
             case TYPE -> value.isOpenSet() && mark.enumType() == (value.isEnum() && !value.isGrouped());
             // A method returning another type is the old shape: resetting its expression would not compile.
             case METHOD -> !value.isOpenSet() && !value.isParam() && value.type().getName().equals(mark.returns());
-            case FIELD -> value.isParam();
+            // A field of another type is the old shape too: the plugin reads it as its own type, and finds nothing.
+            case FIELD -> value.isParam() && (mark.returns() == null || spelled(value.form()) == null
+                    || mark.returns().equals(spelled(value.form())));
+        };
+    }
+
+    /**
+     * {@code type}'s whole name, type arguments included, nested classes dotted and a primitive boxed — the same
+     * spelling {@link #spelled(Type)} gives the plugin's declared form; null when it does not resolve.
+     */
+    private static String spelled(org.eclipse.jdt.core.dom.ITypeBinding type) {
+        if (!resolved(type)) return null;
+        String name = type.isPrimitive() ? boxed(type.getName()) : type.getQualifiedName();
+        return name.replaceAll("\\s", "");
+    }
+
+    /**
+     * Whether {@code type} and every type in it resolve: a type argument missing from the classpath spells
+     * differently, and a classpath problem must not read as a value declared another way.
+     */
+    private static boolean resolved(org.eclipse.jdt.core.dom.ITypeBinding type) {
+        if (type == null || type.isRecovered()) return false;
+        if (type.isArray()) return resolved(type.getElementType());
+        if (type.isWildcardType()) return type.getBound() == null || resolved(type.getBound());
+        for (org.eclipse.jdt.core.dom.ITypeBinding argument : type.getTypeArguments()) {
+            if (!resolved(argument)) return false;
+        }
+        return true;
+    }
+
+    /** A field's type as its first variable has it, so {@code int x[]} reads as {@code int[]}. */
+    private static org.eclipse.jdt.core.dom.ITypeBinding fieldType(FieldDeclaration field) {
+        if (field.fragments().isEmpty()) return null;
+        org.eclipse.jdt.core.dom.IVariableBinding variable =
+                ((VariableDeclarationFragment) field.fragments().getFirst()).resolveBinding();
+        return variable == null ? null : variable.getType();
+    }
+
+    /** A plugin's declared form, spelled as above; null for a form that is neither a class nor a generic one. */
+    private static String spelled(Type form) {
+        String name;
+        if (form instanceof Class<?> type) {
+            // getTypeName, not getName: an array is java.lang.String[] there, as JDT spells it.
+            name = type.isPrimitive() ? boxed(type.getName()) : type.getTypeName();
+        } else if (form instanceof ParameterizedType) {
+            name = form.getTypeName();
+        } else {
+            return null;
+        }
+        return name.replace('$', '.').replaceAll("\\s", "");
+    }
+
+    private static String boxed(String primitive) {
+        return switch (primitive) {
+            case "boolean" -> Boolean.class.getName();
+            case "int" -> Integer.class.getName();
+            case "long" -> Long.class.getName();
+            case "double" -> Double.class.getName();
+            case "float" -> Float.class.getName();
+            case "short" -> Short.class.getName();
+            case "byte" -> Byte.class.getName();
+            case "char" -> Character.class.getName();
+            default -> primitive;
         };
     }
 
