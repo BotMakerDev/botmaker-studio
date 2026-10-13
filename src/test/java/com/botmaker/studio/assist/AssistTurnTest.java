@@ -123,6 +123,81 @@ class AssistTurnTest {
         assertTrue(turn.source().contains("System.out.println(Subject.LIMIT)"), turn.source());
     }
 
+    @Test
+    void aTestIsBuiltInItsSlotFromAnOperatorWhoseOperandsAreSlotsInTurn() {
+        String source = SOURCE.replace("System.out.println(count);",
+                "if (count > 1) {\n            System.out.println(count);\n        }");
+        AssistTurn turn = turn(source);
+        String condition = statement(turn, "if (count").slots().getFirst().id();
+
+        Outcome negated = turn.setSlot(condition, "op:NOT");
+        assertInstanceOf(Outcome.Accepted.class, negated, negated.toString());
+        assertTrue(turn.source().contains("if (!"), turn.source());
+        List<BlockView.Slot> slots = statement(turn, "if (!").slots();
+        assertTrue(slots.size() > 1, "the operand is a slot of its own: " + slots);
+        assertTrue(slots.stream().allMatch(s -> s.type().equals("boolean")), slots.toString());
+    }
+
+    @Test
+    void anOperatorOrCallThatDoesNotFitTheSlotIsRefused() {
+        AssistTurn turn = turn(SOURCE);
+        String slot = statement(turn, "System.out.println").slots().getFirst().id();
+
+        Outcome.Refused logic = assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "op:AND"));
+        assertTrue(logic.reasons().getFirst().contains("does not give a int"), logic.reasons().toString());
+        Outcome.Refused unknown = assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "op:EXEC"));
+        assertTrue(unknown.reasons().getFirst().contains("op:NOT"), "it lists the operators: " + unknown.reasons());
+        assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "call:Runtime.exec(String)"));
+        assertEquals(SOURCE, turn.source());
+    }
+
+    @Test
+    void aManagedValueTakesNoOperator() {
+        String source = SOURCE.replace("public class Subject {", """
+                public class Subject {
+                    @com.botmaker.plugin.api.managed.ManagedMarker @interface Mark { }
+                    @Mark public static boolean flag() { return true; }
+                """);
+        AssistTurn turn = turn(source);
+        String slot = turn.tree().stream().filter(m -> m.name().equals("flag")).findFirst().orElseThrow()
+                .body().statements().getFirst().slots().getFirst().id();
+
+        Outcome.Refused refused = assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "op:NOT"));
+        assertTrue(refused.reasons().getFirst().contains("managed value"), refused.reasons().toString());
+        assertEquals(source, turn.source());
+    }
+
+    @Test
+    void aCallStatementMovesByTheIdTheTreeGivesItButAConditionIsNoStatement() {
+        String source = SOURCE.replace("System.out.println(count);",
+                "if (count > 1) {\n            System.out.println(count);\n        }");
+        AssistTurn turn = turn(source);
+        BlockView.Statement branch = statement(turn, "if (count");
+        assertInstanceOf(Outcome.Refused.class, turn.delete(branch.slots().getFirst().id()));
+
+        BlockView.Statement printed = branch.bodies().getFirst().statements().getFirst();
+        Outcome moved = turn.moveBlock(printed.id(), runBody(turn).id(), 1);
+        assertInstanceOf(Outcome.Accepted.class, moved, moved.toString());
+        assertTrue(runBody(turn).statements().get(1).text().startsWith("System.out.println"), turn.source());
+    }
+
+    @Test
+    void aLibraryCallStatementListsItsArgumentsAsSlots() {
+        AssistTurn turn = turn(SOURCE.replace("System.out.println(count);", "Math.max(count, 2);"));
+        List<BlockView.Slot> slots = statement(turn, "Math.max").slots();
+
+        assertEquals(List.of("count", "2"), slots.stream().map(BlockView.Slot::value).toList());
+    }
+
+    @Test
+    void aCallStatementIsDeletedByTheIdTheTreeGivesIt() {
+        AssistTurn turn = turn(SOURCE);
+        Outcome deleted = turn.delete(statement(turn, "System.out.println").id());
+
+        assertInstanceOf(Outcome.Accepted.class, deleted, deleted.toString());
+        assertFalse(turn.source().contains("println"), turn.source());
+    }
+
     // ---- what is refused, and leaves nothing behind ----
 
     @Test

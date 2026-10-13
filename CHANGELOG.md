@@ -17,6 +17,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The assistant is told how each plugin lays a bot out.** A plugin's guide (`StudioPlugin.assistantGuide()`)
   is added to the MCP instructions under the plugin's name, and the new `plugin_guide` tool reads it again after
   a plugin changes.
+- **The assistant can write a test into a condition.** `set_slot` takes a palette call whose result fits the
+  slot (`call:ImageFinder.find(ImageTemplate)`) or an operator (`op:NOT`, `op:AND`, `op:LESS`…), and `read_tree`
+  lists the slots inside it, so an If or While can check the screen.
 
 ### Changed
 
@@ -83,6 +86,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **`read_tree` lists a plugin call statement's arguments as slots**, and `delete_block`/`move_block` take the id
+  it gives that statement.
 - **An assistant reads each traced line once.** A bot's trace line is also printed, so `read_trace` and a run
   tool's answer showed it twice (`[Debug Source] …` and `[Source] …`). The trace copy stays, with its source
   line; the level is named only when it is not debug detail (`[Warning Vision] …`).

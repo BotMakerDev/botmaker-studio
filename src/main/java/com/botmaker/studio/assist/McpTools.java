@@ -66,7 +66,9 @@ public final class McpTools {
             - Every file tool takes `file`; leave it empty for the open file. An edit that adds, removes or
               moves statements answers with the reshaped methods' ids as they are now; use those.
             - You cannot write Java. A slot takes a value of its type: a literal, one of the bot's constants,
-              or a constant or factory call of that type.
+              or a constant or factory call of that type. A test is built in its slot: set_slot a palette
+              call (call:ImageFinder.find(ImageTemplate)) or an operator (op:NOT) whose result fits, then
+              read_tree and set the slots it brings.
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
             - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
               before a large change saves a version to go back to with revert.
@@ -228,7 +230,11 @@ public final class McpTools {
                 edit(json, "set_slot",
                         "Write a value into a slot: a literal, one of the bot's constants by name (Pictures.ORE), "
                                 + "an enum or static constant of the slot's type, or a factory call that type "
-                                + "declares. Anything else is refused.",
+                                + "declares. Or build one: a palette call id whose result fits the slot "
+                                + "(call:ImageFinder.find(ImageTemplate)), or an operator ("
+                                + String.join(", ", AssistTurn.operatorIds()) + "); the call's arguments and the "
+                                + "operator's operands are then slots of their own, which read_tree lists. "
+                                + "Anything else is refused.",
                         List.of(FILE, Prop.text("slotId", "the slot id, from read_tree"), Prop.text("value", "the value")),
                         bot, (tools, args) -> tools.setSlot(text(args, "slotId"), text(args, "value")), true),
                 edit(json, "delete_block", "Delete a statement. Refused if the file would stop compiling.",

@@ -9,6 +9,8 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockType;
+import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.MethodReferences;
@@ -23,8 +25,10 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.util.MethodSignature;
 import org.eclipse.jdt.core.dom.*;
@@ -175,12 +179,22 @@ public final class AssistTurn {
         Optional<Expression> slot = stage.findNode(slotId, Expression.class);
         if (slot.isEmpty()) return Outcome.Refused.because("No slot has the id " + slotId + ". Read the tree again.");
         ITypeBinding expected = expectedType(slot.get());
+        String given = value == null ? "" : value.strip();
+        String callKey = PaletteEntry.Kind.CALL.restOf(given);
+        if ((callKey != null || given.startsWith(OPERATOR)) && inManagedValue(slot.get())) {
+            return Outcome.Refused.because("Slot " + slotId + " is a plugin's managed value: it takes a value, "
+                    + "never a call or an operator.");
+        }
+        if (callKey != null) return setCall(stage, slotId, slot.get(), expected, callKey);
+        if (given.startsWith(OPERATOR)) {
+            return setOperator(stage, slotId, slot.get(), expected, given.substring(OPERATOR.length()));
+        }
         Optional<Type> type = valueType(expected);
         if (type.isEmpty()) {
             return Outcome.Refused.because("No loaded plugin declares " + nameOf(expected)
                     + ", so a value of it cannot be written here.");
         }
-        String text = value == null ? "" : value.strip();
+        String text = given;
         List<ManagedConstants.Constant> named = constantsNamed(text);
         if (named.size() > 1) {
             return Outcome.Refused.because("`" + text + "` names " + named.size() + " of the bot's constants: "
@@ -212,6 +226,70 @@ public final class AssistTurn {
                 editor -> editor.replaceWithValue(slot.get(), written.get()));
     }
 
+    /**
+     * Writes the palette's call {@code key} into a slot its result fits, as the slot's menu does: its arguments
+     * are the call's defaults, each a slot of its own to set next.
+     */
+    private Outcome setCall(Stage stage, String slotId, Expression slot, ITypeBinding expected, String key) {
+        Optional<PaletteCall> call = paletteCall(stage.analyzer, key);
+        if (call.isEmpty()) return Outcome.Refused.because("The palette has no call " + PaletteEntry.Kind.CALL.idOf(key) + ".");
+        ResolvedType returns = call.get().signature().returnType();
+        if (expected == null) return Outcome.Refused.because("Slot " + slotId + " has no type Studio can read.");
+        if (returns == null || returns.isVoid() || !returns.isAssignmentCompatible(ResolvedType.of(expected))) {
+            return Outcome.Refused.because(key + " gives " + (returns == null ? "nothing" : returns.simpleName())
+                    + ", not a " + nameOf(expected) + ".");
+        }
+        ExpressionChoice.Method choice = call.get().choice();
+        return apply(stage, "set " + slotId + " to " + choice.scope() + "." + choice.methodName()
+                + "(…); read the tree for its arguments' slots", editor -> editor.replaceWithMethodCall(slot, choice));
+    }
+
+    /**
+     * Writes an operator ({@code op:NOT}, {@code op:AND}, {@code op:LESS}…) into a slot its result fits, as the
+     * slot's menu does: its operands are placeholders, each a slot of its own to set next.
+     */
+    private Outcome setOperator(Stage stage, String slotId, Expression slot, ITypeBinding expected, String id) {
+        Optional<ExpressionType> operator = ExpressionCatalog.byId(id).filter(AssistTurn::isOperator);
+        if (operator.isEmpty()) {
+            return Outcome.Refused.because("`" + OPERATOR + id + "` is not an operator. Operators: "
+                    + String.join(", ", operatorIds()) + ".");
+        }
+        if (expected == null) return Outcome.Refused.because("Slot " + slotId + " has no type Studio can read.");
+        if (!ExpressionCatalog.isCompatibleWith(operator.get(), ResolvedType.of(expected), stage.state)) {
+            return Outcome.Refused.because(operator.get().displayName() + " does not give a " + nameOf(expected) + ".");
+        }
+        return apply(stage, "set " + slotId + " to " + operator.get().displayName()
+                + "; read the tree for its operands' slots", editor -> editor.replaceExpression(slot, operator.get()));
+    }
+
+    /**
+     * Whether {@code node} is inside a member a plugin's marker annotates: a managed value, whose expression only
+     * the grammar writes and the host reads back (umbrella CLAUDE.md, a plugin's values).
+     */
+    private static boolean inManagedValue(ASTNode node) {
+        for (ASTNode at = node; at != null; at = at.getParent()) {
+            if (!(at instanceof BodyDeclaration declaration)) continue;
+            for (Object modifier : declaration.modifiers()) {
+                if (modifier instanceof Annotation annotation && ManagedIds.isMarker(annotation.resolveTypeBinding())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** What set_slot takes before an operator's id: {@code op:NOT}. */
+    static final String OPERATOR = "op:";
+
+    /** The operators a slot takes, as set_slot spells them, in the menu's order. */
+    static List<String> operatorIds() {
+        return ExpressionCatalog.all().stream().filter(AssistTurn::isOperator).map(t -> OPERATOR + t.id()).toList();
+    }
+
+    private static boolean isOperator(ExpressionType type) {
+        return type instanceof ExpressionType.InfixOp || type instanceof ExpressionType.PrefixOp;
+    }
+
     /** The bot's managed constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
     private List<ManagedConstants.Constant> constantsNamed(String text) {
         int dot = text.lastIndexOf('.');
@@ -234,8 +312,7 @@ public final class AssistTurn {
     /** Deletes the statement {@code blockId}. */
     public Outcome delete(String blockId) {
         Stage stage = stage();
-        Optional<Statement> statement = stage.findNode(blockId, Statement.class)
-                .filter(s -> !(s instanceof Block));
+        Optional<Statement> statement = stage.statement(blockId);
         if (statement.isEmpty()) return Outcome.Refused.because("No statement has the id " + blockId + ".");
         return apply(stage, "deleted " + oneLine(statement.get(), source),
                 editor -> editor.deleteStatement(statement.get()));
@@ -275,7 +352,7 @@ public final class AssistTurn {
     /** Moves the statement {@code blockId} into body {@code bodyId}, before the statement now at {@code index}. */
     public Outcome moveBlock(String blockId, String bodyId, int index) {
         Stage stage = stage();
-        Optional<Statement> statement = stage.findNode(blockId, Statement.class).filter(s -> !(s instanceof Block));
+        Optional<Statement> statement = stage.statement(blockId);
         if (statement.isEmpty()) return Outcome.Refused.because("No statement has the id " + blockId + ".");
         Optional<BodyBlock> target = stage.find(bodyId, BodyBlock.class);
         if (target.isEmpty()) return Outcome.Refused.because("No body has the id " + bodyId + ". Read the tree again.");
@@ -478,6 +555,16 @@ public final class AssistTurn {
             });
             return found.stream().findFirst();
         }
+
+        /**
+         * The statement {@code id} names: by its own id, or — as read_tree names a call statement, by its call —
+         * by the id of an expression statement's expression.
+         */
+        Optional<Statement> statement(String id) {
+            return findNode(id, Statement.class).filter(s -> !(s instanceof Block))
+                    .or(() -> findNode(id, Expression.class).map(ASTNode::getParent)
+                            .filter(ExpressionStatement.class::isInstance).map(Statement.class::cast));
+        }
     }
 
     private Stage stage() {
@@ -511,12 +598,21 @@ public final class AssistTurn {
     }
 
     private Optional<ExpressionChoice.Method> call(ProjectAnalyzer analyzer, String key) {
+        return paletteCall(analyzer, key).map(PaletteCall::choice);
+    }
+
+    /** A call the palette offers: its owner's simple name and its signature. */
+    private record PaletteCall(String owner, MethodSignature signature) {
+        ExpressionChoice.Method choice() {
+            return new ExpressionChoice.Method(owner, signature.name(), signature.paramTypes(), true);
+        }
+    }
+
+    private Optional<PaletteCall> paletteCall(ProjectAnalyzer analyzer, String key) {
         for (FacadeEntry facade : facades()) {
             String owner = facade.simpleName();
             for (MethodSignature sig : offered(analyzer, owner)) {
-                if (callKey(owner, sig).equals(key)) {
-                    return Optional.of(new ExpressionChoice.Method(owner, sig.name(), sig.paramTypes(), true));
-                }
+                if (callKey(owner, sig).equals(key)) return Optional.of(new PaletteCall(owner, sig));
             }
         }
         return Optional.empty();
@@ -555,18 +651,18 @@ public final class AssistTurn {
         List<Expression> positions = new ArrayList<>();
         switch (statement) {
             case ExpressionStatement s -> arguments(s.getExpression(), positions);
+            // A plugin's call statement is its block by the call itself, not the statement around it.
+            case Expression call -> arguments(call, positions);
             case VariableDeclarationStatement s -> {
                 for (Object fragment : s.fragments()) {
                     Expression initializer = ((VariableDeclarationFragment) fragment).getInitializer();
-                    if (initializer == null) continue;
-                    positions.add(initializer);
-                    arguments(initializer, positions);
+                    if (initializer != null) within(initializer, positions);
                 }
             }
-            case IfStatement s -> positions.add(s.getExpression());
-            case WhileStatement s -> positions.add(s.getExpression());
-            case DoStatement s -> positions.add(s.getExpression());
-            case ReturnStatement s -> { if (s.getExpression() != null) positions.add(s.getExpression()); }
+            case IfStatement s -> within(s.getExpression(), positions);
+            case WhileStatement s -> within(s.getExpression(), positions);
+            case DoStatement s -> within(s.getExpression(), positions);
+            case ReturnStatement s -> { if (s.getExpression() != null) within(s.getExpression(), positions); }
             default -> { }
         }
         List<BlockView.Slot> slots = new ArrayList<>();
@@ -576,6 +672,25 @@ public final class AssistTurn {
                     valueType(expected).isPresent()));
         }
         return slots;
+    }
+
+    /**
+     * {@code expression} and the positions inside it a value may be written into: through a {@code !}, an
+     * operator's operands or brackets, down to each call's arguments — so a condition built with set_slot
+     * ({@code !ImageFinder.find(…)}) can have its parts set too.
+     */
+    private static void within(Expression expression, List<Expression> out) {
+        out.add(expression);
+        switch (expression) {
+            case PrefixExpression p when p.getOperator() == PrefixExpression.Operator.NOT -> within(p.getOperand(), out);
+            case InfixExpression i -> {
+                within(i.getLeftOperand(), out);
+                within(i.getRightOperand(), out);
+                for (Object more : i.extendedOperands()) within((Expression) more, out);
+            }
+            case ParenthesizedExpression p -> within(p.getExpression(), out);
+            default -> arguments(expression, out);
+        }
     }
 
     private static void arguments(Expression expression, List<Expression> out) {
