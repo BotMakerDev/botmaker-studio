@@ -51,6 +51,7 @@ import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.studio.project.params.LeftoverFields;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.ProjectVcs;
@@ -1321,15 +1322,7 @@ final class StudioBridge implements StudioDriver {
         String text = value == null ? "" : value.strip();
         return onFx(() -> {
             ValueGrammar grammar = PluginHost.grammar();
-            List<JavaParameter> all = JavaParameters.scan(ctx.config(), ctx.state(), grammar);
-            List<JavaParameter> named = all.stream().filter(p -> p.qualified().equals(wanted)).toList();
-            if (named.isEmpty()) named = all.stream().filter(p -> p.name().equals(wanted)).toList();
-            if (named.size() != 1) {
-                throw new IllegalArgumentException((named.isEmpty() ? "The bot has no parameter " : "More than one "
-                        + "class has a parameter ") + wanted + ". list_params names them"
-                        + (named.isEmpty() ? "." : ": give Class.name."));
-            }
-            JavaParameter p = named.getFirst();
+            JavaParameter p = parameterNamed(JavaParameters.scan(ctx.config(), ctx.state(), grammar), wanted);
             if (!p.editable()) throw new IllegalArgumentException(p.qualified() + " cannot be set here: " + p.note());
             Optional<Object> read = grammar.valueOf(p.form(), text);
             if (read.isEmpty()) {
@@ -1349,6 +1342,69 @@ final class StudioBridge implements StudioDriver {
                     .orElseThrow(() -> new IllegalArgumentException(p.qualified() + " changed meanwhile. Try again."));
             return "Set " + p.qualified() + " to " + stored.value() + ".";
         });
+    }
+
+    /** The one parameter of {@code all} called {@code wanted}: {@code Class.name}, or a name only one class has. */
+    private static JavaParameter parameterNamed(List<JavaParameter> all, String wanted) {
+        List<JavaParameter> named = all.stream().filter(p -> p.qualified().equals(wanted)).toList();
+        if (named.isEmpty()) named = all.stream().filter(p -> p.name().equals(wanted)).toList();
+        if (named.size() != 1) {
+            throw new IllegalArgumentException((named.isEmpty() ? "The bot has no parameter " : "More than one "
+                    + "class has a parameter ") + wanted + ". list_params names them"
+                    + (named.isEmpty() ? "." : ": give Class.name."));
+        }
+        return named.getFirst();
+    }
+
+    @Override
+    public String resetParam(String param, boolean confirm) {
+        if (confirm) notReading();
+        String wanted = param == null ? "" : param.strip();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        Refactor.Outcome outcome;
+        try {
+            index = prepared.get();
+            ValueGrammar grammar = PluginHost.grammar();
+            JavaParameter p = parameterNamed(JavaParameters.over(index, grammar), wanted);
+            outcome = LeftoverFields.reset(index, p, PluginHost.managedValues(), grammar);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The reset could not be worked out: ", e);
+        }
+        if (!(outcome instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) outcome).reason());
+        }
+        if (!confirm) {
+            return "Nothing changed yet. With confirm: " + plan.summary() + ".\nA version of the bot is saved before"
+                    + " it.";
+        }
+        return cleanupWritten(index, plan, Set.of());
+    }
+
+    @Override
+    public String deleteField(String file, String field) {
+        notReading();
+        Path at = onFx(() -> path(file));
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        Refactor.Outcome outcome;
+        try {
+            index = prepared.get();
+            outcome = LeftoverFields.delete(index, at, field, PluginHost.managedValues());
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The deletion could not be worked out: ", e);
+        }
+        if (outcome instanceof Refactor.Refused refused) {
+            Path root = ctx.config().sourceRoot();
+            List<String> lines = new ArrayList<>();
+            lines.add(refused.reason());
+            for (Usages.Usage use : refused.uses()) {
+                lines.add(LiveBot.relative(root, use.file()) + ":" + use.line()
+                        + (use.enclosing().isEmpty() ? "" : " in " + use.enclosing()) + "  " + use.text().strip());
+            }
+            throw new IllegalArgumentException(String.join("\n", lines));
+        }
+        return cleanupWritten(index, (Refactor.Planned) outcome, Set.of());
     }
 
     @Override

@@ -71,6 +71,8 @@ public final class McpTools {
               list_migrations says which values a plugin retired, to migrate before a move drops them;
               read_migration how one type's values become another's, set_migration copies them,
               switch_uses points the bot at the copies and remove_migrated removes what is left.
+              reset_param puts a plugin's parameter back as it declares it; delete_field removes a field
+              nothing uses any more.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -649,6 +651,29 @@ public final class McpTools {
                         List.of(Prop.text("param", "the parameter: Class.name, or its name alone when only one has it"),
                                 Prop.text("value", "a value of its type, as set_slot takes it")),
                         args -> driver.setParamDefault(text(args, "param"), text(args, "value"))),
+                spec(json, "reset_param",
+                        "Put a plugin's parameter back as its plugin declares it now: its first value, or — when "
+                                + "the field is another type than the plugin declares, as a plugin's move can leave "
+                                + "it — removed and written anew. Refused when the bot would stop compiling. Without "
+                                + "confirm it only says what it would do; with confirm a version of the bot is saved "
+                                + "first.",
+                        """
+                                {"type":"object","properties":{
+                                  "param":{"type":"string","description":"the parameter: Class.name, or its name alone when only one has it"},
+                                  "confirm":{"type":"boolean","description":"true to do it; false or absent to only see what it would do"}},
+                                 "required":["param"],"additionalProperties":false}""",
+                        request -> {
+                            Map<String, Object> args = arguments(request);
+                            return answer(() -> driver.resetParam(text(args, "param"), flag(args, "confirm")));
+                        }),
+                act(json, "delete_field",
+                        "Delete a field of the bot's code — one a plugin no longer declares, say. Refused, with every "
+                                + "place that still uses it, while anything does; for a parameter a plugin declares "
+                                + "(reset_param); and when the bot would stop compiling. A safety version is saved "
+                                + "first.",
+                        List.of(FILE, Prop.text("field", "the field's name, or Class.name when two classes of the file "
+                                + "have one")),
+                        args -> driver.deleteField(text(args, "file"), text(args, "field"))),
                 act(json, "get_settings", "List the project settings you may change, each with its value and "
                                 + "what it takes.",
                         List.of(), args -> driver.settings()),

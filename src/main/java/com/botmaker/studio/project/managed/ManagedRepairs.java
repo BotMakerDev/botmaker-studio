@@ -208,6 +208,20 @@ public final class ManagedRepairs {
         return ids;
     }
 
+    /**
+     * Whether the field {@code className} of {@code file} carrying the parameter {@code value}'s mark is written
+     * the way its plugin declares it now — the upgrade's own test, so a {@code List<String>} left for a
+     * {@code List<Launcher>} does not fit; empty when that class's fields carry no such mark (a nested class's are
+     * not read).
+     */
+    public static Optional<Boolean> fieldFits(BotIndex index, ManagedValue<?> value, List<ManagedValue<?>> live,
+                                              Path file, String className) {
+        return marks(index, live, Set.of(value.marker())).stream()
+                .filter(mark -> mark.kind() == Kind.FIELD && mark.id().equals(value.id())
+                        && mark.file().equals(file) && mark.className().equals(className))
+                .findFirst().map(mark -> fits(mark, value));
+    }
+
     // --- reading -----------------------------------------------------------------------------------------------
 
     /**

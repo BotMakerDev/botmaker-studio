@@ -31,6 +31,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   uses at the copies (a use the copy does not fit left and marked), and `remove_migrated` removes the originals
   nothing uses and then the `@Migrate` methods nothing needs, previewed without `confirm`; each writes one version
   after a safety one.
+- **An assistant can put leftover fields right.** `reset_param` sets a plugin's parameter back to its first value,
+  or removes and writes it anew when a move left it as another type (`List<String>` for `List<Launcher>`);
+  `delete_field` deletes a field nothing uses, listing its uses otherwise. Each saves a version first, and one
+  that would stop the bot compiling changes nothing.
 - **`list_plugins` gives a template's SDK version**, not the pom property (`${botmaker.sdk.version}`) that pins it.
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.

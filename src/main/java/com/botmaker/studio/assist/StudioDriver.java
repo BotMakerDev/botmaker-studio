@@ -231,6 +231,19 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio sets no parameters here.");
     }
 
+    /**
+     * A plugin's {@code @Param} field {@code param} as its plugin declares it now: its first value, or written anew
+     * when it is another type. Only says what it would do unless {@code confirm}.
+     */
+    default String resetParam(String param, boolean confirm) {
+        throw new IllegalArgumentException("Studio resets no parameters here.");
+    }
+
+    /** Deletes the field {@code field} of {@code file}, refused while anything uses it. */
+    default String deleteField(String file, String field) {
+        throw new IllegalArgumentException("Studio deletes no fields here.");
+    }
+
     /** The project settings an assistant may read and set, each with its value and what it takes. */
     default String settings() {
         throw new IllegalArgumentException("Studio has no settings here.");
