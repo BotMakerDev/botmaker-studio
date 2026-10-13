@@ -884,12 +884,135 @@ final class StudioBridge implements StudioDriver {
             }
             try {
                 MigrationWindow.written(ctx.config(), ctx.state(), plan, index, this::redrawIfActive);
-            } catch (RuntimeException failed) {
-                throw new IllegalArgumentException("The migration stopped part-way (" + failed.getMessage()
-                        + "); revert goes back to the safety version from before it.");
+            } catch (RuntimeException | LinkageError failed) {
+                throw stoppedPartWay(failed);
             }
             return plan.summary() + ". The version before it is in list_versions.\n" + said;
         });
+    }
+
+    /**
+     * The window's Switch uses: every use of {@code from}'s values named in {@code names} (all when blank) pointed
+     * at its copy in {@code to} (blank: the one type its copies are in); a use the copy does not fit is left and
+     * its function marked. Written as one version after a safety one, as the window does without asking.
+     */
+    @Override
+    public String switchUses(String from, String to, String names) {
+        notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        MigrationCleanup.Switched switched;
+        try {
+            index = prepared.get();
+            ValueGrammar grammar = PluginHost.grammar();
+            List<ManagedValue<?>> declared = PluginHost.managedValues();
+            Set<Class<?>> known = knownTypes(grammar, declared);
+            Class<?> source = migrated(from, known, true);
+            Set<String> named = new LinkedHashSet<>();
+            for (String name : (names == null ? "" : names).split(",")) {
+                if (!name.isBlank()) named.add(name.strip());
+            }
+            // As the window's menu: named values switch to where the first one's copy is.
+            Class<?> target = (to == null || to.isBlank()) && !named.isEmpty()
+                    ? MigrationCleanup.copyTarget(index, grammar, declared, source, named.iterator().next())
+                    .orElseThrow(() -> new IllegalArgumentException("No copy of " + named.iterator().next()
+                            + " was found: migrate it first (set_migration)."))
+                    : copiedInto(index, grammar, declared, source, to, known);
+            String note = onFx(() -> MigrationActions.leftNote(ctx.state(), source));
+            switched = MigrationCleanup.switchUses(index, grammar, declared, source, target, named, note);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The uses could not be worked out: ", e);
+        }
+        String left = switched.left().isEmpty() ? "" : "\nLeft as they are:\n- " + String.join("\n- ",
+                switched.left());
+        if (!(switched.outcome() instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) switched.outcome()).reason() + left);
+        }
+        return cleanupWritten(index, plan, Set.of()) + left;
+    }
+
+    /**
+     * The window's Remove originals and the Review tab's Remove unneeded methods, as one change: {@code from}'s
+     * originals copied into {@code to} that nothing uses, then each {@code @Migrate} method nothing needs. Without
+     * {@code confirm}, what would go; with it, written as one version after a safety one.
+     */
+    @Override
+    public String removeMigrated(String from, String to, boolean confirm) {
+        if (confirm) notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        MigrationCleanup.Cleared cleared;
+        Class<?> target;
+        try {
+            index = prepared.get();
+            ValueGrammar grammar = PluginHost.grammar();
+            List<ManagedValue<?>> declared = PluginHost.managedValues();
+            Set<Class<?>> known = knownTypes(grammar, declared);
+            Class<?> source = migrated(from, known, true);
+            target = to == null || to.isBlank()
+                    ? MigrationCleanup.copiedInto(index, grammar, declared, source).orElse(null)
+                    : migrated(to, known, false);
+            cleared = MigrationCleanup.clear(index, grammar, declared, source, target);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The removal could not be worked out: ", e);
+        }
+        String unnamed = target == null ? "No single type holds copies of " + from + "'s values, so no original is "
+                + "removed; name the type in to." : "";
+        if (!(cleared.outcome() instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) cleared.outcome()).reason()
+                    + (unnamed.isEmpty() ? "" : " " + unnamed));
+        }
+        List<String> lines = new ArrayList<>();
+        if (!unnamed.isEmpty()) lines.add(unnamed);
+        if (!cleared.originals().isEmpty()) {
+            lines.add("Originals nothing uses, each with its copy: " + String.join(", ", cleared.originals()) + ".");
+        }
+        if (!cleared.methods().isEmpty()) {
+            lines.add("@Migrate methods, of any type, no value needs then: " + String.join(", ", cleared.methods())
+                    + ".");
+        }
+        if (!cleared.deleted().isEmpty()) {
+            lines.add("Files left holding nothing else, deleted: " + String.join(", ", cleared.deleted().stream()
+                    .map(file -> file.getFileName().toString()).toList()) + ".");
+        }
+        if (!confirm) {
+            return "Would remove:\n" + String.join("\n", lines) + "\nCall again with confirm to remove them; a version "
+                    + "of the bot is saved before it.";
+        }
+        return cleanupWritten(index, plan, cleared.deleted()) + "\n" + String.join("\n", lines);
+    }
+
+    /** The type {@code from}'s copies are in: {@code to} when given, else the one type holding any. */
+    private static Class<?> copiedInto(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
+                                       Class<?> from, String to, Set<Class<?>> known) {
+        if (to != null && !to.isBlank()) return migrated(to, known, false);
+        return MigrationCleanup.copiedInto(index, grammar, declared, from).orElseThrow(() ->
+                new IllegalArgumentException("No single type holds copies of " + from.getSimpleName()
+                        + "'s values: migrate them first (set_migration), or name the type in to."));
+    }
+
+    /** A cleanup step written as {@link MigrationActions} writes it, its refusal as the tool's. */
+    private String cleanupWritten(BotIndex index, Refactor.Planned plan, Set<Path> deleted) {
+        Map<Path, String> basis = MigrationActions.basis(index, plan, deleted);
+        MigrationActions.Wrote wrote = onFx(() -> {
+            try {
+                return new MigrationActions(ctx.config(), ctx.state(), () -> null, this::redrawIfActive, () -> {})
+                        .write(plan, deleted, basis);
+            } catch (RuntimeException | LinkageError failed) {
+                throw stoppedPartWay(failed);
+            }
+        });
+        if (!wrote.done()) throw new IllegalArgumentException(wrote.text());
+        return wrote.text() + " The version before it is in list_versions.";
+    }
+
+    /** A write that threw: it may have saved the safety version and changed part of the bot. */
+    private static IllegalArgumentException stoppedPartWay(Throwable failed) {
+        IllegalArgumentException said = new IllegalArgumentException("It stopped part-way ("
+                + (failed.getMessage() == null ? failed.getClass().getSimpleName() : failed.getMessage())
+                + "); if list_versions has a safety version from just before, revert goes back to it.");
+        said.initCause(failed);
+        return said;
     }
 
     /** Redraws {@code file} when it is the one on the canvas, after a write past the editor. FX thread. */

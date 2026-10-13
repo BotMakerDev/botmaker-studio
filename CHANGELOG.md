@@ -27,7 +27,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   through and why it cannot be written yet. `set_migration` is the window's Apply: lines in the same words change
   that mapping (`grey: fixed true`, `Area.w: fixed 0`, `RED: NAVY`); without `confirm` it lists each value before
   and after, with it the `@Migrate` methods and `@Migrated` copies are written as one version, the new type's
-  holder too when the bot lacks it. A mapping that would not compile writes nothing.
+  holder too when the bot lacks it. A mapping that would not compile writes nothing. `switch_uses` points the bot's
+  uses at the copies (a use the copy does not fit left and marked), and `remove_migrated` removes the originals
+  nothing uses and then the `@Migrate` methods nothing needs, previewed without `confirm`; each writes one version
+  after a safety one.
 - **`list_plugins` gives a template's SDK version**, not the pom property (`${botmaker.sdk.version}`) that pins it.
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.

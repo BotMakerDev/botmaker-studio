@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -159,6 +160,35 @@ class MigrationCleanupTest {
         MigrationCleanup.Removal removal = MigrationCleanup.removeMethods(done, unneeded);
         assertInstanceOf(Refactor.Planned.class, removal.outcome(), removal.outcome()::toString);
         assertEquals(Set.of(file(root, "Migrations")), removal.deleted(), "nothing else was in it");
+    }
+
+    @Test
+    void clearingRemovesTheOriginalsNothingUsesThenTheMethodsNothingNeeds(@TempDir Path root) {
+        BotIndex before = index(root, MINER);
+        assertEquals(Optional.of(Shot.class), MigrationCleanup.copiedInto(before, GRAMMAR, DECLARED, OldShot.class));
+        MigrationCleanup.Cleared nothing = MigrationCleanup.clear(before, GRAMMAR, DECLARED, OldShot.class, Shot.class);
+        assertTrue(assertInstanceOf(Refactor.Refused.class, nothing.outcome()).reason().startsWith("Nothing to remove"));
+
+        BotIndex switched = after(before, MigrationCleanup.switchUses(before, GRAMMAR, DECLARED, OldShot.class,
+                Shot.class, Set.of(), null).outcome());
+        MigrationCleanup.Cleared originals = MigrationCleanup.clear(switched, GRAMMAR, DECLARED, OldShot.class,
+                Shot.class);
+        assertEquals("Removed 1 original of OldShot", assertInstanceOf(Refactor.Planned.class, originals.outcome())
+                .summary());
+        assertEquals(List.of("OldShots.ORE"), originals.originals());
+        assertEquals(List.of(), originals.methods(), "GOLD keeps its method");
+
+        String emptied = OLD_SHOTS.replace("    public static final OldShot ORE = new OldShot(\"ore.png\", 80);\n", "")
+                .replace("    public static final OldShot GOLD = new OldShot(\"gold.png\", 90);\n", "");
+        Map<Path, String> sources = new LinkedHashMap<>(before.sources());
+        sources.put(file(root, "plugins/sdk/OldShots"), emptied);
+        sources.remove(file(root, "Miner"));
+        MigrationCleanup.Cleared methods = MigrationCleanup.clear(before.replacing(sources), GRAMMAR, DECLARED,
+                OldShot.class, Shot.class);
+        assertEquals("Removed 1 @Migrate method", assertInstanceOf(Refactor.Planned.class, methods.outcome())
+                .summary());
+        assertEquals(Set.of(file(root, "Migrations")), methods.deleted());
+        assertFalse(((Refactor.Planned) methods.outcome()).rewrites().containsKey(file(root, "Migrations")));
     }
 
     @Test

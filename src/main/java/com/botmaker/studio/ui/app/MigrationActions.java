@@ -88,8 +88,7 @@ final class MigrationActions {
      * {@code to} — {@code null}: wherever the first named value's copy is. {@code told} gets what happened.
      */
     void switchUses(Class<?> from, Class<?> to, Set<String> names, Told told) {
-        String note = ReviewMarker.available(state) ? "Still uses a " + from.getSimpleName() + " value: its copy"
-                + " does not fit here. Change what holds it, then switch its uses again." : null;
+        String note = leftNote(state, from);
         work(told, "Switching uses…", (index, grammar, declared) -> {
             Class<?> into = to != null ? to : names.isEmpty() ? null
                     : MigrationCleanup.copyTarget(index, grammar, declared, from, names.iterator().next()).orElse(null);
@@ -101,6 +100,12 @@ final class MigrationActions {
             String left = switched.left().isEmpty() ? "" : " Left as they are: " + listed(switched.left()) + ".";
             return new Planned(switched.outcome(), Set.of(), null, left);
         });
+    }
+
+    /** The {@code @Refactor} note a use left on an old value gets, or null where marks are not available. */
+    static String leftNote(ProjectState state, Class<?> from) {
+        return ReviewMarker.available(state) ? "Still uses a " + from.getSimpleName() + " value: its copy"
+                + " does not fit here. Change what holds it, then switch its uses again." : null;
     }
 
     /** Removes {@code from}'s values whose copy is in {@code to} and that nothing uses, once the author agrees. */
@@ -160,8 +165,7 @@ final class MigrationActions {
                 BotIndex bot = index.get();
                 planned = plan.plan(bot, grammar, declared);
                 if (planned.outcome() instanceof Refactor.Planned change) {
-                    change.rewrites().keySet().forEach(file -> basis.put(file, bot.sources().get(file)));
-                    planned.deleted().forEach(file -> basis.put(file, bot.sources().get(file)));
+                    basis.putAll(basis(bot, change, planned.deleted()));
                 }
             } catch (RuntimeException | LinkageError e) {
                 planned = Planned.refused("It could not be worked out: " + e);
@@ -192,19 +196,39 @@ final class MigrationActions {
                 return;
             }
         }
+        Wrote wrote = write(change, planned.deleted(), basis);
+        told.finished(wrote.done() ? wrote.text() + planned.note() : wrote.text());
+        if (wrote.done()) after.run();
+    }
+
+    /** What {@link #write} did: whether it wrote, and what to say. */
+    record Wrote(boolean done, String text) {}
+
+    /**
+     * Writes {@code change} and deletes {@code deleted} as one version after a safety one — unless a file it touches
+     * is no longer the text it was worked out from ({@code basis}). Also the assistant's {@code switch_uses} and
+     * {@code remove_migrated}, which ask nothing on screen. FX thread.
+     */
+    Wrote write(Refactor.Planned change, Set<Path> deleted, Map<Path, String> basis) {
         List<String> changed = changedSince(config, state, basis);
         if (!changed.isEmpty()) {
-            told.finished(String.join(", ", changed) + " changed while this was worked out, so nothing was changed."
-                    + " Try again.");
-            return;
+            return new Wrote(false, String.join(", ", changed) + " changed while this was worked out, so nothing was"
+                    + " changed. Try again.");
         }
         Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY, "Before: " + change.summary());
         BotSources.forEach(config, state, (file, source) -> change.rewrites().get(file));
-        List<String> undeleted = deleted(planned.deleted());
+        List<String> undeleted = deleted(deleted);
         change.rewrites().keySet().forEach(redraw);
-        told.finished(change.summary() + "." + planned.note()
+        return new Wrote(true, change.summary() + "."
                 + (undeleted.isEmpty() ? "" : " " + String.join("; ", undeleted) + "."));
-        after.run();
+    }
+
+    /** The text of each file {@code change} rewrites and each of {@code deleted}, as {@code index} read them. */
+    static Map<Path, String> basis(BotIndex index, Refactor.Planned change, Set<Path> deleted) {
+        Map<Path, String> basis = new HashMap<>();
+        change.rewrites().keySet().forEach(file -> basis.put(file, index.sources().get(file)));
+        deleted.forEach(file -> basis.put(file, index.sources().get(file)));
+        return basis;
     }
 
     /** The names of the files whose text is no longer what {@code basis} holds for them: edited while planned. */

@@ -205,6 +205,22 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio cannot migrate values here.");
     }
 
+    /**
+     * Points the uses of {@code from}'s values named in {@code names} (comma-separated; blank: all) at their copies in
+     * {@code to} (blank: the one type holding them); a use its copy does not fit is left, its function marked.
+     */
+    default String switchUses(String from, String to, String names) {
+        throw new IllegalArgumentException("Studio cannot switch uses here.");
+    }
+
+    /**
+     * Removes {@code from}'s originals copied into {@code to} that nothing uses, then the {@code @Migrate} methods
+     * nothing needs; without {@code confirm} only says what would go.
+     */
+    default String removeMigrated(String from, String to, boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot remove migrated values here.");
+    }
+
     /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
     default String listParams() {
         throw new IllegalArgumentException("Studio reads no parameters here.");

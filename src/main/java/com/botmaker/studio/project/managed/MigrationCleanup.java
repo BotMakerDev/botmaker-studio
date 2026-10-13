@@ -270,6 +270,66 @@ public final class MigrationCleanup {
         return Refactor.checked(index, new Refactor.Planned(what, rewrites), what);
     }
 
+    /**
+     * What the assistant's {@code remove_migrated} removes (2026-10-13): the originals of {@code from} copied into
+     * {@code to} that nothing uses ({@link #removable}, none when {@code to} is null), then every {@code @Migrate}
+     * method nothing needs once they are gone ({@link #unneeded}, {@link #removeMethods}) — one change, worked out
+     * over the bot as the first leaves it.
+     */
+    public record Cleared(Refactor.Outcome outcome, Set<Path> deleted, List<String> originals, List<String> methods) {}
+
+    public static Cleared clear(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared, Class<?> from,
+                                Class<?> to) {
+        List<ManagedSets.Member> removable = to == null ? List.of() : removable(index, grammar, declared, from, to);
+        List<String> originals = removable.stream().map(ManagedSets.Member::qualified).toList();
+        Map<Path, String> rewrites = new LinkedHashMap<>();
+        BotIndex after = index;
+        if (!removable.isEmpty()) {
+            Refactor.Outcome outcome = removeOriginals(index, removable);
+            if (!(outcome instanceof Refactor.Planned removed)) {
+                return new Cleared(outcome, Set.of(), originals, List.of());
+            }
+            rewrites.putAll(removed.rewrites());
+            Map<Path, String> sources = new LinkedHashMap<>(index.sources());
+            sources.putAll(removed.rewrites());
+            after = index.replacing(sources);
+        }
+        List<ManagedMigrations.Method> unneeded = unneeded(after, grammar);
+        List<String> methods = unneeded.stream().map(ManagedMigrations.Method::qualified).toList();
+        Set<Path> deleted = Set.of();
+        if (!unneeded.isEmpty()) {
+            Removal removal = removeMethods(after, unneeded);
+            if (!(removal.outcome() instanceof Refactor.Planned plan)) {
+                return new Cleared(removal.outcome(), Set.of(), originals, methods);
+            }
+            rewrites.putAll(plan.rewrites());
+            deleted = removal.deleted();
+            rewrites.keySet().removeAll(deleted);
+        }
+        if (rewrites.isEmpty() && deleted.isEmpty()) {
+            return new Cleared(new Refactor.Refused("Nothing to remove: no original of " + from.getSimpleName()
+                    + " has its copy" + (to == null ? "" : " in " + to.getSimpleName()) + " with nothing using it, "
+                    + "and no @Migrate method is unneeded."), Set.of(), List.of(), List.of());
+        }
+        List<String> said = new ArrayList<>();
+        if (!originals.isEmpty()) {
+            said.add(originals.size() + (originals.size() == 1 ? " original" : " originals") + " of "
+                    + from.getSimpleName());
+        }
+        if (!methods.isEmpty()) {
+            said.add(methods.size() + (methods.size() == 1 ? " @Migrate method" : " @Migrate methods"));
+        }
+        return new Cleared(new Refactor.Planned("Removed " + String.join(" and ", said), rewrites), deleted,
+                originals, methods);
+    }
+
+    /** The one type {@code from}'s copies are in, or empty when none has any or several do. */
+    public static Optional<Class<?>> copiedInto(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
+                                                Class<?> from) {
+        Set<Class<?>> into = new LinkedHashSet<>(copies(index, grammar, declared, from).values());
+        return into.size() == 1 ? Optional.of(into.iterator().next()) : Optional.empty();
+    }
+
     // --- removing methods nothing needs --------------------------------------------------------------------
 
     /**

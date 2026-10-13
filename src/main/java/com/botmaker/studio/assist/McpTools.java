@@ -69,7 +69,8 @@ public final class McpTools {
               search_plugins, add_plugin, set_plugin_version and remove_plugin what it is built from.
               set_setting dev_mode on, then set_plugin_version to the local build, tries a fix before its release.
               list_migrations says which values a plugin retired, to migrate before a move drops them;
-              read_migration how one type's values become another's, set_migration copies them.
+              read_migration how one type's values become another's, set_migration copies them,
+              switch_uses points the bot at the copies and remove_migrated removes what is left.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -613,6 +614,31 @@ public final class McpTools {
                             Map<String, Object> args = arguments(request);
                             return answer(() -> driver.setMigration(text(args, "from"), text(args, "to"),
                                     text(args, "mapping"), flag(args, "confirm")));
+                        }),
+                act(json, "switch_uses",
+                        "Point the bot's uses of a migrated type's values at their copies (OldShots.ORE becomes "
+                                + "Shots.ORE). A use the copy does not fit — held where only the old type goes — is "
+                                + "left and its function marked for review; change what holds it, then switch "
+                                + "again. A version of the bot is saved first.",
+                        List.of(Prop.text("from", "the old type, as list_migrations names it"),
+                                Prop.optionalText("to", "the type holding the copies; empty for the one that does"),
+                                Prop.optionalText("names", "the values to switch, comma-separated; empty for all")),
+                        args -> driver.switchUses(text(args, "from"), text(args, "to"), text(args, "names"))),
+                spec(json, "remove_migrated",
+                        "Remove what a migration leaves behind: the old type's values that have their copy and "
+                                + "that nothing uses any more (switch_uses first), then every @Migrate method no "
+                                + "value needs — and a class left with nothing else. Without confirm it only says "
+                                + "what would go; with confirm a version of the bot is saved first.",
+                        """
+                                {"type":"object","properties":{
+                                  "from":{"type":"string","description":"the old type, as list_migrations names it"},
+                                  "to":{"type":"string","description":"the type holding the copies; empty for the one that does"},
+                                  "confirm":{"type":"boolean","description":"true to remove them; false or absent to only see what would go"}},
+                                 "required":["from"],"additionalProperties":false}""",
+                        request -> {
+                            Map<String, Object> args = arguments(request);
+                            return answer(() -> driver.removeMigrated(text(args, "from"), text(args, "to"),
+                                    flag(args, "confirm")));
                         }),
                 act(json, "list_params",
                         "List the bot's parameters — its @Param fields, the values its user can set — with each "
