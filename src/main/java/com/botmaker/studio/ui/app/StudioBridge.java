@@ -1483,6 +1483,11 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
+    public List<PluginGuide> pluginGuides() {
+        return PluginHost.assistantGuides().stream().map(g -> new PluginGuide(g.pluginName(), g.text())).toList();
+    }
+
+    @Override
     public AgentContext agentContext() {
         record Asked(StudioServices services, WatchedScreen shown, List<Watched> said,
                      OverlayPart.FrameSource frames, Marks marks) {}

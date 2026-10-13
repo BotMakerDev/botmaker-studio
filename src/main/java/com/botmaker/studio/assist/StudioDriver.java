@@ -32,6 +32,14 @@ public interface StudioDriver {
     /** A plugin's assistant tool, under the name it is served by: {@code <plugin segment>_<tool name>}. */
     record PluginTool(String name, String pluginName, AssistantTool<?> tool) {}
 
+    /** How a bot built on a plugin is laid out, in the plugin's own words ({@code StudioPlugin.assistantGuide}). */
+    record PluginGuide(String pluginName, String text) {}
+
+    /** The bound plugins' guides that say something, in plugin order. */
+    default List<PluginGuide> pluginGuides() {
+        return List.of();
+    }
+
     /** The plugins' targets in the bot now. Blocking: the bot is parsed. */
     List<Target> targets();
 

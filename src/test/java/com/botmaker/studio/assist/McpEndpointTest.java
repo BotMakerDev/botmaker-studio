@@ -192,6 +192,12 @@ class McpEndpointTest {
         }
 
         @Override
+        public List<PluginGuide> pluginGuides() {
+            return more ? List.of(new PluginGuide("Fake", "One activity per chore."), new PluginGuide("More", "Two."))
+                    : List.of(new PluginGuide("Fake", "One activity per chore."));
+        }
+
+        @Override
         public AgentContext agentContext() {
             return new AgentContext() {
                 @Override public StudioServices services() { return null; }
@@ -293,7 +299,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
+                "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
                 "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "
@@ -301,6 +307,22 @@ class McpEndpointTest {
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
+    }
+
+    @Test
+    void eachPluginsGuideIsSaidAtConnectAndByPluginGuide() throws Exception {
+        JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
+                + "\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}");
+        String instructions = init.path("result").path("instructions").asText();
+        assertTrue(instructions.startsWith(McpTools.INSTRUCTIONS), instructions);
+        assertTrue(instructions.endsWith("How a bot on Fake is laid out:\nOne activity per chore.\n"), instructions);
+        post("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", TOKEN);
+        assertEquals("How a bot on Fake is laid out:\nOne activity per chore.\n", text(call("plugin_guide", "{}")));
+        driver.more = true;
+        assertTrue(text(call("plugin_guide", "{}")).endsWith("How a bot on More is laid out:\nTwo.\n"),
+                "plugin_guide reads the plugins bound now, not the connect's");
+        assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
+        assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
     }
 
     @Test

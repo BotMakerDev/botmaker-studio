@@ -421,6 +421,7 @@ public final class PluginHost {
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
         managedValues = mergeManagedValues(bound);
         assistantTools = mergeAssistantTools(bound);
+        assistantGuides = mergeAssistantGuides(bound);
         runOverlayParts = null;
         overlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
@@ -792,6 +793,30 @@ public final class PluginHost {
     /** Every bound plugin's assistant tools, in plugin order, asked for once per bind. */
     public static List<OwnedTool> assistantTools() {
         return assistantTools;
+    }
+
+    /** A plugin's guide to the bot it expects, with the plugin that wrote it. */
+    public record OwnedGuide(String pluginName, String text) {}
+
+    private static volatile List<OwnedGuide> assistantGuides = List.of();
+
+    /** Every bound plugin's guide that says something, in plugin order, asked for once per bind. */
+    public static List<OwnedGuide> assistantGuides() {
+        return assistantGuides;
+    }
+
+    static List<OwnedGuide> mergeAssistantGuides(List<StudioPlugin> set) {
+        List<OwnedGuide> merged = new ArrayList<>();
+        for (StudioPlugin plugin : set) {
+            try {
+                String text = plugin.assistantGuide();
+                if (text != null && !text.isBlank()) merged.add(new OwnedGuide(plugin.displayName(), text.strip()));
+            } catch (RuntimeException | LinkageError e) {
+                // Includes a plugin built against a contract without this method: it simply says nothing.
+                System.err.println("Warning: " + plugin.id() + " could not give its assistant guide: " + e);
+            }
+        }
+        return List.copyOf(merged);
     }
 
     static List<OwnedTool> mergeAssistantTools(List<StudioPlugin> set) {

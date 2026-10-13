@@ -38,6 +38,9 @@ public final class McpTools {
     public static final String INSTRUCTIONS = """
             You build a bot in BotMaker Studio, a block editor over Java. You work only through the tools.
 
+            Build the bot the way its plugins lay one out: plugin_guide says, for each plugin, where each
+            kind of work goes and how to name it. Follow it before you add a method or a picture.
+
             Work in this loop, one small step at a time:
             1. Look. list_targets says where each activity's blocks go and set_target opens one; list_files
                and list_methods say where the rest is. A plugin's own tools (named <plugin>_<tool>) see the
@@ -78,7 +81,25 @@ public final class McpTools {
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
-    private static final String NO_PROJECT = "No project is open in BotMaker Studio. Open one and try again.";
+    /** {@link #INSTRUCTIONS}, then each plugin's guide under its name. */
+    static String instructions(List<StudioDriver.PluginGuide> guides) {
+        return guides.isEmpty() ? INSTRUCTIONS
+                : INSTRUCTIONS + "\nThe plugins' guides as they were at connect:\n\n" + guides(guides);
+    }
+
+    /** Each guide under its plugin's name, or a sentence saying there is none. */
+    static String guides(List<StudioDriver.PluginGuide> guides) {
+        if (guides.isEmpty()) return "No plugin of this bot says how its bot is laid out.";
+        StringBuilder out = new StringBuilder();
+        for (StudioDriver.PluginGuide guide : guides) {
+            if (!out.isEmpty()) out.append('\n');
+            out.append("How a bot on ").append(guide.pluginName()).append(" is laid out:\n")
+                    .append(guide.text()).append('\n');
+        }
+        return out.toString();
+    }
+
+    private static final String NO_PROJECT ="No project is open in BotMaker Studio. Open one and try again.";
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** One property of a tool's input. */
@@ -148,7 +169,7 @@ public final class McpTools {
 
     /** The tools that touch neither the bot's files nor its plugins, so they answer while a plugin moves. */
     static final java.util.Set<String> WHILE_MOVING = java.util.Set.of("list_plugins", "search_plugins",
-            "list_versions", "list_templates", "get_settings", "run_state", "read_trace", "stop");
+            "list_versions", "list_templates", "plugin_guide", "get_settings", "run_state", "read_trace", "stop");
 
     /**
      * The bound plugins' tools, but one whose name is in {@code taken}: a name that is Studio's own or an earlier
@@ -533,6 +554,10 @@ public final class McpTools {
                                 + "set_plugin_version move is. A plugin brings the palette's calls and the types "
                                 + "slots take, and may bring tools of its own.",
                         List.of(), args -> driver.listPlugins()),
+                act(json, "plugin_guide",
+                        "Read how the bot's plugins lay a bot out, each in its own words: where each kind of work "
+                                + "goes and how to name it, as the bound plugins say it now: read it again after a plugin changes.",
+                        List.of(), args -> guides(driver.pluginGuides())),
                 act(json, "search_plugins", "Search the plugin registry, by a word of a plugin's name, id, "
                                 + "description or tags.",
                         List.of(Prop.optionalText("query", "the word; empty for every plugin")),

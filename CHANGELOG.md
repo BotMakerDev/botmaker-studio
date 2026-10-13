@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **The assistant is told how each plugin lays a bot out.** A plugin's guide (`StudioPlugin.assistantGuide()`)
+  is added to the MCP instructions under the plugin's name, and the new `plugin_guide` tool reads it again after
+  a plugin changes.
+
 ### Changed
 
 - **A try runs in a warm JVM.** ▶ Try and the assistant's `try_statement` run in one JVM the project keeps
