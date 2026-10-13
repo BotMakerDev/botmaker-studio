@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **An assistant can move a plugin to another version.** `set_plugin_version` is the Installed tab's version
+  menu: a release, or in dev mode this computer's own build. Without `confirm` it says what the move repairs;
+  a confirmed move asks the user on screen, saves a version, repairs the calls (each choice taking the plugin's
+  suggestion, marked for review) and serves the plugin's tools anew.
 - **An assistant can turn on dev mode.** `set_setting dev_mode on` (or `off`) is *Plugins & Libraries*' Dev mode:
   the project loads its plugins' local `-SNAPSHOT` builds, the plugins reload, and their tools are served anew.
   Turning it on asks the user on screen first, as adding a plugin does.

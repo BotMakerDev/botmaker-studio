@@ -59,6 +59,11 @@ import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
+import com.botmaker.studio.services.upgrade.ProjectUpgrade;
+import com.botmaker.studio.services.upgrade.FixList;
+import com.botmaker.studio.services.LocalBuilds;
+import com.botmaker.studio.plugin.ReleasedPlugins;
+import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -648,12 +653,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String removePlugin(String id, boolean deleteFiles, boolean confirm) {
         List<InstalledPlugin> declared = installed(registryEntries());
-        String wanted = id == null ? "" : id.strip();
-        InstalledPlugin plugin = declared.stream()
-                .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.artifact().artifactId().equalsIgnoreCase(wanted)
-                        || p.displayName().equalsIgnoreCase(wanted))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("The bot declares no plugin " + wanted
-                        + ". list_plugins lists them."));
+        InstalledPlugin plugin = declaredPlugin(declared, id);
         PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
                 jitpack, plugin.artifact(), InstalledPlugin.ambiguousAmong(ctx.config().projectPath(), declared));
         PluginUpgradeService.Report report = upgrades.removal();
@@ -674,6 +674,111 @@ final class StudioBridge implements StudioDriver {
         say("The assistant removed " + plugin.displayName() + ".");
         return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), report.breaks().size(),
                 repaired.leftAsWritten(), repaired.deleted());
+    }
+
+    /**
+     * The Installed tab's version menu and its button, as one call (2026-10-13): the same pass, every fix the
+     * plugin suggests taken as the tab's fix sheet would preselect it, and the user asked on screen first, as
+     * for adding a plugin — another version is other code running with Studio's permissions.
+     */
+    @Override
+    public String setPluginVersion(String id, String version, boolean confirm) {
+        List<InstalledPlugin> declared = installed(registryEntries());
+        InstalledPlugin plugin = declaredPlugin(declared, id);
+        String name = plugin.displayName();
+        // As the tab, whose version menu is off for a twin: moving one copy repairs the bot as if the other were gone.
+        if (InstalledPlugin.sameArtifactGroups(declared).stream().anyMatch(g -> g.size() > 1 && g.contains(plugin))) {
+            throw new IllegalArgumentException("The pom declares " + name + " twice, under both groupIds. The user "
+                    + "keeps one copy in Plugins & Libraries first.");
+        }
+        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
+                jitpack, plugin.artifact(), InstalledPlugin.ambiguousAmong(ctx.config().projectPath(), declared));
+        String from = upgrades.currentVersion();
+        String to = version == null ? "" : version.strip();
+        String local = ctx.libraryService().devMode() ? LocalBuilds.scan().stream()
+                .filter(b -> b.coordinate().equals(upgrades.coordinate())).map(LocalBuilds.Build::version)
+                .findFirst().orElse("") : "";
+        List<String> offered = new ArrayList<>();
+        if (!local.isEmpty()) offered.add(local);
+        List<String> released = new ArrayList<>(waitFor(upgrades.availableVersions(), 30, "list " + name + "'s versions"));
+        released.add(plugin.available());
+        // Only the local build is a dev version here: Studio refuses any other -SNAPSHOT pin at bind.
+        for (String v : released) {
+            if (!v.isBlank() && !ReleasedPlugins.isDevVersion(v) && !offered.contains(v)) offered.add(v);
+        }
+        if (!offered.contains(to)) {
+            throw new IllegalArgumentException((to.isEmpty() ? "Name the version to move " + name + " to."
+                    : name + " has no version " + to + " here.")
+                    + (offered.isEmpty() ? " No version of it could be read." : " Its versions: "
+                    + String.join(", ", offered.stream().limit(15).map(v -> v.equals(local) ? v + " (local build)"
+                    : v).toList()) + ".")
+                    + (ReleasedPlugins.isDevVersion(to) && local.isEmpty()
+                    ? " A -SNAPSHOT build loads only in dev mode: set_setting dev_mode on." : ""));
+        }
+        if (to.equals(from)) return name + " is on " + to + " already.";
+        PluginUpgradeService.Report report = waitFor(CompletableFuture.supplyAsync(() -> upgrades.compare(to)),
+                PLUGIN_WRITE_SECONDS, "read what moving " + name + " changes");
+        String preview = movePreview(plugin, from, to, to.equals(local), report);
+        if (!confirm) return preview + "\nset_plugin_version with confirm moves it.";
+        if (!userAgrees("Move a plugin?", "The assistant wants to move " + name + ".\n\n" + preview + "\n\nThe "
+                + "version moved to runs with Studio's own permissions.")) {
+            throw new IllegalArgumentException("The user did not agree to move " + name + ".");
+        }
+        // No picks: every place with a choice takes the plugin's own suggestion, and is marked for review.
+        ProjectUpgrade.Result result = waitFor(ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(upgrades, to)),
+                ctx.libraryService()::updateVersions), PLUGIN_WRITE_SECONDS, "move " + name);
+        onFx(() -> {
+            // A holder the repair of the values deleted: its buffer goes, and the editor moves off it.
+            ProjectFile active = ctx.state().getActiveFile();
+            result.deleted().forEach(ctx.state()::removeFile);
+            if (active != null && result.deleted().contains(active.getPath())) {
+                ctx.state().setActiveFile(ctx.config().entrySourceFile());
+            }
+            return null;
+        });
+        say("The assistant moved " + name + " from " + from + " to " + to + ".");
+        return result.summary();
+    }
+
+    /** What moving {@code plugin} from {@code from} to {@code to} would change, as the question says it. */
+    private static String movePreview(InstalledPlugin plugin, String from, String to, boolean local,
+                                      PluginUpgradeService.Report report) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Moving " + plugin.displayName() + " (" + plugin.coordinate() + ") from " + from + " to " + to
+                + (local ? ", this computer's own build, which no release checked" : "") + ": "
+                + InstalledPluginsTab.chipText(report) + ".");
+        if (!report.breaks().isEmpty()) {
+            lines.add(report.breaks().size() + " call(s) are repaired, and the functions they are in are marked for "
+                    + "review: " + String.join(", ", report.breaks().stream()
+                    .map(PluginUpgradeService.Break::display).distinct().limit(20).toList()) + ".");
+        }
+        int choices = FixList.of(report).size();
+        if (choices > 0) {
+            lines.add(choices + " place(s) have more than one fix; each takes the one the plugin suggests.");
+        }
+        lines.addAll(report.values());
+        for (MigrationSteps.Stranded set : report.stranded()) {
+            lines.add(set.values() + " value(s) of " + set.type().getSimpleName() + " are ones " + to + " no longer "
+                    + "declares: they are removed or reset. To keep them, the user migrates them first in Plugins "
+                    + "& Libraries.");
+        }
+        if (!report.leftForYou().isEmpty()) {
+            lines.add("Left as written and marked, for the user to change: " + String.join(", ", report.leftForYou()
+                    .stream().map(PluginUpgradeService.Break::type).distinct().toList()) + ".");
+        }
+        if (report.isIncomplete()) lines.add("Not everything could be read: " + report.problems().getFirst());
+        lines.add("A version of the bot is saved first.");
+        return String.join("\n", lines);
+    }
+
+    /** The plugin the pom declares that {@code id} names — by its coordinate, artifactId or name. */
+    private static InstalledPlugin declaredPlugin(List<InstalledPlugin> declared, String id) {
+        String wanted = id == null ? "" : id.strip();
+        return declared.stream()
+                .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.artifact().artifactId().equalsIgnoreCase(wanted)
+                        || p.displayName().equalsIgnoreCase(wanted))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("The bot declares no plugin " + wanted
+                        + ". list_plugins lists them."));
     }
 
     private static final long PLUGIN_WRITE_SECONDS = 600;

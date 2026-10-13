@@ -66,8 +66,8 @@ public final class McpTools {
             - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
               before a large change saves a version to go back to with revert.
             - list_params and set_param_default are the values the bot's user sets; list_plugins,
-              search_plugins, add_plugin and remove_plugin what it is built from. set_setting dev_mode on
-              loads the plugins' local builds, to try a fix before its release.
+              search_plugins, add_plugin, set_plugin_version and remove_plugin what it is built from.
+              set_setting dev_mode on, then set_plugin_version to the local build, tries a fix before its release.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 
@@ -538,6 +538,30 @@ public final class McpTools {
                             return answer(() -> {
                                 String done = driver.removePlugin(text(args, "id"), flag(args, "deleteFiles"), confirm);
                                 return confirm ? changed(pluginsChanged, done) : done;
+                            });
+                        }),
+                spec(json, "set_plugin_version",
+                        "Move a plugin the bot uses to another version: a release, or in dev mode this computer's "
+                                + "own build (set_setting dev_mode on). Without confirm it only says what would "
+                                + "change, or which versions there are. With confirm the user is asked on screen, "
+                                + "a version of the bot is saved, the calls into it are repaired and marked for "
+                                + "review, and its tools are served anew.",
+                        """
+                                {"type":"object","properties":{
+                                  "id":{"type":"string","description":"the plugin, as list_plugins names it"},
+                                  "version":{"type":"string","description":"the version to move to; a wrong one answers with the versions there are"},
+                                  "confirm":{"type":"boolean","description":"true to move it; false or absent to only see what would change"}},
+                                 "required":["id","version"],"additionalProperties":false}""",
+                        request -> {
+                            Map<String, Object> args = arguments(request);
+                            boolean confirm = flag(args, "confirm");
+                            // A confirmed move may have written the pom before it failed: serve the tools anew anyway.
+                            return answer(() -> {
+                                try {
+                                    return driver.setPluginVersion(text(args, "id"), text(args, "version"), confirm);
+                                } finally {
+                                    if (confirm) pluginsChanged.run();
+                                }
                             });
                         }),
                 act(json, "list_params",

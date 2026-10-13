@@ -161,6 +161,14 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio cannot remove a plugin here.");
     }
 
+    /**
+     * What moving the declared plugin {@code id} to {@code version} would change, or, when {@code confirm}, moves
+     * it once the user agrees on screen: a version first, the calls into it repaired, the pom written.
+     */
+    default String setPluginVersion(String id, String version, boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot move a plugin here.");
+    }
+
     /** The bot's {@code @Param} fields: each one's name, type, value and whether it can be set. */
     default String listParams() {
         throw new IllegalArgumentException("Studio reads no parameters here.");

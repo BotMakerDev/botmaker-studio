@@ -151,6 +151,12 @@ class McpEndpointTest {
             if (confirm) more = false;
             return confirm ? "removed" : "would remove";
         }
+        @Override public String setPluginVersion(String id, String version, boolean confirm) {
+            asked.add("move " + id + " " + version + " " + confirm);
+            // The version moved to brings the tool, so it shows only once the tools are served anew.
+            if (confirm) more = true;
+            return confirm ? "moved" : "would move";
+        }
         @Override public String setParamDefault(String param, String value) {
             asked.add("param " + param + "=" + value);
             return "set";
@@ -275,7 +281,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "list_params", "set_param_default",
+                "list_plugins", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_params", "set_param_default",
                 "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
@@ -306,6 +312,17 @@ class McpEndpointTest {
         assertFalse(toolNames().contains("more_snap"));
         assertEquals(List.of("add more", "remove more false false", "remove more true true"), driver.asked);
         assertEquals(1, toolNames().stream().filter("list_files"::equals).count());
+    }
+
+    @Test
+    void aPluginMovedIsServedAnewOnlyOnceConfirmed() throws Exception {
+        initialize();
+        assertEquals("would move", text(call("set_plugin_version", "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\"}")));
+        assertFalse(toolNames().contains("more_snap"), "a preview changes nothing");
+        assertEquals("moved", text(call("set_plugin_version",
+                "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\",\"confirm\":true}")));
+        assertTrue(toolNames().contains("more_snap"), "the moved plugin's tools are served without a restart");
+        assertEquals(List.of("move sdk 1.4.5-SNAPSHOT false", "move sdk 1.4.5-SNAPSHOT true"), driver.asked);
     }
 
     @Test
