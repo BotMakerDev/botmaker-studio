@@ -23,6 +23,7 @@ import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedIds;
@@ -216,15 +217,18 @@ public final class AssistTurn {
             return apply(stage, "set " + slotId + " to " + reference.source(),
                     editor -> editor.replaceWithValue(slot.get(), reference));
         }
-        Optional<Object> read = workspace.grammar().valueOf(type.get(), text);
+        // The bot's constants are read wherever the value holds one: ImageTemplateGroup.of(Pictures.A, Pictures.B).
+        Optional<Object> read = SourceNode.parse(text)
+                .flatMap(node -> workspace.grammar().read(type.get(), node, workspace.lookup()));
         if (read.isEmpty()) {
             return Outcome.Refused.because("`" + value + "` is not a " + nameOf(expected)
                     + " value. Write a literal, one of the bot's constants (Pictures.ORE), or a constant or "
                     + "factory call the type declares.");
         }
-        // A value one of the bot's constants holds is written as that constant, as the slot editors write it.
+        // A value one of the bot's constants holds is written as that constant, as the slot editors write it,
+        // and so is each part of it.
         Optional<JavaValue> written = workspace.lookup().spell(read.get())
-                .or(() -> workspace.grammar().spell(type.get(), read.get()));
+                .or(() -> workspace.grammar().write(type.get(), read.get(), workspace.lookup()));
         if (written.isEmpty()) return Outcome.Refused.because("That value cannot be written as " + nameOf(expected) + ".");
         return apply(stage, "set " + slotId + " to " + written.get().source(),
                 editor -> editor.replaceWithValue(slot.get(), written.get()));

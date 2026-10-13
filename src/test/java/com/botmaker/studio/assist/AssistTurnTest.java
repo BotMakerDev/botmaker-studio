@@ -1,10 +1,13 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.plugin.api.value.Drawn;
+import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectTemplate;
+import com.botmaker.studio.project.managed.ManagedConstants.Constant;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -23,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The assistant's tool layer, headless: what it lets through, what it refuses, and that a refusal leaves the
  * working copy byte-identical. No model is involved — each test is the call a model would make.
  */
-class AssistTurnTest {
+public class AssistTurnTest {
 
     private static final String SOURCE = """
             package com.mybot;
@@ -109,9 +112,9 @@ class AssistTurnTest {
     @Test
     void aSlotTakesOneOfTheBotsConstantsByName() {
         String source = SOURCE.replace("public class Subject {", "public class Subject {\n    public static final int LIMIT = 5;");
-        List<com.botmaker.studio.project.managed.ManagedConstants.Constant> constants = List.of(
-                new com.botmaker.studio.project.managed.ManagedConstants.Constant("com.mybot.Subject", "LIMIT", "5"),
-                new com.botmaker.studio.project.managed.ManagedConstants.Constant("com.mybot.Subject", "NAME", "\"a\""));
+        List<Constant> constants = List.of(
+                new Constant("com.mybot.Subject", "LIMIT", "5"),
+                new Constant("com.mybot.Subject", "NAME", "\"a\""));
         AssistWorkspace base = workspace();
         AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), base.grammar(),
@@ -121,6 +124,64 @@ class AssistTurnTest {
         assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "Subject.NAME"), "a String is not an int");
         assertInstanceOf(Outcome.Accepted.class, turn.setSlot(slot, "Subject.LIMIT"));
         assertTrue(turn.source().contains("System.out.println(Subject.LIMIT)"), turn.source());
+    }
+
+    /** A picture, as the SDK's {@code ImageTemplate} is written. */
+    public static final class Pic {
+        private final String path;
+
+        public Pic(String path) { this.path = path; }
+
+        public String path() { return path; }
+
+        @Override public boolean equals(Object o) { return o instanceof Pic p && p.path.equals(path); }
+
+        @Override public int hashCode() { return path.hashCode(); }
+    }
+
+    /** Several pictures, as the SDK's {@code ImageTemplateGroup} is written. */
+    public static final class Pics {
+        private final List<Pic> all;
+
+        private Pics(List<Pic> all) { this.all = all; }
+
+        public static Pics of(Pic... pics) { return new Pics(List.of(pics)); }
+
+        public List<Pic> all() { return all; }
+
+        public static void take(Pics pics) {}
+    }
+
+    private static final Drawn NO_EDITOR = () -> ctx -> null;
+
+    @Test
+    void aSlotReadsTheBotsConstantsInsideAValue() {
+        String pic = Pic.class.getCanonicalName();
+        String source = SOURCE
+                .replace("public class Subject {", "public class Subject {\n    public static final " + pic
+                        + " ORE = new " + pic + "(\"ore.png\");\n    public static final " + pic + " GEM = new "
+                        + pic + "(\"gem.png\");")
+                .replace("System.out.println(count);", Pics.class.getCanonicalName() + ".take(null);");
+        ValueGrammar grammar = ValueGrammar.of(List.of(
+                PluginType.value(Pic.class).fresh(() -> new Pic("default.png"))
+                        .editor(NO_EDITOR).writtenAs(Pic::new, Pic::path),
+                PluginType.value(Pics.class).fresh(() -> Pics.of(new Pic("default.png")))
+                        .editor(NO_EDITOR).writtenAsEach(Pics::of, Pics::all)), List.of());
+        List<Constant> constants = List.of(
+                new Constant("com.mybot.Subject", "ORE",
+                        "new " + pic + "(\"ore.png\")"),
+                new Constant("com.mybot.Subject", "GEM",
+                        "new " + pic + "(\"gem.png\")"));
+        AssistWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+                base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
+                constants), source);
+        String slot = statement(turn, Pics.class.getCanonicalName()).slots().getFirst().id();
+
+        Outcome set = turn.setSlot(slot, "Pics.of(Subject.ORE, Subject.GEM)");
+        assertInstanceOf(Outcome.Accepted.class, set, set + " " + turn.errors());
+        assertTrue(turn.source().contains("Pics.of(Subject.ORE, Subject.GEM)"), "each part is the bot's constant:\n"
+                + turn.source());
     }
 
     @Test

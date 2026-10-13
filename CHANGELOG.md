@@ -90,6 +90,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A palette call's plugin-typed argument starts as the plugin's fresh value**: `ImageTemplateGroup.of(<the
+  placeholder picture>)`, not `(ImageTemplateGroup) null` or a `new ImageTemplate("")` that throws at run. The
+  seed looked the type up by its bare simple name, which no plugin declares.
+- **`set_slot` reads the bot's constants inside a value**: `ImageTemplateGroup.of(Pictures.CLOSE_X,
+  Pictures.CLAIM_OFFLINE)` is accepted and written with each constant kept.
 - **`read_tree` lists a plugin call statement's arguments as slots**, and `delete_block`/`move_block` take the id
   it gives that statement.
 - **Every palette call inserts code that compiles.** Calls taking a `Class` (`ActivitySwitch.active`), an

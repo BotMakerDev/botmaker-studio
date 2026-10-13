@@ -12,6 +12,8 @@ import com.botmaker.studio.util.MethodSignature;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 import org.eclipse.jdt.core.dom.*;
 
 public class InitializerFactory {
@@ -113,7 +115,8 @@ public class InitializerFactory {
         // plugin's vocabulary because the host was written first. What replaced them is the plugin's own
         // declaration of the type — its fresh() or its freshCall(), written by the host's grammar fully
         // qualified — and a second plugin's interface-typed slot now gets an answer where before it got `new T()`.
-        String seed = PluginHost.freshInitializer(richType.leafType().qualifiedName());
+        String seed = seedNames(type, richType).stream().map(PluginHost::freshInitializer)
+                .filter(Objects::nonNull).findFirst().orElse(null);
         if (seed != null) {
             Expression seeded = parseExpr(ast, seed);
             if (seeded != null) return seeded;
@@ -188,6 +191,19 @@ public class InitializerFactory {
         }
 
         return ast.newNullLiteral();
+    }
+
+    /**
+     * The full names a plugin's fresh value is asked by: the enriched type's, then the type's as given.
+     *
+     * <p>The given one too, because enrichment answers a name the project does not declare with its bare
+     * simple name. A palette call's parameters are read off a jar by full name
+     * ({@code com.botmaker.sdk.api.vision.ImageTemplateGroup}), so asking by the enriched name alone found no
+     * plugin, and Studio's assistant got {@code (ImageTemplateGroup) null} and {@code new ImageTemplate("")}
+     * (2026-10-13).
+     */
+    static List<String> seedNames(ResolvedType given, ResolvedType enriched) {
+        return Stream.of(enriched, given).map(t -> t.leafType().qualifiedName()).distinct().toList();
     }
 
     /**
