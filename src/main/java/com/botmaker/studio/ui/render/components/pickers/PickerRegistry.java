@@ -1,7 +1,18 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.plugin.api.slot.SlotRun;
+import com.botmaker.studio.core.ValueSlot;
 import javafx.scene.Node;
+import org.eclipse.jdt.core.dom.Assignment;
+import org.eclipse.jdt.core.dom.ConditionalExpression;
+import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.IVariableBinding;
+import org.eclipse.jdt.core.dom.InfixExpression;
+import org.eclipse.jdt.core.dom.InstanceofExpression;
+import org.eclipse.jdt.core.dom.NumberLiteral;
+import org.eclipse.jdt.core.dom.PostfixExpression;
+import org.eclipse.jdt.core.dom.PrefixExpression;
+import org.eclipse.jdt.core.dom.SimpleName;
 
 import java.util.List;
 
@@ -87,6 +98,7 @@ public final class PickerRegistry {
      * and would shut a plugin out of its own type.
      */
     public static Node pickerNodeFor(PickerContext ctx) {
+        if (ctx != null && computed(ctx.arg())) return null;
         // A slot the canvas may not write gets a plugin's preview — a thumbnail, a swatch — or the plain
         // read-only node. Never an editor: one that opens a chooser and then has its write refused is worse
         // than none, and the host's own pickers here are all editors.
@@ -120,6 +132,7 @@ public final class PickerRegistry {
 
     /** Whether any picker applies to {@code ctx} (detection without building the node). */
     public static boolean hasPicker(PickerContext ctx) {
+        if (ctx != null && computed(ctx.arg())) return false;
         for (SpecialTypePicker picker : PICKERS) {
             if (picker.matches(ctx)) return true;
         }
@@ -128,5 +141,26 @@ public final class PickerRegistry {
             if (picker.matches(ctx)) return true;
         }
         return false;
+    }
+
+    /**
+     * Whether {@code arg} holds a computation rather than a value — {@code attempt < 5}, {@code attempt++},
+     * {@code !found}, a local's name. No editor draws one: each claims its slot by type, so a {@code for}'s
+     * condition was drawn as an "Off" toggle and its {@code attempt++} as a 0 field (2026-10-13). The
+     * expression's own block draws it instead. A negative number ({@code -5}) is still a value.
+     */
+    static boolean computed(ValueSlot arg) {
+        Expression node = arg == null ? null : arg.node();
+        return switch (node) {
+            case InfixExpression ignored -> true;
+            case PostfixExpression ignored -> true;
+            case PrefixExpression prefix -> !(prefix.getOperator() == PrefixExpression.Operator.MINUS
+                    && prefix.getOperand() instanceof NumberLiteral);
+            case Assignment ignored -> true;
+            case ConditionalExpression ignored -> true;
+            case InstanceofExpression ignored -> true;
+            case SimpleName name -> name.resolveBinding() instanceof IVariableBinding variable && !variable.isField();
+            case null, default -> false;
+        };
     }
 }

@@ -63,6 +63,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A `for` loop reads as written.** `for (int attempt = 0; attempt < 5; attempt++)` was drawn "while Off each
+  time 0": a value editor claimed the condition and the step by their type and showed a default. A slot holding
+  a computation (`attempt < 5`, `attempt++`, `!found`, a local's name) is now drawn as its own block.
 - **A plugin parameter whose type changed is repaired on upgrade.** A field such as `List<String> launchTargets`
   left behind after the SDK made it `List<Launcher>` still compiled, so the upgrade kept it and the plugin read
   nothing from it. It is now removed like any value declared another way, and written again with its new type.
