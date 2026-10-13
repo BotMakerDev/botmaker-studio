@@ -233,7 +233,8 @@ public final class McpTools {
                                 + "declares. Or build one: a palette call id whose result fits the slot "
                                 + "(call:ImageFinder.find(ImageTemplate)), or an operator ("
                                 + String.join(", ", AssistTurn.operatorIds()) + "); the call's arguments and the "
-                                + "operator's operands are then slots of their own, which read_tree lists. "
+                                + "operator's operands are then slots of their own, which read_tree lists, and "
+                                + "op:LAMBDA's body (the action of ImageFinder.whileFindAny…) a body to insert into. "
                                 + "Anything else is refused.",
                         List.of(FILE, Prop.text("slotId", "the slot id, from read_tree"), Prop.text("value", "the value")),
                         bot, (tools, args) -> tools.setSlot(text(args, "slotId"), text(args, "value")), true),

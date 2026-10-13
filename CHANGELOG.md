@@ -19,7 +19,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   a plugin changes.
 - **The assistant can write a test into a condition.** `set_slot` takes a palette call whose result fits the
   slot (`call:ImageFinder.find(ImageTemplate)`) or an operator (`op:NOT`, `op:AND`, `op:LESS`…), and `read_tree`
-  lists the slots inside it, so an If or While can check the screen.
+  lists the slots inside it, so an If or While can check the screen. `op:LAMBDA` writes the action a call such
+  as `ImageFinder.whileFindAny` runs, its body a body to insert into.
 
 ### Changed
 

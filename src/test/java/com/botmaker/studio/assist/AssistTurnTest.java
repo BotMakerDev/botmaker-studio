@@ -152,6 +152,18 @@ class AssistTurnTest {
     }
 
     @Test
+    void aCodeSlotTakesALambdaWhoseBodyIsABody() {
+        AssistTurn turn = turn(SOURCE.replace("System.out.println(count);", "java.util.List.of(name).forEach(null);"));
+        String slot = statement(turn, "java.util.List").slots().getFirst().id();
+
+        Outcome set = turn.setSlot(slot, "op:LAMBDA");
+        assertInstanceOf(Outcome.Accepted.class, set, set.toString());
+        assertEquals(1, statement(turn, "java.util.List").bodies().size(), turn.source());
+        assertInstanceOf(Outcome.Accepted.class,
+                turn.insert(statement(turn, "java.util.List").bodies().getFirst().id(), 0, "block:PRINT"));
+    }
+
+    @Test
     void aManagedValueTakesNoOperator() {
         String source = SOURCE.replace("public class Subject {", """
                 public class Subject {

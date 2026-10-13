@@ -286,8 +286,10 @@ public final class AssistTurn {
         return ExpressionCatalog.all().stream().filter(AssistTurn::isOperator).map(t -> OPERATOR + t.id()).toList();
     }
 
+    /** An operator, or a lambda — the code a call such as {@code ImageFinder.whileFindAny} runs, its body a body. */
     private static boolean isOperator(ExpressionType type) {
-        return type instanceof ExpressionType.InfixOp || type instanceof ExpressionType.PrefixOp;
+        return type instanceof ExpressionType.InfixOp || type instanceof ExpressionType.PrefixOp
+                || type == ExpressionCatalog.LAMBDA;
     }
 
     /** The bot's managed constants {@code text} names as {@code Owner.FIELD}, by simple or full owner. */
