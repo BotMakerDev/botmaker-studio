@@ -605,7 +605,11 @@ public final class McpTools {
                                 + "keep what holds.",
                         List.of(Prop.text("section", "the section's heading, one line: Hotkeys"),
                                 Prop.text("text", "its whole new text, Markdown; empty removes the section")),
-                        args -> GameNotes.write(project(driver), text(args, "section"), text(args, "text"))),
+                        args -> {
+                            String done = GameNotes.write(project(driver), text(args, "section"), text(args, "text"));
+                            driver.notesWritten();
+                            return done;
+                        }),
                 act(json, "search_plugins", "Search the plugin registry, by a word of a plugin's name, id, "
                                 + "description or tags.",
                         List.of(Prop.optionalText("query", "the word; empty for every plugin")),

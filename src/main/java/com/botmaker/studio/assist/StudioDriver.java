@@ -41,6 +41,10 @@ public interface StudioDriver {
         return Optional.empty();
     }
 
+    /** After write_notes: the explorer lists the notes once they are there. */
+    default void notesWritten() {
+    }
+
     /** The bound plugins' guides that say something, in plugin order. */
     default List<PluginGuide> pluginGuides() {
         return List.of();

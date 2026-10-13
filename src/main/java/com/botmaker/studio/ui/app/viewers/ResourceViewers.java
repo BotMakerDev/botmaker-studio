@@ -37,7 +37,8 @@ import java.util.TreeMap;
  * What a file that is not Java looks like when the explorer opens it (2026-09-27): a picture as itself, JSON as
  * a tree, a {@code .properties} file as a table of keys and values, and any other text as text. View only —
  * nothing here writes, because every one of these files is either a plugin's (its window edits it) or the
- * user's to change in whatever editor they like.
+ * user's to change in whatever editor they like. Markdown is the one exception (2026-10-13): drawn as a page with
+ * an Edit to change it ({@link MarkdownView}), since the bot's {@code GAME.md} is notes its author corrects.
  *
  * <p>Nothing is parsed by hand: a picture is JavaFX's {@link Image}, JSON is Jackson's tree, a properties file
  * is {@link Properties}. A file that does not parse as what its name says is shown as text, under a line saying
@@ -55,7 +56,8 @@ public final class ResourceViewers {
         IMAGE("image", "Picture", List.of("png", "jpg", "jpeg", "gif", "bmp", "webp")),
         JSON("json", "JSON", List.of("json")),
         PROPERTIES("properties", "Properties", List.of("properties")),
-        TEXT("text", "Text", List.of("txt", "yml", "yaml", "xml", "csv", "md"));
+        MARKDOWN("markdown", "Markdown", List.of("md")),
+        TEXT("text", "Text", List.of("txt", "yml", "yaml", "xml", "csv"));
 
         private final String id;
         private final String displayName;
@@ -87,6 +89,11 @@ public final class ResourceViewers {
         }
     }
 
+    /** Whether {@code shown}, a viewer {@link #view} made, holds text being edited and not yet saved. */
+    public static boolean editing(Node shown) {
+        return shown != null && Boolean.TRUE.equals(shown.getProperties().get(MarkdownView.EDITING));
+    }
+
     /** True when {@link #view} shows {@code file}. */
     public static boolean canView(Path file) {
         return Format.of(file).isPresent();
@@ -105,6 +112,7 @@ public final class ResourceViewers {
                 case IMAGE -> picture(bytes);
                 case JSON -> json(new String(bytes, StandardCharsets.UTF_8));
                 case PROPERTIES -> properties(new String(bytes, StandardCharsets.UTF_8));
+                case MARKDOWN -> MarkdownView.of(file, new String(bytes, StandardCharsets.UTF_8));
                 case TEXT -> text(new String(bytes, StandardCharsets.UTF_8));
             };
         } catch (IOException e) {

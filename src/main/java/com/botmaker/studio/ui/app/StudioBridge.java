@@ -518,6 +518,11 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
+    public void notesWritten() {
+        Platform.runLater(() -> ctx.eventBus().publish(new CoreApplicationEvents.ProjectFilesChangedEvent()));
+    }
+
+    @Override
     public String checkpoint(String label) {
         String name = label == null ? "" : label.strip();
         if (name.isEmpty()) throw new IllegalArgumentException("A version needs a label: what it is.");

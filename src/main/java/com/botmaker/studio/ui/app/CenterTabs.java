@@ -134,7 +134,8 @@ final class CenterTabs {
         Path absolute = normal(file);
         String name = absolute.getFileName() == null ? absolute.toString() : absolute.getFileName().toString();
         Tab tab = open.get(absolute.toString());
-        if (tab != null) tab.setContent(ResourceViewers.view(absolute));
+        // Drawn afresh, but for a file being edited there: its unsaved text is the user's.
+        if (tab != null && !ResourceViewers.editing(tab.getContent())) tab.setContent(ResourceViewers.view(absolute));
         else tab = add(absolute.toString(), name, absolute.toString(), new Shows(absolute, false),
                 ResourceViewers.view(absolute));
         tabs.getSelectionModel().select(tab);

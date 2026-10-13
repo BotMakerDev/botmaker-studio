@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app.viewers;
 
 import com.botmaker.studio.ui.app.viewers.ResourceViewers.Format;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
+import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.scene.Node;
 import javafx.scene.control.TableView;
@@ -37,6 +38,35 @@ class ResourceViewersTest extends FxHeadlessTest {
         assertEquals(Optional.of(Format.TEXT), Format.of(Path.of("notes.yml")));
         assertEquals(Optional.empty(), Format.of(Path.of("Bot.java")));
         assertFalse(ResourceViewers.canView(Path.of("Makefile")));
+        assertEquals(Optional.of(Format.MARKDOWN), Format.of(Path.of("GAME.md")));
+    }
+
+    /** A gallery bot's notes are drawn as a page, never run: their HTML is text, their colours the theme's. */
+    @Test
+    void markdownIsAPageWithItsHtmlEscaped() {
+        String page = MarkdownView.html("## Hotkeys\n\n- **Q** opens Quests\n\n<script>alert(1)</script>\n"
+                + "[x](javascript:alert(1))", BlockTheme.ThemeType.DARK);
+        assertTrue(page.contains("<h2>Hotkeys</h2>"), page);
+        assertTrue(page.contains("<strong>Q</strong> opens Quests"), page);
+        assertFalse(page.contains("<script>"), page);
+        assertFalse(page.contains("javascript:"), page);
+        assertTrue(page.contains("background:#1e1f22"), page);
+
+        String tracked = MarkdownView.html("![seen](https://example.com/t.png?who=1)", BlockTheme.ThemeType.DEFAULT);
+        assertFalse(tracked.contains("<img"), "a picture would be fetched as the tab opens: " + tracked);
+        assertTrue(tracked.contains("seen"), tracked);
+        assertTrue(tracked.contains("default-src 'none'"), tracked);
+    }
+
+    @Test
+    void anEditIsSavedOnlyOverTheTextItBeganFrom() throws Exception {
+        Path notes = dir.resolve("GAME.md");
+        Files.writeString(notes, "# Mine\n");
+        assertEquals(Optional.empty(), MarkdownView.save(notes, "# Mine\n", "# Mine\n\nQ.\n"));
+        assertEquals("# Mine\n\nQ.\n", Files.readString(notes));
+        assertTrue(MarkdownView.save(notes, "# Mine\n", "# Lost\n").orElseThrow().contains("changed since"),
+                "the assistant wrote meanwhile: its section is not undone");
+        assertEquals("# Mine\n\nQ.\n", Files.readString(notes));
     }
 
     @Test

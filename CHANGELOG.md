@@ -19,6 +19,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   reads it, which the instructions say to do before exploring, so the next session starts from it. The file is
   plain Markdown in the bot, versioned and published with it, edited through its CommonMark tree: a `##` in a code
   block is never taken for a section. Its text never enters the MCP instructions, as a gallery bot's maker wrote it.
+- **Markdown files open as a page.** `GAME.md` is listed first in the explorer, and any `.md` file opens drawn in the
+  theme's colours, with Edit to change its text and Save. The page runs no script, loads nothing (a picture shows
+  its words), and a link keeps it where it is. Clicking the row again keeps an edit in progress, and Save refuses
+  when the file changed meanwhile, so it never undoes what the assistant wrote.
 - **The assistant is told how each plugin lays a bot out.** A plugin's guide (`StudioPlugin.assistantGuide()`)
   is added to the MCP instructions under the plugin's name, and the new `plugin_guide` tool reads it again after
   a plugin changes.

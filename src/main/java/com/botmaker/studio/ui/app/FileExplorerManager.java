@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.assist.GameNotes;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
@@ -341,6 +342,12 @@ public class FileExplorerManager {
         if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
+        // The bot's notes on its game sit at its root, beside no source: first, once the assistant wrote some.
+        Path notes = config.projectPath().resolve(GameNotes.FILE);
+        if (Files.isRegularFile(notes) && matches.test(notes)) {
+            root.getChildren().addFirst(new TreeItem<>(new ExplorerNode(GameNotes.FILE, notes, FileRole.of(notes),
+                    ExplorerModel.kindOf(notes, null, entryPoint), false)));
+        }
         fileTree.setRoot(root);
         refreshStatus();
     }
