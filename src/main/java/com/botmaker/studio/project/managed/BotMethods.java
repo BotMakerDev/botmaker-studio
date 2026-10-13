@@ -82,6 +82,19 @@ public final class BotMethods {
         });
     }
 
+    /** The canonical names of the bot's top-level types, in file order: what a value written into it may import. */
+    public static List<String> topLevelTypes(BotIndex index) {
+        return index.read(units -> {
+            List<String> out = new ArrayList<>();
+            units.forEach((file, unit) -> {
+                for (Object each : unit.types()) {
+                    if (each instanceof AbstractTypeDeclaration type) out.add(SourceNames.canonicalOf(type));
+                }
+            });
+            return List.copyOf(out);
+        });
+    }
+
     private static boolean eligible(MethodDeclaration method, String canonical) {
         int flags = method.getModifiers();
         if (method.isConstructor() || !Modifier.isPublic(flags) || !Modifier.isStatic(flags)

@@ -10,6 +10,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.studio.plugin.grammar.ShortNames;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
@@ -128,7 +129,7 @@ public final class HostPluginValues implements PluginValues {
         if (found.isEmpty() || !found.get().editable()) return Optional.empty();
         ManagedMethod value = found.get();
         return Optional.of(HostValueContext.of(value.form(), value.expression(), services,
-                expression -> write(value, expression), this::constants));
+                expression -> write(value, imported(expression)), this::constants));
     }
 
     /**
@@ -322,7 +323,7 @@ public final class HostPluginValues implements PluginValues {
                 .map(parameter -> HostValueContext.of(parameter.form(), parameter.initializer(), services,
                         expression -> {
                             snapshot();
-                            JavaParameters.setValue(config, state, parameter, expression);
+                            JavaParameters.setValue(config, state, parameter, imported(expression));
                             redraw(java.util.Set.of(file[0]));
                         }, this::constants));
     }
@@ -548,7 +549,7 @@ public final class HostPluginValues implements PluginValues {
                 // The bot's constants too (2026-10-12): a flow names its activities as Activities.Collect.class,
                 // which nothing but them spells, so without them every flow with an activity was refused.
                 .map(found -> HostValueContext.of(found.form(), found.initializer(), services,
-                        expression -> writeInitializer(found, expression), this::constants));
+                        expression -> writeInitializer(found, imported(expression)), this::constants));
     }
 
     public Optional<String> add(String id, String member, Object value) {
@@ -566,7 +567,7 @@ public final class HostPluginValues implements PluginValues {
             return Optional.of("No plugin in this project declares " + type.getSimpleName() + ", so "
                     + member + " cannot be written.");
         }
-        return apply(ManagedSets.add(index(), id, member, type, initializer.get()));
+        return apply(ManagedSets.add(index(), id, member, type, imported(initializer.get())));
     }
 
     /**
@@ -656,6 +657,14 @@ public final class HostPluginValues implements PluginValues {
 
     private BotIndex index() {
         return BotIndex.of(config, state);
+    }
+
+    /**
+     * {@code value} as it may be written into any of the bot's files: a part a plugin hands over as the Java it
+     * is written as, {@code Research::body}, imports its class, and a full name is written short (2026-10-13).
+     */
+    private JavaValue imported(JavaValue value) {
+        return ShortNames.imported(value, BotMethods.topLevelTypes(index()));
     }
 
     private static String missing(String id, String member) {

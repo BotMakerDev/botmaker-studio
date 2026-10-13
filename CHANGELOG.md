@@ -90,6 +90,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A flow card's body compiles in `Flows.java`.** A value a plugin hands over as the Java it is written as, a
+  card's body `Research::body`, was written with no import, so a body in the bot's own package broke the bot
+  (`Flows.java` sits in `plugins/sdk`). Every plugin value Studio writes now imports the bot's classes it names
+  and writes a full name short with its import: `ActivityBody.none()`, not
+  `com.botmaker.sdk.api.flow.ActivityBody.none()` (`plugin/grammar/ShortNames`). A full name is left as it is
+  when the value already imports another class by that name; the target file's own imports are not checked.
 - **An MCP client can give a method one of the bot's own types.** `add_method` and `edit_signature` refused
   `Activities.Research`, so an activity's body could not be written over MCP. They now take any type the bot
   declares, enums and member types too. A class the bot declares is written as its file names it, its outer
