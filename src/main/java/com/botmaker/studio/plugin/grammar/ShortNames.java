@@ -20,6 +20,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * A value's classes written by their simple names, each with its import (2026-10-13).
@@ -82,6 +84,34 @@ public final class ShortNames {
         // Shown as written while nothing in it moved; a name made short is shown short.
         return full.isEmpty() ? new JavaValue(node, List.copyOf(imports), value.source())
                 : JavaValue.built(node, imports);
+    }
+
+    /**
+     * {@code node}, a tree not yet in a file, with each full class name ({@code com.x.Type}, as
+     * {@link #imported} reads one) written {@code Type} where {@code free} says that simple name may stand for it,
+     * each such class handed to {@code imports}. Changed in place; the root is answered, since it may be replaced.
+     */
+    public static Expression shortened(Expression node, Predicate<String> free, Consumer<String> imports) {
+        List<QualifiedName> full = new ArrayList<>();
+        node.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(QualifiedName name) {
+                String written = name.getFullyQualifiedName();
+                if (isTopLevel(written, 3) && free.test(written)) {
+                    full.add(name);
+                    return false;
+                }
+                return true;
+            }
+        });
+        Expression root = node;
+        for (QualifiedName name : full) {
+            imports.accept(name.getFullyQualifiedName());
+            SimpleName now = node.getAST().newSimpleName(name.getName().getIdentifier());
+            if (name == root) root = now;
+            else replace(name, now);
+        }
+        return root;
     }
 
     /** Whether {@code simple} may stand for {@code canonical}: free, or already that class. Takes it when free. */

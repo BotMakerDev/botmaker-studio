@@ -412,8 +412,9 @@ class McpEndpointTest {
         assertFalse(isError(insert), insert.toString());
         assertTrue(text(insert).contains("Applied."), text(insert));
         // The ids it shifted come back with it, so the assistant need not read the tree again.
-        assertTrue(text(insert).contains("The methods it reshaped") && text(insert).contains("\"name\":\"run\""),
+        assertTrue(text(insert).contains("The methods it reshaped") && text(insert).contains(".run()\n  body "),
                 text(insert));
+        assertFalse(text(insert).contains("\"slots\""), "an outline, not the tree: " + text(insert));
         assertEquals(List.of("Subject.java"), bot.commits);
         assertTrue(bot.files.get(SUBJECT).contains("System.out.println"), bot.files.get(SUBJECT));
     }

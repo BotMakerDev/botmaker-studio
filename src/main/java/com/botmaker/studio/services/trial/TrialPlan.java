@@ -151,14 +151,22 @@ public final class TrialPlan {
      * @param locals       every local it may need, in declaration order
      * @param reads        the locals the statement itself reads
      * @param label        what the trial is called in the console
+     * @param target       {@code com.bot.Collect#body} when the trial runs that method whole, else empty
      */
     public record Plan(String packageName, List<String> imports, String body, boolean valued, List<Local> locals,
-                       List<String> reads, String label) {
+                       List<String> reads, String label, String target) {
 
         public Plan {
             imports = List.copyOf(imports);
             locals = List.copyOf(locals);
             reads = List.copyOf(reads);
+            target = target == null ? "" : target;
+        }
+
+        /** A statement's plan: it runs no method whole. */
+        public Plan(String packageName, List<String> imports, String body, boolean valued, List<Local> locals,
+                    List<String> reads, String label) {
+            this(packageName, imports, body, valued, locals, reads, label, "");
         }
 
         /**
@@ -234,8 +242,11 @@ public final class TrialPlan {
     public static Plan call(String packageName, String className, String method, boolean valued) {
         String call = className + "." + method + "()";
         String simple = className.substring(className.lastIndexOf('.') + 1);
+        // The binary name, which a plugin can load: the nested classes after the package joined by '$'.
+        String binary = packageName.isEmpty() || !className.startsWith(packageName + ".") ? className.replace('.', '$')
+                : packageName + "." + className.substring(packageName.length() + 1).replace('.', '$');
         return new Plan(packageName, List.of(), valued ? "return " + call + ";" : call + ";", valued, List.of(),
-                List.of(), simple + "." + method + "()");
+                List.of(), simple + "." + method + "()", binary + "#" + method);
     }
 
     private static Plan planned(Statement statement, String source, Predicate<IMethodBinding> readOnly,

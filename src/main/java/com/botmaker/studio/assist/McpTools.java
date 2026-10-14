@@ -646,7 +646,8 @@ public final class McpTools {
                                 + "change, or which versions there are. With confirm it answers once the user is "
                                 + "asked on screen; when they agree a version of the bot is saved, the calls into it "
                                 + "are repaired and marked for review, and its tools are served anew. list_plugins "
-                                + "says when the move is done.",
+                                + "says when the move is done. The local build it is on already, with confirm, is "
+                                + "loaded again: a rebuild into ~/.m2 runs without restarting Studio.",
                         """
                                 {"type":"object","properties":{
                                   "id":{"type":"string","description":"the plugin, as list_plugins names it"},

@@ -1,15 +1,19 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.studio.parser.EditContext;
+import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.grammar.ShortNames;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.MethodSignature;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,9 +45,72 @@ public class InitializerFactory {
      * literal-valued constructor parameters. Filling {@code new Rect(Point, Point)} would trade "no such
      * constructor" for "cannot find symbol Point". Destructuring the context here rather than passing it down
      * keeps that limit visible in the signatures below.
+     *
+     * <p>Its rewriter is used once, on the seed made: a plugin's seed and the JDK ones below are written with full
+     * class names so they compile anywhere, and here each is written short and imported
+     * ({@code Key.A}, not {@code com.botmaker.sdk.api.input.Key.A}) where that simple name names no other class
+     * in the file (2026-10-14).
      */
     public static Expression createDefaultInitializer(EditContext ctx, ResolvedType type) {
-        return createDefaultInitializer(ctx.ast(), type, ctx.cu(), ctx.state(), ctx.analyzer());
+        Expression seeded = createDefaultInitializer(ctx.ast(), type, ctx.cu(), ctx.state(), ctx.analyzer());
+        if (ctx.rewriter() == null || ctx.cu() == null) return seeded;
+        Map<String, String> taken = takenNames(ctx.cu(), ctx.state());
+        return ShortNames.shortened(seeded, canonical -> claim(taken, canonical),
+                canonical -> ImportManager.addImport(ctx.cu(), ctx.rewriter(), canonical));
+    }
+
+    /**
+     * Each simple name {@code cu} already gives a class, to its full name: its single-type imports, its own
+     * types, and the bot's classes in its package ({@code ?} for a file whose package is not read yet).
+     */
+    private static Map<String, String> takenNames(CompilationUnit cu, ProjectState state) {
+        Map<String, String> taken = new HashMap<>();
+        String pkg = cu.getPackage() == null ? "" : cu.getPackage().getName().getFullyQualifiedName();
+        for (Object each : cu.imports()) {
+            if (each instanceof ImportDeclaration imp && !imp.isOnDemand() && !imp.isStatic()) {
+                String name = imp.getName().getFullyQualifiedName();
+                taken.putIfAbsent(name.substring(name.lastIndexOf('.') + 1), name);
+            }
+        }
+        // Its own types, member ones too: inside its class a member type hides an import of that name.
+        cu.accept(new ASTVisitor() {
+            @Override
+            public void preVisit(ASTNode node) {
+                if (node instanceof AbstractTypeDeclaration declared) {
+                    String name = declared.getName().getIdentifier();
+                    taken.putIfAbsent(name, declared.isPackageMemberTypeDeclaration()
+                            ? pkg.isEmpty() ? name : pkg + "." + name : "?");
+                }
+            }
+        });
+        if (state == null) return taken;
+        for (ProjectFile file : state.getAllFiles()) {
+            String name = file.getClassName();
+            CompilationUnit unit = file.getAst();
+            String filePkg = unit == null ? null : unit.getPackage() == null ? ""
+                    : unit.getPackage().getName().getFullyQualifiedName();
+            if (name == null || filePkg != null && !filePkg.equals(pkg)) continue;
+            taken.putIfAbsent(name, filePkg == null ? "?" : filePkg.isEmpty() ? name : filePkg + "." + name);
+        }
+        return taken;
+    }
+
+    /**
+     * Whether {@code canonical} may be written by its simple name: no other class has it in the file, and no
+     * {@code java.lang} class, which an import would hide from the rest of the file. Takes it when free.
+     */
+    private static boolean claim(Map<String, String> taken, String canonical) {
+        String simple = canonical.substring(canonical.lastIndexOf('.') + 1);
+        String lang = "java.lang." + simple;
+        if (!canonical.equals(lang)) {
+            try {
+                Class.forName(lang, false, ClassLoader.getPlatformClassLoader());
+                return false;
+            } catch (ClassNotFoundException | LinkageError free) {
+                // No java.lang class of that name.
+            }
+        }
+        return taken.putIfAbsent(simple, canonical) == null || taken.get(simple).equals(canonical);
     }
 
     public static Expression createDefaultInitializer(AST ast, ResolvedType type, CompilationUnit cu, ProjectState state) {

@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * A {@code java.awt.Color} argument must be seeded with a compilable, fully-qualified white.
+ * A {@code java.awt.Color} argument must be seeded with a compilable white, its class imported.
  *
  * <p>The bug this pins down shipped twice. {@code InitializerFactory}'s generic object branch emitted a bare
  * {@code new Color()}, which fails to compile on two counts — nothing imports {@code Color}, and
@@ -48,7 +48,7 @@ class ColorArgumentSeedTest {
     }
 
     @Test
-    void aColorArgumentIsSeededWithFullyQualifiedWhite() {
+    void aColorArgumentIsSeededWithImportedWhite() {
         EditorFixture f = new EditorFixture(SOURCE);
         MethodInvocation call = findCall(f.state.getCompilationUnit().orElseThrow());
 
@@ -56,8 +56,9 @@ class ColorArgumentSeedTest {
                 List.of(ResolvedType.named("Color"), ResolvedType.named("double")));
 
         assertNotNull(f.lastCode, "the overload switch should rewrite the source");
-        assertTrue(f.lastCode.contains("new java.awt.Color(255, 255, 255)"),
-                "a Color slot must be seeded with fully-qualified white, got:\n" + f.lastCode);
+        // Seeded in full, then written short with its import (2026-10-14).
+        assertTrue(f.lastCode.contains("new Color(255, 255, 255)") && f.lastCode.contains("import java.awt.Color;"),
+                "a Color slot must be seeded with white, its class imported, got:\n" + f.lastCode);
         // The exact shape that shipped broken: a no-arg construction of a class with no no-arg constructor.
         assertFalse(f.lastCode.contains("new Color()"),
                 "a Color slot must never be seeded with an uncompilable new Color(), got:\n" + f.lastCode);

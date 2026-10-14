@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.trial;
 
+import com.botmaker.plugin.api.assist.TrialEntry;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -68,6 +69,20 @@ public class TrialCallerTest {
         String out = compileAndRun(TrialCaller.write(plan, Map.of(), entry(), List.of()),
                 "package com.bot; public final class Values { public static void quiet() { System.out.print(\"ran\"); } }");
         assertEquals("ran", out);
+    }
+
+    /** A method run whole names itself to the plugin by binary name; a statement after it names nothing. */
+    @Test
+    void aMethodRunWholeIsNamedToThePluginAndAStatementClearsIt() throws Exception {
+        String bot = "package com.bot; public final class Values { public static final class Inner {"
+                + " public static void body() { System.out.print(System.getProperty(\"" + TrialEntry.TARGET
+                + "\")); } } }";
+        TrialPlan.Plan whole = TrialPlan.call("com.bot", "com.bot.Values.Inner", "body", false);
+        assertEquals("com.bot.Values$Inner#body", compileAndRun(TrialCaller.write(whole, Map.of(), entry(), List.of()),
+                bot));
+        TrialPlan.Plan statement = new TrialPlan.Plan("com.bot", List.of(), "Values.Inner.body();", false, List.of(),
+                List.of(), "body");
+        assertEquals("null", compileAndRun(TrialCaller.write(statement, Map.of(), entry(), List.of()), bot));
     }
 
     @Test

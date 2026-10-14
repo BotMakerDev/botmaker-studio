@@ -742,7 +742,23 @@ final class StudioBridge implements StudioDriver {
                     + (ReleasedPlugins.isDevVersion(to) && local.isEmpty()
                     ? " A -SNAPSHOT build loads only in dev mode: set_setting dev_mode on." : ""));
         }
-        if (to.equals(from)) return name + " is on " + to + " already.";
+        if (to.equals(from)) {
+            if (!to.equals(local) || !ReleasedPlugins.isDevVersion(to)) return name + " is on " + to + " already.";
+            PluginMove under = move.get();
+            if (under != null && under.busy()) {
+                throw new IllegalArgumentException("A plugin move is under way; list_plugins says where it is.");
+            }
+            // This computer's build, rebuilt into ~/.m2 at the same version: Plugins & Libraries' Reload plugins.
+            if (!confirm) {
+                return name + " is on this computer's build " + to + " already. With confirm it is loaded again, "
+                        + "as Reload plugins does, so a rebuild runs here and its tools are served anew.";
+            }
+            waitFor(ctx.libraryService().reloadPlugins(), PLUGIN_WRITE_SECONDS, "reload the plugins");
+            moved.run();
+            say("The assistant reloaded the plugins from this computer's builds.");
+            return "Reloaded " + name + " " + to + " from this computer's build; its tools are served anew. A game "
+                    + "it launched in a private display may need launching again.";
+        }
         PluginUpgradeService.Report report = waitFor(CompletableFuture.supplyAsync(() -> upgrades.compare(to)),
                 PLUGIN_WRITE_SECONDS, "read what moving " + name + " changes");
         String preview = movePreview(plugin, from, to, to.equals(local), report);

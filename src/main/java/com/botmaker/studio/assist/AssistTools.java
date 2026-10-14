@@ -125,15 +125,34 @@ public final class AssistTools {
      * The methods whose statements were added, removed or moved since {@code before}, as {@code read_tree} gives
      * them — so an edit that shifts ids answers with the ids it left, and the assistant need not read the tree
      * again. Empty when no statement moved: a {@code set_slot} changes values, never ids.
+     *
+     * <p>An outline, not the tree: each body and statement id with the statement's first words, no slots — the
+     * whole tree of a long method ran to thousands of characters per edit (2026-10-14); read_tree has the slots.
      */
     synchronized String reshaped(List<BlockView.Method> before) {
         Map<String, List<String>> was = new HashMap<>();
         keyed(before).forEach((key, m) -> was.put(key, ids(m.body(), new ArrayList<>())));
-        List<BlockView.Method> changed = keyed(current().tree()).entrySet().stream()
-                .filter(e -> !ids(e.getValue().body(), new ArrayList<>()).equals(was.get(e.getKey())))
-                .map(Map.Entry::getValue)
-                .toList();
-        return changed.isEmpty() ? "" : json(changed);
+        StringBuilder out = new StringBuilder();
+        keyed(current().tree()).forEach((key, m) -> {
+            if (ids(m.body(), new ArrayList<>()).equals(was.get(key))) return;
+            out.append('\n').append(m.owner()).append('.').append(m.name()).append("()");
+            outline(m.body(), 1, out);
+        });
+        return out.toString();
+    }
+
+    /** Past this, a statement's words in an outline are cut. */
+    private static final int OUTLINE_WORDS = 60;
+
+    private static void outline(BlockView.Body body, int depth, StringBuilder out) {
+        String indent = "  ".repeat(depth);
+        out.append('\n').append(indent).append("body ").append(body.id());
+        for (BlockView.Statement s : body.statements()) {
+            String words = (s.text() == null ? "" : s.text()).strip().lines().findFirst().orElse("");
+            if (words.length() > OUTLINE_WORDS) words = words.substring(0, OUTLINE_WORDS) + "…";
+            out.append('\n').append(indent).append("  ").append(s.id()).append("  ").append(words);
+            s.bodies().forEach(b -> outline(b, depth + 2, out));
+        }
     }
 
     /** Each method by {@code Owner.name#n}, {@code n} telling overloads apart in file order. */

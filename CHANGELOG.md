@@ -50,6 +50,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A method run on its own names itself to the plugin.** ▶ Run on a target and `run_activity` set
+  `botmaker.trial.target` to it, so the SDK goes home first when the activity's card does.
+- **`set_plugin_version` to the local build the bot is on reloads it.** A rebuild into `~/.m2` at the same version
+  runs with `confirm`, as *Reload plugins* does, and its tools are served anew: no Studio restart, no reconnect.
+- **An edit's answer is an outline.** The methods an edit reshaped come back as each body's and statement's id with
+  the statement's first words, not their whole tree with every slot, which ran to thousands of characters per edit.
+- **A seeded argument is written by its short name.** A plugin's seed and the JDK ones are written in full so they
+  compile anywhere; a call inserted from the menu or by the assistant now reads `Key.A` with `Key` imported, not
+  `com.botmaker.sdk.api.input.Key.A`, unless that simple name already names another class in the file.
 - **The assistant's entry point is handed the bot's values.** `insert_block` of `call:Bot.runFlow(Class)` in
   `main` writes `Bot.runFlow(Sdk.class)`, as the statement menu does, never `Bot.runFlow((Class) null)`, which no
   slot could fix: a class literal is no plugin's value. Each step of a turn now sees the bot's other files, so the

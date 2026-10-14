@@ -1,6 +1,7 @@
 package com.botmaker.studio.services.trial;
 
 import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.api.assist.TrialEntry;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.managed.ManagedIds;
@@ -109,6 +110,10 @@ public final class TrialCaller {
         out.append("public final class ").append(SIMPLE_NAME).append(" {\n\n");
         out.append("    private static final Object NO_RESULT = new Object();\n\n");
         out.append("    public static void main(String[] args) {\n");
+        // A warm JVM keeps the last trial's properties: set it for a method run whole, clear it for a statement.
+        out.append(plan.target().isEmpty()
+                ? "        System.clearProperty(\"" + TrialEntry.TARGET + "\");\n"
+                : "        System.setProperty(\"" + TrialEntry.TARGET + "\", \"" + plan.target() + "\");\n");
         out.append("        ").append(entry.getDeclaringClass().getCanonicalName()).append('.').append(entry.getName())
                 .append("(() -> {\n");
         out.append("            try {\n");
