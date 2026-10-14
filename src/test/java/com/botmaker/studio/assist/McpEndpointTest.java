@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -176,12 +177,29 @@ class McpEndpointTest {
 
         /** Whether the plugin add_plugin adds is bound. */
         volatile boolean more;
+        /** The open project's folder, and what fake_snap does there besides answering. */
+        volatile Path dir;
+        volatile Runnable onSnap = () -> {};
+        volatile int filesChanged;
+
+        @Override
+        public Optional<Path> projectDir() {
+            return Optional.ofNullable(dir);
+        }
+
+        @Override
+        public void projectFilesChanged() {
+            filesChanged++;
+        }
 
         @Override
         public List<PluginTool> pluginTools() {
             AssistantTool<Snap> snap = AssistantTool.named("snap").describedAs("A square picture.")
-                    .takes(Snap.class).handledBy((p, ctx) -> AgentReply.text("a " + p.size() + "px square")
-                            .and(AgentReply.image(new BufferedImage(p.size(), p.size(), BufferedImage.TYPE_INT_RGB))));
+                    .takes(Snap.class).handledBy((p, ctx) -> {
+                        onSnap.run();
+                        return AgentReply.text("a " + p.size() + "px square")
+                                .and(AgentReply.image(new BufferedImage(p.size(), p.size(), BufferedImage.TYPE_INT_RGB)));
+                    });
             List<PluginTool> tools = new ArrayList<>(List.of(new PluginTool("fake_snap", "Fake", snap),
                     new PluginTool("list_files", "Fake", snap)));
             if (more) {
@@ -300,7 +318,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
                 "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "plugin_guide", "read_notes", "write_notes", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
+                "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
                 "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "
@@ -324,8 +342,6 @@ class McpEndpointTest {
                 "plugin_guide reads the plugins bound now, not the connect's");
         assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
         assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
-        assertTrue(text(call("read_notes", "{}")).startsWith("REFUSED: No project is open"),
-                "notes need a project to live in");
     }
 
     @Test
@@ -507,6 +523,25 @@ class McpEndpointTest {
 
         JsonNode wrong = call("fake_snap", "{\"size\":\"big\"}");
         assertTrue(isError(wrong), wrong.toString());
+    }
+
+    @Test
+    void aFileAPluginToolPutsAtTheBotsRootReachesTheExplorer(@TempDir Path bot) throws Exception {
+        initialize();
+        driver.dir = bot;
+        Files.setLastModifiedTime(bot, FileTime.fromMillis(0));
+        call("fake_snap", "{\"size\":1}");
+        assertEquals(0, driver.filesChanged, "nothing written, nothing to list again");
+
+        driver.onSnap = () -> {
+            try {
+                Files.writeString(bot.resolve("GAME.md"), "# The game\n");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        };
+        call("fake_snap", "{\"size\":1}");
+        assertEquals(1, driver.filesChanged, "a new file at the root is listed");
     }
 
     @Test

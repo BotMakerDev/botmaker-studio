@@ -212,8 +212,8 @@
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- Markdown read as a tree, not by line: the bot's GAME.md, edited a section at a time by the assistant
-             (its source spans), and drawn as HTML in a WebView. -->
+        <!-- Markdown drawn as HTML in a WebView: a bot's README and the SDK's GAME.md notes (the SDK edits them
+             with the same version). -->
         <dependency>
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>

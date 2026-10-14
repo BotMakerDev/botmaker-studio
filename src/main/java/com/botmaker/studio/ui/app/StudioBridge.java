@@ -518,7 +518,7 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public void notesWritten() {
+    public void projectFilesChanged() {
         Platform.runLater(() -> ctx.eventBus().publish(new CoreApplicationEvents.ProjectFilesChangedEvent()));
     }
 

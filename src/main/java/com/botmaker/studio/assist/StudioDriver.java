@@ -36,13 +36,13 @@ public interface StudioDriver {
     /** How a bot built on a plugin is laid out, in the plugin's own words ({@code StudioPlugin.assistantGuide}). */
     record PluginGuide(String pluginName, String text) {}
 
-    /** The open project's folder, where {@link GameNotes} keeps the bot's notes; empty with none open. */
+    /** The open project's folder; empty with none open. */
     default Optional<Path> projectDir() {
         return Optional.empty();
     }
 
-    /** After write_notes: the explorer lists the notes once they are there. */
-    default void notesWritten() {
+    /** After a plugin's tool changed the project's folder: the explorer lists what is there now. */
+    default void projectFilesChanged() {
     }
 
     /** The bound plugins' guides that say something, in plugin order. */

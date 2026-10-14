@@ -39,6 +39,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The bot's notes on its game moved to the SDK.** `read_notes` and `write_notes` are the SDK's tools now,
+  and Studio names no `GAME.md`. The explorer lists every Markdown file at the bot's root first (its README
+  too). It lists the files again after a plugin's tool adds, removes or replaces a file there.
 - **Run activity flow inserts `Bot.runFlow(Sdk.class)`** with an SDK whose entry point takes only the values
   classes: the run reads its own parameters off `Sdk.java`.
 - **A try runs in a warm JVM.** ▶ Try and the assistant's `try_statement` run in one JVM the project keeps

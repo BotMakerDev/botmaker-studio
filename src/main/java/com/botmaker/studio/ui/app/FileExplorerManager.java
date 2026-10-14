@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.assist.GameNotes;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
@@ -53,13 +52,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * The Project Files explorer: a filter, the file tree, and a collapsible <b>Structure</b> section for the open
@@ -311,6 +313,11 @@ public class FileExplorerManager {
         return path;
     }
 
+    /** A Markdown page the root lists: README.md, GAME.md; never a hidden one, such as a file being written. */
+    static boolean markdownPage(String name) {
+        return !name.startsWith(".") && name.toLowerCase(Locale.ROOT).endsWith(".md");
+    }
+
     public void refreshTree() {
         Predicate<Path> matches = ExplorerModel.matching(filter.getText());
         boolean filtering = !filter.getText().isBlank();
@@ -342,11 +349,19 @@ public class FileExplorerManager {
         if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
-        // The bot's notes on its game sit at its root, beside no source: first, once the assistant wrote some.
-        Path notes = config.projectPath().resolve(GameNotes.FILE);
-        if (Files.isRegularFile(notes) && matches.test(notes)) {
-            root.getChildren().addFirst(new TreeItem<>(new ExplorerNode(GameNotes.FILE, notes, FileRole.of(notes),
-                    ExplorerModel.kindOf(notes, null, entryPoint), false)));
+        // Markdown at the bot's root sits beside no source — its README, the notes a plugin keeps on the game (the
+        // SDK's GAME.md): first, by name.
+        List<Path> pages = new ArrayList<>();
+        try (Stream<Path> top = Files.list(config.projectPath())) {
+            top.filter(p -> markdownPage(p.getFileName().toString()) && Files.isRegularFile(p) && matches.test(p))
+                    .sorted(Comparator.reverseOrder()).forEach(pages::add);
+        } catch (IOException e) {
+            // A root that cannot be listed shows its sources only.
+        }
+        for (Path page : pages) {
+            String name = page.getFileName().toString();
+            root.getChildren().addFirst(new TreeItem<>(new ExplorerNode(name, page, FileRole.of(page),
+                    ExplorerModel.kindOf(page, null, entryPoint), false)));
         }
         fileTree.setRoot(root);
         refreshStatus();
