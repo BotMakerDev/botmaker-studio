@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **`list_palette` hides no name.** Called empty it gives an index, one line per class of calls or category of
+  statements with each entry's bare name, about sixteen lines where it gave over a hundred JSON objects. A filter
+  gives one `id → returns` line per entry; its words are OR'd (`wait gone`) and each looks in the id, label,
+  category, parameter and return types, so a class, a type or a word in a name all find it.
 - **A refused value shows how its type is written.** `set_slot` refusing `Duration.ofSeconds(3)` now adds "It is
   written like `Duration.ofMillis(1000L)`", so the assistant fixes it in one more call.
 

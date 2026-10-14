@@ -216,9 +216,11 @@ public final class McpTools {
                 edit(json, "list_methods", "List a file's methods that have a body, with each body's id.",
                         List.of(FILE), bot, (tools, args) -> tools.listMethods(), false),
                 edit(json, "list_palette",
-                        "List what can be inserted into a file: statement blocks and plugin calls. Each entry's id "
-                                + "is what insert_block takes. Filter by a word, or pass an empty string.",
-                        List.of(Prop.optionalText("filter", "a word to filter by label or category; empty for everything"),
+                        "List what can be inserted into a file: statement blocks and plugin calls. Call it empty "
+                                + "first for the index, every name by class, then filter by a class or words to "
+                                + "get each entry's id, which insert_block takes.",
+                        List.of(Prop.optionalText("filter", "words, any of which an entry's id, label, category, "
+                                        + "parameter or return type holds (ImageFinder, wait gone); empty for the index"),
                                 FILE),
                         bot, (tools, args) -> tools.listPalette(text(args, "filter")), false),
                 edit(json, "read_tree",

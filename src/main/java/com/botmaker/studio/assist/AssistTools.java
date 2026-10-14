@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,15 +38,73 @@ public final class AssistTools {
         return List.copyOf(log);
     }
 
-    /** The palette entries whose label or category contains {@code filter}; all of them for an empty one. */
+    /** The palette's index for an empty {@code filter}, else the entries it matches, one line each ({@link #listed}). */
     public synchronized String listPalette(String filter) {
-        String needle = filter == null ? "" : filter.strip().toLowerCase(Locale.ROOT);
-        List<PaletteEntry> entries = current().palette().stream()
-                .filter(e -> needle.isEmpty() || e.label().toLowerCase(Locale.ROOT).contains(needle)
-                        || e.category().toLowerCase(Locale.ROOT).contains(needle))
+        String needle = filter == null ? "" : filter.strip();
+        record("listPalette(" + needle + ")");
+        return listed(current().palette(), needle);
+    }
+
+    /**
+     * What list_palette says. No filter: the index, one line per class of calls or category of statements with
+     * how many entries it has and each one's bare name, so every name is seen and none is hidden by a word that
+     * missed it; a name with overloads says how many ({@code untilFind ×2}). A filter: each entry it matches as
+     * {@code id → returns}, the id being what insert_block takes. The filter's words are OR'd and each looks in an
+     * entry's id (without its {@code call:} or {@code block:}), label, category, parameter and return types.
+     */
+    static String listed(List<PaletteEntry> palette, String filter) {
+        List<String> words = filter == null ? List.of() : Arrays.stream(filter.toLowerCase(Locale.ROOT)
+                .split("[\\s,]+")).filter(w -> !w.isEmpty()).toList();
+        if (words.isEmpty()) {
+            Map<Group, Map<String, Integer>> groups = new LinkedHashMap<>();
+            for (PaletteEntry e : palette) {
+                groups.computeIfAbsent(group(e), g -> new LinkedHashMap<>()).merge(bareName(e), 1, Integer::sum);
+            }
+            StringBuilder said = new StringBuilder();
+            groups.forEach((group, names) -> {
+                int count = names.values().stream().mapToInt(Integer::intValue).sum();
+                said.append(group.name()).append(" (").append(count)
+                        .append(group.kind() == PaletteEntry.Kind.CALL ? " call" : " statement")
+                        .append(count == 1 ? "): " : "s): ")
+                        .append(String.join(", ", names.entrySet().stream()
+                                .map(n -> n.getValue() == 1 ? n.getKey() : n.getKey() + " ×" + n.getValue()).toList()))
+                        .append('\n');
+            });
+            return said.append("Filter by a class or a word for each entry's id, parameters and return type.")
+                    .toString();
+        }
+        List<String> lines = palette.stream()
+                .filter(e -> words.stream().anyMatch(w -> haystack(e).contains(w)))
+                .map(e -> e.kind() == PaletteEntry.Kind.CALL ? e.id() + " → " + e.returns()
+                        : e.id() + " — " + e.label() + " (" + e.category() + ")")
                 .toList();
-        record("listPalette(" + needle + ") → " + entries.size() + " entries");
-        return json(entries);
+        return lines.isEmpty() ? "Nothing matches " + filter.strip() + ". An empty filter gives every name."
+                : String.join("\n", lines);
+    }
+
+    /** A line of the index: a call's class or a statement's category, the word that filters it. */
+    private record Group(String name, PaletteEntry.Kind kind) {
+    }
+
+    private static Group group(PaletteEntry e) {
+        return new Group(e.kind() == PaletteEntry.Kind.CALL ? owner(e) : e.category(), e.kind());
+    }
+
+    /** A call's method name without its class; a statement's id without its prefix ({@code IF}). */
+    private static String bareName(PaletteEntry e) {
+        if (e.kind() == PaletteEntry.Kind.STATEMENT) return PaletteEntry.Kind.STATEMENT.restOf(e.id());
+        return e.label().substring(e.label().lastIndexOf('.') + 1);
+    }
+
+    private static String owner(PaletteEntry e) {
+        int dot = e.label().lastIndexOf('.');
+        return dot < 0 ? e.category() : e.label().substring(0, dot);
+    }
+
+    /** Without the id's prefix: {@code call} would match every call. */
+    private static String haystack(PaletteEntry e) {
+        return String.join(" ", e.kind().restOf(e.id()), e.label(), e.category(), String.join(" ", e.params()),
+                e.returns()).toLowerCase(Locale.ROOT);
     }
 
     public synchronized String readTree() {
