@@ -8,6 +8,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionType;
@@ -19,6 +20,7 @@ import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.parser.ExpressionChoice;
+import com.botmaker.studio.parser.StatementPlacement;
 import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
@@ -168,10 +170,24 @@ public final class AssistTurn {
         }
         String callKey = PaletteEntry.Kind.CALL.restOf(paletteId);
         if (callKey != null) {
-            Optional<ExpressionChoice.Method> call = call(stage.analyzer, callKey);
-            if (call.isEmpty()) return Outcome.Refused.because("The palette has no call " + paletteId + ".");
-            return apply(stage, "inserted " + call.get().scope() + "." + call.get().methodName(),
-                    editor -> editor.addMethodCallStatement(body.get(), call.get(), at));
+            Optional<PaletteCall> found = paletteCall(stage.analyzer, callKey);
+            if (found.isEmpty()) return Outcome.Refused.because("The palette has no call " + paletteId + ".");
+            ExpressionChoice.Method call = found.get().choice();
+            if (found.get().facade().entryPoint(call.methodName())) {
+                if (!StatementPlacement.inMain(body.get().getAstNode())) {
+                    return Outcome.Refused.because(call.scope() + "." + call.methodName()
+                            + " starts the bot: it goes in main only.");
+                }
+                // An entry point is written as the statement menu writes it: Bot.runFlow(Sdk.class), each
+                // holder of the bot's values handed over, never a (Class) null no slot can take a class into.
+                BlockType entry = new BlockType.LibraryCall("SDK_" + call.scope() + "_" + call.methodName(),
+                        call.methodName(), BlockCategory.INPUT, found.get().facade().type(), call.methodName(),
+                        List.of());
+                return apply(stage, "inserted " + call.scope() + "." + call.methodName(),
+                        editor -> editor.addStatement(body.get(), entry, at));
+            }
+            return apply(stage, "inserted " + call.scope() + "." + call.methodName(),
+                    editor -> editor.addMethodCallStatement(body.get(), call, at));
         }
         return Outcome.Refused.because(paletteId + " is not a palette id. Ids start with block: or call:.");
     }
@@ -748,12 +764,8 @@ public final class AssistTurn {
         return owner + "." + sig.name() + "(" + sig.signatureKey() + ")";
     }
 
-    private Optional<ExpressionChoice.Method> call(ProjectAnalyzer analyzer, String key) {
-        return paletteCall(analyzer, key).map(PaletteCall::choice);
-    }
-
-    /** A call the palette offers: its owner's simple name and its signature. */
-    private record PaletteCall(String owner, MethodSignature signature) {
+    /** A call the palette offers: its facade, its owner's simple name and its signature. */
+    private record PaletteCall(FacadeEntry facade, String owner, MethodSignature signature) {
         ExpressionChoice.Method choice() {
             return new ExpressionChoice.Method(owner, signature.name(), signature.paramTypes(), true);
         }
@@ -763,7 +775,7 @@ public final class AssistTurn {
         for (FacadeEntry facade : facades()) {
             String owner = facade.simpleName();
             for (MethodSignature sig : offered(analyzer, owner)) {
-                if (callKey(owner, sig).equals(key)) return Optional.of(new PaletteCall(owner, sig));
+                if (callKey(owner, sig).equals(key)) return Optional.of(new PaletteCall(facade, owner, sig));
             }
         }
         return Optional.empty();

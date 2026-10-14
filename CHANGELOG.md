@@ -50,6 +50,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **The assistant's entry point is handed the bot's values.** `insert_block` of `call:Bot.runFlow(Class)` in
+  `main` writes `Bot.runFlow(Sdk.class)`, as the statement menu does, never `Bot.runFlow((Class) null)`, which no
+  slot could fix: a class literal is no plugin's value. Each step of a turn now sees the bot's other files, so the
+  holder of values is found.
 - **A loop dropped inside another loop compiles.** Its lambda's value takes a free name (`it2`, `it3`) when the
   name it would get is already in scope there; a loop beside another keeps `it`.
 

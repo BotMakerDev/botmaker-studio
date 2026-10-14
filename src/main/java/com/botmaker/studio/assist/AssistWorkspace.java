@@ -29,6 +29,8 @@ import java.util.List;
  * @param journal where a refused rewrite is recorded, or {@code null} for the cache directory
  * @param grammar   the value grammar a slot's value is read and written with
  * @param constants the bot's managed constants, which a slot may be set to by name ({@code Pictures.ORE})
+ * @param others    the bot's other files as they were when the turn began, read only: an insert that names
+ *                  another class of the bot ({@code Bot.runFlow(Sdk.class)}) looks for it among them
  */
 public record AssistWorkspace(ProjectConfig config,
                               Path file,
@@ -39,19 +41,33 @@ public record AssistWorkspace(ProjectConfig config,
                               TypeSummaryManager index,
                               RefusalJournal journal,
                               ValueGrammar grammar,
-                              List<ManagedConstants.Constant> constants) {
+                              List<ManagedConstants.Constant> constants,
+                              List<ProjectFile> others) {
 
     public AssistWorkspace {
         classpath = classpath == null ? List.of() : List.copyOf(classpath);
         if (grammar == null) grammar = PluginHost.grammar();
         constants = constants == null ? List.of() : List.copyOf(constants);
+        others = others == null ? List.of() : List.copyOf(others);
+    }
+
+    /** A workspace that knows none of the bot's other files. */
+    public AssistWorkspace(ProjectConfig config, Path file, List<String> classpath, Path sourceRoot,
+                           ProjectTemplate template, StudioProjectSettings settings, TypeSummaryManager index,
+                           RefusalJournal journal, ValueGrammar grammar, List<ManagedConstants.Constant> constants) {
+        this(config, file, classpath, sourceRoot, template, settings, index, journal, grammar, constants, List.of());
     }
 
     /** {@code file} of the open project. FX thread, as {@link ProjectState} is. */
     public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index, Path file) {
+        // Copied, not shared: the live files change as the canvas re-parses.
+        List<ProjectFile> others = state.getAllFiles().stream()
+                .filter(each -> !each.getPath().equals(file))
+                .map(each -> new ProjectFile(each.getPath(), each.getContent()))
+                .toList();
         return new AssistWorkspace(config, file, state.getResolvedClasspath(), state.getSourcePath(),
                 state.getTemplate(), state.getSettings(), index, null, PluginHost.grammar(),
-                ManagedConstants.scan(config, state));
+                ManagedConstants.scan(config, state), others);
     }
 
     /** The constants as the grammar reads them. */
@@ -62,6 +78,7 @@ public record AssistWorkspace(ProjectConfig config,
     /** A fresh {@link ProjectState} holding {@code source} as this workspace's file — one step of a turn. */
     ProjectState stage(String source) {
         ProjectState staged = new ProjectState();
+        others.forEach(each -> staged.addFile(new ProjectFile(each.getPath(), each.getContent())));
         staged.addFile(new ProjectFile(file, source));
         staged.setActiveFile(file);
         staged.setSourcePath(sourceRoot);

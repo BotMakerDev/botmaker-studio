@@ -6,6 +6,8 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.project.managed.ManagedConstants.Constant;
 import org.junit.jupiter.api.Test;
@@ -85,6 +87,25 @@ public class AssistTurnTest {
         List<PaletteEntry> palette = turn(SOURCE).palette();
         assertTrue(palette.stream().anyMatch(e -> e.id().equals("block:PRINT")));
         assertTrue(palette.stream().anyMatch(e -> e.id().equals("block:IF")));
+    }
+
+    /**
+     * A step of a turn sees the bot's other files, so an entry point inserted in main is handed the bot's holder
+     * of values (Bot.runFlow(Sdk.class)); staged alone, it was handed null (2026-10-14).
+     */
+    @Test
+    void aStagedStepSeesTheBotsOtherFilesAndItsOwnSource() {
+        AssistWorkspace base = workspace();
+        Path sdk = Paths.get("Sdk.java").toAbsolutePath();
+        AssistWorkspace workspace = new AssistWorkspace(base.config(), base.file(), base.classpath(), base.sourceRoot(),
+                base.template(), base.settings(), base.index(), base.journal(), base.grammar(), base.constants(),
+                List.of(new ProjectFile(sdk, "public final class Sdk {}"),
+                        new ProjectFile(base.file(), "stale")));
+
+        ProjectState staged = workspace.stage(SOURCE);
+
+        assertEquals("public final class Sdk {}", staged.getFile(sdk).orElseThrow().getContent());
+        assertEquals(SOURCE, staged.getFile(base.file()).orElseThrow().getContent(), "the turn's own copy wins");
     }
 
     // ---- what goes through ----
