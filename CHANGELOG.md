@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A refused value shows how its type is written.** `set_slot` refusing `Duration.ofSeconds(3)` now adds "It is
+  written like `Duration.ofMillis(1000L)`", so the assistant fixes it in one more call.
+
 - **The assistant keeps what it learns about the game.** `write_notes` saves it in the bot's `GAME.md`, one
   section at a time (how to reach a screen, a hotkey, what Escape does, how slow a screen is), and `read_notes`
   reads it, which the instructions say to do before exploring, so the next session starts from it. The file is

@@ -199,6 +199,9 @@ public class AssistTurnTest {
                 constants), source);
         String slot = statement(turn, Pics.class.getCanonicalName()).slots().getFirst().id();
 
+        Outcome.Refused near = assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "Pics.none()"));
+        assertTrue(near.reasons().stream().anyMatch(r -> r.contains("It is written like `") && r.contains("Pics.of(")),
+                "a refusal names the type's own spelling: " + near.reasons());
         Outcome set = turn.setSlot(slot, "Pics.of(Subject.ORE, Subject.GEM)");
         assertInstanceOf(Outcome.Accepted.class, set, set + " " + turn.errors());
         assertTrue(turn.source().contains("Pics.of(Subject.ORE, Subject.GEM)"), "each part is the bot's constant:\n"

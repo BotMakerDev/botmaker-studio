@@ -248,9 +248,12 @@ public final class AssistTurn {
         Optional<Object> read = SourceNode.parse(text)
                 .flatMap(node -> workspace.grammar().read(type.get(), node, workspace.lookup()));
         if (read.isEmpty()) {
+            // The type's own spelling, so a near miss (Duration.ofSeconds for Duration.ofMillis) is fixed in one go.
+            String like = workspace.grammar().freshSpelling(type.get())
+                    .map(fresh -> " It is written like `" + fresh.source() + "`.").orElse("");
             return Outcome.Refused.because("`" + value + "` is not a " + nameOf(expected)
                     + " value. Write a literal, one of the bot's constants (Pictures.ORE), or a constant or "
-                    + "factory call the type declares.");
+                    + "factory call the type declares." + like);
         }
         // A value one of the bot's constants holds is written as that constant, as the slot editors write it,
         // and so is each part of it.
