@@ -50,6 +50,7 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -353,7 +354,8 @@ public class FileExplorerManager {
         // SDK's GAME.md): first, by name.
         List<Path> pages = new ArrayList<>();
         try (Stream<Path> top = Files.list(config.projectPath())) {
-            top.filter(p -> markdownPage(p.getFileName().toString()) && Files.isRegularFile(p) && matches.test(p))
+            top.filter(p -> markdownPage(p.getFileName().toString())
+                            && Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS) && matches.test(p))
                     .sorted(Comparator.reverseOrder()).forEach(pages::add);
         } catch (IOException e) {
             // A root that cannot be listed shows its sources only.
