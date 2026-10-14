@@ -165,20 +165,33 @@ public final class McpTools {
     /**
      * {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}), and, but for
      * the tools in {@link #WHILE_MOVING}, while a plugin move is asked or runs ({@link StudioDriver#pluginMoving}):
-     * the move rewrites the bot's files and the pom under them.
+     * the move rewrites the bot's files and the pom under them. Each call's time is kept in {@link #TIMES}.
      */
     private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
-        boolean passes = WHILE_MOVING.contains(tool.tool().name());
+        String name = tool.tool().name();
+        boolean passes = WHILE_MOVING.contains(name);
         return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> {
-            if (driver.reloading()) {
-                return result("REFUSED: Studio is switching the project (after a revert, or to a project "
-                        + "create_project made). Reconnect and call again once it is open.", true);
+            long start = System.nanoTime();
+            CallToolResult answer = null;
+            try {
+                if (driver.reloading()) {
+                    answer = result("REFUSED: Studio is switching the project (after a revert, or to a project "
+                            + "create_project made). Reconnect and call again once it is open.", true);
+                } else {
+                    String moving = passes ? "" : driver.pluginMoving();
+                    answer = moving.isEmpty() ? tool.callHandler().apply(exchange, request)
+                            : result("REFUSED: " + moving + " Wait for it: list_plugins says when it is done.", true);
+                }
+                return answer;
+            } finally {
+                // A handler that threw counts as an error.
+                TIMES.record(name, System.nanoTime() - start, answer == null || Boolean.TRUE.equals(answer.isError()));
             }
-            String moving = passes ? "" : driver.pluginMoving();
-            return moving.isEmpty() ? tool.callHandler().apply(exchange, request)
-                    : result("REFUSED: " + moving + " Wait for it: list_plugins says when it is done.", true);
         }).build();
     }
+
+    /** Where every call's time goes, Studio's tools' and the plugins'. */
+    private static final ToolTimes TIMES = ToolTimes.inCache();
 
     /** The tools that touch neither the bot's files nor its plugins, so they answer while a plugin moves. */
     static final java.util.Set<String> WHILE_MOVING = java.util.Set.of("list_plugins", "search_plugins",

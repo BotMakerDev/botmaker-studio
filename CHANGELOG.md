@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Every assistant tool call's time is kept.** Each call over MCP, Studio's tools and the plugins', adds a row
+  to `tool-times.tsv` in Studio's cache (`~/.cache/botmaker/`): when it ended, the tool, its milliseconds, and
+  `ok` or `error`. Past 4 MB the file moves aside to `tool-times.old.tsv`.
 - **`list_palette` hides no name.** Called empty it gives an index, one line per class of calls or category of
   statements with each entry's bare name, about sixteen lines where it gave over a hundred JSON objects. A filter
   gives one `id → returns` line per entry; its words are OR'd (`wait gone`) and each looks in the id, label,
