@@ -362,9 +362,9 @@ public class StatementFactory {
             List<String> holders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l)
                     ? valuesHolders(ctx.state()) : List.of();
             if (!holders.isEmpty()) {
-                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.flow, Sdk.doSetup, Sdk.skip,
-                // Sdk.class) — is handed each plugin's parameter of the type an argument before them takes, then
-                // every plugin's holder of values: the arguments Studio knows and the author would look up.
+                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed each
+                // plugin's parameter of the type an argument before them takes, then every plugin's holder of
+                // values: the arguments Studio knows and the author would look up.
                 List<ManagedValue<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
                 // Each holder's file read once per insert: one nobody opened is parsed here.
                 java.util.Map<String, Optional<CompilationUnit>> units = new java.util.HashMap<>();

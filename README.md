@@ -113,7 +113,7 @@ another folder with **Open Folder…**. A Gamebot project looks like this:
 ~/BotMakerProjects/MyBot/
 ├── pom.xml                          # a normal Maven pom; declares the plugins and pins their versions
 ├── src/main/java/com/mybot/
-│   ├── Gamebot.java                 # main() — Bot.runFlow(Sdk.flow, …, Sdk.class); a template keeps its class names
+│   ├── Gamebot.java                 # main() — Bot.runFlow(Sdk.class); a template keeps its class names
 │   ├── Collect.java, Battle.java…   # one class per activity — this is where your blocks live
 │   ├── Parameters.java              # the @Param fields Project ▸ Parameters edits
 │   └── plugins/sdk/                 # the SDK plugin's values, edited through its windows

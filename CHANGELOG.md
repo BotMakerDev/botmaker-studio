@@ -36,6 +36,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Run activity flow inserts `Bot.runFlow(Sdk.class)`** with an SDK whose entry point takes only the values
+  classes: the run reads its own parameters off `Sdk.java`.
 - **A try runs in a warm JVM.** ▶ Try and the assistant's `try_statement` run in one JVM the project keeps
   between tries, with the bot's classes loaded afresh each time: a try no longer pays a JVM's start, the SDK's and
   the private display's join, and its start-up lines come once. The JVM starts again when the dependencies, the run
