@@ -15,9 +15,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The migration window's steps for a pair as the assistant writes them (2026-10-13, {@code set_migration}): each
+ * The migration window's steps for a pair as the assistant writes them (2026-10-13, {@code migration set}): each
  * pair seeded as the window seeds it — the bot's {@code @Migrate} method, else the first guess — then changed by
- * the lines given, in the words {@code read_migration} says them: {@code grey: fixed true},
+ * the lines given, in the words {@code migration read} says them: {@code grey: fixed true},
  * {@code area: from area}, {@code tag: built from name}, {@code RED: CRIMSON}. A line for a pair a part goes
  * through starts with either type's simple name ({@code Area.w: fixed 0}). Pure.
  */

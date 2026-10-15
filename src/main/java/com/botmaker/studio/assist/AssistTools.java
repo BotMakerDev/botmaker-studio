@@ -49,7 +49,7 @@ public final class AssistTools {
      * What list_palette says. No filter: the index, one line per class of calls or category of statements with
      * how many entries it has and each one's bare name, so every name is seen and none is hidden by a word that
      * missed it; a name with overloads says how many ({@code untilFind ×2}). A filter: each entry it matches as
-     * {@code id → returns}, the id being what insert_block takes. The filter's words are OR'd and each looks in an
+     * {@code id → returns}, the id being what edit_code's insert takes. The filter's words are OR'd and each looks in an
      * entry's id (without its {@code call:} or {@code block:}), label, category, parameter and return types.
      */
     static String listed(List<PaletteEntry> palette, String filter) {
@@ -185,7 +185,7 @@ public final class AssistTools {
     /**
      * The methods whose statements were added, removed or moved since {@code before}, as {@code read_tree} gives
      * them — so an edit that shifts ids answers with the ids it left, and the assistant need not read the tree
-     * again. Empty when no statement moved: a {@code set_slot} changes values, never ids.
+     * again. Empty when no statement moved: a {@code set} changes values, never ids.
      *
      * <p>An outline, not the tree: each body and statement id with the statement's first words, no slots — the
      * whole tree of a long method ran to thousands of characters per edit (2026-10-14); read_tree has the slots.

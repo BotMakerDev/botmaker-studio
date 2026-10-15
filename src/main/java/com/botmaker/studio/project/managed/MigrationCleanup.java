@@ -271,7 +271,7 @@ public final class MigrationCleanup {
     }
 
     /**
-     * What the assistant's {@code remove_migrated} removes (2026-10-13): the originals of {@code from} copied into
+     * What the assistant's {@code migration remove_migrated} removes (2026-10-13): the originals of {@code from} copied into
      * {@code to} that nothing uses ({@link #removable}, none when {@code to} is null), then every {@code @Migrate}
      * method nothing needs once they are gone ({@link #unneeded}, {@link #removeMethods}) — one change, worked out
      * over the bot as the first leaves it.

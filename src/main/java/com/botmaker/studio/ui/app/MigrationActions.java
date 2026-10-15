@@ -206,8 +206,8 @@ final class MigrationActions {
 
     /**
      * Writes {@code change} and deletes {@code deleted} as one version after a safety one — unless a file it touches
-     * is no longer the text it was worked out from ({@code basis}). Also the assistant's {@code switch_uses} and
-     * {@code remove_migrated}, which ask nothing on screen. FX thread.
+     * is no longer the text it was worked out from ({@code basis}). Also the assistant's {@code migration switch_uses}
+     * and {@code remove_migrated}, which ask nothing on screen. FX thread.
      */
     Wrote write(Refactor.Planned change, Set<Path> deleted, Map<Path, String> basis) {
         List<String> changed = changedSince(config, state, basis);

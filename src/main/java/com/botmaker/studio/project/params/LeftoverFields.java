@@ -27,7 +27,7 @@ import java.util.Optional;
 /**
  * Fields a plugin's move leaves behind, put right one at a time (2026-10-13): a plugin's parameter set back to its
  * first value — or, written as another type than the plugin declares now, removed and written anew — and a field
- * nothing needs deleted. The assistant's {@code reset_param} and {@code delete_field}.
+ * nothing needs deleted. The assistant's {@code params reset} and {@code delete_field}.
  *
  * <p><b>Pure, over the bot's one parse</b>: each answers a plan compiled as the whole bot, or why there is none;
  * nothing is written here.

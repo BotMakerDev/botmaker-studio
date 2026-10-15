@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The bot's migrations as sentences, for the assistant's {@code list_migrations}, {@code read_migration} and
- * {@code set_plugin_version} (2026-10-13): what the Review tab's retired rows, the migration window's steps and
+ * The bot's migrations as sentences, for the assistant's {@code migration list}, {@code migration read} and
+ * {@code plugins set_version} (2026-10-13): what the Review tab's retired rows, the migration window's steps and
  * methods and the upgrade's dropped-values warning say, with each type named so a later tool call can name it back.
  */
 public final class MigrationSummary {
@@ -91,7 +91,7 @@ public final class MigrationSummary {
     }
 
     /**
-     * The whole of {@code read_migration}: how {@code from}'s values become {@code to}'s — {@code null} for its
+     * The whole of {@code migration read}: how {@code from}'s values become {@code to}'s — {@code null} for its
      * plugin's replacement, else the first type that fits, as the migration window preselects — part by part or
      * constant by constant, as the bot's {@code @Migrate} method has it or else as first guessed, with what else
      * each can be, the pairs it goes through and why it cannot be written yet.
@@ -215,7 +215,7 @@ public final class MigrationSummary {
         };
     }
 
-    /** The whole of {@code list_migrations}: the retired types, the methods the bot keeps and those nothing needs. */
+    /** The whole of {@code migration list}: the retired types, the methods the bot keeps and those nothing needs. */
     public static String listing(List<MigrationSteps.Pending> pending, List<ManagedMigrations.Method> methods,
                                  List<ManagedMigrations.Method> unneeded) {
         List<String> lines = new ArrayList<>();

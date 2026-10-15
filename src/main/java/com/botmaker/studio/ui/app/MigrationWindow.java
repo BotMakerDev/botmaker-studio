@@ -319,7 +319,7 @@ final class MigrationWindow {
 
     /**
      * {@code plan} as one version: a safety one first, new files created, the rest through the buffers; each file
-     * told to {@code redraw}. The window's Apply and the assistant's {@code set_migration}. FX thread.
+     * told to {@code redraw}. The window's Apply and the assistant's {@code migration set}. FX thread.
      */
     static void written(ProjectConfig config, ProjectState state, Refactor.Planned plan, BotIndex index,
                         Consumer<Path> redraw) {

@@ -407,13 +407,13 @@ public final class AssistTurn {
                 + "; read the tree for its slot", editor -> editor.addVarargsArgument(call.get(), element));
     }
 
-    /** What set_slot takes before a variable's name: {@code var:value}. */
+    /** What edit_code's set takes before a variable's name: {@code var:value}. */
     static final String VARIABLE = "var:";
 
-    /** What set_slot takes before an operator's id: {@code op:NOT}. */
+    /** What edit_code's set takes before an operator's id: {@code op:NOT}. */
     static final String OPERATOR = "op:";
 
-    /** The operators a slot takes, as set_slot spells them, in the menu's order. */
+    /** The operators a slot takes, as edit_code's set spells them, in the menu's order. */
     static List<String> operatorIds() {
         return ExpressionCatalog.all().stream().filter(AssistTurn::isOperator).map(t -> OPERATOR + t.id()).toList();
     }
@@ -840,8 +840,8 @@ public final class AssistTurn {
 
     /**
      * {@code expression} and the positions inside it a value may be written into: through a {@code !}, an
-     * operator's operands or brackets, down to each call's arguments — so a condition built with set_slot
-     * ({@code !ImageFinder.find(…)}) can have its parts set too.
+     * operator's operands or brackets, down to each call's arguments — so a condition built with edit_code's
+     * set ({@code !ImageFinder.find(…)}) can have its parts set too.
      */
     private static void within(Expression expression, List<Expression> out) {
         out.add(expression);

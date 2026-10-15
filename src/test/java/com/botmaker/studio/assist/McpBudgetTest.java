@@ -24,14 +24,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Gemini and opencode in the Assistant tab) pays all of it on every request. The sizes are written to
  * {@code target/mcp-budget.tsv}, biggest first, and the total may not pass {@link #CEILING}: a tool that grows its
  * words past it says so here, not in a client's bill. The plugins' tools are measured by their own builds (the
- * SDK's {@code SdkAssistTest}).
+ * SDK's {@code SdkToolBudgetTest}).
  */
 class McpBudgetTest {
 
     /**
      * Characters, Studio's tools and the instructions together; about four to a token. 30,913 on 2026-10-15, before
      * the tools were typed and merged; 31,650 once typed (each action's fields said, the method parameters
-     * described); 23,847 once merged into tools of several actions and trimmed, 37 tools where there were 58.
+     * described); 23,847 once merged into tools of several actions and trimmed, 37 tools where there were 58. The ceiling leaves
+     * about a tenth over that.
      */
     static final int CEILING = 26_000;
 

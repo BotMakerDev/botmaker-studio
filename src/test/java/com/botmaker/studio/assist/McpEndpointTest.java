@@ -558,6 +558,27 @@ class McpEndpointTest {
         assertTrue(reordered.indexOf("System.out.println") < reordered.indexOf("int count"), reordered);
     }
 
+    /** A slot's value and a variable's name are edit_code actions too, set and edit_variable (2026-10-15). */
+    @Test
+    void aSlotIsSetAndAVariableRenamedThroughEditCode() throws Exception {
+        initialize();
+        String tree = text(call("read_tree", "{\"method\":\"run\"}"));
+        Matcher declared = Pattern.compile("\"id\":\"([^\"]+)\"[^{}]*?int count[^{}]*?\"slots\":\\[\\{\"id\":\"([^\"]+)\"")
+                .matcher(tree);
+        assertTrue(declared.find(), tree);
+
+        JsonNode set = call("edit_code", "{\"edits\":[{\"action\":\"set\",\"slotId\":\"" + declared.group(2)
+                + "\",\"value\":\"7\"}]}");
+        assertFalse(isError(set), set.toString());
+        assertTrue(bot.files.get(SUBJECT).contains("int count = 7;"), bot.files.get(SUBJECT));
+
+        JsonNode renamed = call("edit_code", "{\"edits\":[{\"action\":\"edit_variable\",\"blockId\":\""
+                + declared.group(1) + "\",\"name\":\"total\"}]}");
+        assertFalse(isError(renamed), renamed.toString());
+        assertTrue(bot.files.get(SUBJECT).contains("int total = 7;"), bot.files.get(SUBJECT));
+        assertEquals(2, bot.commits.size(), "one step each");
+    }
+
     @Test
     void aSignatureChangeThatBreaksAnotherFileIsNotKept() throws Exception {
         initialize();
