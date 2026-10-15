@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin lists the bot's boolean methods and adds one** (`PluginValues.booleanMethods`,
+  `createBooleanMethod`): `public static boolean name() { return false; }` in the class it names, or a new one.
+- **A tool's answer in several text parts reaches the client as one text**, the parts a blank line apart.
 - **quit_studio** closes Studio as its window's close button does, half a second after it answers, so a client
   can restart it with the bridge's start_studio.
 - **`/mcp-hello`** proves to a client that it talks to this Studio before the client sends the token: it signs

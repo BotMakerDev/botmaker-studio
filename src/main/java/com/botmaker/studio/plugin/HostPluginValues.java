@@ -439,6 +439,16 @@ public final class HostPluginValues implements PluginValues {
         return createMethod((String) null, null, className, method);
     }
 
+    @Override
+    public List<String> booleanMethods() {
+        return BotMethods.returning(index(), BotMethods.BOOLEAN);
+    }
+
+    @Override
+    public MethodWrite createBooleanMethod(String className, String method) {
+        return written(index(), className, method, BotMethods.BOOLEAN, null, null);
+    }
+
     // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────
 
     public List<String> members(String id) {
@@ -503,6 +513,12 @@ public final class HostPluginValues implements PluginValues {
             imported = canonical.substring(0, canonical.length() - group.length() - 1);
             first = found.get().members().getFirst().name();
         }
+        return written(index, className, method, returns, imported, first);
+    }
+
+    /** {@link BotMethods#create}'s method written into the bot, creating its class when there is none. */
+    private MethodWrite written(BotIndex index, String className, String method, String returns, String imported,
+                                String first) {
         Path file = className == null ? null : config.mainPackageDir().resolve(className + ".java");
         Refactor.Outcome planned = BotMethods.create(index, config.mainPackage(), file, className, method, returns,
                 imported, first);

@@ -821,19 +821,33 @@ public final class McpTools {
         return out;
     }
 
-    /** A plugin's reply as MCP content: its text and its images, in order, a large frame as a JPEG. */
+    /**
+     * A plugin's reply as MCP content: its text and its images, in order, a large frame as a JPEG. Texts next to each
+     * other are one content, a blank line between them: a client shows a run of texts with nothing between, so the
+     * sentences of several tries ran together (2026-10-15).
+     */
     static CallToolResult reply(AgentReply reply) {
         CallToolResult.Builder out = CallToolResult.builder().isError(reply.isRefused());
+        StringBuilder text = new StringBuilder();
         for (AgentReply.Part part : reply.parts()) {
             switch (part.kind()) {
-                case TEXT -> out.addTextContent(part.text());
+                case TEXT -> {
+                    String said = part.text().stripTrailing();    // a table's or a code's indent kept
+                    if (said.isBlank()) continue;
+                    if (!text.isEmpty()) text.append("\n\n");
+                    text.append(said);
+                }
                 case IMAGE -> {
+                    if (!text.isEmpty()) out.addTextContent(text.toString());
+                    text.setLength(0);
                     McpImage image = McpImage.of(part.png());
                     out.addContent(new McpSchema.ImageContent(null,
                             Base64.getEncoder().encodeToString(image.bytes()), image.mimeType()));
                 }
             }
         }
+        if (!text.isEmpty()) out.addTextContent(text.toString());
+        else if (reply.parts().stream().noneMatch(p -> p.kind() == AgentReply.Kind.IMAGE)) out.addTextContent("");
         return out.build();
     }
 

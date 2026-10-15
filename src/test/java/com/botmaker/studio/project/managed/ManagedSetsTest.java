@@ -322,6 +322,13 @@ class ManagedSetsTest {
                 "home", null, null, null)).rewrites().get(rest);
         assertTrue(created.startsWith("package com.bot;"), created);
         assertTrue(created.contains("public static void home() {"), created);
+
+        String condition = assertInstanceOf(Refactor.Planned.class, BotMethods.create(index, "com.bot", collect,
+                "Collect", "eventOn", BotMethods.BOOLEAN, null, null)).rewrites().get(collect);
+        assertTrue(condition.contains("public static boolean eventOn() {"), condition);
+        assertTrue(condition.contains("return false;"), condition);
+        assertEquals(List.of("Collect::eventOn"), BotMethods.returning(BotIndex.over(Map.of(collect, condition),
+                List.of(contract(), testClasses()), root), BotMethods.BOOLEAN));
     }
 
     private static final String ROUTES = """

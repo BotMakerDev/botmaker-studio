@@ -38,6 +38,9 @@ import java.util.Map;
  */
 public final class BotMethods {
 
+    /** What {@link #returning} and {@link #create} take for a {@code boolean} method: no class is named so. */
+    public static final String BOOLEAN = "boolean";
+
     private BotMethods() {}
 
     /**
@@ -104,6 +107,10 @@ public final class BotMethods {
             return returned instanceof PrimitiveType primitive && primitive.getPrimitiveTypeCode() == PrimitiveType.VOID
                     && !method.getName().getIdentifier().equals("main");
         }
+        if (canonical.equals(BOOLEAN)) {
+            return returned instanceof PrimitiveType primitive
+                    && primitive.getPrimitiveTypeCode() == PrimitiveType.BOOLEAN;
+        }
         return returned instanceof SimpleType simple && SourceNames.refersTo(simple.getName(), canonical);
     }
 
@@ -121,7 +128,7 @@ public final class BotMethods {
                                           String name, String returns, String imported, String first) {
         if (!isJavaName(className)) return new Refactor.Refused("“" + className + "” is not a class name Java accepts.");
         if (!isJavaName(name)) return new Refactor.Refused("“" + name + "” is not a method name Java accepts.");
-        if (returns != null && !isJavaName(first)) return new Refactor.Refused(returns + " has no constant to return.");
+        if (returns != null && !returns.equals(BOOLEAN) && !isJavaName(first)) return new Refactor.Refused(returns + " has no constant to return.");
         Path file = index.read(units -> {
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
                 for (Object each : entry.getValue().types()) {
@@ -168,6 +175,13 @@ public final class BotMethods {
         Block body = ast.newBlock();
         if (returns == null) {
             method.setReturnType2(ast.newPrimitiveType(PrimitiveType.VOID));
+        } else if (returns.equals(BOOLEAN)) {
+            method.setReturnType2(ast.newPrimitiveType(PrimitiveType.BOOLEAN));
+            ReturnStatement result = ast.newReturnStatement();
+            result.setExpression(ast.newBooleanLiteral(false));
+            @SuppressWarnings("unchecked")
+            List<Object> statements = body.statements();
+            statements.add(result);
         } else {
             method.setReturnType2(ast.newSimpleType(ast.newName(returns)));
             ReturnStatement result = ast.newReturnStatement();
