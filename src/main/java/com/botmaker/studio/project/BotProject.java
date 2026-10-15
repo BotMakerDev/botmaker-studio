@@ -3,6 +3,7 @@ package com.botmaker.studio.project;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.BlockConverter;
+import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
@@ -299,6 +300,8 @@ public class BotProject {
         // constant renamed through a window left open over the project the user just left would land in the
         // wrong file.
         HostPluginValues.install(config, state, HostServices.forProject(config), eventBus);
+        // And the undo those writes join, the editor's own (EditorHistory): a plugin window's ↶ is the menu's.
+        HostHistory.install(eventBus);
 
         // Every bound plugin's managed holder the project lacks (Sdk.java, Pictures.java), written now so the
         // file is there before the explorer is first drawn. Never over a file; LibraryService does the same
@@ -373,5 +376,6 @@ public class BotProject {
         PluginHost.unbind();
         HostRuns.clear();
         HostPluginValues.clear();
+        HostHistory.clear();
     }
 }

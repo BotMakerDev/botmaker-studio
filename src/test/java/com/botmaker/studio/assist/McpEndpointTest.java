@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.assist.AgentReply;
@@ -8,6 +9,7 @@ import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectTemplate;
@@ -110,6 +112,21 @@ class McpEndpointTest {
     }
 
     /** Studio, as far as the tools reach it: what was asked is recorded. */
+    /** A history of labels alone: what was done, newest last, and what was undone, newest last. */
+    private record Steps(List<String> done, List<String> undone) implements History {
+        Steps(List<String> done) {
+            this(done, new ArrayList<>());
+        }
+        @Override public boolean canUndo() { return !done.isEmpty(); }
+        @Override public boolean canRedo() { return !undone.isEmpty(); }
+        @Override public String undoLabel() { return canUndo() ? done.getLast() : ""; }
+        @Override public String redoLabel() { return canRedo() ? undone.getLast() : ""; }
+        @Override public void undo() { undone.add(done.removeLast()); }
+        @Override public void redo() { done.add(undone.removeLast()); }
+        @Override public AutoCloseable onChanged(Runnable listener) { return () -> {}; }
+        @Override public void batch(String label, Runnable writes) { writes.run(); }
+    }
+
     private static final class FakeDriver implements StudioDriver {
         final List<String> asked = new ArrayList<>();
 
@@ -137,6 +154,11 @@ class McpEndpointTest {
         volatile boolean reloading;
         @Override public boolean reloading() { return reloading; }
         @Override public String checkpoint(String label) { asked.add("checkpoint " + label); return "saved"; }
+
+        /** Two steps made, the plugin window's batch the last: what Studio's history would hold. */
+        final Steps steps = new Steps(new ArrayList<>(List.of("Set the slot", "Move 3 cards")));
+        @Override public String undo() { return HostHistory.step(steps, true); }
+        @Override public String redo() { return HostHistory.step(steps, false); }
         @Override public String createProject(String name, String template, List<String> plugins) {
             asked.add("create " + name + " " + template + " " + plugins);
             return "created";
@@ -316,7 +338,7 @@ class McpEndpointTest {
                 "set_slot", "delete_block", "apply_edits", "add_method", "edit_variable", "add_argument",
                 "move_block", "edit_signature",
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
-                "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
+                "list_review", "mark_reviewed", "remove_mark", "undo_change", "undo", "redo", "run_bot", "run_activity",
                 "try_statement", "stop", "quit_studio", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
                 "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
                 "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
@@ -342,6 +364,21 @@ class McpEndpointTest {
                 "plugin_guide reads the plugins bound now, not the connect's");
         assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
         assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
+    }
+
+    @Test
+    void undoAndRedoNameTheStepTheyTookAndWhatIsNext() throws Exception {
+        initialize();
+        assertEquals("Took back: Move 3 cards. Next undo: Set the slot. Next redo: Move 3 cards.",
+                text(call("undo", "{}")));
+        assertEquals("Took back: Set the slot. Nothing more to undo. Next redo: Set the slot.",
+                text(call("undo", "{}")));
+        assertEquals("Nothing to undo. Next redo: Set the slot.", text(call("undo", "{}")));
+        assertEquals("Did again: Set the slot. Next undo: Set the slot. Next redo: Move 3 cards.",
+                text(call("redo", "{}")));
+        assertEquals("Did again: Move 3 cards. Next undo: Move 3 cards. Nothing more to redo.",
+                text(call("redo", "{}")));
+        assertEquals("Nothing to redo. Next undo: Move 3 cards.", text(call("redo", "{}")));
     }
 
     @Test

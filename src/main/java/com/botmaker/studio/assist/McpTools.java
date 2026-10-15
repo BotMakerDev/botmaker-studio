@@ -77,7 +77,8 @@ public final class McpTools {
               read_tree and set the slots it brings; var:<name> passes a variable in scope (a lambda's
               value).
             - Every edit is compiled. A REFUSED answer says why; fix the cause and try again, or explain.
-            - Each accepted edit lands in the user's file at once, as one step they can undo. checkpoint
+            - Each accepted edit lands in the user's file at once, as one step they can undo. undo and redo
+              take the last step back or do it again, yours or the user's, as Studio's ↶/↷ do. checkpoint
               before a large change saves a version to go back to with revert.
             - list_params and set_param_default are the values the bot's user sets; list_plugins,
               search_plugins, add_plugin, set_plugin_version and remove_plugin what it is built from.
@@ -504,7 +505,15 @@ public final class McpTools {
                 act(json, "undo_change",
                         "Put a review item's function back as it was before the refactor that marked it, from the "
                                 + "bot's versions. What comes back may not compile.",
-                        List.of(REVIEW_ID), args -> driver.undoChange(text(args, "id"))));
+                        List.of(REVIEW_ID), args -> driver.undoChange(text(args, "id"))),
+                act(json, "undo",
+                        "Take the last step back, as Studio's ↶ (Ctrl+Z) does: an edit of yours, the user's, or one a "
+                                + "plugin window made. Says which step it took back and what is next each way.",
+                        List.of(), args -> driver.undo()),
+                act(json, "redo",
+                        "Do the last undone step again, as Studio's ↷ (Ctrl+Y) does. Says which step and what is next "
+                                + "each way.",
+                        List.of(), args -> driver.redo()));
     }
 
     private static final Prop SYMBOL = Prop.text("symbol",

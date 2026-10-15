@@ -253,7 +253,7 @@ public final class HostPluginValues implements PluginValues {
     private java.util.Set<Path> keep(java.util.Map<Path, List<ManagedValue<?>>> kept) {
         java.util.Set<Path> changed = new java.util.LinkedHashSet<>();
         if (kept.isEmpty()) return changed;
-        BotSources.forEach(config, state, (file, source) -> {
+        recorded(() -> BotSources.forEach(config, state, (file, source) -> {
             List<ManagedValue<?>> values = kept.get(file);
             if (values == null) return null;
             String after = ManagedHolders.keptValues(source, values, PluginHost.grammar());
@@ -261,7 +261,7 @@ public final class HostPluginValues implements PluginValues {
             if (changed.isEmpty()) snapshot();
             changed.add(file);
             return after;
-        });
+        }));
         if (!changed.isEmpty()) redraw(changed);
         return changed;
     }
@@ -274,12 +274,34 @@ public final class HostPluginValues implements PluginValues {
      * rather than as the user types (2026-09-20), and why a plugin's should too.
      */
     private void write(ManagedMethod value, JavaValue expression) {
-        snapshot();
-        JavaManagedValues.setValue(config, state, value, expression);
+        recorded(() -> {
+            snapshot();
+            JavaManagedValues.setValue(config, state, value, expression);
+        });
     }
 
     private void snapshot() {
-        Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, HISTORY_LABEL);
+        checkpoint(HISTORY_LABEL);
+    }
+
+    /** The Project History snapshot before a write: one per undo step, so a batch takes one, not one per write. */
+    private void checkpoint(String label) {
+        WriteSteps.Step open = WriteSteps.open();
+        if (open != null && !open.firstCheckpoint()) return;
+        Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, label);
+    }
+
+    /**
+     * Runs {@code writes} as one step of the editor's undo ({@link WriteSteps}), or as part of the plugin's batch
+     * when one is open — so ↶ takes a plugin's write back like an edit on the canvas.
+     */
+    private void recorded(Runnable writes) {
+        WriteSteps.step(HISTORY_LABEL, () -> {
+            writes.run();
+            return null;
+        }, step -> {
+            if (eventBus != null) eventBus.publish(step);
+        });
     }
 
     // ── the contract's operations, by declaration: each the spelled one below ────────────────────────────
@@ -322,8 +344,10 @@ public final class HostPluginValues implements PluginValues {
                 .filter(JavaParameter::editable)
                 .map(parameter -> HostValueContext.of(parameter.form(), parameter.initializer(), services,
                         expression -> {
-                            snapshot();
-                            JavaParameters.setValue(config, state, parameter, imported(expression));
+                            recorded(() -> {
+                                snapshot();
+                                JavaParameters.setValue(config, state, parameter, imported(expression));
+                            });
                             redraw(java.util.Set.of(file[0]));
                         }, this::constants));
     }
@@ -530,7 +554,7 @@ public final class HostPluginValues implements PluginValues {
                 return new MethodWrite(null, className + ".java already exists but declares no class "
                         + className + ", so nothing was written.");
             }
-            Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, "Before: " + plan.summary());
+            checkpoint("Before: " + plan.summary());
             try {
                 ProjectWrites.create(config, file, plan.rewrites().get(file), plan.summary());
             } catch (java.io.UncheckedIOException e) {
@@ -700,15 +724,17 @@ public final class HostPluginValues implements PluginValues {
 
     /**
      * A plan written as one step in Project History: the snapshot first, then every file it rewrites, buffer
-     * and disk, then the open file redrawn when it was one of them. Not the canvas's ↶ — a plugin's window
-     * is not on the canvas, and the holder it changes is locked there.
+     * and disk, then the open file redrawn when it was one of them. It is one step of the editor's ↶ as well
+     * (2026-10-15), or part of the plugin's batch.
      */
     private Optional<String> apply(Refactor.Outcome outcome) {
         return switch (outcome) {
             case Refactor.Refused refused -> Optional.of(refused.reason());
             case Refactor.Planned plan -> {
-                Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, "Before: " + plan.summary());
-                BotSources.forEach(config, state, (file, source) -> plan.rewrites().get(file));
+                recorded(() -> {
+                    checkpoint("Before: " + plan.summary());
+                    BotSources.forEach(config, state, (file, source) -> plan.rewrites().get(file));
+                });
                 redraw(plan.rewrites().keySet());
                 yield Optional.empty();
             }
@@ -716,12 +742,14 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private void writeInitializer(ManagedSets.Member member, JavaValue expression) {
-        snapshot();
         Path file = member.file().toAbsolutePath().normalize();
-        // An edit makes a migrated value the author's: a rerun of the migration leaves it alone from now on.
-        BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
-                ? ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(), member.name(),
-                        expression), member.className(), member.name()) : null);
+        recorded(() -> {
+            snapshot();
+            // An edit makes a migrated value the author's: a rerun of the migration leaves it alone from now on.
+            BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
+                    ? ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(),
+                            member.name(), expression), member.className(), member.name()) : null);
+        });
         redraw(java.util.Set.of(file));
     }
 

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -48,8 +49,43 @@ public final class BotSources {
         String apply(Path file, String source);
     }
 
+    /** Hears each file a walk rewrote: what it said, and what it says now. */
+    @FunctionalInterface
+    public interface Recorder {
+        void rewrote(Path file, String before, String after);
+    }
+
+    /** Who hears this thread's rewrites, or null — see {@link #recording}. */
+    private static final ThreadLocal<Recorder> RECORDER = new ThreadLocal<>();
+
+    /**
+     * Runs {@code writes} with {@code recorder} hearing every file a {@link #forEach} on this thread rewrites —
+     * how a plugin's value writes become one undo step ({@code plugin/WriteSteps}). Per thread, so a write the
+     * assistant's tool makes on its own thread never lands in a step the canvas is recording, and back to the
+     * previous recorder after.
+     */
+    public static <T> T recording(Recorder recorder, Supplier<T> writes) {
+        Recorder outer = RECORDER.get();
+        RECORDER.set(recorder);
+        try {
+            return writes.get();
+        } finally {
+            if (outer == null) RECORDER.remove();
+            else RECORDER.set(outer);
+        }
+    }
+
     /** Visits every {@code .java} file the bot owns exactly once, buffer first. */
     public static void forEach(ProjectConfig config, ProjectState state, Rewrite rewrite) {
+        Recorder recorder = RECORDER.get();
+        if (recorder != null) {
+            Rewrite inner = rewrite;
+            rewrite = (file, source) -> {
+                String rewritten = inner.apply(file, source);
+                if (rewritten != null && !rewritten.equals(source)) recorder.rewrote(file, source, rewritten);
+                return rewritten;
+            };
+        }
         Map<Path, ProjectFile> open = openBuffers(state);
         Set<Path> seen = new LinkedHashSet<>();
         // ProjectConfig.templatesSourceFile() answered this until it was deleted with Studio's copy of the

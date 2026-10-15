@@ -41,6 +41,17 @@ public class CoreApplicationEvents {
     public record FileEdit(java.nio.file.Path path, String previousContent, String newContent) {}
 
     /**
+     * Files a plugin's value writes rewrote underneath the editor, as one history step named {@code label} — a
+     * {@code PluginValues} write, or a plugin's batch of them. The files are already written, buffer and disk;
+     * this is for history alone, so ↶ takes them back like an edit made on the canvas.
+     */
+    public record FilesRewrittenEvent(String label, List<FileEdit> edits) implements ApplicationEvent {
+        public FilesRewrittenEvent {
+            edits = edits != null ? List.copyOf(edits) : List.of();
+        }
+    }
+
+    /**
      * Asks the window to open {@code file} and land on the block at {@code offset} — what a use listed in a
      * refusal ({@code RefusalDialog}) does when clicked, from a block that has no handle on the navigation.
      */

@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin's value writes are undone with ↶.** Each `PluginValues` write is one step of the editor's undo, named,
+  and a plugin's `History.batch` makes several one step under its own label; ↶/↷ put every file it wrote back. Before,
+  only a Project History safety version could take one back. A batch takes one safety version, not one per write.
+  The history moved out of `CodeEditorService` into `services/EditorHistory`; `plugin/HostHistory` is the contract's
+  `History` over it.
+- **The assistant's `undo` and `redo`** take the editor's last step back or do it again, as ↶/↷ do, and say which
+  step and what is next each way. `undo_change` stays: it puts a review item's function back from the versions.
 - **A plugin lists the bot's boolean methods and adds one** (`PluginValues.booleanMethods`,
   `createBooleanMethod`): `public static boolean name() { return false; }` in the class it names, or a new one.
 - **A tool's answer in several text parts reaches the client as one text**, the parts a blank line apart.

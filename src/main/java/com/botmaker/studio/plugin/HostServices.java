@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.Dialogs;
+import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.Theme;
 import com.botmaker.plugin.api.source.PluginValues;
@@ -120,6 +121,15 @@ public final class HostServices implements StudioServices {
     @Override
     public PluginValues pluginValues() {
         return HostPluginValues.live();
+    }
+
+    /**
+     * The open project's undo history, or {@link History#NONE} between projects — read from {@link HostHistory}
+     * each time, for the reason {@link #runs()} is.
+     */
+    @Override
+    public History history() {
+        return HostHistory.live();
     }
 
     @Override

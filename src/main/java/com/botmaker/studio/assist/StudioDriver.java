@@ -133,6 +133,19 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no review list here.");
     }
 
+    /**
+     * Takes the editor's last step back, as its ↶ does — the user's edit, the assistant's, or a plugin window's —
+     * and says which, and what is next each way.
+     */
+    default String undo() {
+        throw new IllegalArgumentException("Studio keeps no undo here.");
+    }
+
+    /** Does the last undone step again, as the editor's ↷ does, and says which, and what is next each way. */
+    default String redo() {
+        throw new IllegalArgumentException("Studio keeps no undo here.");
+    }
+
     // ---- versions, plugins and the project (phase 9) — each refused here unless the implementation offers it
 
     /** The bot's newest {@code limit} versions, newest first: id, when, who and what. */

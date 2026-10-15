@@ -22,6 +22,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.BlockId;
+import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
@@ -463,6 +464,16 @@ final class StudioBridge implements StudioDriver {
             }
             return "Took the mark off " + item.where() + ".";
         });
+    }
+
+    @Override
+    public String undo() {
+        return onFx(() -> HostHistory.step(HostHistory.live(), true));
+    }
+
+    @Override
+    public String redo() {
+        return onFx(() -> HostHistory.step(HostHistory.live(), false));
     }
 
     @Override
