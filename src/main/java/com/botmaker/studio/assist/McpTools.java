@@ -1,7 +1,8 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.assist.AgentReply;
-import com.botmaker.plugin.api.assist.ToolParam;
+import com.botmaker.plugin.api.assist.AssistantTool;
+import com.botmaker.plugin.api.assist.ToolSchema;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * The assistant's tools as MCP serves them, in five groups: the bot's files ({@link AssistTools} over a fresh
@@ -834,7 +836,7 @@ public final class McpTools {
         List<SyncToolSpecification> out = new ArrayList<>();
         for (StudioDriver.PluginTool owned : driver.pluginTools()) {
             String description = owned.tool().description() + " (from " + owned.pluginName() + ")";
-            out.add(spec(json, owned.name(), description, schemaOf(owned.tool().params()), request -> {
+            out.add(spec(json, owned.name(), description, schemaOf(owned.tool().schema()), request -> {
                 AgentReply reply;
                 long before = rootChanged(driver);
                 try {
@@ -881,20 +883,54 @@ public final class McpTools {
         return out.build();
     }
 
-    /** A plugin tool's parameters as a JSON schema. */
-    static String schemaOf(List<ToolParam> params) {
+    /**
+     * A plugin tool's parameters as a JSON schema: nested records as objects, lists as {@code items}. An action
+     * tool is flat (no {@code oneOf}, which Gemini reads poorly): {@code action}'s description says what each action
+     * needs and does, and a field only some actions take names them.
+     */
+    static String schemaOf(ToolSchema schema) {
+        try {
+            return JSON.writeValueAsString(objectOf(schema.fields(), schema.actions()));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Map<String, Object> objectOf(List<ToolSchema.Field> fields, List<ToolSchema.Action> actions) {
         Map<String, Object> properties = new LinkedHashMap<>();
         List<String> required = new ArrayList<>();
-        for (ToolParam param : params) {
+        for (ToolSchema.Field field : fields) {
             Map<String, Object> property = new LinkedHashMap<>();
-            property.put("type", param.kind().jsonType());
-            if (param.kind() == ToolParam.Kind.TEXT_LIST) property.put("items", Map.of("type", "string"));
-            if (!param.choices().isEmpty()) property.put("enum", param.choices());
-            if (!param.description().isEmpty()) property.put("description", param.description());
-            properties.put(param.name(), property);
-            if (!param.optional()) required.add(param.name());
+            property.put("type", field.kind().jsonType());
+            switch (field.kind()) {
+                case TEXT_LIST -> property.put("items", Map.of("type", "string"));
+                case CHOICE_LIST -> property.put("items", Map.of("type", "string", "enum", field.choices()));
+                case RECORD -> property.putAll(objectOf(field.fields(), List.of()));
+                case RECORD_LIST -> property.put("items", objectOf(field.fields(), List.of()));
+                case TEXT_MAP -> property.put("additionalProperties", Map.of("type", "string"));
+                default -> {
+                    if (!field.choices().isEmpty()) property.put("enum", field.choices());
+                }
+            }
+            String description = field.name().equals(AssistantTool.ACTION) && !actions.isEmpty()
+                    ? actionsSaid(actions)
+                    : field.description() + (field.actions().isEmpty() ? "" : " (" + String.join(", ", field.actions()) + ")");
+            if (!description.isBlank()) property.put("description", description.strip());
+            properties.put(field.name(), property);
+            if (!field.optional()) required.add(field.name());
         }
-        return object(properties, required);
+        Map<String, Object> object = new LinkedHashMap<>();
+        object.put("type", "object");
+        object.put("properties", properties);
+        object.put("required", required);
+        object.put("additionalProperties", false);
+        return object;
+    }
+
+    /** {@code rename(name, to): Renames a screen; delete(name): …} */
+    private static String actionsSaid(List<ToolSchema.Action> actions) {
+        return actions.stream().map(a -> a.id() + "(" + String.join(", ", a.required()) + ")"
+                + (a.description().isEmpty() ? "" : ": " + a.description())).collect(Collectors.joining("; "));
     }
 
     // ---- plumbing ------------------------------------------------------------------------------------------

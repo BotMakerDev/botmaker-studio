@@ -19,6 +19,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   before these columns is moved aside to `tool-times.old.tsv`. At connect, the MCP server names the bot's plugins
   that have a guide and points to `plugin_guide`. It no longer pastes the guides into its instructions, which
   clients cut short.
+- **A plugin's assistant tool may take nested values and one of several actions.** Studio serves a nested record
+  as an object, a list of records as an array of them, and an action tool as one flat object: `action`, whose
+  description says what each action needs and does, and the actions' fields, each naming the actions that take
+  it when not all do. No `oneOf`, which Gemini reads poorly.
 
 - **A plugin's value writes are undone with ↶.** Each `PluginValues` write is one step of the editor's undo, named,
   and a plugin's `History.batch` makes several one step under its own label; ↶/↷ put every file it wrote back. Before,
