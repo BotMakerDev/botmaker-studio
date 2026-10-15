@@ -16,7 +16,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -403,7 +402,7 @@ public class AssistTurnTest {
     @Test
     void aMethodIsAddedOfTypesStudioOffers() {
         AssistTurn turn = turn(SOURCE);
-        Outcome added = turn.addMethod("", "rest", "void", List.of(Map.of("name", "seconds", "type", "int")));
+        Outcome added = turn.addMethod("", "rest", "void", List.of(new SignatureNames.Param("seconds", "int")));
 
         assertInstanceOf(Outcome.Accepted.class, added, added.toString());
         assertTrue(turn.source().contains("rest(int seconds)"), turn.source());
@@ -413,7 +412,7 @@ public class AssistTurnTest {
                 turn.addMethod("", "other", "Runtime", List.of()));
         assertTrue(unknown.reasons().getFirst().contains("no type Runtime"), unknown.reasons().toString());
         assertInstanceOf(Outcome.Refused.class, turn.addMethod("", "rest", "void",
-                List.of(Map.of("name", "seconds", "type", "int"))), "the same signature twice");
+                List.of(new SignatureNames.Param("seconds", "int"))), "the same signature twice");
     }
 
     /** An activity's body returns its own enum, which no plugin declares (2026-10-13). */
@@ -482,7 +481,7 @@ public class AssistTurnTest {
         AssistTurn turn = turn(SOURCE);
         assertInstanceOf(Outcome.Accepted.class, turn.addMethod("", "idle", "Nothing", List.of()));
         assertInstanceOf(Outcome.Refused.class,
-                turn.addMethod("", "idle2", "void", List.of(Map.of("name", "x", "type", "Nothing"))));
+                turn.addMethod("", "idle2", "void", List.of(new SignatureNames.Param("x", "Nothing"))));
     }
 
     @Test
@@ -501,7 +500,7 @@ public class AssistTurnTest {
                 """;
         AssistTurn turn = turn(source);
         Outcome changed = turn.editSignature("Subject.helper", "twice", null, List.of(
-                Map.of("name", "n", "type", "int"), Map.of("name", "times", "type", "int")));
+                new SignatureNames.Param("n", "int"), new SignatureNames.Param("times", "int")));
 
         assertInstanceOf(Outcome.Accepted.class, changed, changed.toString());
         assertTrue(turn.source().contains("twice(int n, int times)"), turn.source());

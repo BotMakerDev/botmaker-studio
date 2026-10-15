@@ -3,6 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
+import com.botmaker.studio.services.ClassFiles;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -86,10 +87,10 @@ public interface StudioDriver {
     // ---- structure, navigation and review (phase 8) — each refused here unless the implementation offers it
 
     /**
-     * Writes an empty {@code kind} (class, interface, record, enum; empty for a class) named {@code name} in
-     * {@code packageName} (empty for the bot's main package), as one version the user can go back to.
+     * Writes an empty {@code kind} ({@code null} for a class) named {@code name} in {@code packageName} (empty
+     * for the bot's main package), as one version the user can go back to.
      */
-    default String addFile(String name, String kind, String packageName) {
+    default String addFile(String name, ClassFiles.Kind kind, String packageName) {
         throw new IllegalArgumentException("Studio cannot add a file here.");
     }
 
@@ -285,8 +286,8 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no settings here.");
     }
 
-    /** Sets the project setting {@code key}, one {@link #settings} lists, to {@code value}. */
-    default String setSetting(String key, String value) {
+    /** Sets the project setting {@code setting} to {@code value}. */
+    default String setSetting(AssistedSetting setting, String value) {
         throw new IllegalArgumentException("Studio has no settings here.");
     }
 

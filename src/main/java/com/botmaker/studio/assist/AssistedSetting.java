@@ -1,15 +1,13 @@
-package com.botmaker.studio.ui.app;
-
-import java.util.Arrays;
-import java.util.List;
+package com.botmaker.studio.assist;
 
 /**
  * The project settings an assistant may read and set over MCP (2026-10-06): the two that change what a run says,
- * and, since 2026-10-13, dev mode, which changes which plugin builds load.
+ * and, since 2026-10-13, dev mode, which changes which plugin builds load. {@code set_setting} takes one by its
+ * constant's name in lower case, which is its {@link #id()}; the tool refuses any other.
  * The rest of {@code settings.json} is the windows' own — layouts, remembered titles, favourites — and no tool
  * reaches it.
  */
-enum AssistedSetting {
+public enum AssistedSetting {
 
     /** The toolbar's 🐞 Debug choice: this checkout's {@code Runs.DEBUG}. */
     DEBUG_OUTPUT("debug_output", "Debug output",
@@ -25,9 +23,7 @@ enum AssistedSetting {
     DEV_MODE("dev_mode", "Dev mode",
             "on or off — whether this project, on this computer, loads its plugins' local -SNAPSHOT builds (what "
                     + "mvn install put in ~/.m2); the user is asked on screen before it turns on; the plugins "
-                    + "reload at once, so their tools may change"),
-
-    UNKNOWN("", "", "");
+                    + "reload at once, so their tools may change");
 
     private final String id;
     private final String displayName;
@@ -39,26 +35,18 @@ enum AssistedSetting {
         this.takes = takes;
     }
 
-    String id() {
+    /** How the assistant names it: its constant's name in lower case, which is what {@code set_setting} matches. */
+    public String id() {
         return id;
     }
 
-    String displayName() {
+    /** Its name as Studio's windows show it. */
+    public String displayName() {
         return displayName;
     }
 
     /** What a value of it is, in a sentence a model reads. */
-    String takes() {
+    public String takes() {
         return takes;
-    }
-
-    /** Every setting but {@link #UNKNOWN}. */
-    static List<AssistedSetting> offered() {
-        return Arrays.stream(values()).filter(s -> s != UNKNOWN).toList();
-    }
-
-    /** The setting {@code id} names; {@link #UNKNOWN} for anything else. */
-    static AssistedSetting fromId(String id) {
-        return offered().stream().filter(s -> s.id.equals(id)).findFirst().orElse(UNKNOWN);
     }
 }

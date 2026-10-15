@@ -150,7 +150,8 @@ public final class AssistTools {
         return outcome("setSlot(" + value + ")", current().setSlot(slotId, value));
     }
 
-    public synchronized String addMethod(String className, String name, String returns, List<?> params) {
+    public synchronized String addMethod(String className, String name, String returns,
+                                         List<SignatureNames.Param> params) {
         return outcome("addMethod(" + name + ")", current().addMethod(className, name, returns, params));
     }
 
@@ -166,7 +167,8 @@ public final class AssistTools {
         return outcome("moveBlock(" + blockId + " to " + index + ")", current().moveBlock(blockId, bodyId, index));
     }
 
-    public synchronized String editSignature(String method, String name, String returns, List<?> params) {
+    public synchronized String editSignature(String method, String name, String returns,
+                                             List<SignatureNames.Param> params) {
         return outcome("editSignature(" + method + ")", current().editSignature(method, name, returns, params));
     }
 

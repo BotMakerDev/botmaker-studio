@@ -8,6 +8,7 @@ import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.toolbar.ActionContext.Area;
+import com.botmaker.studio.assist.AssistedSetting;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.assist.PluginMove;
 import com.botmaker.studio.assist.RunLog;
@@ -291,9 +292,8 @@ final class StudioBridge implements StudioDriver {
     // ---- structure and navigation --------------------------------------------------------------------------
 
     @Override
-    public String addFile(String name, String kind, String packageName) {
-        ClassFiles.Kind what = kind == null || kind.isBlank() ? ClassFiles.Kind.CLASS : ClassFiles.Kind.fromId(kind)
-                .orElseThrow(() -> new IllegalArgumentException("kind is class, interface, record or enum."));
+    public String addFile(String name, ClassFiles.Kind kind, String packageName) {
+        ClassFiles.Kind what = kind == null ? ClassFiles.Kind.CLASS : kind;
         notReading();
         String pkg = packageName == null ? "" : packageName.strip();
         if (!pkg.isEmpty() && !javax.lang.model.SourceVersion.isName(pkg)) {
@@ -1469,7 +1469,7 @@ final class StudioBridge implements StudioDriver {
     public String settings() {
         StudioProjectSettings now = onFx(() -> ctx.projectSettingsService().current());
         List<String> lines = new ArrayList<>();
-        for (AssistedSetting setting : AssistedSetting.offered()) {
+        for (AssistedSetting setting : AssistedSetting.values()) {
             lines.add(setting.id() + " = " + valueOf(setting, now) + "  — " + setting.displayName() + ": "
                     + setting.takes());
         }
@@ -1477,8 +1477,7 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public String setSetting(String key, String value) {
-        AssistedSetting setting = AssistedSetting.fromId(key == null ? "" : key.strip());
+    public String setSetting(AssistedSetting setting, String value) {
         String text = value == null ? "" : value.strip();
         ProjectSettingsService service = ctx.projectSettingsService();
         if (setting == AssistedSetting.DEV_MODE) {
@@ -1508,7 +1507,6 @@ final class StudioBridge implements StudioDriver {
             case HIDDEN_TRACE -> now.withHiddenTraceWriters(text.isEmpty() ? List.of()
                     : java.util.Arrays.stream(text.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList());
             case DEV_MODE -> throw new IllegalStateException("dev_mode is set above");
-            case UNKNOWN -> throw new IllegalArgumentException("No setting " + key + ". get_settings lists them.");
         };
         waitFor(service.update(next), 30, "save the settings");
         return "Set " + setting.id() + " to " + valueOf(setting, next) + ".";
@@ -1520,7 +1518,6 @@ final class StudioBridge implements StudioDriver {
                     .name().toLowerCase(java.util.Locale.ROOT);
             case HIDDEN_TRACE -> String.join(", ", settings.hiddenTraceWriters());
             case DEV_MODE -> settings.devMode() ? "on" : "off";
-            case UNKNOWN -> "";
         };
     }
 

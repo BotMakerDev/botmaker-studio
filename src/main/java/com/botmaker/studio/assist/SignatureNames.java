@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
@@ -20,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -82,29 +82,29 @@ final class SignatureNames {
         return SignatureType.of(list ? BotType.Choice.listOf(type) : BotType.Choice.of(type));
     }
 
+    /** One parameter of a signature an assistant writes, as {@code add_method} and {@code edit_signature} take it. */
+    record Param(@Describe("its name") String name, @Describe("its type, as returns names one") String type) {
+    }
+
     /**
-     * {@code params}, each {@code {name, type}}, as a draft's parameters. A name the method already has keeps
-     * its place in its calls ({@code origin}); a new one is added to them.
+     * {@code params} as a draft's parameters. A name the method already has keeps its place in its calls
+     * ({@code origin}); a new one is added to them.
      *
      * @param existing the method's parameter names now, in order; empty for a new method
      */
-    static List<FunctionDraft.Parameter> parameters(List<?> params, List<String> existing) {
+    static List<FunctionDraft.Parameter> parameters(List<Param> params, List<String> existing) {
         return parameters(params, existing, List::of);
     }
 
     /** The same, a parameter's type also one of {@code botTypes}, as {@link #type(String, boolean, Supplier)}. */
-    static List<FunctionDraft.Parameter> parameters(List<?> params, List<String> existing,
+    static List<FunctionDraft.Parameter> parameters(List<Param> params, List<String> existing,
                                                     Supplier<? extends Collection<String>> botTypes) {
-        return params.stream().map(each -> {
-            if (!(each instanceof Map<?, ?> param)) {
-                throw new IllegalArgumentException("A parameter is {\"name\": …, \"type\": …}, not " + each + ".");
-            }
-            String name = String.valueOf(param.get("name") == null ? "" : param.get("name")).strip();
+        return params.stream().map(param -> {
+            String name = param.name() == null ? "" : param.name().strip();
             FunctionDraft.parameterNameProblem(name, List.of()).ifPresent(problem -> {
                 throw new IllegalArgumentException(problem);
             });
-            SignatureType type = type(String.valueOf(param.get("type") == null ? "" : param.get("type")), false,
-                    botTypes);
+            SignatureType type = type(param.type(), false, botTypes);
             int origin = existing.indexOf(name);
             return new FunctionDraft.Parameter(name, type, origin < 0 ? FunctionDraft.Parameter.NEW : origin);
         }).toList();

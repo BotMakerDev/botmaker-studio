@@ -360,9 +360,9 @@ class McpEndpointTest {
                 + "edit.\n"), instructions);
         assertFalse(instructions.contains("One activity per chore."), "the guide itself is plugin_guide's answer");
         post("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", TOKEN);
-        assertEquals("How a bot on Fake is laid out:\nOne activity per chore.\n", text(call("plugin_guide", "{}")));
+        assertEquals("How a bot on Fake is laid out:\nOne activity per chore.", text(call("plugin_guide", "{}")));
         driver.more = true;
-        assertTrue(text(call("plugin_guide", "{}")).endsWith("How a bot on More is laid out:\nTwo.\n"),
+        assertTrue(text(call("plugin_guide", "{}")).endsWith("How a bot on More is laid out:\nTwo."),
                 "plugin_guide reads the plugins bound now, not the connect's");
         assertEquals("No plugin of this bot says how its bot is laid out.", McpTools.guides(List.of()));
         assertEquals(McpTools.INSTRUCTIONS, McpTools.instructions(List.of()), "no guide, nothing added");
@@ -507,20 +507,25 @@ class McpEndpointTest {
         initialize();
         String body = bodyOf("", "run");
         JsonNode both = call("apply_edits", "{\"edits\":["
-                + "{\"op\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"},"
-                + "{\"op\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"}]}");
+                + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"},"
+                + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"}]}");
         assertFalse(isError(both), both.toString());
         assertEquals(1, bot.commits.size(), "one undo step");
         String after = bot.files.get(SUBJECT);
         assertEquals(2, after.split("System.out.println", -1).length - 1, after);
 
         JsonNode half = call("apply_edits", "{\"edits\":["
-                + "{\"op\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":0,\"paletteId\":\"block:PRINT\"},"
-                + "{\"op\":\"delete\",\"blockId\":\"nowhere\"}]}");
+                + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":0,\"paletteId\":\"block:PRINT\"},"
+                + "{\"action\":\"delete\",\"blockId\":\"nowhere\"}]}");
         assertTrue(isError(half), half.toString());
         assertTrue(text(half).contains("edit 2 of 2"), text(half));
         assertEquals(1, bot.commits.size(), "nothing of a refused batch is kept");
         assertEquals(after, bot.files.get(SUBJECT));
+
+        JsonNode short1 = call("apply_edits", "{\"edits\":[{\"action\":\"insert\",\"bodyId\":\"" + body + "\"}]}");
+        assertTrue(isError(short1), short1.toString());
+        assertEquals("REFUSED: apply_edits: 'edits[0].index' is required for insert", text(short1),
+                "the contract checks what the schema cannot say: which fields an action needs");
     }
 
     @Test

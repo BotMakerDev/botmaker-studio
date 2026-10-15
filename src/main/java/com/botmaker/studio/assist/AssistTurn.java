@@ -488,10 +488,8 @@ public final class AssistTurn {
     /**
      * Adds a method to the class {@code className} (the file's first class when blank), after its other members,
      * as the Add Function dialog does: {@code returns} and each parameter's type a type the dialog offers.
-     *
-     * @param params each {@code {name, type}}
      */
-    public Outcome addMethod(String className, String name, String returns, List<?> params) {
+    public Outcome addMethod(String className, String name, String returns, List<SignatureNames.Param> params) {
         Stage stage = stage();
         Optional<TypeDeclaration> type = typeNamed(stage, className);
         if (type.isEmpty()) {
@@ -555,7 +553,7 @@ public final class AssistTurn {
      * parameters; a null one is kept. Its calls in this file follow; a parameter keeps its place in them by name.
      * Calls in other files are the caller's to check ({@code LiveBot.breaksElsewhere}).
      */
-    public Outcome editSignature(String method, String name, String returns, List<?> params) {
+    public Outcome editSignature(String method, String name, String returns, List<SignatureNames.Param> params) {
         Stage stage = stage();
         List<MethodDeclaration> found = methodsNamed(stage, method);
         if (found.isEmpty()) return Outcome.Refused.because("This file has no method " + method + ".");

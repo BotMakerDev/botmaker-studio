@@ -23,6 +23,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   as an object, a list of records as an array of them, and an action tool as one flat object: `action`, whose
   description says what each action needs and does, and the actions' fields, each naming the actions that take
   it when not all do. No `oneOf`, which Gemini reads poorly.
+- **Studio's own MCP tools are declared as a plugin's are**: each an `AssistantTool` over a parameter record, in
+  `assist/FileTools`, `StudioTools`, `RunTools` and `ProjectTools`; `McpTools` only serves them. The hand-written
+  schemas and the `text()`/`number()`/`flag()` readers, which turned a missing value into `""` without a word, are
+  gone: a missing or ill-typed argument is refused, `REFUSED: <tool>: 'value' is required`. `add_file`'s `kind`
+  and `set_setting`'s `key` are enums, sent as a JSON `enum`; `add_method`/`edit_signature`'s `params` are typed.
+  One wire change: each of `apply_edits`' edits names its kind as `action` (was `op`).
+  `edit_variable`'s `name` and `type` may be left out, as its description always said. An argument a tool does
+  not take is refused, where a tool with none ignored it; an answer loses its trailing blank lines.
 
 - **A plugin's value writes are undone with ↶.** Each `PluginValues` write is one step of the editor's undo, named,
   and a plugin's `History.batch` makes several one step under its own label; ↶/↷ put every file it wrote back. Before,
