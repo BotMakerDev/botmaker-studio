@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -319,6 +320,49 @@ class ManagedConstantsTest {
                 new Step(new Group("Rest"), new TestOutcome.Named("Rest.NEXT"))).orElseThrow();
         assertTrue(written.source().endsWith("(Activities.Rest.class, Activities.Rest.NEXT)"), written.source());
         assertTrue(written.imports().contains("com.bot.plugins.sdk.Activities"), written.imports().toString());
+    }
+
+    /**
+     * A constant whose value names the bot's own constants (a picture filed under {@code Activities.Tavern.class})
+     * reads with them, and a value equal to it is written as that constant, not spelled out again (2026-10-15).
+     */
+    @Test
+    void aConstantHoldingTheBotsNamesIsReadAndWrittenAsItself() {
+        List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
+                        .ofEnums(TestOutcome.class, ManagedConstantsTest::inGroup)
+                        .groupedAs(Group.class, ManagedConstantsTest::group)
+                        .in("Activities").because("Mine."),
+                ManagedValue.openSet(TestValue.Id.FLOW).of(Step.class).in("Steps").because("Mine."));
+        String activities = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestOutcome;
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.OUTCOMES)
+                public final class Activities {
+                    public enum Collect implements TestOutcome { NEXT, WON }
+                }
+                """;
+        String steps = """
+                package com.bot.plugins.sdk;
+
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.FLOW)
+                public final class Steps {
+                    public static final Step FIRST = %s.of(com.bot.plugins.sdk.Activities.Collect.class,
+                            com.bot.plugins.sdk.Activities.Collect.WON);
+                }
+                """.formatted(JavaNames.canonical(Step.class));
+        List<ManagedConstants.Constant> constants = new ArrayList<>(ManagedConstants.read(activities, known));
+        constants.addAll(ManagedConstants.read(steps, known));
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(constants,
+                ValueGrammar.of(List.of(), List.of(NAMED_OUTCOME, STEP)));
+        Step first = new Step(new Group("Collect"), new TestOutcome.Named("Collect.WON"));
+
+        assertEquals(first, lookup.read(name("Steps.FIRST")).orElseThrow());
+        assertEquals("Steps.FIRST", lookup.spell(first).orElseThrow().source());
     }
 
     /** An unchanged file is not parsed again; a file whose text changed is, and its new constant is found. */

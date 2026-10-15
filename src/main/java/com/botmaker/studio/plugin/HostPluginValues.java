@@ -562,10 +562,20 @@ public final class HostPluginValues implements PluginValues {
             return apply(ManagedSets.add(index(), id, member, null, null));
         }
         Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
-        Optional<JavaValue> initializer = PluginHost.grammar().spellAny(value);
+        // Each part another constant holds is written as that constant: a screen's Way.of(HOME, …) names HOME, which
+        // nothing but the bot's own names can write (2026-10-14).
+        ManagedConstants.Lookup names = new ManagedConstants.Lookup(constants(), PluginHost.grammar());
+        Optional<JavaValue> initializer = PluginHost.grammar().write(type, value, names);
         if (initializer.isEmpty()) {
             return Optional.of("No plugin in this project declares " + type.getSimpleName() + ", so "
                     + member + " cannot be written.");
+        }
+        // A link the writer could not write is left out of the call; a new record must read back whole, or it is
+        // not added half-written (2026-10-15, a screen's way in lost).
+        if (value instanceof Record && !PluginHost.grammar().read(type, initializer.get().written(), names)
+                .map(value::equals).orElse(false)) {
+            return Optional.of(member + " cannot be written whole: a part of it is of a type nothing writes, or "
+                    + "names a constant the bot does not have. Nothing was added.");
         }
         return apply(ManagedSets.add(index(), id, member, type, imported(initializer.get())));
     }

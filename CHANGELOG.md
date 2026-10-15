@@ -14,6 +14,22 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **quit_studio** closes Studio as its window's close button does, half a second after it answers, so a client
+  can restart it with the bridge's start_studio.
+- **`/mcp-hello`** proves to a client that it talks to this Studio before the client sends the token: it signs
+  the client's nonce with the token (HMAC-SHA256) and says nothing of the token itself. Every other path still
+  asks for the token.
+
+### Fixed
+
+- **A plugin's record value is added only when it reads back whole.** A link the writer could not write was left
+  out of the call, so a screen lost its way in. Now the add is refused and says why. A part that another constant
+  holds is written as that constant (`Way.of(HOME, …)`).
+- **A picture filed under an activity matched no constant.** A value written with the bot's names
+  (`Activities.Tavern.class`) is now matched by its value first, so it is written as its `Pictures` constant.
+- **Text blocks read as javac reads them**: indentation stripped and escapes read, and a text block written back
+  holds exactly its value.
+
 - **Every assistant tool call's time is kept.** Each call over MCP, Studio's tools and the plugins', adds a row
   to `tool-times.tsv` in Studio's cache (`~/.cache/botmaker/`): when it ended, the tool, its milliseconds, and
   `ok` or `error`. Past 4 MB the file moves aside to `tool-times.old.tsv`.

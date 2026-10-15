@@ -10,6 +10,7 @@ import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTrans
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.ee11.servlet.FilterHolder;
@@ -18,11 +19,16 @@ import org.eclipse.jetty.ee11.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -42,6 +48,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class McpEndpoint implements AutoCloseable {
 
     public static final String PATH = "/mcp";
+    /**
+     * Where a client proves this is Studio before it sends the token: a process that took the port while Studio was
+     * down would be handed it otherwise. {@code ?nonce=<hex>} answers HMAC-SHA256 of the nonce under the token, in hex;
+     * the only path the token is not asked for, and it says nothing of the token.
+     */
+    public static final String HELLO = "/mcp-hello";
 
     private final Server jetty;
     private final McpSyncServer mcp;
@@ -86,6 +98,7 @@ public final class McpEndpoint implements AutoCloseable {
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
         context.addServlet(new ServletHolder(transport), PATH);
+        context.addServlet(new ServletHolder(new Hello(token)), HELLO);
         context.addFilter(new FilterHolder(bearer(token)), "/*", EnumSet.of(DispatcherType.REQUEST));
         jetty.setHandler(context);
         try {
@@ -156,10 +169,45 @@ public final class McpEndpoint implements AutoCloseable {
         }
     }
 
-    /** Refuses a request whose bearer token is not {@code token}, compared in constant time. */
+    /** Answers {@link #HELLO}: the nonce signed with the token, so a client knows it talks to this Studio. */
+    private static final class Hello extends HttpServlet {
+        private final String token;
+
+        Hello(String token) {
+            this.token = token;
+        }
+
+        @Override
+        protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+            String nonce = request.getParameter("nonce");
+            if (nonce == null || !nonce.matches("[0-9a-f]{32,128}")) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+                return;
+            }
+            response.setContentType("text/plain");
+            response.getWriter().write(proof(token, nonce));
+        }
+    }
+
+    /** HMAC-SHA256 of {@code nonce} under {@code token}, in hex: what {@link #HELLO} answers. */
+    static String proof(String token, String nonce) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(token.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal(nonce.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 is missing from this Java", e);
+        }
+    }
+
+    /** Refuses a request whose bearer token is not {@code token}, compared in constant time; {@link #HELLO} aside. */
     private static Filter bearer(String token) {
         byte[] expected = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
         return (request, response, chain) -> {
+            if (HELLO.equals(((HttpServletRequest) request).getRequestURI())) {
+                chain.doFilter(request, response);
+                return;
+            }
             String header = ((HttpServletRequest) request).getHeader("Authorization");
             byte[] given = header == null ? new byte[0] : header.getBytes(StandardCharsets.UTF_8);
             if (!MessageDigest.isEqual(expected, given)) {

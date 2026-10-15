@@ -128,7 +128,7 @@ public final class JdkLiterals {
     private static Optional<Object> literal(Expression expression, boolean negated) {
         return switch (expression) {
             case StringLiteral string when !negated -> Optional.of(string.getLiteralValue());
-            case TextBlock block when !negated -> Optional.of(block.getLiteralValue());
+            case TextBlock block when !negated -> Optional.of(value(block));
             case CharacterLiteral character when !negated -> Optional.of(character.charValue());
             case BooleanLiteral bool when !negated -> Optional.of(bool.booleanValue());
             case NumberLiteral number -> number(number.getToken(), negated);
@@ -231,6 +231,42 @@ public final class JdkLiterals {
     }
 
     /**
+     * The string {@code block} holds, as javac reads it: its indentation stripped, then its escapes read. JDT's own
+     * {@link TextBlock#getLiteralValue} keeps both.
+     */
+    static String value(TextBlock block) {
+        String escaped = block.getEscapedValue();
+        String body = escaped.substring(escaped.indexOf('\n') + 1, escaped.length() - 3);
+        return body.stripIndent().translateEscapes();
+    }
+
+    /** How far a text block's lines and its closing quotes sit in; Java strips it, so the value is as given. */
+    private static final String BLOCK_INDENT = " ".repeat(16);
+
+    /**
+     * {@code value} as a text block holding exactly it: each line indented as much as the closing quotes (stripped
+     * again by Java), the last ended by a {@code \} so no line break is added, a trailing space kept as {@code \s},
+     * and backslashes and {@code """} escaped.
+     */
+    static TextBlock textBlock(AST ast, String value) {
+        StringBuilder out = new StringBuilder("\"\"\"\n");
+        String[] lines = value.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].replace("\\", "\\\\").replace("\"\"\"", "\\\"\"\"").replace("\r", "\\r")
+                    .replace("\t", "\\t");
+            if (line.endsWith(" ")) line = line.substring(0, line.length() - 1) + "\\s";
+            boolean last = i == lines.length - 1;
+            // An empty line counts for no indentation, but the last carries its \: it is indented too.
+            out.append(line.isEmpty() && !last ? "" : BLOCK_INDENT + line);
+            out.append(last ? "\\\n" : "\n");
+        }
+        out.append(BLOCK_INDENT).append("\"\"\"");
+        TextBlock block = ast.newTextBlock();
+        block.setEscapedValue(out.toString());
+        return block;
+    }
+
+    /**
      * The node for one literal this class spelled — never for text from anywhere else, so the token's shape
      * is known: quoted, a boolean, or a number with at most a leading minus.
      */
@@ -238,7 +274,9 @@ public final class JdkLiterals {
         if (token.startsWith("\"")) {
             StringLiteral literal = ast.newStringLiteral();
             literal.setEscapedValue(token);
-            return literal;
+            String value = literal.getLiteralValue();
+            // Lines read as lines (a screen's notes, 2026-10-15): a text block, not one long "…\n…".
+            return value.contains("\n") ? textBlock(ast, value) : literal;
         }
         if (token.startsWith("'")) {
             CharacterLiteral literal = ast.newCharacterLiteral();

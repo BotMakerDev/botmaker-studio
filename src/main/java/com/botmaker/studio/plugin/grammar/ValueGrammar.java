@@ -283,6 +283,11 @@ public final class ValueGrammar {
         return reader.readAny(node);
     }
 
+    /** {@link #valueOfAny(String)}, reading the bot's own {@code names} wherever the value holds one. */
+    public Optional<Object> valueOfAny(String source, BotNames names) {
+        return SourceNode.parse(source).flatMap(node -> reader.with(names).readAny(node));
+    }
+
     // ---- writing ---------------------------------------------------------------------------------------
     //
     // Every write answers a JavaValue: a tree built node by node (ValueWriter), never Java concatenated as

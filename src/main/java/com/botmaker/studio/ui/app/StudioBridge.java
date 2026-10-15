@@ -78,6 +78,7 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -90,6 +91,7 @@ import org.eclipse.jdt.core.dom.Statement;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -117,6 +119,9 @@ import static com.botmaker.studio.ui.app.LiveEditorBot.onFx;
  * opens that file in the editor first.
  */
 final class StudioBridge implements StudioDriver {
+
+    /** How long quit's answer is given to reach the client before Studio closes. */
+    private static final Duration QUIT_DELAY = Duration.ofMillis(500);
 
     private final StudioContext ctx;
     private final ClassFiles classFiles;
@@ -264,6 +269,22 @@ final class StudioBridge implements StudioDriver {
                     : new CoreApplicationEvents.StopRunRequestedEvent());
             return "Stopping. run_state says when it has.";
         });
+    }
+
+    @Override
+    public String quit() {
+        Window main = onFx(owner::get);
+        if (main == null) throw new IllegalArgumentException("Studio's window is not shown.");
+        // Asked to close a moment after this answer leaves: the close ends this endpoint with Studio.
+        Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(QUIT_DELAY);
+            } catch (InterruptedException stopped) {
+                return;
+            }
+            Platform.runLater(() -> main.fireEvent(new WindowEvent(main, WindowEvent.WINDOW_CLOSE_REQUEST)));
+        });
+        return "Closing Studio. start_studio opens it again.";
     }
 
     // ---- structure and navigation --------------------------------------------------------------------------

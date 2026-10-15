@@ -78,6 +78,11 @@ public interface StudioDriver {
     /** Stops the run, the try or the debug session. */
     String stop();
 
+    /** Closes Studio as its window's close button does, once this answer is sent. */
+    default String quit() {
+        throw new IllegalArgumentException("Studio cannot be closed from here.");
+    }
+
     // ---- structure, navigation and review (phase 8) — each refused here unless the implementation offers it
 
     /**

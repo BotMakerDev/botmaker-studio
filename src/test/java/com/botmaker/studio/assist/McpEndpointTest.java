@@ -317,7 +317,7 @@ class McpEndpointTest {
                 "move_block", "edit_signature",
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
                 "list_review", "mark_reviewed", "remove_mark", "undo_change", "run_bot", "run_activity",
-                "try_statement", "stop", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
+                "try_statement", "stop", "quit_studio", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
                 "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
                 "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");

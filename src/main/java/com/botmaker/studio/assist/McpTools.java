@@ -195,7 +195,7 @@ public final class McpTools {
 
     /** The tools that touch neither the bot's files nor its plugins, so they answer while a plugin moves. */
     static final java.util.Set<String> WHILE_MOVING = java.util.Set.of("list_plugins", "search_plugins",
-            "list_versions", "list_templates", "plugin_guide", "get_settings", "run_state", "read_trace", "stop");
+            "list_versions", "list_templates", "plugin_guide", "get_settings", "run_state", "read_trace", "stop", "quit_studio");
 
     /**
      * The bound plugins' tools, but one whose name is in {@code taken}: a name that is Studio's own or an earlier
@@ -532,6 +532,8 @@ public final class McpTools {
                         args -> started(log, args, () -> driver.tryStatement(text(args, "file"),
                                 text(args, "blockId"), values(args)))),
                 act(json, "stop", "Stop the run, the try or the debug session.", List.of(), args -> driver.stop()),
+                act(json, "quit_studio", "Close BotMaker Studio, as its window's close button does. Through the "
+                        + "botmaker mcp-bridge, start_studio opens it again.", List.of(), args -> driver.quit()),
                 act(json, "run_state", "Say whether something runs now, and for how long.", List.of(),
                         args -> log.state()),
                 act(json, "read_trace",

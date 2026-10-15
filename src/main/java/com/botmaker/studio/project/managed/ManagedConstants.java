@@ -95,6 +95,12 @@ public final class ManagedConstants {
                     : initializer == null ? Optional.empty() : grammar.valueOfAny(initializer);
         }
 
+        /** {@link #value(ValueGrammar)}, reading the bot's own {@code names} its initialiser holds. */
+        public Optional<Object> value(ValueGrammar grammar, BotNames names) {
+            return member != null ? Optional.of(member)
+                    : initializer == null ? Optional.empty() : grammar.valueOfAny(initializer, names);
+        }
+
         /** Whether this is a whole nested enum, written as its class literal, rather than a constant. */
         public boolean isGroup() {
             return field == null;
@@ -196,6 +202,8 @@ public final class ManagedConstants {
         private final ValueGrammar grammar;
         /** Each constant's value as the grammar writes it, computed once: every part of every write asks. */
         private List<Optional<JavaValue>> written;
+        /** Each constant's value as the bot's names read it, computed once. */
+        private List<Optional<Object>> values;
 
         public Lookup(List<Constant> constants, ValueGrammar grammar) {
             this.constants = constants == null ? List.of() : List.copyOf(constants);
@@ -215,7 +223,7 @@ public final class ManagedConstants {
          * the way javac would, through the file's imports ({@link SourceNames}), not matched by its spelling.
          */
         public Optional<Object> read(QualifiedName name) {
-            return constant(name).flatMap(constant -> constant.value(grammar));
+            return constant(name).flatMap(constant -> constant.value(grammar, this));
         }
 
         @Override
@@ -274,18 +282,20 @@ public final class ManagedConstants {
                 }
             }
             Optional<JavaValue> canonical = grammar.initializerOfAny(value);
-            if (canonical.isEmpty()) return Optional.empty();
             // A value with a name of its own (Flow.NONE) keeps it: a bot field that merely holds it
             // (EZF = Flow.NONE) is a name for something else that happens to start equal.
-            boolean named = canonical.get().node() instanceof Name;
+            boolean named = canonical.isPresent() && canonical.get().node() instanceof Name;
+            List<Optional<Object>> held = values();
             List<Optional<JavaValue>> theirs = written();
             for (int i = 0; i < constants.size(); i++) {
                 Constant constant = constants.get(i);
-                if (constant.isGroup() || (named && constant.member() == null)
-                        || theirs.get(i).isEmpty() || !theirs.get(i).get().sameJava(canonical.get())) {
-                    continue;
+                if (constant.isGroup() || (named && constant.member() == null)) continue;
+                // Equal values first: a picture filed under an activity (Activities.Tavern.class) is written
+                // only with the bot's names, so its tree never matches one written without them (2026-10-15).
+                if (held.get(i).filter(value::equals).isPresent() || canonical.isPresent()
+                        && theirs.get(i).filter(tree -> tree.sameJava(canonical.get())).isPresent()) {
+                    return Optional.of(reference(constant));
                 }
-                return Optional.of(reference(constant));
             }
             return Optional.empty();
         }
@@ -317,16 +327,23 @@ public final class ManagedConstants {
 
         private synchronized List<Optional<JavaValue>> written() {
             if (written == null) {
-                List<Optional<JavaValue>> out = new ArrayList<>(constants.size());
-                for (Constant constant : constants) {
-                    // A field referred to by name is matched by its member, never by what the grammar writes.
-                    boolean referred = constant.member() != null && constant.initializer() != null;
-                    out.add(constant.isGroup() || referred ? Optional.empty()
-                            : constant.value(grammar).flatMap(grammar::initializerOfAny));
-                }
-                written = List.copyOf(out);
+                written = values().stream().map(held -> held.flatMap(grammar::initializerOfAny)).toList();
             }
             return written;
+        }
+
+        /** Each constant's value, read with the bot's names, computed once; empty for a group or a field referred to by name. */
+        private synchronized List<Optional<Object>> values() {
+            if (values == null) {
+                List<Optional<Object>> out = new ArrayList<>(constants.size());
+                for (Constant constant : constants) {
+                    // A field referred to by name is matched by its member, never by what it holds.
+                    boolean referred = constant.member() != null && constant.initializer() != null;
+                    out.add(constant.isGroup() || referred ? Optional.empty() : constant.value(grammar, this));
+                }
+                values = List.copyOf(out);
+            }
+            return values;
         }
     }
 
