@@ -48,7 +48,7 @@ public final class LeftoverFields {
                                          ValueGrammar grammar) {
         String name = parameter.qualified();
         if (!parameter.declaredByPlugin()) {
-            return new Refactor.Refused(name + " is the bot's own parameter: set_param_default sets it.");
+            return new Refactor.Refused(name + " is the bot's own parameter: params set_default sets it.");
         }
         Optional<ManagedValue<?>> declared = live.stream()
                 .filter(value -> value != null && value.isParam() && value.id().equals(parameter.managedId()))
@@ -144,7 +144,7 @@ public final class LeftoverFields {
             String id = mark == null ? "" : ManagedIds.idOf(mark, live);
             if (!id.isEmpty() && live.stream().anyMatch(value -> value != null && id.equals(value.id()))) {
                 return Located.refused(qualified + " is a plugin's, which BotMaker writes back while the plugin"
-                        + " is in the project: reset_param sets a parameter back to how its plugin declares it.");
+                        + " is in the project: params reset sets a parameter back to how its plugin declares it.");
             }
             ASTRewrite rewriter = ASTRewrite.create(unit.getAST());
             rewriter.remove(declaration.fragments().size() == 1 ? declaration : fragment, null);

@@ -12,6 +12,7 @@ import java.util.List;
 import static com.botmaker.studio.assist.FileTools.FILE;
 import static com.botmaker.studio.assist.McpTools.given;
 import static com.botmaker.studio.assist.McpTools.said;
+import static com.botmaker.studio.assist.McpTools.saidOneOf;
 
 /** The tools over Studio itself ({@link StudioDriver}): targets, the overlay's caret, boxes on the game, the code's shape. */
 final class StudioTools {
@@ -21,7 +22,7 @@ final class StudioTools {
     static final String TARGET = "the target's key, or Label.method, from list_targets";
     private static final String SYMBOL = "the declaration: Type, Type.member (a method, field or constant) or "
             + "Type.method.local";
-    private static final String REVIEW_ID = "the item's id, from list_review";
+    private static final String REVIEW_ID = "the item's id, from list";
 
     record Target(@Describe(TARGET) String target) {
     }
@@ -50,7 +51,23 @@ final class StudioTools {
     record Rename(@Describe(SYMBOL) String symbol, @Describe("the new name") String to) {
     }
 
-    record ReviewItem(@Describe(REVIEW_ID) String id) {
+    /** {@code review}: the functions a refactor changed by guessing and marked for the user to look at. */
+    sealed interface Review {
+        @Describe("the marked functions, each with its id and what the mark says")
+        record List() implements Review {
+        }
+
+        @Describe("mark one looked at; the mark stays in the code as the record")
+        record Mark(@Describe(REVIEW_ID) String id) implements Review {
+        }
+
+        @Describe("take its mark out of the code")
+        record Unmark(String id) implements Review {
+        }
+
+        @Describe("put its function back as it was before the refactor, from the bot's versions; it may not compile")
+        record Undo(String id) implements Review {
+        }
     }
 
     static List<AssistantTool<?>> of(StudioDriver driver) {
@@ -69,56 +86,44 @@ final class StudioTools {
                             return String.join("\n", lines);
                         }),
                 said("set_target",
-                        "Open a target in Studio — its file in the editor and, when the overlay editor is open, there "
-                                + "too — so the user sees where you are working.",
+                        "Open a target in Studio's editor, and in the overlay editor when it is open, so the user "
+                                + "sees where you work.",
                         Target.class, call -> driver.setTarget(call.target())),
                 said("move_caret",
-                        "Park the overlay editor's caret on a statement, so the user sees it and its probe is shown "
-                                + "on the game. Needs the overlay editor open.",
+                        "Park the overlay editor's caret on a statement, its probe shown on the game.",
                         Caret.class, call -> driver.moveCaret(given(call.file()), call.blockId())),
                 said("show_area",
-                        "Box an area on the game, in the bot's pixels (what screenshots and clicks use), with a "
-                                + "label — to show the user what you mean. Needs the overlay editor open.",
+                        "Box an area on the game for the user, in the bot's pixels, in the overlay editor.",
                         Box.class, call -> driver.showArea(new Area(call.x(), call.y(), call.width(), call.height()),
                                 given(call.label()))),
                 said("add_file",
-                        "Add an empty class, interface, record or enum to the bot, for methods to go in. It is "
-                                + "saved as a version the user can go back to.",
+                        "Add an empty class, interface, record or enum to the bot, saved as a version.",
                         NewFile.class, call -> driver.addFile(call.name(), call.kind(), given(call.packageName()))),
                 said("delete_file",
-                        "Delete one of the bot's files. Refused, with every place that still uses it, while anything "
-                                + "uses what it declares; never the entry point or a plugin's file. A safety version "
-                                + "is saved first.",
+                        "Delete one of the bot's files, a safety version saved first. Refused while anything uses "
+                                + "it, saying where; never the entry point or a plugin's file.",
                         File.class, call -> driver.deleteFile(call.file())),
-                said("find_usages", "List every use of a declaration of the bot, by binding: file, line, "
-                                + "the method it is in, and the line's text.",
+                said("find_usages", "List every use of a declaration: file, line, method and the line's text.",
                         Symbol.class, call -> driver.findUsages(call.symbol())),
                 said("rename",
-                        "Rename a declaration and every use of it across the bot, as one step the user can undo; "
-                                + "a class takes its file with it, after a safety version. Refused, with why, when the "
-                                + "bot would stop compiling, and for a plugin's file.",
+                        "Rename a declaration and its uses across the bot, as one undo step; a class takes its file. "
+                                + "Refused when the bot would stop compiling, and for a plugin's file.",
                         Rename.class, call -> driver.rename(call.symbol(), call.to())),
                 said("open", "Open a declaration in Studio's editor, so the user sees it.",
                         Symbol.class, call -> driver.open(call.symbol())),
-                said("list_review",
-                        "List the functions a refactor changed by guessing and marked for the user to look at, each "
-                                + "with its id and what the mark says.",
-                        driver::listReview),
-                said("mark_reviewed", "Mark a review item looked at; the mark stays in the code as the record.",
-                        ReviewItem.class, call -> driver.markReviewed(call.id())),
-                said("remove_mark", "Take a review item's mark out of the code.",
-                        ReviewItem.class, call -> driver.removeMark(call.id())),
-                said("undo_change",
-                        "Put a review item's function back as it was before the refactor that marked it, from the "
-                                + "bot's versions. What comes back may not compile.",
-                        ReviewItem.class, call -> driver.undoChange(call.id())),
+                saidOneOf("review",
+                        "The functions a refactor changed by guessing and marked for the user: list, mark, unmark, "
+                                + "undo.",
+                        Review.class, action -> switch (action) {
+                            case Review.List list -> driver.listReview();
+                            case Review.Mark mark -> driver.markReviewed(mark.id());
+                            case Review.Unmark unmark -> driver.removeMark(unmark.id());
+                            case Review.Undo undo -> driver.undoChange(undo.id());
+                        }),
                 said("undo",
-                        "Take the last step back, as Studio's ↶ (Ctrl+Z) does: an edit of yours, the user's, or one a "
-                                + "plugin window made. Says which step it took back and what is next each way.",
+                        "Take the last step back, as Studio's ↶ does: yours, the user's or a plugin window's. Says "
+                                + "which, and what is next each way.",
                         driver::undo),
-                said("redo",
-                        "Do the last undone step again, as Studio's ↷ (Ctrl+Y) does. Says which step and what is next "
-                                + "each way.",
-                        driver::redo));
+                said("redo", "Do the last undone step again, as Studio's ↷ does.", driver::redo));
     }
 }

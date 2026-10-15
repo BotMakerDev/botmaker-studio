@@ -46,8 +46,8 @@ public enum AiTool {
     static final List<String> CLAUDE_EDIT_TOOLS = List.of("Edit", "MultiEdit", "Write", "NotebookEdit");
 
     static final String CLAUDE_PROMPT = "You are running inside BotMaker Studio. Change the user's bot only "
-            + "through the " + SERVER + " MCP tools (read_tree, list_palette, insert_block, set_slot, "
-            + "delete_block, list_errors); direct file edits are disabled in this session.";
+            + "through the " + SERVER + " MCP tools (read_tree, list_palette, edit_code, "
+            + "list_errors); direct file edits are disabled in this session.";
 
     private static final ObjectMapper JSON = new ObjectMapper();
 

@@ -127,7 +127,7 @@ public final class MigrationMapping {
         if (!unused.isEmpty()) {
             return Asked.refused(String.join("; ", unused) + ": no pair this migration goes through has "
                     + (unused.size() == 1 ? "it" : "them") + "; prefix a line with its type's simple name "
-                    + "(read_migration names the pairs).");
+                    + "(migration read names the pairs).");
         }
         return new Asked(List.copyOf(out), null);
     }

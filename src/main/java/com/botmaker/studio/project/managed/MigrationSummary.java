@@ -57,7 +57,7 @@ public final class MigrationSummary {
                 + "resets them"
                 + (set.to() != null ? "; their plugin points to " + type(set.to()) : "")
                 + (set.migratable() ? ". To keep them, migrate them first, on the version the bot has now "
-                + "(list_migrations)."
+                + "(migration list)."
                 : ". They cannot be migrated; the version saved before the move keeps them.");
     }
 
@@ -172,9 +172,9 @@ public final class MigrationSummary {
         if (!nested.isEmpty()) {
             lines.add("It goes through " + String.join(", ", nested.stream()
                     .map(pair -> type(pair.getKey()) + " → " + type(pair.getValue())).toList())
-                    + ", each a mapping of its own (read_migration).");
+                    + ", each a mapping of its own (migration read).");
         }
-        lines.add(problem == null ? "Ready to write (set_migration)." : "Not ready: " + problem);
+        lines.add(problem == null ? "Ready to write (migration set)." : "Not ready: " + problem);
         return String.join("\n", lines);
     }
 

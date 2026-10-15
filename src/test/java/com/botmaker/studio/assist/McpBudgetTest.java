@@ -31,9 +31,9 @@ class McpBudgetTest {
     /**
      * Characters, Studio's tools and the instructions together; about four to a token. 30,913 on 2026-10-15, before
      * the tools were typed and merged; 31,650 once typed (each action's fields said, the method parameters
-     * described), before the merges trim them.
+     * described); 23,847 once merged into tools of several actions and trimmed, 37 tools where there were 58.
      */
-    static final int CEILING = 32_000;
+    static final int CEILING = 26_000;
 
     private static final ObjectMapper JSON = new ObjectMapper();
 

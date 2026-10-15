@@ -39,7 +39,7 @@ final class RunTools {
     record Statement(@Describe(value = FILE, optional = true) String file,
                      @Describe("the statement id, from read_tree") String blockId,
                      @Describe(value = "earlier locals the statement reads, by name, each a value of its type as "
-                             + "set_slot takes it", optional = true) Map<String, String> values,
+                             + "a slot takes it", optional = true) Map<String, String> values,
                      @Describe(value = WAIT, optional = true) @Key("wait") Integer seconds) {
     }
 
@@ -55,22 +55,20 @@ final class RunTools {
                 said("run_bot", "Run the whole bot, as the toolbar's ▶ Run does. It acts on the game.",
                         Run.class, call -> started(log, call.seconds(), driver::runBot)),
                 said("run_activity",
-                        "Run one target's method on its own, through the bot's plugin, without the rest of the bot. "
-                                + "It acts on the game.",
+                        "Run one target's method on its own, without the rest of the bot. It acts on the game.",
                         Activity.class, call -> started(log, call.seconds(), () -> driver.runActivity(call.target()))),
                 said("try_statement",
-                        "Run one statement on its own, with the earlier values it reads — taken from the last run, "
-                                + "computed when that only looks at the screen, or given in `values`. It acts on the "
-                                + "game. A value it needs and cannot find is refused by name.",
+                        "Run one statement on its own, with the earlier values it reads: from the last run, computed "
+                                + "when that only looks at the screen, or given in values. It acts on the game.",
                         Statement.class, call -> started(log, call.seconds(), () -> driver.tryStatement(given(call.file()),
                                 call.blockId(), call.values() == null ? Map.of() : call.values()))),
                 said("stop", "Stop the run, the try or the debug session.", driver::stop),
-                said("quit_studio", "Close BotMaker Studio, as its window's close button does. Through the "
-                        + "botmaker mcp-bridge, start_studio opens it again.", driver::quit),
+                said("quit_studio", "Close BotMaker Studio; through the botmaker mcp-bridge, start_studio opens it "
+                        + "again.", driver::quit),
                 said("run_state", "Say whether something runs now, and for how long.", log::state),
                 said("read_trace",
-                        "Read the last lines the bot printed and traced, oldest first, with Studio's markers where a "
-                                + "run started and stopped.",
+                        "Read the last lines the bot printed and traced, oldest first, with markers where a run "
+                                + "started and stopped.",
                         Trace.class, call -> log.read(new RunLog.Read(call.lines() == null ? 50 : call.lines(),
                                 call.this_run() == null || call.this_run(), Boolean.TRUE.equals(call.errors_only())))));
     }

@@ -31,6 +31,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   One wire change: each of `apply_edits`' edits names its kind as `action` (was `op`).
   `edit_variable`'s `name` and `type` may be left out, as its description always said. An argument a tool does
   not take is refused, where a tool with none ignored it; an answer loses its trailing blank lines.
+- **Studio serves 37 MCP tools where it served 58, and a third fewer characters** (23,847, was 31,650 —
+  `McpBudgetTest`'s ceiling is now 26,000). Families of verbs became one tool of several actions, `action`
+  picking one:
+  - `edit_code` (insert, set, delete, move, add_argument, edit_variable) replaces `insert_block`, `set_slot`,
+    `delete_block`, `move_block`, `add_argument`, `edit_variable` and `apply_edits`; one edit is a list of one;
+  - `review` (list, mark, unmark, undo) replaces `list_review`, `mark_reviewed`, `remove_mark`, `undo_change`;
+  - `versions` (list, checkpoint, revert), `plugins` (list, search, add, set_version, remove), `migration` (list,
+    read, set, switch_uses, remove_migrated) and `params` (list, set_default, reset) replace their 16 tools.
+
+  A field another action takes is refused, naming the action's own. While a plugin moves, `plugins list`,
+  `plugins search` and `versions list` still answer. The descriptions are shorter; how a slot's value is spelt is
+  said once, in `edit_code`'s. Studio's answers name the new tools (`versions revert`, `plugins list`).
 
 - **A plugin's value writes are undone with ↶.** Each `PluginValues` write is one step of the editor's undo, named,
   and a plugin's `History.batch` makes several one step under its own label; ↶/↷ put every file it wrote back. Before,

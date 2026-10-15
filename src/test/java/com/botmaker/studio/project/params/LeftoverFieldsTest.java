@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** reset_param and delete_field: a plugin's leftover parameter put back, a field nothing needs deleted. */
+/** params reset and delete_field: a plugin's leftover parameter put back, a field nothing needs deleted. */
 class LeftoverFieldsTest {
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.empty();
@@ -87,7 +87,7 @@ class LeftoverFieldsTest {
 
         Refactor.Outcome reset = LeftoverFields.reset(index, own, LIVE, GRAMMAR);
 
-        assertTrue(((Refactor.Refused) reset).reason().contains("set_param_default"), reset.toString());
+        assertTrue(((Refactor.Refused) reset).reason().contains("params set_default"), reset.toString());
     }
 
     private static final String HELPERS = """
@@ -126,7 +126,7 @@ class LeftoverFieldsTest {
 
         Refactor.Outcome refused = LeftoverFields.delete(index, sdk, "doSetup", LIVE);
 
-        assertTrue(((Refactor.Refused) refused).reason().contains("reset_param"), refused.toString());
+        assertTrue(((Refactor.Refused) refused).reason().contains("params reset"), refused.toString());
     }
 
     private static JavaParameter owned(Path file, String name, ManagedValue<?> value) {

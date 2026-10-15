@@ -19,7 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** What list_migrations and set_plugin_version say of the bot's migrations. */
+/** What migration list and plugins set_version say of the bot's migrations. */
 class MigrationSummaryTest {
 
     private static final String OLD = "OldShot (com.botmaker.studio.project.managed.MigrationTypes.OldShot)";
@@ -62,7 +62,7 @@ class MigrationSummaryTest {
                 true), "SDK 2.0.0");
         assertEquals("2 values of " + OLD + " not copied yet: SDK 2.0.0 drops their set, so the move removes them "
                 + "(one the bot's code names is kept, unmarked) or resets them; their plugin points to " + NEW
-                + ". To keep them, migrate them first, on the version the bot has now (list_migrations).", kept);
+                + ". To keep them, migrate them first, on the version the bot has now (migration list).", kept);
         String lost = MigrationSummary.stranded(new MigrationSteps.Stranded("SHOTS", null, null, 1, false),
                 "SDK 2.0.0");
         assertTrue(lost.startsWith("1 value of the set SHOTS not copied yet: "), lost);
@@ -89,7 +89,7 @@ class MigrationSummaryTest {
         assertTrue(lines.contains("- file (String): from file — or: fixed <String>"), text);
         assertTrue(lines.contains("- grey (boolean): fixed false — or: fixed <boolean>"), text);
         assertTrue(lines.contains("Not in the bot yet: the mapping above is a first guess."), text);
-        assertEquals("Ready to write (set_migration).", lines.getLast());
+        assertEquals("Ready to write (migration set).", lines.getLast());
 
         String area = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldShot.class, Area.class);
         assertTrue(area.contains("The migration window does not offer Area for OldShot's values."), area);
@@ -114,7 +114,7 @@ class MigrationSummaryTest {
     void aPairNamesThePairsItGoesThroughAndEnumsTheirArms() {
         String frame = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldFrame.class, Frame.class);
         assertTrue(frame.contains("It goes through " + MigrationSummary.type(OldArea.class) + " → "
-                + MigrationSummary.type(Area.class) + ", each a mapping of its own (read_migration)."), frame);
+                + MigrationSummary.type(Area.class) + ", each a mapping of its own (migration read)."), frame);
 
         String tint = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, null);
         assertTrue(tint.contains("each can become CRIMSON, NAVY:\n- RED → CRIMSON\n- BLUE → NAVY"), tint);

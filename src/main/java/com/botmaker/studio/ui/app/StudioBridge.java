@@ -365,7 +365,7 @@ final class StudioBridge implements StudioDriver {
                     return classFiles.applyRename(moved);
                 } catch (java.io.IOException failed) {
                     throw new IllegalArgumentException("The rename stopped part-way (" + failed.getMessage()
-                            + "); revert goes back to the safety version from before.");
+                            + "); versions revert goes back to the safety version from before.");
                 }
             });
         }
@@ -449,7 +449,7 @@ final class StudioBridge implements StudioDriver {
         return onFx(() -> {
             ReviewService.Item item = reviewItem(id);
             if (!ReviewService.markReviewed(ctx.config(), ctx.state(), item)) {
-                throw new IllegalArgumentException(item.where() + " changed since; list_review again.");
+                throw new IllegalArgumentException(item.where() + " changed since; review list again.");
             }
             return "Marked " + item.where() + " reviewed.";
         });
@@ -460,7 +460,7 @@ final class StudioBridge implements StudioDriver {
         return onFx(() -> {
             ReviewService.Item item = reviewItem(id);
             if (!ReviewService.removeMark(ctx.config(), ctx.state(), item)) {
-                throw new IllegalArgumentException(item.where() + " changed since; list_review again.");
+                throw new IllegalArgumentException(item.where() + " changed since; review list again.");
             }
             return "Took the mark off " + item.where() + ".";
         });
@@ -507,7 +507,7 @@ final class StudioBridge implements StudioDriver {
         String wanted = id == null ? "" : id.strip();
         return ReviewService.scan(ctx.config(), ctx.state()).stream().filter(i -> reviewId(i).equals(wanted))
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("No review item " + wanted
-                        + ". list_review gives the ids; one moves when its file is edited."));
+                        + ". review list gives the ids; one moves when its file is edited."));
     }
 
     /** The bot's index: its sources read on FX, parsed on the caller's thread. */
@@ -532,7 +532,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String listVersions(int limit) {
         List<ProjectVcs.CommitInfo> history = history();
-        if (history.isEmpty()) return "The bot has no versions yet. checkpoint saves one.";
+        if (history.isEmpty()) return "The bot has no versions yet. versions checkpoint saves one.";
         int shown = Math.clamp(limit, 1, 200);
         List<String> lines = new ArrayList<>();
         for (ProjectVcs.CommitInfo c : history.subList(0, Math.min(shown, history.size()))) {
@@ -565,7 +565,7 @@ final class StudioBridge implements StudioDriver {
             if (sha == null) return "Nothing changed since the last version, so none was saved.";
             // Named, so it is a milestone in the Versions tab like a version the user saved.
             new ProjectVcs(dir).name(sha, name);
-            return "Saved the version " + sha + " “" + name + "”. revert " + sha + " puts the bot back to it.";
+            return "Saved the version " + sha + " “" + name + "”. versions revert " + sha + " puts the bot back to it.";
         } catch (IOException e) {
             throw new IllegalArgumentException("Studio could not save a version: " + e.getMessage());
         }
@@ -584,7 +584,7 @@ final class StudioBridge implements StudioDriver {
                 : history().stream().filter(c -> c.sha().startsWith(wanted)).toList();
         if (matching.size() != 1) {
             throw new IllegalArgumentException((matching.isEmpty() ? "No version " : "More than one version starts ")
-                    + wanted + ". list_versions gives the ids.");
+                    + wanted + ". versions list gives the ids.");
         }
         ProjectVcs.CommitInfo target = matching.getFirst();
         // From here to the reload the editor holds the old code: a run or a save would write it back.
@@ -717,7 +717,7 @@ final class StudioBridge implements StudioDriver {
         PluginUpgradeService.Report report = upgrades.removal();
         PluginHolders holders = upgrades.holders();
         String preview = removalPreview(plugin, report, holders, deleteFiles);
-        if (!confirm) return preview + "\nremove_plugin with confirm removes it.";
+        if (!confirm) return preview + "\nplugins remove with confirm removes it.";
         if (!userAgrees("Remove a plugin?", preview)) {
             throw new IllegalArgumentException("The user did not agree to remove " + plugin.displayName() + ".");
         }
@@ -778,7 +778,7 @@ final class StudioBridge implements StudioDriver {
             if (!to.equals(local) || !ReleasedPlugins.isDevVersion(to)) return name + " is on " + to + " already.";
             PluginMove under = move.get();
             if (under != null && under.busy()) {
-                throw new IllegalArgumentException("A plugin move is under way; list_plugins says where it is.");
+                throw new IllegalArgumentException("A plugin move is under way; plugins list says where it is.");
             }
             // This computer's build, rebuilt into ~/.m2 at the same version: Plugins & Libraries' Reload plugins.
             if (!confirm) {
@@ -794,11 +794,11 @@ final class StudioBridge implements StudioDriver {
         PluginUpgradeService.Report report = waitFor(CompletableFuture.supplyAsync(() -> upgrades.compare(to)),
                 PLUGIN_WRITE_SECONDS, "read what moving " + name + " changes");
         String preview = movePreview(plugin, from, to, to.equals(local), report);
-        if (!confirm) return preview + "\nset_plugin_version with confirm moves it.";
+        if (!confirm) return preview + "\nplugins set_version with confirm moves it.";
         PluginMove asked = PluginMove.asked(name, from, to);
         PluginMove before = move.get();
         if (before != null && before.busy() || !move.compareAndSet(before, asked)) {
-            throw new IllegalArgumentException("Another plugin move is under way; list_plugins says where it is.");
+            throw new IllegalArgumentException("Another plugin move is under way; plugins list says where it is.");
         }
         String question = "The assistant wants to move " + name + ".\n\n" + preview + "\n\nThe version moved to runs "
                 + "with Studio's own permissions.";
@@ -946,7 +946,7 @@ final class StudioBridge implements StudioDriver {
             } catch (RuntimeException | LinkageError failed) {
                 throw stoppedPartWay(failed);
             }
-            return plan.summary() + ". The version before it is in list_versions.\n" + said;
+            return plan.summary() + ". The version before it is in versions list.\n" + said;
         });
     }
 
@@ -975,7 +975,7 @@ final class StudioBridge implements StudioDriver {
             Class<?> target = (to == null || to.isBlank()) && !named.isEmpty()
                     ? MigrationCleanup.copyTarget(index, grammar, declared, source, named.iterator().next())
                     .orElseThrow(() -> new IllegalArgumentException("No copy of " + named.iterator().next()
-                            + " was found: migrate it first (set_migration)."))
+                            + " was found: migrate it first (migration set)."))
                     : copiedInto(index, grammar, declared, source, to, known);
             String note = onFx(() -> MigrationActions.leftNote(ctx.state(), source));
             switched = MigrationCleanup.switchUses(index, grammar, declared, source, target, named, note);
@@ -1047,7 +1047,7 @@ final class StudioBridge implements StudioDriver {
         if (to != null && !to.isBlank()) return migrated(to, known, false);
         return MigrationCleanup.copiedInto(index, grammar, declared, from).orElseThrow(() ->
                 new IllegalArgumentException("No single type holds copies of " + from.getSimpleName()
-                        + "'s values: migrate them first (set_migration), or name the type in to."));
+                        + "'s values: migrate them first (migration set), or name the type in to."));
     }
 
     /** A cleanup step written as {@link MigrationActions} writes it, its refusal as the tool's. */
@@ -1062,14 +1062,14 @@ final class StudioBridge implements StudioDriver {
             }
         });
         if (!wrote.done()) throw new IllegalArgumentException(wrote.text());
-        return wrote.text() + " The version before it is in list_versions.";
+        return wrote.text() + " The version before it is in versions list.";
     }
 
     /** A write that threw: it may have saved the safety version and changed part of the bot. */
     private static IllegalArgumentException stoppedPartWay(Throwable failed) {
         IllegalArgumentException said = new IllegalArgumentException("It stopped part-way ("
                 + (failed.getMessage() == null ? failed.getClass().getSimpleName() : failed.getMessage())
-                + "); if list_versions has a safety version from just before, revert goes back to it.");
+                + "); if versions list has a safety version from just before, versions revert goes back to it.");
         said.initCause(failed);
         return said;
     }
@@ -1096,7 +1096,7 @@ final class StudioBridge implements StudioDriver {
     private static Class<?> migrated(String name, Set<Class<?>> known, boolean old) {
         return MigrationSummary.named(name, PluginHost.classLoader(), known)
                 .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + name + "\"; give its "
-                        + "full name" + (old ? ", as list_migrations names the retired ones and read_migration the "
+                        + "full name" + (old ? ", as migration list names the retired ones and migration read the "
                         + "pairs they go through." : ".")));
     }
 
@@ -1148,7 +1148,7 @@ final class StudioBridge implements StudioDriver {
                 .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.artifact().artifactId().equalsIgnoreCase(wanted)
                         || p.displayName().equalsIgnoreCase(wanted))
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("The bot declares no plugin " + wanted
-                        + ". list_plugins lists them."));
+                        + ". plugins list lists them."));
     }
 
     private static final long PLUGIN_WRITE_SECONDS = 600;
@@ -1184,7 +1184,7 @@ final class StudioBridge implements StudioDriver {
                 .filter(p -> p.id().equalsIgnoreCase(wanted) || p.name().equalsIgnoreCase(wanted)
                         || p.artifactId().equalsIgnoreCase(wanted))
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
-                        + ". search_plugins lists them."));
+                        + ". plugins search lists them."));
     }
 
     // ---- new projects --------------------------------------------------------------------------------------
@@ -1408,7 +1408,7 @@ final class StudioBridge implements StudioDriver {
         if (named.isEmpty()) named = all.stream().filter(p -> p.name().equals(wanted)).toList();
         if (named.size() != 1) {
             throw new IllegalArgumentException((named.isEmpty() ? "The bot has no parameter " : "More than one "
-                    + "class has a parameter ") + wanted + ". list_params names them"
+                    + "class has a parameter ") + wanted + ". params list names them"
                     + (named.isEmpty() ? "." : ": give Class.name."));
         }
         return named.getFirst();

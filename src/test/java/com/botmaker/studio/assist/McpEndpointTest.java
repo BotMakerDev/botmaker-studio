@@ -322,6 +322,12 @@ class McpEndpointTest {
         return body.group(1);
     }
 
+    /** edit_code's arguments for one print statement inserted at {@code index} of {@code body}. */
+    private static String printAt(String body, int index) {
+        return "{\"edits\":[{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":" + index
+                + ",\"paletteId\":\"block:PRINT\"}]}";
+    }
+
     @Test
     void aRequestWithoutTheTokenIsRefused() throws Exception {
         assertEquals(401, post("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}", null).statusCode());
@@ -334,17 +340,23 @@ class McpEndpointTest {
         JsonNode tools = rpc("tools/list", "{}").path("result").path("tools");
         List<String> names = new ArrayList<>();
         tools.forEach(t -> names.add(t.path("name").asText()));
-        assertEquals(List.of("list_files", "list_methods", "list_palette", "read_tree", "list_errors", "insert_block",
-                "set_slot", "delete_block", "apply_edits", "add_method", "edit_variable", "add_argument",
-                "move_block", "edit_signature",
-                "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages", "rename", "open",
-                "list_review", "mark_reviewed", "remove_mark", "undo_change", "undo", "redo", "run_bot", "run_activity",
-                "try_statement", "stop", "quit_studio", "run_state", "read_trace", "list_versions", "checkpoint", "revert",
-                "list_plugins", "plugin_guide", "search_plugins", "add_plugin", "remove_plugin", "set_plugin_version", "list_migrations", "read_migration", "set_migration", "switch_uses", "remove_migrated", "list_params", "set_param_default",
-                "reset_param", "delete_field", "get_settings", "set_setting", "list_templates", "create_project", "fake_snap"), names,
+        assertEquals(List.of("list_files", "list_methods", "list_palette", "read_tree", "list_errors", "edit_code",
+                "add_method", "edit_signature",
+                "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages",
+                "rename", "open", "review", "undo", "redo",
+                "run_bot", "run_activity", "try_statement", "stop", "quit_studio", "run_state", "read_trace",
+                "versions", "plugins", "plugin_guide", "migration", "params", "delete_field", "get_settings",
+                "set_setting", "list_templates", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
-        assertTrue(names.containsAll(McpTools.WHILE_MOVING), "every tool a move lets through is one: "
-                + McpTools.WHILE_MOVING);
+        for (String passes : McpTools.WHILE_MOVING) {
+            String[] key = passes.split(" ");
+            assertTrue(names.contains(key[0]), "every tool a move lets through is one: " + passes);
+            if (key.length == 1) continue;
+            List<String> actions = new ArrayList<>();
+            tools.path(names.indexOf(key[0])).path("inputSchema").path("properties").path("action").path("enum")
+                    .forEach(a -> actions.add(a.asText()));
+            assertTrue(actions.contains(key[1]), "every action a move lets through is one: " + passes + " " + actions);
+        }
         JsonNode snap = tools.path(names.indexOf("fake_snap"));
         assertEquals("integer", snap.path("inputSchema").path("properties").path("size").path("type").asText(),
                 snap.toString());
@@ -396,13 +408,14 @@ class McpEndpointTest {
     void aPluginAddedIsServedAndOneRemovedGoes() throws Exception {
         initialize();
         assertFalse(toolNames().contains("more_snap"));
-        assertEquals("added", text(call("add_plugin", "{\"id\":\"more\"}")));
+        assertEquals("added", text(call("plugins", "{\"action\":\"add\",\"id\":\"more\"}")));
         assertTrue(toolNames().contains("more_snap"), "served without a restart");
         assertEquals("more", text(call("more_snap", "{}")));
 
-        assertEquals("would remove", text(call("remove_plugin", "{\"id\":\"more\"}")));
+        assertEquals("would remove", text(call("plugins", "{\"action\":\"remove\",\"id\":\"more\"}")));
         assertTrue(toolNames().contains("more_snap"), "a preview changes nothing");
-        assertEquals("removed", text(call("remove_plugin", "{\"id\":\"more\",\"deleteFiles\":true,\"confirm\":true}")));
+        assertEquals("removed", text(call("plugins",
+                "{\"action\":\"remove\",\"id\":\"more\",\"deleteFiles\":true,\"confirm\":true}")));
         assertFalse(toolNames().contains("more_snap"));
         assertEquals(List.of("add more", "remove more false false", "remove more true true"), driver.asked);
         assertEquals(1, toolNames().stream().filter("list_files"::equals).count());
@@ -411,22 +424,26 @@ class McpEndpointTest {
     @Test
     void aPluginMovedIsServedAnewOnlyOnceConfirmed() throws Exception {
         initialize();
-        assertEquals("would move", text(call("set_plugin_version", "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\"}")));
+        assertEquals("would move", text(call("plugins",
+                "{\"action\":\"set_version\",\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\"}")));
         assertFalse(toolNames().contains("more_snap"), "a preview changes nothing");
-        assertEquals("asked", text(call("set_plugin_version",
-                "{\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\",\"confirm\":true}")));
+        assertEquals("asked", text(call("plugins",
+                "{\"action\":\"set_version\",\"id\":\"sdk\",\"version\":\"1.4.5-SNAPSHOT\",\"confirm\":true}")));
         assertFalse(toolNames().contains("more_snap"), "nothing moved while the user is asked");
 
-        JsonNode edit = call("checkpoint", "{\"label\":\"x\"}");
+        JsonNode edit = call("versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}");
         assertTrue(isError(edit) && text(edit).contains("Moving sdk: the user is asked on screen.")
-                && text(edit).contains("list_plugins"), "a tool that writes the bot waits for the move: " + edit);
-        JsonNode again = call("set_plugin_version", "{\"id\":\"sdk\",\"version\":\"1.4.4\",\"confirm\":true}");
-        assertTrue(isError(again), "one move at a time: " + again);
+                && text(edit).contains("plugins list"), "an action that writes the bot waits for the move: " + edit);
+        JsonNode again = call("plugins",
+                "{\"action\":\"set_version\",\"id\":\"sdk\",\"version\":\"1.4.4\",\"confirm\":true}");
+        assertTrue(isError(again) && text(again).contains("Wait for it"), "one move at a time: " + again);
         assertEquals("stopped", text(call("stop", "{}")), "a tool that touches neither answers");
+        assertFalse(text(call("plugins", "{\"action\":\"search\"}")).contains("Wait for it"),
+                "an action that touches neither answers");
 
         driver.finishMove();
         assertTrue(toolNames().contains("more_snap"), "the moved plugin's tools are served without a restart");
-        assertEquals("saved", text(call("checkpoint", "{\"label\":\"x\"}")));
+        assertEquals("saved", text(call("versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}")));
         assertEquals(List.of("move sdk 1.4.5-SNAPSHOT false", "move sdk 1.4.5-SNAPSHOT true", "checkpoint x"),
                 driver.asked);
     }
@@ -434,18 +451,22 @@ class McpEndpointTest {
     @Test
     void versionsAndParametersGoToStudio() throws Exception {
         initialize();
-        assertEquals("saved", text(call("checkpoint", "{\"label\":\"Before the loop\"}")));
-        assertEquals("set", text(call("set_param_default", "{\"param\":\"Parameters.rounds\",\"value\":\"3\"}")));
-        assertTrue(isError(call("list_params", "{}")), "what the driver lacks is refused");
+        assertEquals("saved", text(call("versions", "{\"action\":\"checkpoint\",\"label\":\"Before the loop\"}")));
+        assertEquals("set", text(call("params",
+                "{\"action\":\"set_default\",\"param\":\"Parameters.rounds\",\"value\":\"3\"}")));
+        assertTrue(isError(call("params", "{\"action\":\"list\"}")), "what the driver lacks is refused");
+        JsonNode foreign = call("params", "{\"action\":\"set_default\",\"param\":\"x\",\"value\":\"3\",\"confirm\":true}");
+        assertEquals("REFUSED: params: set_default does not take [confirm]; it takes [param, value]", text(foreign),
+                "a field of another action is refused, naming the action's own");
 
         bus.publish(new CoreApplicationEvents.ProgramStartedEvent());
-        JsonNode during = call("revert", "{\"version\":\"abc1234\"}");
+        JsonNode during = call("versions", "{\"action\":\"revert\",\"version\":\"abc1234\"}");
         assertTrue(isError(during) && text(during).contains("Stop it first"), "no revert under a run: " + during);
         bus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
-        assertEquals("reverted", text(call("revert", "{\"version\":\"abc1234\"}")));
-        for (String[] tool : List.of(new String[] {"run_bot", "{}"}, new String[] {"checkpoint", "{\"label\":\"x\"}"},
-                new String[] {"fake_snap", "{\"size\":1}"},
-                new String[] {"insert_block", "{\"bodyId\":\"b\",\"index\":0,\"paletteId\":\"block:PRINT\"}"})) {
+        assertEquals("reverted", text(call("versions", "{\"action\":\"revert\",\"version\":\"abc1234\"}")));
+        for (String[] tool : List.of(new String[] {"run_bot", "{}"},
+                new String[] {"versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}"},
+                new String[] {"fake_snap", "{\"size\":1}"}, new String[] {"edit_code", printAt("b", 0)})) {
             JsonNode after = call(tool[0], tool[1]);
             assertTrue(isError(after) && text(after).contains("switching the project"), tool[0] + " before the reload: " + after);
         }
@@ -462,8 +483,7 @@ class McpEndpointTest {
     @Test
     void anAcceptedEditIsCommittedOnItsOwn() throws Exception {
         initialize();
-        JsonNode insert = call("insert_block", "{\"bodyId\":\"" + bodyOf("", "run")
-                + "\",\"index\":1,\"paletteId\":\"block:PRINT\"}");
+        JsonNode insert = call("edit_code", printAt(bodyOf("", "run"), 1));
         assertFalse(isError(insert), insert.toString());
         assertTrue(text(insert).contains("Applied."), text(insert));
         // The ids it shifted come back with it, so the assistant need not read the tree again.
@@ -478,8 +498,7 @@ class McpEndpointTest {
     void aFileThatIsNotOpenIsEditedByName() throws Exception {
         initialize();
         assertTrue(text(call("list_files", "{}")).contains("com/mybot/Other.java"));
-        JsonNode insert = call("insert_block", "{\"file\":\"Other\",\"bodyId\":\"" + bodyOf("Other", "go")
-                + "\",\"index\":0,\"paletteId\":\"block:PRINT\"}");
+        JsonNode insert = call("edit_code", "{\"file\":\"Other\"," + printAt(bodyOf("Other", "go"), 0).substring(1));
         assertFalse(isError(insert), insert.toString());
         assertEquals(List.of("Other.java"), bot.commits);
         assertEquals(SOURCE, bot.files.get(SUBJECT), "the open file is untouched");
@@ -495,7 +514,7 @@ class McpEndpointTest {
     @Test
     void aRefusedEditCommitsNothingAndSaysWhy() throws Exception {
         initialize();
-        JsonNode insert = call("insert_block", "{\"bodyId\":\"nowhere\",\"index\":0,\"paletteId\":\"block:PRINT\"}");
+        JsonNode insert = call("edit_code", printAt("nowhere", 0));
         assertTrue(isError(insert), insert.toString());
         assertTrue(text(insert).startsWith("REFUSED"), text(insert));
         assertTrue(bot.commits.isEmpty());
@@ -506,7 +525,7 @@ class McpEndpointTest {
     void severalEditsLandAsOneStepOrNotAtAll() throws Exception {
         initialize();
         String body = bodyOf("", "run");
-        JsonNode both = call("apply_edits", "{\"edits\":["
+        JsonNode both = call("edit_code", "{\"edits\":["
                 + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"},"
                 + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":1,\"paletteId\":\"block:PRINT\"}]}");
         assertFalse(isError(both), both.toString());
@@ -514,7 +533,7 @@ class McpEndpointTest {
         String after = bot.files.get(SUBJECT);
         assertEquals(2, after.split("System.out.println", -1).length - 1, after);
 
-        JsonNode half = call("apply_edits", "{\"edits\":["
+        JsonNode half = call("edit_code", "{\"edits\":["
                 + "{\"action\":\"insert\",\"bodyId\":\"" + body + "\",\"index\":0,\"paletteId\":\"block:PRINT\"},"
                 + "{\"action\":\"delete\",\"blockId\":\"nowhere\"}]}");
         assertTrue(isError(half), half.toString());
@@ -522,10 +541,21 @@ class McpEndpointTest {
         assertEquals(1, bot.commits.size(), "nothing of a refused batch is kept");
         assertEquals(after, bot.files.get(SUBJECT));
 
-        JsonNode short1 = call("apply_edits", "{\"edits\":[{\"action\":\"insert\",\"bodyId\":\"" + body + "\"}]}");
+        JsonNode short1 = call("edit_code", "{\"edits\":[{\"action\":\"insert\",\"bodyId\":\"" + body + "\"}]}");
         assertTrue(isError(short1), short1.toString());
-        assertEquals("REFUSED: apply_edits: 'edits[0].index' is required for insert", text(short1),
+        assertEquals("REFUSED: edit_code: 'edits[0].index' is required for insert", text(short1),
                 "the contract checks what the schema cannot say: which fields an action needs");
+
+        // A move is one more edit: the second print goes above the first.
+        String tree = text(call("read_tree", "{\"method\":\"run\"}"));
+        Matcher prints = Pattern.compile("\"id\":\"([^\"]+)\"[^{}]*?System.out.println").matcher(tree);
+        assertTrue(prints.find() && prints.find(), tree);
+        JsonNode moved = call("edit_code", "{\"edits\":[{\"action\":\"move\",\"blockId\":\"" + prints.group(1)
+                + "\",\"bodyId\":\"" + body + "\",\"index\":0}]}");
+        assertFalse(isError(moved), moved.toString());
+        assertEquals(2, bot.commits.size(), moved.toString());
+        String reordered = bot.files.get(SUBJECT);
+        assertTrue(reordered.indexOf("System.out.println") < reordered.indexOf("int count"), reordered);
     }
 
     @Test
@@ -551,7 +581,7 @@ class McpEndpointTest {
         initialize();
         assertEquals("renamed", text(call("rename", "{\"symbol\":\"Other.go\",\"to\":\"start\"}")));
         assertEquals(List.of("rename Other.go start"), driver.asked);
-        JsonNode review = call("list_review", "{}");
+        JsonNode review = call("review", "{\"action\":\"list\"}");
         assertTrue(isError(review) && text(review).startsWith("REFUSED"), review.toString());
     }
 
