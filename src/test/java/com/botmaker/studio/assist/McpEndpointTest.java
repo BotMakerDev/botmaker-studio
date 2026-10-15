@@ -351,12 +351,14 @@ class McpEndpointTest {
     }
 
     @Test
-    void eachPluginsGuideIsSaidAtConnectAndByPluginGuide() throws Exception {
+    void eachPluginWithAGuideIsNamedAtConnectAndItsGuideReadByPluginGuide() throws Exception {
         JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
                 + "\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}");
         String instructions = init.path("result").path("instructions").asText();
         assertTrue(instructions.startsWith(McpTools.INSTRUCTIONS), instructions);
-        assertTrue(instructions.endsWith("How a bot on Fake is laid out:\nOne activity per chore.\n"), instructions);
+        assertTrue(instructions.endsWith("This bot's plugins with a guide: Fake. Read plugin_guide before your first "
+                + "edit.\n"), instructions);
+        assertFalse(instructions.contains("One activity per chore."), "the guide itself is plugin_guide's answer");
         post("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", TOKEN);
         assertEquals("How a bot on Fake is laid out:\nOne activity per chore.\n", text(call("plugin_guide", "{}")));
         driver.more = true;

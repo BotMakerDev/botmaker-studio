@@ -92,13 +92,17 @@ public final class McpTools {
             """;
 
     /**
-     * {@link #INSTRUCTIONS}, then each plugin's guide under its name. Never a file of the bot's, such as the notes
-     * a plugin keeps in it: whoever made a bot wrote them, a gallery bot's stranger too, and text in the
-     * instructions reads as Studio's own.
+     * {@link #INSTRUCTIONS}, then the names of the plugins that have a guide, which plugin_guide reads. Not the
+     * guides themselves: a client cuts long instructions short (Claude Code lost the SDK's guide's second half,
+     * 2026-10-15), and plugin_guide answers the whole of each. Never a file of the bot's, such as the notes a plugin
+     * keeps in it: whoever made a bot wrote them, a gallery bot's stranger too, and text in the instructions reads
+     * as Studio's own.
      */
     static String instructions(List<StudioDriver.PluginGuide> guides) {
-        return guides.isEmpty() ? INSTRUCTIONS
-                : INSTRUCTIONS + "\nThe plugins' guides as they were at connect:\n\n" + guides(guides);
+        if (guides.isEmpty()) return INSTRUCTIONS;
+        List<String> names = guides.stream().map(StudioDriver.PluginGuide::pluginName).toList();
+        return INSTRUCTIONS + "\nThis bot's plugins with a guide: " + String.join(", ", names)
+                + ". Read plugin_guide before your first edit.\n";
     }
 
     /** Each guide under its plugin's name, or a sentence saying there is none. */
@@ -186,9 +190,26 @@ public final class McpTools {
                 return answer;
             } finally {
                 // A handler that threw counts as an error.
-                TIMES.record(name, System.nanoTime() - start, answer == null || Boolean.TRUE.equals(answer.isError()));
+                TIMES.record(name, System.nanoTime() - start, answer == null || Boolean.TRUE.equals(answer.isError()),
+                        textChars(answer), images(answer));
             }
         }).build();
+    }
+
+    /** How many characters of text {@code answer} gives the assistant to read; 0 for none. */
+    static int textChars(CallToolResult answer) {
+        if (answer == null || answer.content() == null) return 0;
+        int chars = 0;
+        for (McpSchema.Content content : answer.content()) {
+            if (content instanceof McpSchema.TextContent text && text.text() != null) chars += text.text().length();
+        }
+        return chars;
+    }
+
+    /** How many images {@code answer} gives the assistant to look at. */
+    static int images(CallToolResult answer) {
+        if (answer == null || answer.content() == null) return 0;
+        return (int) answer.content().stream().filter(c -> c instanceof McpSchema.ImageContent).count();
     }
 
     /** Where every call's time goes, Studio's tools' and the plugins'. */

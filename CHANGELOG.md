@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The assistant's costly answers show up.** `tool-times.tsv` in Studio's cache now also records how much text and
+  how many images each tool call answered, so `sort -k5 -n` finds the replies that cost the most. A file written
+  before these columns is moved aside to `tool-times.old.tsv`. At connect, the MCP server names the bot's plugins
+  that have a guide and points to `plugin_guide`. It no longer pastes the guides into its instructions, which
+  clients cut short.
+
 - **A plugin's value writes are undone with ↶.** Each `PluginValues` write is one step of the editor's undo, named,
   and a plugin's `History.batch` makes several one step under its own label; ↶/↷ put every file it wrote back. Before,
   only a Project History safety version could take one back. A batch takes one safety version, not one per write.
