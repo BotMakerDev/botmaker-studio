@@ -237,7 +237,9 @@ public final class AssistTurn {
             // An enum's constant has no initialiser: what it holds is spelled through the grammar instead.
             String held = constant.initializer() != null ? constant.initializer()
                     : workspace.grammar().initializerOfAny(constant.member()).map(JavaValue::source).orElse(null);
-            if (held == null || workspace.grammar().valueOf(type.get(), held).isEmpty()) {
+            // Read with the bot's own names: an initialiser may name another constant (Way.of(Screens.HOME, …)).
+            if (held == null || SourceNode.parse(held)
+                    .flatMap(node -> workspace.grammar().read(type.get(), node, workspace.lookup())).isEmpty()) {
                 return Outcome.Refused.because("`" + text + "` is not a " + nameOf(expected) + ".");
             }
             JavaValue reference = reference(constant);

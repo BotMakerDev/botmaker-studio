@@ -96,6 +96,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **`edit_code` refused a constant whose value names another constant.** `Screens.MARKET` (built `Way.of(Screens.TAVERN,
+  …)`) and `Pictures.PLAY_OFF_TAVERN` (`.activities(List.of(Activities.Tavern.class))`) were "not a GameScreen", "not
+  an ImageTemplate": the constant's initialiser was read without the bot's own names. It is read with them now.
 - **A dev reload that broke the bot showed nothing broken.** The bot's parsed index was cached by its jars' paths,
   and a `-SNAPSHOT` rebuilt in place keeps its path, so Migrate and `migration list` read the bot as it compiled
   against the old jar. Each jar's size and time are part of the key now.

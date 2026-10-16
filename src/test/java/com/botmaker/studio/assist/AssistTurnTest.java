@@ -207,6 +207,35 @@ public class AssistTurnTest {
                 + turn.source());
     }
 
+    /** A constant whose initialiser names another of the bot's constants, as a screen names the one it is from. */
+    @Test
+    void aSlotTakesAConstantHoldingAnotherConstant() {
+        String pic = Pic.class.getCanonicalName();
+        String pics = Pics.class.getCanonicalName();
+        String source = SOURCE
+                .replace("public class Subject {", "public class Subject {\n    public static final " + pic
+                        + " ORE = new " + pic + "(\"ore.png\");\n    public static final " + pics + " BOTH = "
+                        + pics + ".of(Subject.ORE);")
+                .replace("System.out.println(count);", pics + ".take(null);");
+        ValueGrammar grammar = ValueGrammar.of(List.of(
+                PluginType.value(Pic.class).fresh(() -> new Pic("default.png"))
+                        .editor(NO_EDITOR).writtenAs(Pic::new, Pic::path),
+                PluginType.value(Pics.class).fresh(() -> Pics.of(new Pic("default.png")))
+                        .editor(NO_EDITOR).writtenAsEach(Pics::of, Pics::all)), List.of());
+        List<Constant> constants = List.of(
+                new Constant("com.mybot.Subject", "ORE", "new " + pic + "(\"ore.png\")"),
+                new Constant("com.mybot.Subject", "BOTH", pics + ".of(Subject.ORE)"));
+        AssistWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+                base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
+                constants), source);
+        String slot = statement(turn, pics + ".take").slots().getFirst().id();
+
+        Outcome set = turn.setSlot(slot, "Subject.BOTH");
+        assertInstanceOf(Outcome.Accepted.class, set, set + " " + turn.errors());
+        assertTrue(turn.source().contains(".take(Subject.BOTH)"), turn.source());
+    }
+
     @Test
     void aTestIsBuiltInItsSlotFromAnOperatorWhoseOperandsAreSlotsInTurn() {
         String source = SOURCE.replace("System.out.println(count);",
