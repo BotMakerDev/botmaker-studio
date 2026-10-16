@@ -54,31 +54,26 @@ public final class MigrationTypes {
 
     private static final Drawn NONE = () -> ctx -> null;
 
-    /** Every declaration, the old ones pointing at their replacements. */
+    /** Every declaration, old and new; the bot's author pairs them. */
     @SuppressWarnings("removal")
     static List<PluginType<?>> types() {
         return List.of(
-                PluginType.value(OldShot.class).fresh(() -> new OldShot("", 0)).editor(NONE).writtenAsRecord()
-                        .replacedBy(Shot.class),
+                PluginType.value(OldShot.class).fresh(() -> new OldShot("", 0)).editor(NONE).writtenAsRecord(),
                 PluginType.value(Shot.class).fresh(() -> new Shot("", 0, false)).editor(NONE).writtenAsRecord(),
-                PluginType.value(OldArea.class).fresh(() -> new OldArea(0, 0)).editor(NONE).writtenAsRecord()
-                        .replacedBy(Area.class),
+                PluginType.value(OldArea.class).fresh(() -> new OldArea(0, 0)).editor(NONE).writtenAsRecord(),
                 PluginType.value(Area.class).fresh(() -> new Area(0, 0, 0)).editor(NONE).writtenAsRecord(),
                 PluginType.value(OldFrame.class).fresh(() -> new OldFrame("", new OldArea(0, 0))).editor(NONE)
-                        .writtenAsRecord().replacedBy(Frame.class),
+                        .writtenAsRecord(),
                 PluginType.value(Frame.class).fresh(() -> new Frame("", new Area(0, 0, 0))).editor(NONE)
                         .writtenAsRecord(),
-                PluginType.value(OldTint.class).firstConstant().editor(NONE).writtenAsConstant().replacedBy(Tint.class),
+                PluginType.value(OldTint.class).firstConstant().editor(NONE).writtenAsConstant(),
                 PluginType.value(Tint.class).firstConstant().editor(NONE).writtenAsConstant(),
-                PluginType.value(OldPaint.class).fresh(() -> new OldPaint(OldTint.RED)).editor(NONE).writtenAsRecord()
-                        .replacedBy(Paint.class),
+                PluginType.value(OldPaint.class).fresh(() -> new OldPaint(OldTint.RED)).editor(NONE).writtenAsRecord(),
                 PluginType.value(Paint.class).fresh(() -> new Paint(Tint.CRIMSON)).editor(NONE).writtenAsRecord(),
-                PluginType.value(OldBadge.class).fresh(() -> new OldBadge("")).editor(NONE).writtenAsRecord()
-                        .replacedBy(Badge.class),
+                PluginType.value(OldBadge.class).fresh(() -> new OldBadge("")).editor(NONE).writtenAsRecord(),
                 PluginType.value(Tag.class).fresh(() -> new Tag("")).editor(NONE).writtenAsRecord(),
                 PluginType.value(Badge.class).fresh(() -> new Badge(new Tag(""))).editor(NONE).writtenAsRecord(),
-                PluginType.value(OldLabel.class).fresh(() -> new OldLabel("")).editor(NONE).writtenAsRecord()
-                        .replacedBy(Label.class),
+                PluginType.value(OldLabel.class).fresh(() -> new OldLabel("")).editor(NONE).writtenAsRecord(),
                 PluginType.value(Label.class).fresh(() -> new Label("", "")).editor(NONE).writtenAsRecord());
     }
 }

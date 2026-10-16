@@ -9,6 +9,7 @@ import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
 import com.botmaker.studio.project.managed.MigrationTypes.OldTint;
 import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+import com.botmaker.studio.project.managed.MigrationTypes.Tint;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -85,7 +86,7 @@ class MigrationSummaryTest {
     void aPairIsReadAsTheWindowSeedsIt() {
         String text = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldShot.class, null);
         List<String> lines = text.lines().toList();
-        assertEquals(OLD + " → " + NEW + ", the replacement its plugin names.", lines.getFirst());
+        assertEquals(OLD + " → " + NEW + ".", lines.getFirst());
         assertTrue(lines.contains("- file (String): from file — or: fixed <String>"), text);
         assertTrue(lines.contains("- grey (boolean): fixed false — or: fixed <boolean>"), text);
         assertTrue(lines.contains("Not in the bot yet: the mapping above is a first guess."), text);
@@ -116,7 +117,7 @@ class MigrationSummaryTest {
         assertTrue(frame.contains("It goes through " + MigrationSummary.type(OldArea.class) + " → "
                 + MigrationSummary.type(Area.class) + ", each a mapping of its own (migration read)."), frame);
 
-        String tint = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, null);
+        String tint = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, Tint.class);
         assertTrue(tint.contains("each can become CRIMSON, NAVY:\n- RED → CRIMSON\n- BLUE → NAVY"), tint);
 
         String refused = MigrationSummary.mapping(GRAMMAR, DECLARED, List.of(), OldTint.class, Shot.class);

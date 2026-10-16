@@ -3,7 +3,6 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -235,13 +234,12 @@ public final class MigrationSteps {
         return List.copyOf(out);
     }
 
-    /** What the plugin declaring {@code type} says replaces it, or {@code null}. */
+    /**
+     * What replaces {@code type}: always {@code null} since contract 0.10.0, which took the plugin's pointer away —
+     * the bot's author picks the target. Kept for its callers until the migration engine replaces them.
+     */
     public static Class<?> replacementOf(ValueGrammar grammar, Class<?> type) {
-        try {
-            return grammar.type(type).map(PluginType::replacedBy).orElse(null);
-        } catch (RuntimeException | LinkageError e) {
-            return null;
-        }
+        return null;
     }
 
     /** Whether an open set the bot can migrate holds values of {@code type}: what offers Migrate type… on one. */
