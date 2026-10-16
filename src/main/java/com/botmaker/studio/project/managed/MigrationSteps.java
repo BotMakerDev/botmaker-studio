@@ -30,7 +30,8 @@ import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.PackageDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
-import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
+import org.eclipse.jdt.core.dom.MemberValuePair;
+import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchExpression;
@@ -454,11 +455,14 @@ public final class MigrationSteps {
 
         MethodDeclaration method = ast.newMethodDeclaration();
         method.setName(ast.newSimpleName(name));
-        SingleMemberAnnotation mark = ast.newSingleMemberAnnotation();
+        // A whole type's rule (2026-10-16): @Migrate(value = Old.class, kind = Migrate.Kind.TYPE).
+        NormalAnnotation mark = ast.newNormalAnnotation();
         mark.setTypeName(ast.newSimpleName(Migrate.class.getSimpleName()));
         TypeLiteral literal = ast.newTypeLiteral();
         literal.setType(source.get());
-        mark.setValue(literal);
+        values(mark).add(pair(ast, "value", literal));
+        values(mark).add(pair(ast, "kind", ast.newName(new String[] {Migrate.class.getSimpleName(),
+                Migrate.Kind.class.getSimpleName(), Migrate.Kind.TYPE.name()})));
         modifiers(method).add(mark);
         modifiers(method).addAll(ast.newModifiers(Modifier.PUBLIC | Modifier.STATIC));
         method.setReturnType2(target.get());
@@ -860,5 +864,17 @@ public final class MigrationSteps {
     @SuppressWarnings("unchecked")
     private static List<Object> statements(Block block) {
         return block.statements();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> values(NormalAnnotation annotation) {
+        return annotation.values();
+    }
+
+    private static MemberValuePair pair(AST ast, String name, Expression value) {
+        MemberValuePair pair = ast.newMemberValuePair();
+        pair.setName(ast.newSimpleName(name));
+        pair.setValue(value);
+        return pair;
     }
 }

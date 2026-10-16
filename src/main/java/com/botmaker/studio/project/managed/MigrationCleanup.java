@@ -195,15 +195,7 @@ public final class MigrationCleanup {
      */
     private static Map<Path, Set<Integer>> brokenLines(BotIndex before, BotIndex after, Map<Path, String> rewrites) {
         Map<Path, Set<Integer>> out = new LinkedHashMap<>();
-        Map<Path, List<CompileGuard.Problem>> was = before.errors();
-        after.errors().forEach((file, problems) -> {
-            // By what the error says, not where: a switch shortens the text, and an error the file already had
-            // further down moves without being new.
-            List<CompileGuard.Problem> introduced = new ArrayList<>(problems);
-            for (CompileGuard.Problem old : was.getOrDefault(file, List.of())) {
-                introduced.stream().filter(now -> sameError(now, old)).findFirst().ifPresent(introduced::remove);
-            }
-            if (introduced.isEmpty()) return;
+        before.introduced(after).forEach((file, introduced) -> {
             String text = after.sources().getOrDefault(file, "");
             String original = before.sources().getOrDefault(file, text);
             int shift = rewrites.containsKey(file) ? lines(text) - lines(original) : 0;
@@ -511,11 +503,6 @@ public final class MigrationCleanup {
     /** Whether {@code use} is the name in an import: what a switch leaves, and a removal takes with it. */
     private static boolean isImport(Usages.Usage use) {
         return use.text().startsWith("import ");
-    }
-
-    /** One error and another the same but for where they are. */
-    private static boolean sameError(CompileGuard.Problem a, CompileGuard.Problem b) {
-        return a.id() == b.id() && a.arguments().equals(b.arguments()) && a.message().equals(b.message());
     }
 
     /** {@code source} without {@code import static …Holder.NAME;} for {@code member}. */

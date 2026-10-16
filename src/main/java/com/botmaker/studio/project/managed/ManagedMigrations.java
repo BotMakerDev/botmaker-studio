@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Migrated;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
@@ -129,7 +130,7 @@ public final class ManagedMigrations {
                     @Override
                     public boolean visit(MethodDeclaration method) {
                         Annotation mark = BotAnnotation.MIGRATE.on(method);
-                        if (mark != null) out.add(method(file, source, method, mark, grammar));
+                        if (mark != null && wholeType(mark)) out.add(method(file, source, method, mark, grammar));
                         return false;
                     }
                 });
@@ -187,7 +188,27 @@ public final class ManagedMigrations {
                 Map.copyOf(arms), problem);
     }
 
-    /** The class literal {@code @Migrate(Old.class)} names, as a value's type. */
+    /**
+     * Whether {@code mark} is a whole type's rule, {@code kind = Migrate.Kind.TYPE}: the only kind whose values are
+     * copied; a member's rule is the engine's ({@code migrate/}, 2026-10-16).
+     */
+    private static boolean wholeType(Annotation mark) {
+        if (!(mark instanceof NormalAnnotation normal)) return false;
+        for (Object each : normal.values()) {
+            MemberValuePair pair = (MemberValuePair) each;
+            if (pair.getName().getIdentifier().equals("kind")) {
+                String constant = switch (pair.getValue()) {
+                    case QualifiedName qualified -> qualified.getName().getIdentifier();
+                    case SimpleName simple -> simple.getIdentifier();
+                    default -> "";
+                };
+                return Migrate.Kind.TYPE.name().equals(constant);
+            }
+        }
+        return false;
+    }
+
+    /** The class literal {@code @Migrate(value = Old.class, kind = TYPE)} names, as a value's type. */
     private static Type sourceOf(Annotation mark, ValueGrammar grammar) {
         Expression value = null;
         if (mark instanceof SingleMemberAnnotation single) value = single.getValue();

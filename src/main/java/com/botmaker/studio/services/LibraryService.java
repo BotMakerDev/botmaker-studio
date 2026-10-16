@@ -3,6 +3,7 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostServices;
@@ -261,6 +262,8 @@ public final class LibraryService {
         onFx(() -> state.setResolvedClasspath(classpath));
         PluginHost.bind(classpath, HostServices.forProject(config),
                 StudioProjectSettings.devModeIn(config.projectPath()));
+        // A -SNAPSHOT rebuilt in place keeps its old API readable for the author's migration (2026-10-16).
+        ApiCache.shared().loaded(config.projectPath(), classpath);
         // A plugin just added brings its managed holders with it (2026-09-26): written from what the plugin
         // declares, never over a file, never into main. The explorer redraws on the event below.
         HostPluginValues.createMissing();

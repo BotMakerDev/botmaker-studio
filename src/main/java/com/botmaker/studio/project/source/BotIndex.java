@@ -155,6 +155,16 @@ public final class BotIndex {
         return build(sources, classpath, root);
     }
 
+    /**
+     * These sources and {@code added} parsed against {@code classpath} — the bot as it compiled with the jars it
+     * used to have, plus a source naming what the bot itself no longer can (2026-10-16, {@code migrate.Rules}).
+     */
+    public BotIndex against(List<String> classpath, Map<Path, String> added) {
+        Map<Path, String> all = new LinkedHashMap<>(sources);
+        all.putAll(added);
+        return build(all, classpath, root);
+    }
+
     /** Every source, by absolute path, in walk order. */
     public Map<Path, String> sources() {
         return sources;
@@ -198,17 +208,46 @@ public final class BotIndex {
      * what it had under its old one.
      */
     public Optional<String> firstNewError(BotIndex after, Map<Path, Path> moves) {
-        Map<Path, List<Problem>> before = new LinkedHashMap<>();
-        errors().forEach((file, problems) -> before.put(moves.getOrDefault(file, file), problems));
-        for (Map.Entry<Path, List<Problem>> entry : after.errors().entrySet()) {
-            List<Problem> introduced = new ArrayList<>(entry.getValue());
-            for (Problem existing : before.getOrDefault(entry.getKey(), List.of())) introduced.remove(existing);
-            if (introduced.isEmpty()) continue;
+        for (Map.Entry<Path, List<Problem>> entry : introduced(after, moves).entrySet()) {
             String code = after.sources.getOrDefault(entry.getKey(), "");
             return Optional.of(entry.getKey().getFileName() + ", "
-                    + CompileGuard.describe(introduced, code).getFirst());
+                    + CompileGuard.describe(entry.getValue(), code).getFirst());
         }
         return Optional.empty();
+    }
+
+    /**
+     * Each error {@code after} has that this index did not, by file, in file order — a moved file compared under
+     * its new path with what it had under its old one.
+     *
+     * <p><b>By what javac says, not where</b> (2026-10-16, from {@code MigrationCleanup}): an edit that shortens a
+     * file moves every error below it, and an error the file already had is not new for having moved. Two errors
+     * javac words alike count once each, so a second one is still new.
+     */
+    public Map<Path, List<Problem>> introduced(BotIndex after, Map<Path, Path> moves) {
+        Map<Path, List<Problem>> before = new LinkedHashMap<>();
+        errors().forEach((file, problems) -> before.put(moves.getOrDefault(file, file), problems));
+        Map<Path, List<Problem>> out = new LinkedHashMap<>();
+        after.errors().forEach((file, problems) -> {
+            List<Problem> had = new ArrayList<>(before.getOrDefault(file, List.of()));
+            List<Problem> added = new ArrayList<>();
+            for (Problem problem : problems) {
+                Optional<Problem> same = had.stream().filter(old -> sameError(old, problem)).findFirst();
+                if (same.isPresent()) had.remove(same.get());
+                else added.add(problem);
+            }
+            if (!added.isEmpty()) out.put(file, List.copyOf(added));
+        });
+        return out;
+    }
+
+    /** The same, with nothing moved. */
+    public Map<Path, List<Problem>> introduced(BotIndex after) {
+        return introduced(after, Map.of());
+    }
+
+    private static boolean sameError(Problem a, Problem b) {
+        return a.id() == b.id() && a.arguments().equals(b.arguments()) && a.message().equals(b.message());
     }
 
     /** The same, with nothing moved. */

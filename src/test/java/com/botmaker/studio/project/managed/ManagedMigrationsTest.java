@@ -78,22 +78,22 @@ class ManagedMigrationsTest {
             import com.botmaker.studio.project.managed.MigrationTypes.*;
 
             public final class Migrations {
-                @Migrate(OldShot.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldShot.class)
                 public static Shot shot(String file, int threshold) {
                     return new Shot(file, threshold, true);
                 }
 
-                @Migrate(OldArea.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldArea.class)
                 public static Area area(int x, int y) {
                     return new Area(x, y, 10);
                 }
 
-                @Migrate(OldFrame.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldFrame.class)
                 public static Frame frame(String file, Area area) {
                     return new Frame(file, area);
                 }
 
-                @Migrate(OldTint.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldTint.class)
                 public static Tint tint(OldTint old) {
                     return switch (old) {
                         case RED -> Tint.CRIMSON;
@@ -101,7 +101,7 @@ class ManagedMigrationsTest {
                     };
                 }
 
-                @Migrate(OldPaint.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldPaint.class)
                 public static Paint paint(Tint tint) {
                     return new Paint(tint);
                 }
@@ -223,7 +223,7 @@ class ManagedMigrationsTest {
 
     @Test
     void twoMethodsForOnePairAreBothRefused(@TempDir Path root) {
-        String twice = MIGRATIONS.replace("@Migrate(OldArea.class)", "@Migrate(OldShot.class)")
+        String twice = MIGRATIONS.replace("@Migrate(kind = Migrate.Kind.TYPE, value = OldArea.class)", "@Migrate(kind = Migrate.Kind.TYPE, value = OldShot.class)")
                 .replace("public static Area area(int x, int y) {\n        return new Area(x, y, 10);",
                         "public static Shot again(String file, int threshold) {\n        return new Shot(file, 0, true);");
         BotIndex index = index(root, Map.of(file(root, "Migrations"), twice));

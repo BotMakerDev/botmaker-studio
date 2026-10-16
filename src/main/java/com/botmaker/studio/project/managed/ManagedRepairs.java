@@ -169,7 +169,16 @@ public final class ManagedRepairs {
                         : ", as " + kept) + "; delete it once nothing uses it.");
                 continue;
             }
-            if (mark.kind() != Kind.METHOD || !failsToCompile(current, mark)) continue;
+            // An open set's constants and a parameter have no first value to take: listed, never skipped
+            // (2026-10-16), so the author writes a @Migrate rule for what they use.
+            if (mark.kind() != Kind.METHOD) {
+                if (failsToCompile(current, mark)) {
+                    left.add(mark.qualified() + " (" + spelled + ") no longer compiles, so it was kept as written;"
+                            + " write a @Migrate rule for what it uses, or fix it by hand.");
+                }
+                continue;
+            }
+            if (!failsToCompile(current, mark)) continue;
             String text = sources.get(mark.file());
             Optional<JavaValue> initial = value.initial() == null ? Optional.empty()
                     : grammar.spell(value.type(), value.initial());

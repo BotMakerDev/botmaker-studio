@@ -14,6 +14,19 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **One migration engine behind `@Migrate` rules** (`migrate/`, not yet shown in a window). A bot's rule names the
+  old method, constructor, field or whole type by its own signature, and Studio finds that element in the jars the
+  bot used to compile against. It then rewrites every use in the project through the rule's body, keeping each
+  use's own spelling. A chain such as `named("home").marker("a").marker("b")` comes out whole. Rules with neither
+  or both of `value` and `name`, rules that match nothing, and two rules for one element are refused with a reason.
+  With no rule, nothing is rewritten. A rewrite that would not compile is left as written and its function is
+  marked `@Refactor`. `migrate.Broken` lists what the new jars break and whether a rule covers each element.
+- **The old API survives a `-SNAPSHOT` rebuild.** Each load keeps a copy of a `-SNAPSHOT` jar whose bytes changed
+  (`~/.cache/botmaker/api`), so a dev reload can still read what the bot used to call.
+- **One finder of uses** (`nav/Uses`): calls, `new`, `this(…)`/`super(…)`, method references, field reads and
+  writes, `case` labels, type names and imports, matched by binding. Signature changes (`MethodReferences`) and
+  migrations both use it.
+
 - **The assistant's costly answers show up.** `tool-times.tsv` in Studio's cache now also records how much text and
   how many images each tool call answered, so `sort -k5 -n` finds the replies that cost the most. A file written
   before these columns is moved aside to `tool-times.old.tsv`. At connect, the MCP server names the bot's plugins
@@ -107,6 +120,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A type migration's method is a whole type's rule**: written `@Migrate(value = Old.class, kind = Migrate.Kind.TYPE)`.
+  Only such rules copy values. A bare `@Migrate(Old.class)` is now a method rule.
+- **An upgrade lists an open set's constant, or a parameter, that no longer compiles** instead of passing over it in
+  silence. It is kept as written, with a hint to write a `@Migrate` rule for what it uses.
+- **A refactor's compile check compares errors by what javac says, not where.** An edit that shortens a file no
+  longer makes an error further down look new.
 - **Migrating a retired type no longer preselects a plugin's replacement.** Contract 0.10.0 took the plugin's
   `replacedBy` pointer away: the bot's author picks the target type, in the migration window or with
   `migration set`.

@@ -183,10 +183,12 @@ class MigrationStepsTest {
         String migrations = plan.rewrites().get(file(root, "Migrations"));
         assertTrue(migrations.startsWith("package com.bot;"), migrations);
         // The test grammar spells a nested class by its outer one: MigrationTypes.Frame.
-        assertTrue(flat(migrations).contains("@Migrate(MigrationTypes.OldFrame.class) public static MigrationTypes.Frame"
+        assertTrue(flat(migrations).contains("@Migrate(value = MigrationTypes.OldFrame.class, kind = Migrate.Kind.TYPE)"
+                + " public static MigrationTypes.Frame"
                 + " frame(String file, MigrationTypes.Area area){return new MigrationTypes.Frame(file, area);}"),
                 migrations);
-        assertTrue(flat(migrations).contains("@Migrate(MigrationTypes.OldArea.class) public static MigrationTypes.Area"
+        assertTrue(flat(migrations).contains("@Migrate(value = MigrationTypes.OldArea.class, kind = Migrate.Kind.TYPE)"
+                + " public static MigrationTypes.Area"
                 + " area(int x, int y){return new MigrationTypes.Area(x, y, 0);}"), migrations);
         MigrationSteps.Row row = draft.rows().getFirst();
         assertEquals("OldFrames.DOOR", row.name());
@@ -236,7 +238,8 @@ class MigrationStepsTest {
         String twins = after.get(file(root, "Migrations")).replace("public static MigrationTypes.Shot shot(",
                 "public static MigrationTypes.Shot shot2(String file, int threshold) {\n"
                         + "        return new MigrationTypes.Shot(file, threshold, false);\n    }\n\n"
-                        + "    @Migrate(MigrationTypes.OldShot.class)\n    public static MigrationTypes.Shot shot(");
+                        + "    @Migrate(value = MigrationTypes.OldShot.class, kind = Migrate.Kind.TYPE)\n"
+                        + "    public static MigrationTypes.Shot shot(");
         Map<Path, String> doubled = new LinkedHashMap<>(after);
         doubled.put(file(root, "Migrations"), twins);
         Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class, MigrationSteps.plan(

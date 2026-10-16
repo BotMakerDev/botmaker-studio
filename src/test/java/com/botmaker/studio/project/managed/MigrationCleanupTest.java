@@ -93,7 +93,7 @@ class MigrationCleanupTest {
                 private Migrations() {
                 }
 
-                @Migrate(OldShot.class)
+                @Migrate(kind = Migrate.Kind.TYPE, value = OldShot.class)
                 public static Shot shot(String file, int threshold) {
                     return new Shot(file, threshold, false);
                 }
@@ -196,7 +196,8 @@ class MigrationCleanupTest {
         String beside = OLD_SHOTS.replace("    private OldShots() {}", """
                     private OldShots() {}
 
-                    @com.botmaker.plugin.api.meta.Migrate(OldShot.class)
+                    @com.botmaker.plugin.api.meta.Migrate(value = OldShot.class,
+                            kind = com.botmaker.plugin.api.meta.Migrate.Kind.TYPE)
                     public static com.botmaker.studio.project.managed.MigrationTypes.Shot shot(String file,
                                                                                          int threshold) {
                         return new com.botmaker.studio.project.managed.MigrationTypes.Shot(file, threshold, false);

@@ -212,6 +212,36 @@ class ManagedRepairsTest {
         assertTrue(plan.isEmpty() && plan.sentences().isEmpty(), plan.sentences().toString());
     }
 
+    /**
+     * An open set's constant that no longer compiles has no first value to take: it is kept as written and listed,
+     * never skipped (2026-10-16), so the author writes a {@code @Migrate} rule for what it uses.
+     */
+    @Test
+    void anOpenSetConstantThatNoLongerCompilesIsListed(@TempDir Path dir) {
+        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        Path words = holder(config, "Words");
+        BotIndex index = index(config, Map.of(words, """
+                package %s.plugins.test;
+
+                import com.botmaker.studio.project.managed.TestValue;
+
+                @TestValue(TestValue.Id.WORDS)
+                public final class Words {
+                    public static final String HELLO = Gone.word();
+
+                    private Words() {}
+                }
+                """.formatted(config.mainPackage())));
+        ManagedValue<String> set = ManagedValue.openSet(TestValue.Id.WORDS).of(String.class).in("Words")
+                .because("New.");
+
+        ManagedRepairs.Planned plan = ManagedRepairs.plan(index, List.of(set), GRAMMAR, NOTE);
+
+        assertTrue(plan.isEmpty(), "kept as written");
+        assertTrue(plan.left().size() == 1 && plan.left().getFirst().contains("Words")
+                && plan.left().getFirst().contains("@Migrate rule"), plan.left().toString());
+    }
+
     static final ManagedValue<List<Integer>> NUMBERS = ManagedValue.param(TestValue.Id.NAMES).in("Sdk")
             .startsAs(ManagedRepairsTest::noNumbers).shown("Game", "Numbers", null).because("New.");
 

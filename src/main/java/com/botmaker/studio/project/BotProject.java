@@ -2,6 +2,7 @@ package com.botmaker.studio.project;
 
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.HostPluginValues;
@@ -159,6 +160,9 @@ public class BotProject {
         // Read from the file, not state: the settings are loaded into state later in the open.
         PluginHost.bind(classpath, HostServices.forProject(config),
                 StudioProjectSettings.devModeIn(config.projectPath()));
+        // 5-'. A -SNAPSHOT jar's bytes are kept as they load, so a rebuild in place leaves the old API readable
+        //      for the author's migration (2026-10-16).
+        ApiCache.shared().loaded(config.projectPath(), classpath);
 
         // 5b. was PluginSourceFiles.install(config) — copying each bound plugin's shipped Java into the
         // project on every bind. Deleted 2026-09-21: a project's plugins/<id>/ file comes from the template

@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.studio.nav.Usages;
+import com.botmaker.studio.nav.Uses;
 import com.botmaker.studio.parser.helpers.SourceParser;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
@@ -12,8 +13,6 @@ import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.ChildListPropertyDescriptor;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.ConstructorInvocation;
-import org.eclipse.jdt.core.dom.CreationReference;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionMethodReference;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
@@ -26,7 +25,6 @@ import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.SuperConstructorInvocation;
 import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 import org.eclipse.jdt.core.dom.SuperMethodReference;
 import org.eclipse.jdt.core.dom.TypeMethodReference;
@@ -272,10 +270,6 @@ public final class MethodReferences {
      */
     private record Shape(String key, String ownerKey, String name, int arity, boolean constructor) {
 
-        boolean is(IMethodBinding binding) {
-            return binding != null && key.equals(Usages.keyOf(binding));
-        }
-
         /**
          * Whether a receiver of type {@code type} could be the declaring class — it is, or it extends or
          * implements it. A receiver whose type javac could only recover (an unresolved name) extends nothing
@@ -299,30 +293,39 @@ public final class MethodReferences {
 
     private static void scan(ProjectFile file, CompilationUnit unit, Shape shape, List<CallSite> calls,
                              List<String> uncertain) {
+        // What javac bound to this method is found where every use is (Uses); a this(…) or super(…) call of a
+        // constructor is one a change of shape cannot follow, so it is "cannot tell".
+        for (Uses.Found found : Uses.in(unit, Set.of(shape.key()), false)) {
+            switch (found.shape()) {
+                case CALL, STATEMENT, CREATION, REFERENCE -> calls.add(new CallSite(file, unit,
+                        (Expression) found.node()));
+                case DELEGATION -> unsure(file, uncertain);
+                default -> { }
+            }
+        }
+        // What is left is a call javac bound to nothing: "cannot tell" when it has this method's name and arity
+        // and its receiver could be the declaring class; anything else is another method.
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodInvocation call) {
-                if (shape.constructor()) return true;
+                if (shape.constructor() || call.resolveMethodBinding() != null) return true;
                 ITypeBinding receiver = call.getExpression() == null ? null
                         : call.getExpression().resolveTypeBinding();
-                judge(call, call.resolveMethodBinding(), call.getName().getIdentifier(), call.arguments().size(),
-                        receiver);
+                unbound(call.getName().getIdentifier(), call.arguments().size(), receiver);
                 return true;
             }
 
             @Override
             public boolean visit(SuperMethodInvocation call) {
-                if (shape.constructor()) return true;
-                judge(call, call.resolveMethodBinding(), call.getName().getIdentifier(), call.arguments().size(),
-                        null);
+                if (shape.constructor() || call.resolveMethodBinding() != null) return true;
+                unbound(call.getName().getIdentifier(), call.arguments().size(), null);
                 return true;
             }
 
             @Override
             public boolean visit(ClassInstanceCreation creation) {
-                if (!shape.constructor()) return true;
-                judge(creation, creation.resolveConstructorBinding(), null, creation.arguments().size(),
-                        creation.getType().resolveBinding());
+                if (!shape.constructor() || creation.resolveConstructorBinding() != null) return true;
+                unbound(null, creation.arguments().size(), creation.getType().resolveBinding());
                 return true;
             }
 
@@ -341,58 +344,23 @@ public final class MethodReferences {
                 return reference(reference, reference.getName().getIdentifier());
             }
 
-            @Override
-            public boolean visit(CreationReference reference) {
-                if (shape.constructor() && shape.is(reference.resolveMethodBinding())) {
-                    calls.add(new CallSite(file, unit, reference));
-                }
-                return true;
-            }
-
-            @Override
-            public boolean visit(ConstructorInvocation call) {
-                if (shape.constructor() && shape.is(call.resolveConstructorBinding())) unsure();
-                return true;
-            }
-
-            @Override
-            public boolean visit(SuperConstructorInvocation call) {
-                if (shape.constructor() && shape.is(call.resolveConstructorBinding())) unsure();
-                return true;
-            }
-
             private boolean reference(MethodReference reference, String name) {
-                if (shape.constructor()) return true;
-                IMethodBinding bound = reference.resolveMethodBinding();
-                if (shape.is(bound)) {
-                    calls.add(new CallSite(file, unit, reference));
-                } else if (bound == null && name.equals(shape.name())) {
-                    unsure();
+                if (!shape.constructor() && reference.resolveMethodBinding() == null && name.equals(shape.name())) {
+                    unsure(file, uncertain);
                 }
                 return true;
             }
 
-            /**
-             * This method when javac binds it here; "cannot tell" when javac bound nothing, the call has this
-             * method's name and arity, and its receiver could be the declaring class; anything else is another
-             * method.
-             */
-            private void judge(Expression call, IMethodBinding bound, String name, int arity,
-                               ITypeBinding receiver) {
-                // A recovered binding names the nearest method even for a call of the wrong arity, which does
-                // not compile against this one and is not one of its calls.
-                if (shape.is(bound) && (arity == shape.arity() || bound.isVarargs())) {
-                    calls.add(new CallSite(file, unit, call));
-                } else if (bound == null && arity == shape.arity()
-                        && (name == null || name.equals(shape.name())) && shape.couldOwn(receiver)) {
-                    unsure();
+            private void unbound(String name, int arity, ITypeBinding receiver) {
+                if (arity == shape.arity() && (name == null || name.equals(shape.name())) && shape.couldOwn(receiver)) {
+                    unsure(file, uncertain);
                 }
-            }
-
-            private void unsure() {
-                if (!uncertain.contains(file.getClassName())) uncertain.add(file.getClassName());
             }
         });
+    }
+
+    private static void unsure(ProjectFile file, List<String> uncertain) {
+        if (!uncertain.contains(file.getClassName())) uncertain.add(file.getClassName());
     }
 
     /** The name of the class {@code declaration} belongs to. */

@@ -55,6 +55,8 @@ public enum BotAnnotation {
     REFACTOR(Refactor.class),
     /** The author's mapping from one type's values to another's, on a bot's method (2026-10-12). */
     MIGRATE(Migrate.class),
+    /** A {@link #MIGRATE} rule's receiver, on its first parameter (2026-10-16). */
+    MIGRATE_SELF(Migrate.Self.class),
     /** A value a {@link #MIGRATE} method wrote and nobody edited since, on an open set's constant (2026-10-12). */
     MIGRATED(Migrated.class);
 
