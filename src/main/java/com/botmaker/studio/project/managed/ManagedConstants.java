@@ -360,6 +360,7 @@ public final class ManagedConstants {
                 String owner = pkg + type.getName().getIdentifier();
                 String id = ManagedIds.idOf(ManagedIds.on(type, known), known);
                 grouped(type, owner, known, out);
+                classes(type, source, owner, id, known, out);
                 // A set referred to by name (ManagedValue.referredToAs, 2026-10-12): a reference to one of its
                 // constants reads as what the plugin makes of the name, and its initialiser is never read for it.
                 ManagedValue<?> referred = known.stream()
@@ -401,6 +402,28 @@ public final class ManagedConstants {
             }
         });
         return out;
+    }
+
+    /**
+     * A set of nested classes' fields ({@code ManagedValue.isClasses}): each one {@code Screens.MARKET.beerBuy}, owned
+     * by the constant holding its class's instance — {@code com.bot.Screens.MARKET} — and standing for what the set's
+     * plugin makes of the two names, never for its initialiser. Nothing for a class of any other set.
+     */
+    private static void classes(TypeDeclaration type, String source, String owner, String id,
+                                Collection<ManagedValue<?>> known, List<Constant> out) {
+        ManagedValue<?> set = known.stream()
+                .filter(value -> value != null && value.isClasses() && value.id().equals(id))
+                .findFirst().orElse(null);
+        if (set == null) return;
+        for (ManagedClasses.Nested nested : ManagedClasses.of(null, source, type, ValueGrammar.empty(), null)) {
+            for (ManagedSets.Member field : nested.fields()) {
+                Object member = set.byField(nested.constant(), field.name());
+                if (member != null) {
+                    out.add(new Constant(owner + "." + nested.constant(), field.name(), field.initializer(), member,
+                            owner, id));
+                }
+            }
+        }
     }
 
     /**

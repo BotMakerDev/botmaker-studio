@@ -129,6 +129,12 @@ public final class ManagedSets {
                         return;
                     }
                     if (!(declared instanceof TypeDeclaration type)) return;
+                    // A set of nested classes: its members are the classes' fields (ManagedClasses).
+                    List<ManagedClasses.Nested> classes = ManagedClasses.of(file, source, type, grammar, null);
+                    if (!classes.isEmpty()) {
+                        classes.forEach(nested -> out.addAll(nested.fields()));
+                        return;
+                    }
                     // A class of constants may nest a helper enum of its own, which is no member of the set:
                     // only a class holding no constant of its own is a set of nested enums.
                     boolean grouped = java.util.Arrays.stream(type.getFields()).noneMatch(ManagedSets::isConstant);
@@ -243,7 +249,13 @@ public final class ManagedSets {
     public static Refactor.Outcome add(BotIndex index, String id, String name, Class<?> type,
                                        JavaValue initializer) {
         int dot = name == null ? -1 : name.indexOf('.');
-        if (dot > 0) return addToGroup(index, id, name.substring(0, dot), name.substring(dot + 1));
+        if (dot > 0) {
+            Optional<ManagedClasses.Nested> into = ManagedClasses.named(index, id, name.substring(0, dot),
+                    ValueGrammar.empty(), null);
+            if (into.isPresent()) return ManagedClasses.addField(index, into.get(), name.substring(dot + 1), type,
+                    initializer);
+            return addToGroup(index, id, name.substring(0, dot), name.substring(dot + 1));
+        }
         if (!isJavaName(name)) {
             return new Refactor.Refused("“" + name + "” is not a name Java accepts.");
         }
@@ -294,9 +306,9 @@ public final class ManagedSets {
      */
     public static Refactor.Outcome repoint(BotIndex index, Member from, Member to, String note) {
         if (!java.util.Objects.equals(from.group(), to.group())) {
-            // Only the name at each use is replaced, so the enum it is qualified with would stay the old one.
-            return new Refactor.Refused(from.qualified() + " and " + to.qualified() + " are in different enums: "
-                    + "a method returning one cannot return the other.");
+            // Only the name at each use is replaced, so the enum or class it is qualified with would stay the old one.
+            return new Refactor.Refused(from.qualified() + " and " + to.qualified() + " are in different "
+                    + (from.initializer() != null ? "classes" : "enums") + ": only the name at each use would change.");
         }
         String key = index.read(units -> {
             CompilationUnit unit = units.get(from.file());
@@ -335,7 +347,9 @@ public final class ManagedSets {
         }
         String source = index.sources().get(member.file());
         String removed = member.group() == null ? removed(source, member.className(), member.name())
-                : removedFromGroup(source, member.className(), member.group(), member.name());
+                : member.initializer() != null
+                        ? ManagedClasses.removedField(source, member.className(), member.group(), member.name())
+                        : removedFromGroup(source, member.className(), member.group(), member.name());
         if (removed.equals(source)) return new Refactor.Refused(member.qualified() + " could not be removed.");
         return Refactor.checked(index, new Refactor.Planned("Removed " + member.qualified(),
                 Map.of(member.file(), removed)), "Removing " + member.qualified());
@@ -355,6 +369,10 @@ public final class ManagedSets {
         if (member.initializer() == null || before.initializer() == null) {
             return new Refactor.Refused(member.qualified() + " is an enum's constant: moving it would change the "
                     + "order the enum lists its constants in, and it reads no other constant.");
+        }
+        if (member.group() != null || before.group() != null) {
+            return new Refactor.Refused(member.qualified() + " is a field of a class of the set: its order is the "
+                    + "class's own, and no other class's field can sit beside it.");
         }
         if (member.qualified().equals(before.qualified())) {
             return new Refactor.Refused(member.qualified() + " cannot move above itself.");
@@ -584,7 +602,7 @@ public final class ManagedSets {
         });
     }
 
-    private static boolean carries(AbstractTypeDeclaration type, String id) {
+    static boolean carries(AbstractTypeDeclaration type, String id) {
         Annotation annotation = JavaManagedSource.managedAnnotation(type);
         return annotation != null && id.equals(JavaManagedSource.idOf(annotation));
     }

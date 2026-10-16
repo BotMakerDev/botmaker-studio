@@ -14,6 +14,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin's set of nested classes** (contract `ofClasses`, 2026-10-16): Studio reads a holder of `static final
+  class X extends <element>` classes, each with its singleton constant, its `public final` fields and its one-return
+  setup method (`project/managed/ManagedClasses`). A field reference — `Screens.MARKET.beerBuy`, or `MARKET.close`
+  inside the holder — reads as the plugin's value and is written back as `Screens.MARKET.beerBuy`. Fields are added,
+  renamed, repointed and removed by binding like any set's constants; a class is added with its constant and an
+  `@Override` setup, renamed with its constant (the class follows when it was named from it, `FAVORED_SHOP` →
+  `FavoredShop`), and removed only while nothing outside it uses the constant, the class or a field. A bare `close`
+  inside the class is not read as a reference yet: write `MARKET.close`.
+
 - **Project ▸ Migrate…** carries the bot over a plugin change by its author's `@Migrate` rules. Each row is an old
   element the bot still uses, with its uses (double-click one to go to it) and its rule's state. **Write rule**
   writes the element's signature and a default body into `Migrations`, marked to be written, and opens it in the

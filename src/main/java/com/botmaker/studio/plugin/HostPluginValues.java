@@ -17,6 +17,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.BotMethods;
 import com.botmaker.studio.project.managed.JavaManagedValues;
+import com.botmaker.studio.project.managed.ManagedClasses;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedIds;
@@ -383,7 +384,47 @@ public final class HostPluginValues implements PluginValues {
 
     @Override
     public Optional<ValueContext> open(ManagedValue<?> set, Member member) {
-        return set == null || member == null ? Optional.empty() : open(set.id(), member.toString());
+        if (set == null || member == null) return Optional.empty();
+        if (set.isClasses() && !member.grouped()) return openSetup(set, member.name());
+        return open(set.id(), member.toString());
+    }
+
+    /** What the setup of the class whose constant is {@code constant} returns, as a value of the setup's type. */
+    private Optional<ValueContext> openSetup(ManagedValue<?> set, String constant) {
+        String setup = set.setup().getName();
+        return ManagedClasses.named(index(), set.id(), constant, PluginHost.grammar(), setup)
+                .filter(nested -> nested.setup() != null)
+                .map(nested -> HostValueContext.of(set.setup().getGenericReturnType(), nested.setup(), services,
+                        expression -> {
+                            Path file = nested.file().toAbsolutePath().normalize();
+                            recorded(() -> {
+                                snapshot();
+                                BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
+                                        ? ManagedClasses.setupSet(source, nested.holder(), nested.constant(), setup,
+                                                imported(expression)) : null);
+                            });
+                            redraw(java.util.Set.of(file));
+                        }, this::constants));
+    }
+
+    @Override
+    public Optional<String> addClass(ManagedValue<?> set, String member, Object setup) {
+        if (set == null || !set.isClasses()) {
+            return Optional.of("No plugin in this project declares that set as a set of classes.");
+        }
+        if (setup == null) return Optional.of("No setup was given for " + member + ".");
+        Class<?> type = set.setup().getReturnType();
+        if (!type.isInstance(setup)) {
+            return Optional.of(member + "'s setup is " + article(setup.getClass()) + ", not " + article(type) + ".");
+        }
+        ManagedConstants.Lookup names = new ManagedConstants.Lookup(constants(), PluginHost.grammar());
+        Optional<JavaValue> written = PluginHost.grammar().write(setup.getClass(), setup, names);
+        if (written.isEmpty()) {
+            return Optional.of("No plugin in this project declares " + type.getSimpleName() + ", so " + member
+                    + " cannot be written.");
+        }
+        return apply(ManagedClasses.add(index(), set.id(), member, set.type(), set.setup(), imported(written.get()),
+                PluginHost.grammar()));
     }
 
     @Override
@@ -423,7 +464,12 @@ public final class HostPluginValues implements PluginValues {
 
     @Override
     public List<String> groups(ManagedValue<?> set) {
-        return set == null ? List.of() : groups(set.id());
+        if (set == null) return List.of();
+        if (set.isClasses()) {
+            return ManagedClasses.all(index(), set.id(), PluginHost.grammar(), null).stream()
+                    .map(ManagedClasses.Nested::constant).toList();
+        }
+        return groups(set.id());
     }
 
     @Override
@@ -433,12 +479,26 @@ public final class HostPluginValues implements PluginValues {
 
     @Override
     public Optional<String> renameGroup(ManagedValue<?> set, String group, String newName) {
-        return set == null ? Optional.of("No set was named.") : renameGroup(set.id(), group, newName);
+        if (set == null) return Optional.of("No set was named.");
+        if (set.isClasses()) {
+            BotIndex index = index();
+            return ManagedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
+                    .map(nested -> apply(ManagedClasses.rename(index, nested, newName)))
+                    .orElseGet(() -> Optional.of(missing(set.id(), group)));
+        }
+        return renameGroup(set.id(), group, newName);
     }
 
     @Override
     public Optional<String> removeGroup(ManagedValue<?> set, String group) {
-        return set == null ? Optional.of("No set was named.") : removeGroup(set.id(), group);
+        if (set == null) return Optional.of("No set was named.");
+        if (set.isClasses()) {
+            BotIndex index = index();
+            return ManagedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
+                    .map(nested -> apply(ManagedClasses.remove(index, nested)))
+                    .orElseGet(() -> Optional.of(missing(set.id(), group)));
+        }
+        return removeGroup(set.id(), group);
     }
 
     @Override
@@ -636,9 +696,14 @@ public final class HostPluginValues implements PluginValues {
 
     /** The same, against the set already found. */
     private static Optional<String> notAnElement(ManagedValue<?> set, String member, Object value) {
-        if (set.type() == null || isA(value.getClass(), set.type().getName())) return Optional.empty();
+        // A set of classes takes fields here, each of its field type; a whole class is addClass's.
+        Class<?> element = set.isClasses() ? set.fieldType() : set.type();
+        if (set.isClasses() && !member.contains(".")) {
+            return Optional.of(member + " names a whole class of " + set.holder() + ", which is added with its setup.");
+        }
+        if (element == null || isA(value.getClass(), element.getName())) return Optional.empty();
         return Optional.of(member + " cannot join " + set.holder() + ": it is " + article(value.getClass())
-                + ", and every constant there is " + article(set.type()) + ".");
+                + ", and every " + (set.isClasses() ? "field" : "constant") + " there is " + article(element) + ".");
     }
 
     /** The open set {@code id} among what the plugins declare, or empty. */
@@ -747,12 +812,16 @@ public final class HostPluginValues implements PluginValues {
 
     private void writeInitializer(ManagedSets.Member member, JavaValue expression) {
         Path file = member.file().toAbsolutePath().normalize();
+        // A field of a nested class (ManagedClasses) is in the class whose instance its group holds.
+        boolean nested = member.group() != null;
         recorded(() -> {
             snapshot();
             // An edit makes a migrated value the author's: a rerun of the migration leaves it alone from now on.
-            BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
-                    ? ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(),
-                            member.name(), expression), member.className(), member.name()) : null);
+            BotSources.forEach(config, state, (visited, source) -> !visited.equals(file) ? null
+                    : nested ? ManagedClasses.fieldSet(source, member.className(), member.group(), member.name(),
+                            expression)
+                    : ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(),
+                            member.name(), expression), member.className(), member.name()));
         });
         redraw(java.util.Set.of(file));
     }
