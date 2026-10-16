@@ -44,7 +44,7 @@ import java.util.stream.Stream;
  * the Parameters window did by writing, re-reading and putting back.
  *
  * <p><b>Cached by content.</b> {@link #of} answers the same index until any source, the classpath or the root
- * changes. Units are shared between callers, and a JDT tree is not safe to walk from two threads while its
+ * changes — a jar rebuilt in place included. Units are shared between callers, and a JDT tree is not safe to walk from two threads while its
  * bindings resolve, so every walk goes through {@link #read}.
  */
 public final class BotIndex {
@@ -53,14 +53,16 @@ public final class BotIndex {
     private static BotIndex cached;
 
     private final List<String> classpath;
+    private final List<String> stamps;
     private final Path root;
     private final Map<Path, String> sources;
     private final Map<Path, CompilationUnit> units;
     private Map<Path, List<Problem>> errors;
 
-    private BotIndex(List<String> classpath, Path root, Map<Path, String> sources,
+    private BotIndex(List<String> classpath, List<String> stamps, Path root, Map<Path, String> sources,
                      Map<Path, CompilationUnit> units) {
         this.classpath = classpath;
+        this.stamps = stamps;
         this.root = root;
         this.sources = sources;
         this.units = units;
@@ -107,10 +109,12 @@ public final class BotIndex {
      * @param root      the bot's {@code src/main/java}; a source outside it is parsed on its own
      */
     public static BotIndex over(Map<Path, String> sources, List<String> classpath, Path root) {
+        // Stamped outside the lock: a stat of every jar is the slow half of the question.
+        List<String> stamps = stamps(classpath == null ? List.of() : classpath);
         synchronized (CACHE_LOCK) {
-            if (cached != null && cached.builtFrom(classpath, root, sources)) return cached;
+            if (cached != null && cached.builtFrom(classpath, stamps, root, sources)) return cached;
         }
-        BotIndex index = build(sources, classpath, root);
+        BotIndex index = build(sources, classpath, root, stamps);
         synchronized (CACHE_LOCK) {
             cached = index;
         }
@@ -118,10 +122,33 @@ public final class BotIndex {
     }
 
     private static BotIndex build(Map<Path, String> sources, List<String> classpath, Path root) {
+        return build(sources, classpath, root, stamps(classpath == null ? List.of() : classpath));
+    }
+
+    /** {@code stamps} taken before the parse: a jar rebuilt while it runs is a change the next call sees. */
+    private static BotIndex build(Map<Path, String> sources, List<String> classpath, Path root, List<String> stamps) {
         Map<Path, String> copy = normalised(sources);
         List<String> jars = classpath == null ? List.of() : List.copyOf(classpath);
         Path base = root == null ? null : root.toAbsolutePath().normalize();
-        return new BotIndex(jars, base, copy, parse(copy, jars, base));
+        return new BotIndex(jars, List.copyOf(stamps), base, copy, parse(copy, jars, base));
+    }
+
+    /**
+     * Each jar's size and time. A {@code -SNAPSHOT} rebuilt in place keeps its path, so the paths alone would
+     * answer the index parsed against the old bytes, and a dev reload that broke the bot would show nothing broken
+     * (2026-10-16).
+     */
+    private static List<String> stamps(List<String> classpath) {
+        List<String> out = new ArrayList<>(classpath.size());
+        for (String entry : classpath) {
+            Path jar = Path.of(entry);
+            try {
+                out.add(Files.size(jar) + ":" + Files.getLastModifiedTime(jar).toMillis());
+            } catch (IOException | RuntimeException e) {
+                out.add("");
+            }
+        }
+        return out;
     }
 
     /**
@@ -260,11 +287,13 @@ public final class BotIndex {
         return firstNewError(after, Map.of());
     }
 
-    private boolean builtFrom(List<String> classpath, Path root, Map<Path, String> sources) {
+    private boolean builtFrom(List<String> classpath, List<String> stamps, Path root, Map<Path, String> sources) {
         Path base = root == null ? null : root.toAbsolutePath().normalize();
-        return this.classpath.equals(classpath == null ? List.of() : classpath)
+        List<String> jars = classpath == null ? List.of() : classpath;
+        return this.classpath.equals(jars)
                 && Objects.equals(this.root, base)
-                && this.sources.equals(normalised(sources));
+                && this.sources.equals(normalised(sources))
+                && this.stamps.equals(stamps);
     }
 
     private static Map<Path, String> normalised(Map<Path, String> sources) {

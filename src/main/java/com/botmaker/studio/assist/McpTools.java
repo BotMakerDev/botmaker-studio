@@ -86,7 +86,8 @@ public final class McpTools {
               user's. versions checkpoint before a large change saves a version versions revert goes back to.
             - params are the values the bot's user sets; plugins what it is built from. set_setting dev_mode
               on, then plugins set_version to the local build, tries a fix before its release. After a
-              plugin change, migration list says what broke; the bot's @Migrate rules carry it over.
+              plugin change, migration list says what broke; seed a rule, write its body (the one Java you
+              write), apply.
             - Keep replies short: say what you changed, or what you could not do and why.
             """;
 

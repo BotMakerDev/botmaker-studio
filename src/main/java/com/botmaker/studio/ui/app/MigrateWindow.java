@@ -36,9 +36,11 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.event.EventHandler;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -76,6 +78,8 @@ final class MigrateWindow {
     private final Consumer<Class<?>> copyValues;
 
     private final Stage stage = new Stage();
+    /** The project's window, brought in front when the editor is shown something. */
+    private Window owner;
     private final Label heading = new Label();
     private final TableView<Broken> rows = new TableView<>();
     private final ListView<Sites.Site> uses = new ListView<>();
@@ -135,7 +139,7 @@ final class MigrateWindow {
         uses.setCellFactory(list -> new SiteCell());
         uses.setOnMouseClicked(e -> {
             Sites.Site site = uses.getSelectionModel().getSelectedItem();
-            if (e.getClickCount() == 2 && site != null) bus.publish(new RevealRequestedEvent(site.file(), site.start()));
+            if (e.getClickCount() == 2 && site != null) goTo(site.file(), site.start());
         });
         Label usesLabel = new Label("Uses — double-click one to go to it");
         writeRule.setOnAction(e -> writeRule());
@@ -183,9 +187,21 @@ final class MigrateWindow {
         VBox.setVgrow(top, Priority.ALWAYS);
         root.setPadding(new Insets(14));
 
-        // Not modal: Write rule opens the rule in the editor behind it, for its author to write before Apply.
-        stage.initOwner(owner);
+        // Not modal: Write rule opens the rule in the editor behind it, for its author to write before Apply. Not
+        // owned either: an owned window stays above its owner, so Open rule and a use's double-click landed out of
+        // sight (2026-10-16). It goes when the project's window does.
+        this.owner = owner;
         stage.initModality(Modality.NONE);
+        if (owner != null) {
+            EventHandler<WindowEvent> closing = e -> stage.close();
+            owner.addEventHandler(WindowEvent.WINDOW_HIDDEN, closing);
+            stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, e -> owner.removeEventHandler(WindowEvent.WINDOW_HIDDEN,
+                    closing));
+            if (!Double.isNaN(owner.getX()) && !Double.isNaN(owner.getY())) {
+                stage.setX(owner.getX() + 60);
+                stage.setY(owner.getY() + 60);
+            }
+        }
         stage.setTitle("Migrate");
         stage.setScene(ThemedWindows.scene(root, 900, 680));
         stage.show();
@@ -497,7 +513,17 @@ final class MigrateWindow {
 
     /** Opens {@code rule} in the editor, the window staying open over it. */
     private void reveal(Rule rule) {
-        bus.publish(new RevealRequestedEvent(rule.file(), rule.start()));
+        goTo(rule.file(), rule.start());
+    }
+
+    /** Shows {@code offset} of {@code file} in the editor, the project's window brought in front of this one. */
+    private void goTo(Path file, int offset) {
+        bus.publish(new RevealRequestedEvent(file, offset));
+        if (owner instanceof Stage main) {
+            main.setIconified(false);
+            main.toFront();
+            main.requestFocus();
+        }
     }
 
     /** {@code work} on a worker, saying {@code what} meanwhile; {@code then} on the FX thread with its answer. */

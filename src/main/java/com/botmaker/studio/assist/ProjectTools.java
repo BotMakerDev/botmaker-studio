@@ -23,6 +23,7 @@ final class ProjectTools {
 
     private static final String CONFIRM = "true to do it; left out, it only says what it would do";
     private static final String OLD_TYPE = "the old type, as list names it";
+    private static final String ELEMENT = "the element, as list names it: GameScreen#marker(ImageTemplate)";
     private static final String PARAM = "the parameter: Class.name, or its name alone when only one has it";
 
     /** {@code versions}: the bot's saved versions. */
@@ -87,10 +88,17 @@ final class ProjectTools {
         record List() implements Migration {
         }
 
-        @Describe("write an element's rule into Migrations: its old signature and a default body marked @Refactor. "
-                + "Then write the body with edit_code: the replacement, the parameters standing for the use's parts")
-        record Seed(@Describe("the element, as list names it: GameScreen#marker(ImageTemplate)") String element)
-                implements Migration {
+        @Describe("write an element's rule into Migrations: its old signature and a default body marked @Refactor; "
+                + "then write")
+        record Seed(@Describe(ELEMENT) String element) implements Migration {
+        }
+
+        @Describe("set a rule's body: what each use becomes, its parameters standing for the use's parts, self for "
+                + "the receiver; one value, or one statement for a void rule. Checked to compile; the seed's mark goes")
+        record Write(@Describe(ELEMENT) String element,
+                     @Describe("the body: self.markers(List.of(marker))") String body,
+                     @Describe(value = "qualified types it names that its file lacks, comma-separated: java.util.List",
+                             optional = true) String imports) implements Migration {
         }
 
         @Describe("rewrite every use a written rule covers, each checked to compile; a use left is said. Without "
@@ -191,6 +199,8 @@ final class ProjectTools {
                         Migration.class, action -> switch (action) {
                             case Migration.List list -> driver.listMigrations();
                             case Migration.Seed seed -> driver.seedRule(seed.element());
+                            case Migration.Write write -> driver.writeRule(write.element(), write.body(),
+                                    given(write.imports()));
                             case Migration.Apply apply -> driver.applyRules(yes(apply.confirm()));
                             case Migration.CopyValues copy -> driver.copyValues(copy.from(), copy.to(),
                                     yes(copy.confirm()));

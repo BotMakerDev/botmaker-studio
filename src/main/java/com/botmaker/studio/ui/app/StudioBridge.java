@@ -102,6 +102,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -916,8 +917,34 @@ final class StudioBridge implements StudioDriver {
         if (!(outcome instanceof Refactor.Planned plan)) {
             throw new IllegalArgumentException(((Refactor.Refused) outcome).reason());
         }
-        return writtenOver(index, plan) + " Its body is a default marked @Refactor: write the replacement with "
-                + "edit_code in " + file.getFileName() + ", then migration apply. migration list names the rule.";
+        return writtenOver(index, plan) + " Its body is a default marked @Refactor, in " + file.getFileName()
+                + ": migration write the replacement, then migration apply.";
+    }
+
+    /** A rule's body written by the assistant: checked to compile, its seed's mark taken off, one version. */
+    @Override
+    public String writeRule(String element, String body, String imports) {
+        notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        Refactor.Outcome outcome;
+        try {
+            index = prepared.get();
+            Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
+            Broken chosen = MigrateWindow.named(migration.broken(), element);
+            if (chosen.rule() == null) {
+                throw new IllegalArgumentException(chosen.element().display() + " has no rule: migration seed it first.");
+            }
+            List<String> types = imports.isBlank() ? List.of() : Arrays.stream(imports.split(","))
+                    .map(String::strip).filter(name -> !name.isEmpty()).toList();
+            outcome = migration.write(chosen.rule(), body, types);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The rule could not be written: ", e);
+        }
+        if (!(outcome instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) outcome).reason());
+        }
+        return writtenOver(index, plan) + " migration apply previews each use rewritten.";
     }
 
     /** Migrate's Preview, or its Apply with {@code confirm}: every use a written rule covers, rewritten. */
@@ -936,8 +963,8 @@ final class StudioBridge implements StudioDriver {
                         .map(rule -> rule.qualified() + (rule.problem() != null ? " (" + rule.problem() + ")"
                                 : " (still seeded)")).toList();
                 throw new IllegalArgumentException(open.isEmpty() ? "No rule is written yet: migration seed one, "
-                        + "then write its body with edit_code." : "No rule can be applied yet: " + String.join(", ",
-                        open) + ". Write a seeded rule's body with edit_code; fix a rule a problem names.");
+                        + "then migration write its body." : "No rule can be applied yet: " + String.join(", ",
+                        open) + ". migration write a seeded rule's body; fix a rule a problem names.");
             }
             result = migration.plan(markable);
         } catch (RuntimeException | LinkageError e) {

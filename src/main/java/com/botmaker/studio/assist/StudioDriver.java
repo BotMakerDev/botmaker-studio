@@ -230,6 +230,14 @@ public interface StudioDriver {
     }
 
     /**
+     * The body of {@code element}'s rule set to {@code body}, the types {@code imports} names (qualified,
+     * comma-separated; blank: none) imported, its seed's mark taken off — refused when it would not compile.
+     */
+    default String writeRule(String element, String body, String imports) {
+        throw new IllegalArgumentException("Studio cannot write rules here.");
+    }
+
+    /**
      * Migrate's Preview, or with {@code confirm} its Apply: every use a written rule covers rewritten, written as one
      * version after a safety one.
      */

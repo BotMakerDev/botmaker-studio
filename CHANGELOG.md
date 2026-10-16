@@ -24,6 +24,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   removal, or a dev build rebuilt under the same version. It also opens from a banner above the canvas when that
   change broke something, from a Review tab row, and from the upgrade's question, whose **Migrate first** moves the
   version and leaves the code for Migrate.
+- **`migration write`** (MCP): the assistant sets a seeded rule's body — one value, or one statement for a `void`
+  rule, with the imports it names — checked to compile, and the seed's `@Refactor` mark goes. `edit_code`'s values
+  could not say `self.markers(List.of(marker))`, so a rule could be seeded and never written over MCP.
 - **The assistant's `migration` tool is Migrate** (MCP). `list` gives Migrate's rows, each element with its first
   uses and its rule, the rules naming nothing, the finished rules and the retired types' values. `seed` writes an
   element's rule, which the assistant then writes with `edit_code`. `apply` previews each use before and after,
@@ -93,6 +96,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A dev reload that broke the bot showed nothing broken.** The bot's parsed index was cached by its jars' paths,
+  and a `-SNAPSHOT` rebuilt in place keeps its path, so Migrate and `migration list` read the bot as it compiled
+  against the old jar. Each jar's size and time are part of the key now.
+- **Migrate's Open rule and a use's double-click showed nothing.** The window was owned by Studio's, so it stayed
+  in front of the editor it had just moved. It is a window of its own now, closed with Studio's, and brings the
+  editor forward.
 - **One assistant tool call is one Project History version.** A plugin tool's writes, on whatever thread they are
   made, take one safety version before the first of them: a `crop_pictures` of six boxes took one for every picture,
   tag and screen it wrote. Each write is still its own undo step.

@@ -2,9 +2,11 @@ package com.botmaker.studio.migrate;
 
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -243,5 +245,49 @@ public final class Migration {
         }
         return new Refactor.Planned("Seeded a rule for " + element.display() + " in " + file.getFileName(),
                 Map.of(file, seeds.source()));
+    }
+
+    /**
+     * {@code rule} with {@code body} as what each use becomes — the one value it returns, or its one statement for a
+     * {@code void} rule — and its seed's {@code @Refactor} mark taken off, {@code imports} (qualified names) added to
+     * its file: the source of its file, checked to compile, or a refusal saying why not. What an assistant writes a
+     * seeded rule with, which edit_code's values cannot say (2026-10-16).
+     */
+    public Refactor.Outcome write(Rule rule, String body, List<String> imports) {
+        String text = body == null ? "" : body.strip();
+        while (text.endsWith(";")) text = text.substring(0, text.length() - 1).strip();
+        if (text.isEmpty()) return new Refactor.Refused("Give the rule's body: what each use becomes.");
+        String source = now.sources().get(rule.file());
+        if (source == null) return new Refactor.Refused(rule.qualified() + " is in no file of the bot.");
+        CompilationUnit unit = BotParser.syntax(source);
+        MethodDeclaration[] found = {null};
+        unit.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(MethodDeclaration method) {
+                if (method.getStartPosition() == rule.start()) found[0] = method;
+                return found[0] == null;
+            }
+        });
+        MethodDeclaration method = found[0];
+        if (method == null || method.getBody() == null) {
+            return new Refactor.Refused(rule.qualified() + " has changed since it was read. Try again.");
+        }
+        ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+        String statement = rule.statement() ? text + ";" : "return " + text + ";";
+        // The rewrite indents each line after the first to the method's own level.
+        rewrite.replace(method.getBody(), rewrite.createStringPlaceholder("{\n    " + statement + "\n}",
+                method.getBody().getNodeType()), null);
+        for (Object each : method.modifiers()) {
+            if (each instanceof Annotation mark
+                    && BotAnnotation.REFACTOR.on(List.of(mark)) != null) {
+                rewrite.remove(mark, null);
+            }
+        }
+        String written = AstRewriteHelper.applyRewrite(rewrite, source);
+        if (imports != null && !imports.isEmpty()) {
+            written = Rewrite.imported(written, new LinkedHashSet<>(imports), Set.of());
+        }
+        return Refactor.checked(now, new Refactor.Planned("Wrote " + rule.qualified() + ": each use becomes "
+                + text, Map.of(rule.file(), written)), "That body");
     }
 }

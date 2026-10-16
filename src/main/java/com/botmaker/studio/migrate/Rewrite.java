@@ -478,7 +478,7 @@ public final class Rewrite {
     }
 
     /** {@code source} importing each of {@code imports} and, statically, each of {@code statics}. */
-    private static String imported(String source, Set<String> imports, Set<String> statics) {
+    static String imported(String source, Set<String> imports, Set<String> statics) {
         CompilationUnit unit = BotParser.syntax(source);
         ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);

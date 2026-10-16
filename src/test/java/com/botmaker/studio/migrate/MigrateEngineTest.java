@@ -535,6 +535,79 @@ class MigrateEngineTest {
         assertEquals(List.of(after), api.previous(dir.resolve("new"), List.of(after)));
     }
 
+    private static final String SEEDED = """
+            package bot;
+
+            import com.botmaker.plugin.api.meta.Migrate;
+            import com.botmaker.plugin.api.meta.Refactor;
+            import lib.Screen;
+
+            public class Migrations {
+                @Refactor("write the replacement")
+                @Migrate(Screen.class)
+                static Screen marker(@Migrate.Self Screen self, String marker) {
+                    return self;
+                }
+            }
+            """;
+
+    /** What migration write does: the seeded body replaced, its mark gone, an import added, then applied. */
+    @Test
+    void aSeededRuleWrittenLosesItsMarkAndIsApplied() throws IOException {
+        Bot bot = bot(BOT, SEEDED);
+        Migration migration = Migration.of(bot.now(), bot.old());
+        Rule rule = migration.rules().getFirst();
+        assertTrue(rule.seeded(), rule.toString());
+
+        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class,
+                migration.write(rule, "self.markers(List.of(marker));", List.of("java.util.List")));
+        String text = plan.rewrites().get(rule.file());
+        assertTrue(!text.contains("@Refactor("), text);
+        assertTrue(text.contains("\n        return self.markers(List.of(marker));\n    }"), text);
+        assertTrue(text.contains("import java.util.List;"), text);
+
+        Migration written = Migration.of(bot.now().replacing(merged(bot.now().sources(), plan.rewrites())), bot.old());
+        Rule ready = written.rules().getFirst();
+        assertTrue(ready.ready(), ready.toString());
+        String migrated = assertInstanceOf(Refactor.Planned.class, written.plan(false).outcome()).rewrites()
+                .get(bot.botFile());
+        assertTrue(migrated.contains("Screen.named(\"home\").markers(List.of(\"a\")).markers(List.of(\"b\"))"),
+                migrated);
+    }
+
+    @Test
+    void aWrittenBodyThatDoesNotCompileIsRefused() throws IOException {
+        Bot bot = bot(BOT, SEEDED);
+        Migration migration = Migration.of(bot.now(), bot.old());
+        Refactor.Refused refused = assertInstanceOf(Refactor.Refused.class,
+                migration.write(migration.rules().getFirst(), "self.marker(marker)", List.of()));
+        assertTrue(refused.reason().startsWith("That body would stop the bot compiling"), refused.reason());
+    }
+
+    /** A dev reload rebuilds a -SNAPSHOT in place: the same path, and the bot's index parsed again against it. */
+    @Test
+    void theBotsIndexIsParsedAgainWhenAJarIsRebuiltInPlace() throws IOException {
+        Path jar = Files.createDirectories(dir.resolve("m2-index/lib/1.0-SNAPSHOT")).resolve("lib-1.0-SNAPSHOT.jar");
+        Files.copy(oldJar, jar);
+        Path root = Files.createTempDirectory(dir, "rebuilt").resolve("src/main/java");
+        Path file = root.resolve("bot/Bot.java").toAbsolutePath().normalize();
+        Map<Path, String> sources = Map.of(file, """
+                package bot;
+
+                import lib.Screen;
+
+                public class Bot {
+                    static Screen HOME = Screen.named("home").marker("a");
+                }
+                """);
+        assertEquals(List.of(), BotIndex.over(sources, List.of(jar.toString()), root).errors().get(file));
+
+        Files.copy(newJar, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.setLastModifiedTime(jar, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 5000));
+        assertTrue(BotIndex.over(sources, List.of(jar.toString()), root).errors().get(file).stream()
+                .anyMatch(problem -> problem.message().contains("marker")));
+    }
+
     // --- the bot ------------------------------------------------------------------------------------------------
 
     private record Bot(BotIndex now, List<String> old, Path botFile) {}
