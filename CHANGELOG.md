@@ -62,6 +62,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **One assistant tool call is one Project History version.** A plugin tool's writes, on whatever thread they are
+  made, take one safety version before the first of them: a `crop_pictures` of six boxes took one for every picture,
+  tag and screen it wrote. Each write is still its own undo step.
 - **Writes to a bot are cheaper**: Project History hashes with the JDK's SHA-1, and the Java parser's options are
   read once, not for every value read.
 - **A plugin's record value is added only when it reads back whole.** A link the writer could not write was left

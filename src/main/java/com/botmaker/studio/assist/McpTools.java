@@ -3,6 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AgentReply;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.ToolSchema;
+import com.botmaker.studio.plugin.ToolCalls;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -285,7 +286,8 @@ public final class McpTools {
                 AgentReply reply;
                 long before = rootChanged(driver);
                 try {
-                    reply = owned.tool().invoke(arguments(request), driver.agentContext());
+                    // One Project History version for the call, however many writes it makes.
+                    reply = ToolCalls.once(() -> owned.tool().invoke(arguments(request), driver.agentContext()));
                 } catch (RuntimeException e) {
                     return result(owned.name() + " could not start: " + e.getMessage(), true);
                 } finally {

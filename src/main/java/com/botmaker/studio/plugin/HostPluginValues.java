@@ -284,10 +284,14 @@ public final class HostPluginValues implements PluginValues {
         checkpoint(HISTORY_LABEL);
     }
 
-    /** The Project History snapshot before a write: one per undo step, so a batch takes one, not one per write. */
+    /**
+     * The Project History snapshot before a write: one per undo step, so a batch takes one, not one per write, and
+     * one per plugin tool call ({@link ToolCalls}).
+     */
     private void checkpoint(String label) {
         WriteSteps.Step open = WriteSteps.open();
         if (open != null && !open.firstCheckpoint()) return;
+        if (!ToolCalls.firstCheckpoint()) return;
         Checkpoints.take(config.projectPath(), VersionOrigin.SAFETY, label);
     }
 
