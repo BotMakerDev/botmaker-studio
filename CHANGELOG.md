@@ -171,7 +171,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   longer makes an error further down look new.
 - **Migrating a retired type no longer preselects a plugin's replacement.** Contract 0.10.0 took the plugin's
   `replacedBy` pointer away: the bot's author picks the target type, in the migration window or with
-  `migration set`.
+  `migration copy_values`.
 - **The bot's notes on its game moved to the SDK.** `read_notes` and `write_notes` are the SDK's tools now,
   and Studio names no `GAME.md`. The explorer lists every Markdown file at the bot's root first (its README
   too). It lists the files again after a plugin's tool adds, removes or replaces a file there.

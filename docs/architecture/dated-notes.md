@@ -1,5 +1,22 @@
 # Dated notes — read these before the other files here
 
+> **Every migration is a `@Migrate` rule since 2026-10-16** (`docs/refactor/25-compatibility.md` §8, §12).
+> `@ReplacedBy`, `PluginType.replacedBy()` and every pointer are gone from the contract, and with them
+> `ApiMigrationRunner`, `Redirects`, `Pairing`, `UpgradeDiff`, `ApiReferences`, `FixList`/`FixSheet`,
+> `ManagedSets.repoint` and `Modernise`: read `sdk-and-shared.md`'s text about pointers, pairing, candidates,
+> per-site decisions and the report's breaks as history. The one engine is `migrate/`: `ApiCache` keeps the jar
+> each plugin last loaded (so an upgrade and a same-`-SNAPSHOT` reload both have the old API), `Broken` lists the
+> old elements the bot uses that the new classpath lacks, `Rules` resolves the bot's `@Migrate` methods by JDT
+> bindings over the old classpath (its own signature names the element; `@Migrate.Self`, `kind`, `name` for a
+> gone type), `Sites` (on `nav/Uses`) finds every use, and `Rewrite` substitutes each rule's body in place,
+> each site checked to compile, a managed value copied beside its original (`@Migrated`). `Seed` writes a rule's
+> skeleton marked `@Refactor("write the replacement")`; seeded rules are applied only as the last resort
+> (*Upgrade anyway*, a removal). `Migration` is the façade for `ui/app/MigrateWindow` (Project ▸ Migrate…, the
+> canvas banner, a Review row, the upgrade's *Migrate first*) and the assistant's `migration` tool (`list`,
+> `seed`, `write`, `apply`, `copy_values`, `switch_uses`, `remove_migrated`, `remove_finished`). Studio never
+> guesses a successor: with no rule, nothing is rewritten. `project/source/BotIndex`'s cache is keyed by each
+> jar's size and mtime, so a `-SNAPSHOT` rebuilt in place is parsed again.
+
 > **A managed value is marked by its plugin's own annotation (2026-10-10).** `@Managed("id")` is gone. A
 > plugin declares an annotation meta-annotated `@ManagedMarker` whose `value()` is an enum nested in it
 > (`@SdkValue(SdkValue.Id.FLOW)`); the id is that enum's binary name plus the constant.
