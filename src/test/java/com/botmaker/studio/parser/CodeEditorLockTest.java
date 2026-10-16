@@ -369,7 +369,7 @@ class CodeEditorLockTest {
 
     /**
      * And its <b>body</b> is the user's, which is the whole point of the file. It is where the bot is put
-     * together, one static call at a time — {@code PopupGuard.install}, {@code Bot.start},
+     * together, one static call at a time — {@code PopupGuard.enabled}, {@code Bot.start},
      * {@code FlowGraph.run} are ordinary API methods a user calls or does not.
      */
     @Test

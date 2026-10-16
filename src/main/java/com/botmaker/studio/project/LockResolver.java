@@ -58,7 +58,7 @@ import java.util.List;
  * changing its parameter is the single edit whose consequence the user cannot read off the screen: the
  * project stops launching, or stops compiling, with nothing pointing at what changed. Its <em>body</em> is
  * the opposite: it is where the bot is actually put together, one static call at a time, and it is meant to
- * be edited. Nothing is "installed" there and no plugin is registered — {@code PopupGuard.install},
+ * be edited. Nothing is "installed" there and no plugin is registered — {@code PopupGuard.enabled},
  * {@code Bot.start} and {@code FlowGraph.run} are ordinary static API methods a user calls or does not.</p>
  *
  * <p>Pure and cheap: no I/O, no state, constructed per call. A null {@code config} or {@code file} means "we

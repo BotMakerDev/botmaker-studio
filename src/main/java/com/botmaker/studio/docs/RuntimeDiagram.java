@@ -108,10 +108,10 @@ public final class RuntimeDiagram {
     /** The side channel: the popup guard, which interrupts vision rather than sitting in the chain. */
     public static Node guard() {
         return new Node("guard", "Popup guard",
-                "The bot's popups method — Sdk.run()'s .popups(…) — runs before every vision step, "
-                + "whichever activity is running, so a daily reward covering the button is dismissed in one "
-                + "place instead of by every activity that might trip over it. A body can switch it off around a "
-                + "step that works through a popup itself.",
+                "Before every vision step, whichever activity is running, the popups of the bot's screen map "
+                + "that show are closed by their way out, so a daily reward covering the button is dismissed in "
+                + "one place instead of by every activity that might trip over it. A body can switch it off "
+                + "around a step that works through a popup itself.",
                 Shape.STEP);
     }
 
