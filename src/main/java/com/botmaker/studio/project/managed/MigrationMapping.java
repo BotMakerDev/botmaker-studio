@@ -15,9 +15,10 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The migration window's steps for a pair as the assistant writes them (2026-10-13, {@code migration set}): each
- * pair seeded as the window seeds it — the bot's {@code @Migrate} method, else the first guess — then changed by
- * the lines given, in the words {@code migration read} says them: {@code grey: fixed true},
+ * The migration window's steps for a pair as the assistant writes them (2026-10-13; since 2026-10-16
+ * {@code migration copy_values} gives no lines, the bot's rule being the mapping): each pair seeded as the window
+ * seeds it — the bot's {@code @Migrate} method, else the first guess — then changed by the lines given:
+ * {@code grey: fixed true},
  * {@code area: from area}, {@code tag: built from name}, {@code RED: CRIMSON}. A line for a pair a part goes
  * through starts with either type's simple name ({@code Area.w: fixed 0}). Pure.
  */
@@ -127,7 +128,7 @@ public final class MigrationMapping {
         if (!unused.isEmpty()) {
             return Asked.refused(String.join("; ", unused) + ": no pair this migration goes through has "
                     + (unused.size() == 1 ? "it" : "them") + "; prefix a line with its type's simple name "
-                    + "(migration read names the pairs).");
+                    + "(the pairs it goes through).");
         }
         return new Asked(List.copyOf(out), null);
     }

@@ -6,6 +6,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.Migration;
+import com.botmaker.studio.migrate.OldElement;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.migrate.Sites;
@@ -15,6 +16,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.managed.MigrationSummary;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -39,6 +41,7 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -227,6 +230,81 @@ final class MigrateWindow {
         return Migration.of(bot, before).broken().size();
     }
 
+    /** The most uses, changes or rows the assistant's answers list one by one. */
+    static final int LISTED = 40;
+
+    /**
+     * The whole of the assistant's {@code migration list}: Migrate's rows, each with its first uses and its rule,
+     * the rules that name nothing, the finished rules and the values of retired types.
+     */
+    static String listing(Migration migration, List<Broken> broken, List<Rule> done,
+                          List<MigrationSteps.Pending> pending) {
+        List<String> lines = new ArrayList<>();
+        String since = migration.unchanged() ? "no plugin changed since the project last loaded its jars"
+                : "compared with the jars the project loaded before its last plugin change";
+        if (broken.isEmpty()) lines.add("Nothing the bot uses is broken or named by a rule (" + since + ").");
+        else {
+            lines.add(broken.size() + (broken.size() == 1 ? " old element the bot uses" : " old elements the bot uses")
+                    + " (" + since + "):");
+            broken.stream().limit(LISTED).forEach(each -> lines.add("- " + each.element().display() + ": "
+                    + uses(each.sites()) + "; " + toolRuleText(each)));
+            if (broken.size() > LISTED) lines.add("… and " + (broken.size() - LISTED) + " more.");
+        }
+        List<Rule> unresolved = migration.rules().stream().filter(rule -> rule.element() == null).toList();
+        if (!unresolved.isEmpty()) {
+            lines.add("Rules that name no old element: " + String.join("; ", unresolved.stream()
+                    .map(rule -> rule.qualified() + ": " + rule.problem()).toList()) + ".");
+        }
+        if (!done.isEmpty()) {
+            lines.add("Finished, their element used nowhere now (remove_finished): " + String.join(", ",
+                    done.stream().map(Rule::qualified).toList()) + ".");
+        }
+        if (!pending.isEmpty()) {
+            lines.add("Values of retired types, copied rather than rewritten (copy_values):");
+            pending.forEach(each -> lines.add("- " + MigrationSummary.pending(each)));
+        }
+        return String.join("\n", lines);
+    }
+
+    /** {@code 36 uses: Screens.java:12, Screens.java:14, …}. */
+    private static String uses(List<Sites.Site> sites) {
+        List<String> shown = sites.stream().limit(3).map(site -> site.file().getFileName() + ":" + site.line())
+                .toList();
+        return sites.size() + (sites.size() == 1 ? " use: " : " uses: ") + String.join(", ", shown)
+                + (sites.size() > shown.size() ? ", …" : "");
+    }
+
+    /** {@code broken}'s rule as the assistant reads it, with what to do next. */
+    static String toolRuleText(Broken broken) {
+        return switch (broken.state()) {
+            case NONE -> "no rule (seed)";
+            case SEEDED -> "rule " + broken.rule().qualified() + " still seeded: write its body";
+            case WRITTEN -> "rule " + broken.rule().qualified();
+            case REFUSED -> "rule " + broken.rule().qualified() + " cannot be applied: " + broken.rule().problem();
+        };
+    }
+
+    /** The row {@code element} names, as {@link OldElement#display()} says it; a refusal naming the rows when none. */
+    static Broken named(List<Broken> broken, String element) {
+        String wanted = element == null ? "" : element.strip();
+        List<Broken> found = broken.stream().filter(b -> b.element().display().equals(wanted)).toList();
+        if (found.size() == 1) return found.getFirst();
+        throw new IllegalArgumentException((found.isEmpty() ? "No old element the bot uses is " : "Two old elements "
+                + "are both ") + "\"" + wanted + "\". " + (broken.isEmpty() ? "Nothing is broken."
+                : "migration list names them: " + String.join(", ", broken.stream().limit(LISTED)
+                .map(b -> b.element().display()).toList()) + "."));
+    }
+
+    /** Each use a plan rewrites, {@code Screens.java:12: before → after}. */
+    static String changesText(List<Rewrite.Change> changes) {
+        List<String> lines = new ArrayList<>();
+        changes.stream().limit(LISTED).forEach(change -> lines.add("- " + change.site().file().getFileName() + ":"
+                + change.site().line() + ": " + change.before() + " → "
+                + (change.after().isEmpty() ? "(deleted)" : change.after())));
+        if (changes.size() > LISTED) lines.add("… and " + (changes.size() - LISTED) + " more.");
+        return String.join("\n", lines);
+    }
+
     /** The canvas's banner and the Review row: {@code 3 old elements … Migrate…}. */
     static String brokenText(int count) {
         return count + (count == 1 ? " old element the bot uses was" : " old elements the bot uses were")
@@ -314,7 +392,7 @@ final class MigrateWindow {
         Broken chosen = rows.getSelectionModel().getSelectedItem();
         if (chosen == null || read == null) return;
         Read basis = read;
-        Path file = rulesFile(basis.migration());
+        Path file = rulesFile(config, basis.migration());
         background("Writing the rule's signature…",
                 () -> basis.migration().seed(chosen.element(), file, config.mainPackage()),
                 outcome -> {
@@ -329,7 +407,7 @@ final class MigrateWindow {
     }
 
     /** Where a new rule goes: beside the bot's first rule, or {@value Migration#CLASS} in the main package. */
-    private Path rulesFile(Migration migration) {
+    static Path rulesFile(ProjectConfig config, Migration migration) {
         return migration.rules().isEmpty()
                 ? config.mainPackageDir().resolve(Migration.CLASS + ".java").toAbsolutePath().normalize()
                 : migration.rules().getFirst().file();

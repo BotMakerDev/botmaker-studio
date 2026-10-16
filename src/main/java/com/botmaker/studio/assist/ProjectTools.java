@@ -66,6 +66,8 @@ final class ProjectTools {
                 + "done. The local build it is on, confirmed, is loaded again")
         record SetVersion(String id,
                           @Describe("the version; a wrong one answers with those there are") String version,
+                          @Describe(value = "true to move only the pom and leave the code to the bot's @Migrate "
+                                  + "rules (migration list)", optional = true) Boolean rulesFirst,
                           @Describe(value = CONFIRM, optional = true) Boolean confirm) implements Plugins {
         }
 
@@ -78,31 +80,28 @@ final class ProjectTools {
         }
     }
 
-    /** {@code migration}: the values of a type a plugin retired, copied into its replacement. */
+    /** {@code migration}: the bot carried over a plugin change by its own {@code @Migrate} rules. */
     sealed interface Migration {
-        @Describe("what the bot has to migrate: each type a plugin retired (@Deprecated, pointing to its "
-                + "replacement), how many values are copied, and the bot's @Migrate methods. Migrate before "
-                + "plugins set_version to a version that drops the type")
+        @Describe("each old element (method, constructor, field, type) the bot uses that the last plugin change "
+                + "broke, with its uses and its rule; the rules nothing needs now; values of retired types")
         record List() implements Migration {
         }
 
-        @Describe("how one type's values are copied into another: each new part and what it is made of, or each "
-                + "old constant and its new one, as the bot's @Migrate method has it, else a first guess; with "
-                + "what else each can be and why it cannot be written yet")
-        record Read(@Describe(OLD_TYPE) String from,
-                    @Describe(value = "the new type, as read names it; set needs it, the others take empty for the "
-                            + "one its plugin names, or that holds the copies",
-                            optional = true) String to) implements Migration {
+        @Describe("write an element's rule into Migrations: its old signature and a default body marked @Refactor. "
+                + "Then write the body with edit_code: the replacement, the parameters standing for the use's parts")
+        record Seed(@Describe("the element, as list names it: GameScreen#marker(ImageTemplate)") String element)
+                implements Migration {
         }
 
-        @Describe("copy the values into the new type, as the migration window's Apply: the bot keeps the mapping "
-                + "as @Migrate methods and each copy, marked @Migrated, under its name beside the old one; nothing "
-                + "is deleted. Confirmed, a version is saved first; a mapping that would not compile writes nothing")
-        record Set(String from, String to,
-                   @Describe(value = "changes to read's mapping, one per line: 'part: from <old part>', 'part: built "
-                           + "from <old part>', 'part: fixed <value>', or 'OLD: NEW' for a constant; a pair's part "
-                           + "prefixed by its type's simple name ('Area.w: fixed 0')", optional = true) String mapping,
-                   @Describe(value = CONFIRM, optional = true) Boolean confirm) implements Migration {
+        @Describe("rewrite every use a written rule covers, each checked to compile; a use left is said. Without "
+                + "confirm, each use before and after; with it, one version after a safety one")
+        record Apply(@Describe(value = CONFIRM, optional = true) Boolean confirm) implements Migration {
+        }
+
+        @Describe("copy a retired type's values into a new type by the bot's @Migrate method for the pair (else "
+                + "a first guess), each copy marked @Migrated beside the old one; nothing is deleted")
+        record CopyValues(@Describe(OLD_TYPE) String from, @Describe("the new type") String to,
+                          @Describe(value = CONFIRM, optional = true) Boolean confirm) implements Migration {
         }
 
         @Describe("point the bot's uses of the old values at their copies (OldShots.ORE becomes Shots.ORE), a "
@@ -116,6 +115,10 @@ final class ProjectTools {
                 + "@Migrate methods no value needs, and a class left empty")
         record RemoveMigrated(String from, @Describe(value = "", optional = true) String to,
                               @Describe(value = "", optional = true) Boolean confirm) implements Migration {
+        }
+
+        @Describe("remove the rules whose old element the bot uses nowhere now, and a file left empty")
+        record RemoveFinished(@Describe(value = "", optional = true) Boolean confirm) implements Migration {
         }
     }
 
@@ -170,7 +173,7 @@ final class ProjectTools {
                             case Plugins.Search search -> driver.searchPlugins(given(search.query()));
                             case Plugins.Add add -> changed(pluginsChanged, driver.addPlugin(add.id()));
                             case Plugins.SetVersion move -> driver.setPluginVersion(move.id(), move.version(),
-                                    yes(move.confirm()), pluginsChanged);
+                                    yes(move.rulesFirst()), yes(move.confirm()), pluginsChanged);
                             case Plugins.Remove remove -> {
                                 boolean confirm = yes(remove.confirm());
                                 String done = driver.removePlugin(remove.id(), yes(remove.deleteFiles()), confirm);
@@ -182,17 +185,20 @@ final class ProjectTools {
                                 + "goes and how to name it. Read it again after a plugin changes.",
                         () -> McpTools.guides(driver.pluginGuides())),
                 saidOneOf("migration",
-                        "Migrate the values of a type a plugin retired into its replacement: list, read the mapping, "
-                                + "set it (write the copies), switch_uses to the copies, remove_migrated what is left.",
+                        "Carry the bot over a plugin change by its @Migrate rules: list what broke, seed a rule, "
+                                + "write its body, apply; copy_values, switch_uses, remove_migrated for retired "
+                                + "types' values; remove_finished.",
                         Migration.class, action -> switch (action) {
                             case Migration.List list -> driver.listMigrations();
-                            case Migration.Read read -> driver.readMigration(read.from(), given(read.to()));
-                            case Migration.Set set -> driver.setMigration(set.from(), set.to(), given(set.mapping()),
-                                    yes(set.confirm()));
+                            case Migration.Seed seed -> driver.seedRule(seed.element());
+                            case Migration.Apply apply -> driver.applyRules(yes(apply.confirm()));
+                            case Migration.CopyValues copy -> driver.copyValues(copy.from(), copy.to(),
+                                    yes(copy.confirm()));
                             case Migration.SwitchUses uses -> driver.switchUses(uses.from(), given(uses.to()),
                                     given(uses.names()));
                             case Migration.RemoveMigrated left -> driver.removeMigrated(left.from(), given(left.to()),
                                     yes(left.confirm()));
+                            case Migration.RemoveFinished done -> driver.removeFinished(yes(done.confirm()));
                         }),
                 saidOneOf("params", "The bot's parameters, the values its user sets: list, set_default, reset.",
                         Params.class, action -> switch (action) {

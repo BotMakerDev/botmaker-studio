@@ -24,6 +24,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   removal, or a dev build rebuilt under the same version. It also opens from a banner above the canvas when that
   change broke something, from a Review tab row, and from the upgrade's question, whose **Migrate first** moves the
   version and leaves the code for Migrate.
+- **The assistant's `migration` tool is Migrate** (MCP). `list` gives Migrate's rows, each element with its first
+  uses and its rule, the rules naming nothing, the finished rules and the retired types' values. `seed` writes an
+  element's rule, which the assistant then writes with `edit_code`. `apply` previews each use before and after,
+  and with `confirm` writes them. `remove_finished` removes the finished rules. `copy_values` copies a retired
+  type's values by the bot's own `@Migrate` method for the pair, and `switch_uses` and `remove_migrated` stay as
+  they were. `read` and `set`, with their mapping lines, are gone: the rule is the mapping. `plugins set_version`
+  takes `rulesFirst`, the upgrade's Migrate first: only the pom moves, and the answer counts what broke.
 - **One migration engine behind `@Migrate` rules** (`migrate/`). A bot's rule names the
   old method, constructor, field or whole type by its own signature, and Studio finds that element in the jars the
   bot used to compile against. It then rewrites every use in the project through the rule's body, keeping each

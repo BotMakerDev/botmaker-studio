@@ -471,6 +471,10 @@ public class UIManager implements ProjectWindow {
         checkBroken();
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> checkBroken(), true);
         eventBus.subscribe(CoreApplicationEvents.MigrateRequestedEvent.class, e -> openMigrate(), true);
+        eventBus.subscribe(CoreApplicationEvents.MigratedEvent.class, e -> {
+            if (reviewPanel != null) reviewPanel.refresh();
+            checkBroken();
+        }, true);
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.

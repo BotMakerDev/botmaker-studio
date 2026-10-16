@@ -212,34 +212,42 @@ public interface StudioDriver {
      * the calls into it repaired, the pom written — and {@code moved} runs when it ends, whether or not it wrote.
      * {@link #listPlugins} says where it is.
      */
-    default String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
+    default String setPluginVersion(String id, String version, boolean rulesFirst, boolean confirm, Runnable moved) {
         throw new IllegalArgumentException("Studio cannot move a plugin here.");
     }
 
     /**
-     * What the bot has to migrate: the values of each type a plugin retired, with its replacement and how many are
-     * copied, and the bot's {@code @Migrate} methods, those nothing needs any more marked.
+     * What Migrate lists: each old element the bot uses that the last plugin change broke or a rule names, with its
+     * uses and its rule's state; the rules nothing needs now; the values of each type a plugin retired.
      */
     default String listMigrations() {
         throw new IllegalArgumentException("Studio cannot read migrations here.");
     }
 
-    /**
-     * How the values of the type named {@code from} become the type named {@code to} (blank: its replacement, else
-     * the first that fits), as the migration window shows the pair: each part's or constant's pick, saved or first
-     * guessed, what else it can be, the pairs it goes through and why it cannot be written yet.
-     */
-    default String readMigration(String from, String to) {
-        throw new IllegalArgumentException("Studio cannot read migrations here.");
+    /** Migrate's Write rule for the element {@code element} names, as {@link #listMigrations} names it. */
+    default String seedRule(String element) {
+        throw new IllegalArgumentException("Studio cannot write rules here.");
     }
 
     /**
-     * The migration window's Apply for the pair: its {@code @Migrate} methods and the {@code @Migrated} copies, the
-     * pair's steps seeded as {@link #readMigration} says them and changed by {@code mapping}'s lines. Without
-     * {@code confirm}, what it would write and each value before and after; with it, written as one version.
+     * Migrate's Preview, or with {@code confirm} its Apply: every use a written rule covers rewritten, written as one
+     * version after a safety one.
      */
-    default String setMigration(String from, String to, String mapping, boolean confirm) {
+    default String applyRules(boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot migrate here.");
+    }
+
+    /**
+     * Copy values: the values of the type named {@code from} copied into {@code to} by the bot's {@code @Migrate}
+     * method for the pair, else a first guess. Without {@code confirm}, each value before and after.
+     */
+    default String copyValues(String from, String to, boolean confirm) {
         throw new IllegalArgumentException("Studio cannot migrate values here.");
+    }
+
+    /** Migrate's Remove finished rules; without {@code confirm} only says what would go. */
+    default String removeFinished(boolean confirm) {
+        throw new IllegalArgumentException("Studio cannot remove rules here.");
     }
 
     /**

@@ -174,7 +174,8 @@ class McpEndpointTest {
             if (confirm) more = false;
             return confirm ? "removed" : "would remove";
         }
-        @Override public String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
+        @Override public String setPluginVersion(String id, String version, boolean rulesFirst, boolean confirm,
+                                                 Runnable moved) {
             asked.add("move " + id + " " + version + " " + confirm);
             if (!confirm) return "would move";
             // The answer comes while the user is asked; the move ends later, in finishMove.

@@ -203,6 +203,9 @@ public class CoreApplicationEvents {
     /** Project ▸ Migrate…, the canvas's banner, the Review row, an upgrade's Migrate first: open Migrate. */
     public record MigrateRequestedEvent() implements ApplicationEvent {}
 
+    /** The assistant's {@code migration} tool wrote the bot: the Review list and the canvas's banner read it again. */
+    public record MigratedEvent() implements ApplicationEvent {}
+
     /** A managed value's right-click Migrate type…: open the migration window on its type's values. */
     public record MigrateTypeRequestedEvent(Class<?> from) implements ApplicationEvent {}
 

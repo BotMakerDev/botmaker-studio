@@ -15,8 +15,13 @@ import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.assist.StudioDriver;
 import com.botmaker.studio.assist.SymbolNames;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.migrate.Broken;
+import com.botmaker.studio.migrate.Migration;
+import com.botmaker.studio.migrate.Rewrite;
+import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
+import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import com.botmaker.studio.core.CodeBlock;
@@ -91,6 +96,7 @@ import org.eclipse.jdt.core.dom.Statement;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -740,7 +746,7 @@ final class StudioBridge implements StudioDriver {
      * answers once the question is on screen ({@link PluginMove}): the answer and the pass outlast a client's call.
      */
     @Override
-    public String setPluginVersion(String id, String version, boolean confirm, Runnable moved) {
+    public String setPluginVersion(String id, String version, boolean rulesFirst, boolean confirm, Runnable moved) {
         List<InstalledPlugin> declared = installed(registryEntries());
         InstalledPlugin plugin = declaredPlugin(declared, id);
         String name = plugin.displayName();
@@ -792,7 +798,7 @@ final class StudioBridge implements StudioDriver {
         }
         PluginUpgradeService.Report report = waitFor(CompletableFuture.supplyAsync(() -> upgrades.compare(to)),
                 PLUGIN_WRITE_SECONDS, "read what moving " + name + " changes");
-        String preview = movePreview(plugin, from, to, to.equals(local), report);
+        String preview = movePreview(plugin, from, to, to.equals(local), report, rulesFirst);
         if (!confirm) return preview + "\nplugins set_version with confirm moves it.";
         PluginMove asked = PluginMove.asked(name, from, to);
         PluginMove before = move.get();
@@ -803,7 +809,9 @@ final class StudioBridge implements StudioDriver {
                 + "with Studio's own permissions.";
         // Its own thread: the question waits up to ASK_MINUTES and the pass up to PLUGIN_WRITE_SECONDS.
         try {
-            Thread.ofVirtual().name("plugin-move").start(() -> carryMove(asked, upgrades, question, moved));
+            int broken = rulesFirst ? report.broken().size() : 0;
+            Thread.ofVirtual().name("plugin-move").start(() -> carryMove(asked, upgrades, question, rulesFirst,
+                    broken, moved));
         } catch (RuntimeException | Error e) {
             move.set(asked.declined("Studio could not start it."));
             throw e;
@@ -811,8 +819,13 @@ final class StudioBridge implements StudioDriver {
         return asked.started();
     }
 
-    /** Asks {@code question} and, once the user agrees, moves the plugin; {@link #move} follows it to its end. */
-    private void carryMove(PluginMove asked, PluginUpgradeService upgrades, String question, Runnable moved) {
+    /**
+     * Asks {@code question} and, once the user agrees, moves the plugin — with {@code rulesFirst} only its pom, as
+     * the upgrade's Migrate first, the {@code broken} elements left to the bot's rules; {@link #move} follows it to
+     * its end.
+     */
+    private void carryMove(PluginMove asked, PluginUpgradeService upgrades, String question, boolean rulesFirst,
+                           int broken, Runnable moved) {
         // The end is published last: until the plugins' tools are served anew, every tool still waits.
         PluginMove ended = asked.failed("it stopped unexpectedly.");
         boolean wrote = false;
@@ -824,8 +837,12 @@ final class StudioBridge implements StudioDriver {
             move.set(asked.moving());
             wrote = true;
             // As Upgrade anyway: a broken element no rule covers takes a seeded default rule, marked for review.
-            ProjectUpgrade.Result result = waitFor(ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(upgrades,
-                    asked.to())), ctx.libraryService()::updateVersions), PLUGIN_WRITE_SECONDS, "move " + asked.plugin());
+            // As Migrate first, with rulesFirst: the pom alone, the code left to the bot's rules.
+            List<ProjectUpgrade.Row> rows = List.of(new ProjectUpgrade.Row(upgrades, asked.to()));
+            ProjectUpgrade.Result result = waitFor(rulesFirst
+                            ? ProjectUpgrade.moveOnly(rows, ctx.libraryService()::updateVersions)
+                            : ProjectUpgrade.run(rows, ctx.libraryService()::updateVersions),
+                    PLUGIN_WRITE_SECONDS, "move " + asked.plugin());
             onFx(() -> {
                 // A holder the repair of the values deleted: its buffer goes, and the editor moves off it.
                 ProjectFile active = ctx.state().getActiveFile();
@@ -836,7 +853,9 @@ final class StudioBridge implements StudioDriver {
                 return null;
             });
             say("The assistant moved " + asked.plugin() + " from " + asked.from() + " to " + asked.to() + ".");
-            ended = asked.moved(result.summary());
+            ended = asked.moved(result.summary() + (broken == 0 ? "" : " The code is left as it was: " + broken
+                    + (broken == 1 ? " old element it uses broke" : " old elements it uses broke")
+                    + "; migration list says them."));
         } catch (RuntimeException e) {
             String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             // userAgrees' unanswered question lands here too, before anything was written.
@@ -855,48 +874,154 @@ final class StudioBridge implements StudioDriver {
     /** The assistant's last plugin move, in flight or ended; null before the first. */
     private final AtomicReference<PluginMove> move = new AtomicReference<>();
 
-    /** The Review tab's retired rows and the migration window's methods, as {@link MigrationSummary} says them. */
+    /** Migrate's rows and its values section, as {@link MigrateWindow#listing} says them. */
     @Override
     public String listMigrations() {
         Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
-        BotIndex index = prepared.get();
-        ValueGrammar grammar = PluginHost.grammar();
         try {
-            List<ManagedMigrations.Method> methods = ManagedMigrations.methods(index, grammar);
-            return MigrationSummary.listing(MigrationSteps.pending(index, grammar, PluginHost.managedValues()),
-                    methods, methods.isEmpty() ? List.of() : MigrationCleanup.unneeded(index, grammar));
+            BotIndex index = prepared.get();
+            List<ManagedValue<?>> declared = PluginHost.managedValues();
+            Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
+            List<Broken> broken = migration.broken();
+            List<MigrationSteps.Pending> pending = MigrationSteps.anyRetired(declared)
+                    ? MigrationSteps.pending(index, PluginHost.grammar(), declared) : List.of();
+            return MigrateWindow.listing(migration, broken, migration.done(broken), pending);
         } catch (RuntimeException | LinkageError e) {
             // As the Review tab: a plugin type that cannot load leaves the migrations unread, not Studio broken.
-            throw new IllegalArgumentException("The bot's migrations could not be read: "
-                    + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+            throw unread("The bot's migrations could not be read: ", e);
         }
     }
 
-    /** One pair's steps, as the migration window seeds them, by {@link MigrationSummary#mapping}. */
+    /** Migrate's Write rule: the element's signature and a default body, marked, written as one version. */
     @Override
-    public String readMigration(String from, String to) {
+    public String seedRule(String element) {
+        notReading();
         Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        Path file;
+        Refactor.Outcome outcome;
         try {
-            BotIndex index = prepared.get();
-            ValueGrammar grammar = PluginHost.grammar();
-            List<ManagedValue<?>> declared = PluginHost.managedValues();
-            Set<Class<?>> known = knownTypes(grammar, declared);
-            Class<?> source = migrated(from, known, true);
-            Class<?> target = to == null || to.isBlank() ? null : migrated(to, known, false);
-            return MigrationSummary.mapping(grammar, declared, ManagedMigrations.methods(index, grammar), source,
-                    target);
+            index = prepared.get();
+            Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
+            Broken chosen = MigrateWindow.named(migration.broken(), element);
+            if (chosen.state() != Broken.State.NONE) {
+                throw new IllegalArgumentException(chosen.element().display() + " has its rule already, "
+                        + chosen.rule().qualified() + ".");
+            }
+            file = MigrateWindow.rulesFile(ctx.config(), migration);
+            outcome = migration.seed(chosen.element(), file, ctx.config().mainPackage());
         } catch (RuntimeException | LinkageError e) {
-            throw unread("The migration could not be read: ", e);
+            throw unread("The rule could not be worked out: ", e);
         }
+        if (!(outcome instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) outcome).reason());
+        }
+        return writtenOver(index, plan) + " Its body is a default marked @Refactor: write the replacement with "
+                + "edit_code in " + file.getFileName() + ", then migration apply. migration list names the rule.";
+    }
+
+    /** Migrate's Preview, or its Apply with {@code confirm}: every use a written rule covers, rewritten. */
+    @Override
+    public String applyRules(boolean confirm) {
+        if (confirm) notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        boolean markable = onFx(() -> ReviewMarker.available(ctx.state()));
+        BotIndex index;
+        Rewrite.Result result;
+        try {
+            index = prepared.get();
+            Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
+            if (migration.rules().stream().noneMatch(Rule::ready)) {
+                List<String> open = migration.rules().stream().filter(rule -> rule.seeded() || rule.problem() != null)
+                        .map(rule -> rule.qualified() + (rule.problem() != null ? " (" + rule.problem() + ")"
+                                : " (still seeded)")).toList();
+                throw new IllegalArgumentException(open.isEmpty() ? "No rule is written yet: migration seed one, "
+                        + "then write its body with edit_code." : "No rule can be applied yet: " + String.join(", ",
+                        open) + ". Write a seeded rule's body with edit_code; fix a rule a problem names.");
+            }
+            result = migration.plan(markable);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The migration could not be worked out: ", e);
+        }
+        String left = MigrateWindow.leftText(result.left());
+        if (!(result.outcome() instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) result.outcome()).reason() + left);
+        }
+        if (!confirm) {
+            return result.applied().size() + (result.applied().size() == 1 ? " use to rewrite" : " uses to rewrite")
+                    + ", each as it is → as rewritten:\n" + MigrateWindow.changesText(result.changes()) + "\n"
+                    + left.strip() + (left.isEmpty() ? "" : "\n") + "Call again with confirm to write it; a version "
+                    + "of the bot is saved before it.";
+        }
+        return writtenOver(index, plan) + left;
+    }
+
+    /** Migrate's Remove finished rules: each rule whose element the bot uses nowhere, and a file left empty. */
+    @Override
+    public String removeFinished(boolean confirm) {
+        if (confirm) notReading();
+        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        BotIndex index;
+        List<Rule> done;
+        Migration.Removal removal;
+        try {
+            index = prepared.get();
+            Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
+            done = migration.done(migration.broken());
+            if (done.isEmpty()) return "No rule is finished: each names an element the bot still uses.";
+            removal = migration.remove(done);
+        } catch (RuntimeException | LinkageError e) {
+            throw unread("The removal could not be worked out: ", e);
+        }
+        if (!(removal.outcome() instanceof Refactor.Planned plan)) {
+            throw new IllegalArgumentException(((Refactor.Refused) removal.outcome()).reason());
+        }
+        String what = "Rules whose element the bot uses nowhere: " + String.join(", ", done.stream()
+                .map(Rule::qualified).toList()) + "." + (removal.deleted().isEmpty() ? ""
+                : "\nFiles left holding nothing else, deleted: " + String.join(", ", removal.deleted().stream()
+                .map(file -> file.getFileName().toString()).toList()) + ".");
+        if (!confirm) {
+            return "Would remove:\n" + what + "\nCall again with confirm to remove them; a version of the bot is "
+                    + "saved before it.";
+        }
+        return cleanupWritten(index, plan, removal.deleted()) + "\n" + what;
     }
 
     /**
-     * The window's Apply for one pair: its steps and those its parts go through, seeded and changed by
-     * {@code mapping} ({@link MigrationMapping}), planned with the new type's holder when the bot lacks it. Without
+     * {@code plan} written as one version after a safety one, as Migrate writes it — refused, nothing written, when
+     * a file it reads changed, or a file it creates was made, since {@code index} was read. Its summary.
+     */
+    private String writtenOver(BotIndex index, Refactor.Planned plan) {
+        return onFx(() -> {
+            List<String> changed = MigrationActions.changedSince(ctx.config(), ctx.state(), index.sources());
+            if (!changed.isEmpty()) {
+                throw new IllegalArgumentException(String.join(", ", changed) + " changed while this was worked "
+                        + "out, so nothing was changed. Try again.");
+            }
+            for (Path file : plan.rewrites().keySet()) {
+                // A file the plan creates (Migrations, the new type's holder) made meanwhile would be overwritten.
+                if (!index.sources().containsKey(file) && Files.exists(file)) {
+                    throw new IllegalArgumentException(file.getFileName() + " was made while this was worked out, "
+                            + "so nothing was changed. Try again.");
+                }
+            }
+            try {
+                MigrationWindow.written(ctx.config(), ctx.state(), plan, index, this::redrawIfActive);
+            } catch (RuntimeException | LinkageError failed) {
+                throw stoppedPartWay(failed);
+            }
+            ctx.eventBus().publish(new CoreApplicationEvents.MigratedEvent());
+            return plan.summary() + ". The version before it is in versions list.";
+        });
+    }
+
+    /**
+     * Copy values: the pair's steps and those its parts go through, as the bot's {@code @Migrate} method for the
+     * pair has them, else first guessed, planned with the new type's holder when the bot lacks it. Without
      * {@code confirm}, what it would write and each value before and after; with it, written as one version.
      */
     @Override
-    public String setMigration(String from, String to, String mapping, boolean confirm) {
+    public String copyValues(String from, String to, boolean confirm) {
         if (confirm) notReading();
         Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
         BotIndex index;
@@ -909,7 +1034,7 @@ final class StudioBridge implements StudioDriver {
             Class<?> source = migrated(from, known, true);
             Class<?> target = migrated(to, known, false);
             MigrationMapping.Asked asked = MigrationMapping.steps(grammar, ManagedMigrations.methods(index, grammar),
-                    source, target, mapping);
+                    source, target, "");
             if (asked.problem() != null) throw new IllegalArgumentException(asked.problem());
             // On FX, as the window works it out: it asks every plugin how it writes the holder.
             Map<Path, String> created = onFx(() -> MigrationWindow.holderFor(ctx.config(), grammar, declared, index,
@@ -927,26 +1052,7 @@ final class StudioBridge implements StudioDriver {
             return "Would write: " + plan.summary() + ".\n" + said + "\nCall again with confirm to write it; a "
                     + "version of the bot is saved before it.";
         }
-        return onFx(() -> {
-            List<String> changed = MigrationActions.changedSince(ctx.config(), ctx.state(), index.sources());
-            if (!changed.isEmpty()) {
-                throw new IllegalArgumentException(String.join(", ", changed) + " changed while this was worked "
-                        + "out, so nothing was changed. Try again.");
-            }
-            for (Path file : plan.rewrites().keySet()) {
-                // A file the plan creates (Migrations, the new type's holder) made meanwhile would be overwritten.
-                if (!index.sources().containsKey(file) && java.nio.file.Files.exists(file)) {
-                    throw new IllegalArgumentException(file.getFileName() + " was made while this was worked out, "
-                            + "so nothing was changed. Try again.");
-                }
-            }
-            try {
-                MigrationWindow.written(ctx.config(), ctx.state(), plan, index, this::redrawIfActive);
-            } catch (RuntimeException | LinkageError failed) {
-                throw stoppedPartWay(failed);
-            }
-            return plan.summary() + ". The version before it is in versions list.\n" + said;
-        });
+        return writtenOver(index, plan) + "\n" + said;
     }
 
     /**
@@ -974,7 +1080,7 @@ final class StudioBridge implements StudioDriver {
             Class<?> target = (to == null || to.isBlank()) && !named.isEmpty()
                     ? MigrationCleanup.copyTarget(index, grammar, declared, source, named.iterator().next())
                     .orElseThrow(() -> new IllegalArgumentException("No copy of " + named.iterator().next()
-                            + " was found: migrate it first (migration set)."))
+                            + " was found: copy it first (migration copy_values)."))
                     : copiedInto(index, grammar, declared, source, to, known);
             String note = onFx(() -> MigrationActions.leftNote(ctx.state(), source));
             switched = MigrationCleanup.switchUses(index, grammar, declared, source, target, named, note);
@@ -1046,7 +1152,7 @@ final class StudioBridge implements StudioDriver {
         if (to != null && !to.isBlank()) return migrated(to, known, false);
         return MigrationCleanup.copiedInto(index, grammar, declared, from).orElseThrow(() ->
                 new IllegalArgumentException("No single type holds copies of " + from.getSimpleName()
-                        + "'s values: migrate them first (migration set), or name the type in to."));
+                        + "'s values: copy them first (migration copy_values), or name the type in to."));
     }
 
     /** A cleanup step written as {@link MigrationActions} writes it, its refusal as the tool's. */
@@ -1054,7 +1160,8 @@ final class StudioBridge implements StudioDriver {
         Map<Path, String> basis = MigrationActions.basis(index, plan, deleted);
         MigrationActions.Wrote wrote = onFx(() -> {
             try {
-                return new MigrationActions(ctx.config(), ctx.state(), () -> null, this::redrawIfActive, () -> {})
+                return new MigrationActions(ctx.config(), ctx.state(), () -> null, this::redrawIfActive,
+                        () -> ctx.eventBus().publish(new CoreApplicationEvents.MigratedEvent()))
                         .write(plan, deleted, basis);
             } catch (RuntimeException | LinkageError failed) {
                 throw stoppedPartWay(failed);
@@ -1092,8 +1199,7 @@ final class StudioBridge implements StudioDriver {
     private static Class<?> migrated(String name, Set<Class<?>> known, boolean old) {
         return MigrationSummary.named(name, PluginHost.classLoader(), known)
                 .orElseThrow(() -> new IllegalArgumentException("No single type is named \"" + name + "\"; give its "
-                        + "full name" + (old ? ", as migration list names the retired ones and migration read the "
-                        + "pairs they go through." : ".")));
+                        + "full name" + (old ? ", as migration list names the retired ones." : ".")));
     }
 
     private static IllegalArgumentException unread(String what, Throwable e) {
@@ -1110,13 +1216,26 @@ final class StudioBridge implements StudioDriver {
 
     /** What moving {@code plugin} from {@code from} to {@code to} would change, as the question says it. */
     private static String movePreview(InstalledPlugin plugin, String from, String to, boolean local,
-                                      PluginUpgradeService.Report report) {
+                                      PluginUpgradeService.Report report, boolean rulesFirst) {
         List<String> lines = new ArrayList<>();
         lines.add("Moving " + plugin.displayName() + " (" + plugin.coordinate() + ") from " + from + " to " + to
                 + (local ? ", this computer's own build, which no release checked" : "") + ": "
                 + InstalledPluginsTab.chipText(report) + ".");
-        lines.addAll(brokenLines(report));
-        lines.addAll(report.values());
+        if (rulesFirst && !report.broken().isEmpty()) {
+            lines.add("Only the pom moves. " + report.broken().size() + " broken element(s) are left as written, "
+                    + "for the bot's @Migrate rules (migration list after the move): " + String.join(", ",
+                    report.broken().stream().map(b -> b.element().display() + " (" + b.sites().size() + ")")
+                            .limit(20).toList()) + ".");
+        } else {
+            lines.addAll(brokenLines(report));
+        }
+        // Migrate first repairs no value either: what the move would do to them is left undone.
+        if (rulesFirst && !report.values().isEmpty()) {
+            lines.add("The plugin's values are left as written too, unrepaired: " + report.values().size()
+                    + " repair(s) a full move would make.");
+        } else {
+            lines.addAll(report.values());
+        }
         for (MigrationSteps.Stranded set : report.stranded()) {
             lines.add(MigrationSummary.stranded(set, plugin.displayName() + " " + to));
         }
