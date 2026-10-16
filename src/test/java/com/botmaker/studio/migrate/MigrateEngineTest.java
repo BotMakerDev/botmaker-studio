@@ -221,6 +221,37 @@ class MigrateEngineTest {
     }
 
     @Test
+    void aPreviewShowsEachOutermostUseBeforeAndAfter() throws IOException {
+        Bot bot = bot(BOT, RULES);
+        Rewrite.Result result = Migration.of(bot.now(), bot.old()).plan(false);
+        List<String> changes = result.changes().stream().map(c -> c.before() + " => " + c.after()).toList();
+        assertTrue(changes.contains("Screen.named(\"home\").marker(\"a\").marker(\"b\") => "
+                + "Screen.named(\"home\").markers(List.of(\"a\")).markers(List.of(\"b\"))"), changes.toString());
+        assertTrue(result.changes().stream().noneMatch(c -> c.before().equals("Screen.named(\"home\").marker(\"a\")")),
+                changes.toString());
+    }
+
+    @Test
+    void onceNoUseIsLeftEveryRuleIsFinishedAndRemovingThemDeletesTheirFile() throws IOException {
+        Bot bot = bot(BOT, RULES);
+        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class,
+                Migration.of(bot.now(), bot.old()).plan(false).outcome());
+        BotIndex migrated = bot.now().replacing(merged(bot.now().sources(), plan.rewrites()));
+        Migration after = Migration.of(migrated, bot.old());
+        List<Broken> broken = after.broken();
+        assertEquals(List.of(), broken.stream().map(b -> b.element().display()).toList());
+        List<Rule> done = after.done(broken);
+        assertEquals(after.rules().size(), done.size());
+
+        Migration.Removal removal = after.remove(done);
+        assertInstanceOf(Refactor.Planned.class, removal.outcome(), () -> removal.outcome().toString());
+        assertEquals(java.util.Set.of(bot.botFile().resolveSibling("Migrations.java")), removal.deleted());
+        // Before the uses are rewritten, no rule is finished.
+        Migration before = Migration.of(bot.now(), bot.old());
+        assertEquals(List.of(), before.done(before.broken()).stream().map(Rule::qualified).toList());
+    }
+
+    @Test
     void withNoRuleNothingIsRewrittenAndEveryBreakIsListed() throws IOException {
         Bot bot = bot(BOT, "package bot; public class Migrations {}");
         Migration migration = Migration.of(bot.now(), bot.old());
@@ -484,6 +515,24 @@ class MigrateEngineTest {
         Path before = Path.of(api.previous(project, List.of(jar.toString())).getFirst());
         assertTrue(before.startsWith(cache), before.toString());
         assertTrue(java.util.Arrays.equals(Files.readAllBytes(oldJar), Files.readAllBytes(before)));
+    }
+
+    @Test
+    void theClasspathBeforeAnUpgradeIsTheOneLoadedBeforeIt() throws IOException {
+        ApiCache api = new ApiCache(dir.resolve("api-cache-upgrade"));
+        Path project = dir.resolve("upgraded");
+        String before = Files.copy(oldJar, Files.createDirectories(dir.resolve("m2/lib/1.0")).resolve("lib-1.0.jar"))
+                .toString();
+        String after = Files.copy(newJar, Files.createDirectories(dir.resolve("m2/lib/2.0")).resolve("lib-2.0.jar"))
+                .toString();
+        api.loaded(project, List.of(before));
+        // The pom moved and the new classpath is not loaded yet: the one recorded is the one before.
+        assertEquals(List.of(before), api.previous(project, List.of(after)));
+        api.loaded(project, List.of(after));
+        api.loaded(project, List.of(after));
+        assertEquals(List.of(before), api.previous(project, List.of(after)));
+        // A project never loaded before has nothing to compare with.
+        assertEquals(List.of(after), api.previous(dir.resolve("new"), List.of(after)));
     }
 
     // --- the bot ------------------------------------------------------------------------------------------------

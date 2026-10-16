@@ -6,6 +6,8 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.migrate.ApiCache;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.PluginOwners;
 import com.botmaker.studio.services.LibraryService;
@@ -465,6 +467,10 @@ public class UIManager implements ProjectWindow {
                 () -> PluginOwners.absent(config), () -> actions.openPlugins(PluginsWindow.Section.BROWSE),
                 () -> EditorCanvas.loadProblemLines(PluginHost.failures(), libraryService.unresolved()),
                 () -> actions.openPlugins(PluginsWindow.Section.INSTALLED), PluginHost::devBuilds);
+        // What the last plugin change broke, under its own banner: read at open and after each change.
+        checkBroken();
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> checkBroken(), true);
+        eventBus.subscribe(CoreApplicationEvents.MigrateRequestedEvent.class, e -> openMigrate(), true);
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.
@@ -542,6 +548,11 @@ public class UIManager implements ProjectWindow {
             @Override
             public void removeMigrationMethods() {
                 migrationActions().removeMethods(toldInADialog());
+            }
+
+            @Override
+            public void openMigrate() {
+                UIManager.this.openMigrate();
             }
         });
         // A managed value's right-click Migrate type…: the same window, the plugin's replacement preselected.
@@ -720,6 +731,49 @@ public class UIManager implements ProjectWindow {
         javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
                 : reviewPanel.node().getScene().getWindow();
         MigrationWindow.open(owner, config, state, from, to, this::redrawIfActive, reviewPanel::refresh);
+    }
+
+    /** Migrate, over what the last plugin change broke; once it writes, the Review list and the banner re-read. */
+    private void openMigrate() {
+        if (reviewPanel == null) return;
+        javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
+                : reviewPanel.node().getScene().getWindow();
+        MigrateWindow.open(owner, config, state, eventBus, this::redrawIfActive, () -> {
+            reviewPanel.refresh();
+            checkBroken();
+        }, from -> openMigration(from, null));
+    }
+
+    /** Which read of {@link #checkBroken} is the newest: an older answer is dropped. */
+    private long brokenAsked;
+
+    /**
+     * Puts up or takes down the canvas's migrate banner: how many old elements the bot uses that the last plugin
+     * change broke. Nothing is parsed when nothing changed; otherwise the bot is compiled twice, on a worker.
+     */
+    private void checkBroken() {
+        if (editorCanvas == null || state.isReaderMode()) return;
+        long asked = ++brokenAsked;
+        List<String> classpath = state.getResolvedClasspath();
+        if (ApiCache.shared().previous(config.projectPath(), classpath).equals(classpath)) {
+            editorCanvas.showBroken(0, this::openMigrate);
+            return;
+        }
+        java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Thread worker = new Thread(() -> {
+            int count;
+            try {
+                count = MigrateWindow.brokenSince(index.get(), config.projectPath());
+            } catch (RuntimeException | LinkageError e) {
+                count = 0;
+            }
+            int found = count;
+            Platform.runLater(() -> {
+                if (asked == brokenAsked && editorCanvas != null) editorCanvas.showBroken(found, this::openMigrate);
+            });
+        }, "migrate-check");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /** The steps after a migration, owned by the main window, the Review list re-read after each. */

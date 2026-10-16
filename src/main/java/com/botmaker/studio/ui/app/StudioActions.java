@@ -184,7 +184,8 @@ final class StudioActions {
     void openPlugins(PluginsWindow.Section section) {
         new PluginsWindow(primaryStage, config, state, libraryService, pluginRegistry, jitPackSearch,
                 mavenCentralSearch, menuBar::reviewChanges,
-                from -> eventBus.publish(new CoreApplicationEvents.MigrateTypeRequestedEvent(from))).show(section);
+                from -> eventBus.publish(new CoreApplicationEvents.MigrateTypeRequestedEvent(from)),
+                () -> eventBus.publish(new CoreApplicationEvents.MigrateRequestedEvent())).show(section);
     }
 
     /**

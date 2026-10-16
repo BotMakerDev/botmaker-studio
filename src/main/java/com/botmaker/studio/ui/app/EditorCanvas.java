@@ -299,6 +299,33 @@ final class EditorCanvas {
                 devModeBanner);
     }
 
+    /** Above the canvas while the last plugin change broke something the bot uses; null otherwise. */
+    private HBox brokenBanner;
+
+    /**
+     * The migrate banner (2026-10-16): an upgrade, a removal or a dev build rebuilt under the same version broke
+     * {@code count} old elements the bot still uses, and Migrate is one button away. {@code 0} takes it down.
+     */
+    void showBroken(int count, Runnable onMigrate) {
+        if (brokenBanner != null) {
+            column.getChildren().remove(brokenBanner);
+            brokenBanner = null;
+        }
+        if (count <= 0) return;
+        Label msg = new Label(MigrateWindow.brokenText(count));
+        msg.setWrapText(true);
+        msg.setMinWidth(0);
+        HBox.setHgrow(msg, Priority.ALWAYS);
+        Button migrate = new Button("Migrate…");
+        migrate.setMinWidth(Region.USE_PREF_SIZE);
+        migrate.setOnAction(e -> onMigrate.run());
+        brokenBanner = new HBox(10, msg, migrate);
+        brokenBanner.setAlignment(Pos.CENTER_LEFT);
+        brokenBanner.getStyleClass().add("missing-plugin-banner");
+        column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
+                brokenBanner);
+    }
+
     /** The dev-mode banner's line, or {@code ""} when no dev build is bound. Pure, for the test. */
     static String devModeText(List<String> devBuilds) {
         if (devBuilds == null || devBuilds.isEmpty()) return "";

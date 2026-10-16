@@ -112,6 +112,7 @@ public final class InstalledPluginsTab {
     private final Runnable onOpenReview;
     private final Runnable onChanged;
     private final Consumer<Class<?>> onMigrate;
+    private final Runnable onMigrateRules;
     private final VBox root = new VBox(12);
 
     /** Shown while a row pins a dev build Studio refused; see {@link #showDevBar}. */
@@ -138,12 +139,14 @@ public final class InstalledPluginsTab {
      * @param onChanged    after a pass or a removal wrote the pom, so the window's other tabs read it again
      * @param onMigrate    <i>Migrate first</i>: the migration window on a type the move would strand, which the
      *                     shell owns, so the window closes behind it
+     * @param onMigrateRules <i>Migrate first</i> before a move that breaks what no rule covers: Migrate, once the
+     *                     pom moved, the window closing behind it
      */
     InstalledPluginsTab(ProjectConfig config, ProjectState state, LibraryService libraryService,
                         PluginRegistry registry, JitPackSearch jitpack,
                         Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds,
                         Runnable onAddPlugin, Runnable onOpenReview, Runnable onChanged,
-                        Consumer<Class<?>> onMigrate) {
+                        Consumer<Class<?>> onMigrate, Runnable onMigrateRules) {
         this.config = config;
         this.state = state;
         this.libraryService = libraryService;
@@ -154,6 +157,7 @@ public final class InstalledPluginsTab {
         this.onOpenReview = onOpenReview;
         this.onChanged = onChanged;
         this.onMigrate = onMigrate;
+        this.onMigrateRules = onMigrateRules;
         build();
     }
 
@@ -895,9 +899,15 @@ public final class InstalledPluginsTab {
                         String open = openSentence(moving, reports);
                         if (!open.isEmpty()) {
                             status("");
-                            Optional<ButtonType> answer = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, open)
-                                    .showAndWait();
-                            if (answer.isEmpty() || answer.get() != ButtonType.OK) {
+                            ButtonType migrate = new ButtonType("Migrate first", ButtonBar.ButtonData.OK_DONE);
+                            ButtonType anyway = new ButtonType("Upgrade anyway", ButtonBar.ButtonData.OTHER);
+                            Optional<ButtonType> answer = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, open,
+                                    migrate, anyway, ButtonType.CANCEL).showAndWait();
+                            if (answer.isPresent() && answer.get() == migrate) {
+                                moveOnly(moving);
+                                return;
+                            }
+                            if (answer.isEmpty() || answer.get() != anyway) {
                                 endBusy();
                                 status("Nothing was changed.");
                                 return;
@@ -928,10 +938,33 @@ public final class InstalledPluginsTab {
         if (open.isEmpty()) return "";
         return "This move breaks " + open.size() + (open.size() == 1 ? " element" : " elements") + " no @Migrate"
                 + " rule of yours covers: " + String.join(", ", open.stream().limit(12).toList())
-                + (open.size() > 12 ? " and " + (open.size() - 12) + " more" : "") + ".\n\nUpgrade anyway writes a"
+                + (open.size() > 12 ? " and " + (open.size() - 12) + " more" : "") + ".\n\nMigrate first moves the"
+                + " version and leaves the bot's code as it is: Migrate lists each element, you write its rule, and"
+                + " Apply rewrites every use.\n\nUpgrade anyway writes a"
                 + " default rule for each into Migrations — a value standing for nothing, or the call deleted —"
                 + " marked for review, and applies it. A use no rule can stand at is left as written and marked."
-                + " A version of the bot is saved first.";
+                + "\n\nEither way a version of the bot is saved first.";
+    }
+
+    /** <i>Migrate first</i>: one snapshot and the pom moved, the code left as it is, then Migrate. */
+    private void moveOnly(List<ProjectUpgrade.Row> moving) {
+        progress.setVisible(true);
+        status("Saving a version and moving " + (moving.size() == 1 ? "to " + moving.getFirst().targetVersion()
+                : moving.size() + " plugins") + "…");
+        ProjectUpgrade.moveOnly(moving, libraryService::updateVersions)
+                .whenComplete((result, error) -> Platform.runLater(() -> {
+                    endBusy();
+                    status("");
+                    if (error != null) {
+                        Throwable cause = error.getCause() != null ? error.getCause() : error;
+                        ThemedWindows.alert(Alert.AlertType.ERROR,
+                                "The move did not run:\n\n" + cause.getMessage()).showAndWait();
+                        return;
+                    }
+                    reload();
+                    onChanged.run();
+                    onMigrateRules.run();
+                }));
     }
 
     /** The pass itself: one snapshot, the code carried over by the bot's rules, the pom written once. */

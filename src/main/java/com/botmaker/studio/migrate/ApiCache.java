@@ -2,6 +2,7 @@ package com.botmaker.studio.migrate;
 
 import com.botmaker.shared.config.CacheDirs;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,24 +14,29 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
 
 /**
- * The bytes each {@code -SNAPSHOT} jar of a project had before its last change, kept so the old API can still be
- * read on a reload of the same version (2026-10-16).
+ * The classpath each project loaded before its last change, kept so the old API can still be read once the
+ * jars moved (2026-10-16): what the Migrate window compares the bot against, on demand.
  *
- * <p><b>Why only {@code -SNAPSHOT}.</b> A released jar never changes under its path, so an upgrade's old jars are
- * still in the local repository under the version the pom pinned. A {@code -SNAPSHOT} is rebuilt in place by
- * {@code mvn install}, and once it is the jar the bot compiled against is gone — unless a copy was taken while it
- * was loaded. Each load copies a {@code -SNAPSHOT} jar whose bytes it has not seen to {@code <sha>.jar} and
- * records, per project and jar path, the bytes now loaded and the ones loaded before them.
+ * <p><b>What a change is.</b> Each load records the classpath it loaded; one that differs from the last
+ * recorded keeps that last one as the classpath before. An upgrade or a removal changes the jars' paths; a
+ * {@code -SNAPSHOT} rebuilt in place by {@code mvn install} keeps its path and changes its bytes, so each
+ * {@code -SNAPSHOT} jar is recorded as a copy of the bytes loaded, {@code <sha>.jar} — the jar the bot compiled
+ * against is gone once rebuilt, unless a copy was taken while it was loaded. A released jar never changes under
+ * its path, so it is recorded as itself.
  *
  * <p>Best-effort: a cache that cannot be written answers the jars themselves, which is the same bot on both
  * sides — nothing is broken and nothing rewritten.
  */
 public final class ApiCache {
+
+    private static final String LOADED = "classpath";
+    private static final String BEFORE = "before";
 
     private final Path root;
 
@@ -44,10 +50,12 @@ public final class ApiCache {
     }
 
     /**
-     * Records that {@code project} loaded {@code classpath}: each {@code -SNAPSHOT} jar whose size or time
-     * changed is hashed, copied when its bytes are new, and its bytes before kept as its previous ones.
+     * Records that {@code project} loaded {@code classpath}: each {@code -SNAPSHOT} jar whose size or time changed
+     * is hashed and copied when its bytes are new, and a classpath unlike the last one keeps that one as before.
      */
     public void loaded(Path project, List<String> classpath) {
+        // An open whose resolve failed binds no jar: no change the bot was carried over.
+        if (classpath == null || classpath.isEmpty()) return;
         synchronized (LOCK) {
             record(project, classpath);
         }
@@ -58,43 +66,73 @@ public final class ApiCache {
 
     private void record(Path project, List<String> classpath) {
         Properties record = read(project);
-        boolean changed = false;
+        Properties was = (Properties) record.clone();
+        List<String> kept = new ArrayList<>();
         for (String entry : classpath) {
             Path jar = Path.of(entry);
-            if (!snapshot(jar) || !Files.isRegularFile(jar)) continue;
+            if (!snapshot(jar) || !Files.isRegularFile(jar)) {
+                kept.add(entry);
+                continue;
+            }
             try {
                 String stamp = Files.size(jar) + ":" + Files.getLastModifiedTime(jar).toMillis();
-                if (stamp.equals(record.getProperty(entry + ".stamp"))) continue;
-                String sha = kept(jar);
-                String current = record.getProperty(entry + ".current");
-                if (current != null && !current.equals(sha)) record.setProperty(entry + ".previous", current);
-                record.setProperty(entry + ".current", sha);
-                record.setProperty(entry + ".stamp", stamp);
-                changed = true;
+                if (!stamp.equals(record.getProperty(entry + ".stamp"))) {
+                    record.setProperty(entry + ".current", kept(jar));
+                    record.setProperty(entry + ".stamp", stamp);
+                }
+                kept.add(root.resolve(record.getProperty(entry + ".current") + ".jar").toString());
             } catch (IOException | UncheckedIOException e) {
                 System.err.println("Could not keep a copy of " + jar.getFileName() + " for migrations: "
                         + e.getMessage());
+                kept.add(entry);
             }
         }
-        if (changed) write(project, record);
+        String loaded = String.join(File.pathSeparator, kept);
+        String last = record.getProperty(LOADED);
+        if (!loaded.equals(last)) {
+            if (last != null) record.setProperty(BEFORE, last);
+            record.setProperty(LOADED, loaded);
+        }
+        if (!record.equals(was)) write(project, record);
     }
 
     /**
-     * {@code classpath} as {@code project} loaded it before: each {@code -SNAPSHOT} jar whose bytes changed since
-     * replaced by its copy of the bytes before. Every other entry is itself.
+     * The classpath {@code project} loaded before {@code classpath}, the one it has now: the one before the last
+     * recorded change, or the last one recorded when {@code classpath} is a change not recorded yet. {@code classpath}
+     * itself when there is none, or a jar of it is gone.
      */
     public List<String> previous(Path project, List<String> classpath) {
         Properties record;
         synchronized (LOCK) {
             record = read(project);
         }
+        String last = record.getProperty(LOADED);
+        if (last == null) return List.copyOf(classpath);
+        String before = recorded(record, classpath).equals(last) ? record.getProperty(BEFORE) : last;
+        if (before == null || before.isEmpty()) return List.copyOf(classpath);
+        List<String> out = Arrays.asList(before.split(File.pathSeparator));
+        return out.stream().allMatch(entry -> Files.isRegularFile(Path.of(entry))) ? List.copyOf(out)
+                : List.copyOf(classpath);
+    }
+
+    /** {@code classpath} as a load would record it, with what {@code record} knows: a jar's bytes unseen as itself. */
+    private String recorded(Properties record, List<String> classpath) {
         List<String> out = new ArrayList<>();
         for (String entry : classpath) {
-            String before = record.getProperty(entry + ".previous");
-            Path copy = before == null ? null : root.resolve(before + ".jar");
-            out.add(copy != null && Files.isRegularFile(copy) ? copy.toString() : entry);
+            Path jar = Path.of(entry);
+            String current = record.getProperty(entry + ".current");
+            String stamp = record.getProperty(entry + ".stamp");
+            String now = null;
+            if (current != null && snapshot(jar) && Files.isRegularFile(jar)) {
+                try {
+                    now = Files.size(jar) + ":" + Files.getLastModifiedTime(jar).toMillis();
+                } catch (IOException e) {
+                    now = null;
+                }
+            }
+            out.add(now != null && now.equals(stamp) ? root.resolve(current + ".jar").toString() : entry);
         }
-        return List.copyOf(out);
+        return String.join(File.pathSeparator, out);
     }
 
     /** Whether {@code jar} sits in a {@code -SNAPSHOT} version's folder of a Maven repository. */

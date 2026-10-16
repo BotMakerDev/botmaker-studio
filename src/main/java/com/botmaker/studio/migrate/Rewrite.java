@@ -68,14 +68,26 @@ public final class Rewrite {
      * @param outcome the files rewritten, or why nothing is
      * @param applied each use rewritten
      * @param left    each use left as written
+     * @param changes each outermost use rewritten, as it reads before and after: what a preview shows
      */
-    public record Result(Refactor.Outcome outcome, List<Sites.Site> applied, List<Left> left) {
+    public record Result(Refactor.Outcome outcome, List<Sites.Site> applied, List<Left> left, List<Change> changes) {
 
         public Result {
             applied = List.copyOf(applied);
             left = List.copyOf(left);
+            changes = List.copyOf(changes);
+        }
+
+        Result(Refactor.Outcome outcome, List<Sites.Site> applied, List<Left> left) {
+            this(outcome, applied, left, List.of());
         }
     }
+
+    /**
+     * One use as a rewrite changes it: its text before, and after — {@code ""} for a call its rule deletes. A use
+     * inside it that a rule rewrites too is rewritten in both.
+     */
+    public record Change(Sites.Site site, String before, String after) {}
 
     /**
      * One use, planned: the range of the original text it replaces and its new text, or why it has none.
@@ -195,7 +207,15 @@ public final class Rewrite {
         }
         String summary = "Migrated " + applied.size() + (applied.size() == 1 ? " use" : " uses")
                 + (left.isEmpty() ? "" : ", " + left.size() + " left for review");
-        return new Result(new Refactor.Planned(summary, rewrites), applied, left);
+        List<Change> changes = new ArrayList<>();
+        for (FilePlan file : files) {
+            List<Candidate> live = file.candidates().stream()
+                    .filter(c -> c.ok() && !failed.containsKey(c) && !consumed(c, file, failed)).toList();
+            for (Candidate each : top(live)) {
+                changes.add(new Change(each.site(), file.source().substring(each.start(), each.end()), each.text()));
+            }
+        }
+        return new Result(new Refactor.Planned(summary, rewrites), applied, left, changes);
     }
 
     // --- planning one file, over the old parse ------------------------------------------------------------------

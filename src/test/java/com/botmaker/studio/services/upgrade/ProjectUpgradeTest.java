@@ -81,6 +81,21 @@ class ProjectUpgradeTest {
         assertTrue(result.summary().contains("left for you to finish"), result.summary());
     }
 
+    /** Migrate first moves every row in one write and rewrites nothing: the author carries the bot over in Migrate. */
+    @Test
+    void migrateFirstMovesThePomAndLeavesTheCode(@TempDir Path tmp) throws Exception {
+        Recorder writer = new Recorder();
+        List<ProjectUpgrade.Row> rows = List.of(
+                new ProjectUpgrade.Row(UpgradeFixtures.serviceOver(tmp.resolve("a"), BOT), "2.0.0"),
+                new ProjectUpgrade.Row(UpgradeFixtures.serviceOver(tmp.resolve("b"), BOT), "3.0.0"));
+
+        ProjectUpgrade.Result result = ProjectUpgrade.moveOnly(rows, writer).get();
+        assertEquals(1, writer.calls.get(), "one pom write for every row");
+        assertEquals(2, result.moved().size());
+        assertEquals(0, result.filesRewritten());
+        assertEquals(0, ProjectUpgrade.moveOnly(List.of(), writer).get().moved().size());
+    }
+
     /** One row that cannot be checked does not stop the row beside it either: both move, in one write. */
     @Test
     void oneUncheckedRowDoesNotStopTheRowsBesideIt(@TempDir Path tmp) throws Exception {

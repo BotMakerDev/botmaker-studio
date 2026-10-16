@@ -200,6 +200,9 @@ public class CoreApplicationEvents {
     /** A block's right-click Go to Definition: the highlighted block names what to go to. */
     public record GoToDefinitionRequestedEvent() implements ApplicationEvent {}
 
+    /** Project ▸ Migrate…, the canvas's banner, the Review row, an upgrade's Migrate first: open Migrate. */
+    public record MigrateRequestedEvent() implements ApplicationEvent {}
+
     /** A managed value's right-click Migrate type…: open the migration window on its type's values. */
     public record MigrateTypeRequestedEvent(Class<?> from) implements ApplicationEvent {}
 

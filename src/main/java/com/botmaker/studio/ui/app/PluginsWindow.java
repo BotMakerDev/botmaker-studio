@@ -69,6 +69,7 @@ public final class PluginsWindow {
     private final MavenCentralSearch mavenCentral;
     private final Runnable onOpenReview;
     private final Consumer<Class<?>> onMigrate;
+    private final Runnable onMigrateRules;
 
     private final TabPane tabs = new TabPane();
     private final Label loadProblems = new Label();
@@ -88,10 +89,11 @@ public final class PluginsWindow {
     /**
      * @param onOpenReview raises the shell's Review tab; offered after a pass rewrote the bot's code
      * @param onMigrate    opens the shell's migration window on a type; offered before a move that strands its values
+     * @param onMigrateRules opens the shell's Migrate; offered before a move that breaks what no rule covers
      */
     public PluginsWindow(Window owner, ProjectConfig config, ProjectState state, LibraryService libraryService,
                          PluginRegistry registry, JitPackSearch jitpack, MavenCentralSearch mavenCentral,
-                         Runnable onOpenReview, Consumer<Class<?>> onMigrate) {
+                         Runnable onOpenReview, Consumer<Class<?>> onMigrate, Runnable onMigrateRules) {
         this.owner = owner;
         this.config = config;
         this.state = state;
@@ -101,6 +103,7 @@ public final class PluginsWindow {
         this.mavenCentral = mavenCentral;
         this.onOpenReview = onOpenReview;
         this.onMigrate = onMigrate;
+        this.onMigrateRules = onMigrateRules;
     }
 
     public void show(Section section) {
@@ -118,6 +121,10 @@ public final class PluginsWindow {
                 from -> {
                     stage.close();
                     onMigrate.accept(from);
+                },
+                () -> {
+                    stage.close();
+                    onMigrateRules.run();
                 });
         browse = new BrowsePluginsTab(libraryService, registry, jitpack, this::localBuilds,
                 () -> select(Section.INSTALLED), this::afterBrowseChanged);

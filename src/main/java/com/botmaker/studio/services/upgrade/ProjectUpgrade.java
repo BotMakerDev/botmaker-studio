@@ -174,6 +174,31 @@ public final class ProjectUpgrade {
                 .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }
 
+    /**
+     * <i>Migrate first</i> (2026-10-16): one snapshot and the pom moved, the bot's code and values left as they are,
+     * for its author to carry over in Migrate — which reads what the move broke against the jars loaded before it.
+     */
+    public static CompletableFuture<Result> moveOnly(List<Row> rows, PomWriter writer) {
+        List<Row> moving = rows.stream()
+                .filter(r -> !r.targetVersion().isBlank()
+                        && !r.targetVersion().equals(r.upgrades().currentVersion()))
+                .toList();
+        if (moving.isEmpty()) return CompletableFuture.completedFuture(Result.nothing());
+        return CompletableFuture
+                .supplyAsync(() -> {
+                    moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
+                    Map<String, String> versions = new LinkedHashMap<>();
+                    List<Moved> moved = new ArrayList<>();
+                    for (Row row : moving) {
+                        versions.put(row.upgrades().coordinate(), row.targetVersion());
+                        moved.add(new Moved(row.upgrades().displayName(), row.upgrades().currentVersion(),
+                                row.targetVersion()));
+                    }
+                    return new Pass(versions, new Result(moved, 0, 0, List.of(), List.of(), List.of()));
+                })
+                .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
+    }
+
     /** The pom write and the sentence that follows it, carried together through the last step. */
     private record Pass(Map<String, String> versions, Result result) {}
 

@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -50,6 +51,8 @@ import java.util.function.BooleanSupplier;
  * <p>Above the marks, one row per type a plugin retired that the bot still has values of (2026-10-12), with
  * <i>Migrate…</i> opening {@link MigrationWindow}. The values keep working until the plugin drops the type. Once
  * no value of a migrated type is left, one more row offers to remove the {@code @Migrate} methods nothing needs.
+ * First of all, when the last plugin change broke old elements the bot still uses, a row opens {@link MigrateWindow}
+ * (2026-10-16).
  *
  * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}, and the tab
  * refreshes when it is opened. Four different code paths write marks, two of them without the editor
@@ -83,6 +86,9 @@ final class ReviewPanel {
          * summary line is the list's own, and the refresh after the removal rewrites it.
          */
         void removeMigrationMethods();
+
+        /** Opens Migrate, over what the last plugin change broke. */
+        void openMigrate();
     }
 
     private final ProjectConfig config;
@@ -143,7 +149,10 @@ final class ReviewPanel {
             // "@Migrate(", not "@Migrate": every copy a migration wrote carries @Migrated.
             BotSources.scan(config, state, (file, source) -> methods[0] |= source.contains("@Migrate("));
         }
-        if (config == null || !MigrationSteps.anyRetired(declared) && !methods[0]) {
+        // A plugin change since the last load: what it broke is read too, by Migrate's own reading.
+        boolean changed = config != null && !state.isReaderMode() && !ApiCache.shared().previous(config.projectPath(),
+                state.getResolvedClasspath()).equals(state.getResolvedClasspath());
+        if (config == null || !MigrationSteps.anyRetired(declared) && !methods[0] && !changed) {
             shown(Migrations.NONE, items);
             return;
         }
@@ -154,7 +163,8 @@ final class ReviewPanel {
             try {
                 BotIndex bot = index.get();
                 found = new Migrations(MigrationSteps.pending(bot, PluginHost.grammar(), declared),
-                        methods[0] ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of());
+                        methods[0] ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of(),
+                        changed ? MigrateWindow.brokenSince(bot, config.projectPath()) : 0);
             } catch (RuntimeException | LinkageError e) {
                 found = Migrations.NONE;
             }
@@ -167,20 +177,26 @@ final class ReviewPanel {
         worker.start();
     }
 
-    /** What the bot still has to migrate, and the migration methods nothing needs any more. */
-    private record Migrations(List<MigrationSteps.Pending> pending, List<ManagedMigrations.Method> unneeded) {
+    /**
+     * What the bot still has to migrate, the migration methods nothing needs any more, and how many old elements
+     * the last plugin change broke that the bot still uses.
+     */
+    private record Migrations(List<MigrationSteps.Pending> pending, List<ManagedMigrations.Method> unneeded,
+                              int broken) {
 
-        static final Migrations NONE = new Migrations(List.of(), List.of());
+        static final Migrations NONE = new Migrations(List.of(), List.of(), 0);
 
         boolean isEmpty() {
-            return pending.isEmpty() && unneeded.isEmpty();
+            return pending.isEmpty() && unneeded.isEmpty() && broken == 0;
         }
     }
 
     /** What was found, as rows above the marks, and the summary over both. */
     private void shown(Migrations found, List<ReviewService.Item> items) {
         shown = found;
-        List<Node> rows = new ArrayList<>(found.pending().stream().map(this::migrationRow).toList());
+        List<Node> rows = new ArrayList<>();
+        if (found.broken() > 0) rows.add(brokenRow(found.broken()));
+        rows.addAll(found.pending().stream().map(this::migrationRow).toList());
         if (!found.unneeded().isEmpty()) rows.add(unneededRow(found.unneeded()));
         migrations.getChildren().setAll(rows);
         migrations.setVisible(!found.isEmpty());
@@ -195,8 +211,26 @@ final class ReviewPanel {
         String retired = pending == 0 ? "" : pending + (pending == 1 ? " retired type" : " retired types")
                 + " to migrate.";
         String done = found.unneeded().isEmpty() ? "" : "Migration methods to remove.";
+        String broken = found.broken() == 0 ? "" : found.broken()
+                + (found.broken() == 1 ? " old element to migrate." : " old elements to migrate.");
         summary.setText(items.isEmpty() && found.isEmpty() ? "Nothing to review."
-                : String.join(" ", List.of(retired, done, marks)).strip().replaceAll(" +", " "));
+                : String.join(" ", List.of(broken, retired, done, marks)).strip().replaceAll(" +", " "));
+    }
+
+    /** {@code 3 old elements the bot uses were broken by the last plugin change…}, and Migrate…. */
+    private HBox brokenRow(int count) {
+        Label label = new Label(MigrateWindow.brokenText(count));
+        label.getStyleClass().add("review-cell-where");
+        label.setWrapText(true);
+        Button migrate = new Button("Migrate…");
+        migrate.setDisable(actions == null);
+        migrate.setOnAction(e -> actions.openMigrate());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox row = new HBox(8, label, spacer, migrate);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("review-cell");
+        return row;
     }
 
     /** True when the project holds at least one mark or retired type — what decides whether the tab raises itself. */

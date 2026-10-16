@@ -275,6 +275,12 @@ public class MenuBarManager {
             if (onReviewChanges != null) onReviewChanges.run();
         });
 
+        // The other half of an upgrade: what it broke, carried over by the author's @Migrate rules.
+        MenuItem migrateItem = new MenuItem("Migrate...");
+        migrateItem.setOnAction(e -> {
+            if (eventBus != null) eventBus.publish(new CoreApplicationEvents.MigrateRequestedEvent());
+        });
+
         MenuItem historyItem = new MenuItem("Versions");
         historyItem.setOnAction(e -> {
             if (onShowHistory != null) onShowHistory.run();
@@ -303,7 +309,7 @@ public class MenuBarManager {
                 parametersItem,
                 new SeparatorMenuItem(),
                 projectSettingsItem, new SeparatorMenuItem(),
-                recoverFilesItem, reviewItem, historyItem, new SeparatorMenuItem(),
+                recoverFilesItem, reviewItem, migrateItem, historyItem, new SeparatorMenuItem(),
                 browseGalleryItem, publishGalleryItem, new SeparatorMenuItem(),
                 projectRepoItem);
         return projectMenu;

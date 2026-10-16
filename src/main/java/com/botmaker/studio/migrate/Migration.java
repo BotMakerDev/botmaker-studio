@@ -1,13 +1,23 @@
 package com.botmaker.studio.migrate;
 
 import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.project.source.BotParser;
+import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -49,6 +59,19 @@ public final class Migration {
         Path probe = Rules.probePath(root);
         BotIndex old = now.against(oldClasspath, Rules.probe(declared, root));
         return new Migration(now, old, List.copyOf(oldClasspath), probe, Rules.resolved(declared, old, probe));
+    }
+
+    /**
+     * {@code now} against what {@code project} loaded before its last change ({@link ApiCache#previous}): the
+     * migration a person asks for, after an upgrade, a removal or a dev build's reload.
+     */
+    public static Migration sinceLastChange(BotIndex now, Path project) {
+        return of(now, ApiCache.shared().previous(project, now.classpath()));
+    }
+
+    /** Whether the old side is the bot's own classpath: nothing changed since the last load, so nothing broke. */
+    public boolean unchanged() {
+        return oldClasspath.equals(now.classpath());
     }
 
     /** Every {@code @Migrate} rule in the bot, each resolved or saying why not. */
@@ -130,9 +153,82 @@ public final class Migration {
             rewrites.putAll(planned.rewrites());
             result = new Rewrite.Result(new Refactor.Planned(planned.summary() + ", " + seeds.seeded().size()
                     + (seeds.seeded().size() == 1 ? " default rule" : " default rules") + " written into "
-                    + file.getFileName(), rewrites), result.applied(), result.left());
+                    + file.getFileName(), rewrites), result.applied(), result.left(), result.changes());
         }
         return new Finished(result, seeds.seeded(), seeds.unseeded());
+    }
+
+    /**
+     * Every rule whose old element the bot no longer uses, by {@code broken} — {@link #broken()}, which lists each
+     * element still used: what Migrate's <i>Remove finished rules</i> removes.
+     */
+    public List<Rule> done(List<Broken> broken) {
+        Set<String> used = new HashSet<>();
+        for (Broken each : broken) used.add(each.element().key());
+        return rules.stream().filter(rule -> rule.element() != null && !used.contains(rule.element().key())).toList();
+    }
+
+    /** What removing rules does: the files rewritten, or why nothing is, and the files it leaves empty. */
+    public record Removal(Refactor.Outcome outcome, Set<Path> deleted) {
+
+        public Removal {
+            deleted = Set.copyOf(deleted);
+        }
+    }
+
+    /**
+     * {@code done} removed from the bot, each by its declaration, and a file deleted whose one class it leaves
+     * holding nothing but constructors; refused when the bot would no longer compile.
+     */
+    public Removal remove(List<Rule> done) {
+        if (done.isEmpty()) return new Removal(new Refactor.Refused("No rule is finished."), Set.of());
+        Map<Path, Set<Integer>> byFile = new LinkedHashMap<>();
+        for (Rule rule : done) byFile.computeIfAbsent(rule.file(), f -> new HashSet<>()).add(rule.start());
+        Map<Path, String> rewrites = new LinkedHashMap<>();
+        Set<Path> deleted = new LinkedHashSet<>();
+        byFile.forEach((file, starts) -> {
+            String source = now.sources().get(file);
+            CompilationUnit unit = source == null ? null : BotParser.syntax(source);
+            if (unit == null) return;
+            ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+            List<MethodDeclaration> removed = new ArrayList<>();
+            unit.accept(new ASTVisitor() {
+                @Override
+                public boolean visit(MethodDeclaration method) {
+                    if (starts.contains(method.getStartPosition())) {
+                        rewrite.remove(method, null);
+                        removed.add(method);
+                    }
+                    return false;
+                }
+            });
+            if (removed.isEmpty()) return;
+            boolean emptied = unit.types().size() == 1 && unit.types().getFirst() instanceof TypeDeclaration only
+                    && ((List<?>) only.bodyDeclarations()).stream().allMatch(member -> removed.contains(member)
+                            || member instanceof MethodDeclaration m && m.isConstructor());
+            if (emptied) {
+                deleted.add(file);
+                return;
+            }
+            String rewritten = AstRewriteHelper.applyRewrite(rewrite, source);
+            if (rewritten != null && !rewritten.equals(source)) rewrites.put(file, rewritten);
+        });
+        if (rewrites.isEmpty() && deleted.isEmpty()) {
+            return new Removal(new Refactor.Refused("No finished rule was found where it was read: refresh and"
+                    + " try again."), Set.of());
+        }
+        Map<Path, String> after = new LinkedHashMap<>(now.sources());
+        after.putAll(rewrites);
+        deleted.forEach(after::remove);
+        String what = "Removed " + done.size() + (done.size() == 1 ? " finished rule" : " finished rules")
+                + (deleted.isEmpty() ? "" : " and " + String.join(", ", deleted.stream()
+                        .map(path -> path.getFileName().toString()).toList()));
+        Optional<String> broken = now.firstNewError(now.replacing(after));
+        if (broken.isPresent()) {
+            return new Removal(new Refactor.Refused(what + " would stop the bot compiling (" + broken.get()
+                    + "), so nothing was changed."), Set.of());
+        }
+        return new Removal(new Refactor.Planned(what, rewrites), deleted);
     }
 
     /**

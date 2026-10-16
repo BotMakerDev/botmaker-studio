@@ -14,15 +14,26 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
-- **One migration engine behind `@Migrate` rules** (`migrate/`, not yet shown in a window). A bot's rule names the
+- **Project ▸ Migrate…** carries the bot over a plugin change by its author's `@Migrate` rules. Each row is an old
+  element the bot still uses, with its uses (double-click one to go to it) and its rule's state. **Write rule**
+  writes the element's signature and a default body into `Migrations`, marked to be written, and opens it in the
+  editor. **Preview** lists each use before and after. **Apply** rewrites every use a written rule covers, as one
+  version after a safety one. **Remove finished rules** removes each rule whose element the bot no longer uses,
+  and the file when that empties it. A retired type's values still go through **Copy values…** (the migration
+  window). Migrate compares the bot with the classpath the project loaded before its last change: an upgrade, a
+  removal, or a dev build rebuilt under the same version. It also opens from a banner above the canvas when that
+  change broke something, from a Review tab row, and from the upgrade's question, whose **Migrate first** moves the
+  version and leaves the code for Migrate.
+- **One migration engine behind `@Migrate` rules** (`migrate/`). A bot's rule names the
   old method, constructor, field or whole type by its own signature, and Studio finds that element in the jars the
   bot used to compile against. It then rewrites every use in the project through the rule's body, keeping each
   use's own spelling. A chain such as `named("home").marker("a").marker("b")` comes out whole. Rules with neither
   or both of `value` and `name`, rules that match nothing, and two rules for one element are refused with a reason.
   With no rule, nothing is rewritten. A rewrite that would not compile is left as written and its function is
   marked `@Refactor`. `migrate.Broken` lists what the new jars break and whether a rule covers each element.
-- **The old API survives a `-SNAPSHOT` rebuild.** Each load keeps a copy of a `-SNAPSHOT` jar whose bytes changed
-  (`~/.cache/botmaker/api`), so a dev reload can still read what the bot used to call.
+- **The old API survives a plugin change.** Each load records the classpath it loaded, and one that differs keeps
+  the last as the classpath before (`~/.cache/botmaker/api`). A `-SNAPSHOT` jar is recorded as a copy of the bytes
+  loaded, so a dev reload can still read what the bot used to call.
 - **One finder of uses** (`nav/Uses`): calls, `new`, `this(…)`/`super(…)`, method references, field reads and
   writes, `case` labels, type names and imports, matched by binding. Signature changes (`MethodReferences`) and
   migrations both use it.

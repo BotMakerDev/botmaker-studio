@@ -1,0 +1,461 @@
+package com.botmaker.studio.ui.app;
+
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.studio.events.CoreApplicationEvents.RevealRequestedEvent;
+import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.migrate.ApiCache;
+import com.botmaker.studio.migrate.Broken;
+import com.botmaker.studio.migrate.Migration;
+import com.botmaker.studio.migrate.Rewrite;
+import com.botmaker.studio.migrate.Rule;
+import com.botmaker.studio.migrate.Sites;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.parser.refactor.ReviewMarker;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+/**
+ * <b>Migrate</b> (2026-10-16, {@code docs/refactor/25-compatibility.md} §12): the bot carried over a plugin change
+ * by its author's {@code @Migrate} rules. One row per old element the bot still uses that the change broke or a
+ * rule names ({@link Broken}), each with its uses and how far its rule has got.
+ *
+ * <p>The old side is what the project loaded before its last change ({@link Migration#sinceLastChange}): an upgrade
+ * or removal moved the jars, or a dev build was rebuilt under the same version. <b>Write rule</b> seeds the old
+ * element's signature and a default body, marked to be written, and opens it in the editor — Studio never guesses
+ * what replaces what. <b>Preview</b> lists each use before and after; <b>Apply</b> rewrites every use a written rule
+ * covers as one version, after a safety one. <b>Remove finished rules</b> removes each rule whose element the bot no
+ * longer uses. A plugin type's values are copied, not rewritten: <b>Copy values…</b> opens {@link MigrationWindow}
+ * on a retired type, whose <i>Switch uses</i> and <i>Remove originals</i> follow.
+ *
+ * <p>Opened from Project ▸ Migrate…, the Review tab, the canvas's banner after a change broke something, and the
+ * upgrade's <i>Migrate first</i>. Each read compiles the bot twice, so it runs off the FX thread; the buffers are
+ * read before and written after on it.
+ */
+final class MigrateWindow {
+
+    private final ProjectConfig config;
+    private final ProjectState state;
+    private final EventBus bus;
+    private final Consumer<Path> redraw;
+    private final Runnable after;
+    private final Consumer<Class<?>> copyValues;
+
+    private final Stage stage = new Stage();
+    private final Label heading = new Label();
+    private final TableView<Broken> rows = new TableView<>();
+    private final ListView<Sites.Site> uses = new ListView<>();
+    private final TableView<Rewrite.Change> changes = new TableView<>();
+    private final VBox values = new VBox(6);
+    private final Label status = new Label();
+    private final Button writeRule = new Button("Write rule");
+    private final Button openRule = new Button("Open rule");
+    private final Button preview = new Button("Preview");
+    private final Button apply = new Button("Apply");
+    private final Button removeDone = new Button("Remove finished rules…");
+
+    /** What the last read found, and the parse it was found in: what a write is checked against. */
+    private Read read;
+    /** Whether a worker is out: every button waits for it. */
+    private boolean working;
+    /** Which read is the newest: an older one's answer is dropped. */
+    private long readAsked;
+    /** The element whose rule was just seeded: once read again, its rule is opened in the editor. */
+    private String revealSeeded;
+
+    private record Read(BotIndex index, Migration migration, List<Broken> broken, List<Rule> done,
+                        List<MigrationSteps.Pending> pending) {}
+
+    private MigrateWindow(ProjectConfig config, ProjectState state, EventBus bus, Consumer<Path> redraw,
+                          Runnable after, Consumer<Class<?>> copyValues) {
+        this.config = config;
+        this.state = state;
+        this.bus = bus;
+        this.redraw = redraw;
+        this.after = after;
+        this.copyValues = copyValues;
+    }
+
+    /**
+     * Opens Migrate over the project. {@code redraw} is told each file written; {@code after} runs once something
+     * was; {@code copyValues} opens the value migration on a retired type.
+     */
+    static void open(Window owner, ProjectConfig config, ProjectState state, EventBus bus, Consumer<Path> redraw,
+                     Runnable after, Consumer<Class<?>> copyValues) {
+        new MigrateWindow(config, state, bus, redraw, after, copyValues).show(owner);
+    }
+
+    private void show(Window owner) {
+        heading.setWrapText(true);
+
+        TableColumn<Broken, String> element = column("Old element", b -> b.element().display());
+        TableColumn<Broken, String> count = column("Uses", b -> String.valueOf(b.sites().size()));
+        TableColumn<Broken, String> rule = column("Rule", MigrateWindow::ruleText);
+        count.setMaxWidth(70);
+        rows.getColumns().setAll(List.of(element, count, rule));
+        rows.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        rows.setPlaceholder(new Label("Nothing the bot uses was broken by the last plugin change."));
+        rows.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> selected(now));
+
+        uses.setPlaceholder(new Label("Pick a row to see where the bot uses it."));
+        uses.setCellFactory(list -> new SiteCell());
+        uses.setOnMouseClicked(e -> {
+            Sites.Site site = uses.getSelectionModel().getSelectedItem();
+            if (e.getClickCount() == 2 && site != null) bus.publish(new RevealRequestedEvent(site.file(), site.start()));
+        });
+        Label usesLabel = new Label("Uses — double-click one to go to it");
+        writeRule.setOnAction(e -> writeRule());
+        openRule.setOnAction(e -> {
+            Broken chosen = rows.getSelectionModel().getSelectedItem();
+            if (chosen != null && chosen.rule() != null) reveal(chosen.rule());
+        });
+        HBox ruleButtons = new HBox(8, writeRule, openRule);
+        VBox right = new VBox(6, usesLabel, uses, ruleButtons);
+        VBox.setVgrow(uses, Priority.ALWAYS);
+        SplitPane top = new SplitPane(rows, right);
+        top.setDividerPositions(0.62);
+
+        TableColumn<Rewrite.Change, String> where = column("Where",
+                c -> c.site().file().getFileName() + ":" + c.site().line());
+        TableColumn<Rewrite.Change, String> before = column("Before", Rewrite.Change::before);
+        TableColumn<Rewrite.Change, String> made = column("After",
+                c -> c.after().isEmpty() ? "(call deleted)" : c.after());
+        where.setMaxWidth(160);
+        changes.getColumns().setAll(List.of(where, before, made));
+        changes.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        changes.setPlaceholder(new Label("Preview lists each use as it is and as its rule rewrites it."));
+        changes.setPrefHeight(170);
+
+        values.managedProperty().bind(values.visibleProperty());
+        values.setVisible(false);
+
+        status.setWrapText(true);
+        status.setMinWidth(0);
+        HBox.setHgrow(status, Priority.ALWAYS);
+        preview.setOnAction(e -> plan(false));
+        apply.setOnAction(e -> plan(true));
+        removeDone.setOnAction(e -> removeDone());
+        Button refresh = new Button("Refresh");
+        refresh.setOnAction(e -> reload());
+        Button close = new Button("Close");
+        close.setOnAction(e -> stage.close());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.SOMETIMES);
+        HBox buttons = new HBox(8, status, spacer, refresh, removeDone, preview, apply, close);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+        for (Button each : List.of(refresh, removeDone, preview, apply, close)) each.setMinWidth(Region.USE_PREF_SIZE);
+
+        VBox root = new VBox(10, heading, top, values, changes, buttons);
+        VBox.setVgrow(top, Priority.ALWAYS);
+        root.setPadding(new Insets(14));
+
+        // Not modal: Write rule opens the rule in the editor behind it, for its author to write before Apply.
+        stage.initOwner(owner);
+        stage.initModality(Modality.NONE);
+        stage.setTitle("Migrate");
+        stage.setScene(ThemedWindows.scene(root, 900, 680));
+        stage.show();
+        reload();
+    }
+
+    private static <T> TableColumn<T, String> column(String title, Function<T, String> text) {
+        TableColumn<T, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell -> new ReadOnlyStringWrapper(text.apply(cell.getValue())));
+        return column;
+    }
+
+    /** How far {@code broken}'s rule has got, as its row says it. */
+    static String ruleText(Broken broken) {
+        return switch (broken.state()) {
+            case NONE -> "none — Write rule";
+            case SEEDED -> broken.rule().qualified() + ", to write";
+            case WRITTEN -> broken.rule().qualified();
+            case REFUSED -> broken.rule().qualified() + ": " + broken.rule().problem();
+        };
+    }
+
+    /** {@code N old elements …} over the rows, from what the last read found. */
+    static String headingText(List<Broken> broken, boolean unchanged) {
+        String since = unchanged ? "No plugin changed since the project last loaded its jars; a rule still applies"
+                + " to what the bot uses now." : "Compared with the jars the project loaded before its last plugin"
+                + " change.";
+        if (broken.isEmpty()) return since;
+        long open = broken.stream().filter(b -> b.state() == Broken.State.NONE).count();
+        return broken.size() + (broken.size() == 1 ? " old element the bot uses" : " old elements the bot uses")
+                + (open == 0 ? ", each with its rule." : ", " + open + " without a rule.") + " " + since
+                + " Write a rule for each, then Apply: Studio rewrites every use the rule covers.";
+    }
+
+    /**
+     * How many old elements {@code bot} still uses that the last plugin change broke or a rule names: what the
+     * canvas's banner and the Review row say. {@code 0}, with nothing parsed, when nothing changed. Off the FX thread.
+     */
+    static int brokenSince(BotIndex bot, Path project) {
+        List<String> before = ApiCache.shared().previous(project, bot.classpath());
+        if (before.equals(bot.classpath())) return 0;
+        return Migration.of(bot, before).broken().size();
+    }
+
+    /** The canvas's banner and the Review row: {@code 3 old elements … Migrate…}. */
+    static String brokenText(int count) {
+        return count + (count == 1 ? " old element the bot uses was" : " old elements the bot uses were")
+                + " broken by the last plugin change. Migrate carries the bot over by your @Migrate rules.";
+    }
+
+    // --- reading ----------------------------------------------------------------------------------------------
+
+    /** Reads the bot again, on a worker, and shows what it found. */
+    private void reload() {
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        List<ManagedValue<?>> declared = PluginHost.managedValues();
+        long asked = ++readAsked;
+        background("Reading what the last plugin change broke…", () -> {
+            BotIndex bot = index.get();
+            Migration migration = Migration.sinceLastChange(bot, config.projectPath());
+            List<Broken> broken = migration.broken();
+            List<MigrationSteps.Pending> pending = MigrationSteps.anyRetired(declared)
+                    ? MigrationSteps.pending(bot, PluginHost.grammar(), declared) : List.of();
+            return new Read(bot, migration, broken, migration.done(broken), pending);
+        }, found -> {
+            // A Refresh clicked while one read was out: only the newest is shown.
+            if (asked != readAsked) return;
+            read = found;
+            Broken was = rows.getSelectionModel().getSelectedItem();
+            rows.getItems().setAll(found.broken());
+            changes.getItems().clear();
+            heading.setText(headingText(found.broken(), found.migration().unchanged()));
+            removeDone.setText(found.done().isEmpty() ? "Remove finished rules…"
+                    : "Remove " + found.done().size() + (found.done().size() == 1 ? " finished rule…"
+                            : " finished rules…"));
+            values.getChildren().setAll(found.pending().stream().map(this::valuesRow).toList());
+            values.setVisible(!found.pending().isEmpty());
+            String key = revealSeeded != null ? revealSeeded : was == null ? null : was.element().key();
+            found.broken().stream().filter(b -> b.element().key().equals(key)).findFirst()
+                    .ifPresent(b -> rows.getSelectionModel().select(b));
+            if (revealSeeded != null) {
+                found.broken().stream().filter(b -> b.element().key().equals(revealSeeded) && b.rule() != null)
+                        .findFirst().ifPresent(b -> reveal(b.rule()));
+                revealSeeded = null;
+            }
+            status.setText("");
+            buttons();
+        });
+    }
+
+    /** {@code 312 values of ImageTemplate, which its plugin retired}, and Copy values…. */
+    private HBox valuesRow(MigrationSteps.Pending pending) {
+        Label label = new Label(pending.values() + (pending.values() == 1 ? " value of " : " values of ")
+                + pending.from().getSimpleName() + ", which its plugin retired, are copied rather than rewritten"
+                + (pending.copied() == 0 ? "." : "; " + pending.copied() + " copied."));
+        label.setWrapText(true);
+        label.setMinWidth(0);
+        HBox.setHgrow(label, Priority.ALWAYS);
+        Button copy = new Button("Copy values…");
+        copy.setMinWidth(Region.USE_PREF_SIZE);
+        copy.setDisable(state.isReaderMode());
+        copy.setOnAction(e -> copyValues.accept(pending.from()));
+        HBox row = new HBox(8, label, copy);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private void selected(Broken broken) {
+        uses.getItems().setAll(broken == null ? List.of() : broken.sites());
+        buttons();
+    }
+
+    /** Each button for what is on screen: nothing while a worker is out, no write in a read-only project. */
+    private void buttons() {
+        Broken chosen = rows.getSelectionModel().getSelectedItem();
+        boolean readOnly = state.isReaderMode();
+        writeRule.setDisable(working || readOnly || chosen == null || chosen.state() != Broken.State.NONE);
+        openRule.setDisable(working || chosen == null || chosen.rule() == null);
+        boolean ready = read != null && read.migration().rules().stream().anyMatch(Rule::ready);
+        preview.setDisable(working || !ready);
+        apply.setDisable(working || readOnly || !ready);
+        removeDone.setDisable(working || readOnly || read == null || read.done().isEmpty());
+    }
+
+    // --- acting -----------------------------------------------------------------------------------------------
+
+    /** Seeds the chosen element's rule into the bot's rules file, then opens it in the editor. */
+    private void writeRule() {
+        Broken chosen = rows.getSelectionModel().getSelectedItem();
+        if (chosen == null || read == null) return;
+        Read basis = read;
+        Path file = rulesFile(basis.migration());
+        background("Writing the rule's signature…",
+                () -> basis.migration().seed(chosen.element(), file, config.mainPackage()),
+                outcome -> {
+                    if (!(outcome instanceof Refactor.Planned plan)) {
+                        status.setText(((Refactor.Refused) outcome).reason());
+                        return;
+                    }
+                    if (!wrote(plan, basis)) return;
+                    revealSeeded = chosen.element().key();
+                    reload();
+                });
+    }
+
+    /** Where a new rule goes: beside the bot's first rule, or {@value Migration#CLASS} in the main package. */
+    private Path rulesFile(Migration migration) {
+        return migration.rules().isEmpty()
+                ? config.mainPackageDir().resolve(Migration.CLASS + ".java").toAbsolutePath().normalize()
+                : migration.rules().getFirst().file();
+    }
+
+    /** Preview, or with {@code write} Apply: every use a written rule covers, rewritten. */
+    private void plan(boolean write) {
+        if (read == null) return;
+        Read basis = read;
+        boolean markable = ReviewMarker.available(state);
+        background(write ? "Migrating…" : "Working out the preview…", () -> basis.migration().plan(markable),
+                result -> {
+                    changes.getItems().setAll(result.changes());
+                    String left = leftText(result.left());
+                    switch (result.outcome()) {
+                        case Refactor.Refused refused -> status.setText(refused.reason() + left);
+                        case Refactor.Planned plan when write -> {
+                            if (!wrote(plan, basis)) return;
+                            status.setText(plan.summary() + "." + left);
+                            after.run();
+                            reload();
+                        }
+                        case Refactor.Planned plan -> status.setText(result.applied().size()
+                                + (result.applied().size() == 1 ? " use to rewrite." : " uses to rewrite.") + left);
+                    }
+                });
+    }
+
+    /** {@code  Left as written: Bot.java:12 (why)…}, or {@code ""}. */
+    static String leftText(List<Rewrite.Left> left) {
+        if (left.isEmpty()) return "";
+        List<String> shown = left.stream().limit(4).map(each -> each.site().file().getFileName() + ":"
+                + each.site().line() + " (" + each.why() + ")").toList();
+        return " Left as written: " + String.join("; ", shown)
+                + (left.size() > shown.size() ? " and " + (left.size() - shown.size()) + " more" : "") + ".";
+    }
+
+    /** Removes each rule whose element the bot no longer uses, once the author agrees. */
+    private void removeDone() {
+        if (read == null || read.done().isEmpty()) return;
+        Read basis = read;
+        background("Checking the bot compiles without them…", () -> basis.migration().remove(basis.done()),
+                removal -> {
+                    if (!(removal.outcome() instanceof Refactor.Planned plan)) {
+                        status.setText(((Refactor.Refused) removal.outcome()).reason());
+                        return;
+                    }
+                    String names = String.join(", ", basis.done().stream().map(Rule::qualified).limit(8).toList())
+                            + (basis.done().size() > 8 ? " and " + (basis.done().size() - 8) + " more" : "");
+                    Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, "Remove " + names
+                            + "? The bot uses none of the old elements they name any more."
+                            + (removal.deleted().isEmpty() ? "" : "\n\nThis deletes " + String.join(", ",
+                                    removal.deleted().stream().map(p -> p.getFileName().toString()).toList())
+                                    + ", which holds nothing else.")
+                            + "\n\nA version of the project is saved first.");
+                    confirm.initOwner(stage);
+                    if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                        status.setText("Nothing was changed.");
+                        return;
+                    }
+                    MigrationActions actions = new MigrationActions(config, state, () -> stage, redraw, after);
+                    Map<Path, String> sources = MigrationActions.basis(basis.index(), plan, removal.deleted());
+                    MigrationActions.Wrote wrote = actions.write(plan, Set.copyOf(removal.deleted()), sources);
+                    status.setText(wrote.text());
+                    if (wrote.done()) {
+                        after.run();
+                        reload();
+                    }
+                });
+    }
+
+    /**
+     * Writes {@code plan} as one version after a safety one — unless a file changed since {@code basis} was read,
+     * which an edit made meanwhile would lose: then nothing is written and the window reads the bot again.
+     */
+    private boolean wrote(Refactor.Planned plan, Read basis) {
+        List<String> changed = MigrationActions.changedSince(config, state, basis.index().sources());
+        if (!changed.isEmpty()) {
+            status.setText(String.join(", ", changed) + " changed while this was worked out, so nothing was"
+                    + " changed. Try again.");
+            reload();
+            return false;
+        }
+        MigrationWindow.written(config, state, plan, basis.index(), redraw);
+        return true;
+    }
+
+    /** Opens {@code rule} in the editor, the window staying open over it. */
+    private void reveal(Rule rule) {
+        bus.publish(new RevealRequestedEvent(rule.file(), rule.start()));
+    }
+
+    /** {@code work} on a worker, saying {@code what} meanwhile; {@code then} on the FX thread with its answer. */
+    private <T> void background(String what, Supplier<T> work, Consumer<T> then) {
+        working = true;
+        buttons();
+        status.setText(what);
+        Thread worker = new Thread(() -> {
+            T answer;
+            try {
+                answer = work.get();
+            } catch (RuntimeException | LinkageError e) {
+                Platform.runLater(() -> {
+                    working = false;
+                    buttons();
+                    status.setText("It could not be worked out: " + e);
+                });
+                return;
+            }
+            Platform.runLater(() -> {
+                // Cleared first: an answer that reads the bot again sends a worker of its own out, which sets it.
+                working = false;
+                then.accept(answer);
+                buttons();
+            });
+        }, "migrate");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** {@code Screens.java:12 — Screens.HOME}. */
+    private static final class SiteCell extends ListCell<Sites.Site> {
+        @Override
+        protected void updateItem(Sites.Site site, boolean empty) {
+            super.updateItem(site, empty);
+            setText(empty || site == null ? null : site.file().getFileName() + ":" + site.line() + " — " + site.where());
+        }
+    }
+}
