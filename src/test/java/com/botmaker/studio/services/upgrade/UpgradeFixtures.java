@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -30,18 +29,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Two real plugin jars and a project to point them at — the fixture every upgrade test is built on.
  *
- * <p>The jars are <b>compiled here rather than mocked</b>, for the reason the whole feature exists: the
- * question is about bytecode, and the interesting cases — a method gone, an overload's arity changed, a
- * pointer split across two survivors — are exactly the ones no pair of published versions exhibits yet. A
- * fixture that only ever encoded what already shipped would pass forever without proving the diff works.
+ * <p>The jars are <b>compiled here rather than mocked</b>: what a release adds is read off bytecode, and the
+ * interesting cases are exactly the ones no pair of published versions exhibits yet.
  *
  * <p>Shared rather than copied because two harnesses that build jars slightly differently is a way to get
  * two tests disagreeing about a jar neither of them is really testing.
  *
- * <p><b>{@code SdkFixtures} until 2026-09-15</b>, and the name was the last thing here still saying the
- * engine is the SDK's. It builds any plugin's jar — {@link #jarOf} takes the package, and
- * {@link #serviceOver} the clashing names of a <em>second</em> plugin — so the SDK survives only as the
- * default {@link #PKG} that the tests written first happen to pass.
+ * <p><b>{@code SdkFixtures} until 2026-09-15.</b> It builds any plugin's jar — {@link #jarOf} takes the
+ * package — so the SDK survives only as the default {@link #PKG} that the tests written first happen to pass.
  */
 final class UpgradeFixtures {
 
@@ -53,7 +48,7 @@ final class UpgradeFixtures {
      */
     static final String PKG = "com.botmaker.sdk.api";
 
-    /** Where the pointer vocabulary really lives — the plugin contract's, not any one plugin's. */
+    /** Where the meta vocabulary really lives — the plugin contract's, not any one plugin's. */
     static final String META = "com.botmaker.plugin.api.meta";
 
     /**
@@ -88,9 +83,9 @@ final class UpgradeFixtures {
         List<String> paths = new ArrayList<>();
         for (Map.Entry<String, String> e : classes.entrySet()) {
             // A bare key is a class of `pkg`, which is every class fixture. A dotted key is a fully-qualified
-            // name, which is how the pointer annotations land in the contract's package rather than this
-            // plugin's — the vocabulary is every plugin's, and a fixture that put it under `pkg` would be
-            // testing a jar shape no plugin produces.
+            // name, which is how @Since lands in the contract's package rather than this plugin's — the
+            // vocabulary is every plugin's, and a fixture that put it under `pkg` would be testing a jar shape
+            // no plugin produces.
             String key = e.getKey();
             int dot = key.lastIndexOf('.');
             String owner = dot < 0 ? pkg : key.substring(0, dot);
@@ -130,10 +125,8 @@ final class UpgradeFixtures {
     /**
      * {@code source} with {@code import com.botmaker.plugin.api.meta.*;} after its package line.
      *
-     * <p>A fixture class writes {@code @ReplacedBy(…)} unqualified, which worked while the annotations were
-     * declared in the same package it is. They are the contract's now, so every fixture would otherwise have
-     * to carry the import — one line repeated across three test classes, forgotten in exactly the test that
-     * adds the next pointer case. A real plugin imports the contract the same way.
+     * <p>A fixture class writes {@code @Since(…)} unqualified; the annotation is the contract's, so every fixture
+     * would otherwise have to carry the import. A real plugin imports the contract the same way.
      *
      * <p>A source already in that package is left alone, and an unused import of a package the jar declares
      * is not a compile error, so this is applied to every fixture rather than to the ones that need it.
@@ -147,15 +140,6 @@ final class UpgradeFixtures {
 
     /** A service over a throwaway project holding {@code sources} as {@code Subject.java}, {@code Subject1}… */
     static PluginUpgradeService serviceOver(Path tmp, String... sources) throws IOException {
-        return serviceOver(tmp, Set.of(), sources);
-    }
-
-    /**
-     * The same, told which simple type names a <em>second</em> installed plugin also declares — the only
-     * thing a project with two plugins in it can say that a project with one cannot.
-     */
-    static PluginUpgradeService serviceOver(Path tmp, Set<String> ambiguous, String... sources)
-            throws IOException {
         Path project = tmp.resolve("project");
         Files.createDirectories(project.resolve("src/main/java/com/mybot"));
 
@@ -173,35 +157,16 @@ final class UpgradeFixtures {
         ProjectConfig config = ProjectConfig.forProject("fixture", project);
         EventBus bus = new EventBus(false);
         LibraryService libraries = new LibraryService(config, state, new TypeSummaryManager(), bus);
-        return new PluginUpgradeService(config, state, libraries, new JitPackSearch(),
-                PluginUpgradeService.SDK, ambiguous);
+        return new PluginUpgradeService(config, state, libraries, new JitPackSearch(), PluginUpgradeService.SDK);
     }
 
     /**
-     * The meta annotations, compiled into whichever fixture jar wants them. CLASS retention is the default,
-     * which is exactly what the real ones declare — and what makes them readable off a jar.
-     *
-     * <p><b>They are declared in {@link #META}, the plugin contract's own package, because that is the only
-     * spelling {@code ApiModel} reads.</b> They were declared under {@code com.botmaker.sdk.api} until
-     * 2026-09-15, which was where a pre-1.1.0 SDK jar kept them — and the reader stopped accepting that
-     * spelling on 2026-09-02, when the four historical package names were dropped. Nothing failed loudly:
-     * the fixture went on compiling, the jars went on carrying annotations, and every pointer test simply
-     * asserted against a jar whose pointers production could no longer see.
-     *
-     * <p>{@code Since} lives there too. There is no {@code Replaces}: the back edge is not read any more, and
-     * a fixture that can still express one would be testing a jar shape no plugin can produce.
+     * {@code base} with the contract's {@code @Since} compiled in. CLASS retention is the default, which is
+     * exactly what the real one declares — and what makes it readable off a jar. It is declared in
+     * {@link #META}, the contract's own package, because that is the only spelling {@code ApiModel} reads.
      */
-    static Map<String, String> withPointers(Map<String, String> base) {
+    static Map<String, String> withSince(Map<String, String> base) {
         Map<String, String> out = new HashMap<>(base);
-        out.put(META + ".ReplacedBy", """
-                package %s;
-                public @interface ReplacedBy {
-                    String[] value() default {};
-                    String[] whens() default {};
-                    String note() default "";
-                    boolean behaviourChanged() default false;
-                }
-                """.formatted(META));
         out.put(META + ".Since", """
                 package %s;
                 public @interface Since { String value(); }

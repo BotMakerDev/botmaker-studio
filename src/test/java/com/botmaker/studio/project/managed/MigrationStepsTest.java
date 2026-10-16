@@ -268,7 +268,7 @@ class MigrationStepsTest {
     void theBotsRetiredTypesArePendingWithNoTargetPicked(@TempDir Path root) {
         BotIndex index = index(root, Map.of(file(root, "plugins/sdk/OldShots"), OLD_SHOTS,
                 file(root, "plugins/sdk/Shots"), SHOTS));
-        assertEquals(List.of(new MigrationSteps.Pending(OldShot.class, null, 2, 0)),
+        assertEquals(List.of(new MigrationSteps.Pending(OldShot.class, 2, 0)),
                 MigrationSteps.pending(index, GRAMMAR, DECLARED), "the author picks the target, no plugin does");
         assertEquals(List.of(Shot.class, Frame.class), MigrationSteps.targets(GRAMMAR, DECLARED, OldShot.class),
                 "any pair of calls, the retired left out");
@@ -280,8 +280,7 @@ class MigrationStepsTest {
                 file(root, "plugins/sdk/Shots"), SHOTS));
         List<ManagedValue<?>> next = List.of(DECLARED.get(1), DECLARED.get(3));
 
-        assertEquals(List.of(new MigrationSteps.Stranded(DECLARED.getFirst().id(), OldShot.class, null, 2,
-                        true)),
+        assertEquals(List.of(new MigrationSteps.Stranded(DECLARED.getFirst().id(), OldShot.class, 2, true)),
                 MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, next),
                 "OldFrames holds nothing; Shots none yet");
         assertEquals(List.of(), MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, DECLARED),

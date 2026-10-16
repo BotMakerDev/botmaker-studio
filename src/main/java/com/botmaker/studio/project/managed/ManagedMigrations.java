@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Migrated;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.studio.migrate.Template;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -26,22 +27,18 @@ import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
-import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.MarkerAnnotation;
 import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
-import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.StructuralPropertyDescriptor;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchExpression;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -414,54 +411,14 @@ public final class ManagedMigrations {
     }
 
     /**
-     * {@code body} parsed on its own with every use of a parameter replaced by a copy of its part. A simple name
-     * spelled like a parameter is that parameter, which shadows anything else: only a method's, a field's, a
-     * type's or an annotation member's own name, and the right of a qualified name, are left alone. A body that
-     * declares a name a parameter has — a lambda's own {@code file} — is empty: which is which is not clear.
+     * {@code body} with every use of a parameter replaced by its part ({@link Template}, the rewrite of the bot's
+     * other code fills a rule's body the same way), parsed. A body that declares a name a parameter has — a
+     * lambda's own {@code file} — is empty: which is which is not clear; so is one whose result does not parse.
      */
     static Optional<Expression> substituted(String body, Map<String, Expression> bound) {
-        Expression root = JavaExpressions.parse(body);
-        if (root == null) return Optional.empty();
-        AST ast = root.getAST();
-        if (root instanceof SimpleName alone && bound.containsKey(alone.getIdentifier())) {
-            return Optional.of((Expression) ASTNode.copySubtree(ast, bound.get(alone.getIdentifier())));
-        }
-        List<SimpleName> uses = new ArrayList<>();
-        boolean[] shadowed = {false};
-        root.accept(new ASTVisitor() {
-            @Override
-            public boolean visit(SimpleName name) {
-                if (!bound.containsKey(name.getIdentifier())) return false;
-                StructuralPropertyDescriptor at = name.getLocationInParent();
-                if (at == VariableDeclarationFragment.NAME_PROPERTY
-                        || at == SingleVariableDeclaration.NAME_PROPERTY) {
-                    shadowed[0] = true;
-                } else if (at != MethodInvocation.NAME_PROPERTY && at != FieldAccess.NAME_PROPERTY
-                        && at != QualifiedName.NAME_PROPERTY && at != SimpleType.NAME_PROPERTY
-                        && at != MemberValuePair.NAME_PROPERTY) {
-                    uses.add(name);
-                }
-                return false;
-            }
-        });
-        if (shadowed[0]) return Optional.empty();
-        try {
-            for (SimpleName use : uses) {
-                ASTNode copy = ASTNode.copySubtree(ast, bound.get(use.getIdentifier()));
-                StructuralPropertyDescriptor at = use.getLocationInParent();
-                if (at.isChildListProperty()) {
-                    @SuppressWarnings("unchecked")
-                    List<ASTNode> siblings = (List<ASTNode>) use.getParent().getStructuralProperty(at);
-                    siblings.set(siblings.indexOf(use), copy);
-                } else {
-                    use.getParent().setStructuralProperty(at, copy);
-                }
-            }
-        } catch (IllegalArgumentException e) {
-            // A part where only a name fits — a parameter used as a qualifier, `file.length()` on a non-name.
-            return Optional.empty();
-        }
-        return Optional.of(root);
+        Map<String, Template.Part> parts = new LinkedHashMap<>();
+        bound.forEach((name, part) -> parts.put(name, Template.Part.of(part, part.toString())));
+        return Template.filled(body, false, parts).map(JavaExpressions::parse);
     }
 
     // --- writing -----------------------------------------------------------------------------------------

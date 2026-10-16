@@ -83,18 +83,6 @@ public final class SignatureMigration {
 
         /** A value that does not exist at this call yet: write {@code type}'s default. */
         record Fresh(SignatureType type) implements ArgumentEdit {}
-
-        /**
-         * The same, for a type named only as text: write a <em>literal</em> default of it — {@code false},
-         * {@code 0}, {@code ""} or {@code null}, and nothing that needs an import.
-         *
-         * <p>The argument-level twin of {@link CallChange.ValueDefaulted}, and here for the same reason. An
-         * SDK upgrade redirecting a call to an overload that takes one more input knows that input's type
-         * only as the target jar spells it, and {@link Fresh} would ask the palette — which answers
-         * {@code new Point()} for a type it can construct, and {@code Direction.UP} for an enum. Both name
-         * something this file may not import and the editor may not have. A literal always compiles.
-         */
-        record Literal(String typeName) implements ArgumentEdit {}
     }
 
     /** What happens at one call site. */
@@ -106,52 +94,10 @@ public final class SignatureMigration {
         record Rewrite(CallSite site, String newName, List<ArgumentEdit> arguments) implements CallChange {}
 
         /**
-         * The same, and on another type: the receiver written at the call site becomes {@code newTypeFqn},
-         * which is imported with it.
-         *
-         * <p>Distinct from {@link Rewrite} because it is the one call change that can be <b>refused</b> at a
-         * site the scan found: a bare statically-imported constant and a {@code case} label name no type at
-         * all, so there is nothing there to retarget and nothing may be invented. A signature edit never
-         * produces one — a function does not move to another class — so this, like {@link ValueDefaulted},
-         * exists for an SDK upgrade, where a member the release moved is the whole point.
-         */
-        record Retargeted(CallSite site, String newTypeFqn, String newName, List<ArgumentEdit> arguments)
-                implements CallChange {}
-
-        /**
          * The call is consumed as a value and no longer gives back what the code around it expects, so the
          * call goes and {@code expected}'s default stands in its place.
          */
         record ValueReplaced(CallSite site, SignatureType expected) implements CallChange {}
-
-        /**
-         * The member is gone, and a <em>literal</em> default of the type it used to give back stands in:
-         * {@code false}, {@code 0}, {@code ""} or {@code null}, and nothing else.
-         *
-         * <p>Deliberately not {@link ValueReplaced}, which asks the palette what a type's default is — and the
-         * palette answers {@code new Point()} for a type it can construct. That is right for a signature edit,
-         * where the type is one the editor offers and certainly exists, and wrong here, where the type is
-         * frequently the one that was just <em>removed</em>: {@code new Key()} names a class the target jar
-         * does not have, trading a missing method for a missing class. A literal always compiles.
-         *
-         * <p>{@code typeFqn} is that type's fully-qualified name <b>in the jar being upgraded to</b>, or null
-         * when the target has no such type (or the default is not a {@code null} at all). It is what lets a
-         * site with no type of its own — a receiver, an overloaded argument — be written
-         * {@code ((ImageTemplate) null)} instead of a bare {@code null} that would not compile or would not
-         * pick an overload. See {@link CallMigrator#literalDefaultFor}.
-         */
-        record ValueDefaulted(CallSite site, String typeName, String typeFqn) implements CallChange {}
-
-        /**
-         * The call stood as a line of its own and is removed outright, statement and all.
-         *
-         * <p>{@link ValueReplaced} cannot cover this and is not a near miss: it replaces the <em>expression</em>,
-         * which for a call made purely for its effect yields {@code 0;} — and for a {@code void} member there
-         * is no value to write at all. This is the one shape a signature edit never produces; it exists for an
-         * SDK upgrade, where a removed member is repaired by making the bot compile rather than by guessing at
-         * a replacement.
-         */
-        record CallDeleted(CallSite site) implements CallChange {}
     }
 
     /** A parameter the user removed that the body still refers to: it becomes a local of the same name. */

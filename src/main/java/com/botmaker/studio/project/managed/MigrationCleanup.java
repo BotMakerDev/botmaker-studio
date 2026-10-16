@@ -439,7 +439,7 @@ public final class MigrationCleanup {
 
     /**
      * The type whose open set holds the copy of {@code from}'s constant {@code name} — of that name, marked
-     * {@code @Migrated} — the plugin's replacement first. Empty when no other set holds one.
+     * {@code @Migrated} — in declaration order. Empty when no other set holds one.
      */
     public static Optional<Class<?>> copyTarget(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
                                                 Class<?> from, String name) {
@@ -450,8 +450,6 @@ public final class MigrationCleanup {
     public static Map<String, Class<?>> copies(BotIndex index, ValueGrammar grammar, List<ManagedValue<?>> declared,
                                                Class<?> from) {
         List<Class<?>> types = new ArrayList<>();
-        Class<?> pointed = MigrationSteps.replacementOf(grammar, from);
-        if (pointed != null) types.add(pointed);
         for (ManagedValue<?> set : declared) {
             if (set != null && set.type() != null && !types.contains(set.type())) types.add(set.type());
         }

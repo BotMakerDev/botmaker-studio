@@ -117,8 +117,7 @@ final class WhatsNew {
      *
      * <p>Only the emphasis markers are removed, and only because a Label renders them literally — {@code
      * **this**} would read as three asterisks and a word. Nothing else is rewritten: the bullet, the
-     * indentation and the author's wording all reach the user exactly as written, which is the same promise
-     * {@code @ReplacedBy.note()} makes.
+     * indentation and the author's wording all reach the user exactly as written.
      */
     private static String display(String line) {
         return line.replace("**", "").replace("`", "");

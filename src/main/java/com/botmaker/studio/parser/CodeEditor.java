@@ -887,9 +887,8 @@ public class CodeEditor {
 
     // repairSdkImports() stood here until 2026-09-02. It repointed a bot's `com.botmaker.sdk.api.*` and
     // `com.botmaker.shared.ocr.*` imports at wherever those classes had moved to, which is the editor
-    // carrying one library's package-move history. A plugin that renames its own types says so with
-    // @ReplacedBy, which the migration path already reads; a package move nobody declared is a compile
-    // error in a line the user can read, which is the honest outcome.
+    // carrying one library's package-move history. A package move is now the bot author's @Migrate TYPE
+    // rule (2026-10-16); with none it is a compile error in a line the user can read, the honest outcome.
 
     /**
      * Removes {@code annotation} from the declaration it sits on — the ✕ on an annotation pill. A

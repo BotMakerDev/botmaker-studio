@@ -51,6 +51,14 @@ public record Rule(Path file, String className, String method, int start, Migrat
         return element != null && problem == null && !seeded;
     }
 
+    /**
+     * Whether a plan applies it: {@link #ready()}, or also still seeded when {@code seededToo} — the last resort,
+     * where each seeded default stands until its author writes the replacement.
+     */
+    boolean applicable(boolean seededToo) {
+        return element != null && problem == null && (seededToo || !seeded);
+    }
+
     /** The same rule, refused for {@code why}. */
     Rule refused(String why) {
         return problem != null ? this : new Rule(file, className, method, start, kind, owner, params, types, self,

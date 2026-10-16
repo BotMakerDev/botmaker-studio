@@ -5,8 +5,6 @@ import com.botmaker.studio.sharing.PluginRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -121,25 +119,5 @@ class InstalledPluginTest {
         assertEquals(List.of("com.github.BotMakerDev:botmaker-plugin-basics",
                         "com.github.BotMakerDev:botmaker-sdk"),
                 rows.stream().map(InstalledPlugin::coordinate).toList());
-    }
-
-    /**
-     * The one hazard two plugins introduce that one never could — and the reason it is answered by a set of
-     * names rather than by a heuristic. See {@link PluginUpgradeService#usesIn}.
-     */
-    @Test
-    void aSimpleNameTwoPluginsBothDeclareIsAmbiguousAndOneOnlyOneDeclaresIsNot() {
-        Set<String> clashing = InstalledPlugin.ambiguousTypeNames(Map.of(
-                "com.github.BotMakerDev:botmaker-sdk", Set.of("Mouse", "Point", "Wait"),
-                "com.example:shapes", Set.of("Point", "Rect")));
-
-        assertEquals(Set.of("Point"), clashing);
-    }
-
-    @Test
-    void oneJarOnItsOwnMakesNothingAmbiguous() {
-        assertTrue(InstalledPlugin.ambiguousTypeNames(Map.of(
-                "com.github.BotMakerDev:botmaker-sdk", Set.of("Mouse", "Point"))).isEmpty(),
-                "a name is only ambiguous against another plugin, never against itself");
     }
 }

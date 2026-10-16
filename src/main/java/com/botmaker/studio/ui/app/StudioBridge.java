@@ -65,7 +65,6 @@ import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.services.upgrade.ProjectUpgrade;
-import com.botmaker.studio.services.upgrade.FixList;
 import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.project.managed.ManagedMigrations;
@@ -713,8 +712,8 @@ final class StudioBridge implements StudioDriver {
         List<InstalledPlugin> declared = installed(registryEntries());
         InstalledPlugin plugin = declaredPlugin(declared, id);
         PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
-                jitpack, plugin.artifact(), InstalledPlugin.ambiguousAmong(ctx.config().projectPath(), declared));
-        PluginUpgradeService.Report report = upgrades.removal();
+                jitpack, plugin.artifact());
+        PluginUpgradeService.Report report = upgrades.removal(plugin.editorDependencies());
         PluginHolders holders = upgrades.holders();
         String preview = removalPreview(plugin, report, holders, deleteFiles);
         if (!confirm) return preview + "\nplugins remove with confirm removes it.";
@@ -722,21 +721,21 @@ final class StudioBridge implements StudioDriver {
             throw new IllegalArgumentException("The user did not agree to remove " + plugin.displayName() + ".");
         }
         PluginHolders deleted = deleteFiles ? holders : PluginHolders.NONE;
-        // No picks: a call with nothing that replaces it takes its default, a value and a review mark.
-        PluginUpgradeService.Repaired repaired = waitFor(upgrades.remove(plugin.editorDependencies(),
-                !report.breaks().isEmpty(), Map.of(), deleted), PLUGIN_WRITE_SECONDS, "remove " + plugin.displayName());
+        // A use no rule covers takes a seeded default rule, marked for review.
+        PluginUpgradeService.Repaired repaired = waitFor(upgrades.remove(plugin.editorDependencies(), deleted),
+                PLUGIN_WRITE_SECONDS, "remove " + plugin.displayName());
         onFx(() -> {
             deleted.forget(ctx.config(), ctx.state());
             return null;
         });
         say("The assistant removed " + plugin.displayName() + ".");
-        return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), report.breaks().size(),
+        return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), repaired.uses(),
                 repaired.leftAsWritten(), repaired.deleted());
     }
 
     /**
-     * The Installed tab's version menu and its button, as one call (2026-10-13): the same pass, every fix the
-     * plugin suggests taken as the tab's fix sheet would preselect it, and the user asked on screen first, as
+     * The Installed tab's version menu and its button, as one call (2026-10-13): the same pass, the bot's rules
+     * applied and a default rule seeded where none is written, and the user asked on screen first, as
      * for adding a plugin — another version is other code running with Studio's permissions. A confirmed call
      * answers once the question is on screen ({@link PluginMove}): the answer and the pass outlast a client's call.
      */
@@ -751,7 +750,7 @@ final class StudioBridge implements StudioDriver {
                     + "keeps one copy in Plugins & Libraries first.");
         }
         PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
-                jitpack, plugin.artifact(), InstalledPlugin.ambiguousAmong(ctx.config().projectPath(), declared));
+                jitpack, plugin.artifact());
         String from = upgrades.currentVersion();
         String to = version == null ? "" : version.strip();
         String local = ctx.libraryService().devMode() ? LocalBuilds.scan().stream()
@@ -824,7 +823,7 @@ final class StudioBridge implements StudioDriver {
             }
             move.set(asked.moving());
             wrote = true;
-            // No picks: every place with a choice takes the plugin's own suggestion, and is marked for review.
+            // As Upgrade anyway: a broken element no rule covers takes a seeded default rule, marked for review.
             ProjectUpgrade.Result result = waitFor(ProjectUpgrade.run(List.of(new ProjectUpgrade.Row(upgrades,
                     asked.to())), ctx.libraryService()::updateVersions), PLUGIN_WRITE_SECONDS, "move " + asked.plugin());
             onFx(() -> {
@@ -1080,14 +1079,11 @@ final class StudioBridge implements StudioDriver {
         if (active != null && file.equals(active.getPath())) ctx.codeEditorService().switchToFile(file);
     }
 
-    /** The types a migration's simple names resolve among: the bot's sets' types and what replaces each. */
+    /** The types a migration's simple names resolve among: the bot's sets' types. */
     private static Set<Class<?>> knownTypes(ValueGrammar grammar, List<ManagedValue<?>> declared) {
         Set<Class<?>> known = new LinkedHashSet<>();
         for (ManagedValue<?> set : declared) {
-            if (set == null || set.type() == null) continue;
-            known.add(set.type());
-            Class<?> replacement = MigrationSteps.replacementOf(grammar, set.type());
-            if (replacement != null) known.add(replacement);
+            if (set != null && set.type() != null) known.add(set.type());
         }
         return known;
     }
@@ -1119,22 +1115,10 @@ final class StudioBridge implements StudioDriver {
         lines.add("Moving " + plugin.displayName() + " (" + plugin.coordinate() + ") from " + from + " to " + to
                 + (local ? ", this computer's own build, which no release checked" : "") + ": "
                 + InstalledPluginsTab.chipText(report) + ".");
-        if (!report.breaks().isEmpty()) {
-            lines.add(report.breaks().size() + " call(s) are repaired, and the functions they are in are marked for "
-                    + "review: " + String.join(", ", report.breaks().stream()
-                    .map(PluginUpgradeService.Break::display).distinct().limit(20).toList()) + ".");
-        }
-        int choices = FixList.of(report).size();
-        if (choices > 0) {
-            lines.add(choices + " place(s) have more than one fix; each takes the one the plugin suggests.");
-        }
+        lines.addAll(brokenLines(report));
         lines.addAll(report.values());
         for (MigrationSteps.Stranded set : report.stranded()) {
             lines.add(MigrationSummary.stranded(set, plugin.displayName() + " " + to));
-        }
-        if (!report.leftForYou().isEmpty()) {
-            lines.add("Left as written and marked, for the user to change: " + String.join(", ", report.leftForYou()
-                    .stream().map(PluginUpgradeService.Break::type).distinct().toList()) + ".");
         }
         if (report.isIncomplete()) lines.add("Not everything could be read: " + report.problems().getFirst());
         lines.add("A version of the bot is saved first.");
@@ -1154,19 +1138,33 @@ final class StudioBridge implements StudioDriver {
     private static final long PLUGIN_WRITE_SECONDS = 600;
 
     /** What removing {@code plugin} would change, as the Installed tab's question says it. */
+    /**
+     * What a move does to each element it breaks, as the question says it: those the bot's rules cover, then those
+     * that take a seeded default rule.
+     */
+    private static List<String> brokenLines(PluginUpgradeService.Report report) {
+        List<String> lines = new ArrayList<>();
+        if (!report.covered().isEmpty()) {
+            lines.add(report.covered().size() + " broken element(s) take the bot's @Migrate rules: "
+                    + String.join(", ", report.covered().stream().map(b -> b.element().display()).limit(20).toList())
+                    + ".");
+        }
+        if (!report.open().isEmpty()) {
+            lines.add(report.open().size() + " broken element(s) no written rule covers take a default rule in "
+                    + "Migrations, marked for review — a value standing for nothing, or the call deleted: "
+                    + String.join(", ", report.open().stream().map(b -> b.element().display() + " ("
+                    + b.sites().size() + ")").limit(20).toList()) + ".");
+        }
+        return lines;
+    }
+
     private static String removalPreview(InstalledPlugin plugin, PluginUpgradeService.Report report,
                                          PluginHolders holders, boolean deleteFiles) {
         List<String> lines = new ArrayList<>();
         lines.add("Removing " + plugin.displayName() + " (" + plugin.coordinate() + "): "
                 + InstalledPluginsTab.chipText(report) + ".");
-        lines.add(report.breaks().isEmpty() ? "The bot calls nothing in it, so only the pom changes."
-                : report.breaks().size() + " use(s) become a default value or are deleted, and the functions they "
-                + "are in are marked for review: " + String.join(", ", report.breaks().stream()
-                .map(PluginUpgradeService.Break::display).distinct().limit(20).toList()) + ".");
-        if (!report.leftForYou().isEmpty()) {
-            lines.add("Left as written and marked, for the user to change: " + String.join(", ", report.leftForYou()
-                    .stream().map(PluginUpgradeService.Break::type).distinct().toList()) + ".");
-        }
+        if (report.broken().isEmpty()) lines.add("The bot uses nothing in it, so only the pom changes.");
+        lines.addAll(brokenLines(report));
         if (report.isIncomplete()) lines.add("Not everything could be read: " + report.problems().getFirst());
         if (!holders.isEmpty()) {
             lines.add((deleteFiles ? "Its files are deleted: " : "Its files stay (deleteFiles deletes them): ")

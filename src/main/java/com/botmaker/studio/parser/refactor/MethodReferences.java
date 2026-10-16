@@ -23,7 +23,6 @@ import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.MethodReference;
 import org.eclipse.jdt.core.dom.QualifiedName;
 import org.eclipse.jdt.core.dom.SimpleName;
-import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 import org.eclipse.jdt.core.dom.SuperMethodReference;
@@ -119,28 +118,6 @@ public final class MethodReferences {
                 case SuperMethodReference reference -> reference.getName();
                 case QualifiedName qualified -> qualified.getName();
                 case SimpleName bare -> bare;
-                default -> null;
-            };
-        }
-
-        /**
-         * The name of the type this member is reached <em>through</em> — the {@code Key} of {@code Key.ENTER},
-         * the receiver of a static call, the class of a {@code new} — or null when the source names none, as
-         * it does for a bare statically-imported constant, a {@code case} label, or a call on {@code this}.
-         *
-         * <p>Null is what makes a move refusable rather than guessable: with no type written at the site there
-         * is nothing to retarget, and {@link CallMigrator} declines the whole migration instead of inventing a
-         * qualifier.
-         */
-        public SimpleName ownerNode() {
-            return switch (node) {
-                case QualifiedName qualified ->
-                        qualified.getQualifier() instanceof SimpleName owner ? owner : null;
-                case MethodInvocation call ->
-                        call.getExpression() instanceof SimpleName receiver ? receiver : null;
-                case ClassInstanceCreation creation ->
-                        creation.getType() instanceof SimpleType simple
-                                && simple.getName() instanceof SimpleName name ? name : null;
                 default -> null;
             };
         }

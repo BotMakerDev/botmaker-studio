@@ -9,6 +9,7 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldAccess;
@@ -145,8 +146,8 @@ final class Rules {
         }
         String returns = statement ? "void" : typeOf(method.getReturnType2(), method.getExtraDimensions());
         return new Rule(file, className, method.getName().getIdentifier(), method.getStartPosition(), kind, owner,
-                params, types, self, body == null ? "" : JavaParameterSource.text(source, body), statement, returns,
-                imports, staticImports, review != null && !review.done(), null, problem);
+                params, types, self, body == null || body instanceof Block ? "" : JavaParameterSource.text(source, body),
+                statement, returns, imports, staticImports, review != null && !review.done(), null, problem);
     }
 
     /** The annotation's members, by name; a single member is {@code value}. */
@@ -180,9 +181,14 @@ final class Rules {
         return base + "[]".repeat(dimensions);
     }
 
-    /** The one statement a {@code void} rule is, or the expression a valued rule's one {@code return} returns. */
+    /**
+     * The one statement a {@code void} rule is — its empty body when it has none, which deletes each call — or the
+     * expression a valued rule's one {@code return} returns.
+     */
     private static ASTNode bodyOf(MethodDeclaration method, boolean statement) {
-        if (method.getBody() == null || method.getBody().statements().size() != 1) return null;
+        if (method.getBody() == null) return null;
+        if (statement && method.getBody().statements().isEmpty()) return method.getBody();
+        if (method.getBody().statements().size() != 1) return null;
         Statement only = (Statement) method.getBody().statements().getFirst();
         if (statement) return only instanceof ReturnStatement ? null : only;
         return only instanceof ReturnStatement ret ? ret.getExpression() : null;

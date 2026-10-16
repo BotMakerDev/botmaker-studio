@@ -118,8 +118,24 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   declared variable) and `add_argument` (one more argument to a call taking any number); `read_tree` lists the
   slots inside a call's arguments, casts and `?:` too.
 
+### Removed
+
+- **The `@ReplacedBy` repair**: `ApiMigrationRunner`, `Redirects`, `Pairing`, `UpgradeDiff`, `ApiReferences`, the
+  fix sheet, the two-plugin simple-name guard (uses are matched by binding now), and the upgrade-only call edits
+  (a default standing in, a deleted call, a retargeted receiver). `ApiModel` reads only what is new and `@Since`.
+
 ### Changed
 
+- **A plugin upgrade or removal carries the bot over with its `@Migrate` rules** (2026-10-16). What a move
+  breaks is javac's answer over the bot against both classpaths, listed per element with its uses and whether a
+  rule covers it. The bot's rules are applied; for each broken element no rule names, *Upgrade anyway* (and a
+  removal) writes a default rule into `Migrations`, marked `@Refactor("write the replacement")`, and applies it:
+  the type's default value, the receiver for a method that gives its own owner back, or the call deleted. A whole
+  type, or a member taking a type that is gone, gets no default: its uses stay as written, listed, and their
+  functions marked. An import of a gone class nothing uses any more goes. The code is repaired before a plugin's
+  values, so a value a rule rewrote is not reset.
+- **The upgrade no longer asks a fix per place.** The fix sheet went with the plugins' `@ReplacedBy` pointers;
+  one question names the broken elements no rule covers before anything is written.
 - **A type migration's method is a whole type's rule**: written `@Migrate(value = Old.class, kind = Migrate.Kind.TYPE)`.
   Only such rules copy values. A bare `@Migrate(Old.class)` is now a method rule.
 - **An upgrade lists an open set's constant, or a parameter, that no longer compiles** instead of passing over it in

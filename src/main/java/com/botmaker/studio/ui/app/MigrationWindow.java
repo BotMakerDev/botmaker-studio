@@ -106,8 +106,8 @@ final class MigrationWindow {
     }
 
     /**
-     * Opens the window on {@code from}'s values, {@code to} preselected — {@code null} for the plugin's replacement,
-     * else the first type that fits. {@code redraw} is told each file written; {@code after} runs once a migration
+     * Opens the window on {@code from}'s values, {@code to} preselected — {@code null} for the first type that
+     * fits. {@code redraw} is told each file written; {@code after} runs once a migration
      * is applied.
      */
     static void open(Window owner, ProjectConfig config, ProjectState state, Class<?> from, Class<?> to,
@@ -124,9 +124,7 @@ final class MigrationWindow {
         target.setConverter(new StringConverter<>() {
             @Override
             public String toString(Class<?> type) {
-                if (type == null) return "";
-                return type.getSimpleName() + (type.equals(MigrationSteps.replacementOf(grammar, from))
-                        ? "  (its replacement)" : "");
+                return type == null ? "" : type.getSimpleName();
             }
 
             @Override

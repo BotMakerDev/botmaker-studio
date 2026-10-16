@@ -30,9 +30,9 @@ import java.util.Set;
  *
  * <h2>Why the source, and not a sidecar</h2>
  *
- * <p>A refactor that guesses — an upgrade standing a default value in for a call the new jar no longer
+ * <p>A refactor that guesses — an upgrade's seeded default rule standing in for an element the new jar no longer
  * offers, a signature change filling a new parameter at every call site — compiles and is very often wrong
- * (see {@link ApiMigrationRunner}). Something has to survive the dialog closing and tell the user which
+ * ({@code migrate.Seed}). Something has to survive the dialog closing and tell the user which
  * functions those were, and the diff cannot. So the mark goes where the change went: an edit that moves the
  * function moves the mark, deleting it deletes the mark, and a revert through Versions takes the marks back
  * out with the change.

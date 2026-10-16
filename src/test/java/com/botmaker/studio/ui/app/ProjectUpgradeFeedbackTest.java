@@ -4,6 +4,8 @@ import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,16 +61,16 @@ class ProjectUpgradeFeedbackTest {
 
     @Test
     void aRemovalThatRewroteCodeSaysHowMuchAndWhereTheWayBackIs() {
-        String summary = InstalledPluginsTab.removalSummary("Basics", 2, 5);
+        String summary = InstalledPluginsTab.removalSummary("Basics", 2, 5, List.of(), "");
 
         assertTrue(summary.startsWith("Removed Basics from this project."), summary);
-        assertTrue(summary.contains("5 calls replaced or deleted in 2 files"), summary);
+        assertTrue(summary.contains("5 uses migrated in 2 files"), summary);
         assertTrue(summary.contains("Versions tab"), summary);
     }
 
     @Test
     void aRemovalThatTouchedNoCodeSaysOnlyThePomChanged() {
-        String summary = InstalledPluginsTab.removalSummary("Basics", 0, 0);
+        String summary = InstalledPluginsTab.removalSummary("Basics", 0, 0, List.of(), "");
 
         assertTrue(summary.contains("only the pom changed"), summary);
     }

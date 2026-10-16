@@ -165,6 +165,11 @@ public final class BotIndex {
         return build(all, classpath, root);
     }
 
+    /** The jars these sources were parsed against. */
+    public List<String> classpath() {
+        return classpath;
+    }
+
     /** Every source, by absolute path, in walk order. */
     public Map<Path, String> sources() {
         return sources;

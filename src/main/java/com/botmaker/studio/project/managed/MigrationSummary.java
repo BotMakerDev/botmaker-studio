@@ -27,11 +27,10 @@ public final class MigrationSummary {
         return type.getSimpleName().equals(full) ? full : type.getSimpleName() + " (" + full + ")";
     }
 
-    /** {@code 312 values of ImageTemplate (…) are of a retired type; its plugin points to Picture (…); 12 copied.} */
+    /** {@code 312 values of ImageTemplate (…), a type its plugin retired; 12 copied.} */
     public static String pending(MigrationSteps.Pending pending) {
         return pending.values() + (pending.values() == 1 ? " value of " : " values of ") + type(pending.from())
                 + ", a type its plugin retired"
-                + (pending.to() == null ? ", naming no replacement" : " for " + type(pending.to()))
                 + (pending.copied() == 0 ? "; none copied yet."
                 : pending.copied() == pending.values() ? "; all copied." : "; " + pending.copied() + " copied.");
     }
@@ -55,7 +54,6 @@ public final class MigrationSummary {
         return set.values() + (set.values() == 1 ? " value of " : " values of ") + what + " not copied yet: " + to
                 + " drops their set, so the move removes them (one the bot's code names is kept, unmarked) or "
                 + "resets them"
-                + (set.to() != null ? "; their plugin points to " + type(set.to()) : "")
                 + (set.migratable() ? ". To keep them, migrate them first, on the version the bot has now "
                 + "(migration list)."
                 : ". They cannot be migrated; the version saved before the move keeps them.");
@@ -91,38 +89,32 @@ public final class MigrationSummary {
     }
 
     /**
-     * The whole of {@code migration read}: how {@code from}'s values become {@code to}'s — {@code null} for its
-     * plugin's replacement, else the first type that fits, as the migration window preselects — part by part or
-     * constant by constant, as the bot's {@code @Migrate} method has it or else as first guessed, with what else
-     * each can be, the pairs it goes through and why it cannot be written yet.
+     * The whole of {@code migration read}: how {@code from}'s values become {@code to}'s — {@code null} for the
+     * first type that fits, as the migration window opens on it — part by part or constant by constant, as the
+     * bot's {@code @Migrate} method has it or else as first guessed, with what else each can be, the pairs it goes
+     * through and why it cannot be written yet.
      */
     public static String mapping(ValueGrammar grammar, List<ManagedValue<?>> declared,
                                  List<ManagedMigrations.Method> methods, Class<?> from, Class<?> to) {
         List<Class<?>> targets = MigrationSteps.targets(grammar, declared, from);
-        Class<?> replacement = MigrationSteps.replacementOf(grammar, from);
         boolean held = MigrationSteps.held(declared, from);
         List<String> lines = new ArrayList<>();
         if (to == null) {
-            // As the window preselects: targets lead with the replacement, unless its shape cannot be mapped.
-            if (replacement != null && !targets.contains(replacement)) {
-                lines.add(type(from) + " cannot be mapped to " + type(replacement) + ", the replacement its plugin "
-                        + "names: " + reason(MigrationSteps.shape(grammar, from, replacement)));
-            }
             if (targets.isEmpty()) {
                 lines.add("No type a plugin declares can take " + type(from) + "'s values.");
                 return String.join("\n", lines);
             }
             to = targets.getFirst();
         }
-        lines.add(type(from) + " → " + type(to)
-                + (ManagedMigrations.named(to, replacement) ? ", the replacement its plugin names." : "."));
+        lines.add(type(from) + " → " + type(to) + ".");
+        Class<?> picked = to;
         if (held && !targets.contains(to)) {
             lines.add("The migration window does not offer " + to.getSimpleName() + " for " + from.getSimpleName()
                     + "'s values.");
         }
         if (held && targets.size() > 1) {
             lines.add("Its values can also go into: " + String.join(", ", targets.stream()
-                    .filter(each -> !ManagedMigrations.named(each, replacement)).map(MigrationSummary::type)
+                    .filter(each -> !ManagedMigrations.named(each, picked)).map(MigrationSummary::type)
                     .toList()) + ".");
         }
         Class<?> made = to;

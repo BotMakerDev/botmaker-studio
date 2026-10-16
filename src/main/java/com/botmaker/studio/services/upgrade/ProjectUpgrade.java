@@ -1,11 +1,8 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.CallSite;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Choice;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Decision;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Site;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,38 +10,32 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Several plugins moved in one pass — one snapshot, one repair per row in sequence, one pom write.
+ * Several plugins moved in one pass — one snapshot, one repair of the code for every row at once, the values
+ * repaired per row, one pom write.
  *
- * <p>This is the only thing the project upgrade window adds to the engine, and it is here rather than in the
- * window because the rule it enforces is not a layout decision: <b>a project must never sit on plugin A's new
- * version with plugin B's old source</b>. Every row is checked before anything at all is written, and the
- * write that moves the versions happens once, after every rewrite has already succeeded.
+ * <p>The rule it enforces is not a layout decision: <b>a project must never sit on plugin A's new version with
+ * plugin B's old source</b>. Every row is checked before anything at all is written, and the write that moves
+ * the versions happens once, after every rewrite has already succeeded.
  *
  * <h2>The order, and why each step is where it is</h2>
  *
  * <ol>
- *   <li><b>Check every row first.</b> {@link PluginUpgradeService#compare} answers without writing. Nothing
- *       it finds refuses the pass since 2026-09-29: an unreadable file, a removed type the bot declares, or
- *       two plugins claiming one simple name each leave that part as written and say so in
- *       {@link Result#leftForYou()}. The user's rule is that an upgrade is never blocked; a plugin's managed
- *       values are repaired like the rest (2026-10-11), never a reason to stop.</li>
- *   <li><b>One snapshot.</b> A commit per plugin would describe a state the user never asked to be in, and
- *       reverting it would undo one plugin's repair while leaving another's.</li>
- *   <li><b>One repair of the values and one of the code per row, committed to disk before the next row
- *       starts.</b> The plugin's managed values are repaired first ({@link PluginUpgradeService#repairValues}), so
- *       the repair reads the bot the new jar compiles. Each pass re-reads the
- *       project's current content, so plugin B is migrated against the files plugin A has already rewritten.
- *       Deferring every write to the end would have the second row plan its edits against text that no longer
- *       exists at those offsets.</li>
- *   <li><b>One pom write, for every row at once.</b> See
- *       {@code MavenService.setDependencyVersions}.</li>
+ *   <li><b>Check every row first.</b> {@link PluginUpgradeService#compare} answers without writing. Nothing it
+ *       finds refuses the pass since 2026-09-29: what it could not read is said back in
+ *       {@link Result#leftForYou()}.</li>
+ *   <li><b>One snapshot.</b> A commit per plugin would describe a state the user never asked to be in.</li>
+ *   <li><b>The code, once, against every row's target at once</b> ({@link PluginUpgradeService#repairCode},
+ *       2026-10-16): the bot's {@code @Migrate} rules applied, a default rule seeded for each broken element none
+ *       names. One pass because a rule may name an element of either plugin, and javac checks the rewrite against
+ *       the classpath the bot will compile with.</li>
+ *   <li><b>The values, per row, after the code</b> ({@link PluginUpgradeService#repairValues}): a managed value a
+ *       rule rewrote compiles again, so only what no rule covers is reset — the last resort.</li>
+ *   <li><b>One pom write, for every row at once.</b> See {@code MavenService.setDependencyVersions}.</li>
  * </ol>
  *
- * <p><b>What it deliberately does not promise:</b> a failure <em>after</em> the snapshot — a file that cannot
- * be written, a jar that stops resolving between the check and the repair — leaves the project mid-pass with
- * no pom change. That is what the snapshot is for, and it is why the snapshot is taken before the first
- * rewrite rather than after the last one. Rolling the files back here would be a second, worse implementation
- * of the revert the VCS panel already offers.
+ * <p><b>What it deliberately does not promise:</b> a failure <em>after</em> the snapshot leaves the project
+ * mid-pass with no pom change. That is what the snapshot is for; rolling the files back here would be a second,
+ * worse implementation of the revert the Versions tab already offers.
  */
 public final class ProjectUpgrade {
 
@@ -54,24 +45,11 @@ public final class ProjectUpgrade {
     /**
      * One row of the window, resolved to the operation it stands for.
      *
-     * @param upgrades       the engine pointed at that plugin's coordinate
-     * @param targetVersion  the version the row's combo box is on — older than the installed one for a
-     *                       downgrade, which is the same operation and the same control
-     * @param alsoModernise  whether to read through the target's own deprecations, the dialog's checkbox
-     * @param picks          the per-site {@link Decision}s the window collected; empty takes the engine's own
-     *                       answer at every site
+     * @param upgrades      the engine pointed at that plugin's coordinate
+     * @param targetVersion the version the row's combo box is on — older than the installed one for a downgrade,
+     *                      which is the same operation and the same control
      */
-    public record Row(PluginUpgradeService upgrades, String targetVersion, boolean alsoModernise,
-                      Map<CallSite, Decision> picks) {
-
-        public Row {
-            picks = picks == null ? Map.of() : Map.copyOf(picks);
-        }
-
-        public Row(PluginUpgradeService upgrades, String targetVersion) {
-            this(upgrades, targetVersion, false, Map.of());
-        }
-    }
+    public record Row(PluginUpgradeService upgrades, String targetVersion) {}
 
     /** One plugin that moved, as the summary names it. */
     public record Moved(String plugin, String from, String to) {
@@ -83,15 +61,12 @@ public final class ProjectUpgrade {
     }
 
     /**
-     * What the pass did, for the window to say back.
-     *
-     * <p>It exists because the window used to close on success: the one moment a user wants to read a
-     * sentence is the moment the operation they were warned about has finished. The counts are the two the
-     * pass actually knows — {@code filesRewritten} is what was written, {@code callsRepaired} is what the
-     * reports found — and nothing here is a report of what <em>would</em> happen.
+     * What the pass did, for the window to say back. {@code filesRewritten} is what was written and
+     * {@code usesRewritten} the uses of a broken element the rules rewrote; nothing here is a report of what
+     * <em>would</em> happen.
      */
-    public record Result(List<Moved> moved, int filesRewritten, int callsRepaired, List<String> leftForYou,
-                         List<String> repaired, List<java.nio.file.Path> deleted) {
+    public record Result(List<Moved> moved, int filesRewritten, int usesRewritten, List<String> leftForYou,
+                         List<String> repaired, List<Path> deleted) {
 
         public Result {
             moved = List.copyOf(moved);
@@ -100,12 +75,8 @@ public final class ProjectUpgrade {
             deleted = List.copyOf(deleted);
         }
 
-        public Result(List<Moved> moved, int filesRewritten, int callsRepaired, List<String> leftForYou) {
-            this(moved, filesRewritten, callsRepaired, leftForYou, List.of(), List.of());
-        }
-
-        public Result(List<Moved> moved, int filesRewritten, int callsRepaired) {
-            this(moved, filesRewritten, callsRepaired, List.of());
+        public Result(List<Moved> moved, int filesRewritten, int usesRewritten) {
+            this(moved, filesRewritten, usesRewritten, List.of(), List.of(), List.of());
         }
 
         public static Result nothing() {
@@ -133,10 +104,10 @@ public final class ProjectUpgrade {
             if (filesRewritten == 0) {
                 text.append(" Nothing in this bot's own code had to change.");
             } else {
-                text.append(" ").append(callsRepaired).append(" call")
-                        .append(callsRepaired == 1 ? "" : "s").append(" repaired in ")
+                text.append(" ").append(usesRewritten).append(" use")
+                        .append(usesRewritten == 1 ? "" : "s").append(" migrated in ")
                         .append(filesRewritten).append(" file").append(filesRewritten == 1 ? "" : "s")
-                        .append(" — the functions they are in are marked for review.");
+                        .append(" — a default rule stands where none was written, marked for review in Migrations.");
             }
             if (!leftForYou.isEmpty()) {
                 text.append(" ").append(leftForYou.size()).append(leftForYou.size() == 1 ? " thing was" : " things were")
@@ -155,10 +126,7 @@ public final class ProjectUpgrade {
         CompletableFuture<Void> write(Map<String, String> versionsByCoordinate);
     }
 
-    /**
-     * Runs the whole pass off the calling thread. The future fails — with nothing written — when any row
-     * refuses; see the class javadoc for what a failure after the snapshot means.
-     */
+    /** Runs the whole pass off the calling thread; see the class javadoc for what a failure after the snapshot means. */
     public static CompletableFuture<Result> run(List<Row> rows, PomWriter writer) {
         List<Row> moving = rows.stream()
                 .filter(r -> !r.targetVersion().isBlank()
@@ -168,130 +136,46 @@ public final class ProjectUpgrade {
 
         return CompletableFuture
                 .supplyAsync(() -> {
-                    // Nothing below this line may write until every row has answered. The reports are held
-                    // in a list keyed by position rather than by the row: two rows moving the same
-                    // coordinate to the same version are equal as records and would collapse into one.
+                    // Nothing below this line may write until every row has answered. The reports are held in a
+                    // list keyed by position: two equal rows would collapse into one as map keys.
                     List<Report> checked = new ArrayList<>();
-                    for (Row row : moving) checked.add(report(row));
+                    for (Row row : moving) checked.add(row.upgrades().compare(row.targetVersion(), false));
 
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
 
                     Map<String, String> versions = new LinkedHashMap<>();
                     List<Moved> moved = new ArrayList<>();
                     List<String> left = new ArrayList<>();
-                    List<String> repaired = new ArrayList<>();
-                    List<java.nio.file.Path> deleted = new ArrayList<>();
-                    int files = 0;
-                    int calls = 0;
                     for (int i = 0; i < moving.size(); i++) {
                         Row row = moving.get(i);
-                        Report report = checked.get(i);
-                        // Read before the repair: the version the project is on is read off the pom, and the
-                        // pom write below moves it.
-                        String from = row.upgrades().currentVersion();
-                        // The plugin's values first, so the repair reads the bot the new jar compiles.
+                        versions.put(row.upgrades().coordinate(), row.targetVersion());
+                        // Read before anything moves: the version the project is on is read off the pom.
+                        moved.add(new Moved(row.upgrades().displayName(), row.upgrades().currentVersion(),
+                                row.targetVersion()));
+                        // What the check could not read does not stop the move (2026-09-29); it is said back.
+                        String name = row.upgrades().displayName();
+                        checked.get(i).problems().forEach(problem -> left.add(name + ": " + problem));
+                    }
+
+                    PluginUpgradeService.Repaired code = moving.getFirst().upgrades().repairCode(versions);
+                    left.addAll(code.leftAsWritten());
+
+                    List<String> repaired = new ArrayList<>();
+                    List<Path> deleted = new ArrayList<>();
+                    int files = code.files();
+                    for (Row row : moving) {
                         PluginUpgradeService.Values values = row.upgrades().repairValues(row.targetVersion());
                         repaired.addAll(values.repaired());
                         left.addAll(values.left());
                         deleted.addAll(values.deleted());
-                        // What the check could not read does not stop the move (2026-09-29); it is said back.
-                        report.problems().forEach(problem -> left.add(row.upgrades().displayName() + ": "
-                                + problem));
-                        if (report.canMigrate() || (row.alsoModernise() && report.canModernise())) {
-                            // The picks name sites by position, read before anything was written. A row
-                            // after the first repairs files an earlier row has rewritten, so its picks are
-                            // carried onto its report read now (2026-10-06): a fix the user chose is never
-                            // dropped because a call moved.
-                            Row asked = row;
-                            if (i > 0 && !row.picks().isEmpty()) {
-                                Report now = report(row);
-                                asked = new Row(row.upgrades(), row.targetVersion(), row.alsoModernise(),
-                                        carried(row.picks(), sitesOf(report), sitesOf(now)));
-                                report = now;
-                            }
-                            PluginUpgradeService.Repaired code = row.upgrades().repairReporting(
-                                    row.targetVersion(), row.alsoModernise(), true, withDefaults(report, asked));
-                            files += code.files();
-                            left.addAll(code.leftAsWritten());
-                            calls += report.breaks().size();
-                        }
-                        moved.add(new Moved(row.upgrades().displayName(), from, row.targetVersion()));
-                        versions.put(row.upgrades().coordinate(), row.targetVersion());
                     }
-                    return new Pass(versions, new Result(moved, files, calls, left, repaired, deleted));
+                    return new Pass(versions, new Result(moved, files, code.uses(), left, repaired, deleted));
                 })
                 .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }
 
     /** The pom write and the sentence that follows it, carried together through the last step. */
     private record Pass(Map<String, String> versions, Result result) {}
-
-    /**
-     * That row's report. Nothing in it refuses the pass since 2026-09-29, when the rule became that an upgrade
-     * is never blocked: what the check could not read is said back in {@link Result#leftForYou()}, a removed
-     * type is repaired as far as a repair can go and the rest left and marked, and a guess nobody answered
-     * takes the default ({@link #withDefaults}).
-     */
-    private static Report report(Row row) {
-        return row.upgrades().compare(row.targetVersion(), row.alsoModernise(), false);
-    }
-
-    /**
-     * The row's picks, with every {@linkplain #waitingSites waiting site} the user did not answer set to a
-     * default value — the answer that compiles, and is marked {@code @Refactor} so the Review tab lists it.
-     * Until 2026-09-29 an unanswered site refused the pass.
-     */
-    /**
-     * {@code picks}, keyed by {@code before}'s sites, moved onto the matching sites of {@code after}: the same
-     * file, the same call text, the same place among that file's calls of that text. A rewrite above a call
-     * moves it; it does not change what the call says. A pick whose site has no match is dropped, and its site
-     * then takes the default like any unanswered one.
-     */
-    static Map<CallSite, Decision> carried(Map<CallSite, Decision> picks, List<CallSite> before,
-                                           List<CallSite> after) {
-        Map<CallSite, Decision> out = new LinkedHashMap<>();
-        for (Map.Entry<CallSite, Decision> pick : picks.entrySet()) {
-            CallSite site = pick.getKey();
-            int ordinal = sameCall(before, site).indexOf(site);
-            List<CallSite> now = sameCall(after, site);
-            if (ordinal >= 0 && ordinal < now.size()) out.put(now.get(ordinal), pick.getValue());
-        }
-        return out;
-    }
-
-    /** {@code sites} with {@code site}'s file and text, in file order. */
-    private static List<CallSite> sameCall(List<CallSite> sites, CallSite site) {
-        return sites.stream().filter(s -> s.file().equals(site.file()) && s.text().equals(site.text()))
-                .sorted(java.util.Comparator.comparingInt(CallSite::offset)).toList();
-    }
-
-    /** Every site a report names — its breaks', its splits' and its guesses' — once each. */
-    static List<CallSite> sitesOf(Report report) {
-        java.util.Set<CallSite> out = new java.util.LinkedHashSet<>();
-        report.breaks().forEach(b -> out.addAll(b.sites()));
-        for (Choice choice : report.splits()) for (Site site : choice.sites()) out.add(site.site());
-        for (Choice choice : report.guesses()) for (Site site : choice.sites()) out.add(site.site());
-        return List.copyOf(out);
-    }
-
-    static Map<CallSite, Decision> withDefaults(Report report, Row row) {
-        Map<CallSite, Decision> picks = new LinkedHashMap<>(row.picks());
-        for (CallSite site : waitingSites(report)) picks.putIfAbsent(site, Decision.DEFAULT);
-        return picks;
-    }
-
-    /**
-     * The sites whose repair is a guess — every site of a {@link Report#guesses()}, and a split's site with
-     * nothing that fits. The window asks about each, and one left unanswered is defaulted and marked.
-     */
-    static List<CallSite> waitingSites(Report report) {
-        List<CallSite> out = new ArrayList<>();
-        for (Choice choice : report.guesses()) for (Site site : choice.sites()) out.add(site.site());
-        for (Choice choice : report.splits()) {
-            for (Site site : choice.sites()) if (site.candidates().isEmpty()) out.add(site.site());
-        }
-        return out;
-    }
 
     private static String snapshotMessage(List<Row> rows) {
         if (rows.size() == 1) {

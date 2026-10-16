@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ReleasedPlugins;
 import com.botmaker.studio.plugin.grammar.JavaNames;
@@ -10,7 +11,6 @@ import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
-import com.botmaker.studio.services.upgrade.FixList;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
 import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
@@ -43,7 +43,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -64,30 +63,25 @@ import java.util.function.Supplier;
  * the same operation), and nothing when there is nothing to do. <i>Upgrade all</i> moves every row that has an
  * upgrade, in one pass. Until this date every row was seeded with its newest version, each pick ran a Check
  * whose report filled the tab with prose, and a separate <i>Snapshot, repair &amp; switch</i> applied whatever
- * was picked — so upgrading one plugin meant un-picking all the others. The repair is unchanged: a pass takes
- * a snapshot, repairs the bot's calls, and gives a call nothing replaces a default value and a review mark.
+ * was picked — so upgrading one plugin meant un-picking all the others. A pass takes a snapshot and carries the
+ * bot over with its {@code @Migrate} rules, a default rule seeded and applied for each broken element none names
+ * (2026-10-16).
  *
  * <p>A dev build in a dev-mode project is the build being tried, so its row offers no upgrade.
  *
- * <h2>Remove is the same repair with no target jar</h2>
+ * <h2>Remove is the same repair with the plugin gone</h2>
  *
- * <p>Every call into the plugin becomes a default value or a deleted line, every import of it is dropped, and
- * a type the bot writes <em>down</em> is left as written, marked and listed. {@link RemovalSheet} says so in
- * one sentence before anything is written.
+ * <p>Every element of the plugin the bot uses is broken, and each takes the bot's rule or a seeded default; a
+ * use no rule can stand at — a type the bot writes <em>down</em> — is left as written, marked and listed.
+ * {@link RemovalSheet} says so before anything is written.
  *
  * <p><b>Install has no repair</b>, and needs none: it is {@link BrowsePluginsTab}'s, and this tab's <i>Add a
  * plugin…</i> switches to it.
  *
  * <h2>One pass, not one pass per row</h2>
  *
- * <p>{@link ProjectUpgrade} takes one snapshot, repairs each row in sequence and writes the pom once: a
- * project sitting on plugin A's new version with plugin B's old source compiles against neither.
- *
- * <h2>Two plugins, one simple name</h2>
- *
- * <p>Call sites are attributed by the simple type name the source writes, so two plugins declaring
- * {@code Point} make that call unanswerable. The set of clashing names is computed once, from the installed
- * jars, and handed to every service built here. See {@link InstalledPlugin#ambiguousAmong}.
+ * <p>{@link ProjectUpgrade} takes one snapshot, repairs the code against every row's target at once and writes
+ * the pom once: a project sitting on plugin A's new version with plugin B's old source compiles against neither.
  */
 public final class InstalledPluginsTab {
 
@@ -293,17 +287,13 @@ public final class InstalledPluginsTab {
                     declaredLibraries, entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
             List<PluginHost.LoadedPlugin> loaded = PluginHost.loaded();
             List<Declared> declared = declaredOnce(found, loaded);
-            // Over the copies kept only: two copies of one plugin declare every name twice, and an
-            // ambiguous name is one no report may attribute.
-            Set<String> ambiguous = InstalledPlugin.ambiguousAmong(config.projectPath(),
-                    declared.stream().map(Declared::row).toList());
             List<PluginHost.LoadedPlugin> bundled = bundled(declaredLibraries, loaded);
             Map<String, String> local = new java.util.HashMap<>();
             builds.forEach(build -> local.put(build.coordinate(), build.version()));
             Platform.runLater(() -> {
                 if (asked != generation) return;        // a later load (a dev-mode switch) owns the table
                 localVersions = Map.copyOf(local);
-                render(declared, bundled, ambiguous);
+                render(declared, bundled);
             });
             return null;
         }).exceptionally(error -> {
@@ -368,7 +358,7 @@ public final class InstalledPluginsTab {
                 + " only; compiling and running the bot still mixes both until one is removed.";
     }
 
-    private void render(List<Declared> declared, List<PluginHost.LoadedPlugin> bundled, Set<String> ambiguous) {
+    private void render(List<Declared> declared, List<PluginHost.LoadedPlugin> bundled) {
         progress.setVisible(false);
         table.getChildren().clear();
         rows.clear();
@@ -392,7 +382,7 @@ public final class InstalledPluginsTab {
         line++;
 
         for (Declared entry : declared) {
-            Row row = new Row(entry.row(), ambiguous, !entry.twins().isEmpty());
+            Row row = new Row(entry.row(), !entry.twins().isEmpty());
             rows.add(row);
             table.add(row.name, 0, line);
             table.add(row.installed, 1, line);
@@ -535,11 +525,10 @@ public final class InstalledPluginsTab {
         private final Button remove = new Button("Remove…");
         private final Label verdict = new Label();
 
-        Row(InstalledPlugin plugin, Set<String> ambiguous, boolean twinned) {
+        Row(InstalledPlugin plugin, boolean twinned) {
             this.plugin = plugin;
             this.twinned = twinned;
-            this.upgrades = new PluginUpgradeService(config, state, libraryService, jitpack,
-                    plugin.artifact(), ambiguous);
+            this.upgrades = new PluginUpgradeService(config, state, libraryService, jitpack, plugin.artifact());
 
             name = new Label(plugin.displayName());
             // Resolved: a template pins its SDK as ${botmaker.sdk.version}, and the pom's text is not a version.
@@ -685,12 +674,12 @@ public final class InstalledPluginsTab {
         }
 
         ProjectUpgrade.Row asRow(String target) {
-            return new ProjectUpgrade.Row(upgrades, target, false, Map.of());
+            return new ProjectUpgrade.Row(upgrades, target);
         }
 
         /**
-         * Reads what removing the plugin would rewrite, then asks ({@link RemovalSheet}) before anything is
-         * written: a call that used to do something becomes a default value or disappears.
+         * Reads what removing the plugin would break, then asks ({@link RemovalSheet}) before anything is
+         * written: a use no rule covers takes a seeded default, a value or nothing.
          */
         void runRemoval() {
             busy = true;
@@ -703,7 +692,7 @@ public final class InstalledPluginsTab {
                 Report report;
                 PluginHolders holders;
                 try {
-                    report = upgrades.removal();
+                    report = upgrades.removal(plugin.editorDependencies());
                     holders = upgrades.holders();
                 } catch (RuntimeException e) {
                     String message = e.getMessage();
@@ -720,20 +709,20 @@ public final class InstalledPluginsTab {
                     status("");
                     Optional<Boolean> answer = RemovalSheet.ask(root.getScene() == null ? null
                             : root.getScene().getWindow(), plugin.displayName(), report, holders);
-                    answer.ifPresent(deleteFiles -> remove(report, deleteFiles ? holders : PluginHolders.NONE));
+                    answer.ifPresent(deleteFiles -> remove(deleteFiles ? holders : PluginHolders.NONE));
                 });
             }, "plugin-removal-check");
             worker.setDaemon(true);
             worker.start();
         }
 
-        private void remove(Report report, PluginHolders holders) {
+        private void remove(PluginHolders holders) {
             busy = true;
             refreshButtons();
             progress.setVisible(true);
-            status("Saving a version, repairing your calls and removing " + plugin.displayName() + "…");
+            status("Saving a version, migrating your code and removing " + plugin.displayName() + "…");
 
-            upgrades.remove(plugin.editorDependencies(), !report.breaks().isEmpty(), Map.of(), holders)
+            upgrades.remove(plugin.editorDependencies(), holders)
                     .whenComplete((repaired, error) -> Platform.runLater(() -> {
                         endBusy();
                         if (error != null) {
@@ -745,9 +734,8 @@ public final class InstalledPluginsTab {
                         }
                         status("");
                         holders.forget(config, state);
-                        showResult(removalSummary(plugin.displayName(), repaired.files(), report.breaks().size(),
+                        showResult(removalSummary(plugin.displayName(), repaired.files(), repaired.uses(),
                                 repaired.leftAsWritten(), repaired.deleted()), repaired.files() > 0);
-                        // One plugin fewer can make a name that was ambiguous answerable again.
                         reload();
                         onChanged.run();
                     }));
@@ -762,31 +750,17 @@ public final class InstalledPluginsTab {
 
     /** A report's verdict in a few words; what the assistant's removal preview opens with ({@code StudioBridge}). */
     static String chipText(Report r) {
-        if (!r.leftForYou().isEmpty()) {
-            return r.breaks().size() + " repairable, " + r.leftForYou().size() + " to finish by hand";
-        }
-        if (r.isIncomplete()) {
-            return r.breaks().isEmpty() ? "partly checked" : r.breaks().size() + " repairable, partly checked";
-        }
-        if (r.breaks().isEmpty()) return "nothing breaks";
-        return r.breaks().size() + " repairable";
+        if (r.broken().isEmpty()) return r.isIncomplete() ? "partly checked" : "nothing breaks";
+        String broken = r.broken().size() + " broken" + (r.covered().isEmpty() ? ""
+                : ", " + r.covered().size() + " with a rule");
+        return r.isIncomplete() ? broken + ", partly checked" : broken;
     }
 
     /**
      * The removal's own result sentence — the upgrade's {@link ProjectUpgrade.Result#summary()} for the one
      * operation that has no versions to name.
      */
-    static String removalSummary(String plugin, int filesRewritten, int calls) {
-        return removalSummary(plugin, filesRewritten, calls, List.of());
-    }
-
-    /** As above, with what the repair left as written. */
-    static String removalSummary(String plugin, int filesRewritten, int calls, List<String> leftForYou) {
-        return removalSummary(plugin, filesRewritten, calls, leftForYou, "");
-    }
-
-    /** As above, naming the plugin's files the removal deleted ({@code ""} for none). */
-    static String removalSummary(String plugin, int filesRewritten, int calls, List<String> leftForYou,
+    static String removalSummary(String plugin, int filesRewritten, int uses, List<String> leftForYou,
                                  String deleted) {
         String head = "Removed " + plugin + " from this project."
                 + (deleted.isBlank() ? "" : " Deleted its files: " + deleted + ".");
@@ -799,10 +773,10 @@ public final class InstalledPluginsTab {
                     : " Nothing else in this bot named it.") + left + back;
         }
         String files = filesRewritten + " file" + (filesRewritten == 1 ? "" : "s");
-        String what = calls == 0
-                ? " Removed their imports in " + files + "; the functions still naming them are marked for review."
-                : " " + calls + " call" + (calls == 1 ? "" : "s") + " replaced or deleted in " + files
-                        + " — the functions they are in are marked for review.";
+        String what = uses == 0
+                ? " Rewrote " + files + "; the functions still naming it are marked for review."
+                : " " + uses + " use" + (uses == 1 ? "" : "s") + " migrated in " + files
+                        + " — a default rule stands where none was written, marked for review in Migrations.";
         return head + what + left + back;
     }
 
@@ -858,8 +832,7 @@ public final class InstalledPluginsTab {
             out.append("• ").append(set.values()).append(set.values() == 1 ? " value of " : " values of ")
                     .append(each.typeName()).append(": ").append(each.plugin()).append(' ').append(each.target())
                     .append(" drops their set")
-                    .append(set.to() != null ? "; it points to " + JavaNames.simple(set.to())
-                            : set.migratable() ? "" : "; nothing in the version you have now can take them")
+                    .append(set.migratable() ? "" : "; nothing in the version you have now can take them")
                     .append(".\n");
         }
         out.append("\nUpgrading removes or resets those values; a removed value your code names is kept, unmarked."
@@ -879,8 +852,8 @@ public final class InstalledPluginsTab {
     // -------------------------------------------------------------------------
 
     /**
-     * Moves {@code moving}: reads what each move breaks, asks a fix for every place ({@link FixSheet}) when
-     * there is any, and only then runs the one pass. Cancelling the fixes writes nothing.
+     * Moves {@code moving}: reads what each move breaks, asks before seeding a default rule for any element no
+     * rule covers ({@link #openSentence}), and only then runs the one pass. Cancelling writes nothing.
      */
     private void runPass(List<ProjectUpgrade.Row> moving) {
         if (moving.isEmpty()) return;
@@ -892,7 +865,7 @@ public final class InstalledPluginsTab {
                 : "moving " + moving.size() + " plugins") + " would break…");
 
         CompletableFuture.supplyAsync(() -> moving.stream()
-                .map(row -> row.upgrades().compare(row.targetVersion(), row.alsoModernise()))
+                .map(row -> row.upgrades().compare(row.targetVersion()))
                 .toList()).whenComplete((reports, error) -> Platform.runLater(() -> {
                     if (error != null) {
                         endBusy();
@@ -919,30 +892,18 @@ public final class InstalledPluginsTab {
                                 return;
                             }
                         }
-                        List<FixSheet.Part> parts = new ArrayList<>();
-                        for (int i = 0; i < moving.size(); i++) {
-                            parts.add(new FixSheet.Part(moving.get(i).upgrades().displayName(),
-                                    moving.get(i).targetVersion(), FixList.of(reports.get(i))));
+                        String open = openSentence(moving, reports);
+                        if (!open.isEmpty()) {
+                            status("");
+                            Optional<ButtonType> answer = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, open)
+                                    .showAndWait();
+                            if (answer.isEmpty() || answer.get() != ButtonType.OK) {
+                                endBusy();
+                                status("Nothing was changed.");
+                                return;
+                            }
                         }
-                        if (parts.stream().allMatch(p -> p.issues().isEmpty())) {
-                            apply(moving);
-                            return;
-                        }
-                        status("");
-                        Optional<List<Map<PluginUpgradeService.CallSite, PluginUpgradeService.Decision>>> picks =
-                                FixSheet.ask(root.getScene() == null ? null : root.getScene().getWindow(), parts);
-                        if (picks.isEmpty()) {
-                            endBusy();
-                            status("Nothing was changed.");
-                            return;
-                        }
-                        List<ProjectUpgrade.Row> fixed = new ArrayList<>();
-                        for (int i = 0; i < moving.size(); i++) {
-                            ProjectUpgrade.Row row = moving.get(i);
-                            fixed.add(new ProjectUpgrade.Row(row.upgrades(), row.targetVersion(),
-                                    row.alsoModernise(), picks.get().get(i)));
-                        }
-                        apply(fixed);
+                        apply(moving);
                     } catch (RuntimeException e) {
                         // A tab left busy keeps every button grey until the window is reopened.
                         endBusy();
@@ -951,7 +912,29 @@ public final class InstalledPluginsTab {
                 }));
     }
 
-    /** The pass itself: one snapshot, each row's calls repaired with its fixes, the pom written once. */
+    /**
+     * What the pass does to each broken element no rule the author wrote covers, as the question before it asks —
+     * {@code ""} when every one has its rule, or nothing breaks.
+     */
+    static String openSentence(List<ProjectUpgrade.Row> moving, List<Report> reports) {
+        List<String> open = new ArrayList<>();
+        for (int i = 0; i < moving.size(); i++) {
+            for (Broken broken : reports.get(i).open()) {
+                String uses = broken.sites().size() + (broken.sites().size() == 1 ? " use" : " uses");
+                open.add(broken.element().display() + " (" + moving.get(i).upgrades().displayName() + ", " + uses
+                        + ")");
+            }
+        }
+        if (open.isEmpty()) return "";
+        return "This move breaks " + open.size() + (open.size() == 1 ? " element" : " elements") + " no @Migrate"
+                + " rule of yours covers: " + String.join(", ", open.stream().limit(12).toList())
+                + (open.size() > 12 ? " and " + (open.size() - 12) + " more" : "") + ".\n\nUpgrade anyway writes a"
+                + " default rule for each into Migrations — a value standing for nothing, or the call deleted —"
+                + " marked for review, and applies it. A use no rule can stand at is left as written and marked."
+                + " A version of the bot is saved first.";
+    }
+
+    /** The pass itself: one snapshot, the code carried over by the bot's rules, the pom written once. */
     private void apply(List<ProjectUpgrade.Row> moving) {
         progress.setVisible(true);
         status("Saving a version, writing the fixes and moving " + (moving.size() == 1

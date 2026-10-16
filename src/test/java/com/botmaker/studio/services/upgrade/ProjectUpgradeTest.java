@@ -22,8 +22,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * The rule the project upgrade window adds to the engine: <b>nothing is written unless every row can be</b>.
  *
- * <p>The pass is ordered check-all → snapshot → repair each row → write the pom once, and the order is what
- * these tests are about. A row that refuses must refuse while the project is still untouched: after the
+ * <p>The pass is ordered check-all → snapshot → the code for every row at once → the values per row → write the
+ * pom once, and the order is what these tests are about. A row that refuses must refuse while the project is still untouched: after the
  * snapshot there is something to undo, and after the pom write the project pins a version its source was
  * never repaired for.
  *
@@ -134,7 +134,7 @@ class ProjectUpgradeTest {
                 List.of(new ProjectUpgrade.Moved("BotMaker SDK", "1.1.6", "1.1.12")), 2, 3).summary();
 
         assertTrue(summary.contains("BotMaker SDK 1.1.6 → 1.1.12"), summary);
-        assertTrue(summary.contains("3 calls repaired in 2 files"), summary);
+        assertTrue(summary.contains("3 uses migrated in 2 files"), summary);
         assertTrue(summary.contains("marked for review"), summary);
         assertTrue(summary.contains("Versions tab"), "it says where the way back is: " + summary);
     }
@@ -167,6 +167,6 @@ class ProjectUpgradeTest {
                 new ProjectUpgrade.Moved("Basics", "3", "4")), 1, 1).summary();
 
         assertTrue(summary.startsWith("Moved 2 plugins: SDK 1 → 2, Basics 3 → 4."), summary);
-        assertTrue(summary.contains("1 call repaired in 1 file"), "singular where it is one: " + summary);
+        assertTrue(summary.contains("1 use migrated in 1 file"), "singular where it is one: " + summary);
     }
 }

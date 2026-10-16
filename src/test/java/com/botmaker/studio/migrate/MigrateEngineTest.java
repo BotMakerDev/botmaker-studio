@@ -364,6 +364,108 @@ class MigrateEngineTest {
         assertInstanceOf(Refactor.Refused.class, migration.plan(true).outcome());
     }
 
+    /**
+     * The last resort, an upgrade the author finishes anyway: each broken element no rule names gets a default rule
+     * seeded into Migrations and applied — the receiver for a method giving its owner back, nothing for a call that
+     * returns nothing, the type's default otherwise, a {@code new} of a gone type too — and a whole type, which has
+     * no default, is left and marked.
+     */
+    @Test
+    void finishingAnywaySeedsADefaultRuleForEachElementNoRuleCovers() throws IOException {
+        String rules = """
+                package bot;
+
+                import com.botmaker.plugin.api.meta.Migrate;
+                import java.util.List;
+                import lib.Screen;
+
+                public class Migrations {
+                    @Migrate(Screen.class)
+                    static Screen marker(@Migrate.Self Screen self, String marker) {
+                        return self.markers(List.of(marker));
+                    }
+                }
+                """;
+        Bot bot = bot(BOT, rules);
+        Path file = bot.botFile().resolveSibling("Migrations.java");
+        Migration.Finished finished = Migration.of(bot.now(), bot.old()).finished(file, "bot", true);
+
+        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class, finished.result().outcome(),
+                () -> finished.result().outcome() + " left " + finished.result().left());
+        List<String> seeded = finished.seeded().stream().map(OldElement::display).toList();
+        assertTrue(seeded.containsAll(List.of("Run#popups(Runnable)", "Finder#untilFind(String, Runnable)",
+                "new Rect(int, int)", "State#OFF", "new Area(int, int, int, int)")), seeded.toString());
+        assertTrue(finished.unseeded().keySet().stream().anyMatch(e -> e.display().equals("Area")),
+                finished.unseeded().toString());
+
+        String migrations = plan.rewrites().get(file);
+        assertTrue(migrations.contains("@Refactor(\"" + Seed.MARK + "\")"), migrations);
+        assertTrue(migrations.contains("static Run popups(@Migrate.Self Run self, Runnable runnable)"), migrations);
+        assertTrue(migrations.contains("return self;"), migrations);
+        assertTrue(migrations.contains("static void untilFind(String string, Runnable runnable)"), migrations);
+        assertTrue(migrations.contains("@Migrate(name = \"lib.Area\", kind = Migrate.Kind.CONSTRUCTOR)"), migrations);
+
+        String text = plan.rewrites().get(bot.botFile());
+        assertTrue(text.contains("Screen.named(\"home\").markers(List.of(\"a\")).markers(List.of(\"b\"))"), text);
+        assertTrue(text.contains("return Run.of().home(r);"), text);
+        assertTrue(!text.contains("untilFind"), "a call that returns nothing is deleted:\n" + text);
+        assertTrue(!text.contains("new Rect(1, 2)") && !text.contains("State.OFF"), text);
+        assertTrue(text.contains("@Refactor(\"Area is gone and was left as written here"), text);
+
+        BotIndex after = bot.now().replacing(merged(bot.now().sources(), plan.rewrites()));
+        assertEquals(List.of(), after.errors().getOrDefault(file, List.of()), migrations);
+        assertTrue(after.errors().getOrDefault(bot.botFile(), List.of()).stream()
+                .allMatch(problem -> problem.message().contains("Area")), () -> after.errors().toString());
+    }
+
+    /**
+     * A removal is the same last resort with the plugin's jar gone: a call is deleted or defaulted, an import of a
+     * type nothing names any more goes, and a type the bot writes down is left as written and marked.
+     */
+    @Test
+    void aRemovalDeletesCallsDropsDeadImportsAndMarksWhatItLeaves() throws IOException {
+        String source = """
+                package bot;
+
+                import lib.Finder;
+                import lib.Rect;
+                import lib.State;
+
+                public class Bot {
+                    static void step() {
+                        Finder.untilFind("p", () -> {});
+                    }
+
+                    static int count() {
+                        Rect r = new Rect(1, 2);
+                        return 1;
+                    }
+                }
+                """;
+        Bot bot = bot(source, "package bot; public class Migrations {}", Map.of(), false);
+        Path file = bot.botFile().resolveSibling("Migrations.java");
+        Migration.Finished finished = Migration.of(bot.now(), bot.old()).finished(file, "bot", true);
+
+        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class, finished.result().outcome(),
+                () -> finished.result().outcome() + " left " + finished.result().left());
+        String text = plan.rewrites().get(bot.botFile());
+        assertTrue(!text.contains("untilFind"), text);
+        assertTrue(!text.contains("import lib.Finder;"), "its only use went with the call:\n" + text);
+        assertTrue(!text.contains("import lib.State;"), "an import of a gone class nothing uses goes too:\n" + text);
+        assertTrue(text.contains("import lib.Rect;") && text.contains("Rect r = null;"), text);
+        assertTrue(text.contains("@Refactor(\"Rect is gone and was left as written here"), text);
+        assertTrue(finished.result().left().stream().allMatch(left -> left.site().element().display().equals("Rect")),
+                finished.result().left().toString());
+        String migrations = plan.rewrites().get(file);
+        assertTrue(migrations.contains("@Migrate(name = \"lib.Finder\")"), migrations);
+    }
+
+    private static Map<Path, String> merged(Map<Path, String> sources, Map<Path, String> rewrites) {
+        Map<Path, String> out = new LinkedHashMap<>(sources);
+        out.putAll(rewrites);
+        return out;
+    }
+
     @Test
     void theCacheKeepsASnapshotJarsBytesFromBeforeItsRebuild() throws IOException {
         Path cache = dir.resolve("api-cache");
@@ -393,6 +495,11 @@ class MigrateEngineTest {
     }
 
     private static Bot bot(String bot, String rules, Map<String, String> more) throws IOException {
+        return bot(bot, rules, more, true);
+    }
+
+    /** @param upgraded whether the new jar takes the old one's place, else the library is removed */
+    private static Bot bot(String bot, String rules, Map<String, String> more, boolean upgraded) throws IOException {
         Path root = Files.createTempDirectory(dir, "bot").resolve("src/main/java");
         Map<Path, String> sources = new LinkedHashMap<>();
         Path botFile = root.resolve("bot/Bot.java").toAbsolutePath().normalize();
@@ -405,7 +512,8 @@ class MigrateEngineTest {
             Files.writeString(entry.getKey(), entry.getValue());
         }
         String contract = TestSupport.contractOnClasspath();
-        BotIndex now = BotIndex.over(sources, List.of(newJar.toString(), contract), root);
+        BotIndex now = BotIndex.over(sources, upgraded ? List.of(newJar.toString(), contract) : List.of(contract),
+                root);
         return new Bot(now, List.of(oldJar.toString(), contract), botFile);
     }
 

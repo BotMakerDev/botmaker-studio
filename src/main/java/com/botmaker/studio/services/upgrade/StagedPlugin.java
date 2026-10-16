@@ -48,19 +48,10 @@ final class StagedPlugin implements AutoCloseable {
      * cannot be resolved or no plugin loads from that jar.
      */
     static Optional<StagedPlugin> open(Path projectDir, String coordinate, String version, Path jar) {
-        List<String> classpath;
-        Path staging = null;
-        try {
-            staging = Files.createTempDirectory("botmaker-upgrade-");
-            Files.copy(projectDir.resolve("pom.xml"), staging.resolve("pom.xml"));
-            MavenService.setDependencyVersions(staging, Map.of(coordinate, version));
-            classpath = MavenService.resolve(staging, ProgressReporter.NONE).jars();
-        } catch (IOException | RuntimeException e) {
-            System.err.println("Warning: could not resolve " + coordinate + " " + version + ": " + e.getMessage());
-            return Optional.empty();
-        } finally {
-            deleteQuietly(staging);
-        }
+        Optional<List<String>> resolved = classpath(projectDir, coordinate + " " + version,
+                staging -> MavenService.setDependencyVersions(staging, Map.of(coordinate, version)));
+        if (resolved.isEmpty()) return Optional.empty();
+        List<String> classpath = resolved.get();
         PluginLoader loader = PluginLoader.openReporting(classpath).loader();
         if (loader == null) return Optional.empty();
         List<StudioPlugin> fromJar = new ArrayList<>();
@@ -73,6 +64,33 @@ final class StagedPlugin implements AutoCloseable {
         }
         return Optional.of(new StagedPlugin(loader, List.copyOf(fromJar), List.copyOf(classpath),
                 PluginHost.grammarOf(loader.plugins())));
+    }
+
+    /** One edit of a copy of the bot's pom. */
+    @FunctionalInterface
+    interface PomEdit {
+        void apply(Path staging) throws IOException;
+    }
+
+    /**
+     * The bot's classpath once {@code edit} is made to its pom — resolved from a copy, the pom itself untouched;
+     * empty when it cannot be resolved.
+     *
+     * @param what what the edit moves to, for the warning
+     */
+    static Optional<List<String>> classpath(Path projectDir, String what, PomEdit edit) {
+        Path staging = null;
+        try {
+            staging = Files.createTempDirectory("botmaker-upgrade-");
+            Files.copy(projectDir.resolve("pom.xml"), staging.resolve("pom.xml"));
+            edit.apply(staging);
+            return Optional.of(List.copyOf(MavenService.resolve(staging, ProgressReporter.NONE).jars()));
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Warning: could not resolve " + what + ": " + e.getMessage());
+            return Optional.empty();
+        } finally {
+            deleteQuietly(staging);
+        }
     }
 
     /** The id of the first plugin the jar holds — what its holders' folder is named after. */

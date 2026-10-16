@@ -55,14 +55,14 @@ import java.util.Optional;
  * has (a lambda's own {@code file}) is refused: which is which is not clear. A part that is not a primary
  * expression is put in parentheses wherever it would otherwise bind differently.
  */
-final class Template {
+public final class Template {
 
     private Template() {}
 
     /** One part of a site: its text, with the uses inside it already rewritten, and whether it is primary. */
-    record Part(String text, boolean primary) {
+    public record Part(String text, boolean primary) {
 
-        static Part of(ASTNode node, String text) {
+        public static Part of(ASTNode node, String text) {
             return new Part(text, Template.primary(node));
         }
     }
@@ -73,7 +73,7 @@ final class Template {
      *
      * @param statement whether {@code body} is a statement rather than an expression
      */
-    static Optional<String> filled(String body, boolean statement, Map<String, Part> parts) {
+    public static Optional<String> filled(String body, boolean statement, Map<String, Part> parts) {
         ASTNode root = statement ? statement(body) : JavaExpressions.parse(body);
         if (root == null) return Optional.empty();
         int base = root.getStartPosition();

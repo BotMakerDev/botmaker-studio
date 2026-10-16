@@ -337,9 +337,9 @@ public class ImportManager {
     // It goes because those two constants are the editor holding one library's package-move history, and
     // because the editor no longer resolves that library at all: with no bundled plugin the catalog it
     // consulted is empty until a project binds, and a repair that runs on open would have nothing to look
-    // names up in. A plugin that renames its own types declares it with @ReplacedBy, which the migration
-    // path reads; a package move nobody declared is a compile error on a line the user can read, which is
-    // the honest outcome and the one this method's own javadoc preferred for unrecognised names anyway.
+    // names up in. A renamed type is the bot author's @Migrate TYPE rule (2026-10-16); with none it is a
+    // compile error on a line the user can read, which is the honest outcome and the one this method's own
+    // javadoc preferred for unrecognised names anyway.
 
     /**
      * Internal method to add import declaration — once per rewrite: {@link #isAlreadyImported} reads the

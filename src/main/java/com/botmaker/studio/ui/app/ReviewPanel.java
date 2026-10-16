@@ -204,11 +204,10 @@ final class ReviewPanel {
         return !list.getItems().isEmpty() || migrations.isVisible();
     }
 
-    /** {@code 312 values of ImageTemplate, which its plugin retired for Picture; 12 copied.}, and Migrate…. */
+    /** {@code 312 values of ImageTemplate, which its plugin retired; 12 copied.}, and Migrate…. */
     private HBox migrationRow(MigrationSteps.Pending pending) {
         String what = pending.values() + (pending.values() == 1 ? " value" : " values") + " of "
                 + pending.from().getSimpleName() + ", which its plugin retired"
-                + (pending.to() == null ? "" : " for " + pending.to().getSimpleName())
                 + (pending.copied() == 0 ? "." : pending.copied() == pending.values() ? "; all copied."
                         : "; " + pending.copied() + " copied.");
         Label label = new Label(what);
@@ -216,7 +215,7 @@ final class ReviewPanel {
         label.setWrapText(true);
         Button migrate = new Button("Migrate…");
         migrate.setDisable(state.isReaderMode() || actions == null);
-        migrate.setOnAction(e -> actions.migrate(pending.from(), pending.to()));
+        migrate.setOnAction(e -> actions.migrate(pending.from(), null));
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox row = new HBox(8, label, spacer, migrate);

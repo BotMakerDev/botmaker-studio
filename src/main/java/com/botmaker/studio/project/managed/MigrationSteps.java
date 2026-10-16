@@ -3,6 +3,8 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
+import com.botmaker.studio.migrate.Migration;
+import com.botmaker.studio.migrate.Seed;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -23,11 +25,9 @@ import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
-import org.eclipse.jdt.core.dom.Javadoc;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.PackageDeclaration;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.MemberValuePair;
@@ -35,8 +35,6 @@ import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchExpression;
-import org.eclipse.jdt.core.dom.TagElement;
-import org.eclipse.jdt.core.dom.TextElement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.TypeLiteral;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -74,7 +72,7 @@ import java.util.Set;
 public final class MigrationSteps {
 
     /** The class a new {@code @Migrate} method goes in, created in the bot's main package when missing. */
-    public static final String CLASS = "Migrations";
+    public static final String CLASS = Migration.CLASS;
 
     private MigrationSteps() {}
 
@@ -139,21 +137,20 @@ public final class MigrationSteps {
     }
 
     /**
-     * A deprecated type whose values the bot still has, what its plugin says replaces it ({@code null}: nothing), and
-     * how many of the values have an {@code @Migrated} copy.
+     * A deprecated type whose values the bot still has, and how many of the values have an {@code @Migrated} copy.
+     * Its plugin says nothing about what replaces it (2026-10-16): the bot's author picks the target.
      */
-    public record Pending(Class<?> from, Class<?> to, int values, int copied) {}
+    public record Pending(Class<?> from, int values, int copied) {}
 
     /**
      * An open set a plugin's next version drops, as the bot holds it now.
      *
      * @param type       what its values are, {@code null} when its declaration names no class
-     * @param to         what its plugin says replaces {@code type}, {@code null} for nothing
      * @param values     how many of its values have no {@code @Migrated} copy
      * @param migratable whether the migration window can copy them: a set of {@code public static final} values,
      *                   and a type the version bound now has for them
      */
-    public record Stranded(String id, Class<?> type, Class<?> to, int values, boolean migratable) {}
+    public record Stranded(String id, Class<?> type, int values, boolean migratable) {}
 
     /** One value as it is and as the migration would write it. */
     public record Row(String name, String before, String after) {}
@@ -179,7 +176,7 @@ public final class MigrationSteps {
             count[1] += (int) members.stream().filter(member -> copies.containsKey(member.name())).count();
         }
         List<Pending> out = new ArrayList<>();
-        counts.forEach((type, count) -> out.add(new Pending(type, replacementOf(grammar, type), count[0], count[1])));
+        counts.forEach((type, count) -> out.add(new Pending(type, count[0], count[1])));
         return List.copyOf(out);
     }
 
@@ -204,8 +201,7 @@ public final class MigrationSteps {
                     : Map.of();
             long left = members.stream().filter(member -> !copies.containsKey(member.name())).count();
             if (left > 0) {
-                out.add(new Stranded(set.id(), set.type(), migratable ? replacementOf(grammar, set.type()) : null,
-                        (int) left, migratable));
+                out.add(new Stranded(set.id(), set.type(), (int) left, migratable));
             }
         }
         return List.copyOf(out);
@@ -222,25 +218,16 @@ public final class MigrationSteps {
 
     /**
      * The types {@code from}'s values can be migrated into: every type an open set holds, other than itself and
-     * the retired, whose shape fits — its plugin's replacement first.
+     * the retired, whose shape fits, in declaration order. Nothing is preselected for the author: the plugin names
+     * no replacement (2026-10-16).
      */
     public static List<Class<?>> targets(ValueGrammar grammar, List<ManagedValue<?>> declared, Class<?> from) {
         Set<Class<?>> out = new LinkedHashSet<>();
-        Class<?> pointed = replacementOf(grammar, from);
-        if (pointed != null) out.add(pointed);
         for (ManagedValue<?> set : declared) {
             if (migratable(set) && !ValueGrammar.retired(set.type())) out.add(set.type());
         }
         out.removeIf(to -> ManagedMigrations.named(to, from) || shape(grammar, from, to) instanceof Shape.Refused);
         return List.copyOf(out);
-    }
-
-    /**
-     * What replaces {@code type}: always {@code null} since contract 0.10.0, which took the plugin's pointer away —
-     * the bot's author picks the target. Kept for its callers until the migration engine replaces them.
-     */
-    public static Class<?> replacementOf(ValueGrammar grammar, Class<?> type) {
-        return null;
     }
 
     /** Whether an open set the bot can migrate holds values of {@code type}: what offers Migrate type… on one. */
@@ -690,7 +677,7 @@ public final class MigrationSteps {
             Optional<ManagedMigrations.Method> over = mapping.stream().findFirst();
             Path file = over.map(ManagedMigrations.Method::file).orElse(migrations);
             String source = written.getOrDefault(file, index.sources().get(file));
-            if (source == null) source = skeleton(mainPackage);
+            if (source == null) source = Seed.skeleton(mainPackage);
             String className = over.map(ManagedMigrations.Method::className).orElse(CLASS);
             String rewritten = withMethod(grammar, source, className, step, over.orElse(null));
             if (rewritten == null) {
@@ -814,41 +801,6 @@ public final class MigrationSteps {
         String unique = longer;
         for (int n = 2; !taken.add(unique); n++) unique = longer + n;
         return unique;
-    }
-
-    /** A new {@value #CLASS}: the class, its doc comment saying what it is for, and nothing else. */
-    @SuppressWarnings("unchecked")
-    static String skeleton(String mainPackage) {
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
-        CompilationUnit unit = ast.newCompilationUnit();
-        PackageDeclaration declaration = ast.newPackageDeclaration();
-        declaration.setName(ast.newName(mainPackage));
-        unit.setPackage(declaration);
-        TypeDeclaration type = ast.newTypeDeclaration();
-        type.setName(ast.newSimpleName(CLASS));
-        type.modifiers().addAll(ast.newModifiers(Modifier.PUBLIC | Modifier.FINAL));
-        Javadoc javadoc = ast.newJavadoc();
-        for (String line : List.of("How BotMaker copies a plugin's retired types into their replacements (Review ▸"
-                        + " Migrate…).",
-                "<p>Each @Migrate method maps one type to another. BotMaker reads it and never runs it; the bot",
-                "never calls it. Delete a method, or this class, once no value of its old type is left.")) {
-            TagElement tag = ast.newTagElement();
-            TextElement text = ast.newTextElement();
-            text.setText(line);
-            tag.fragments().add(text);
-            javadoc.tags().add(tag);
-        }
-        type.setJavadoc(javadoc);
-        MethodDeclaration constructor = ast.newMethodDeclaration();
-        constructor.setConstructor(true);
-        constructor.setName(ast.newSimpleName(CLASS));
-        constructor.modifiers().addAll(ast.newModifiers(Modifier.PRIVATE));
-        constructor.setBody(ast.newBlock());
-        type.bodyDeclarations().add(constructor);
-        unit.types().add(type);
-        StringBuilder out = new StringBuilder();
-        SourceFormatter.format(unit.toString()).lines().forEach(line -> out.append(line.stripTrailing()).append('\n'));
-        return out.toString();
     }
 
     @SuppressWarnings("unchecked")

@@ -1,9 +1,11 @@
 package com.botmaker.studio.migrate;
 
+import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.FieldAccess;
@@ -13,6 +15,7 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.NodeFinder;
+import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 import org.eclipse.jdt.core.dom.Type;
 
@@ -77,6 +80,7 @@ public record Broken(OldElement element, List<Sites.Site> sites, State state, Ru
         for (Rule rule : rules) {
             if (rule.element() != null) elements.putIfAbsent(rule.element().key(), rule.element());
         }
+        membersOfGoneTypes(old, probe, rules, elements);
         Map<String, List<Sites.Site>> byKey = new LinkedHashMap<>();
         for (Sites.Site site : Sites.in(old, elements, probe)) {
             byKey.computeIfAbsent(site.element().key(), k -> new ArrayList<>()).add(site);
@@ -90,6 +94,54 @@ public record Broken(OldElement element, List<Sites.Site> sites, State state, Ru
             out.add(new Broken(elements.get(key), sites, state, rule));
         });
         return List.copyOf(out);
+    }
+
+    /**
+     * Adds to {@code elements} every member the bot uses of a broken type no rule names. javac reports a type the
+     * new jars lack at the type's name, so {@code Finder.untilFind(…)} breaks as {@code Finder}; each member is still
+     * an element of its own, which a rule — or the last resort's default — can stand for. A type a rule names is
+     * left whole: its rule stands for each {@code new} of it.
+     */
+    private static void membersOfGoneTypes(BotIndex old, Path probe, List<Rule> rules,
+                                           Map<String, OldElement> elements) {
+        Set<String> ruled = new HashSet<>();
+        for (Rule rule : rules) if (rule.element() != null) ruled.add(rule.element().key());
+        Set<String> gone = new HashSet<>();
+        for (OldElement element : elements.values()) {
+            if (element.kind() == Migrate.Kind.TYPE && !ruled.contains(element.key())) gone.add(element.owner());
+        }
+        if (gone.isEmpty()) return;
+        old.read(units -> {
+            units.forEach((file, unit) -> {
+                if (file.equals(probe)) return;
+                unit.accept(new ASTVisitor() {
+                    @Override
+                    public boolean visit(MethodDeclaration method) {
+                        return BotAnnotation.MIGRATE.on(method) == null;
+                    }
+
+                    @Override
+                    public boolean visit(ClassInstanceCreation creation) {
+                        add(creation.resolveConstructorBinding());
+                        return true;
+                    }
+
+                    @Override
+                    public boolean visit(SimpleName name) {
+                        if (!name.isDeclaration()) add(name.resolveBinding());
+                        return false;
+                    }
+
+                    private void add(IBinding binding) {
+                        if (binding == null) return;
+                        OldElement.of(binding)
+                                .filter(element -> element.kind() != Migrate.Kind.TYPE && gone.contains(element.owner()))
+                                .ifPresent(element -> elements.putIfAbsent(element.key(), element));
+                    }
+                });
+            });
+            return null;
+        });
     }
 
     /**

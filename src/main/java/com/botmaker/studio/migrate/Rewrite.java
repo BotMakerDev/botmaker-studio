@@ -14,6 +14,7 @@ import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -93,22 +94,34 @@ public final class Rewrite {
         }
     }
 
-    /** One file's plan, as plain data: its uses and the imports that name an element. */
+    /** One file's plan, as plain data: its uses, the imports that name an element, and which elements no rule has. */
     private record FilePlan(Path file, String source, List<Candidate> candidates, List<Sites.Site> imports,
-                            Map<Sites.Site, int[]> importRanges, boolean holdsRules) {}
+                            Map<Sites.Site, int[]> importRanges, boolean holdsRules, Set<String> unruled) {}
 
     /** One file as one round writes it. */
     private record Written(String text, Map<Candidate, int[]> ranges) {}
 
-    static Result plan(BotIndex now, BotIndex old, Path probe, List<Rule> rules, boolean markable) {
+    /**
+     * @param seededToo whether a seeded rule is applied too, as {@link Rule#applicable} says
+     * @param unruled   broken elements no rule stands for, and why: each use is left, listed and marked, and an
+     *                  import of one nothing else uses any more goes — the jar that declared it is gone
+     */
+    static Result plan(BotIndex now, BotIndex old, Path probe, List<Rule> rules, boolean markable,
+                       boolean seededToo, Map<OldElement, String> unruled) {
         Map<String, Rule> byKey = new LinkedHashMap<>();
         Map<String, OldElement> elements = new LinkedHashMap<>();
         for (Rule rule : rules) {
-            if (!rule.ready()) continue;
+            if (!rule.applicable(seededToo)) continue;
             byKey.put(rule.element().key(), rule);
             elements.put(rule.element().key(), rule.element());
         }
-        if (byKey.isEmpty()) {
+        Map<String, String> why = new LinkedHashMap<>();
+        unruled.forEach((element, reason) -> {
+            if (byKey.containsKey(element.key())) return;
+            elements.putIfAbsent(element.key(), element);
+            why.put(element.key(), reason);
+        });
+        if (byKey.isEmpty() && why.isEmpty()) {
             return new Result(new Refactor.Refused("No rule is ready: write one for an element the bot uses."),
                     List.of(), List.of());
         }
@@ -120,7 +133,7 @@ public final class Rewrite {
                 if (file.equals(probe)) return;
                 List<Uses.Found> found = Uses.in(unit, elements.keySet(), true);
                 if (!found.isEmpty()) {
-                    out.add(planned(file, old.sources().get(file), unit, found, byKey, elements,
+                    out.add(planned(file, old.sources().get(file), unit, found, byKey, why, elements,
                             ruleFiles.contains(file)));
                 }
             });
@@ -156,8 +169,12 @@ public final class Rewrite {
         List<Left> left = new ArrayList<>();
         for (FilePlan file : files) {
             for (Candidate candidate : file.candidates()) {
+                // A use inside one whose rewrite drops it reaches the file neither rewritten nor left.
+                if (consumed(candidate, file, failed)) continue;
                 if (candidate.ok() && !failed.containsKey(candidate)) applied.add(candidate.site());
-                else left.add(new Left(candidate.site(), candidate.ok() ? failed.get(candidate) : candidate.why()));
+                else {
+                    left.add(new Left(candidate.site(), candidate.ok() ? failed.get(candidate) : candidate.why()));
+                }
             }
         }
         if (unexplained != null) {
@@ -184,7 +201,8 @@ public final class Rewrite {
     // --- planning one file, over the old parse ------------------------------------------------------------------
 
     private static FilePlan planned(Path file, String source, CompilationUnit unit, List<Uses.Found> found,
-                                    Map<String, Rule> byKey, Map<String, OldElement> elements, boolean holdsRules) {
+                                    Map<String, Rule> byKey, Map<String, String> unruled,
+                                    Map<String, OldElement> elements, boolean holdsRules) {
         List<Uses.Found> ordered = new ArrayList<>(found);
         ordered.sort(Comparator.comparingInt((Uses.Found f) -> f.node().getLength()));
         List<Candidate> candidates = new ArrayList<>();
@@ -198,16 +216,24 @@ public final class Rewrite {
                 importRanges.put(site, lineRange(source, node));
                 continue;
             }
-            candidates.add(candidate(site, node, byKey.get(each.key()), source, candidates));
+            Rule rule = byKey.get(each.key());
+            candidates.add(rule == null ? left(site, null, node, unruled.get(each.key()), methodStart(node))
+                    : candidate(site, node, rule, source, candidates));
         }
         candidates.sort(Comparator.comparingInt(Candidate::start));
-        return new FilePlan(file, source, List.copyOf(candidates), List.copyOf(imports), importRanges, holdsRules);
+        return new FilePlan(file, source, List.copyOf(candidates), List.copyOf(imports), importRanges, holdsRules,
+                unruled.keySet());
+    }
+
+    /** The start of the function {@code node} is in, or -1. */
+    private static int methodStart(ASTNode node) {
+        MethodDeclaration method = ReviewMarks.enclosingMethod(node);
+        return method == null ? -1 : method.getStartPosition();
     }
 
     private static Candidate candidate(Sites.Site site, ASTNode node, Rule rule, String source,
                                        List<Candidate> inner) {
-        MethodDeclaration method = ReviewMarks.enclosingMethod(node);
-        int methodStart = method == null ? -1 : method.getStartPosition();
+        int methodStart = methodStart(node);
         int start = node.getStartPosition();
         int end = start + node.getLength();
         String name = rule.qualified();
@@ -281,6 +307,11 @@ public final class Rewrite {
                     ASTNode statement = node.getParent();
                     start = statement.getStartPosition();
                     end = start + statement.getLength();
+                    if (rule.body().isEmpty()) {
+                        // Nothing in its place: the call goes, and a statement that must be one stays an empty block.
+                        String text = statement.getParent() instanceof Block ? "" : "{}";
+                        return new Candidate(site, rule, start, end, text, null, methodStart);
+                    }
                 }
             }
             case IMPORT -> throw new IllegalArgumentException("an import is no use a rule rewrites");
@@ -313,6 +344,23 @@ public final class Rewrite {
     private static Candidate left(Sites.Site site, Rule rule, ASTNode node, String why, int methodStart) {
         return new Candidate(site, rule, node.getStartPosition(), node.getStartPosition() + node.getLength(), null,
                 why, methodStart);
+    }
+
+    /**
+     * Whether {@code each}, a use not rewritten, went with a use around it that was: the rewrite of that use no
+     * longer holds its text — a part a rule drops, a call a rule deletes. It is neither left nor kept.
+     */
+    private static boolean consumed(Candidate each, FilePlan file, Map<Candidate, String> failed) {
+        // A use rewritten is looked for as rewritten, one kept as it is written.
+        String original = each.ok() && !failed.containsKey(each) ? each.text()
+                : file.source().substring(each.start(), each.end());
+        if (original.isEmpty()) return false;
+        for (Candidate outer : file.candidates()) {
+            if (outer.ok() && !failed.containsKey(outer) && outer.contains(each) && !outer.text().contains(original)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** {@code node}'s text with each use inside it already planned put in its place. */
@@ -352,9 +400,12 @@ public final class Rewrite {
     /** {@code file} with every use not failed rewritten, and the imports that follow. */
     private static Written written(FilePlan file, Map<Candidate, String> failed) {
         List<Candidate> live = file.candidates().stream().filter(c -> c.ok() && !failed.containsKey(c)).toList();
-        Set<String> gone = new LinkedHashSet<>();
+        // The elements a use of is still written in this file: kept as written, and not inside a rewrite that drops it.
+        Set<String> kept = new LinkedHashSet<>();
         for (Candidate each : file.candidates()) {
-            if (!each.ok() || failed.containsKey(each)) gone.add(each.site().element().key());
+            if ((!each.ok() || failed.containsKey(each)) && !consumed(each, file, failed)) {
+                kept.add(each.site().element().key());
+            }
         }
         record Edit(int start, int end, String text, Candidate candidate) {}
         List<Edit> edits = new ArrayList<>();
@@ -363,8 +414,14 @@ public final class Rewrite {
             for (Sites.Site imported : file.imports()) {
                 // A static import of a method names every overload of it, and only one is this element's.
                 if (imported.element().kind() == Migrate.Kind.METHOD) continue;
-                if (gone.contains(imported.element().key())) continue;
-                if (live.stream().noneMatch(c -> c.site().element().key().equals(imported.element().key()))) continue;
+                if (kept.contains(imported.element().key())) continue;
+                // A rule's element is still declared until every use is rewritten; one no rule stands for is gone.
+                boolean ruled = file.candidates().stream().anyMatch(c -> c.rule() != null
+                        && c.site().element().key().equals(imported.element().key()));
+                if (ruled && live.stream().noneMatch(c -> c.site().element().key().equals(imported.element().key()))) {
+                    continue;
+                }
+                if (!ruled && !file.unruled().contains(imported.element().key())) continue;
                 int[] range = file.importRanges().get(imported);
                 edits.add(new Edit(range[0], range[1], "", null));
             }
@@ -485,10 +542,12 @@ public final class Rewrite {
         Map<Integer, List<String>> entries = new LinkedHashMap<>();
         for (Candidate each : file.candidates()) {
             String why = each.ok() ? failed.get(each) : each.why();
-            if (why == null || each.methodStart() < 0) continue;
+            if (why == null || each.methodStart() < 0 || consumed(each, file, failed)) continue;
             entries.computeIfAbsent(each.methodStart(), k -> new ArrayList<>())
-                    .add(each.rule().qualified() + " could not rewrite " + each.site().element().display()
-                            + " here: " + why);
+                    .add(each.rule() == null
+                            ? each.site().element().display() + " is gone and was left as written here: " + why
+                            : each.rule().qualified() + " could not rewrite " + each.site().element().display()
+                                    + " here: " + why);
         }
         if (entries.isEmpty()) return text;
         CompilationUnit unit = BotParser.syntax(text);

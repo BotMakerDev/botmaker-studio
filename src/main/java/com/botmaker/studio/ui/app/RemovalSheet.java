@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.studio.services.upgrade.PluginHolders;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Break;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -101,17 +101,22 @@ final class RemovalSheet {
 
     /** The sheet's one sentence: what changes in the bot. Pure, for the test. */
     static String summary(String plugin, Report report) {
-        long types = report.leftForYou().stream().map(Break::type).distinct().count();
-        // Call sites of the breaks the repair makes; a type left as written is counted once, below.
-        int sites = report.breaks().stream().filter(b -> !b.leavesWork()).mapToInt(b -> b.sites().size()).sum();
-        String calls = report.breaks().isEmpty()
-                ? "This bot calls nothing in " + plugin + ", so only the pom changes."
-                : sites == 0 ? "No call needs repairing."
-                : sites + (sites == 1 ? " call" : " calls")
-                        + " will become a default value or be deleted, marked for review.";
+        if (report.broken().isEmpty()) {
+            return "This bot uses nothing in " + plugin + ", so only the pom changes. A version of the project is"
+                    + " saved first.";
+        }
+        long types = report.broken().stream().filter(b -> b.element().kind() == Migrate.Kind.TYPE).count();
+        int uses = report.open().stream().filter(b -> b.element().kind() != Migrate.Kind.TYPE)
+                .mapToInt(b -> b.sites().size()).sum();
+        int covered = report.covered().stream().mapToInt(b -> b.sites().size()).sum();
+        String rules = covered == 0 ? "" : covered + (covered == 1 ? " use takes" : " uses take")
+                + " your @Migrate rules. ";
+        String defaults = uses == 0 ? "" : uses + (uses == 1 ? " use takes" : " uses take")
+                + " a default rule written into Migrations — a value standing for nothing, or the call deleted —"
+                + " marked for review. ";
         String left = types == 0 ? ""
-                : " " + types + (types == 1 ? " type it writes stays" : " types it writes stay")
-                        + " as written, for you to change.";
-        return calls + left + " A version of the project is saved first.";
+                : types + (types == 1 ? " type it declares stays" : " types it declares stay")
+                        + " as written where the bot writes it down, for you to change. ";
+        return rules + defaults + left + "A version of the project is saved first.";
     }
 }

@@ -35,7 +35,7 @@ flowchart TD
 
 - **The outcome it returns** — One of the activity's own named outcomes — the label on the wire leaving it in the flow editor.
 
-- **Popup guard** (before every vision step) — The bot's popups method — Sdk.run()'s .popups(…) — runs before every vision step, whichever activity is running, so a daily reward covering the button is dismissed in one place instead of by every activity that might trip over it. A body can switch it off around a step that works through a popup itself.
+- **Popup guard** (before every vision step) — Before every vision step, whichever activity is running, the popups of the bot's screen map that show are closed by their way out, so a daily reward covering the button is dismissed in one place instead of by every activity that might trip over it. A body can switch it off around a step that works through a popup itself.
 
 The run follows the wire leaving that outcome and runs whatever is on the other end — for as long as there is one. A run ends when the outcome it reported has no wire leaving it: an unwired outcome is the stop, and there is no terminal node to draw.
 

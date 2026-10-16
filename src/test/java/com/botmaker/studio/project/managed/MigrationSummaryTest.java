@@ -48,23 +48,23 @@ class MigrationSummaryTest {
     }
 
     @Test
-    void aRetiredTypeSaysItsReplacementAndHowFarItIsCopied() {
-        assertEquals("2 values of " + OLD + ", a type its plugin retired for " + NEW + "; none copied yet.",
-                MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, Shot.class, 2, 0)));
-        assertEquals("1 value of " + OLD + ", a type its plugin retired, naming no replacement; all copied.",
-                MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, null, 1, 1)));
-        assertTrue(MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, Shot.class, 3, 1))
+    void aRetiredTypeSaysHowFarItIsCopied() {
+        assertEquals("2 values of " + OLD + ", a type its plugin retired; none copied yet.",
+                MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, 2, 0)));
+        assertEquals("1 value of " + OLD + ", a type its plugin retired; all copied.",
+                MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, 1, 1)));
+        assertTrue(MigrationSummary.pending(new MigrationSteps.Pending(OldShot.class, 3, 1))
                 .endsWith("; 1 copied."));
     }
 
     @Test
     void aStrandedSetSaysWhetherItCanBeKept() {
-        String kept = MigrationSummary.stranded(new MigrationSteps.Stranded("SHOTS", OldShot.class, Shot.class, 2,
-                true), "SDK 2.0.0");
+        String kept = MigrationSummary.stranded(new MigrationSteps.Stranded("SHOTS", OldShot.class, 2, true),
+                "SDK 2.0.0");
         assertEquals("2 values of " + OLD + " not copied yet: SDK 2.0.0 drops their set, so the move removes them "
-                + "(one the bot's code names is kept, unmarked) or resets them; their plugin points to " + NEW
-                + ". To keep them, migrate them first, on the version the bot has now (migration list).", kept);
-        String lost = MigrationSummary.stranded(new MigrationSteps.Stranded("SHOTS", null, null, 1, false),
+                + "(one the bot's code names is kept, unmarked) or resets them. To keep them, migrate them first,"
+                + " on the version the bot has now (migration list).", kept);
+        String lost = MigrationSummary.stranded(new MigrationSteps.Stranded("SHOTS", null, 1, false),
                 "SDK 2.0.0");
         assertTrue(lost.startsWith("1 value of the set SHOTS not copied yet: "), lost);
         assertTrue(lost.endsWith("They cannot be migrated; the version saved before the move keeps them."), lost);
@@ -129,11 +129,11 @@ class MigrationSummaryTest {
     void theListingNamesEachMethodAndTheOnesNothingNeeds() {
         ManagedMigrations.Method shot = method("shot", null);
         ManagedMigrations.Method broken = method("again", "both migrate OldShot to Shot; keep one.");
-        String text = MigrationSummary.listing(List.of(new MigrationSteps.Pending(OldShot.class, Shot.class, 2, 0)),
+        String text = MigrationSummary.listing(List.of(new MigrationSteps.Pending(OldShot.class, 2, 0)),
                 List.of(shot, broken), List.of(method("shot", null), broken));
         assertEquals("""
                 To migrate:
-                - 2 values of %1$s, a type its plugin retired for %2$s; none copied yet.
+                - 2 values of %1$s, a type its plugin retired; none copied yet.
                 The bot's @Migrate methods:
                 - Migrations.shot: %1$s → %2$s (nothing needs it now)
                 - Migrations.again: %1$s → %2$s — cannot be used: both migrate OldShot to Shot; keep one."""

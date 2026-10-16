@@ -7,12 +7,8 @@ import com.botmaker.studio.sharing.PluginRegistry;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -130,42 +126,6 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
     }
 
     /**
-     * The simple type names <b>more than one</b> of these jars declares — every name no report may attribute.
-     *
-     * <p>Attribution is by the simple name the bot's source writes ({@code ApiReferences}), because there
-     * are no bindings; two plugins declaring {@code Point} therefore make {@code Point.of(…)} unanswerable.
-     * This is the set {@code PluginUpgradeService} is handed so it can refuse rather than guess — naming the
-     * wrong plugin would report a break in a class the bot never touched <em>and rewrite it there</em>,
-     * which is the one outcome worse than a compile error.
-     *
-     * <p>It is computed from the jars rather than from the coordinates because a clash is a property of
-     * what two plugins actually declare, and nothing but the bytecode knows that.
-     *
-     * @param byCoordinate each plugin's coordinate mapped to the type names its jar declares —
-     *                     {@code ApiModel.snapshot(jar).keySet()}
-     */
-    /**
-     * The same set, computed from these rows' own installed jars — what the window hands every service it
-     * builds.
-     *
-     * <p>Each jar is resolved at the version the row says is <em>installed</em>, because that is the one the
-     * bot's source was written against and so the one attribution is being done over. A row whose jar cannot
-     * be resolved contributes nothing rather than refusing: a coordinate nobody can fetch declares no names
-     * that could clash.
-     *
-     * <p><b>Blocking</b> — it scans one jar per row. Call it off the FX thread.
-     */
-    public static Set<String> ambiguousAmong(Path projectDir, List<InstalledPlugin> rows) {
-        Map<String, Set<String>> byCoordinate = new LinkedHashMap<>();
-        for (InstalledPlugin row : rows) {
-            MavenService.resolveArtifact(projectDir, row.artifact().groupId(), row.artifact().artifactId(),
-                            "", row.installed())
-                    .ifPresent(jar -> byCoordinate.put(row.coordinate(), ApiModel.snapshot(jar).keySet()));
-        }
-        return ambiguousTypeNames(byCoordinate);
-    }
-
-    /**
      * {@code rows} grouped by artifact, in pom order: a group of two is one plugin the pom declares under both
      * of BotMaker's groupIds (2026-10-06, {@code DuplicatePlugins}). Every other plugin is a group of one.
      */
@@ -191,16 +151,5 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
                 .or(() -> group.stream()
                         .filter(row -> DuplicatePlugins.CURRENT_GROUP.equals(row.artifact().groupId())).findFirst())
                 .orElse(group.getFirst());
-    }
-
-    public static Set<String> ambiguousTypeNames(Map<String, Set<String>> byCoordinate) {
-        Set<String> seen = new LinkedHashSet<>();
-        Set<String> twice = new LinkedHashSet<>();
-        for (Set<String> names : byCoordinate.values()) {
-            for (String name : names) {
-                if (!seen.add(name)) twice.add(name);
-            }
-        }
-        return Set.copyOf(twice);
     }
 }
