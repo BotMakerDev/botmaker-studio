@@ -29,8 +29,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * A Markdown file drawn as a page, with Edit to change its text (2026-10-13): the bot's {@code GAME.md}, which the
- * assistant writes and the author reads and corrects. Rendered by commonmark-java into a {@link WebView} in the
+ * A Markdown file drawn as a page, with Edit to change its text (2026-10-13): a bot's {@code README.md}, which its
+ * author reads and corrects. Rendered by commonmark-java into a {@link WebView} in the
  * colours of Studio's theme. The file may come from a gallery bot, so its HTML is escaped, its links keep the
  * page where it is, and the page runs no script.
  */

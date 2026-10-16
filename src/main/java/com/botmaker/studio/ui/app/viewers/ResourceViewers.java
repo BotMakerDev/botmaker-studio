@@ -38,7 +38,7 @@ import java.util.TreeMap;
  * a tree, a {@code .properties} file as a table of keys and values, and any other text as text. View only —
  * nothing here writes, because every one of these files is either a plugin's (its window edits it) or the
  * user's to change in whatever editor they like. Markdown is the one exception (2026-10-13): drawn as a page with
- * an Edit to change it ({@link MarkdownView}), since the bot's {@code GAME.md} is notes its author corrects.
+ * an Edit to change it ({@link MarkdownView}), since a bot's {@code README.md} is text its author corrects.
  *
  * <p>Nothing is parsed by hand: a picture is JavaFX's {@link Image}, JSON is Jackson's tree, a properties file
  * is {@link Properties}. A file that does not parse as what its name says is shown as text, under a line saying

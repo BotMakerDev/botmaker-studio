@@ -397,7 +397,7 @@ public final class McpTools {
 
     /**
      * When the project's folder last gained, lost or swapped a file: a plugin's tool writing a file at the bot's
-     * root (the SDK's GAME.md, moved into place) changes it. -1 with no project or no answer.
+     * root (written, or moved into place) changes it. -1 with no project or no answer.
      */
     private static long rootChanged(StudioDriver driver) {
         return driver.projectDir().map(dir -> {

@@ -38,7 +38,7 @@ class ResourceViewersTest extends FxHeadlessTest {
         assertEquals(Optional.of(Format.TEXT), Format.of(Path.of("notes.yml")));
         assertEquals(Optional.empty(), Format.of(Path.of("Bot.java")));
         assertFalse(ResourceViewers.canView(Path.of("Makefile")));
-        assertEquals(Optional.of(Format.MARKDOWN), Format.of(Path.of("GAME.md")));
+        assertEquals(Optional.of(Format.MARKDOWN), Format.of(Path.of("README.md")));
     }
 
     /** A gallery bot's notes are drawn as a page, never run: their HTML is text, their colours the theme's. */
@@ -60,7 +60,7 @@ class ResourceViewersTest extends FxHeadlessTest {
 
     @Test
     void anEditIsSavedOnlyOverTheTextItBeganFrom() throws Exception {
-        Path notes = dir.resolve("GAME.md");
+        Path notes = dir.resolve("README.md");
         Files.writeString(notes, "# Mine\n");
         assertEquals(Optional.empty(), MarkdownView.save(notes, "# Mine\n", "# Mine\n\nQ.\n"));
         assertEquals("# Mine\n\nQ.\n", Files.readString(notes));

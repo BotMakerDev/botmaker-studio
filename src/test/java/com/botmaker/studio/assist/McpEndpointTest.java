@@ -631,7 +631,7 @@ class McpEndpointTest {
 
         driver.onSnap = () -> {
             try {
-                Files.writeString(bot.resolve("GAME.md"), "# The game\n");
+                Files.writeString(bot.resolve("README.md"), "# The bot\n");
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

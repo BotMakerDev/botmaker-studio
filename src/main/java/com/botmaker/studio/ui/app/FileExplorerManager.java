@@ -314,7 +314,7 @@ public class FileExplorerManager {
         return path;
     }
 
-    /** A Markdown page the root lists: README.md, GAME.md; never a hidden one, such as a file being written. */
+    /** A Markdown page the root lists, such as README.md; never a hidden one, such as a file being written. */
     static boolean markdownPage(String name) {
         return !name.startsWith(".") && name.toLowerCase(Locale.ROOT).endsWith(".md");
     }
@@ -350,8 +350,7 @@ public class FileExplorerManager {
         if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
-        // Markdown at the bot's root sits beside no source — its README, the notes a plugin keeps on the game (the
-        // SDK's GAME.md): first, by name.
+        // Markdown at the bot's root sits beside no source (its README): first, by name.
         List<Path> pages = new ArrayList<>();
         try (Stream<Path> top = Files.list(config.projectPath())) {
             top.filter(p -> markdownPage(p.getFileName().toString())
