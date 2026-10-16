@@ -6,6 +6,7 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.Expression;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -16,6 +17,19 @@ import java.util.Map;
 public final class JavaExpressions {
 
     private JavaExpressions() {}
+
+    /**
+     * The compiler options every parse here sets, read once: {@code JavaCore.getOptions()} rebuilds its map from the
+     * preferences on each call, and an assistant's picture cut parsed hundreds of expressions (2026-10-16).
+     */
+    private static final Map<String, String> OPTIONS = options();
+
+    private static Map<String, String> options() {
+        Map<String, String> options = JavaCore.getOptions();
+        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
+        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
+        return Map.copyOf(options);
+    }
 
     /**
      * The property set on the root of a tree this class parsed: an expression with no file around it. JDT
@@ -34,10 +48,7 @@ public final class JavaExpressions {
         ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
         parser.setKind(ASTParser.K_EXPRESSION);
         parser.setSource(source.toCharArray());
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        parser.setCompilerOptions(options);
+        parser.setCompilerOptions(new HashMap<>(OPTIONS));
         ASTNode node = parser.createAST(null);
         if (!(node instanceof Expression parsed)) return null;
         parsed.getRoot().setProperty(DETACHED, Boolean.TRUE);

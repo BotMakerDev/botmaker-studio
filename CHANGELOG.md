@@ -62,6 +62,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Writes to a bot are cheaper**: Project History hashes with the JDK's SHA-1, and the Java parser's options are
+  read once, not for every value read.
 - **A plugin's record value is added only when it reads back whole.** A link the writer could not write was left
   out of the call, so a screen lost its way in. Now the add is refused and says why. A part that another constant
   holds is written as that constant (`Way.of(HOME, …)`).

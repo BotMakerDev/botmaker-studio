@@ -99,6 +99,16 @@ public final class ProjectVcs {
     private static final PersonIdent DEFAULT_AUTHOR =
             new PersonIdent("BotMaker Studio", "studio@botmaker.local");
 
+    /** The system property JGit reads, on each hash, for which SHA-1 to use. */
+    private static final String SHA1_IMPLEMENTATION = "org.eclipse.jgit.util.sha1.implementation";
+
+    static {
+        // The JDK's SHA-1, not JGit's own: JGit's checks every block for a collision attack in plain Java, and a
+        // checkpoint hashing a screen's 1 MB shot spent most of an assistant's picture cut there (2026-10-16).
+        // A project's history is local, written by Studio alone, so there is no forged object to catch.
+        if (System.getProperty(SHA1_IMPLEMENTATION) == null) System.setProperty(SHA1_IMPLEMENTATION, "jdkNative");
+    }
+
     /**
      * Names git should ignore. Mirrors {@code ProjectArchive}'s publish exclusions for build output, and adds
      * the local-only editor state {@code ProjectArchive} also excludes but that additionally shouldn't clutter
