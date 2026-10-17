@@ -4,10 +4,12 @@ import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.IVariableBinding;
 import org.eclipse.jdt.core.dom.NumberLiteral;
 import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -490,5 +493,48 @@ class VariableScopeVisitorTest {
         assertEquals(List.of(), scope.variables());
         assertEquals(List.of(), scope.methods());
         assertEquals(List.of(), scope.types());
+    }
+
+    @Test
+    void aSecondQuestionOnTheSameParseIsAnsweredWithoutWalkingItAgain() {
+        CompilationUnit cu = parse("""
+                package com.example;
+                public class Demo {
+                    void run() {
+                        int count = 1;
+                        System.out.println("@here");
+                    }
+                }
+                """);
+
+        ASTNode here = marker(cu, "@here");
+        assertSame(VariableScopeVisitor.getAvailableVariables(here), VariableScopeVisitor.getAvailableVariables(here),
+                "the scope a parse was indexed with is the one handed out again");
+    }
+
+    @Test
+    void aTreeEditedInPlaceIsWalkedAgainNotReadStale() {
+        CompilationUnit cu = parse("""
+                package com.example;
+                public class Demo {
+                    void run() {
+                        int count = 1;
+                        System.out.println("@here");
+                    }
+                }
+                """);
+
+        ASTNode here = marker(cu, "@here");
+        assertEquals(Set.of("count"), names(VariableScopeVisitor.getAvailableVariables(here)));
+
+        Block body = (Block) ((Statement) here.getParent().getParent()).getParent();
+        body.statements().removeFirst();
+
+        assertEquals(Set.of(), names(VariableScopeVisitor.getAvailableVariables(here)),
+                "a declaration removed from the tree is no longer offered after it");
+    }
+
+    private static Set<String> names(List<IVariableBinding> variables) {
+        return variables.stream().map(IVariableBinding::getName).collect(Collectors.toSet());
     }
 }

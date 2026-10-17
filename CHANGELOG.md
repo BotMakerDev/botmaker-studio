@@ -105,6 +105,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Drawing a file walked it once per question about a variable's scope** (profiled 2026-10-18): a call block asked
+  about seven times while it was drawn, and each question walked the whole file. This was 55% of the FX thread's
+  time on a big constants file. `VariableScopeVisitor` now indexes a parse once, keeps the index on the
+  `CompilationUnit` while its `modificationCount` holds, and shares one scope snapshot until a scope changes.
+  `ProjectAnalyzer.getAvailableScopes` asks once instead of three times.
 - **`edit_code` refused a constant whose value names another constant.** `Screens.MARKET` (built `Way.of(Screens.TAVERN,
   …)`) and `Pictures.PLAY_OFF_TAVERN` (`.activities(List.of(Activities.Tavern.class))`) were "not a GameScreen", "not
   an ImageTemplate": the constant's initialiser was read without the bot's own names. It is read with them now.

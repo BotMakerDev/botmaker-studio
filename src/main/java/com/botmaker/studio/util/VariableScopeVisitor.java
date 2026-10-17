@@ -17,6 +17,13 @@ public class VariableScopeVisitor extends ASTVisitor {
     private final Map<ASTNode, List<IMethodBinding>>   methodResult   = new LinkedHashMap<>();
     private final Map<ASTNode, List<ITypeBinding>>     typeResult     = new LinkedHashMap<>();
 
+    /**
+     * What the three stacks hold now, shared by every node visited until a scope opens, closes or declares
+     * something; null once one has. Nodes outnumber scope changes many times over, so a walk copies the
+     * stacks once per change rather than once per node.
+     */
+    private NodeScope current;
+
     // -----------------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------------
@@ -56,21 +63,13 @@ public class VariableScopeVisitor extends ASTVisitor {
         if (block.statements().isEmpty() || !(block.getRoot() instanceof CompilationUnit cu)) {
             return getAvailableVariables(block);
         }
-        ASTNode last = (ASTNode) block.statements().getLast();
-        List<IVariableBinding> captured = new ArrayList<>();
-        boolean[] done = {false};
-        cu.accept(new VariableScopeVisitor() {
-            // postVisit runs after the statement's endVisit has declared its locals, and before the block's
-            // endVisit pops them.
-            @Override
-            public void postVisit(ASTNode candidate) {
-                if (!done[0] && candidate == last) {
-                    done[0] = true;
-                    captured.addAll(snapshotVariables());
-                }
-            }
-        });
-        return captured;
+        NodeScope atEnd = Index.of(cu).atEnd.get(block);
+        return atEnd != null ? atEnd.variables() : List.of();
+    }
+
+    /** All three scopes at {@code node}, from one lookup — what the three getters answer one at a time. */
+    public static NodeScope getAvailableScopes(ASTNode node) {
+        return getScopeAt(node);
     }
 
     public static List<IVariableBinding> getAvailableVariables(ASTNode node, ITypeBinding type) {
@@ -122,6 +121,7 @@ public class VariableScopeVisitor extends ASTVisitor {
 
     @Override
     public boolean visit(ImportDeclaration node) {
+        current = null;
         if (node.isStatic()) {
             IBinding b = node.resolveBinding();
             if (b instanceof IMethodBinding mb && !methodStack.isEmpty())
@@ -238,6 +238,7 @@ public class VariableScopeVisitor extends ASTVisitor {
     @Override
     public void endVisit(TypeDeclarationStatement node) {
         // Local class declared inside a block
+        current = null;
         ITypeBinding tb = node.getDeclaration().resolveBinding();
         if (tb != null && !typeStack.isEmpty())
             typeStack.peek().put(tb.getName(), tb);
@@ -262,13 +263,17 @@ public class VariableScopeVisitor extends ASTVisitor {
     // Stack helpers
     // -----------------------------------------------------------------------
 
+    // Every put into a stack follows a pushAll in the same visit, or goes through declareVariable or one of the
+    // two other declaring visits, which mark the snapshot stale themselves.
     private void pushAll() {
+        current = null;
         variableStack.push(new LinkedHashMap<>());
         methodStack.push(new LinkedHashMap<>());
         typeStack.push(new LinkedHashMap<>());
     }
 
     private void popAll() {
+        current = null;
         if (!variableStack.isEmpty()) variableStack.pop();
         if (!methodStack.isEmpty())   methodStack.pop();
         if (!typeStack.isEmpty())     typeStack.pop();
@@ -311,6 +316,7 @@ public class VariableScopeVisitor extends ASTVisitor {
 
     private void declareVariable(SimpleName name) {
         if (variableStack.isEmpty()) return;
+        current = null;
         IBinding b = name.resolveBinding();
         if (b instanceof IVariableBinding vb)
             variableStack.peek().put(name.getIdentifier(), vb);
@@ -329,9 +335,16 @@ public class VariableScopeVisitor extends ASTVisitor {
     }
 
     protected void record(ASTNode node) {
-        variableResult.put(node, snapshotVariables());
-        methodResult.put(node, snapshotMethods());
-        typeResult.put(node, snapshotTypes());
+        NodeScope scope = scope();
+        variableResult.put(node, scope.variables());
+        methodResult.put(node, scope.methods());
+        typeResult.put(node, scope.types());
+    }
+
+    /** What is in scope now; rebuilt only after the stacks changed. */
+    protected NodeScope scope() {
+        if (current == null) current = new NodeScope(snapshotVariables(), snapshotMethods(), snapshotTypes());
+        return current;
     }
 
     protected List<IVariableBinding> snapshotVariables() {
@@ -363,32 +376,70 @@ public class VariableScopeVisitor extends ASTVisitor {
     }
 
     // -----------------------------------------------------------------------
-    // Single-node shortcut — runs a targeted traversal and stops after target
+    // Per-node lookup — one walk per parse, kept on the parse
     // -----------------------------------------------------------------------
 
     private static final NodeScope EMPTY_SCOPE = new NodeScope(List.of(), List.of(), List.of());
 
-    private static NodeScope getScopeAt(ASTNode node) {
-        CompilationUnit cu = (CompilationUnit) node.getRoot();
-        if (cu == null) return EMPTY_SCOPE;
+    /**
+     * The scope at every node of one parse. A block asks for its scope several times while it is drawn, and a
+     * file draws hundreds of blocks; walking the whole file for each question was most of the FX thread's time
+     * on a big constants file (profiled 2026-10-18).
+     *
+     * <p>Kept as a property of the {@link CompilationUnit} rather than in a weak map: the index holds the
+     * tree's nodes, which hold their root, so a weak map's value would keep its own key alive. It answers only
+     * while the tree's {@code modificationCount} is the one it was built at — a tree edited in place is walked
+     * again rather than read stale. {@code setProperty} does not move that count.
+     */
+    private static final class Index extends VariableScopeVisitor {
 
-        // Capture the live scope stacks the instant traversal reaches the target node — independent of the
-        // node's type. preVisit(node) fires after every ancestor scope has been pushed and after the
-        // endVisit of any preceding-sibling declaration, so the snapshot is exactly what is in scope at the
-        // node (and excludes a variable from its own initializer). Using record() instead would only answer
-        // for the handful of "trigger" expression kinds, missing literals / placeholders / statements.
-        NodeScope[] captured = { null };
-        VariableScopeVisitor visitor = new VariableScopeVisitor() {
-            @Override
-            public void preVisit(ASTNode candidate) {
-                if (captured[0] == null && candidate == node) {
-                    captured[0] = new NodeScope(snapshotVariables(), snapshotMethods(), snapshotTypes());
-                }
+        private static final String PROPERTY = Index.class.getName();
+
+        private final long modifications;
+        private final Map<ASTNode, NodeScope> at = new IdentityHashMap<>();
+        /** A block → what is in scope after its last statement: its end, where an appended statement lands. */
+        private final Map<ASTNode, NodeScope> atEnd = new IdentityHashMap<>();
+
+        private Index(long modifications) {
+            this.modifications = modifications;
+        }
+
+        static Index of(CompilationUnit cu) {
+            synchronized (cu) {
+                long modifications = cu.getAST().modificationCount();
+                if (cu.getProperty(PROPERTY) instanceof Index kept && kept.modifications == modifications) return kept;
+                Index built = new Index(modifications);
+                cu.accept(built);
+                cu.setProperty(PROPERTY, built);
+                return built;
             }
-        };
+        }
 
-        cu.accept(visitor);
-        NodeScope scope = captured[0] != null ? captured[0] : EMPTY_SCOPE;
+        // preVisit(node) fires after every ancestor scope has been pushed and after the endVisit of any
+        // preceding-sibling declaration, so the snapshot is exactly what is in scope at the node (and excludes a
+        // variable from its own initializer) — for every node kind, literals, placeholders and statements too.
+        @Override
+        public void preVisit(ASTNode node) {
+            at.put(node, scope());
+        }
+
+        // postVisit runs after the statement's endVisit has declared its locals, and before the block's endVisit
+        // pops them.
+        @Override
+        public void postVisit(ASTNode node) {
+            if (node.getParent() instanceof Block block && block.statements().getLast() == node) {
+                atEnd.put(block, scope());
+            }
+        }
+
+        // The per-kind maps are analyze()'s; the index answers for every node already.
+        @Override
+        protected void record(ASTNode node) {}
+    }
+
+    private static NodeScope getScopeAt(ASTNode node) {
+        if (!(node.getRoot() instanceof CompilationUnit cu)) return EMPTY_SCOPE;
+        NodeScope scope = Index.of(cu).at.getOrDefault(node, EMPTY_SCOPE);
 
         // A declaration's own variable is not in scope inside its initializer. Locals are already excluded
         // (declared on endVisit), but fields are pre-registered for the whole type, so drop the enclosing

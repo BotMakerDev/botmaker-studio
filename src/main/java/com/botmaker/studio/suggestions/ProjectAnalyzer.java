@@ -573,10 +573,7 @@ public class ProjectAnalyzer {
      */
     public VariableScopeVisitor.NodeScope getAvailableScopes(ASTNode contextNode) {
         if (contextNode == null) return new VariableScopeVisitor.NodeScope(List.of(), List.of(), List.of());
-        List<IVariableBinding> variables = VariableScopeVisitor.getAvailableVariables(contextNode);
-        List<IMethodBinding> methods    = VariableScopeVisitor.getAvailableMethods(contextNode);
-        List<ITypeBinding>   types      = VariableScopeVisitor.getAvailableTypes(contextNode);
-        return new VariableScopeVisitor.NodeScope(variables, methods, types);
+        return VariableScopeVisitor.getAvailableScopes(contextNode);
     }
 
     /**
