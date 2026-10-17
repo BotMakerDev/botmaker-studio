@@ -31,3 +31,15 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
   because nothing authors the expected size; it needs a BotMaker-owned project or emulator setting.
 - **Retire `services/capture/ScreenOverlay`** (Studio's own overlay HUD) now the SDK draws its own.
 - **`DayOfWeek`/`Month` on the canvas** rely on `EnumPicker` until basics declares them.
+- **Render is the FX thread's cost now** (JFR 2026-10-18, `~/botmaker-profiles/*-after.jfr`): a file's first
+  render, and a switch back after another file was written, rebuild every block. Of
+  `CodeEditorService.render`'s FX samples, about 30% are lookups each render repeats, all keyable on the
+  buffers or the bind:
+  - `JavaParameters.over` → `BotRecords.collect` (11%);
+  - `ManagedSets.members` → `ManagedClasses.fields` (10%);
+  - `TypeSummaryManager.ensureCaches` → `PluginHost.cataloguedPackages`, on every call (7%).
+  The remaining 40% is JavaFX building and styling block nodes. The tab-switch reuse saves that only when
+  no other open file was written; a kept tab's canvas that stays in the scene would save its CSS pass too.
+- **`ProjectVcs.checkpoint` runs on the FX thread** before every plugin write (`HostPluginValues.checkpoint`);
+  moving it off needs a snapshot of the files on disk taken before the write, because the write follows at
+  once.
