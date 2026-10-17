@@ -257,6 +257,25 @@ class BlockReuseRenderTest extends FxHeadlessTest {
     }
 
     @Test
+    void a_file_switched_back_to_through_two_other_files_keeps_its_javafx_nodes() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+        ProjectFile third = new ProjectFile(Paths.get("Third.java").toAbsolutePath(),
+                "package com.mybot;\npublic class Third {\n    public void go() {\n        int d = 5;\n    }\n}\n");
+        fixture.state.addFile(third);
+
+        Node keptNode = statement(fixture, 1).getUINode();
+        onFx(() -> context.switchToFile(other.getPath()));
+        onFx(() -> context.switchToFile(third.getPath()));
+        onFx(() -> context.switchToFile(subject));
+
+        assertSame(keptNode, statement(fixture, 1).getUINode(),
+                "a file left for two others in turn, none written, draws the blocks it had");
+    }
+
+    @Test
     void a_file_switched_back_to_after_a_rebind_or_another_files_write_is_rebuilt() throws Exception {
         EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
         CodeEditorService context = renderInto(fixture);
