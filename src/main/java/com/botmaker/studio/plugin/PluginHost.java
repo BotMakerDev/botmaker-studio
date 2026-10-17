@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
 import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -426,6 +427,7 @@ public final class PluginHost {
         overlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
         catalog = null;
+        shipped = new ConcurrentHashMap<>();
         if (previous != null) previous.close();
     }
 
@@ -1125,16 +1127,25 @@ public final class PluginHost {
     }
 
     /**
+     * {@link #shipsInPlugin}'s answers for the plugins bound now, replaced on every bind. A palette's curation
+     * asks it of every name it offers, each time a menu is built, and a name no plugin ships failed its
+     * {@code Class.forName} anew every time: the most thrown exception in a profile of ordinary editing.
+     */
+    private static volatile Map<String, Boolean> shipped = new ConcurrentHashMap<>();
+
+    /**
      * Whether the class {@code binaryName} ships in a bound plugin's jar. Looked up without being
-     * initialised; false for a name no plugin's loader can find.
+     * initialised, once per name per bind; false for a name no plugin's loader can find.
      */
     public static boolean shipsInPlugin(String binaryName) {
         if (binaryName == null || binaryName.indexOf('.') < 0) return false;
-        try {
-            return pluginOwning(Class.forName(binaryName, false, classLoader())).isPresent();
-        } catch (ClassNotFoundException | LinkageError e) {
-            return false;
-        }
+        return shipped.computeIfAbsent(binaryName, name -> {
+            try {
+                return pluginOwning(Class.forName(name, false, classLoader())).isPresent();
+            } catch (ClassNotFoundException | LinkageError e) {
+                return false;
+            }
+        });
     }
 
     private static PaletteCatalog merge(List<StudioPlugin> set) {

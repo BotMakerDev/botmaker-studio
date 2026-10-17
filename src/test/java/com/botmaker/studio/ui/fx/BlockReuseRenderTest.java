@@ -4,6 +4,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
+import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.application.Platform;
 import javafx.scene.Node;
@@ -13,6 +14,7 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -229,5 +231,52 @@ class BlockReuseRenderTest extends FxHeadlessTest {
 
         assertNotSame(movedNode, statement(fixture, 2).getUINode(),
                 "a statement whose path changed is rebuilt, wide policy or not");
+    }
+
+    /** A second open file beside the fixture's, for the editor to switch to. */
+    private static ProjectFile otherFile(EditorFixture fixture) {
+        ProjectFile other = new ProjectFile(Paths.get("Other.java").toAbsolutePath(),
+                "package com.mybot;\npublic class Other {\n    public void go() {\n        int c = 3;\n    }\n}\n");
+        fixture.state.addFile(other);
+        return other;
+    }
+
+    @Test
+    void a_file_switched_away_from_and_back_keeps_its_javafx_nodes() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+
+        Node keptNode = statement(fixture, 1).getUINode();
+        onFx(() -> context.switchToFile(other.getPath()));
+        onFx(() -> context.switchToFile(subject));
+
+        assertSame(keptNode, statement(fixture, 1).getUINode(),
+                "switching back to a file draws the blocks it had, not a rebuild of every one");
+    }
+
+    @Test
+    void a_file_switched_back_to_after_a_rebind_or_another_files_write_is_rebuilt() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+
+        // A plugin re-bound while the other file is in front: the kept blocks have the old widgets.
+        Node beforeRebind = statement(fixture, 1).getUINode();
+        onFx(() -> context.switchToFile(other.getPath()));
+        onFx(fixture::rerender);
+        onFx(() -> context.switchToFile(subject));
+        assertNotSame(beforeRebind, statement(fixture, 1).getUINode(),
+                "a rebind redraws the files switched away from too");
+
+        // The other file written while it is in front: a kept block may have read it at render time.
+        Node beforeWrite = statement(fixture, 1).getUINode();
+        onFx(() -> context.switchToFile(other.getPath()));
+        other.setContent(other.getContent().replace("int c = 3;", "int c = 4;"));
+        onFx(() -> context.switchToFile(subject));
+        assertNotSame(beforeWrite, statement(fixture, 1).getUINode(),
+                "a write to another file keeps nothing on the way back");
     }
 }

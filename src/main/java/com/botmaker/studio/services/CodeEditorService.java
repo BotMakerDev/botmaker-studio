@@ -42,8 +42,10 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -76,6 +78,41 @@ public class CodeEditorService {
      * block it builds. See {@code docs/refactor/30-block-reuse.md} §10.
      */
     private boolean lastRenderWasReadOnly;
+
+    /** How many files switched away from keep their blocks for a switch back; the oldest goes first. */
+    private static final int KEPT_RENDERS = 8;
+
+    /**
+     * The blocks of each file switched away from, by its normalised path, offered back when it is switched to
+     * again ({@link #reuseOnReturn}). Rebuilding a file's every block on each tab switch was the slowest thing
+     * a profile of ordinary editing found after the scope walk. Synchronized: a refresh clears it on the
+     * publishing thread, so a switch in the same FX pulse cannot take a render the refresh threw away.
+     */
+    private final Map<Path, KeptRender> keptRenders = Collections.synchronizedMap(
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Path, KeptRender> eldest) {
+                    return size() > KEPT_RENDERS;
+                }
+            });
+
+    /**
+     * The file and source the registry in {@link ProjectState} was built from, set with it in {@link #render}.
+     * Not the state's current file and code: {@code adopt} moves those as soon as an edit is published, while
+     * the registry waits for the deferred render, and a switch in between would keep blocks under text they
+     * were not parsed from.
+     */
+    private Path lastRenderedFile;
+    private String lastRenderedSource;
+
+    /**
+     * A file's last render: its registry, the source it was parsed from and the lock verdict it was parsed
+     * under, as {@link BlockReuse#of} takes them, and the text every <em>other</em> file had then. A block
+     * may compute something at render time from outside its own subtree ({@code 30-block-reuse.md} §6), and
+     * on a switch back what lies outside may be another file: any other file written since keeps nothing.
+     */
+    private record KeptRender(Map<ASTNode, CodeBlock> blocks, String source, boolean readOnly,
+                              List<String> otherFiles) { }
 
     public CodeEditorService(
             ProjectConfig config,
@@ -121,7 +158,9 @@ public class CodeEditorService {
             CompilationUnit parsed = adopt(event.code());
             // No reuse here, and deliberately so: LibrariesChangedEvent rebuilds through this event, and its
             // whole job is to throw the cached widgets away so a newly bound plugin's pickers are drawn. A
-            // kept node is exactly the restart this event exists to avoid needing.
+            // kept node is exactly the restart this event exists to avoid needing. The files switched away
+            // from were drawn with the same widgets, so they keep nothing either.
+            keptRenders.clear();
             Platform.runLater(() -> render(parsed, event.code(), false, BlockReuse.NONE));
         }, false);
 
@@ -549,10 +588,13 @@ public class CodeEditorService {
 
         if (file == null) return;
 
+        keepRenderOfActiveFile(at);
         state.setActiveFile(path);
         state.setDocUri(file.getUri());
 
-        refreshUI(file.getContent(), false);
+        String content = file.getContent();
+        BlockReuse reuse = reuseOnReturn(at);
+        render(adopt(content), content, false, reuse);
 
         // Only after the file is parsed and active: a case with no trailing break gets one, so the break the
         // switch block draws as fixed chrome is always really there, and a bare arrow-rule body gets braces so
@@ -617,13 +659,38 @@ public class CodeEditorService {
     // pair with generated code; nothing generates code any more, and a use the flow makes is a use like any other.
 
     /**
-     * A whole-file render with <b>no reuse</b>, and the {@code NONE} is load-bearing rather than cautious:
-     * this is reached from {@link #switchToFile}, so the tree on screen belongs to a <em>different file</em>.
-     * A {@code BlockId} is a path from the compilation unit, so {@code types[0]/…/statements[0]} names a node
-     * in both files, and two files that happen to agree on one statement's text would hand a block across.
+     * Keeps the active file's blocks for a switch back, unless the switch is to that same file.
+     *
+     * <p>Kept by the file they were drawn for and offered back only to it. A {@code BlockId} is a path from
+     * the compilation unit, so {@code types[0]/…/statements[0]} names a node in both files, and two files that
+     * happen to agree on one statement's text would hand a block across.
      */
-    private void refreshUI(String javaCode, boolean markNewIdentifiersAsUnedited) {
-        render(adopt(javaCode), javaCode, markNewIdentifiersAsUnedited, BlockReuse.NONE);
+    private void keepRenderOfActiveFile(Path switchingTo) {
+        Path key = lastRenderedFile;
+        Map<ASTNode, CodeBlock> blocks = state.getNodeToBlockMap();
+        String source = lastRenderedSource;
+        if (key == null || blocks == null || blocks.isEmpty() || source == null) return;
+        if (key.equals(switchingTo)) return;
+        keptRenders.put(key, new KeptRender(blocks, source, lastRenderWasReadOnly, otherFilesText(key)));
+    }
+
+    /**
+     * The reuse a switch to {@code file} is offered: its own last render, taken once, when no other file has
+     * been written since; {@link BlockReuse#NONE} otherwise. The file's own text may have changed meanwhile —
+     * {@link BlockReuse} keeps only what is unchanged, as it does for an edit.
+     */
+    private BlockReuse reuseOnReturn(Path file) {
+        KeptRender kept = keptRenders.remove(file);
+        if (kept == null || !kept.otherFiles().equals(otherFilesText(file))) return BlockReuse.NONE;
+        return BlockReuse.of(kept.blocks(), kept.source(), kept.readOnly(), block -> true);
+    }
+
+    /** The text of every open file but {@code file}, in the state's order. */
+    private List<String> otherFilesText(Path file) {
+        return state.getAllFiles().stream()
+                .filter(f -> !f.getPath().toAbsolutePath().normalize().equals(file))
+                .map(ProjectFile::getContent)
+                .toList();
     }
 
     /**
@@ -704,6 +771,9 @@ public class CodeEditorService {
         );
         lastRenderWasReadOnly = resolver.suppressesInteraction();
         state.setNodeToBlockMap(rebuilt);
+        Path rendered = activePath();
+        lastRenderedFile = rendered == null ? null : rendered.toAbsolutePath().normalize();
+        lastRenderedSource = javaCode;
         AbstractCodeBlock rootBlock = result.root();
         this.lastRootBlock = rootBlock;
 

@@ -105,6 +105,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Switching back to a tab rebuilt every block of its file** (profiled 2026-10-18). The last eight files
+  switched away from now keep their blocks, and a switch back reuses each block whose text is unchanged, as
+  an edit does. Nothing is kept after a plugin rebind, a change of editor for a type, or a write to any
+  other file. `PluginHost.shipsInPlugin` also answers each name once per bind, so a palette's curation stops
+  failing a `Class.forName` for each name every time a menu is built.
 - **Opening a project read every library's cached index to offer types from one or two** (profiled
   2026-10-18): all 74 jars' ClassGraph JSON was deserialized, a thread pool each, to keep 94 types. Each cache
   now has a `.packages` list beside it, and a jar is read only once one of its packages is under what the bound
