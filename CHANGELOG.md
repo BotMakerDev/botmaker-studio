@@ -105,6 +105,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Opening a project read every library's cached index to offer types from one or two** (profiled
+  2026-10-18): all 74 jars' ClassGraph JSON was deserialized, a thread pool each, to keep 94 types. Each cache
+  now has a `.packages` list beside it, and a jar is read only once one of its packages is under what the bound
+  plugins offer, or when asked for by name. Cache files of an older format (`.json`, `.ser`) are deleted.
 - **Drawing a file walked it once per question about a variable's scope** (profiled 2026-10-18): a call block asked
   about seven times while it was drawn, and each question walked the whole file. This was 55% of the FX thread's
   time on a big constants file. `VariableScopeVisitor` now indexes a parse once, keeps the index on the

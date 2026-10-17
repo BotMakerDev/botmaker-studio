@@ -241,6 +241,84 @@ class TypeSummaryManagerCacheTest {
         assertEquals(3, after.totalTypes());
     }
 
+    // --- Reading only the jars it offers from ---
+
+    /**
+     * A cached jar whose packages are all outside the prefixes is never deserialized: an open read every jar's
+     * JSON (opencv, openblas, bcprov) to offer types from one or two of them. Widening the prefixes reads it.
+     */
+    @Test
+    void aCachedJarOutsideThePrefixesIsReadOnlyOnceThePrefixesReachIt(@TempDir Path tmp) throws IOException {
+        Path jar = fixtureJar(tmp, "fixture-1.0.jar");
+        managerFor(jar);
+        Set<String>[] prefixes = new Set[]{Set.of("com.somewhere.else")};
+
+        TypeSummaryManager manager = new TypeSummaryManager(() -> prefixes[0]);
+        manager.refresh(List.of(jar.toString()));
+
+        assertEquals(List.of(), simpleNames(manager));
+        assertFalse(manager.isLoaded(jar.toString()), "nothing it offers is in this jar, so it stays unread");
+
+        prefixes[0] = Set.of("com.example");
+
+        assertEquals(List.of("Mode", "Quiet", "Widget"), simpleNames(manager),
+                "a prefix above the jar's package reaches it, as a bound plugin's does");
+        assertTrue(manager.isLoaded(jar.toString()));
+    }
+
+    @Test
+    void aDeferredJarIsReadWhenAskedForByNameAndOverEverythingReadsAll(@TempDir Path tmp) throws IOException {
+        Path jar = fixtureJar(tmp, "fixture-1.0.jar");
+        managerFor(jar);
+
+        TypeSummaryManager hidden = new TypeSummaryManager(Set.of("com.somewhere.else"));
+        hidden.refresh(List.of(jar.toString()));
+        assertFalse(hidden.isLoaded(jar.toString()));
+        assertEquals(3, hidden.getTypesForJar(jar.toString()).size(), "asking for the jar reads it");
+
+        TypeSummaryManager everything = TypeSummaryManager.overEverything();
+        everything.refresh(List.of(jar.toString()));
+        assertEquals(3, everything.totalTypes(), "what a jar contains is never filtered");
+    }
+
+    /** A cache written before the package lists existed is read whole once, and gets its list then. */
+    @Test
+    void aCacheWithNoPackageListIsReadWholeOnceAndGetsOne(@TempDir Path tmp) throws IOException {
+        Path jar = fixtureJar(tmp, "fixture-1.0.jar");
+        managerFor(jar);
+        Path cache = TypeSummaryManager.getCacheFileForJar(jar.toString());
+        Path list = TypeSummaryManager.packagesFileFor(cache);
+        assertEquals(List.of(PKG), Files.readAllLines(list), "indexing writes the jar's packages");
+        Files.delete(list);
+
+        TypeSummaryManager first = new TypeSummaryManager(Set.of("com.somewhere.else"));
+        first.refresh(List.of(jar.toString()));
+        assertTrue(first.isLoaded(jar.toString()), "with no list, only reading the cache says what it holds");
+        assertEquals(List.of(PKG), Files.readAllLines(list));
+
+        TypeSummaryManager second = new TypeSummaryManager(Set.of("com.somewhere.else"));
+        second.refresh(List.of(jar.toString()));
+        assertFalse(second.isLoaded(jar.toString()), "the next open reads the list instead");
+    }
+
+    @Test
+    void cacheFilesOfAnotherFormatAreSweptAndThisFormatsKept(@TempDir Path tmp) throws IOException {
+        Path jar = fixtureJar(tmp, "fixture-1.0.jar");
+        managerFor(jar);
+        Path cache = TypeSummaryManager.getCacheFileForJar(jar.toString());
+        Path old = cache.resolveSibling("fixture-1.0.jar.json");
+        Path older = cache.resolveSibling("fixture-1.0.jar.ser");
+        Files.writeString(old, "{}");
+        Files.writeString(older, "");
+
+        TypeSummaryManager.sweepStaleCaches();
+
+        assertFalse(Files.exists(old));
+        assertFalse(Files.exists(older));
+        assertTrue(Files.exists(cache));
+        assertTrue(Files.exists(TypeSummaryManager.packagesFileFor(cache)));
+    }
+
     @Test
     void refreshingWithAJarAlreadyInMemoryIsANoOp(@TempDir Path tmp) throws IOException {
         Path jar = fixtureJar(tmp, "fixture-1.0.jar");

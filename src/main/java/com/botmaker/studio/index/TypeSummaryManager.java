@@ -23,6 +23,10 @@ import java.util.function.Supplier;
  *
  * <p>Cache <em>policy</em> (where/when/invalidate) lives here; only the serialize/deserialize step is
  * delegated to ClassGraph.
+ *
+ * <p>Beside each cache sits the list of its packages ({@code .packages}), and a jar is read from its JSON
+ * only once one of them is under the allowed prefixes, or once it is asked for by name: an open reads the
+ * one or two jars it offers from, not all of them.
  */
 public class TypeSummaryManager {
 
@@ -74,6 +78,16 @@ public class TypeSummaryManager {
 
     /** jar path → owning ScanResult, retained so the whole index can be re-serialized to JSON. */
     private final Map<String, ScanResult> scans = new HashMap<>();
+
+    /**
+     * jar path → its packages, for a jar with a fresh cache that nothing has asked for yet (2026-10-18).
+     *
+     * <p>The profiler found a project open deserializing all 74 of its jars' JSON — opencv, openblas,
+     * bcprov, each a ClassGraph pool of its own — to offer 94 types out of one or two of them. A jar here is
+     * known but not loaded: {@link #ensureCaches()} loads it once one of its packages is under the prefixes,
+     * and {@link #getTypesForJar} when asked for it by name.
+     */
+    private final Map<String, Set<String>> deferred = new HashMap<>();
 
     // Derived caches so reads are O(1) instead of re-flattening/scanning every jar on each lookup (the hot
     // path for menu population). Marked dirty by store() and rebuilt lazily on first read, so loading N jars
@@ -128,10 +142,21 @@ public class TypeSummaryManager {
 
     /** True when {@code ci}'s package is under one of {@code prefixes}. */
     private boolean isAllowed(ClassInfo ci, Set<String> prefixes) {
-        if (everything) return true;
-        String pkg = ci.getPackageName();
+        return everything || isUnder(ci.getPackageName(), prefixes);
+    }
+
+    private static boolean isUnder(String pkg, Set<String> prefixes) {
         for (String prefix : prefixes) {
             if (pkg.equals(prefix) || pkg.startsWith(prefix + ".")) return true;
+        }
+        return false;
+    }
+
+    /** True when a deferred jar holding {@code packages} has a class {@link #getAllTypes()} would offer. */
+    private boolean isWanted(Set<String> packages, Set<String> prefixes) {
+        if (everything) return true;
+        for (String pkg : packages) {
+            if (isUnder(pkg, prefixes)) return true;
         }
         return false;
     }
@@ -148,25 +173,17 @@ public class TypeSummaryManager {
      */
     public static TypeSummaryManager buildOrLoad(List<String> allJars) {
         TypeSummaryManager manager = new TypeSummaryManager();
+        sweepStaleCaches();
 
         List<String> missingJars = new ArrayList<>();
 
         for (String jar : allJars) {
             if (ClassPathManager.isSystemJar(jar)) continue;
-
-            Path cacheFile = getCacheFileForJar(jar);
-            if (isCacheFresh(jar, cacheFile)) {
-                ScanResult cached = loadFromFile(cacheFile);
-                if (cached != null) {
-                    manager.store(jar, cached);
-                    continue;
-                }
-            }
-            missingJars.add(jar);
+            if (!manager.fromCache(jar, getCacheFileForJar(jar))) missingJars.add(jar);
         }
 
         System.out.println("Index loaded from cache — " + manager.totalTypes() + " types across "
-                + manager.index.size() + " jars");
+                + manager.index.size() + " jars (" + manager.deferred.size() + " more not needed yet)");
 
         if (missingJars.isEmpty()) {
             return manager;
@@ -195,6 +212,9 @@ public class TypeSummaryManager {
      * Incrementally indexes any of {@code jars} not already present in this manager (skipping system
      * jars), saving each new jar's scan to its cache file. Already-indexed and system jars are ignored,
      * so this is cheap to call after a classpath change.
+     *
+     * <p>It ends by loading the jars the prefixes now want, so the deferred jars a plugin bound just before
+     * this call brings into view are read here, off the FX thread, not by the first menu that opens.
      */
     public void refresh(List<String> jars) {
         for (String jar : jars) {
@@ -204,41 +224,42 @@ public class TypeSummaryManager {
             // Already indexed in memory: keep it only if the on-disk jar hasn't changed since. A reused
             // SNAPSHOT path (botmaker-sdk-1.3.1-SNAPSHOT.jar) keeps the same key across rebuilds, so without
             // this a live session would never pick up a freshly reinstalled SDK.
-            if (index.containsKey(jar)) {
+            if (isKnown(jar)) {
                 if (isCacheFresh(jar, cacheFile)) continue;
-                scans.remove(jar);
-                index.remove(jar);
-                namesByJar.remove(Path.of(jar).toAbsolutePath().normalize());
-                cachesDirty = true;
+                forget(jar);
             }
 
-            if (isCacheFresh(jar, cacheFile)) {
-                ScanResult cached = loadFromFile(cacheFile);
-                if (cached != null) {
-                    store(jar, cached);
-                    continue;
-                }
-            }
+            if (fromCache(jar, cacheFile)) continue;
             indexJar(jar);
             saveJar(jar);
         }
+        ensureCaches();
     }
 
-    public List<ClassInfo> getAllTypes() {
+    // The readers hold the lock the rebuild does: refresh() rebuilds on LibraryService's thread while a menu
+    // reads on FX, and a map read mid-clear() misses a type a block then draws as unresolved.
+    public synchronized List<ClassInfo> getAllTypes() {
         ensureCaches();
         return allTypesCache;
     }
 
-    public List<ClassInfo> getTypesForJar(String jarPath) {
+    /** What {@code jarPath} holds, read from its cache now if nothing had asked for it yet. */
+    public synchronized List<ClassInfo> getTypesForJar(String jarPath) {
+        if (deferred.containsKey(jarPath)) loadDeferred(jarPath);
         return index.getOrDefault(jarPath, List.of());
     }
 
-    public Optional<ClassInfo> findBySimpleName(String simpleName) {
+    /** Whether {@code jarPath}'s classes are read into memory, not only known by their packages. For a test. */
+    synchronized boolean isLoaded(String jarPath) {
+        return index.containsKey(jarPath);
+    }
+
+    public synchronized Optional<ClassInfo> findBySimpleName(String simpleName) {
         ensureCaches();
         return Optional.ofNullable(bySimpleName.get(simpleName));
     }
 
-    public Optional<ClassInfo> findByQualifiedName(String qualifiedName) {
+    public synchronized Optional<ClassInfo> findByQualifiedName(String qualifiedName) {
         ensureCaches();
         return Optional.ofNullable(byQualifiedName.get(qualifiedName));
     }
@@ -257,7 +278,7 @@ public class TypeSummaryManager {
      * asking one throws — every call block's class dropdown did, on every project opened a second time
      * (2026-10-01).
      */
-    public boolean isIn(ClassInfo type, Set<Path> jars) {
+    public synchronized boolean isIn(ClassInfo type, Set<Path> jars) {
         if (jars.isEmpty()) return false;
         for (Path jar : jars) {
             if (namesByJar.getOrDefault(jar, Set.of()).contains(type.getName())) return true;
@@ -266,7 +287,7 @@ public class TypeSummaryManager {
     }
 
     /** Library classes exposing at least one public static method returning a value (Call-Function targets). */
-    public List<ClassInfo> getStaticUtilityTypes() {
+    public synchronized List<ClassInfo> getStaticUtilityTypes() {
         ensureCaches();
         return staticUtilityCache;
     }
@@ -310,7 +331,7 @@ public class TypeSummaryManager {
     }
 
     /** Records a scan and its non-anonymous classes under a jar path, then rebuilds the derived caches. */
-    private void store(String jar, ScanResult scan) {
+    private synchronized void store(String jar, ScanResult scan) {
         scans.put(jar, scan);
         List<ClassInfo> classes = scan.getAllClasses().stream()
                 .filter(ci -> !ci.isAnonymousInnerClass())
@@ -321,11 +342,61 @@ public class TypeSummaryManager {
         cachesDirty = true;
     }
 
+    private synchronized boolean isKnown(String jar) {
+        return index.containsKey(jar) || deferred.containsKey(jar);
+    }
+
+    private synchronized void forget(String jar) {
+        scans.remove(jar);
+        index.remove(jar);
+        deferred.remove(jar);
+        namesByJar.remove(Path.of(jar).toAbsolutePath().normalize());
+        cachesDirty = true;
+    }
+
+    private synchronized void defer(String jar, Set<String> packages) {
+        deferred.put(jar, packages);
+        cachesDirty = true;
+    }
+
+    /**
+     * Takes {@code jar} from a fresh cache: deferred when its package list says what it holds, read whole
+     * (and the list written) when there is none yet. False when there is no cache it can use.
+     */
+    private boolean fromCache(String jar, Path cacheFile) {
+        if (!isCacheFresh(jar, cacheFile)) return false;
+        Set<String> packages = readPackages(cacheFile);
+        if (packages != null) {
+            defer(jar, packages);
+            return true;
+        }
+        ScanResult cached = loadFromFile(cacheFile);
+        if (cached == null) return false;
+        store(jar, cached);
+        savePackages(jar);
+        return true;
+    }
+
+    /** Reads a deferred jar's cache into the index, scanning the jar again if the cache went bad meanwhile. */
+    private synchronized void loadDeferred(String jar) {
+        deferred.remove(jar);
+        ScanResult cached = loadFromFile(getCacheFileForJar(jar));
+        if (cached != null) {
+            store(jar, cached);
+        } else {
+            indexJar(jar);
+            saveJar(jar);
+        }
+    }
+
     private synchronized void ensureCaches() {
         // The prefixes are asked for every time, not captured: a plugin bound into the open project widens
         // them, and the caches built before it was installed hide everything it brought.
         Set<String> prefixes = everything ? Set.of() : Set.copyOf(allowedPackagePrefixes.get());
         if (!cachesDirty && prefixes.equals(prefixesInUse)) return;
+        for (String jar : List.copyOf(deferred.keySet())) {
+            if (isWanted(deferred.get(jar), prefixes)) loadDeferred(jar);
+        }
         cachesDirty = false;
         prefixesInUse = prefixes;
         // Only allowed-package classes are surfaced to the user; transitive deps and the SDK's internal
@@ -362,7 +433,69 @@ public class TypeSummaryManager {
      */
     public static Path getCacheFileForJar(String jarPath) {
         String jarFileName = Path.of(jarPath).getFileName().toString();
-        return CacheDirs.cacheRoot().resolve("jars").resolve(jarFileName + "." + CACHE_FORMAT + ".json");
+        return jarsDir().resolve(jarFileName + "." + CACHE_FORMAT + ".json");
+    }
+
+    private static Path jarsDir() {
+        return CacheDirs.cacheRoot().resolve("jars");
+    }
+
+    /** The packages a cache holds, one per line, beside it: {@code somelib-1.0.0.jar.v2.packages}. */
+    static Path packagesFileFor(Path cacheFile) {
+        String name = cacheFile.getFileName().toString();
+        return cacheFile.resolveSibling(name.substring(0, name.length() - ".json".length()) + ".packages");
+    }
+
+    /**
+     * The packages {@code cacheFile} holds, or null when no list was written since it was: a cache an older
+     * Studio wrote, or one rewritten by one after this list, is read whole once and the list written then.
+     */
+    private static Set<String> readPackages(Path cacheFile) {
+        Path list = packagesFileFor(cacheFile);
+        try {
+            if (!Files.exists(list)
+                    || Files.getLastModifiedTime(list).compareTo(Files.getLastModifiedTime(cacheFile)) < 0) {
+                return null;
+            }
+            return Set.copyOf(Files.readAllLines(list));
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Writes the package list of a jar in memory beside its cache. Called after the cache itself is written. */
+    private void savePackages(String jarPath) {
+        Path list = packagesFileFor(getCacheFileForJar(jarPath));
+        try {
+            Files.write(list, getTypesForJar(jarPath).stream().map(ClassInfo::getPackageName)
+                    .distinct().sorted().toList());
+        } catch (IOException e) {
+            System.err.println("Failed to save the package list for " + jarPath + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Deletes the files in the cache directory that are not this {@link #CACHE_FORMAT}'s: pre-{@code v2}
+     * {@code .json} and {@code .ser} copies no Studio of this format reads, 350 of 550 files on the machine
+     * the profiler ran on.
+     */
+    static void sweepStaleCaches() {
+        Path dir = jarsDir();
+        if (!Files.isDirectory(dir)) return;
+        String json = "." + CACHE_FORMAT + ".json";
+        String packages = "." + CACHE_FORMAT + ".packages";
+        try (var stream = Files.list(dir)) {
+            stream.filter(p -> {
+                        String name = p.getFileName().toString();
+                        return Files.isRegularFile(p) && !name.endsWith(json) && !name.endsWith(packages);
+                    })
+                    .forEach(p -> {
+                        try { Files.deleteIfExists(p); }
+                        catch (IOException e) { /* best effort */ }
+                    });
+        } catch (IOException e) {
+            System.err.println("Failed to sweep old jar caches: " + e.getMessage());
+        }
     }
 
     /**
@@ -393,6 +526,7 @@ public class TypeSummaryManager {
         try {
             Files.createDirectories(cacheFile.getParent());
             Files.writeString(cacheFile, scan.toJSON());
+            savePackages(jarPath);
             System.out.println("Saved cache: " + cacheFile.getFileName()
                     + " (" + getTypesForJar(jarPath).size() + " types)");
         } catch (IOException e) {
@@ -431,6 +565,7 @@ public class TypeSummaryManager {
         Path cacheFile = getCacheFileForJar(jarPath);
         try {
             Files.deleteIfExists(cacheFile);
+            Files.deleteIfExists(packagesFileFor(cacheFile));
             System.out.println("Invalidated cache for: " + Path.of(jarPath).getFileName());
         } catch (IOException e) {
             System.err.println("Failed to invalidate cache for " + jarPath + ": " + e.getMessage());
@@ -441,10 +576,10 @@ public class TypeSummaryManager {
      * Deletes all per-jar cache files under the jars/ subdirectory.
      */
     public static void clearAllCaches() {
-        Path jarsDir = CacheDirs.cacheRoot().resolve("jars");
+        Path jarsDir = jarsDir();
         if (!Files.exists(jarsDir)) return;
         try (var stream = Files.walk(jarsDir)) {
-            stream.filter(p -> p.toString().endsWith(".json"))
+            stream.filter(p -> p.toString().endsWith(".json") || p.toString().endsWith(".packages"))
                     .forEach(p -> {
                         try { Files.deleteIfExists(p); }
                         catch (IOException e) { /* best effort */ }
