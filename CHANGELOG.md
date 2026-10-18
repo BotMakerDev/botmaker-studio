@@ -105,6 +105,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Each render walked the whole bot again for its parameters and its sets' members** (2026-10-18). The
+  bot's `@Param` fields (`JavaParameters.over`), a set's members (`ManagedSets.members`) and a set's nested
+  classes (`ManagedClasses.all`) are now worked out once per parse of the bot and per plugin bind
+  (`BotIndex.memo`). An edit makes a new parse, so it is never answered stale. The packages the bound plugins
+  catalogue (`PluginHost.cataloguedPackages`) are computed once per bind; the type index asked for them on
+  every lookup. Together these were about a quarter of a render's time in a profile of ordinary editing.
 - **Switching back to a file parsed, drew and styled it again** (2026-10-18). A file left unchanged, with no
   other file written meanwhile, now shows the canvas it had, scrolled where it was. Its root stays in the
   scene, hidden, for each of the 8 files the editor keeps for a switch back, so nothing is styled again either.

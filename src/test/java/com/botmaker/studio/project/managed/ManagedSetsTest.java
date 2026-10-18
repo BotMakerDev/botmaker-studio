@@ -16,6 +16,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -73,6 +75,34 @@ class ManagedSetsTest {
         assertEquals(List.of("ORE", "GOLD"), ManagedSets.members(index(root), ID,GRAMMAR).stream()
                 .map(ManagedSets.Member::name).toList());
         assertTrue(ManagedSets.members(index(root), "flow", GRAMMAR).isEmpty(), "no class carries that id");
+    }
+
+    @Test
+    void theMembersAreAskedOnceAndAnEditedBufferIsAskedAgain(@TempDir Path root) {
+        BotIndex index = index(root);
+        List<ManagedSets.Member> first = ManagedSets.members(index, ID, GRAMMAR);
+        assertSame(first, ManagedSets.members(index, ID, GRAMMAR), "the same index answers what it found");
+
+        Map<Path, String> edited = new LinkedHashMap<>();
+        edited.put(pictures(root), PICTURES.replace("GOLD = ", "SILVER = "));
+        edited.put(bot(root), BOT);
+        BotIndex after = BotIndex.over(edited, List.of(contract(), testClasses()), root);
+        assertNotSame(index, after, "an edited buffer is another index");
+        assertEquals(List.of("ORE", "SILVER"), ManagedSets.members(after, ID, GRAMMAR).stream()
+                .map(ManagedSets.Member::name).toList(), "so its members are read again, not answered stale");
+    }
+
+    @Test
+    void aBindOverTheSameIndexIsAskedAgain(@TempDir Path root) {
+        BotIndex index = index(root);
+        Object bind = new Object();
+        int[] walks = {0};
+        List<Object> key = List.of("question");
+        index.memo(bind, key, units -> ++walks[0]);
+        index.memo(bind, key, units -> ++walks[0]);
+        assertEquals(1, walks[0], "one bind, one walk");
+        index.memo(new Object(), key, units -> ++walks[0]);   // a plugin bound or reloaded: new managed values
+        assertEquals(2, walks[0], "a new bind walks again over the same unchanged sources");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
+import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -44,6 +45,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -115,14 +117,16 @@ public final class JavaParameters {
      * has not reached yet, so what the bot declares has to be known in full before the first field is read.
      */
     public static List<JavaParameter> over(BotIndex index, ValueGrammar grammar) {
-        // The bot's own constants, so Flows.MAIN or Activities.Rest.class in an initialiser reads as a value.
-        ManagedConstants.Lookup names = new ManagedConstants.Lookup(ManagedConstants.over(index), grammar);
-        return index.read(units -> {
+        // Once per index and bind: blocks ask it on every render (2026-10-18). A bind replaces both of these.
+        List<ManagedValue<?>> managed = PluginHost.managedValues();
+        return index.memo(managed, Arrays.asList(JavaParameters.class, grammar), units -> {
+            // The bot's own constants, so Flows.MAIN or Activities.Rest.class in an initialiser reads as a value.
+            ManagedConstants.Lookup names = new ManagedConstants.Lookup(ManagedConstants.over(index), grammar);
             BotRecords records = BotRecords.over(grammar, units.values());
             List<JavaParameter> out = new ArrayList<>();
             units.forEach((file, unit) -> out.addAll(
                     JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records, names,
-                            PluginHost.managedValues())));
+                            managed)));
             return List.copyOf(out);
         });
     }

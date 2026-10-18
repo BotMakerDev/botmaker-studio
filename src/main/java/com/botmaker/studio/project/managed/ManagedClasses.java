@@ -35,6 +35,7 @@ import javax.lang.model.SourceVersion;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -125,7 +126,9 @@ public final class ManagedClasses {
     /** The classes of the set {@code id}, in the order their constants are written; empty when none is marked so. */
     public static List<Nested> all(BotIndex index, String id, ValueGrammar grammar, String setupName) {
         if (id == null || id.isBlank()) return List.of();
-        return index.read(units -> {
+        // Once per index, set and bind: the setup window and a block ask it on every render (2026-10-18).
+        return index.memo(PluginHost.managedValues(), Arrays.asList(ManagedClasses.class, id, grammar, setupName),
+                units -> {
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
                 for (Object each : entry.getValue().types()) {
                     if (each instanceof TypeDeclaration type && ManagedSets.carries(type, id)) {

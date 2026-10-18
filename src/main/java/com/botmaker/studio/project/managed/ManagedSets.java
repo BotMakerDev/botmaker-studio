@@ -32,6 +32,7 @@ import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -112,7 +113,8 @@ public final class ManagedSets {
     /** The constants of the open set {@code id}, in the order they are written; empty when no class carries it. */
     public static List<Member> members(BotIndex index, String id, ValueGrammar grammar) {
         if (id == null || id.isBlank()) return List.of();
-        return index.read(units -> {
+        // Once per index, set and bind: a block asks it on every render (2026-10-18).
+        return index.memo(PluginHost.managedValues(), Arrays.asList(ManagedSets.class, id, grammar), units -> {
             List<Member> out = new ArrayList<>();
             units.forEach((file, unit) -> {
                 if (!out.isEmpty()) return;
@@ -137,7 +139,7 @@ public final class ManagedSets {
                     }
                     // A class of constants may nest a helper enum of its own, which is no member of the set:
                     // only a class holding no constant of its own is a set of nested enums.
-                    boolean grouped = java.util.Arrays.stream(type.getFields()).noneMatch(ManagedSets::isConstant);
+                    boolean grouped = Arrays.stream(type.getFields()).noneMatch(ManagedSets::isConstant);
                     if (grouped) for (Group group : nested(file, type)) out.addAll(group.members());
                     for (FieldDeclaration field : type.getFields()) {
                         if (!isConstant(field)) continue;

@@ -215,6 +215,38 @@ public final class BotIndex {
         return walk.apply(units);
     }
 
+    /** How many answers {@link #memo} holds; the oldest goes first, so a grammar built per call cannot grow it. */
+    private static final int MEMOS = 64;
+
+    /** What {@link #memo} has derived from these trees, by the key it was asked with, for {@link #memoBind}. */
+    private final Map<List<Object>, Object> memos = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<List<Object>, Object> eldest) {
+            return size() > MEMOS;
+        }
+    };
+    /** The bind {@link #memos} were computed under; a new one empties them, so an old plugin's classes go. */
+    private Object memoBind;
+
+    /**
+     * {@code walk}'s answer over the units, computed once per {@code bind} and {@code key} for the life of this
+     * index (2026-10-18): the bot's parameters and a set's members were walked again on every render, though
+     * the index is the same until a source changes. {@code bind} is what the bound plugins answer the walk
+     * with ({@code PluginHost.managedValues()}, replaced on every bind); the key holds everything else it reads
+     * — the grammar, an id. The answer must be immutable, since every caller shares it.
+     */
+    @SuppressWarnings("unchecked")
+    public synchronized <T> T memo(Object bind, List<Object> key, Function<Map<Path, CompilationUnit>, T> walk) {
+        if (bind != memoBind) {
+            memos.clear();
+            memoBind = bind;
+        }
+        if (memos.containsKey(key)) return (T) memos.get(key);
+        T answer = walk.apply(units);
+        memos.put(key, answer);
+        return answer;
+    }
+
     /** Every compile error each file has, by path. */
     public synchronized Map<Path, List<Problem>> errors() {
         if (errors == null) {

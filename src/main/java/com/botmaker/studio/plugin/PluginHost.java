@@ -427,6 +427,7 @@ public final class PluginHost {
         overlayParts = null;
         pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
         catalog = null;
+        catalogued = null;
         shipped = new ConcurrentHashMap<>();
         if (previous != null) previous.close();
     }
@@ -1051,14 +1052,27 @@ public final class PluginHost {
      * everything the bot's own classpath resolves.
      */
     public static Set<String> cataloguedPackages() {
+        PaletteCatalog now = bundled();
+        Catalogued known = catalogued;
+        if (known != null && known.of() == now) return known.packages();
         Set<String> packages = new LinkedHashSet<>();
-        for (FacadeEntry facade : bundled().facades()) {
+        for (FacadeEntry facade : now.facades()) {
             String qualified = facade.qualifiedName();
             int dot = qualified.lastIndexOf('.');
             if (dot > 0) packages.add(qualified.substring(0, dot));
         }
-        return Set.copyOf(packages);
+        Set<String> answer = Set.copyOf(packages);
+        catalogued = new Catalogued(now, answer);
+        return answer;
     }
+
+    /**
+     * {@link #cataloguedPackages}, with the catalog it was read from: answered again only for that catalog, so a
+     * lookup that read the old one while a bind ran cannot leave its answer for the new one. The type index asks
+     * it on every lookup, and a block's parameter types are looked up on every render (2026-10-18).
+     */
+    private record Catalogued(PaletteCatalog of, Set<String> packages) { }
+    private static volatile Catalogued catalogued;
 
     /**
      * The bundled facade with this simple name, if exactly one plugin offers it.
