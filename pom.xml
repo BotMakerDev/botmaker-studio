@@ -39,8 +39,8 @@
         <botmaker.pluginhost.version>0.5.4-SNAPSHOT</botmaker.pluginhost.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
-        <mcp.version>2.0.1</mcp.version>
-        <jetty.version>12.1.13</jetty.version>
+        <mcp.version>2.1.0</mcp.version>
+        <jetty.version>12.1.14</jetty.version>
         <!-- Numeric-only version for jpackage (rejects -SNAPSHOT / non-numeric versions). -->
         <app.version>1.0.5</app.version>
 
@@ -86,19 +86,20 @@
 
     </repositories>
 
-    <!-- pty4j brings kotlin-stdlib 2.1, which has held the jdk7/jdk8 classes since 1.8; shared's dadb still
-         pulls the 1.5 split jars, which would put a second, older copy of those classes on the classpath. -->
+    <!-- pty4j brings kotlin-stdlib (2.4.20 with pty4j 0.14), which has held the jdk7/jdk8 classes since 1.8;
+         shared's dadb still pulls the 1.5 split jars, which would put a second, older copy of those classes on
+         the classpath. Kept at the stdlib's version. -->
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-stdlib-jdk7</artifactId>
-                <version>2.1.21</version>
+                <version>2.4.20</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-stdlib-jdk8</artifactId>
-                <version>2.1.21</version>
+                <version>2.4.20</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -192,24 +193,13 @@
              Studio source may name a com.botmaker.plugin.toolkit type, and there is no longer a jar on any
              Studio classpath for one to resolve against. -->
 
-        <!-- OpenCV (native bindings). Drives the GrabCut object-capture wand in ui/app/capture.
-             Same artifact + version the SDK pins (see ../botmaker-sdk/pom.xml) so the two modules
-             never disagree on the native library they extract and load. -->
-        <dependency>
-            <groupId>org.openpnp</groupId>
-            <artifactId>opencv</artifactId>
-            <version>4.9.0-0</version>
-        </dependency>
+        <!-- OpenCV was declared here for the GrabCut wand, which left for the SDK plugin; shared still brings it
+             (2026-10-18). FXML went the same day: nothing loads a .fxml. -->
 
         <!-- JavaFX -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
         <!-- Markdown drawn as HTML in a WebView: a bot's README and the SDK's GAME.md notes (the SDK edits them
@@ -230,28 +220,14 @@
         <dependency>
             <groupId>org.jetbrains.pty4j</groupId>
             <artifactId>pty4j</artifactId>
-            <version>0.13.10</version>
+            <version>0.14.0</version>
         </dependency>
 
-        <!-- Wayland live preview: xdg-desktop-portal ScreenCast handshake over D-Bus (persistent restore
-             token → prompt once ever) + PipeWire live video via GStreamer. Linux-only at runtime; the code
-             degrades gracefully (falls back to AWT Robot) when the portal/GStreamer stack is unavailable,
-             so Windows/macOS builds are unaffected. See services/preview/*. -->
-        <dependency>
-            <groupId>com.github.hypfvieh</groupId>
-            <artifactId>dbus-java-core</artifactId>
-            <version>5.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.hypfvieh</groupId>
-            <artifactId>dbus-java-transport-native-unixsocket</artifactId>
-            <version>5.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.freedesktop.gstreamer</groupId>
-            <artifactId>gst1-java-core</artifactId>
-            <version>1.4.0</version>
-        </dependency>
+        <!-- D-Bus and GStreamer stood here for the Wayland live preview, dropped 2026-07-09; nothing named
+             them since (removed 2026-10-18). -->
+
+        <!-- JDT's own org.eclipse.platform jars (core.runtime, core.resources, …) come at the versions its pom
+             names: the pins that stood here only overrode them. -->
 
         <!-- Eclipse JDT Core -->
         <dependency>
@@ -279,70 +255,47 @@
             <version>0.21.0</version>
         </dependency>
 
-        <!-- Eclipse Runtime Base Libs -->
-        <dependency>
-            <groupId>org.eclipse.platform</groupId>
-            <artifactId>org.eclipse.core.runtime</artifactId>
-            <version>3.31.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.platform</groupId>
-            <artifactId>org.eclipse.equinox.common</artifactId>
-            <version>3.17.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.platform</groupId>
-            <artifactId>org.eclipse.core.resources</artifactId>
-            <version>3.21.0</version>
-        </dependency>
-
         <!-- Maven Model API & Resolver -->
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
-            <version>3.9.9</version>
+            <version>3.9.16</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-resolver-provider</artifactId>
-            <version>3.9.9</version>
+            <version>3.9.16</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven.resolver</groupId>
             <artifactId>maven-resolver-supplier</artifactId>
-            <version>1.9.22</version>
+            <version>1.9.27</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven.resolver</groupId>
             <artifactId>maven-resolver-connector-basic</artifactId>
-            <version>1.9.22</version>
+            <version>1.9.27</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven.resolver</groupId>
             <artifactId>maven-resolver-transport-http</artifactId>
-            <version>1.9.22</version>
+            <version>1.9.27</version>
         </dependency>
 
-        <!-- SLF4J -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>2.0.17</version> <!-- Realigned to match slf4j-simple version -->
-        </dependency>
+        <!-- The one logging binding, for what logs through SLF4J (the resolver, JGit); slf4j-api comes with it. -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>2.0.17</version>
+            <version>2.0.20</version>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Jackson Databind. 2.22.1 since 2026-09-24 because LangChain4j 1.20 is built against it, and this
-             declaration wins by nearest-wins: left at 2.17.0 it would hand LangChain4j an older databind than
-             the one it compiled against. -->
+        <!-- Jackson Databind, nearest-wins over shared's 2.17.0. Raised to 2.22 on 2026-09-24 for LangChain4j,
+             gone since; the MCP SDK's Jackson 2 mapper is what it serves now. -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.22.1</version>
+            <version>2.22.4</version>
         </dependency>
 
         <!-- JGit: pure-Java git for the per-project local VCS (project/vcs/ProjectVcs) — commit history,
@@ -447,7 +400,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.2</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -581,7 +534,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
+                <version>3.6.0</version>
                 <configuration>
                     <!-- JVM args translated from your Gradle test task (heap-dump path made
                          portable: lands under target/, so it works on Linux/macOS/Windows). -->
@@ -660,7 +613,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-clean-plugin</artifactId>
-                        <version>3.4.0</version>
+                        <version>3.5.0</version>
                         <executions>
                             <execution>
                                 <id>clean-dist</id>
@@ -682,7 +635,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-resources-plugin</artifactId>
-                        <version>3.3.1</version>
+                        <version>3.5.0</version>
                         <executions>
                             <execution>
                                 <id>stage-jpackage-input</id>
@@ -706,7 +659,7 @@
                     <plugin>
                         <groupId>org.panteleyev</groupId>
                         <artifactId>jpackage-maven-plugin</artifactId>
-                        <version>1.6.5</version>
+                        <version>1.8.0</version>
                         <executions>
                             <execution>
                                 <id>build-app-image</id>
@@ -1218,7 +1171,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-antrun-plugin</artifactId>
-                        <version>3.1.0</version>
+                        <version>3.2.0</version>
                         <executions>
                             <execution>
                                 <id>build-icns</id>

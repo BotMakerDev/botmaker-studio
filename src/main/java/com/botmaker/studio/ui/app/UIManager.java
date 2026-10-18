@@ -467,6 +467,7 @@ public class UIManager implements ProjectWindow {
                 () -> PluginOwners.absent(config), () -> actions.openPlugins(PluginsWindow.Section.BROWSE),
                 () -> EditorCanvas.loadProblemLines(PluginHost.failures(), libraryService.unresolved()),
                 () -> actions.openPlugins(PluginsWindow.Section.INSTALLED), PluginHost::devBuilds);
+        editorCanvas.setIdleFill(true);
         // What the last plugin change broke, under its own banner: read at open and after each change.
         checkBroken();
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> checkBroken(), true);

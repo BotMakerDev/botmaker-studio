@@ -610,11 +610,12 @@ final class EditorCanvas {
             if (!fillStep()) stop();
         }
     };
-    private boolean idleFill = true;
+    private boolean idleFill;
 
     /**
-     * Whether the canvas draws every blank left once a render has settled (2026-10-18), on by default: a fast
-     * scroll then has nothing left to draw. Off for a test that counts what a render drew by itself.
+     * Whether the canvas draws every blank left once a render has settled (2026-10-18), so a fast scroll later has
+     * nothing left to draw. Studio's window turns it on; off by default, because a test's canvases share one FX
+     * thread and stay in their stages: each filling at once starved it (a full suite run, 2026-10-18).
      */
     void setIdleFill(boolean on) {
         idleFill = on;

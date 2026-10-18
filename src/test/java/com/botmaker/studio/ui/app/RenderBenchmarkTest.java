@@ -162,7 +162,6 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         onFx(() -> {
             made[0] = new EditorCanvas(context, fixture.bus(), false, "Big", () -> {}, List::of, () -> {},
                     List::of, () -> {}, List::of);
-            made[0].setIdleFill(false);   // until the fill is measured on its own, below
             // Wired as UIManager wires them, so a switch selects a tab the way a click on one does.
             tabs[0] = new CenterTabs(made[0].node());
             tabs[0].setEditor(context::switchToFile, () -> fixture.state.getActiveFile().getPath());

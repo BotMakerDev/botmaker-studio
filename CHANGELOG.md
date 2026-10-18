@@ -211,12 +211,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Removed
 
+- **Dependencies nothing used** (2026-10-18): `opencv` (the GrabCut wand left for the SDK; shared still brings
+  it), `javafx-fxml`, `dbus-java-core` and its unixsocket transport and `gst1-java-core` (the Wayland preview,
+  dropped 2026-07-09), the `org.eclipse.core.runtime`/`equinox.common`/`core.resources` pins (JDT brings its own),
+  and `slf4j-api` (it comes with its binding).
 - **The `@ReplacedBy` repair**: `ApiMigrationRunner`, `Redirects`, `Pairing`, `UpgradeDiff`, `ApiReferences`, the
   fix sheet, the two-plugin simple-name guard (uses are matched by binding now), and the upgrade-only call edits
   (a default standing in, a deleted call, a retargeted receiver). `ApiModel` reads only what is new and `@Since`.
 
 ### Changed
 
+- **Minor dependency upgrades** (2026-10-18): pty4j 0.14.0 (kotlin pins 2.4.20), maven-model and
+  resolver-provider 3.9.16 with resolver 1.9.27 (3.10 brings resolver 2), MCP SDK 2.1.0, Jetty 12.1.14, jackson-databind 2.22.4,
+  slf4j-simple 2.0.20; plugins shade 3.6.2, surefire 3.6.0, clean 3.5.0, resources 3.5.0, antrun 3.2.0, jpackage
+  1.8.0. commonmark stays at the SDK's 0.21.0 and JavaFX at 25.0.4, both pins shared with upstreams.
 - **A plugin upgrade or removal carries the bot over with its `@Migrate` rules** (2026-10-16). What a move
   breaks is javac's answer over the bot against both classpaths, listed per element with its uses and whether a
   rule covers it. The bot's rules are applied; for each broken element no rule names, *Upgrade anyway* (and a

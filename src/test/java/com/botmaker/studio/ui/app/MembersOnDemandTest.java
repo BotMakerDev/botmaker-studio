@@ -75,7 +75,6 @@ class MembersOnDemandTest extends FxHeadlessTest {
         onFx(() -> {
             made[0] = new EditorCanvas(fixture.context(), fixture.bus(),
                     false, "Subject", () -> {}, List::of, () -> {}, List::of, () -> {}, List::of);
-            made[0].setIdleFill(false);   // what a render draws by itself; the fill has its own test
             root.getChildren().setAll(made[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class,
                     made[0]::handleBlocksUpdate, false);
