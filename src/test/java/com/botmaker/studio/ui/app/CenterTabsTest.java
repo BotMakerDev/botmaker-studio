@@ -3,11 +3,15 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -172,6 +176,48 @@ class CenterTabsTest extends FxHeadlessTest {
             closed.follow();
             assertEquals(List.of(), closed.titles(), "every tab closed stays closed");
         });
+    }
+
+    @Test
+    void theStripKeepsItsHeightWhateverTheAreaBelowAsksFor() throws Exception {
+        Path a = Files.writeString(dir.resolve("A.java"), "class A {}");
+        AtomicReference<Path> active = new AtomicReference<>(a);
+        interact(() -> {
+            Region canvas = new Region();
+            CenterTabs tabs = new CenterTabs(canvas);
+            tabs.setEditor(active::set, active::get);
+            VBox root = (VBox) tabs.node();
+            TabPane pane = (TabPane) root.getChildren().getFirst();
+            Stage stage = new Stage();
+            stage.setScene(new Scene(new StackPane(root), 600, 400));
+            stage.show();
+            try {
+                tabs.follow();
+                double strip = laidOut(root, pane);
+                assertTrue(strip > 0, "an open tab shows the strip");
+
+                canvas.setMinHeight(2000);   // a canvas asking for more than the column has
+                assertEquals(strip, laidOut(root, pane), "squeezed the strip to nothing before 2026-10-18");
+                Node area = root.getChildren().get(1);
+                assertEquals(400 - strip, area.getLayoutBounds().getHeight(), 0.5, "the area below gives way");
+                assertEquals(0, canvas.getLayoutY(), "from the top: its first lines are not clipped");
+
+                canvas.setMinHeight(0);
+                Region tall = new Region();
+                tall.setMinHeight(2000);
+                tabs.open("tall", "Tall", "here", () -> tall);
+                assertEquals(strip, laidOut(root, pane), "nor does a tall viewer squeeze it");
+                assertEquals(0, tall.getLayoutY(), "which is drawn from its top too");
+            } finally {
+                stage.hide();
+            }
+        });
+    }
+
+    private static double laidOut(VBox root, TabPane pane) {
+        root.applyCss();
+        root.layout();
+        return pane.getHeight();
     }
 
     /** The viewer drawn beside the canvas in its area, or null. */

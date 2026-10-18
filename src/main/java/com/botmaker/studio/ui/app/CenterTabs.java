@@ -4,6 +4,7 @@ import com.botmaker.studio.ui.app.viewers.ResourceViewers;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
@@ -16,6 +17,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Rectangle;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,6 +86,9 @@ final class CenterTabs {
         tabs.getStyleClass().add("center-tabs");
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
         tabs.setMaxHeight(Region.USE_PREF_SIZE);
+        // A tab pane's minimum is 0: below the strip, a canvas or viewer asking for more height than the column
+        // has squeezed it to nothing (2026-10-18). The strip keeps its height; the area gives way, clipped.
+        tabs.setMinHeight(Region.USE_PREF_SIZE);
         tabs.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             // Drawn even while tabs close or are restored at once; only the switch waits for the one left in front.
             show(now);
@@ -94,6 +99,13 @@ final class CenterTabs {
         none.visibleProperty().bind(Bindings.isEmpty(tabs.getTabs()).and(started));
         none.setMouseTransparent(true);
         area = new StackPane(canvas, none);
+        area.setMinHeight(0);
+        // Taller than the area, a centred child would lose its top to the clip.
+        StackPane.setAlignment(canvas, Pos.TOP_LEFT);
+        Rectangle clip = new Rectangle();
+        clip.widthProperty().bind(area.widthProperty());
+        clip.heightProperty().bind(area.heightProperty());
+        area.setClip(clip);
         VBox.setVgrow(area, Priority.ALWAYS);
         root = new VBox(tabs, area);
         show(null);
@@ -260,7 +272,10 @@ final class CenterTabs {
         Node view = tab == null ? null : views.get(tab);
         if (view != inFront) {
             if (inFront != null) area.getChildren().remove(inFront);
-            if (view != null) area.getChildren().add(view);
+            if (view != null) {
+                StackPane.setAlignment(view, Pos.TOP_LEFT);
+                area.getChildren().add(view);
+            }
             inFront = view;
         }
         boolean canvasShows = view == null && (javaFile(tab) != null || tab == null && !started.get());

@@ -105,6 +105,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **The file tabs were sometimes hidden** (2026-10-18). Since the canvas moved below the tab strip, a canvas
+  or viewer asking for more height than the centre column had squeezed the strip to nothing, because a tab
+  pane's minimum height is 0. The strip now keeps its height (`CenterTabs`), and the area below gives way,
+  clipped.
 - **Each render walked the whole bot again for its parameters and its sets' members** (2026-10-18). The
   bot's `@Param` fields (`JavaParameters.over`), a set's members (`ManagedSets.members`) and a set's nested
   classes (`ManagedClasses.all`) are now worked out once per parse of the bot and per plugin bind
