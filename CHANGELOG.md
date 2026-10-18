@@ -105,6 +105,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Opening a big file drew every member, on screen or not** (2026-10-18). The canvas now draws only the
+  fields, methods and nested types near what it shows. Each other one is a blank of about its height, drawn
+  when a scroll, a resize or a zoom brings it near, or when a find, an error, a Structure row or the debugger
+  goes to it. The member at the top of the view stays put while blanks are drawn. On `RenderBenchmarkTest`'s
+  file of 300 constants, a render draws 929 nodes, not 16806, and takes about 350 ms, not 1.3–1.5 s;
+  switching back to it takes about 95 ms, not 0.64 s.
 - **Opening a file styled every block twice** (2026-10-18). The canvas was moved into the selected tab after
   each render, and a node that leaves the scene is restyled whole when it comes back. That happened on a
   project's first file and on every file opened from Project Files, a usage or the assistant. The tab strip

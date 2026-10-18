@@ -53,6 +53,12 @@ public abstract class AbstractCodeBlock implements CodeBlock {
     private List<Node> compactNodes;
 
     private Tooltip errorTooltip;
+    /**
+     * What {@link #highlight} and {@link #setError} last said, put on the node when it is built after them: a
+     * member the canvas draws on demand is drawn after the errors and the debugger reached it (2026-10-18).
+     */
+    private boolean highlighted;
+    private String errorMessage;
 
     // Breakpoint state — exposed as a property so the gutter circle and the :breakpoint pseudo-class
     // both track it without manual visual refreshes.
@@ -187,6 +193,8 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             for (BlockDecorator decorator : DECORATORS) {
                 decorator.decorate(uiNode, this, context);
             }
+            if (highlighted) uiNode.pseudoClassStateChanged(HIGHLIGHTED, true);
+            if (errorMessage != null) setError(errorMessage);
         }
         return uiNode;
     }
@@ -201,16 +209,19 @@ public abstract class AbstractCodeBlock implements CodeBlock {
 
     @Override
     public void highlight() {
+        highlighted = true;
         if (uiNode != null) uiNode.pseudoClassStateChanged(HIGHLIGHTED, true);
     }
 
     @Override
     public void unhighlight() {
+        highlighted = false;
         if (uiNode != null) uiNode.pseudoClassStateChanged(HIGHLIGHTED, false);
     }
 
     @Override
     public void setError(String message) {
+        errorMessage = message;
         if (uiNode == null) return;
         uiNode.pseudoClassStateChanged(ERROR, true);
         if (errorTooltip == null) {
@@ -223,6 +234,7 @@ public abstract class AbstractCodeBlock implements CodeBlock {
 
     @Override
     public void clearError() {
+        errorMessage = null;
         if (uiNode == null) return;
         uiNode.pseudoClassStateChanged(ERROR, false);
         if (errorTooltip != null) {

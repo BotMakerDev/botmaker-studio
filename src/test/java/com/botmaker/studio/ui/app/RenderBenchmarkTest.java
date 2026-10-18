@@ -11,6 +11,7 @@ import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Files. Each render prints:
  * <ul>
  *   <li>nodes under the canvas, in total and by the block that owns them;</li>
- *   <li>the time to build the tree, and the time of {@code handleBlocksUpdate}'s forced CSS and layout;</li>
+ *   <li>the time of {@code handleBlocksUpdate}: building the tree, its forced CSS and layout, and drawing the
+ *   members near the viewport (the rest are blanks, {@code MemberPlaceholder});</li>
  *   <li>the CSS and layout time of each of the next pulses, and how many of them restyle a large part of the
- *   tree again (a pulse costing more than a tenth of the forced pass).</li>
+ *   tree again (a pulse costing more than a tenth of the render).</li>
  * </ul>
+ * Last, the canvas is scrolled to the end, and the nodes it then holds are printed.
  *
  * <p>Only structure is asserted: the node count of the first render stays under {@link #NODE_CEILING}, so a
  * change cannot quietly add nodes back. Times depend on the machine and the shared toolkit, and never fail a
@@ -53,8 +56,11 @@ class RenderBenchmarkTest extends FxHeadlessTest {
     private static final int CONSTANTS = 300;
     /** Methods after the constants, each a handful of call blocks. */
     private static final int METHODS = 20;
-    /** Nodes under the canvas after the first render, measured 2026-10-18 (16806) plus a margin; lower it as phases cut nodes. */
-    private static final int NODE_CEILING = 18_000;
+    /**
+     * Nodes under the canvas after the first render plus a margin; lower it as phases cut nodes. Measured
+     * 2026-10-18: 16806 with every member drawn, 929 with only those near the viewport.
+     */
+    private static final int NODE_CEILING = 1_500;
     /** Pulses measured after each render. */
     private static final int PULSES = 4;
 
@@ -103,7 +109,7 @@ class RenderBenchmarkTest extends FxHeadlessTest {
     }
 
     /** One render as the canvas saw it. */
-    private record Render(String label, long buildNanos, long forcedNanos, long endedAt) {}
+    private record Render(String label, long renderNanos, long endedAt) {}
 
     /** Runs {@code work} on the FX thread, then waits until {@code count} more pulses have run on the scene. */
     private void onFx(Runnable work, int count) throws Exception {
@@ -150,11 +156,9 @@ class RenderBenchmarkTest extends FxHeadlessTest {
             root.getChildren().setAll(tabs[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, event -> {
                 long start = System.nanoTime();
-                if (event.rootBlock() != null) event.rootBlock().getUINode(context);
-                long built = System.nanoTime();
                 made[0].handleBlocksUpdate(event);
                 long end = System.nanoTime();
-                renders.add(new Render(label[0], built - start, end - built, end));
+                renders.add(new Render(label[0], end - start, end));
             }, false);
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> tabs[0].follow(), false);
         }, 2);
@@ -172,6 +176,13 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         onFx(() -> context.switchToFile(big), PULSES);
         report(renders, 3, made[0], fixture);
 
+        ScrollPane scroll = (ScrollPane) made[0].node().lookup(".code-scroll-pane");
+        long scrollStart = System.nanoTime();
+        onFx(() -> scroll.setVvalue(1), PULSES);
+        System.out.printf("%n[render-benchmark] scrolled to the end: nodes %d, %.1f ms with its pulses%n",
+                countNodes(made[0].node(), owners(fixture), "(canvas)", new TreeMap<>()),
+                ms(System.nanoTime() - scrollStart));
+
         assertTrue(firstNodes < NODE_CEILING,
                 "the first render drew " + firstNodes + " nodes, over the ceiling of " + NODE_CEILING
                         + ": a change added nodes back");
@@ -184,10 +195,10 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         Map<String, Integer> byBlock = new TreeMap<>();
         int total = countNodes(canvas.node(), owners(fixture), "(canvas)", byBlock);
         List<long[]> after = pulses.stream().filter(p -> p[0] >= render.endedAt()).limit(PULSES).toList();
-        long heavy = after.stream().filter(p -> p[1] * 10 > render.forcedNanos()).count();
+        long heavy = after.stream().filter(p -> p[1] * 10 > render.renderNanos()).count();
         StringBuilder out = new StringBuilder("\n[render-benchmark] ").append(render.label()).append('\n')
-                .append(String.format("  nodes %d, build %.1f ms, forced css+layout %.1f ms%n", total,
-                        ms(render.buildNanos()), ms(render.forcedNanos())))
+                .append(String.format("  nodes %d, render (build, css, layout, drawing in view) %.1f ms%n", total,
+                        ms(render.renderNanos())))
                 .append("  next pulses css+layout ms:");
         after.forEach(p -> out.append(String.format(" %.1f", ms(p[1]))));
         out.append(String.format("  (%d restyle a large part again)%n", heavy)).append("  nodes by block:");

@@ -65,17 +65,7 @@ public class ClassBlock extends TypeBlock {
         }
 
         for (int i = 0; i < bodyDeclarations.size(); i++) {
-            CodeBlock block = bodyDeclarations.get(i);
-
-            Node node = block.getUINode(context);
-
-            // Make methods draggable for reordering. makeBlockMovable installs the onDragDetected
-            // handler itself, so call it directly at render time (not from inside an onDragDetected).
-            if (editable && block instanceof MethodDeclarationBlock) {
-                context.getDragAndDropManager().makeBlockMovable(node, block);
-            }
-
-            container.getChildren().add(node);
+            container.getChildren().add(memberNode(bodyDeclarations.get(i), context));
             if (editable) {
                 container.getChildren().add(createClassMemberSeparator(context, i + 1));
             }
@@ -87,6 +77,17 @@ public class ClassBlock extends TypeBlock {
         }
 
         return container;
+    }
+
+    @Override
+    protected Node drawMember(CodeBlock member, CodeEditorService context) {
+        Node node = member.getUINode(context);
+        // Make methods draggable for reordering. makeBlockMovable installs the onDragDetected
+        // handler itself, so call it directly at render time (not from inside an onDragDetected).
+        if (!isReadOnly() && member instanceof MethodDeclarationBlock) {
+            context.getDragAndDropManager().makeBlockMovable(node, member);
+        }
+        return node;
     }
 
     /**

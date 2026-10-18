@@ -1,6 +1,8 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.host.PluginLoader;
+import com.botmaker.studio.blocks.MemberPlaceholder;
+import com.botmaker.studio.blocks.TypeBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -23,6 +25,7 @@ import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -38,8 +41,12 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -49,6 +56,10 @@ import java.util.function.Supplier;
  * <p>It re-renders the whole program on every {@code UIBlocksUpdatedEvent}, which is what makes the scroll
  * position its problem: the swap empties the {@link ScrollPane}, so the viewport's position is lost unless
  * something puts it back. See {@link #handleBlocksUpdate}.
+ *
+ * <p>Only the members near the viewport are drawn (2026-10-18): each other member of a type is a
+ * {@link MemberPlaceholder}, drawn when a scroll, a resize or a zoom brings it near, or when a reveal, the
+ * debugger or a highlight needs its block. See {@link #drawInView}.
  */
 final class EditorCanvas {
 
@@ -141,11 +152,23 @@ final class EditorCanvas {
         }, true);
         followSubscription = eventBus.subscribe(CoreApplicationEvents.ExecutionFollowedEvent.class,
                 e -> follow(e.block()), true);
+        // The block the debugger pauses on is drawn, so its live values and its highlight have a node to go on.
+        highlightSubscription = eventBus.subscribe(CoreApplicationEvents.BlockHighlightEvent.class,
+                e -> drawMemberOf(e.block()), true);
+        // Ahead of LiveValues, subscribed after this canvas: the pause comes before the highlight.
+        pausedSubscription = eventBus.subscribe(CoreApplicationEvents.DebugSessionPausedEvent.class,
+                e -> drawMemberOf(e.block()), true);
+        InvalidationListener moved = o -> queueDraw();
+        scrollPane.vvalueProperty().addListener(moved);
+        scrollPane.viewportBoundsProperty().addListener(moved);
+        zoomPane.zoomProperty().addListener(moved);
     }
 
     /** Drops what this canvas subscribed to on the project's bus: the next window builds its own. */
     void dispose() {
         followSubscription.close();
+        highlightSubscription.close();
+        pausedSubscription.close();
         if (followScroll != null) followScroll.stop();
     }
 
@@ -158,6 +181,8 @@ final class EditorCanvas {
     private static final double FOLLOW_MARGIN = 0.2;
 
     private final EventBus.Subscription followSubscription;
+    private final EventBus.Subscription highlightSubscription;
+    private final EventBus.Subscription pausedSubscription;
     private Timeline followScroll;
     private long lastFollowScroll;
 
@@ -168,6 +193,7 @@ final class EditorCanvas {
      * next follow.
      */
     private void follow(CodeBlock block) {
+        drawMemberOf(block);
         Node node = block == null ? null : block.getUINode();
         if (node == null || node.getScene() == null) return;
         long now = System.currentTimeMillis();
@@ -372,12 +398,25 @@ final class EditorCanvas {
      */
     void handleBlocksUpdate(CoreApplicationEvents.UIBlocksUpdatedEvent event) {
         double vvalue = scrollPane.getVvalue();
+        Path file = codeEditorService.getState().getActiveFile() == null ? null
+                : codeEditorService.getState().getActiveFile().getPath();
+        if (Objects.equals(file, heightsFile)) {
+            rememberHeights();
+        } else {
+            drawnHeights.clear();
+            heightsFile = file;
+        }
         blocksContainer.getChildren().clear();
         if (event.rootBlock() != null) {
+            if (event.rootBlock() instanceof TypeBlock type) type.drawMembersOnDemand();
             Node rootNode = event.rootBlock().getUINode(codeEditorService);
             rootNode.addEventHandler(BlockEvent.BreakpointToggleEvent.TOGGLE_BREAKPOINT, e ->
                     eventBus.publish(new CoreApplicationEvents.BreakpointToggledEvent(e.getBlock(), e.isEnabled())));
             blocksContainer.getChildren().add(rootNode);
+            for (MemberPlaceholder blank : blanks()) {
+                Double known = drawnHeights.get(blank.key());
+                if (known != null) blank.setEstimate(known);
+            }
         }
         // Lay the new tree out now, so the scroll range is the real one when the position goes back; then once
         // more after the pulse, for anything that only settles there. The pulse alone was a race: a first
@@ -386,7 +425,145 @@ final class EditorCanvas {
         scrollPane.applyCss();
         scrollPane.layout();
         scrollPane.setVvalue(vvalue);
-        Platform.runLater(() -> scrollPane.setVvalue(vvalue));
+        // Then the members in view are drawn before the first frame shows them; what they push down is kept
+        // where it is, so the restore above holds for the member the user was on.
+        drawInView();
+        double settled = scrollPane.getVvalue();
+        Platform.runLater(() -> scrollPane.setVvalue(settled));
+    }
+
+    // --- members drawn on demand -----------------------------------------------------------------------------
+
+    /** How far past each edge of the viewport, as a fraction of its height, a member is drawn ahead. */
+    private static final double DRAW_AHEAD = 0.5;
+    /** Draw-and-lay-out passes one call makes before leaving the rest to the next pulse. */
+    private static final int DRAW_ROUNDS = 8;
+
+    /**
+     * Each drawn member's height by its block id, in the file last drawn: the blank standing for it after the
+     * next render is that tall, so an edit's re-render keeps the scroll range, and the position, it had.
+     */
+    private final Map<String, Double> drawnHeights = new HashMap<>();
+    /** The file {@link #drawnHeights} is about. */
+    private Path heightsFile;
+    private boolean drawQueued;
+
+    /** Draws what scrolled, zoomed or resized into view, once per pulse however many changes asked. */
+    private void queueDraw() {
+        if (drawQueued) return;
+        drawQueued = true;
+        Platform.runLater(this::drawInView);
+    }
+
+    /**
+     * Draws the members whose blanks are in the viewport or near it (2026-10-18), keeping the member at its top
+     * where it is while drawn heights replace guessed ones, and again while that brings more blanks near.
+     */
+    private void drawInView() {
+        drawQueued = false;
+        for (int round = 0; round < DRAW_ROUNDS; round++) {
+            List<Node> members = members();
+            List<MemberPlaceholder> near = blanksNear(members);
+            if (near.isEmpty()) return;
+            Node anchor = memberAtTop(members);
+            double anchorOffset = anchor == null ? 0 : contentBounds(anchor).getMinY() - viewTop();
+            near.forEach(MemberPlaceholder::draw);
+            scrollPane.applyCss();
+            scrollPane.layout();
+            double range = zoomPane.getHeight() - scrollPane.getViewportBounds().getHeight();
+            if (anchor != null && anchor.getScene() != null && range > 0) {
+                double top = contentBounds(anchor).getMinY() - anchorOffset;
+                scrollPane.setVvalue(Math.max(0, Math.min(1, top / range)));
+            }
+        }
+        queueDraw();
+    }
+
+    /** The top of the viewport, in the zoom pane's coordinates. */
+    private double viewTop() {
+        double range = Math.max(0, zoomPane.getHeight() - scrollPane.getViewportBounds().getHeight());
+        return scrollPane.getVvalue() * range;
+    }
+
+    /** {@code node}'s bounds in the zoom pane, which is what the scroll range measures: after the zoom. */
+    private Bounds contentBounds(Node node) {
+        return zoomPane.sceneToLocal(node.localToScene(node.getBoundsInLocal()));
+    }
+
+    private List<MemberPlaceholder> blanksNear(List<Node> members) {
+        double viewportH = scrollPane.getViewportBounds().getHeight();
+        double from = viewTop() - viewportH * DRAW_AHEAD;
+        double to = viewTop() + viewportH * (1 + DRAW_AHEAD);
+        List<MemberPlaceholder> near = new ArrayList<>();
+        for (Node member : members) {
+            if (!(member instanceof MemberPlaceholder blank)) continue;
+            Bounds bounds = contentBounds(blank);
+            if (bounds != null && bounds.getMaxY() >= from && bounds.getMinY() <= to) near.add(blank);
+        }
+        return near;
+    }
+
+    /** The innermost member, drawn or not, across the viewport's top; else the first one below it. */
+    private Node memberAtTop(List<Node> members) {
+        double top = viewTop();
+        Node across = null;
+        Node below = null;
+        for (Node member : members) {
+            Bounds bounds = contentBounds(member);
+            if (bounds == null) continue;
+            if (bounds.getMinY() <= top && bounds.getMaxY() > top) across = member;
+            else if (below == null && bounds.getMinY() > top) below = member;
+        }
+        return across != null ? across : below;
+    }
+
+    /** Every blank still in the tree, through the types drawn so far. */
+    private List<MemberPlaceholder> blanks() {
+        List<MemberPlaceholder> blanks = new ArrayList<>();
+        for (Node member : members()) {
+            if (member instanceof MemberPlaceholder blank) blanks.add(blank);
+        }
+        return blanks;
+    }
+
+    /** Each member's node or blank, outer before inner, through the types drawn so far. */
+    private List<Node> members() {
+        List<Node> members = new ArrayList<>();
+        for (Node child : blocksContainer.getChildren()) collectMembers(child, members);
+        return members;
+    }
+
+    /** A type's card holds its members as children; a member drawn carries its blank's key. */
+    private static void collectMembers(Node type, List<Node> into) {
+        if (!(type instanceof Parent parent) || !type.getStyleClass().contains("class-block")) return;
+        for (Node child : parent.getChildrenUnmodifiable()) {
+            if (child instanceof MemberPlaceholder || child.getProperties().get(MemberPlaceholder.KEY) != null) {
+                into.add(child);
+                collectMembers(child, into);
+            }
+        }
+    }
+
+    /** Keeps the height of each member drawn in the tree about to be replaced, by its blank's key. */
+    private void rememberHeights() {
+        for (Node member : members()) {
+            if (member instanceof MemberPlaceholder) continue;
+            Object id = member.getProperties().get(MemberPlaceholder.KEY);
+            double height = member.getLayoutBounds().getHeight();
+            if (id instanceof String key && height > 0) drawnHeights.put(key, height);
+        }
+    }
+
+    /**
+     * Draws the member {@code block} is in, if a blank still stands for it, and lays the canvas out. A block with
+     * a node is not enough: a block an edit reused keeps its node while its member is a blank again.
+     */
+    private void drawMemberOf(CodeBlock block) {
+        if (block == null || block.getUINode() != null && block.getUINode().getScene() != null) return;
+        if (TypeBlock.drawAround(block, codeEditorService.getState().getNodeToBlockMap())) {
+            scrollPane.applyCss();
+            scrollPane.layout();
+        }
     }
 
     /**
@@ -406,6 +583,7 @@ final class EditorCanvas {
         if (block == null) return;
         CodeBlock target = block.getHighlightTarget();
         eventBus.publish(new CoreApplicationEvents.BlockHighlightEvent(target));
+        drawMemberOf(target);
         Node node = target != null ? target.getUINode() : null;
         if (node == null) return;
         Platform.runLater(() -> {
