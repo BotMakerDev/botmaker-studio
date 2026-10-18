@@ -14,9 +14,11 @@ import com.botmaker.studio.ui.render.theme.BlockStylePreference;
 import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.BlockFontPreference;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
+import javafx.animation.AnimationTimer;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
+import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
@@ -43,6 +45,7 @@ import javafx.util.Duration;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -61,7 +64,8 @@ import java.util.function.Supplier;
  *
  * <p>Only the members near the viewport are drawn (2026-10-18): each other member of a type is a
  * {@link MemberPlaceholder}, drawn when a scroll, a resize or a zoom brings it near, or when a reveal, the
- * debugger or a highlight needs its block. See {@link #drawInView}.
+ * debugger or a highlight needs its block. See {@link #drawInView}. Once a render has settled, the blanks left are
+ * drawn a few per pulse, nearest first, so a fast scroll later finds them drawn: see {@link #setIdleFill}.
  *
  * <p>The root of each file the service keeps for a switch back stays in the container, hidden and unmanaged
  * (2026-10-18), and a switch back shows it where it was scrolled to: see {@link #showKept}.
@@ -167,6 +171,11 @@ final class EditorCanvas {
         scrollPane.vvalueProperty().addListener(moved);
         scrollPane.viewportBoundsProperty().addListener(moved);
         zoomPane.zoomProperty().addListener(moved);
+        scrollPane.sceneProperty().addListener((o, was, now) -> {
+            if (was != null) was.removePreLayoutPulseListener(drawIfQueued);
+            if (now != null) now.addPreLayoutPulseListener(drawIfQueued);
+        });
+        idleDelay.setOnFinished(e -> fill.start());
     }
 
     /** Drops what this canvas subscribed to on the project's bus: the next window builds its own. */
@@ -175,6 +184,8 @@ final class EditorCanvas {
         highlightSubscription.close();
         pausedSubscription.close();
         if (followScroll != null) followScroll.stop();
+        stopFill();
+        if (scrollPane.getScene() != null) scrollPane.getScene().removePreLayoutPulseListener(drawIfQueued);
     }
 
     // --- following a run --------------------------------------------------------------------------------------
@@ -406,6 +417,7 @@ final class EditorCanvas {
      * (2026-10-18): it is still a hidden child here, and goes to {@link #showKept} instead.
      */
     void handleBlocksUpdate(CoreApplicationEvents.UIBlocksUpdatedEvent event) {
+        stopFill();
         double vvalue = scrollPane.getVvalue();
         Node returning = event.rootBlock() == null ? null : event.rootBlock().getUINode();
         if (returning != null && returning != shownRoot && returning.getParent() == blocksContainer) {
@@ -444,20 +456,27 @@ final class EditorCanvas {
         // more after the pulse, for anything that only settles there. The pulse alone was a race: a first
         // layout that took longer (a canvas of fitted fields and dropdowns measures each one) left the range
         // collapsed when the restore ran, and CanvasScrollTest saw the canvas jump to the top.
-        settleAt(vvalue);
+        settleAt(vvalue, shownRoot);
     }
 
     /**
      * Lays the canvas out, scrolls it to {@code vvalue}, then draws the members in view before the first frame
      * shows them; what they push down is kept where it is, so the position holds for the member the user was on.
+     *
+     * <p>Only {@code fresh}, a root just built, is styled first, or nothing for a kept root shown again. The scroll
+     * pane's own {@code applyCss} restyled every node under it however clean, each kept root's included: it marks
+     * the node it is called on for an update, and a parent's update reaches each child (2026-10-18). It is called
+     * once, while the pane has no skin and so no viewport to lay out.
      */
-    private void settleAt(double vvalue) {
-        scrollPane.applyCss();
+    private void settleAt(double vvalue, Node fresh) {
+        if (scrollPane.getSkin() == null) scrollPane.applyCss();
+        else if (fresh != null) fresh.applyCss();
         scrollPane.layout();
         scrollPane.setVvalue(vvalue);
         drawInView();
         double settled = scrollPane.getVvalue();
         Platform.runLater(() -> scrollPane.setVvalue(settled));
+        if (idleFill) idleDelay.playFromStart();
     }
 
     /** The file the service has active, which the blocks handed in are drawn from. */
@@ -482,6 +501,7 @@ final class EditorCanvas {
      * CSS pass, which on a big file was most of a switch back.
      */
     private void showKept(Node root, double vvalue) {
+        stopFill();
         hideShownRoot(vvalue);
         root.setVisible(true);
         root.setManaged(true);
@@ -490,7 +510,7 @@ final class EditorCanvas {
         heightsFile = activeFile();
         keepOnlyKeptRoots();
         // A resize or a zoom while it was hidden: what that brought near is drawn here.
-        settleAt(root.getProperties().get(KEPT_VVALUE) instanceof Double at ? at : 0);
+        settleAt(root.getProperties().get(KEPT_VVALUE) instanceof Double at ? at : 0, null);
     }
 
     /** Hides the root on screen, kept in the scene and out of the layout, with where it was scrolled to. */
@@ -528,12 +548,21 @@ final class EditorCanvas {
     /** The file {@link #drawnHeights} is about. */
     private Path heightsFile;
     private boolean drawQueued;
+    /** Runs a queued draw: before a pulse styles and lays out the scene, or from the queue, whichever is first. */
+    private final Runnable drawIfQueued = () -> {
+        if (drawQueued) drawInView();
+    };
 
-    /** Draws what scrolled, zoomed or resized into view, once per pulse however many changes asked. */
+    /**
+     * Draws what scrolled, zoomed or resized into view, once per pulse however many changes asked. Run from the
+     * queue alone, the draw came after the pulse that painted the new position (2026-10-18): a fast scroll showed
+     * blanks in the lower half of nearly every frame, so the scene's pulse runs it first.
+     */
     private void queueDraw() {
         if (drawQueued) return;
         drawQueued = true;
-        Platform.runLater(this::drawInView);
+        Platform.runLater(drawIfQueued);
+        Platform.requestNextPulse();
     }
 
     /**
@@ -543,21 +572,94 @@ final class EditorCanvas {
     private void drawInView() {
         drawQueued = false;
         for (int round = 0; round < DRAW_ROUNDS; round++) {
-            List<Node> members = members();
-            List<MemberPlaceholder> near = blanksNear(members);
+            List<MemberPlaceholder> near = blanksNear(members());
             if (near.isEmpty()) return;
-            Node anchor = memberAtTop(members);
-            double anchorOffset = anchor == null ? 0 : contentBounds(anchor).getMinY() - viewTop();
-            near.forEach(MemberPlaceholder::draw);
-            scrollPane.applyCss();
-            scrollPane.layout();
-            double range = zoomPane.getHeight() - scrollPane.getViewportBounds().getHeight();
-            if (anchor != null && anchor.getScene() != null && range > 0) {
-                double top = contentBounds(anchor).getMinY() - anchorOffset;
-                scrollPane.setVvalue(Math.max(0, Math.min(1, top / range)));
-            }
+            drawKeepingTop(() -> near.forEach(MemberPlaceholder::draw));
         }
         queueDraw();
+    }
+
+    /** Runs {@code draw} and lays the canvas out, the member at the viewport's top kept where it was. */
+    private void drawKeepingTop(Runnable draw) {
+        Node anchor = memberAtTop(members());
+        double anchorOffset = anchor == null ? 0 : contentBounds(anchor).getMinY() - viewTop();
+        draw.run();   // each member drawn is styled alone, by MemberPlaceholder.draw
+        scrollPane.layout();
+        double range = zoomPane.getHeight() - scrollPane.getViewportBounds().getHeight();
+        if (anchor != null && anchor.getScene() != null && range > 0) {
+            double top = contentBounds(anchor).getMinY() - anchorOffset;
+            scrollPane.setVvalue(Math.max(0, Math.min(1, top / range)));
+        }
+    }
+
+    // --- the rest drawn while idle ---------------------------------------------------------------------------
+
+    /** How long after a render the canvas starts drawing the members still blank. */
+    private static final Duration FILL_DELAY = Duration.millis(300);
+    /**
+     * Drawing and styling time one pulse of the fill spends before laying out what it drew. A one-line constant
+     * costs about 3 ms, a method of a few calls about 25 (the benchmark, 2026-10-18), so a pulse draws at least one.
+     */
+    private static final long FILL_BUDGET_NANOS = 6_000_000;
+
+    private final PauseTransition idleDelay = new PauseTransition(FILL_DELAY);
+    /** Draws the blanks a few per pulse, nearest the viewport first, until none is left or a render comes. */
+    private final AnimationTimer fill = new AnimationTimer() {
+        @Override
+        public void handle(long now) {
+            if (!fillStep()) stop();
+        }
+    };
+    private boolean idleFill = true;
+
+    /**
+     * Whether the canvas draws every blank left once a render has settled (2026-10-18), on by default: a fast
+     * scroll then has nothing left to draw. Off for a test that counts what a render drew by itself.
+     */
+    void setIdleFill(boolean on) {
+        idleFill = on;
+        stopFill();
+        if (on) idleDelay.playFromStart();
+    }
+
+    private void stopFill() {
+        idleDelay.stop();
+        fill.stop();
+    }
+
+    /** One pulse of the fill; false once nothing is left to draw, or a member would not draw. */
+    private boolean fillStep() {
+        if (shownRoot == null || scrollPane.getScene() == null) return false;
+        try {
+            return fillSome();
+        } catch (RuntimeException e) {
+            // Left to the paths that need the member: the fill would otherwise throw on it every pulse.
+            System.err.println("[canvas] idle fill stopped: " + e);
+            return false;
+        }
+    }
+
+    private boolean fillSome() {
+        if (drawQueued) drawInView();   // a scroll's own draw first, and the fill's own anchoring is one too
+        List<MemberPlaceholder> left = blanks();
+        if (left.isEmpty()) return false;
+        double top = viewTop();
+        double bottom = top + scrollPane.getViewportBounds().getHeight();
+        Map<MemberPlaceholder, Double> distance = new HashMap<>();
+        for (MemberPlaceholder blank : left) {
+            Bounds bounds = contentBounds(blank);
+            distance.put(blank, bounds == null ? 0 : bounds.getMinY() > bottom ? bounds.getMinY() - bottom
+                    : bounds.getMaxY() < top ? top - bounds.getMaxY() : 0);
+        }
+        left.sort(Comparator.comparingDouble(distance::get));
+        drawKeepingTop(() -> {
+            long start = System.nanoTime();
+            for (MemberPlaceholder blank : left) {
+                blank.draw();
+                if (System.nanoTime() - start > FILL_BUDGET_NANOS) break;
+            }
+        });
+        return true;
     }
 
     /** The top of the viewport, in the zoom pane's coordinates. */
@@ -641,10 +743,7 @@ final class EditorCanvas {
      */
     private void drawMemberOf(CodeBlock block) {
         if (block == null || block.getUINode() != null && block.getUINode().getScene() != null) return;
-        if (TypeBlock.drawAround(block, codeEditorService.getState().getNodeToBlockMap())) {
-            scrollPane.applyCss();
-            scrollPane.layout();
-        }
+        if (TypeBlock.drawAround(block, codeEditorService.getState().getNodeToBlockMap())) scrollPane.layout();
     }
 
     /**

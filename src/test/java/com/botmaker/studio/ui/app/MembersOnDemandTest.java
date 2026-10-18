@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,6 +75,7 @@ class MembersOnDemandTest extends FxHeadlessTest {
         onFx(() -> {
             made[0] = new EditorCanvas(fixture.context(), fixture.bus(),
                     false, "Subject", () -> {}, List::of, () -> {}, List::of, () -> {}, List::of);
+            made[0].setIdleFill(false);   // what a render draws by itself; the fill has its own test
             root.getChildren().setAll(made[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class,
                     made[0]::handleBlocksUpdate, false);
@@ -181,6 +183,33 @@ class MembersOnDemandTest extends FxHeadlessTest {
         assertNull(middle.getUINode());
         onFx(() -> scroll.setVvalue(0.5));
         onFx(() -> assertTrue(inScene(middle.getUINode()), "the constant halfway down is drawn once scrolled to"));
+    }
+
+    @Test
+    void once_idle_the_canvas_draws_every_blank_left_without_moving_the_view() throws Exception {
+        EditorFixture fixture = new EditorFixture(source());
+        EditorCanvas canvas = drawn(fixture);
+        ScrollPane scroll = (ScrollPane) canvas.node().lookup(".code-scroll-pane");
+        CodeBlock middle = constant(fixture, CONSTANTS / 2);
+        onFx(() -> scroll.setVvalue(0.5));
+        double[] before = new double[1];
+        onFx(() -> {
+            before[0] = middle.getUINode().localToScene(0, 0).getY();
+            canvas.setIdleFill(true);
+        });
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        long[] left = {blanks(canvas)};
+        while (left[0] > 0) {
+            assertTrue(System.nanoTime() < deadline, "the fill should have drawn every blank, " + left[0] + " left");
+            Thread.sleep(50);
+            onFx(() -> left[0] = blanks(canvas));
+        }
+        onFx(() -> {
+            assertTrue(inScene(constant(fixture, 0).getUINode()), "the members above the view are drawn");
+            assertTrue(inScene(farStatement(fixture).getUINode()), "and those below");
+            assertEquals(before[0], middle.getUINode().localToScene(0, 0).getY(), 1,
+                    "what the user was looking at stayed where it was");
+        });
     }
 
     @Test

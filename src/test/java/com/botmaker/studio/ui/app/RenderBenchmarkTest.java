@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.blocks.MemberPlaceholder;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
@@ -7,6 +8,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -69,6 +71,12 @@ class RenderBenchmarkTest extends FxHeadlessTest {
     /** {@code [start, duration]} in nanoseconds of every pulse's CSS and layout, as the scene ran them. */
     private final List<long[]> pulses = new CopyOnWriteArrayList<>();
     private long pulseStart;
+    /** While set, each pulse that lays out a blank in its viewport is counted: the frame painted shows it. */
+    private volatile ScrollPane watchedScroll;
+    private volatile int framesWithBlanks;
+    /** While set, the start of the pulse's animations; the longest from there to the end of layout. */
+    private volatile long frameStart;
+    private volatile long longestFrame;
 
     @Override
     public void start(Stage stage) {
@@ -79,7 +87,11 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         // A scene runs its pre-layout listeners, then the CSS pass, then the layout pass, then its post-layout
         // listeners: the gap between the two is what the pulse spent styling and laying out.
         scene.addPreLayoutPulseListener(() -> pulseStart = System.nanoTime());
-        scene.addPostLayoutPulseListener(() -> pulses.add(new long[]{pulseStart, System.nanoTime() - pulseStart}));
+        scene.addPostLayoutPulseListener(() -> {
+            pulses.add(new long[]{pulseStart, System.nanoTime() - pulseStart});
+            if (watchedScroll != null && blankInView(watchedScroll)) framesWithBlanks++;
+            if (frameStart > 0) longestFrame = Math.max(longestFrame, System.nanoTime() - frameStart);
+        });
         stage.setScene(scene);
         stage.show();
     }
@@ -150,6 +162,7 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         onFx(() -> {
             made[0] = new EditorCanvas(context, fixture.bus(), false, "Big", () -> {}, List::of, () -> {},
                     List::of, () -> {}, List::of);
+            made[0].setIdleFill(false);   // until the fill is measured on its own, below
             // Wired as UIManager wires them, so a switch selects a tab the way a click on one does.
             tabs[0] = new CenterTabs(made[0].node());
             tabs[0].setEditor(context::switchToFile, () -> fixture.state.getActiveFile().getPath());
@@ -177,6 +190,16 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         report(renders, 3, made[0], fixture);
 
         ScrollPane scroll = (ScrollPane) made[0].node().lookup(".code-scroll-pane");
+        fastScroll(scroll, "drawing as it goes");
+        onFx(() -> scroll.setVvalue(0), PULSES);
+
+        // Again with the switch back's render filled in while idle: a new one, the fast scroll drew the last.
+        label[0] = "after an edit";
+        onFx(fixture::rerender, PULSES);
+        report(renders, 4, made[0], fixture);
+        fill(made[0], scroll);
+        fastScroll(scroll, "after the fill");
+        onFx(() -> scroll.setVvalue(0), PULSES);
         long scrollStart = System.nanoTime();
         onFx(() -> scroll.setVvalue(1), PULSES);
         System.out.printf("%n[render-benchmark] scrolled to the end: nodes %d, %.1f ms with its pulses%n",
@@ -186,6 +209,80 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         assertTrue(firstNodes < NODE_CEILING,
                 "the first render drew " + firstNodes + " nodes, over the ceiling of " + NODE_CEILING
                         + ": a change added nodes back");
+    }
+
+    /**
+     * Scrolls from the top to the end a viewport per pulse, as a fling or a dragged thumb does, and prints how
+     * long it took and how many of its frames showed a blank in the viewport.
+     */
+    private void fastScroll(ScrollPane scroll, String when) throws Exception {
+        boolean[] atEnd = {false};
+        int frames = 0;
+        long busy = 0;
+        framesWithBlanks = 0;
+        watchedScroll = scroll;
+        try {
+            while (!atEnd[0] && frames < 500) {
+                long[] at = {0};
+                onFx(() -> {
+                    at[0] = System.nanoTime();
+                    double viewportH = scroll.getViewportBounds().getHeight();
+                    double range = scroll.getContent().getLayoutBounds().getHeight() - viewportH;
+                    double next = range <= 0 ? 1 : scroll.getVvalue() + viewportH / range;
+                    scroll.setVvalue(Math.min(1, next));
+                    atEnd[0] = next >= 1;
+                }, 1);
+                frames++;
+                // From the scroll to the end of the frame's layout: the draw it queued runs in between.
+                long[] pulse = pulses.getLast();
+                busy += pulse[0] + pulse[1] - at[0];
+            }
+        } finally {
+            watchedScroll = null;
+        }
+        System.out.printf("%n[render-benchmark] fast scroll to the end, %s: %d frames, %d with a blank in view, "
+                + "%.1f ms of FX work (%.1f per frame)%n", when, frames, framesWithBlanks, ms(busy), ms(busy) / frames);
+        assertEquals(0, framesWithBlanks, "a frame painted a blank in the viewport");
+    }
+
+    /** Turns the idle fill on and prints how long, and how many pulses, it took to draw every blank. */
+    private void fill(EditorCanvas canvas, ScrollPane scroll) throws Exception {
+        // Started before the fill's, so it runs first in each pulse: from it to the end of layout is the frame.
+        AnimationTimer frames = new AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                frameStart = System.nanoTime();
+            }
+        };
+        int firstPulse = pulses.size();
+        long start = System.nanoTime();
+        onFx(() -> {
+            frames.start();
+            canvas.setIdleFill(true);
+        }, 0);
+        long deadline = start + TimeUnit.SECONDS.toNanos(60);
+        int[] left = {Integer.MAX_VALUE};
+        try {
+            while (left[0] > 0) {
+                assertTrue(System.nanoTime() < deadline, "the fill should have drawn every blank, " + left[0] + " left");
+                Thread.sleep(20);
+                onFx(() -> left[0] = scroll.lookupAll("." + MemberPlaceholder.STYLE_CLASS).size(), 0);
+            }
+        } finally {
+            onFx(frames::stop, 0);
+            frameStart = 0;
+        }
+        System.out.printf("%n[render-benchmark] idle fill: every blank drawn in %.1f ms (%d pulses, longest frame "
+                        + "%.1f ms)%n", ms(System.nanoTime() - start), pulses.size() - firstPulse, ms(longestFrame));
+    }
+
+    /** Whether a blank stands anywhere in the scroll pane's viewport. */
+    private static boolean blankInView(ScrollPane scroll) {
+        Node viewport = scroll.lookup(".viewport");
+        var view = viewport.localToScene(viewport.getLayoutBounds());
+        return scroll.lookupAll("." + MemberPlaceholder.STYLE_CLASS).stream()
+                .anyMatch(blank -> blank.isVisible() && blank.getScene() != null
+                        && blank.localToScene(blank.getLayoutBounds()).intersects(view));
     }
 
     /** Prints the last render's numbers and returns its node count; the step must have made the {@code nth}. */

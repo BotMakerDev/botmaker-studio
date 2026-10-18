@@ -77,7 +77,10 @@ public final class MemberPlaceholder extends Region {
         };
     }
 
-    /** Draws the member in this blank's place and returns its node; the blank has left the tree after. */
+    /**
+     * Draws the member in this blank's place, styled, and returns its node; the blank has left the tree after. Only
+     * the new node is styled: {@code applyCss} on the canvas around it restyles every member drawn so far.
+     */
     public Node draw() {
         Node node = drawer.get();
         node.getProperties().put(KEY, key());
@@ -85,6 +88,7 @@ public final class MemberPlaceholder extends Region {
             int at = pane.getChildren().indexOf(this);
             if (at >= 0) pane.getChildren().set(at, node);
         }
+        node.applyCss();
         return node;
     }
 

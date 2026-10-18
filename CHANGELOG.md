@@ -105,6 +105,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A fast scroll lagged and showed members being drawn** (2026-10-18). Three causes, each fixed in
+  `EditorCanvas`:
+  - A scroll's draw ran after the frame that painted the new position, so nearly every frame of a fast scroll
+    showed blanks. It now runs before the pulse lays the scene out.
+  - Every forced layout called `applyCss` on the scroll pane. JavaFX restyles every node under a node
+    `applyCss` is called on, clean or not. So each draw restyled every member drawn so far, and every render
+    restyled the hidden kept roots too. Now only the new member (`MemberPlaceholder.draw`) or the new root is
+    styled. A switch back went from 11 to 2 ms on the benchmark.
+  - Once a render settles (300 ms), the members still blank are drawn about 6 ms per pulse, nearest the
+    viewport first, the member at the top kept in place. A fast scroll after that costs about 8 ms a frame
+    instead of 70.
 - **The file tabs were sometimes hidden** (2026-10-18). Since the canvas moved below the tab strip, a canvas
   or viewer asking for more height than the centre column had squeezed the strip to nothing, because a tab
   pane's minimum height is 0. The strip now keeps its height (`CenterTabs`), and the area below gives way,
