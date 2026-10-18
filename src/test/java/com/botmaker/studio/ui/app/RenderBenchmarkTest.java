@@ -33,13 +33,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * What drawing a big file costs the FX thread, printed so a speed change can be measured headless.
  *
  * <p>A generated file shaped like Firestone's Screens.java (hundreds of constants, then methods of calls) is
- * rendered through the real {@code CodeEditorService} into a real {@link EditorCanvas} styled by
- * {@code blocks.css}, then switched away from and back. Each render prints:
+ * rendered through the real {@code CodeEditorService} into a real {@link EditorCanvas} under real
+ * {@link CenterTabs}, styled by {@code blocks.css}, then switched away from by its tab and back from Project
+ * Files. Each render prints:
  * <ul>
  *   <li>nodes under the canvas, in total and by the block that owns them;</li>
  *   <li>the time to build the tree, and the time of {@code handleBlocksUpdate}'s forced CSS and layout;</li>
  *   <li>the CSS and layout time of each of the next pulses, and how many of them restyle a large part of the
- *   tree again (a pulse costing more than a quarter of the forced pass).</li>
+ *   tree again (a pulse costing more than a tenth of the forced pass).</li>
  * </ul>
  *
  * <p>Only structure is asserted: the node count of the first render stays under {@link #NODE_CEILING}, so a
@@ -139,10 +140,14 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         List<Render> renders = new ArrayList<>();
         String[] label = {"first open"};
         EditorCanvas[] made = new EditorCanvas[1];
+        CenterTabs[] tabs = new CenterTabs[1];
         onFx(() -> {
             made[0] = new EditorCanvas(context, fixture.bus(), false, "Big", () -> {}, List::of, () -> {},
                     List::of, () -> {}, List::of);
-            root.getChildren().setAll(made[0].node());
+            // Wired as UIManager wires them, so a switch selects a tab the way a click on one does.
+            tabs[0] = new CenterTabs(made[0].node());
+            tabs[0].setEditor(context::switchToFile, () -> fixture.state.getActiveFile().getPath());
+            root.getChildren().setAll(tabs[0].node());
             fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, event -> {
                 long start = System.nanoTime();
                 if (event.rootBlock() != null) event.rootBlock().getUINode(context);
@@ -151,16 +156,19 @@ class RenderBenchmarkTest extends FxHeadlessTest {
                 long end = System.nanoTime();
                 renders.add(new Render(label[0], built - start, end - built, end));
             }, false);
+            fixture.bus().subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> tabs[0].follow(), false);
         }, 2);
 
         onFx(fixture::rerender, PULSES);
         int firstNodes = report(renders, 1, made[0], fixture);
 
-        label[0] = "switch away";
-        onFx(() -> context.switchToFile(other.getPath()), PULSES);
+        // Away by a click on a tab, which switches the editor; back from Project Files, which switches the editor
+        // first and leaves the tab to follow.
+        label[0] = "switch away (tab)";
+        onFx(() -> tabs[0].openJava(other.getPath()), PULSES);
         report(renders, 2, made[0], fixture);
 
-        label[0] = "switch back";
+        label[0] = "switch back (Project Files)";
         onFx(() -> context.switchToFile(big), PULSES);
         report(renders, 3, made[0], fixture);
 
@@ -176,7 +184,7 @@ class RenderBenchmarkTest extends FxHeadlessTest {
         Map<String, Integer> byBlock = new TreeMap<>();
         int total = countNodes(canvas.node(), owners(fixture), "(canvas)", byBlock);
         List<long[]> after = pulses.stream().filter(p -> p[0] >= render.endedAt()).limit(PULSES).toList();
-        long heavy = after.stream().filter(p -> p[1] * 4 > render.forcedNanos()).count();
+        long heavy = after.stream().filter(p -> p[1] * 10 > render.forcedNanos()).count();
         StringBuilder out = new StringBuilder("\n[render-benchmark] ").append(render.label()).append('\n')
                 .append(String.format("  nodes %d, build %.1f ms, forced css+layout %.1f ms%n", total,
                         ms(render.buildNanos()), ms(render.forcedNanos())))

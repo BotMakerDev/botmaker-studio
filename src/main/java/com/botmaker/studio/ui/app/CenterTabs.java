@@ -12,11 +12,15 @@ import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,16 +39,28 @@ import java.util.function.Supplier;
  * tab closes, from its × or its menu (Close, Close Others, Close All, Close Tabs to the Left / Right), and with
  * none open the centre says how to open one. The editor keeps its open file meanwhile, so the tools that act
  * on "the open file" still have one; showing it again is a click on it in Project Files.
+ *
+ * <p><b>The canvas never moves (2026-10-18).</b> The tab pane is only the strip: no tab has content, and what
+ * the selected tab shows is drawn in one area below it — the canvas, or the viewer in front of it. A node that
+ * leaves the scene is restyled whole when it comes back, so moving the canvas into each tab cost a second CSS
+ * pass over every block after each render (543 ms on {@code RenderBenchmarkTest}'s file): the canvas is only
+ * hidden while a viewer is in front.
  */
 final class CenterTabs {
 
     private static final String JAVA = "java:";
 
     private final TabPane tabs = new TabPane();
-    private final StackPane root;
+    private final VBox root;
+    /** Below the strip: the canvas, the message for no tab, and the viewer of the selected tab when it has one. */
+    private final StackPane area;
     private final Node canvas;
     /** Every tab, by what it shows — {@code java:<path>} for a Java file, a viewer's path or key otherwise. */
     private final Map<String, Tab> open = new LinkedHashMap<>();
+    /** What each viewer's tab shows; a Java file's tab shows the canvas and has none. */
+    private final Map<Tab, Node> views = new HashMap<>();
+    /** The viewer drawn over the canvas now, or null. */
+    private Node inFront;
     private Consumer<Path> onSwitch = file -> { };
     private Supplier<Path> active = () -> null;
     /** The Java file the canvas last showed in a tab; kept when that tab closes, so an edit does not reopen it. */
@@ -54,9 +70,8 @@ final class CenterTabs {
     /** Tabs restored and waiting for the editor's first file, or null. */
     private Restored pending;
 
-    /** Whether a file has been drawn in a tab yet; the empty message waits for it. */
+    /** Whether a file has been drawn in a tab yet; until then the canvas shows its loading message, tab or none. */
     private final BooleanProperty started = new SimpleBooleanProperty(false);
-    private final StackPane beforeFirstFile;
 
     /** What a tab shows from disk: a file, and whether the canvas draws it. */
     private record Shows(Path file, boolean java) { }
@@ -66,18 +81,22 @@ final class CenterTabs {
 
     CenterTabs(Node canvas) {
         this.canvas = canvas;
-        this.beforeFirstFile = new StackPane(canvas);
         tabs.getStyleClass().add("center-tabs");
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
+        tabs.setMaxHeight(Region.USE_PREF_SIZE);
         tabs.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
+            // Drawn even while tabs close or are restored at once; only the switch waits for the one left in front.
+            show(now);
             if (!quiet) selected(now);
         });
         Label none = new Label("No file open. Click one in Project Files to open it here.");
         none.getStyleClass().add("center-tabs-empty");
         none.visibleProperty().bind(Bindings.isEmpty(tabs.getTabs()).and(started));
         none.setMouseTransparent(true);
-        // Until the first file is drawn the canvas shows on its own, with its loading message, over the tabs.
-        root = new StackPane(tabs, none, beforeFirstFile);
+        area = new StackPane(canvas, none);
+        VBox.setVgrow(area, Priority.ALWAYS);
+        root = new VBox(tabs, area);
+        show(null);
     }
 
     Node node() {
@@ -120,7 +139,7 @@ final class CenterTabs {
         if (file != null && !normal(file).equals(shown)) openJava(file);
     }
 
-    /** {@code file}'s tab, made when there is none, selected and holding the canvas. */
+    /** {@code file}'s tab, made when there is none, selected, and the canvas shown. */
     void openJava(Path file) {
         Path at = normal(file);
         Tab tab = open.get(JAVA + at);
@@ -135,10 +154,10 @@ final class CenterTabs {
         String name = absolute.getFileName() == null ? absolute.toString() : absolute.getFileName().toString();
         Tab tab = open.get(absolute.toString());
         // Drawn afresh, but for a file being edited there: its unsaved text is the user's.
-        if (tab != null && !ResourceViewers.editing(tab.getContent())) tab.setContent(ResourceViewers.view(absolute));
-        else tab = add(absolute.toString(), name, absolute.toString(), new Shows(absolute, false),
+        if (tab == null) tab = add(absolute.toString(), name, absolute.toString(), new Shows(absolute, false),
                 ResourceViewers.view(absolute));
-        tabs.getSelectionModel().select(tab);
+        else if (!ResourceViewers.editing(views.get(tab))) views.put(tab, ResourceViewers.view(absolute));
+        bringForward(tab);
     }
 
     /**
@@ -148,9 +167,9 @@ final class CenterTabs {
      */
     void open(String key, String title, String where, Supplier<Node> content) {
         Tab tab = open.get(key);
-        if (tab != null) tab.setContent(content.get());
+        if (tab != null) views.put(tab, content.get());
         else tab = add(key, title, where, null, content.get());
-        tabs.getSelectionModel().select(tab);
+        bringForward(tab);
     }
 
     /**
@@ -212,13 +231,14 @@ final class CenterTabs {
 
     // ------------------------------------------------------------------
 
-    private Tab add(String key, String title, String where, Shows shows, Node content) {
-        Tab tab = new Tab(title, content);
+    private Tab add(String key, String title, String where, Shows shows, Node view) {
+        Tab tab = new Tab(title);
         tab.setTooltip(new Tooltip(where));
         tab.setUserData(shows);
+        if (view != null) views.put(tab, view);
         tab.setOnClosed(e -> {
             open.remove(key, tab);
-            if (tab.getContent() == canvas) tab.setContent(null);
+            views.remove(tab);
         });
         tab.setContextMenu(menu(tab));
         open.put(key, tab);
@@ -226,26 +246,44 @@ final class CenterTabs {
         return tab;
     }
 
-    /** A Java tab came forward: the canvas moves into it, and the editor to its file. */
+    /** {@code tab} selected, and drawn again when it already was: its viewer may be a new one. */
+    private void bringForward(Tab tab) {
+        tabs.getSelectionModel().select(tab);
+        show(tab);
+    }
+
+    /**
+     * Draws what {@code tab} shows below the strip: its viewer over the canvas, or the canvas for a Java file's.
+     * With no tab, the canvas shows only until the first file is drawn, with its loading message.
+     */
+    private void show(Tab tab) {
+        Node view = tab == null ? null : views.get(tab);
+        if (view != inFront) {
+            if (inFront != null) area.getChildren().remove(inFront);
+            if (view != null) area.getChildren().add(view);
+            inFront = view;
+        }
+        boolean canvasShows = view == null && (javaFile(tab) != null || tab == null && !started.get());
+        // Hidden and out of layout, but never out of the scene: what leaves the scene is restyled whole on return.
+        canvas.setVisible(canvasShows);
+        canvas.setManaged(canvasShows);
+    }
+
+    /** A Java tab came forward: the editor switches to its file. */
     private void selected(Tab tab) {
         Path file = javaFile(tab);
         if (file == null) return;
         start();
-        for (Tab other : tabs.getTabs()) {
-            if (other != tab && other.getContent() == canvas) other.setContent(null);
-        }
-        if (tab.getContent() != canvas) tab.setContent(canvas);
         shown = file;
         Path now = active.get();
         if (now == null || !normal(now).equals(file)) onSwitch.accept(file);
     }
 
-    /** The first file is drawn: the canvas leaves its loading place for the tabs. */
+    /** The first file is drawn: from now on the canvas shows only for a Java file's tab. */
     private void start() {
         if (started.get()) return;
-        beforeFirstFile.getChildren().clear();
-        root.getChildren().remove(beforeFirstFile);
         started.set(true);
+        show(tabs.getSelectionModel().getSelectedItem());
     }
 
     private ContextMenu menu(Tab tab) {

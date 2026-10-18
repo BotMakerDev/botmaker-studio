@@ -105,6 +105,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Opening a file styled every block twice** (2026-10-18). The canvas was moved into the selected tab after
+  each render, and a node that leaves the scene is restyled whole when it comes back. That happened on a
+  project's first file and on every file opened from Project Files, a usage or the assistant. The tab strip
+  now only switches files, and the canvas stays in one place below it, hidden while a viewer is in front.
+  On `RenderBenchmarkTest`'s file of 300 constants, the extra pass drops from 544 ms to 60 ms on first open
+  and from 181 ms to 48 ms from Project Files.
 - **Switching back to a tab rebuilt every block of its file** (profiled 2026-10-18). The last eight files
   switched away from now keep their blocks, and a switch back reuses each block whose text is unchanged, as
   an edit does. Nothing is kept after a plugin rebind, a change of editor for a type, or a write to any

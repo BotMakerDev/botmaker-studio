@@ -2,27 +2,30 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * One tab per open Java file with the canvas in the selected one, a tab per thing opened to be read, every tab
- * closable from its menu, and none at all allowed.
+ * One tab per open Java file with the canvas shown for the selected one and never moved, a tab per thing opened
+ * to be read, every tab closable from its menu, and none at all allowed.
  */
 class CenterTabsTest extends FxHeadlessTest {
 
@@ -37,19 +40,24 @@ class CenterTabsTest extends FxHeadlessTest {
         AtomicReference<Path> active = new AtomicReference<>(a);
         interact(() -> {
             Label canvas = new Label("canvas");
+            canvas.setVisible(false);   // so that the tabs, not the default, are what shows it
             CenterTabs tabs = new CenterTabs(canvas);
             tabs.setEditor(active::set, active::get);
-            TabPane pane = (TabPane) ((StackPane) tabs.node()).getChildren().getFirst();
+            TabPane pane = (TabPane) ((VBox) tabs.node()).getChildren().getFirst();
+            Parent home = canvas.getParent();
+            AtomicInteger moves = new AtomicInteger();
+            canvas.parentProperty().addListener((o, was, now) -> moves.incrementAndGet());
+            assertTrue(canvas.isVisible(), "before the first file the canvas shows its loading message");
 
             tabs.follow();
             assertEquals(List.of("A.java"), tabs.titles(), "the first file drawn gets its tab");
-            assertSame(canvas, selectedContent(pane));
+            assertTrue(canvas.isVisible() && canvas.isManaged());
 
             active.set(b);   // switched to from Project Files, a usage or the assistant
             tabs.follow();
             assertEquals(List.of("A.java", "B.java"), tabs.titles());
-            assertSame(canvas, selectedContent(pane), "the canvas moved into B's tab");
-            assertNull(pane.getTabs().getFirst().getContent());
+            assertEquals("B.java", pane.getSelectionModel().getSelectedItem().getText());
+            assertTrue(canvas.isVisible(), "B's tab shows the canvas");
 
             pane.getSelectionModel().select(pane.getTabs().getFirst());
             assertEquals(a, active.get(), "selecting a tab switches the editor to its file");
@@ -57,16 +65,28 @@ class CenterTabsTest extends FxHeadlessTest {
             tabs.openResource(json);
             tabs.openResource(json);
             assertEquals(List.of("A.java", "B.java", "targets.json"), tabs.titles(), "the same file is one tab");
+            assertFalse(canvas.isVisible() || canvas.isManaged(), "a viewer in front hides the canvas, out of layout");
+            Node viewer = viewerIn(home, canvas);
+            assertTrue(viewer != null && viewer.isVisible(), "and is drawn over it");
             tabs.follow();
             assertEquals("targets.json", pane.getSelectionModel().getSelectedItem().getText(),
                     "an edit to the open file does not take the front from a viewer");
+
+            pane.getSelectionModel().select(pane.getTabs().get(1));
+            assertTrue(canvas.isVisible(), "a Java tab in front again shows the canvas");
+            assertNull(viewerIn(home, canvas), "with the viewer gone from over it");
+            assertTrue(pane.getTabs().stream().allMatch(tab -> tab.getContent() == null),
+                    "the tab pane is only the strip");
 
             fire(pane.getTabs().getFirst(), "Close Tabs to the Right");
             assertEquals(List.of("A.java"), tabs.titles());
 
             fire(pane.getTabs().getFirst(), "Close All");
             assertEquals(List.of(), tabs.titles(), "no tab at all is allowed");
-            assertTrue(((StackPane) tabs.node()).getChildren().get(1).isVisible(), "and says how to open one");
+            assertTrue(home.lookup(".center-tabs-empty").isVisible(), "and says how to open one");
+            assertFalse(canvas.isVisible());
+            assertSame(home, canvas.getParent());
+            assertEquals(0, moves.get(), "the canvas never left its place, so it is never restyled whole");
             tabs.follow();
             assertEquals(List.of(), tabs.titles(), "an edit to the open file does not reopen its tab");
 
@@ -154,8 +174,11 @@ class CenterTabsTest extends FxHeadlessTest {
         });
     }
 
-    private static Node selectedContent(TabPane pane) {
-        return pane.getSelectionModel().getSelectedItem().getContent();
+    /** The viewer drawn beside the canvas in its area, or null. */
+    private static Node viewerIn(Parent area, Node canvas) {
+        return area.getChildrenUnmodifiable().stream()
+                .filter(node -> node != canvas && !node.getStyleClass().contains("center-tabs-empty"))
+                .findFirst().orElse(null);
     }
 
     private static void fire(Tab tab, String item) {

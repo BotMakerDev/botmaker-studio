@@ -478,8 +478,8 @@ public class UIManager implements ProjectWindow {
 
         // Its tab, beside which a picture, a data file or a library class opens to be read. Landing on a block
         // (an error row, a Structure row, a paused debugger) brings the canvas back in front of them.
-        // Since 2026-10-13 one tab per open Java file, the canvas drawn into the selected one: selecting a tab
-        // switches the file, and a switch made anywhere else brings its tab forward.
+        // Since 2026-10-13 one tab per open Java file, the canvas shown below the strip for the selected one:
+        // selecting a tab switches the file, and a switch made anywhere else brings its tab forward.
         centerTabs = new CenterTabs(editorCanvas.node());
         centerTabs.setEditor(codeEditorService::switchToFile,
                 () -> state.getActiveFile() == null ? null : state.getActiveFile().getPath());
