@@ -298,4 +298,61 @@ class BlockReuseRenderTest extends FxHeadlessTest {
         assertNotSame(beforeWrite, statement(fixture, 1).getUINode(),
                 "a write to another file keeps nothing on the way back");
     }
+
+    @Test
+    void a_file_switched_back_to_unchanged_is_shown_unparsed_and_unrendered() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+
+        CodeBlock rootBefore = context.getRootBlock().orElseThrow();
+        var parseBefore = fixture.state.getCompilationUnit().orElseThrow();
+        onFx(() -> context.switchToFile(other.getPath()));
+        onFx(() -> context.switchToFile(subject));
+
+        assertSame(rootBefore, context.getRootBlock().orElseThrow(), "the root it had, so its node too");
+        assertSame(parseBefore, fixture.state.getCompilationUnit().orElseThrow(),
+                "and the parse it had: nothing reparsed");
+        assertSame(rootBefore, fixture.state.getNodeToBlockMap().get(rootBefore.getAstNode()),
+                "the registry is that render's again");
+    }
+
+    @Test
+    void a_file_switched_back_to_after_its_own_or_another_files_write_renders_again() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+
+        CodeBlock rootBefore = context.getRootBlock().orElseThrow();
+        onFx(() -> context.switchToFile(other.getPath()));
+        other.setContent(other.getContent().replace("int c = 3;", "int c = 4;"));
+        onFx(() -> context.switchToFile(subject));
+        assertNotSame(rootBefore, context.getRootBlock().orElseThrow(), "another file written: rendered again");
+
+        CodeBlock rootThen = context.getRootBlock().orElseThrow();
+        onFx(() -> context.switchToFile(other.getPath()));
+        fixture.state.getFile(subject).orElseThrow().setContent(source("int a = 1;", "int b = 7;"));
+        onFx(() -> context.switchToFile(subject));
+        assertNotSame(rootThen, context.getRootBlock().orElseThrow(), "its own text changed: rendered again");
+        assertTrue(fixture.state.getCurrentCode().contains("int b = 7;"));
+    }
+
+    @Test
+    void a_breakpoint_set_while_away_shows_on_return() throws Exception {
+        EditorFixture fixture = new EditorFixture(source("int a = 1;", "int b = 2;"));
+        CodeEditorService context = renderInto(fixture);
+        Path subject = fixture.state.getActiveFile().getPath();
+        ProjectFile other = otherFile(fixture);
+
+        CodeBlock second = statement(fixture, 1);
+        assertFalse(second.isBreakpoint());
+        onFx(() -> context.switchToFile(other.getPath()));
+        fixture.state.addBreakpoint(subject, second.getId());   // as the Breakpoints list does
+        onFx(() -> context.switchToFile(subject));
+
+        assertSame(second, statement(fixture, 1), "shown kept");
+        assertTrue(second.isBreakpoint(), "with the breakpoint set while it was away");
+    }
 }

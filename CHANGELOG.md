@@ -105,6 +105,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Switching back to a file parsed, drew and styled it again** (2026-10-18). A file left unchanged, with no
+  other file written meanwhile, now shows the canvas it had, scrolled where it was. Its root stays in the
+  scene, hidden, for each of the 8 files the editor keeps for a switch back, so nothing is styled again either.
+  A breakpoint set while it was away still shows. On `RenderBenchmarkTest`'s file, switching back takes about
+  11 ms, not 95 ms. A rebind, or a change to the file or to any other file, renders it as before.
 - **Opening a big file drew every member, on screen or not** (2026-10-18). The canvas now draws only the
   fields, methods and nested types near what it shows. Each other one is a blank of about its height, drawn
   when a scroll, a resize or a zoom brings it near, or when a find, an error, a Structure row or the debugger

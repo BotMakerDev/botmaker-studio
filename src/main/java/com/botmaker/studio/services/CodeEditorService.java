@@ -84,7 +84,8 @@ public class CodeEditorService {
 
     /**
      * The blocks of each file switched away from, by its normalised path, offered back when it is switched to
-     * again ({@link #reuseOnReturn}). Rebuilding a file's every block on each tab switch was the slowest thing
+     * again: shown whole when nothing changed ({@link #showKept}), else offered to the render as reuse
+     * ({@link #reuseOf}). Rebuilding a file's every block on each tab switch was the slowest thing
      * a profile of ordinary editing found after the scope walk. Synchronized: a refresh clears it on the
      * publishing thread, so a switch in the same FX pulse cannot take a render the refresh threw away.
      */
@@ -112,7 +113,10 @@ public class CodeEditorService {
      * on a switch back what lies outside may be another file: any other file written since keeps nothing.
      */
     private record KeptRender(Map<ASTNode, CodeBlock> blocks, String source, boolean readOnly,
-                              List<String> otherFiles) { }
+                              List<String> otherFiles, AbstractCodeBlock root, List<String> problems) { }
+
+    /** What the last render could not draw, said again when its file is shown kept ({@link #showKept}). */
+    private List<String> lastRenderProblems = List.of();
 
     public CodeEditorService(
             ProjectConfig config,
@@ -593,14 +597,21 @@ public class CodeEditorService {
         state.setDocUri(file.getUri());
 
         String content = file.getContent();
-        BlockReuse reuse = reuseOnReturn(at);
-        render(adopt(content), content, false, reuse);
+        KeptRender kept = keptRenders.remove(at);
+        boolean othersUnchanged = kept != null && kept.otherFiles().equals(otherFilesText(at));
+        LockResolver resolver = LockResolver.forActiveFile(config, state);
+        if (othersUnchanged && kept.root() != null && kept.source().equals(content)
+                && kept.readOnly() == resolver.suppressesInteraction()) {
+            showKept(kept, at, resolver);
+        } else {
+            render(adopt(content), content, false, othersUnchanged ? reuseOf(kept) : BlockReuse.NONE);
+        }
 
         // Only after the file is parsed and active: a case with no trailing break gets one, so the break the
         // switch block draws as fixed chrome is always really there, and a bare arrow-rule body gets braces so
         // the branch is somewhere a block can actually be dropped. Skipped for files the user can't edit
         // anyway (generated scaffolding), and a no-op when both are already true.
-        if (!LockResolver.forActiveFile(config, state).suppressesInteraction()) {
+        if (!resolver.suppressesInteraction()) {
             codeEditor.normalizeSwitches();
         }
     }
@@ -671,18 +682,45 @@ public class CodeEditorService {
         String source = lastRenderedSource;
         if (key == null || blocks == null || blocks.isEmpty() || source == null) return;
         if (key.equals(switchingTo)) return;
-        keptRenders.put(key, new KeptRender(blocks, source, lastRenderWasReadOnly, otherFilesText(key)));
+        keptRenders.put(key, new KeptRender(blocks, source, lastRenderWasReadOnly, otherFilesText(key),
+                lastRootBlock, lastRenderProblems));
     }
 
     /**
-     * The reuse a switch to {@code file} is offered: its own last render, taken once, when no other file has
-     * been written since; {@link BlockReuse#NONE} otherwise. The file's own text may have changed meanwhile —
-     * {@link BlockReuse} keeps only what is unchanged, as it does for an edit.
+     * The reuse a switch back to a file whose own text changed meanwhile is offered: its last render, which
+     * {@link BlockReuse} keeps only what is unchanged of, as it does for an edit.
      */
-    private BlockReuse reuseOnReturn(Path file) {
-        KeptRender kept = keptRenders.remove(file);
-        if (kept == null || !kept.otherFiles().equals(otherFilesText(file))) return BlockReuse.NONE;
+    private static BlockReuse reuseOf(KeptRender kept) {
         return BlockReuse.of(kept.blocks(), kept.source(), kept.readOnly(), block -> true);
+    }
+
+    /**
+     * Shows {@code file}'s last render again, unparsed and unrendered (2026-10-18): its text, every other
+     * file's and its lock verdict are what they were then, so a render would build the same blocks. The
+     * canvas keeps the root's node in its scene meanwhile ({@code EditorCanvas}), so it is not styled again
+     * either. Sets what {@link #render} sets: the parse, the registry, the verdict, the breakpoints, the
+     * diagnostics' map and the status line.
+     */
+    private void showKept(KeptRender kept, Path file, LockResolver resolver) {
+        state.setCurrentCode(kept.source());
+        state.setCompilationUnit((CompilationUnit) kept.root().getAstNode().getRoot());
+        state.setNodeToBlockMap(kept.blocks());
+        if (diagnosticsManager != null) diagnosticsManager.updateSource(state.getNodeToBlockMap(), kept.source());
+        lastRenderWasReadOnly = kept.readOnly();
+        lastRenderedFile = file;
+        lastRenderedSource = kept.source();
+        lastRootBlock = kept.root();
+        lastRenderProblems = kept.problems();
+        restoreBreakpoints();
+        eventBus.publish(new CoreApplicationEvents.UIBlocksUpdatedEvent(kept.root()));
+        announceLoaded(resolver, kept.problems());
+    }
+
+    /** The roots of the renders kept for a switch back, whose nodes the canvas keeps hidden meanwhile. */
+    public List<CodeBlock> keptRoots() {
+        synchronized (keptRenders) {
+            return keptRenders.values().stream().<CodeBlock>map(KeptRender::root).filter(Objects::nonNull).toList();
+        }
     }
 
     /** The text of every open file but {@code file}, in the state's order. */
@@ -776,30 +814,39 @@ public class CodeEditorService {
         lastRenderedSource = javaCode;
         AbstractCodeBlock rootBlock = result.root();
         this.lastRootBlock = rootBlock;
+        lastRenderProblems = result.problems();
+        restoreBreakpoints();
 
-        // Put the breakpoints back onto the freshly built blocks. This is the one reader of a block id that
-        // crosses a re-parse, and the reason BlockId is a structural path rather than a character offset:
-        // with offsets, every block below an edit answered to a new id here and silently lost its mark.
-        // Set both ways, which it did not have to be until blocks started surviving (2026-09-15). A freshly
-        // built block defaults to no breakpoint, so setting only the true case was total; a block that
-        // survived the re-parse carries the mark it had, and a breakpoint the user removed would come back
-        // on the next unrelated edit.
+        state.setCompilationUnit(result.cu());
+        eventBus.publish(new CoreApplicationEvents.UIBlocksUpdatedEvent(rootBlock));
+        announceLoaded(resolver, result.problems());
+    }
+
+    /**
+     * Puts the breakpoints back onto the blocks on screen. This is the one reader of a block id that crosses a
+     * re-parse, and the reason BlockId is a structural path rather than a character offset: with offsets, every
+     * block below an edit answered to a new id here and silently lost its mark. Set both ways, which it did not
+     * have to be until blocks started surviving (2026-09-15). A freshly built block defaults to no breakpoint,
+     * so setting only the true case was total; a block that survived the re-parse carries the mark it had, and
+     * a breakpoint the user removed would come back on the next unrelated edit.
+     */
+    private void restoreBreakpoints() {
         Path breakpointFile = activeFilePath();
         for (CodeBlock block : state.getNodeToBlockMap().values()) {
             block.setBreakpoint(state.hasBreakpoint(breakpointFile, block.getId()));
         }
+    }
 
-        state.setCompilationUnit(result.cu());
-        eventBus.publish(new CoreApplicationEvents.UIBlocksUpdatedEvent(rootBlock));
-
+    /** The status line after a file is drawn: its name, its lock badge and what could not be drawn. */
+    private void announceLoaded(LockResolver resolver, List<String> problems) {
         if (state.getActiveFile() != null) {
             String fileName = state.getActiveFile().getPath().getFileName().toString();
             String badge = resolver.badge();
             if (badge != null) fileName += " [" + badge + "]";
             // A member left out of the canvas is said, not silently missing: the file on disk still has it,
             // and a canvas that looks complete while it is not is how an edit lands next to a hole.
-            String loaded = result.problems().isEmpty() ? "Loaded: " + fileName
-                    : "Loaded: " + fileName + " — " + String.join("; ", result.problems());
+            String loaded = problems.isEmpty() ? "Loaded: " + fileName
+                    : "Loaded: " + fileName + " — " + String.join("; ", problems);
             eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(loaded));
         }
     }

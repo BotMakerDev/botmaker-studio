@@ -44,9 +44,11 @@ import javafx.util.Duration;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -60,6 +62,9 @@ import java.util.function.Supplier;
  * <p>Only the members near the viewport are drawn (2026-10-18): each other member of a type is a
  * {@link MemberPlaceholder}, drawn when a scroll, a resize or a zoom brings it near, or when a reveal, the
  * debugger or a highlight needs its block. See {@link #drawInView}.
+ *
+ * <p>The root of each file the service keeps for a switch back stays in the container, hidden and unmanaged
+ * (2026-10-18), and a switch back shows it where it was scrolled to: see {@link #showKept}.
  */
 final class EditorCanvas {
 
@@ -380,6 +385,7 @@ final class EditorCanvas {
         centred.setAlignment(Pos.CENTER);
         centred.setPadding(new Insets(60, 0, 0, 0));
         blocksContainer.getChildren().setAll(centred);
+        shownRoot = null;
     }
 
     /**
@@ -392,27 +398,43 @@ final class EditorCanvas {
      *
      * <p><b>Block reuse did not make this redundant</b> (2026-09-15), which the plan for it expected. Member
      * blocks are deliberately never reused — {@code BlockConverter.parseRoot} builds them fresh — so the node
-     * swapped in here is always new and always unlaid-out, whatever survives underneath it. Deleting the two
-     * lines was tried and measured: the canvas jumps to the top. {@code CanvasScrollTest} holds both that and
-     * its cause. See {@code docs/refactor/30-block-reuse.md} §10.
+     * swapped in after a render is always new and always unlaid-out, whatever survives underneath it. Deleting
+     * the two lines was tried and measured: the canvas jumps to the top. {@code CanvasScrollTest} holds both
+     * that and its cause. See {@code docs/refactor/30-block-reuse.md} §10.
+     *
+     * <p>The one root handed in that is not new is a kept one, which a switch back shows unrendered
+     * (2026-10-18): it is still a hidden child here, and goes to {@link #showKept} instead.
      */
     void handleBlocksUpdate(CoreApplicationEvents.UIBlocksUpdatedEvent event) {
         double vvalue = scrollPane.getVvalue();
-        Path file = codeEditorService.getState().getActiveFile() == null ? null
-                : codeEditorService.getState().getActiveFile().getPath();
+        Node returning = event.rootBlock() == null ? null : event.rootBlock().getUINode();
+        if (returning != null && returning != shownRoot && returning.getParent() == blocksContainer) {
+            showKept(returning, vvalue);
+            return;
+        }
+        Path file = activeFile();
         if (Objects.equals(file, heightsFile)) {
             rememberHeights();
         } else {
             drawnHeights.clear();
             heightsFile = file;
         }
-        blocksContainer.getChildren().clear();
+        hideShownRoot(vvalue);
+        shownRoot = null;
+        keepOnlyKeptRoots();
         if (event.rootBlock() != null) {
             if (event.rootBlock() instanceof TypeBlock type) type.drawMembersOnDemand();
             Node rootNode = event.rootBlock().getUINode(codeEditorService);
-            rootNode.addEventHandler(BlockEvent.BreakpointToggleEvent.TOGGLE_BREAKPOINT, e ->
-                    eventBus.publish(new CoreApplicationEvents.BreakpointToggledEvent(e.getBlock(), e.isEnabled())));
+            // Once per node: a kept root put back after the loading message dropped it already has it.
+            if (rootNode.getProperties().putIfAbsent(BREAKPOINTS_HANDLED, true) == null) {
+                rootNode.addEventHandler(BlockEvent.BreakpointToggleEvent.TOGGLE_BREAKPOINT, e -> eventBus.publish(
+                        new CoreApplicationEvents.BreakpointToggledEvent(e.getBlock(), e.isEnabled())));
+            }
+            // Visible again in case it was hidden kept and then dropped from the container (the loading message).
+            rootNode.setVisible(true);
+            rootNode.setManaged(true);
             blocksContainer.getChildren().add(rootNode);
+            shownRoot = rootNode;
             for (MemberPlaceholder blank : blanks()) {
                 Double known = drawnHeights.get(blank.key());
                 if (known != null) blank.setEstimate(known);
@@ -422,14 +444,73 @@ final class EditorCanvas {
         // more after the pulse, for anything that only settles there. The pulse alone was a race: a first
         // layout that took longer (a canvas of fitted fields and dropdowns measures each one) left the range
         // collapsed when the restore ran, and CanvasScrollTest saw the canvas jump to the top.
+        settleAt(vvalue);
+    }
+
+    /**
+     * Lays the canvas out, scrolls it to {@code vvalue}, then draws the members in view before the first frame
+     * shows them; what they push down is kept where it is, so the position holds for the member the user was on.
+     */
+    private void settleAt(double vvalue) {
         scrollPane.applyCss();
         scrollPane.layout();
         scrollPane.setVvalue(vvalue);
-        // Then the members in view are drawn before the first frame shows them; what they push down is kept
-        // where it is, so the restore above holds for the member the user was on.
         drawInView();
         double settled = scrollPane.getVvalue();
         Platform.runLater(() -> scrollPane.setVvalue(settled));
+    }
+
+    /** The file the service has active, which the blocks handed in are drawn from. */
+    private Path activeFile() {
+        return codeEditorService.getState().getActiveFile() == null ? null
+                : codeEditorService.getState().getActiveFile().getPath();
+    }
+
+    // --- roots kept for a switch back ------------------------------------------------------------------------
+
+    /** Where a hidden root was scrolled to, on its node: a switch back puts the canvas there again. */
+    private static final String KEPT_VVALUE = "botmaker.canvas.keptVvalue";
+    /** Set on a root once it publishes its breakpoint toggles, so a root put back does not publish twice. */
+    private static final String BREAKPOINTS_HANDLED = "botmaker.canvas.breakpointsHandled";
+
+    /** The root node on screen; the container's other children are kept roots, hidden. */
+    private Node shownRoot;
+
+    /**
+     * Shows a root kept hidden since its file was switched away from (2026-10-18), where it was scrolled to.
+     * It stayed in the scene, so it is neither built nor styled again: a file put back in its parent paid a whole
+     * CSS pass, which on a big file was most of a switch back.
+     */
+    private void showKept(Node root, double vvalue) {
+        hideShownRoot(vvalue);
+        root.setVisible(true);
+        root.setManaged(true);
+        shownRoot = root;
+        drawnHeights.clear();
+        heightsFile = activeFile();
+        keepOnlyKeptRoots();
+        // A resize or a zoom while it was hidden: what that brought near is drawn here.
+        settleAt(root.getProperties().get(KEPT_VVALUE) instanceof Double at ? at : 0);
+    }
+
+    /** Hides the root on screen, kept in the scene and out of the layout, with where it was scrolled to. */
+    private void hideShownRoot(double vvalue) {
+        if (shownRoot == null) return;
+        shownRoot.getProperties().put(KEPT_VVALUE, vvalue);
+        shownRoot.setVisible(false);
+        shownRoot.setManaged(false);
+    }
+
+    /**
+     * Drops every child but the root on screen and the roots the service keeps for a switch back: a render it
+     * dropped (the oldest past its limit, a rebind, a file switched back to under changed text) loses its node.
+     */
+    private void keepOnlyKeptRoots() {
+        Set<Node> kept = new HashSet<>();
+        for (CodeBlock root : codeEditorService.keptRoots()) {
+            if (root.getUINode() != null) kept.add(root.getUINode());
+        }
+        blocksContainer.getChildren().removeIf(child -> child != shownRoot && !kept.contains(child));
     }
 
     // --- members drawn on demand -----------------------------------------------------------------------------
@@ -529,7 +610,7 @@ final class EditorCanvas {
     /** Each member's node or blank, outer before inner, through the types drawn so far. */
     private List<Node> members() {
         List<Node> members = new ArrayList<>();
-        for (Node child : blocksContainer.getChildren()) collectMembers(child, members);
+        if (shownRoot != null) collectMembers(shownRoot, members);
         return members;
     }
 
