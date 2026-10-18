@@ -221,9 +221,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
-- **Minor dependency upgrades** (2026-10-18): pty4j 0.14.0 (kotlin pins 2.4.20), maven-model and
-  resolver-provider 3.9.16 with resolver 1.9.27 (3.10 brings resolver 2), MCP SDK 2.1.0, Jetty 12.1.14, jackson-databind 2.22.4,
-  slf4j-simple 2.0.20; plugins shade 3.6.2, surefire 3.6.0, clean 3.5.0, resources 3.5.0, antrun 3.2.0, jpackage
+- **Major dependency upgrades** (2026-10-18): ClassGraph 6.0.0, JDT core 3.47.0 (Java 25 sources), JGit 7.8,
+  lsp4j 1.0.0, maven-model and resolver-provider 3.10.0 with resolver 2.0.24 (`maven-resolver-supplier-mvn3`,
+  which brings the basic connector and the file and Apache HTTP transports), JUnit 6.1.3. ClassGraph 6 has no JSON
+  serialization, so the type index keeps its own records (`index/LibraryType`): what Studio reads off a class, its
+  methods, constructors and fields, cached as JSON (`<jar>.v3.json`). An old `v2` cache is swept and its jar
+  scanned once again. A cache loads without a ClassGraph thread pool, and no scan stays open for a session.
+- **Minor dependency upgrades** (2026-10-18): pty4j 0.14.0 (kotlin pins 2.4.20), MCP SDK 2.1.0, Jetty 12.1.14,
+  jackson-databind 2.22.4, slf4j-simple 2.0.20; plugins shade 3.6.2, surefire 3.6.0, clean 3.5.0, resources 3.5.0, antrun 3.2.0, jpackage
   1.8.0. commonmark stays at the SDK's 0.21.0 and JavaFX at 25.0.4, both pins shared with upstreams.
 - **A plugin upgrade or removal carries the bot over with its `@Migrate` rules** (2026-10-16). What a move
   breaks is javac's answer over the bot against both classpaths, listed per element with its uses and whether a

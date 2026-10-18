@@ -2,9 +2,8 @@ package com.botmaker.studio.suggestions;
 
 import com.botmaker.studio.TestSupport;
 
+import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import io.github.classgraph.FieldInfo;
-import io.github.classgraph.MethodInfo;
 import com.botmaker.studio.util.VariableScopeVisitor;
 import org.eclipse.jdt.core.dom.*;
 import org.junit.jupiter.api.BeforeAll;
@@ -263,12 +262,11 @@ public class NodeScopeExplorerTest {
                         + ((mb.getModifiers() & 0x8) != 0 ? "  [static]" : "");
             }
             case ProjectAnalyzer.ResolvedMethod.FromIndex f -> {
-                MethodInfo mi = f.info();
-                String ret = mi.getTypeSignatureOrTypeDescriptor().getResultType().toString();
-                String params = Arrays.stream(mi.getParameterInfo())
-                        .map(p -> p.getTypeSignatureOrTypeDescriptor().toString())
+                LibraryType.Method mi = f.info();
+                String params = mi.parameters().stream()
+                        .map(LibraryType.Parameter::type)
                         .collect(Collectors.joining(", "));
-                yield ret + "  " + mi.getName() + "(" + params + ")"
+                yield mi.returnType() + "  " + mi.name() + "(" + params + ")"
                         + (mi.isStatic() ? "  [static]" : "");
             }
         };
@@ -282,8 +280,8 @@ public class NodeScopeExplorerTest {
                         + ((vb.getModifiers() & 0x8) != 0 ? "  [static]" : "");
             }
             case ProjectAnalyzer.ResolvedField.FromIndex f -> {
-                FieldInfo fi = f.info();
-                yield fi.getTypeSignatureOrTypeDescriptor().toString() + "  " + fi.getName()
+                LibraryType.Field fi = f.info();
+                yield fi.type() + "  " + fi.name()
                         + (fi.isStatic() ? "  [static]" : "");
             }
         };

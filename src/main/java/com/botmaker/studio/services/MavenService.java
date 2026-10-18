@@ -513,7 +513,7 @@ public final class MavenService {
         DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
         Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
         session.setLocalRepositoryManager(
-                system.newLocalRepositoryManager(session, new LocalRepository(localRepo.toFile())));
+                system.newLocalRepositoryManager(session, new LocalRepository(localRepo)));
         // Expose the JVM's system properties (notably java.version) to the model builder so POMs whose
         // effective model depends on JDK-activated profiles resolve correctly. Without this, bytedeco's
         // javacpp-presets parent fails ("Failed to determine Java version for profile doclint-java8-disable"),
@@ -584,8 +584,8 @@ public final class MavenService {
     private static void collectJars(List<ArtifactResult> results, List<String> out) {
         if (results == null) return;
         for (ArtifactResult ar : results) {
-            if (ar.getArtifact() != null && ar.getArtifact().getFile() != null) {
-                out.add(ar.getArtifact().getFile().getAbsolutePath());
+            if (ar.getArtifact() != null && ar.getArtifact().getPath() != null) {
+                out.add(ar.getArtifact().getPath().toAbsolutePath().toString());
             }
         }
     }
@@ -1134,8 +1134,7 @@ public final class MavenService {
         request.setRepositories(buildRemoteRepositories(model));
         try {
             ArtifactResult result = system.resolveArtifact(session, request);
-            var file = result.getArtifact().getFile();
-            return file != null ? Optional.of(file.toPath()) : Optional.empty();
+            return Optional.ofNullable(result.getArtifact().getPath());
         } catch (ArtifactResolutionException e) {
             System.err.println("Could not resolve artifact " + artifact + ": " + e.getMessage());
             return Optional.empty();

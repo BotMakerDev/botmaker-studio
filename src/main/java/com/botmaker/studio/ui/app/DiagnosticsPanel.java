@@ -161,7 +161,7 @@ final class DiagnosticsPanel {
             Diagnostic selected = list.getSelectionModel().getSelectedItem();
             if (selected == null) return;
             ClipboardContent content = new ClipboardContent();
-            content.putString(selected.getMessage());
+            content.putString(ErrorTranslator.messageOf(selected));
             Clipboard.getSystemClipboard().setContent(content);
         });
         cm.getItems().add(copy);

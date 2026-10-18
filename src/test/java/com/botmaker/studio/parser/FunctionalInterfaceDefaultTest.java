@@ -87,7 +87,7 @@ public class FunctionalInterfaceDefaultTest {
                 EditContext.of(cu, null, null), source, found.get(), "ImageFinder", "whileFind",
                 whileFindParams));
 
-        assertTrue(result.replace(" ", "").contains("whileFind(template,it->{}"),
+        assertTrue(result.replaceAll("\\s", "").contains("whileFind(template,it->{}"),
                 () -> "kept image arg and added a block-bodied lambda: " + result);
     }
 

@@ -3,7 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.studio.plugin.grammar.JdkLiterals;
 import com.botmaker.studio.types.ResolvedType;
-import io.github.classgraph.ClassInfo;
+import com.botmaker.studio.index.LibraryType;
 import org.eclipse.jdt.core.dom.IMethodBinding;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 
@@ -64,14 +64,14 @@ public final class HostTypes {
                 : new Named(name, supertypes, erased.getName());
     }
 
-    /** A library class from the index: ClassGraph lists every superclass and interface itself. */
-    static TypeRef of(ClassInfo info) {
+    /** A library class from the index, which lists every superclass and interface itself. */
+    static TypeRef of(LibraryType info) {
         Set<String> supertypes = new HashSet<>();
-        supertypes.add(info.getName());
-        info.getSuperclasses().forEach(each -> supertypes.add(each.getName()));
-        info.getInterfaces().forEach(each -> supertypes.add(each.getName()));
+        supertypes.add(info.name());
+        supertypes.addAll(info.superclasses());
+        supertypes.addAll(info.interfaces());
         supertypes.add(Object.class.getName());
-        return new Named(info.getName(), supertypes, info.getSimpleName());
+        return new Named(info.name(), supertypes, info.simpleName());
     }
 
     /**

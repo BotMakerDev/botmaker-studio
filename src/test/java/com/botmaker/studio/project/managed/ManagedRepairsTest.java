@@ -77,7 +77,7 @@ class ManagedRepairsTest {
 
     @Test
     void aValueWhoseIdIsGoneIsRemovedWithItsFile(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path greetings = holder(config, "Greetings");
         BotIndex index = index(config, Map.of(greetings, GREETINGS.formatted(config.mainPackage())));
 
@@ -90,7 +90,7 @@ class ManagedRepairsTest {
 
     @Test
     void aValueTheBotStillNamesIsKeptUnmarked(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path greetings = holder(config, "Greetings");
         BotIndex index = index(config, Map.of(
                 greetings, GREETINGS.formatted(config.mainPackage()),
@@ -118,7 +118,7 @@ class ManagedRepairsTest {
     /** An enum where the plugin now declares a class of enums is declared another way: removed. */
     @Test
     void aHolderOfAnotherKindIsRemoved(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path activities = holder(config, "Activities");
         BotIndex index = index(config, Map.of(activities, """
                 package %s.plugins.test;
@@ -139,7 +139,7 @@ class ManagedRepairsTest {
     /** The kept enum is in the file the plugin's class of enums needs: it is renamed out of the way. */
     @Test
     void aKeptHolderInThePluginsFileIsRenamed(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path activities = holder(config, "Activities");
         Path bot = config.mainPackageDir().resolve("Bot.java").toAbsolutePath().normalize();
         BotIndex index = index(config, Map.of(activities, """
@@ -174,7 +174,7 @@ class ManagedRepairsTest {
     /** A method returning another type than the value's is the old shape: removed, never reset. */
     @Test
     void aMethodOfAnotherTypeIsRemoved(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path values = holder(config, "Values");
         BotIndex index = index(config, Map.of(values, VALUES.formatted(config.mainPackage(), "\"hello\"")
                 .replace("public static String greeting()", "public static Integer greeting()")
@@ -188,7 +188,7 @@ class ManagedRepairsTest {
 
     @Test
     void aValueThatNoLongerCompilesTakesItsFirstValueMarked(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path values = holder(config, "Values");
         BotIndex index = index(config, Map.of(values, VALUES.formatted(config.mainPackage(), "Gone.greeting()")));
 
@@ -203,7 +203,7 @@ class ManagedRepairsTest {
 
     @Test
     void aValueThatCompilesIsLeftAlone(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         BotIndex index = index(config, Map.of(holder(config, "Values"),
                 VALUES.formatted(config.mainPackage(), "\"hello\"")));
 
@@ -218,7 +218,7 @@ class ManagedRepairsTest {
      */
     @Test
     void anOpenSetConstantThatNoLongerCompilesIsListed(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path words = holder(config, "Words");
         BotIndex index = index(config, Map.of(words, """
                 package %s.plugins.test;
@@ -268,7 +268,7 @@ class ManagedRepairsTest {
      */
     @Test
     void aParameterOfAnotherTypeIsRemovedAndOneOfItsTypeKept(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path sdk = holder(config, "Sdk");
         String test = TestValue.class.getCanonicalName();
 
@@ -304,7 +304,7 @@ class ManagedRepairsTest {
     /** A wildcard, a nested type argument, an array and a primitive each spell the same on both sides: all kept. */
     @Test
     void parametersOfTheirOwnTypeAreLeftAlone(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path sdk = holder(config, "Sdk");
         BotIndex index = index(config, Map.of(sdk, """
                 package %s.plugins.test;
@@ -332,7 +332,7 @@ class ManagedRepairsTest {
     /** A plugin's parameter is a marked field, which counts as held (2026-10-11). */
     @Test
     void aMarkedFieldIsHeld(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         BotIndex index = index(config, Map.of(holder(config, "Sdk"), """
                 package %s.plugins.test;
 

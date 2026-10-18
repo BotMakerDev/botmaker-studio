@@ -1,10 +1,8 @@
 package com.botmaker.studio.suggestions;
 
+import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;
-import io.github.classgraph.ClassInfo;
-import io.github.classgraph.FieldInfo;
-import io.github.classgraph.MethodInfo;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.types.JdkType;
@@ -23,7 +21,7 @@ import java.util.stream.Collectors;
  * Unified type analysis and suggestion provider.
  * Combines:
  * <ul>
- *   <li><b>Library index</b> — raw ClassGraph {@link ClassInfo} from cached jar analysis via {@link TypeSummaryManager}</li>
+ *   <li><b>Library index</b> — {@link LibraryType} records from cached jar analysis via {@link TypeSummaryManager}</li>
  *   <li><b>Project AST</b> — rich {@link ITypeBinding} from live source parsing</li>
  * </ul>
  *
@@ -64,8 +62,8 @@ public class ProjectAnalyzer {
             public boolean isStatic() { return Modifier.isStatic(binding.getModifiers()); }
         }
 
-        record FromIndex(MethodInfo info) implements ResolvedMethod {
-            public String name()     { return info.getName(); }
+        record FromIndex(LibraryType.Method info) implements ResolvedMethod {
+            public String name()     { return info.name(); }
             public boolean isStatic() { return info.isStatic(); }
         }
     }
@@ -80,8 +78,8 @@ public class ProjectAnalyzer {
             public boolean isStatic() { return Modifier.isStatic(binding.getModifiers()); }
         }
 
-        record FromIndex(FieldInfo info) implements ResolvedField {
-            public String name()     { return info.getName(); }
+        record FromIndex(LibraryType.Field info) implements ResolvedField {
+            public String name()     { return info.name(); }
             public boolean isStatic() { return info.isStatic(); }
         }
     }
@@ -116,14 +114,13 @@ public class ProjectAnalyzer {
      */
     public boolean isMemberDeprecated(String simpleName, String member) {
         if (libraryIndex == null || simpleName == null || member == null) return false;
-        ClassInfo type = libraryIndex.findBySimpleName(simpleName).orElse(null);
+        LibraryType type = libraryIndex.findBySimpleName(simpleName).orElse(null);
         if (type == null) return false;
-        if (type.hasAnnotation(Deprecated.class.getName())) return true;
-        List<MethodInfo> overloads = type.getMethodInfo().stream()
-                .filter(m -> m.isPublic() && m.getName().equals(member))
+        if (type.deprecated()) return true;
+        List<LibraryType.Method> overloads = type.methods(member).stream()
+                .filter(LibraryType.Method::isPublic)
                 .toList();
-        return !overloads.isEmpty()
-                && overloads.stream().allMatch(m -> m.hasAnnotation(Deprecated.class.getName()));
+        return !overloads.isEmpty() && overloads.stream().allMatch(LibraryType.Method::deprecated);
     }
 
     // =========================================================================
@@ -269,7 +266,7 @@ public class ProjectAnalyzer {
 
         // 2. Search library index (lightweight summaries)
         if (libraryIndex != null) {
-            Optional<ClassInfo> libType = libraryIndex.findBySimpleName(typeName);
+            Optional<LibraryType> libType = libraryIndex.findBySimpleName(typeName);
             if (libType.isPresent()) {
                 return ResolvedType.of(libType.get());
             }
@@ -310,7 +307,7 @@ public class ProjectAnalyzer {
         }
 
         if (libraryIndex != null) {
-            Optional<ClassInfo> libType = typeName.contains(".")
+            Optional<LibraryType> libType = typeName.contains(".")
                     ? libraryIndex.findByQualifiedName(typeName)
                     : libraryIndex.findBySimpleName(typeName);
             if (libType.isPresent()) return ResolvedType.of(libType.get());
@@ -352,8 +349,8 @@ public class ProjectAnalyzer {
 
         // Library index
         if (libraryIndex != null) {
-            Optional<ClassInfo> libType = libraryIndex.findBySimpleName(simpleClassName);
-            if (libType.isPresent()) return libType.get().getName();
+            Optional<LibraryType> libType = libraryIndex.findBySimpleName(simpleClassName);
+            if (libType.isPresent()) return libType.get().name();
         }
 
         // Common java.util fallback. The FQN comes off the class literal rather than "java.util." + name, so a
@@ -411,7 +408,7 @@ public class ProjectAnalyzer {
         }
 
         // 3. Library types (non-abstract, non-interface for instantiation menus) — memoized; rebuilding a
-        // ResolvedType per library ClassInfo on every menu open is the dominant cost otherwise.
+        // ResolvedType per library type on every menu open is the dominant cost otherwise.
         types.addAll(libraryTypes());
 
         // 4. Local types visible from context
@@ -486,14 +483,14 @@ public class ProjectAnalyzer {
         // 2. Library index. Public constructors of a class that can be instantiated: an enum's constructor is
         // private and an interface has none, and offering either wrote `new Key()` into a bot.
         if (libraryIndex != null) {
-            Optional<ClassInfo> libType = libraryIndex.findBySimpleName(className);
+            Optional<LibraryType> libType = libraryIndex.findBySimpleName(className);
             if (libType.isEmpty()) libType = libraryIndex.findByQualifiedName(className);
             if (libType.isPresent()) {
-                ClassInfo ci = libType.get();
+                LibraryType ci = libType.get();
                 if (ci.isEnum() || ci.isInterface() || ci.isAbstract()) return List.of();
-                return ci.getConstructorInfo().stream()
-                        .filter(MethodInfo::isPublic)
-                        .map(mi -> toConstructorSignature(mi, ci.getSimpleName()))
+                return ci.constructors().stream()
+                        .filter(LibraryType.Method::isPublic)
+                        .map(mi -> toConstructorSignature(mi, ci.simpleName()))
                         .collect(Collectors.toList());
             }
         }
@@ -530,14 +527,14 @@ public class ProjectAnalyzer {
         }
         if (libraryIndex == null) return Optional.empty();
         String name = type.leafType().qualifiedName();
-        Optional<ClassInfo> found = libraryIndex.findByQualifiedName(name);
+        Optional<LibraryType> found = libraryIndex.findByQualifiedName(name);
         if (found.isEmpty()) found = libraryIndex.findBySimpleName(type.leafType().simpleName());
         if (found.isEmpty()) return Optional.empty();
-        ClassInfo ci = found.get();
-        for (FieldInfo f : ci.getFieldInfo()) {
-            boolean ownType = f.getTypeDescriptor().toString().equals(ci.getName());
+        LibraryType ci = found.get();
+        for (LibraryType.Field f : ci.fields()) {
+            boolean ownType = f.erasedType().equals(ci.name());
             if (f.isPublic() && f.isStatic() && f.isFinal() && (f.isEnum() || ownType)) {
-                return Optional.of(ci.getSimpleName() + "." + f.getName());
+                return Optional.of(ci.simpleName() + "." + f.name());
             }
         }
         return Optional.empty();
@@ -688,16 +685,16 @@ public class ProjectAnalyzer {
             return ResolvedType.UNKNOWN;
         }
         String receiver = mi.getExpression().toString();
-        Optional<ClassInfo> ci = libraryIndex.findBySimpleName(receiver);
+        Optional<LibraryType> ci = libraryIndex.findBySimpleName(receiver);
         if (ci.isEmpty()) ci = libraryIndex.findByQualifiedName(receiver);
         if (ci.isEmpty()) return ResolvedType.UNKNOWN;
 
         int position = mi.arguments().indexOf(lambda);
         String name = mi.getName().getIdentifier();
-        for (MethodInfo info : ci.get().getMethodInfo(name)) {
-            var params = info.getParameterInfo();
-            if (params.length != mi.arguments().size() || position < 0 || position >= params.length) continue;
-            String arg = firstTypeArgument(params[position].getTypeSignatureOrTypeDescriptor().toString());
+        for (LibraryType.Method info : ci.get().methods(name)) {
+            var params = info.parameters();
+            if (params.size() != mi.arguments().size() || position < 0 || position >= params.size()) continue;
+            String arg = firstTypeArgument(params.get(position).type());
             if (arg != null) return resolveLibraryType(arg);
         }
         return ResolvedType.UNKNOWN;
@@ -742,7 +739,7 @@ public class ProjectAnalyzer {
 
     /**
      * Returns methods of a type, binding-accurate for project types and
-     * ClassGraph {@link MethodInfo}-based for external library types.
+     * type-index-based for external library types.
      * Resolution order: live {@code getDeclaredMethods()} → library index by qualified name → by simple name.
      */
     public List<ResolvedMethod> getMethodsOf(ITypeBinding type) {
@@ -764,13 +761,13 @@ public class ProjectAnalyzer {
 
         // 2. Library index — qualified name first, simple name fallback
         if (libraryIndex != null) {
-            Optional<ClassInfo> ci = libraryIndex.findByQualifiedName(type.getQualifiedName());
+            Optional<LibraryType> ci = libraryIndex.findByQualifiedName(type.getQualifiedName());
             if (ci.isEmpty()) ci = libraryIndex.findBySimpleName(type.getName());
             if (ci.isPresent()) {
-                return ci.get().getMethodInfo().stream()
+                return ci.get().methods().stream()
                         .filter(mi -> mi.isPublic() && (!staticOnly || mi.isStatic()))
                         .map(ResolvedMethod.FromIndex::new)
-                        .sorted(Comparator.comparing(f -> f.info().getName()))
+                        .sorted(Comparator.comparing(f -> f.info().name()))
                         .collect(Collectors.toList());
             }
         }
@@ -851,20 +848,20 @@ public class ProjectAnalyzer {
 
         String qualified = receiver.getFullyQualifiedName();
         String simple = qualified.contains(".") ? qualified.substring(qualified.lastIndexOf('.') + 1) : qualified;
-        Optional<ClassInfo> owner = libraryIndex.findByQualifiedName(qualified);
+        Optional<LibraryType> owner = libraryIndex.findByQualifiedName(qualified);
         if (owner.isEmpty()) owner = libraryIndex.findBySimpleName(simple);
         if (owner.isEmpty()) return ResolvedType.UNKNOWN;
 
-        Set<String> returned = owner.get().getMethodInfo(call.getName().getIdentifier()).stream()
-                .filter(MethodInfo::isPublic)
-                .map(mi -> mi.getTypeSignatureOrTypeDescriptor().getResultType().toString())
+        Set<String> returned = owner.get().methods(call.getName().getIdentifier()).stream()
+                .filter(LibraryType.Method::isPublic)
+                .map(LibraryType.Method::returnType)
                 .collect(Collectors.toSet());
         return returned.size() == 1 ? ResolvedType.named(returned.iterator().next()) : ResolvedType.UNKNOWN;
     }
 
     /**
      * Returns public fields of a type, binding-accurate for project types and
-     * ClassGraph {@link FieldInfo}-based for external library types.
+     * type-index-based for external library types.
      */
     public List<ResolvedField> getFieldsOf(ITypeBinding type) {
         if (type == null) return List.of();
@@ -881,13 +878,13 @@ public class ProjectAnalyzer {
 
         // 2. Library index
         if (libraryIndex != null) {
-            Optional<ClassInfo> ci = libraryIndex.findByQualifiedName(type.getQualifiedName());
+            Optional<LibraryType> ci = libraryIndex.findByQualifiedName(type.getQualifiedName());
             if (ci.isEmpty()) ci = libraryIndex.findBySimpleName(type.getName());
             if (ci.isPresent()) {
-                return ci.get().getFieldInfo().stream()
-                        .filter(FieldInfo::isPublic)
+                return ci.get().fields().stream()
+                        .filter(LibraryType.Field::isPublic)
                         .map(ResolvedField.FromIndex::new)
-                        .sorted(Comparator.comparing(f -> f.info().getName()))
+                        .sorted(Comparator.comparing(f -> f.info().name()))
                         .collect(Collectors.toList());
             }
         }
@@ -946,10 +943,10 @@ public class ProjectAnalyzer {
             }
         }
         if (signatures.isEmpty() && libraryIndex != null) {
-            Optional<ClassInfo> libType = libraryIndex.findBySimpleName(typeName);
+            Optional<LibraryType> libType = libraryIndex.findBySimpleName(typeName);
             if (libType.isEmpty()) libType = libraryIndex.findByQualifiedName(typeName);
             if (libType.isPresent()) {
-                for (MethodInfo mi : libType.get().getMethodInfo()) {
+                for (LibraryType.Method mi : libType.get().methods()) {
                     if (mi.isPublic() && (!staticOnly || mi.isStatic())) signatures.add(toMethodSignature(mi));
                 }
             }
@@ -974,13 +971,12 @@ public class ProjectAnalyzer {
             return out;
         }
         if (libraryIndex != null) {
-            Optional<ClassInfo> ci = libraryIndex.findBySimpleName(typeName);
+            Optional<LibraryType> ci = libraryIndex.findBySimpleName(typeName);
             if (ci.isEmpty()) ci = libraryIndex.findByQualifiedName(typeName);
             if (ci.isPresent()) {
-                for (FieldInfo fi : ci.get().getFieldInfo()) {
+                for (LibraryType.Field fi : ci.get().fields()) {
                     if (!fi.isPublic() || fi.isStatic() != wantStatic) continue;
-                    out.add(new FieldOption(fi.getName(),
-                            ResolvedType.named(fi.getTypeSignatureOrTypeDescriptor().toString()), fi.isStatic()));
+                    out.add(new FieldOption(fi.name(), ResolvedType.named(fi.type()), fi.isStatic()));
                 }
             }
         }
@@ -990,7 +986,7 @@ public class ProjectAnalyzer {
     private static ResolvedType fieldType(ResolvedField f) {
         return switch (f) {
             case ResolvedField.Bound b -> ResolvedType.of(b.binding().getType());
-            case ResolvedField.FromIndex fi -> ResolvedType.named(fi.info().getTypeSignatureOrTypeDescriptor().toString());
+            case ResolvedField.FromIndex fi -> ResolvedType.named(fi.info().type());
         };
     }
 
@@ -1361,7 +1357,7 @@ public class ProjectAnalyzer {
         return new MethodSignature(mb.getName(), types, names, ResolvedType.of(mb.getReturnType()), mb.isVarargs());
     }
 
-    private MethodSignature toMethodSignature(MethodInfo mi) {
+    private MethodSignature toMethodSignature(LibraryType.Method mi) {
         List<ResolvedType> paramTypes = libraryParamTypes(mi);
         boolean varargs = mi.isVarArgs();
         // A varargs param's bytecode descriptor is the array type (…ImageTemplate[]); use the element type.
@@ -1369,26 +1365,26 @@ public class ProjectAnalyzer {
             ResolvedType last = paramTypes.get(paramTypes.size() - 1);
             if (last.isArray()) paramTypes.set(paramTypes.size() - 1, last.leafType().asArray(last.arrayDimensions() - 1));
         }
-        ResolvedType returnType = ResolvedType.named(mi.getTypeSignatureOrTypeDescriptor().getResultType().toString());
-        return new MethodSignature(mi.getName(), paramTypes, libraryParamNames(mi), returnType, varargs);
+        ResolvedType returnType = ResolvedType.named(mi.returnType());
+        return new MethodSignature(mi.name(), paramTypes, libraryParamNames(mi), returnType, varargs);
     }
 
     /** A constructor signature carries the type's simple name (not {@code <init>}) and the type as its return. */
-    private MethodSignature toConstructorSignature(MethodInfo mi, String className) {
+    private MethodSignature toConstructorSignature(LibraryType.Method mi, String className) {
         List<ResolvedType> paramTypes = libraryParamTypes(mi);
         return new MethodSignature(className, paramTypes, libraryParamNames(mi), ResolvedType.named(className));
     }
 
     /**
      * Real parameter names when the jar was compiled with {@code -parameters} (the BotMaker SDK is; most
-     * libraries are not), else synthesized {@code arg0/arg1/…}. ClassGraph exposes the name from the
-     * {@code MethodParameters} attribute, returning {@code null} when it's absent.
+     * libraries are not), else synthesized {@code arg0/arg1/…}. The index reads the name from the
+     * {@code MethodParameters} attribute, and holds {@code null} when it's absent.
      */
-    private List<String> libraryParamNames(MethodInfo mi) {
-        var params = mi.getParameterInfo();
-        List<String> names = new ArrayList<>(params.length);
-        for (int i = 0; i < params.length; i++) {
-            String name = params[i].getName();
+    private List<String> libraryParamNames(LibraryType.Method mi) {
+        var params = mi.parameters();
+        List<String> names = new ArrayList<>(params.size());
+        for (int i = 0; i < params.size(); i++) {
+            String name = params.get(i).name();
             names.add(name != null && !name.isBlank() ? name : "arg" + i);
         }
         return names;
@@ -1399,13 +1395,13 @@ public class ProjectAnalyzer {
      * the whole reason: {@code FlowGraph.<O extends Enum<O>> route(O, String)} has a signature naming {@code O},
      * which resolves in no index, means nothing to a slot editor, and changes when the SDK renames the variable
      * — while its erasure, {@code Enum}, is a real type and is the only spelling a plugin catalog's descriptor
-     * can produce. {@link MethodSignature#signatureKeyOf(io.github.classgraph.MethodInfo)} reads the descriptor
+     * can produce. {@link MethodSignature#signatureKeyOf(LibraryType.Method)} reads the descriptor
      * for the same reason, and {@code SignatureKeyAgreementTest} holds the two together. For a non-generic
      * parameter the two are identical, since {@link #resolveLibraryType} strips generic arguments anyway.
      */
-    private List<ResolvedType> libraryParamTypes(MethodInfo mi) {
-        return Arrays.stream(mi.getParameterInfo())
-                .map(p -> resolveLibraryType(p.getTypeDescriptor().toString()))
+    private List<ResolvedType> libraryParamTypes(LibraryType.Method mi) {
+        return mi.parameters().stream()
+                .map(p -> resolveLibraryType(p.erasedType()))
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
@@ -1427,7 +1423,7 @@ public class ProjectAnalyzer {
         ResolvedType leaf = ResolvedType.named(base);
         if (libraryIndex != null) {
             String simple = base.contains(".") ? base.substring(base.lastIndexOf('.') + 1) : base;
-            Optional<ClassInfo> ci = libraryIndex.findByQualifiedName(base);
+            Optional<LibraryType> ci = libraryIndex.findByQualifiedName(base);
             if (ci.isEmpty()) ci = libraryIndex.findBySimpleName(simple);
             if (ci.isPresent()) leaf = ResolvedType.of(ci.get());
         }

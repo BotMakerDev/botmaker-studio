@@ -1,7 +1,6 @@
 package com.botmaker.studio.types;
 
-import io.github.classgraph.ClassInfo;
-import io.github.classgraph.FieldInfo;
+import com.botmaker.studio.index.LibraryType;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.IVariableBinding;
 
@@ -15,7 +14,7 @@ import java.util.stream.Collectors;
  * Unified representation of a Java type, resolved from one of four sources:
  * <ul>
  *   <li>{@link Bound} — a live JDT {@link ITypeBinding} (strong: project/classpath types)</li>
- *   <li>{@link FromIndex} — a ClassGraph {@link ClassInfo} (weak: external library types)</li>
+ *   <li>{@link FromIndex} — a type index {@link LibraryType} (weak: external library types)</li>
  *   <li>{@link Primitive} — a primitive/void by name (no binding)</li>
  *   <li>{@link Named} — any other type known only by (qualified) name, plus array names</li>
  * </ul>
@@ -125,7 +124,7 @@ public sealed interface ResolvedType
         return new Bound(binding);
     }
 
-    static ResolvedType of(ClassInfo info) {
+    static ResolvedType of(LibraryType info) {
         if (info == null) return UNKNOWN;
         return new FromIndex(info);
     }
@@ -243,25 +242,25 @@ public sealed interface ResolvedType
         @Override public String toString()        { return "Bound{" + qualifiedName() + "}"; }
     }
 
-    /** Weak: an external library type from the ClassGraph index. */
-    record FromIndex(ClassInfo info) implements ResolvedType {
-        public String simpleName()    { return info.getSimpleName(); }
-        public String qualifiedName() { return info.getName(); }
+    /** Weak: an external library type from the type index. */
+    record FromIndex(LibraryType info) implements ResolvedType {
+        public String simpleName()    { return info.simpleName(); }
+        public String qualifiedName() { return info.name(); }
         public boolean isEnum()       { return info.isEnum(); }
         public boolean isArray()      { return false; }
         public boolean isPrimitive()  { return false; }
         public int arrayDimensions()  { return 0; }
         public ResolvedType leafType() { return this; }
         public ResolvedType asArray(int dimensions) {
-            return dimensions == 0 ? this : ResolvedType.named(info.getName() + "[]".repeat(dimensions));
+            return dimensions == 0 ? this : ResolvedType.named(info.name() + "[]".repeat(dimensions));
         }
         public List<String> enumConstants() {
             if (!info.isEnum()) return List.of();
-            return info.getFieldInfo().stream()
-                    .filter(FieldInfo::isStatic)
-                    .filter(FieldInfo::isFinal)
-                    .filter(fi -> info.getName().equals(fi.getTypeSignatureOrTypeDescriptor().toString()))
-                    .map(FieldInfo::getName)
+            return info.fields().stream()
+                    .filter(LibraryType.Field::isStatic)
+                    .filter(LibraryType.Field::isFinal)
+                    .filter(fi -> info.name().equals(fi.type()))
+                    .map(LibraryType.Field::name)
                     .collect(Collectors.toList());
         }
         public boolean isAssignmentCompatible(ResolvedType target) {

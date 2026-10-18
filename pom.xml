@@ -233,53 +233,44 @@
         <dependency>
             <groupId>org.eclipse.jdt</groupId>
             <artifactId>org.eclipse.jdt.core</artifactId>
-            <version>3.37.0</version>
+            <version>3.47.0</version>
         </dependency>
 
         <!-- ClassGraph -->
         <dependency>
             <groupId>io.github.classgraph</groupId>
             <artifactId>classgraph</artifactId>
-            <version>4.8.179</version>
+            <version>6.0.0</version>
         </dependency>
 
         <!-- LSP4J -->
         <dependency>
             <groupId>org.eclipse.lsp4j</groupId>
             <artifactId>org.eclipse.lsp4j</artifactId>
-            <version>0.21.0</version>
+            <version>1.0.0</version>
         </dependency>
         <dependency>
             <groupId>org.eclipse.lsp4j</groupId>
             <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
-            <version>0.21.0</version>
+            <version>1.0.0</version>
         </dependency>
 
-        <!-- Maven Model API & Resolver -->
+        <!-- Maven Model API & Resolver. Resolver 2's supplier for Maven 3 brings the basic connector and the
+             file and Apache HTTP transports; transport-http and the plain supplier are gone in 2. -->
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
-            <version>3.9.16</version>
+            <version>3.10.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-resolver-provider</artifactId>
-            <version>3.9.16</version>
+            <version>3.10.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.maven.resolver</groupId>
-            <artifactId>maven-resolver-supplier</artifactId>
-            <version>1.9.27</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.maven.resolver</groupId>
-            <artifactId>maven-resolver-connector-basic</artifactId>
-            <version>1.9.27</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.maven.resolver</groupId>
-            <artifactId>maven-resolver-transport-http</artifactId>
-            <version>1.9.27</version>
+            <artifactId>maven-resolver-supplier-mvn3</artifactId>
+            <version>2.0.24</version>
         </dependency>
 
         <!-- The one logging binding, for what logs through SLF4J (the resolver, JGit); slf4j-api comes with it. -->
@@ -303,7 +294,7 @@
         <dependency>
             <groupId>org.eclipse.jgit</groupId>
             <artifactId>org.eclipse.jgit</artifactId>
-            <version>6.10.0.202406032230-r</version>
+            <version>7.8.0.202609011348-r</version>
         </dependency>
 
         <!-- LangChain4j stood here (2026-09-24 to 2026-09-25): the Assistant tab's own model client. A Claude
@@ -337,19 +328,19 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>5.10.2</version>
+            <version>6.1.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.10.2</version>
+            <version>6.1.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>
-            <version>1.10.2</version>
+            <version>6.1.3</version>
             <scope>test</scope>
         </dependency>
 

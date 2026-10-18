@@ -1,9 +1,8 @@
 package com.botmaker.studio.util;
 
 import com.botmaker.plugin.api.catalog.MemberId;
+import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.types.ResolvedType;
-import io.github.classgraph.MethodInfo;
-import io.github.classgraph.MethodParameterInfo;
 
 import java.lang.reflect.Executable;
 import java.util.List;
@@ -95,13 +94,13 @@ public record MethodSignature(String name, List<ResolvedType> paramTypes, List<S
      * SDK renames it. For every non-generic method the two are identical, generic <em>arguments</em> having
      * been stripped by {@link #simpleNameOf} already.
      */
-    public static String signatureKeyOf(MethodInfo mi) {
-        MethodParameterInfo[] params = mi.getParameterInfo();
+    public static String signatureKeyOf(LibraryType.Method mi) {
+        List<LibraryType.Parameter> params = mi.parameters();
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < params.length; i++) {
+        for (int i = 0; i < params.size(); i++) {
             if (i > 0) sb.append(',');
-            boolean varargsTail = mi.isVarArgs() && i == params.length - 1;
-            sb.append(simpleNameOf(params[i].getTypeDescriptor().toString(), varargsTail));
+            boolean varargsTail = mi.isVarArgs() && i == params.size() - 1;
+            sb.append(simpleNameOf(params.get(i).erasedType(), varargsTail));
         }
         return sb.toString();
     }
@@ -111,7 +110,7 @@ public record MethodSignature(String name, List<ResolvedType> paramTypes, List<S
      * the same key has to be spelled in, and the one that arrived with the palette catalog.
      *
      * <p>A {@link MemberId} carries the JVM descriptor of the method reference that named it, so the
-     * derivation is the same reduction as {@link #signatureKeyOf(MethodInfo)} over
+     * derivation is the same reduction as {@link #signatureKeyOf(LibraryType.Method)} over
      * {@link MemberId#parameterTypeNames()} — with one thing the descriptor cannot say. <b>Varargs is not in
      * a descriptor:</b> {@code findAny(ImageTemplate...)} and {@code findAny(ImageTemplate[])} compile to the
      * identical signature, while the key spells the first as its <em>element</em> type. The flag is a

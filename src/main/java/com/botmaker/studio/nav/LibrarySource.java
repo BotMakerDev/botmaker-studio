@@ -232,7 +232,7 @@ public final class LibrarySource {
     static Optional<View> outline(Target target, Path jar) {
         ClassGraph graph = new ClassGraph().enableClassInfo().enableMethodInfo().enableFieldInfo()
                 .acceptPackagesNonRecursive(target.packageName());
-        graph = jar == null ? graph.enableSystemJarsAndModules() : graph.overrideClasspath(jar.toString());
+        graph = jar == null ? graph.enableSystemModules() : graph.enableClasspathEntries(jar.toString());
         try (ScanResult scan = graph.scan()) {
             ClassInfo top = scan.getClassInfo(target.topLevel());
             if (top == null) return Optional.empty();
@@ -269,15 +269,15 @@ public final class LibrarySource {
                 .sorted(Comparator.comparing(MethodInfo::getName)).forEach(methods::add);
         for (MethodInfo method : methods) {
             if (isTarget && line[0] == 0 && method.getName().equals(target.member())
-                    && method.getParameterInfo().length == target.parameters()) {
+                    && method.getParameterInfo().size() == target.parameters()) {
                 line[0] = out.size() + 1;
             }
             // A constructor's name in a class file is <init>; the outline writes it as Java does.
             out.add(inner + method.toStringWithSimpleNames().replace("<init>", simple) + ";");
         }
-        for (ClassInfo nested : type.getInnerClasses()) {
-            // getInnerClasses reaches every depth; each class writes only the ones declared directly in it.
-            if (nested.getName().lastIndexOf('$') == type.getName().length() && !nested.isAnonymousInnerClass()) {
+        for (ClassInfo nested : type.getNestedClasses()) {
+            // getNestedClasses reaches every depth; each class writes only the ones declared directly in it.
+            if (nested.getName().lastIndexOf('$') == type.getName().length() && !nested.isAnonymousClass()) {
                 out.add("");
                 write(nested, inner, target, out, line);
             }

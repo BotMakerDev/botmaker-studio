@@ -218,7 +218,7 @@ class ErrorTranslatorTest {
 
         assertEquals("Check your code for issues.", ErrorTranslator.getSuggestion(real),
                 "the generic fallback is what every user actually gets");
-        assertEquals(real.getMessage(), ErrorTranslator.getShortSummary(real),
+        assertEquals(ErrorTranslator.messageOf(real), ErrorTranslator.getShortSummary(real),
                 "and the message survives only because it was already written for a human");
     }
 

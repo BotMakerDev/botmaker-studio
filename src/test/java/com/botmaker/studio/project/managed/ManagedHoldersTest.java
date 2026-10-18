@@ -49,7 +49,7 @@ class ManagedHoldersTest {
     private ManagedHolders.Plan plan(TestValue.Id id) {
         ManagedValue<?> value = DECLARED.stream().filter(v -> v.id().equals(ManagedValue.idOf(id))).findFirst()
                 .orElseThrow();
-        return ManagedHolders.plan(ProjectConfig.forDirectory(dir), "com.botmaker.sdk", value, DECLARED,
+        return ManagedHolders.plan(ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", value, DECLARED,
                 TestValues.GRAMMAR);
     }
 
@@ -60,7 +60,7 @@ class ManagedHoldersTest {
         assertEquals("plugins/sdk/Sdk.java", write.relative());
         assertTrue(write.file().endsWith(Path.of("plugins", "sdk", "Sdk.java")), write.file().toString());
         String source = write.source();
-        assertTrue(source.contains("package " + ProjectConfig.forDirectory(dir).mainPackage() + ".plugins.sdk;"),
+        assertTrue(source.contains("package " + ProjectConfig.forDirectory(dir.resolve("bot")).mainPackage() + ".plugins.sdk;"),
                 source);
         assertTrue(source.contains("import " + TestValue.class.getCanonicalName() + ";"), source);
         assertTrue(source.contains("import java.time.Duration;"), source);
@@ -93,7 +93,7 @@ class ManagedHoldersTest {
         ManagedValue<TestOutcome> outcomes = ManagedValue.openSet(TestValue.Id.OUTCOMES)
                 .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine.");
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", outcomes, List.of(outcomes),
+                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", outcomes, List.of(outcomes),
                 TestValues.GRAMMAR)).source();
 
         assertTrue(source.contains("@TestValue(TestValue.Id.OUTCOMES)\npublic enum Outcomes implements TestOutcome {"),
@@ -110,7 +110,7 @@ class ManagedHoldersTest {
                 ManagedValue.method(TestValue.Id.REST_BETWEEN).in("Values").holds(String.class, null)
                         .because("Mine."),
                 ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in("Names").because("Mine."));
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
 
         String values = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
                 "com.botmaker.test", declared.getFirst(), declared, TestValues.GRAMMAR)).source();
@@ -135,7 +135,7 @@ class ManagedHoldersTest {
     @Test
     void theFileIsWrittenOnceAndNeverOverwritten() throws Exception {
         ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan(TestValue.Id.GREETING);
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         assertTrue(ProjectWrites.create(config, write.file(), write.source(), "Create"));
         Files.writeString(write.file(), "// the user's now");
         assertTrue(ProjectWrites.create(config, write.file(), write.source(), "Create"));
@@ -145,7 +145,7 @@ class ManagedHoldersTest {
     /** On bind (2026-09-26): every holder the project lacks, one per holder, and none it already has. */
     @Test
     void onBindEveryMissingHolderIsPlannedOnce() {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of("com.botmaker.sdk", DECLARED),
                 java.util.Set.of(), java.util.Set.of("Main.java"), TestValues.GRAMMAR);
         assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), plans.stream()
@@ -154,7 +154,7 @@ class ManagedHoldersTest {
 
     @Test
     void onBindAHolderTheBotAlreadyHasIsLeftAlone() throws Exception {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         java.util.Map<String, List<ManagedValue<?>>> sdk = java.util.Map.of("com.botmaker.sdk", DECLARED);
         // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
         assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
@@ -193,7 +193,7 @@ class ManagedHoldersTest {
     void aParameterIsAMarkedParamFieldBeforeTheMethods() {
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), DO_SETUP, PAUSE);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", DECLARED.getFirst(), declared,
                 TestValues.GRAMMAR)).source();
 
         assertTrue(source.contains("    @TestValue(TestValue.Id.DO_SETUP)\n    @Param(category = \"Run\","
@@ -309,7 +309,7 @@ class ManagedHoldersTest {
                 .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.Visibility.EDITOR).because("Mine.");
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), spot);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", DECLARED.getFirst(), declared,
                 TestValues.GRAMMAR)).source();
         assertTrue(source.contains("greeting()"), source);
         assertTrue(!source.contains("mine"), source);

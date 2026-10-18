@@ -1,7 +1,6 @@
 package com.botmaker.studio.index;
 
 import com.botmaker.shared.config.CacheDirs;
-import io.github.classgraph.ClassInfo;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -28,10 +27,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <b>Studio remainder MISSING 4 — index → JSON cache → re-hydrate round-trip.</b>
  *
  * <p>355 lines at 0.0%, and the cache is what makes Studio's startup tolerable: without it every launch
- * re-scans every jar on the project's classpath with ClassGraph before the first menu can open. The
- * serialize/deserialize step is ClassGraph's; what is Studio's — and what this covers — is the <em>policy</em>
- * around it: where a cache file goes, when it is considered fresh, what re-hydrates from it, and which
- * classes are surfaced to the user once it has.
+ * re-scans every jar on the project's classpath with ClassGraph before the first menu can open. This covers
+ * the records' round trip and the <em>policy</em> around it: where a cache file goes, when it is considered
+ * fresh, what re-hydrates from it, and which classes are surfaced to the user once it has.
  *
  * <p>The fixture is a real jar, compiled here with the platform compiler and scanned by the real ClassGraph.
  * There is no seam for the cache <em>directory</em> — {@code CacheDirs.cacheRoot()} is a static read of
@@ -102,7 +100,7 @@ class TypeSummaryManagerCacheTest {
     }
 
     private static List<String> simpleNames(TypeSummaryManager manager) {
-        return manager.getAllTypes().stream().map(ClassInfo::getSimpleName).sorted().toList();
+        return manager.getAllTypes().stream().map(LibraryType::simpleName).sorted().toList();
     }
 
     // --- Indexing ---
@@ -123,11 +121,11 @@ class TypeSummaryManagerCacheTest {
             throws IOException {
         TypeSummaryManager manager = managerFor(fixtureJar(tmp, "fixture-1.0.jar"));
 
-        assertEquals(List.of("Mode"), manager.findEnums().stream().map(ClassInfo::getSimpleName).toList(),
+        assertEquals(List.of("Mode"), manager.findEnums().stream().map(LibraryType::simpleName).toList(),
                 "the expression menu offers enum constants off this list");
-        assertTrue(manager.getStaticUtilityTypes().stream().anyMatch(c -> "Widget".equals(c.getSimpleName())),
+        assertTrue(manager.getStaticUtilityTypes().stream().anyMatch(c -> "Widget".equals(c.simpleName())),
                 "Widget.describe is a public static returning a value — a Call-Function target");
-        assertFalse(manager.getStaticUtilityTypes().stream().anyMatch(c -> "Quiet".equals(c.getSimpleName())),
+        assertFalse(manager.getStaticUtilityTypes().stream().anyMatch(c -> "Quiet".equals(c.simpleName())),
                 "a class with nothing static to call must not appear in the Call-Function menu");
     }
 
@@ -188,12 +186,12 @@ class TypeSummaryManagerCacheTest {
         // it here would turn a deliberate cache invalidation into a red test every time.
         String name = cache.getFileName().toString();
         assertTrue(name.startsWith("fixture-1.0.jar."), "cache is keyed by the jar's name, was " + name);
-        assertTrue(name.endsWith(".json"), "cache is ClassGraph JSON, was " + name);
+        assertTrue(name.endsWith(".json"), "cache is JSON, was " + name);
     }
 
     /**
-     * <b>The round-trip.</b> A second manager over the same jar must not re-scan — it re-hydrates
-     * ClassGraph's JSON — and must answer identically. Everything a menu reads has to survive the trip:
+     * <b>The round-trip.</b> A second manager over the same jar must not re-scan — it re-hydrates the
+     * records' JSON — and must answer identically. Everything a menu reads has to survive the trip:
      * the class list, the enum flag, the member info the static-utility filter runs on.
      */
     @Test
@@ -208,9 +206,9 @@ class TypeSummaryManagerCacheTest {
 
         assertEquals(simpleNames(first), simpleNames(second));
         assertEquals(first.totalTypes(), second.totalTypes());
-        assertEquals(List.of("Mode"), second.findEnums().stream().map(ClassInfo::getSimpleName).toList(),
+        assertEquals(List.of("Mode"), second.findEnums().stream().map(LibraryType::simpleName).toList(),
                 "isEnum must survive JSON, or every enum picker empties on the second launch");
-        assertTrue(second.getStaticUtilityTypes().stream().anyMatch(c -> "Widget".equals(c.getSimpleName())),
+        assertTrue(second.getStaticUtilityTypes().stream().anyMatch(c -> "Widget".equals(c.simpleName())),
                 "method info must survive too — the static-utility filter reads it");
         assertEquals(writtenAt, Files.getLastModifiedTime(cache),
                 "a fresh cache must be read, not rewritten: rewriting it means the scan ran again");
@@ -348,14 +346,14 @@ class TypeSummaryManagerCacheTest {
         Path jar = fixtureJar(tmp, "fixture-1.0.jar");
         managerFor(jar);
         Path cache = TypeSummaryManager.getCacheFileForJar(jar.toString());
-        Files.writeString(cache, "{ not the json ClassGraph wrote }");
+        Files.writeString(cache, "{ not the json the index wrote }");
         Files.setLastModifiedTime(cache, FileTime.fromMillis(System.currentTimeMillis() + 5_000));
 
         TypeSummaryManager manager = new TypeSummaryManager(Set.of(PKG));
         manager.refresh(List.of(jar.toString()));
 
         assertEquals(3, manager.totalTypes(),
-                "a cache written by an older ClassGraph must degrade to a re-scan, not an unopenable project");
+                "a cache in a shape this Studio does not read must degrade to a re-scan, not an unopenable project");
     }
 
     @Test

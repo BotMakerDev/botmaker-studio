@@ -56,7 +56,7 @@ public final class ExpressionFormHandler {
             case PatternInstanceofExpression check -> {
                 if (type instanceof PrimitiveType
                         || !(check.getPattern() instanceof TypePattern pattern)
-                        || !(pattern.getPatternVariable() instanceof SingleVariableDeclaration variable)) {
+                        || !(pattern.getPatternVariable2() instanceof SingleVariableDeclaration variable)) {
                     return null;
                 }
                 ctx.rewriter().set(variable, SingleVariableDeclaration.TYPE_PROPERTY, type, null);
@@ -90,7 +90,7 @@ public final class ExpressionFormHandler {
             case InstanceofExpression check -> check.getRightOperand();
             case PatternInstanceofExpression check
                     when check.getPattern() instanceof TypePattern pattern
-                    && pattern.getPatternVariable() instanceof SingleVariableDeclaration variable ->
+                    && pattern.getPatternVariable2() instanceof SingleVariableDeclaration variable ->
                     variable.getType();
             case TypeLiteral literal -> literal.getType();
             case VariableDeclarationExpression declaration -> declaration.getType();

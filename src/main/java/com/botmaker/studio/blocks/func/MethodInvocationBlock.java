@@ -11,7 +11,6 @@ import com.botmaker.studio.palette.ApiDocs;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.core.ValueSlot;
@@ -27,7 +26,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
-import javafx.stage.Window;
 import javafx.util.Callback;
 import org.eclipse.jdt.core.dom.*;
 
@@ -442,9 +440,9 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                 java.util.Set<java.nio.file.Path> pluginJars = PluginHost.pluginJars();
                 var libraryIndex = context.getProjectAnalyzer().getLibraryIndex();
                 libraryIndex.getStaticUtilityTypes().stream()
-                        .filter(ci -> !PluginHost.isFacadeClass(ci.getSimpleName()))
+                        .filter(ci -> !PluginHost.isFacadeClass(ci.simpleName()))
                         .filter(ci -> !libraryIndex.isIn(ci, pluginJars))
-                        .forEach(ci -> libraryClassItems.add(ci.getSimpleName()));
+                        .forEach(ci -> libraryClassItems.add(ci.simpleName()));
             }
             Collections.sort(libraryClassItems);
             if (!libraryClassItems.isEmpty()) { selectorItems.add("--- JAVA & LIBRARIES ---"); selectorItems.addAll(libraryClassItems); }

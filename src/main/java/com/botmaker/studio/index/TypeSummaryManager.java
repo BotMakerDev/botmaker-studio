@@ -3,8 +3,18 @@ package com.botmaker.studio.index;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.util.ClassPathManager;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.classgraph.AnnotationInfo;
+import io.github.classgraph.AnnotationInfoList;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
+import io.github.classgraph.FieldInfo;
+import io.github.classgraph.HasName;
+import io.github.classgraph.MethodInfo;
 import io.github.classgraph.ScanResult;
 
 import java.io.IOException;
@@ -14,15 +24,12 @@ import java.util.*;
 import java.util.function.Supplier;
 
 /**
- * Per-jar index of external library types, backed directly by ClassGraph.
+ * Per-jar index of external library types, read off the class files by ClassGraph.
  *
- * <p>Each jar is scanned once into a {@link ScanResult}; the scan is cached to disk using
- * ClassGraph's own JSON serialization ({@link ScanResult#toJSON()} / {@link ScanResult#fromJSON(String)}),
- * one {@code .json} file per jar. The in-memory index hands out raw {@link ClassInfo} objects, which
- * {@link com.botmaker.studio.suggestions.ProjectAnalyzer} consumes directly — there is no intermediate DTO.
- *
- * <p>Cache <em>policy</em> (where/when/invalidate) lives here; only the serialize/deserialize step is
- * delegated to ClassGraph.
+ * <p>Each jar is scanned once into {@link LibraryType} records, and they are cached to disk as JSON, one
+ * {@code .json} file per jar. The in-memory index hands out those records, which
+ * {@link com.botmaker.studio.suggestions.ProjectAnalyzer} consumes directly. It handed out ClassGraph's own
+ * {@code ClassInfo} and cached ClassGraph's JSON until ClassGraph 6 removed it (2026-10-18).
  *
  * <p>Beside each cache sits the list of its packages ({@code .packages}), and a jar is read from its JSON
  * only once one of them is under the allowed prefixes, or once it is asked for by name: an open reads the
@@ -67,17 +74,11 @@ public class TypeSummaryManager {
      */
     private final boolean everything;
 
-    /**
-     * jar path → its (non-anonymous) classes. The scans are intentionally not closed: the
-     * {@link ClassInfo} objects are read for the lifetime of the manager.
-     */
-    private final Map<String, List<ClassInfo>> index = new HashMap<>();
+    /** jar path → its (non-anonymous) classes, as its cache file holds them. */
+    private final Map<String, List<LibraryType>> index = new HashMap<>();
 
     /** Normalised jar path → the names of its indexed classes: which jar a class came from, for {@link #isIn}. */
     private final Map<Path, Set<String>> namesByJar = new HashMap<>();
-
-    /** jar path → owning ScanResult, retained so the whole index can be re-serialized to JSON. */
-    private final Map<String, ScanResult> scans = new HashMap<>();
 
     /**
      * jar path → its packages, for a jar with a fresh cache that nothing has asked for yet (2026-10-18).
@@ -93,10 +94,10 @@ public class TypeSummaryManager {
     // path for menu population). Marked dirty by store() and rebuilt lazily on first read, so loading N jars
     // rebuilds once, not N times.
     private boolean cachesDirty = true;
-    private List<ClassInfo> allTypesCache = List.of();
-    private final Map<String, ClassInfo> bySimpleName = new HashMap<>();
-    private final Map<String, ClassInfo> byQualifiedName = new HashMap<>();
-    private List<ClassInfo> staticUtilityCache = List.of();
+    private List<LibraryType> allTypesCache = List.of();
+    private final Map<String, LibraryType> bySimpleName = new HashMap<>();
+    private final Map<String, LibraryType> byQualifiedName = new HashMap<>();
+    private List<LibraryType> staticUtilityCache = List.of();
 
     public TypeSummaryManager() {
         this(TypeSummaryManager::defaultAllowedPackagePrefixes, false);
@@ -141,8 +142,8 @@ public class TypeSummaryManager {
     }
 
     /** True when {@code ci}'s package is under one of {@code prefixes}. */
-    private boolean isAllowed(ClassInfo ci, Set<String> prefixes) {
-        return everything || isUnder(ci.getPackageName(), prefixes);
+    private boolean isAllowed(LibraryType type, Set<String> prefixes) {
+        return everything || isUnder(type.packageName(), prefixes);
     }
 
     private static boolean isUnder(String pkg, Set<String> prefixes) {
@@ -238,13 +239,13 @@ public class TypeSummaryManager {
 
     // The readers hold the lock the rebuild does: refresh() rebuilds on LibraryService's thread while a menu
     // reads on FX, and a map read mid-clear() misses a type a block then draws as unresolved.
-    public synchronized List<ClassInfo> getAllTypes() {
+    public synchronized List<LibraryType> getAllTypes() {
         ensureCaches();
         return allTypesCache;
     }
 
     /** What {@code jarPath} holds, read from its cache now if nothing had asked for it yet. */
-    public synchronized List<ClassInfo> getTypesForJar(String jarPath) {
+    public synchronized List<LibraryType> getTypesForJar(String jarPath) {
         if (deferred.containsKey(jarPath)) loadDeferred(jarPath);
         return index.getOrDefault(jarPath, List.of());
     }
@@ -254,40 +255,38 @@ public class TypeSummaryManager {
         return index.containsKey(jarPath);
     }
 
-    public synchronized Optional<ClassInfo> findBySimpleName(String simpleName) {
+    public synchronized Optional<LibraryType> findBySimpleName(String simpleName) {
         ensureCaches();
         return Optional.ofNullable(bySimpleName.get(simpleName));
     }
 
-    public synchronized Optional<ClassInfo> findByQualifiedName(String qualifiedName) {
+    public synchronized Optional<LibraryType> findByQualifiedName(String qualifiedName) {
         ensureCaches();
         return Optional.ofNullable(byQualifiedName.get(qualifiedName));
     }
 
-    public List<ClassInfo> findEnums() {
+    public List<LibraryType> findEnums() {
         return getAllTypes().stream()
-                .filter(ClassInfo::isEnum)
+                .filter(LibraryType::isEnum)
                 .toList();
     }
 
     /**
-     * Whether {@code type} was indexed out of one of {@code jars} (absolute, normalised paths).
-     *
-     * <p>Answered from this index's own record of which jar each class came from, never from ClassGraph's
-     * {@code getClasspathElementFile}: a class re-hydrated from the JSON cache has no classpath element, and
-     * asking one throws — every call block's class dropdown did, on every project opened a second time
+     * Whether {@code type} was indexed out of one of {@code jars} (absolute, normalised paths), answered from
+     * this index's own record of which jar each class came from. It asked ClassGraph's
+     * {@code getClasspathElementFile} once, which a class re-hydrated from the old JSON cache could not answer
      * (2026-10-01).
      */
-    public synchronized boolean isIn(ClassInfo type, Set<Path> jars) {
+    public synchronized boolean isIn(LibraryType type, Set<Path> jars) {
         if (jars.isEmpty()) return false;
         for (Path jar : jars) {
-            if (namesByJar.getOrDefault(jar, Set.of()).contains(type.getName())) return true;
+            if (namesByJar.getOrDefault(jar, Set.of()).contains(type.name())) return true;
         }
         return false;
     }
 
     /** Library classes exposing at least one public static method returning a value (Call-Function targets). */
-    public synchronized List<ClassInfo> getStaticUtilityTypes() {
+    public synchronized List<LibraryType> getStaticUtilityTypes() {
         ensureCaches();
         return staticUtilityCache;
     }
@@ -310,19 +309,21 @@ public class TypeSummaryManager {
     // =========================================================================
 
     private void indexJar(String jar) {
-        try {
-            // Scan is intentionally not closed: ClassInfo objects are read for the manager's lifetime.
-            // Annotation info is what makes @Deprecated readable (it is a RUNTIME-retained annotation, so it
-            // is in the class file — but ClassGraph does not record annotations unless asked).
-            // ProjectAnalyzer.isMemberDeprecated reads it to strike deprecated calls through; without this the flag is silently always false.
-            ScanResult scan = new ClassGraph()
-                    .overrideClasspath(jar)
-                    .enableMethodInfo()
-                    .enableFieldInfo()
-                    .enableAnnotationInfo()
-                    .scan();
-
-            store(jar, scan);
+        // Annotation info is what makes @Deprecated readable (it is a RUNTIME-retained annotation, so it is in
+        // the class file — but ClassGraph does not record annotations unless asked).
+        // ProjectAnalyzer.isMemberDeprecated reads it to strike deprecated calls through; without this the flag
+        // is silently always false.
+        try (ScanResult scan = new ClassGraph()
+                .enableClasspathEntries(jar)
+                .enableClassInfo()
+                .enableMethodInfo()
+                .enableFieldInfo()
+                .enableAnnotationInfo()
+                .scan()) {
+            store(jar, scan.getAllClasses().stream()
+                    .filter(ci -> !ci.isAnonymousClass())
+                    .map(TypeSummaryManager::typeOf)
+                    .toList());
             System.out.println("Indexed: " + Path.of(jar).getFileName()
                     + " → " + getTypesForJar(jar).size() + " types");
         } catch (Exception e) {
@@ -330,15 +331,50 @@ public class TypeSummaryManager {
         }
     }
 
-    /** Records a scan and its non-anonymous classes under a jar path, then rebuilds the derived caches. */
-    private synchronized void store(String jar, ScanResult scan) {
-        scans.put(jar, scan);
-        List<ClassInfo> classes = scan.getAllClasses().stream()
-                .filter(ci -> !ci.isAnonymousInnerClass())
+    private static LibraryType typeOf(ClassInfo ci) {
+        int typeParameters = ci.getTypeSignature() == null ? 0 : ci.getTypeSignature().getTypeParameters().size();
+        return new LibraryType(ci.getName(), ci.getSimpleName(), ci.getModifiers(), typeParameters,
+                names(ci.getAllSuperclasses()), names(ci.getAllSuperinterfaces()),
+                ci.getMethodInfo().stream().map(TypeSummaryManager::methodOf).toList(),
+                ci.getConstructorInfo().stream().map(TypeSummaryManager::methodOf).toList(),
+                ci.getFieldInfo().stream().map(TypeSummaryManager::fieldOf).toList(),
+                ci.hasAnnotation(DEPRECATED), since(ci.getAllAnnotationInfo()));
+    }
+
+    private static LibraryType.Method methodOf(MethodInfo mi) {
+        List<LibraryType.Parameter> parameters = mi.getParameterInfo().stream()
+                .map(p -> new LibraryType.Parameter(p.getName(), p.getTypeSignatureOrTypeDescriptor().toString(),
+                        p.getTypeDescriptor().toString()))
                 .toList();
+        return new LibraryType.Method(mi.getName(), mi.getModifiers(), parameters,
+                mi.getTypeSignatureOrTypeDescriptor().getResultType().toString(), mi.hasAnnotation(DEPRECATED),
+                since(mi.getAllAnnotationInfo()));
+    }
+
+    private static LibraryType.Field fieldOf(FieldInfo fi) {
+        return new LibraryType.Field(fi.getName(), fi.getModifiers(), fi.getTypeSignatureOrTypeDescriptor().toString(),
+                fi.getTypeDescriptor().toString(), fi.hasAnnotation(DEPRECATED), since(fi.getAllAnnotationInfo()));
+    }
+
+    private static final String DEPRECATED = Deprecated.class.getName();
+
+    /** The {@code @Since} value written on an element itself, {@code ""} when it carries none. */
+    private static String since(AnnotationInfoList annotations) {
+        AnnotationInfo annotation = annotations.directOnly().get(LibraryType.SINCE);
+        if (annotation == null) return "";
+        Object value = annotation.getParameterValues().getValue("value");
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static List<String> names(List<? extends HasName> infos) {
+        return infos.stream().map(HasName::getName).toList();
+    }
+
+    /** Records a jar's classes, then marks the derived caches for a rebuild. */
+    private synchronized void store(String jar, List<LibraryType> classes) {
         index.put(jar, classes);
         namesByJar.put(Path.of(jar).toAbsolutePath().normalize(),
-                classes.stream().map(ClassInfo::getName).collect(java.util.stream.Collectors.toSet()));
+                classes.stream().map(LibraryType::name).collect(java.util.stream.Collectors.toSet()));
         cachesDirty = true;
     }
 
@@ -347,7 +383,6 @@ public class TypeSummaryManager {
     }
 
     private synchronized void forget(String jar) {
-        scans.remove(jar);
         index.remove(jar);
         deferred.remove(jar);
         namesByJar.remove(Path.of(jar).toAbsolutePath().normalize());
@@ -370,7 +405,7 @@ public class TypeSummaryManager {
             defer(jar, packages);
             return true;
         }
-        ScanResult cached = loadFromFile(cacheFile);
+        List<LibraryType> cached = loadFromFile(cacheFile);
         if (cached == null) return false;
         store(jar, cached);
         savePackages(jar);
@@ -380,7 +415,7 @@ public class TypeSummaryManager {
     /** Reads a deferred jar's cache into the index, scanning the jar again if the cache went bad meanwhile. */
     private synchronized void loadDeferred(String jar) {
         deferred.remove(jar);
-        ScanResult cached = loadFromFile(getCacheFileForJar(jar));
+        List<LibraryType> cached = loadFromFile(getCacheFileForJar(jar));
         if (cached != null) {
             store(jar, cached);
         } else {
@@ -404,32 +439,40 @@ public class TypeSummaryManager {
         allTypesCache = index.values().stream().flatMap(List::stream).filter(ci -> isAllowed(ci, prefixes)).toList();
         bySimpleName.clear();
         byQualifiedName.clear();
-        for (ClassInfo ci : allTypesCache) {
-            bySimpleName.putIfAbsent(ci.getSimpleName(), ci); // first wins, matching old findFirst()
-            byQualifiedName.putIfAbsent(ci.getName(), ci);
+        for (LibraryType type : allTypesCache) {
+            bySimpleName.putIfAbsent(type.simpleName(), type); // first wins, matching old findFirst()
+            byQualifiedName.putIfAbsent(type.name(), type);
         }
         staticUtilityCache = allTypesCache.stream()
-                .filter(ci -> ci.getMethodInfo().stream().anyMatch(m ->
-                        m.isPublic() && m.isStatic()
-                                && !m.getTypeSignatureOrTypeDescriptor().getResultType().toString().equals("void")))
+                .filter(type -> type.methods().stream().anyMatch(m ->
+                        m.isPublic() && m.isStatic() && !m.returnType().equals("void")))
                 .toList();
     }
 
     // =========================================================================
-    // SERIALIZATION — per-jar files (ClassGraph JSON)
+    // SERIALIZATION — per-jar files (JSON of LibraryType)
     // =========================================================================
 
     /**
-     * Bumped whenever the {@link ClassGraph} scan configuration changes, so the new setting actually reaches
-     * an existing installation. Freshness is decided by mtime ({@link #isCacheFresh}), and a cache written
-     * before the change is <em>newer</em> than the unchanged jar — so it would be loaded forever, missing
-     * whatever the new setting records. {@code v2} = annotation info enabled (for {@code @Deprecated}).
+     * Bumped whenever what a cache file holds changes, so the change actually reaches an existing
+     * installation. Freshness is decided by mtime ({@link #isCacheFresh}), and a cache written before the
+     * change is <em>newer</em> than the unchanged jar — so it would be loaded forever, missing whatever the
+     * change records. {@code v2} = annotation info enabled (for {@code @Deprecated}); {@code v3} = Studio's
+     * own {@link LibraryType} records in place of ClassGraph's JSON (2026-10-18).
      */
-    private static final String CACHE_FORMAT = "v2";
+    private static final String CACHE_FORMAT = "v3";
+
+    /**
+     * The record components, never the {@code isPublic()} a record answers from them: those are derived and
+     * would read back as properties no record has.
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     /**
      * Derives a stable cache file path for a given jar.
-     * e.g. ~/.cache/botmaker/jars/somelib-1.0.0.jar.v2.json
+     * e.g. ~/.cache/botmaker/jars/somelib-1.0.0.jar.v3.json
      */
     public static Path getCacheFileForJar(String jarPath) {
         String jarFileName = Path.of(jarPath).getFileName().toString();
@@ -440,7 +483,7 @@ public class TypeSummaryManager {
         return CacheDirs.cacheRoot().resolve("jars");
     }
 
-    /** The packages a cache holds, one per line, beside it: {@code somelib-1.0.0.jar.v2.packages}. */
+    /** The packages a cache holds, one per line, beside it: {@code somelib-1.0.0.jar.v3.packages}. */
     static Path packagesFileFor(Path cacheFile) {
         String name = cacheFile.getFileName().toString();
         return cacheFile.resolveSibling(name.substring(0, name.length() - ".json".length()) + ".packages");
@@ -467,7 +510,7 @@ public class TypeSummaryManager {
     private void savePackages(String jarPath) {
         Path list = packagesFileFor(getCacheFileForJar(jarPath));
         try {
-            Files.write(list, getTypesForJar(jarPath).stream().map(ClassInfo::getPackageName)
+            Files.write(list, getTypesForJar(jarPath).stream().map(LibraryType::packageName)
                     .distinct().sorted().toList());
         } catch (IOException e) {
             System.err.println("Failed to save the package list for " + jarPath + ": " + e.getMessage());
@@ -475,9 +518,9 @@ public class TypeSummaryManager {
     }
 
     /**
-     * Deletes the files in the cache directory that are not this {@link #CACHE_FORMAT}'s: pre-{@code v2}
-     * {@code .json} and {@code .ser} copies no Studio of this format reads, 350 of 550 files on the machine
-     * the profiler ran on.
+     * Deletes the files in the cache directory that are not this {@link #CACHE_FORMAT}'s: older {@code .json}
+     * and {@code .ser} copies no Studio of this format reads, 350 of 550 files on the machine the profiler ran
+     * on.
      */
     static void sweepStaleCaches() {
         Path dir = jarsDir();
@@ -516,16 +559,19 @@ public class TypeSummaryManager {
     }
 
     /**
-     * Saves the indexed scan for a single jar to its dedicated .json file.
+     * Saves the indexed classes of a single jar to its dedicated .json file.
      */
     public void saveJar(String jarPath) {
-        ScanResult scan = scans.get(jarPath);
-        if (scan == null) return;
+        List<LibraryType> types;
+        synchronized (this) {
+            types = index.get(jarPath);
+        }
+        if (types == null) return;
 
         Path cacheFile = getCacheFileForJar(jarPath);
         try {
             Files.createDirectories(cacheFile.getParent());
-            Files.writeString(cacheFile, scan.toJSON());
+            MAPPER.writeValue(cacheFile.toFile(), types);
             savePackages(jarPath);
             System.out.println("Saved cache: " + cacheFile.getFileName()
                     + " (" + getTypesForJar(jarPath).size() + " types)");
@@ -544,13 +590,11 @@ public class TypeSummaryManager {
     }
 
     /**
-     * Loads classes from a single cache file by re-hydrating ClassGraph's JSON.
-     * Returns null if the file is missing, corrupt, or incompatible.
+     * Loads the classes of a single cache file. Returns null if the file is missing, corrupt, or incompatible.
      */
-    private static ScanResult loadFromFile(Path cacheFile) {
+    private static List<LibraryType> loadFromFile(Path cacheFile) {
         try {
-            // ScanResult is intentionally not closed: it is read for the manager's lifetime.
-            return ScanResult.fromJSON(Files.readString(cacheFile));
+            return MAPPER.readValue(cacheFile.toFile(), new TypeReference<List<LibraryType>>() {});
         } catch (Exception e) {
             System.err.println("Failed to load cache " + cacheFile.getFileName()
                     + ", will re-index: " + e.getMessage());

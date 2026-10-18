@@ -51,7 +51,7 @@ public class InstanceofBlock extends AbstractExpressionBlock implements BlockWit
         spec.label("is", () -> SentenceLayoutBuilder.keywordNode("is a"));
         if (astNode instanceof PatternInstanceofExpression check) {
             if (check.getPattern() instanceof TypePattern pattern
-                    && pattern.getPatternVariable() instanceof SingleVariableDeclaration variable) {
+                    && pattern.getPatternVariable2() instanceof SingleVariableDeclaration variable) {
                 spec.custom("type", () -> typeField(astNode, context))
                         .label("called", () -> SentenceLayoutBuilder.keywordNode("called"))
                         .custom("name", () -> TextFieldComponents.createVariableName(

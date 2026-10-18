@@ -266,10 +266,20 @@ public class ErrorTranslator {
     }
 
     /**
+     * A diagnostic's message as text. lsp4j 1.0 types it as text or markup; Studio writes only text, and markup
+     * gives its source.
+     */
+    public static String messageOf(Diagnostic diagnostic) {
+        var message = diagnostic.getMessage();
+        if (message == null) return null;
+        return message.isLeft() ? message.getLeft() : message.getRight().getValue();
+    }
+
+    /**
      * Translates a single diagnostic to a user-friendly message
      */
     public static String translateSingleDiagnostic(Diagnostic diagnostic) {
-        String originalMessage = diagnostic.getMessage();
+        String originalMessage = messageOf(diagnostic);
 
         // Try to extract error code
         Integer errorCode = extractErrorCode(originalMessage);
@@ -348,7 +358,7 @@ public class ErrorTranslator {
      * Get a short summary for UI display (e.g., tooltip)
      */
     public static String getShortSummary(Diagnostic diagnostic) {
-        String originalMessage = diagnostic.getMessage();
+        String originalMessage = messageOf(diagnostic);
         Integer errorCode = extractErrorCode(originalMessage);
 
         if (errorCode != null && ERROR_MAPPINGS.containsKey(errorCode)) {
@@ -364,7 +374,7 @@ public class ErrorTranslator {
      * Get just the suggestion part
      */
     public static String getSuggestion(Diagnostic diagnostic) {
-        String originalMessage = diagnostic.getMessage();
+        String originalMessage = messageOf(diagnostic);
         Integer errorCode = extractErrorCode(originalMessage);
 
         if (errorCode != null && ERROR_MAPPINGS.containsKey(errorCode)) {

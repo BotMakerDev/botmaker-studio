@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.menu;
 
+import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.palette.ExpressionCatalog;
@@ -16,7 +17,6 @@ import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.DefaultNames;
 import com.botmaker.studio.util.MethodSignature;
 import com.botmaker.studio.util.VariableScopeVisitor;
-import io.github.classgraph.ClassInfo;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Menu;
@@ -587,23 +587,22 @@ public final class ExpressionMenu {
         libMenu.getProperties().put("loaded", true);
         libMenu.getItems().clear();
 
-        Map<String, List<ClassInfo>> byPackage = new TreeMap<>();
+        Map<String, List<LibraryType>> byPackage = new TreeMap<>();
         java.util.Set<java.nio.file.Path> pluginJars = PluginHost.pluginJars();
-        for (ClassInfo ci : analyzer.getLibraryIndex().getStaticUtilityTypes()) {
+        for (LibraryType ci : analyzer.getLibraryIndex().getStaticUtilityTypes()) {
             // A plugin's classes are omitted, catalogued or not — they're reached only through its own
             // palette, so there's a single access path (see StatementMenu / MethodInvocationBlock), and one
             // it does not catalogue is not reached at all.
-            if (PluginHost.isFacadeClass(ci.getSimpleName())) continue;
+            if (PluginHost.isFacadeClass(ci.simpleName())) continue;
             if (analyzer.getLibraryIndex().isIn(ci, pluginJars)) continue;
-            byPackage.computeIfAbsent(ci.getPackageName() == null ? "" : ci.getPackageName(),
-                    k -> new ArrayList<>()).add(ci);
+            byPackage.computeIfAbsent(ci.packageName(), k -> new ArrayList<>()).add(ci);
         }
         byPackage.forEach((pkg, classes) -> {
             Menu pkgMenu = new Menu(pkg.isEmpty() ? "(default)" : pkg);
             classes.stream()
-                    .sorted(Comparator.comparing(ClassInfo::getSimpleName))
+                    .sorted(Comparator.comparing(LibraryType::simpleName))
                     .forEach(ci -> MenuBuilders.addIfNonNull(pkgMenu.getItems(), MenuBuilders.buildScopeMenu(
-                            ci.getSimpleName(), ci.getSimpleName(), ci.getName(), true, expectedType, analyzer,
+                            ci.simpleName(), ci.simpleName(), ci.name(), true, expectedType, analyzer,
                             onSelect)));
             if (!pkgMenu.getItems().isEmpty()) libMenu.getItems().add(pkgMenu); // skip jars/packages with nothing compatible
         });

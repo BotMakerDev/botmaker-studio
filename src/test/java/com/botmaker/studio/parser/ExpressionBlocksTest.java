@@ -259,7 +259,7 @@ class ExpressionBlocksTest {
             }
         });
         SingleVariableDeclaration variable = (SingleVariableDeclaration)
-                ((TypePattern) checks[0].getPattern()).getPatternVariable();
+                ((TypePattern) checks[0].getPattern()).getPatternVariable2();
         f.editor.renameLocal(variable.getName(), "text");
         assertNotNull(f.lastCode);
         assertParses(f.lastCode);

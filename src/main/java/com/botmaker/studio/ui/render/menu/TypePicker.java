@@ -289,8 +289,7 @@ public final class TypePicker {
     static int typeParameterCount(ResolvedType type) {
         return switch (type) {
             case ResolvedType.Bound bound -> bound.binding().getTypeDeclaration().getTypeParameters().length;
-            case ResolvedType.FromIndex index -> index.info().getTypeSignature() == null
-                    ? 0 : index.info().getTypeSignature().getTypeParameters().size();
+            case ResolvedType.FromIndex index -> index.info().typeParameters();
             case ResolvedType.Named named -> classOf(named.qualifiedName()).map(c -> c.getTypeParameters().length).orElse(0);
             case ResolvedType.Primitive primitive -> 0;
         };
@@ -308,7 +307,7 @@ public final class TypePicker {
                 }
                 yield false;
             }
-            case ResolvedType.FromIndex index -> "java.lang.Throwable".equals(index.info().getName())
+            case ResolvedType.FromIndex index -> "java.lang.Throwable".equals(index.info().name())
                     || index.info().extendsSuperclass("java.lang.Throwable");
             case ResolvedType.Named named -> classOf(named.qualifiedName()).map(Throwable.class::isAssignableFrom).orElse(false);
             case ResolvedType.Primitive primitive -> false;

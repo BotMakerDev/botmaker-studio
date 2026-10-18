@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **The type index holds `index/LibraryType` records since 2026-10-18**, not ClassGraph's `ClassInfo`.
+> ClassGraph 6 removed `ScanResult.toJSON`/`fromJSON`, so `TypeSummaryManager` scans a jar, keeps what Studio
+> reads of each public class (modifiers, supertypes, type-parameter count, public methods, constructors and
+> fields with their generic and erased types, `@Deprecated`, `@Since`) and caches those records as JSON
+> (`CACHE_FORMAT` `v3`). `ProjectAnalyzer.ResolvedMethod`/`ResolvedField.FromIndex` and
+> `ResolvedType.FromIndex` wrap them. Read `suggestions.md`'s "consume ClassGraph directly" and
+> `sdk-and-shared.md`'s `ClassInfo` as history; only `nav/LibrarySource`'s outline still asks ClassGraph itself.
+
 > **Every migration is a `@Migrate` rule since 2026-10-16** (`docs/refactor/25-compatibility.md` §8, §12).
 > `@ReplacedBy`, `PluginType.replacedBy()` and every pointer are gone from the contract, and with them
 > `ApiMigrationRunner`, `Redirects`, `Pairing`, `UpgradeDiff`, `ApiReferences`, `FixList`/`FixSheet`,

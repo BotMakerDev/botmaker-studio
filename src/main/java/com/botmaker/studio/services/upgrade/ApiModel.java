@@ -1,12 +1,8 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
+import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
-import io.github.classgraph.AnnotationInfo;
-import io.github.classgraph.AnnotationInfoList;
-import io.github.classgraph.ClassInfo;
-import io.github.classgraph.FieldInfo;
-import io.github.classgraph.MethodInfo;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,9 +26,6 @@ import java.util.TreeSet;
  * the bot against both classpaths ({@code migrate.Migration}).
  */
 final class ApiModel {
-
-    /** The release an element first appeared in, which is what gives "What's new" its eras. */
-    private static final String SINCE = "com.botmaker.plugin.api.meta.Since";
 
     /** A constructor has no name of its own; this is how a member map spells one. */
     static final String CTOR = "<init>";
@@ -67,37 +60,32 @@ final class ApiModel {
         TypeSummaryManager index = TypeSummaryManager.overEverything();
         index.refresh(List.of(jar.toString()));
         Map<String, ApiClass> out = new LinkedHashMap<>();
-        for (ClassInfo ci : index.getAllTypes()) {
-            out.put(ci.getSimpleName(), apiClassOf(ci));
+        for (LibraryType type : index.getAllTypes()) {
+            out.put(type.simpleName(), apiClassOf(type));
         }
         return out;
     }
 
-    static ApiClass apiClassOf(ClassInfo ci) {
+    static ApiClass apiClassOf(LibraryType type) {
         Map<String, List<ApiMember>> byName = new LinkedHashMap<>();
-        List<MethodInfo> all = new ArrayList<>(ci.getMethodInfo());
-        all.addAll(ci.getConstructorInfo());
-        for (MethodInfo mi : all) {
-            if (!mi.isPublic() || mi.isSynthetic()) continue;
-            String name = mi.isConstructor() ? CTOR : mi.getName();
-            byName.computeIfAbsent(name, k -> new ArrayList<>())
-                    .add(new ApiMember(name, false, since(mi.getAnnotationInfo())));
-        }
+        addMethods(byName, type.methods(), false);
+        addMethods(byName, type.constructors(), true);
         // An enum constant is a public static field of its enum, so it needs no case of its own.
-        for (FieldInfo fi : ci.getFieldInfo()) {
-            if (!fi.isPublic() || fi.isSynthetic()) continue;
-            byName.computeIfAbsent(fi.getName(), k -> new ArrayList<>())
-                    .add(new ApiMember(fi.getName(), true, since(fi.getAnnotationInfo())));
+        for (LibraryType.Field field : type.fields()) {
+            if (!field.isPublic() || field.isSynthetic()) continue;
+            byName.computeIfAbsent(field.name(), k -> new ArrayList<>())
+                    .add(new ApiMember(field.name(), true, field.since()));
         }
-        return new ApiClass(ci.getName(), ci.getSimpleName(), since(ci.getAnnotationInfo()), Map.copyOf(byName));
+        return new ApiClass(type.name(), type.simpleName(), type.since(), Map.copyOf(byName));
     }
 
-    /** The {@code @Since} on an element, {@code ""} when it carries none — ClassGraph's null list included. */
-    private static String since(AnnotationInfoList annotations) {
-        AnnotationInfo annotation = annotations == null ? null : annotations.get(SINCE);
-        if (annotation == null) return "";
-        Object value = annotation.getParameterValues(true).getValue("value");
-        return value == null ? "" : String.valueOf(value).trim();
+    private static void addMethods(Map<String, List<ApiMember>> byName, List<LibraryType.Method> methods,
+                                   boolean constructors) {
+        for (LibraryType.Method method : methods) {
+            if (!method.isPublic() || method.isSynthetic()) continue;
+            String name = constructors ? CTOR : method.name();
+            byName.computeIfAbsent(name, k -> new ArrayList<>()).add(new ApiMember(name, false, method.since()));
+        }
     }
 
     /**
