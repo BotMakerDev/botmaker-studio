@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedClasses;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.BotNames;
@@ -36,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * The constants of every managed type in the bot's own source — {@code Pictures.COLLECT} and its
@@ -56,8 +60,8 @@ public final class ManagedConstants {
      * @param field       the field's name; null for a whole nested enum
      * @param initializer its initialiser, as written; null for an enum's constant
      * @param member      what an enum's constant stands for, made by its plugin from the name
-     *                    ({@code ManagedValue.byName}), a nested enum ({@code ManagedValue.byGroup}), or a field of a
-     *                    set referred to by name ({@code ManagedValue.byReference}); null for any other field,
+     *                    ({@code OneEnum.byName}), a nested enum ({@code EnumGroups.byGroup}), or a field of a
+     *                    set referred to by name ({@code OfConstants.byReference}); null for any other field,
      *                    whose initialiser says
      * @param topLevel    the top-level class {@code owner} is in, fully qualified — what a bot imports
      * @param set         the id of the open set whose mark {@code topLevel} carries; null when not known
@@ -363,8 +367,14 @@ public final class ManagedConstants {
                 classes(type, source, owner, id, known, out);
                 // A set referred to by name (ManagedValue.referredToAs, 2026-10-12): a reference to one of its
                 // constants reads as what the plugin makes of the name, and its initialiser is never read for it.
-                ManagedValue<?> referred = known.stream()
-                        .filter(value -> value != null && value.isReferredByName() && value.id().equals(id))
+                Function<String, Object> referred = known.stream()
+                        .filter(value -> value != null && value.id().equals(id))
+                        .<Function<String, Object>>flatMap(value -> switch (value) {
+                            case ManagedOpenSet.OfConstants<?> set when set.isReferredByName() ->
+                                    Stream.of(set::byReference);
+                            case ManagedClasses<?> set when set.isReferredByName() -> Stream.of(set::byReference);
+                            default -> Stream.empty();
+                        })
                         .findFirst().orElse(null);
                 for (FieldDeclaration field : type.getFields()) {
                     int flags = field.getModifiers();
@@ -373,7 +383,7 @@ public final class ManagedConstants {
                         VariableDeclarationFragment fragment = (VariableDeclarationFragment) each;
                         if (fragment.getInitializer() == null) continue;
                         String name = fragment.getName().getIdentifier();
-                        Object member = referred == null ? null : referred.byReference(name);
+                        Object member = referred == null ? null : referred.apply(name);
                         out.add(new Constant(owner, name, JavaParameterSource.text(source, fragment.getInitializer()),
                                 member).inSet(id));
                     }
@@ -388,9 +398,7 @@ public final class ManagedConstants {
                 Annotation mark = ManagedIds.on(type, known);
                 if (mark == null) return false;
                 String id = ManagedIds.idOf(mark, known);
-                ManagedValue<?> set = known.stream()
-                        .filter(value -> value != null && value.isEnum() && value.id().equals(id))
-                        .findFirst().orElse(null);
+                ManagedOpenSet.OneEnum<?> set = declared(known, ManagedOpenSet.OneEnum.class, id);
                 if (set == null) return false;
                 String owner = pkg + type.getName().getIdentifier();
                 for (Object each : type.enumConstants()) {
@@ -405,17 +413,15 @@ public final class ManagedConstants {
     }
 
     /**
-     * A set of nested classes' fields ({@code ManagedValue.isClasses}): each one {@code Screens.MARKET.beerBuy}, owned
+     * A set of nested classes' fields ({@link ManagedClasses}): each one {@code Screens.MARKET.beerBuy}, owned
      * by the constant holding its class's instance — {@code com.bot.Screens.MARKET} — and standing for what the set's
      * plugin makes of the two names, never for its initialiser. Nothing for a class of any other set.
      */
     private static void classes(TypeDeclaration type, String source, String owner, String id,
                                 Collection<ManagedValue<?>> known, List<Constant> out) {
-        ManagedValue<?> set = known.stream()
-                .filter(value -> value != null && value.isClasses() && value.id().equals(id))
-                .findFirst().orElse(null);
+        ManagedClasses<?> set = declared(known, ManagedClasses.class, id);
         if (set == null) return;
-        for (ManagedClasses.Nested nested : ManagedClasses.of(null, source, type, ValueGrammar.empty(), null)) {
+        for (NestedClasses.Nested nested : NestedClasses.of(null, source, type, ValueGrammar.empty(), null)) {
             for (ManagedSets.Member field : nested.fields()) {
                 Object member = set.byField(nested.constant(), field.name());
                 if (member != null) {
@@ -427,15 +433,13 @@ public final class ManagedConstants {
     }
 
     /**
-     * A grouped set's nested enums ({@code ManagedValue.isGrouped}): each enum as a whole, then each of its
+     * A grouped set's nested enums ({@link ManagedOpenSet.EnumGroups}): each enum as a whole, then each of its
      * constants, every one what the set's plugin makes of the names. Nothing for a class of any other set.
      */
     private static void grouped(TypeDeclaration type, String owner, Collection<ManagedValue<?>> known,
                                 List<Constant> out) {
         String id = ManagedIds.idOf(ManagedIds.on(type, known), known);
-        ManagedValue<?> set = known.stream()
-                .filter(value -> value != null && value.isGrouped() && value.id().equals(id))
-                .findFirst().orElse(null);
+        ManagedOpenSet.EnumGroups<?> set = declared(known, ManagedOpenSet.EnumGroups.class, id);
         if (set == null) return;
         for (Object body : type.bodyDeclarations()) {
             if (!(body instanceof EnumDeclaration nested)) continue;
@@ -449,5 +453,11 @@ public final class ManagedConstants {
                 if (member != null) out.add(new Constant(nestedOwner, name, null, member, owner, id));
             }
         }
+    }
+
+    /** The value of the kind {@code kind} that {@code known} declares under {@code id}, or null. */
+    private static <V> V declared(Collection<ManagedValue<?>> known, Class<V> kind, String id) {
+        return known.stream().filter(value -> kind.isInstance(value) && value.id().equals(id)).map(kind::cast)
+                .findFirst().orElse(null);
     }
 }

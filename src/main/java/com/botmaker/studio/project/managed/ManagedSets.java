@@ -43,7 +43,7 @@ import java.util.Set;
 /**
  * A plugin's open sets — a class carrying {@code @SdkValue(SdkValue.Id.PICTURES)} whose {@code public static
  * final} constants the plugin adds, renames, repoints, removes (2026-09-28) and moves (2026-10-12), or an enum
- * carrying one whose bare constants it does the same to but move ({@code ManagedValue.isEnum}, 2026-10-10).
+ * carrying one whose bare constants it does the same to but move ({@code ManagedOpenSet.OneEnum}, 2026-10-10).
  *
  * <p><b>Pure, over the bot's one parse.</b> A {@link BotIndex} in, a {@link Refactor.Planned plan} or a
  * {@link Refactor.Refused refusal} out, nothing written — the shape {@link Refactor} has, and for the same
@@ -91,7 +91,7 @@ public final class ManagedSets {
     }
 
     /**
-     * One enum nested in a grouped set's class ({@code ManagedValue.isGrouped}).
+     * One enum nested in a grouped set's class ({@code ManagedOpenSet.EnumGroups}).
      *
      * @param file      the file its class is declared in
      * @param className the class's simple name — {@code Activities}
@@ -131,8 +131,8 @@ public final class ManagedSets {
                         return;
                     }
                     if (!(declared instanceof TypeDeclaration type)) return;
-                    // A set of nested classes: its members are the classes' fields (ManagedClasses).
-                    List<ManagedClasses.Nested> classes = ManagedClasses.of(file, source, type, grammar, null);
+                    // A set of nested classes: its members are the classes' fields (NestedClasses).
+                    List<NestedClasses.Nested> classes = NestedClasses.of(file, source, type, grammar, null);
                     if (!classes.isEmpty()) {
                         classes.forEach(nested -> out.addAll(nested.fields()));
                         return;
@@ -252,9 +252,9 @@ public final class ManagedSets {
                                        JavaValue initializer) {
         int dot = name == null ? -1 : name.indexOf('.');
         if (dot > 0) {
-            Optional<ManagedClasses.Nested> into = ManagedClasses.named(index, id, name.substring(0, dot),
+            Optional<NestedClasses.Nested> into = NestedClasses.named(index, id, name.substring(0, dot),
                     ValueGrammar.empty(), null);
-            if (into.isPresent()) return ManagedClasses.addField(index, into.get(), name.substring(dot + 1), type,
+            if (into.isPresent()) return NestedClasses.addField(index, into.get(), name.substring(dot + 1), type,
                     initializer);
             return addToGroup(index, id, name.substring(0, dot), name.substring(dot + 1));
         }
@@ -350,7 +350,7 @@ public final class ManagedSets {
         String source = index.sources().get(member.file());
         String removed = member.group() == null ? removed(source, member.className(), member.name())
                 : member.initializer() != null
-                        ? ManagedClasses.removedField(source, member.className(), member.group(), member.name())
+                        ? NestedClasses.removedField(source, member.className(), member.group(), member.name())
                         : removedFromGroup(source, member.className(), member.group(), member.name());
         if (removed.equals(source)) return new Refactor.Refused(member.qualified() + " could not be removed.");
         return Refactor.checked(index, new Refactor.Planned("Removed " + member.qualified(),

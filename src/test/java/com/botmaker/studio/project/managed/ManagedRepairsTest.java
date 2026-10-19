@@ -28,7 +28,7 @@ class ManagedRepairsTest {
     static final ManagedValue<String> GREETING = ManagedValue.method(TestValue.Id.GREETING).in("Values")
             .holds(String.class, "hi").because("New.");
     static final ManagedValue<TestOutcome> ACTIVITIES = ManagedValue.openSet(TestValue.Id.ACTIVITIES)
-            .ofEnums(TestOutcome.class, ManagedRepairsTest::inGroup)
+            .ofEnumGroups(TestOutcome.class, ManagedRepairsTest::inGroup)
             .groupedAs(Group.class, ManagedRepairsTest::group)
             .in("Activities").because("New.");
 

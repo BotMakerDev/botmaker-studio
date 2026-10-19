@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.plugin.ConstantValues;
@@ -24,11 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A set of nested classes ({@code ManagedValue.ofClasses}, 2026-10-16): each class is a member with its constant,
  * its fields members of their own, its setup a value — read, written and renamed by binding.
  */
-class ManagedClassesTest {
+class NestedClassesTest {
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.empty();
 
-    private static final ManagedValue<TestScreen> SET = ManagedValue.openSet(TestValue.Id.SCREENS)
+    private static final ManagedClasses<TestScreen> SET = ManagedValue.openSet(TestValue.Id.SCREENS)
             .ofClasses(TestScreen.class)
             .fields(TestScreen.Field.class, TestScreen::field)
             .setup(TestScreen::setup)
@@ -87,9 +88,9 @@ class ManagedClassesTest {
         BotIndex index = index(root);
         assertEquals(List.of("HOME.market", "MARKET.buy", "MARKET.close"),
                 ManagedSets.members(index, ID, GRAMMAR).stream().map(ManagedSets.Member::memberName).toList());
-        List<ManagedClasses.Nested> classes = ManagedClasses.all(index, ID, GRAMMAR, "setup");
-        assertEquals(List.of("HOME", "MARKET"), classes.stream().map(ManagedClasses.Nested::constant).toList());
-        assertEquals(List.of("Home", "Market"), classes.stream().map(ManagedClasses.Nested::className).toList());
+        List<NestedClasses.Nested> classes = NestedClasses.all(index, ID, GRAMMAR, "setup");
+        assertEquals(List.of("HOME", "MARKET"), classes.stream().map(NestedClasses.Nested::constant).toList());
+        assertEquals(List.of("Home", "Market"), classes.stream().map(NestedClasses.Nested::className).toList());
         assertEquals("\"Home\"", classes.getFirst().setup());
         assertEquals("\"buy.png\"", classes.get(1).fields().getFirst().initializer());
         assertEquals("Screens.MARKET.buy", classes.get(1).fields().getFirst().qualified());
@@ -105,7 +106,7 @@ class ManagedClassesTest {
         BotIndex index = BotIndex.over(sources, List.of(locationOf(TestValue.class)), root);
         assertEquals(List.of("HOME", "TITLE", "MARKET"),
                 ManagedSets.members(index, ID, GRAMMAR).stream().map(ManagedSets.Member::name).toList());
-        assertTrue(ManagedClasses.all(index, ID, GRAMMAR, "setup").isEmpty());
+        assertTrue(NestedClasses.all(index, ID, GRAMMAR, "setup").isEmpty());
     }
 
     @Test
@@ -139,34 +140,34 @@ class ManagedClassesTest {
     void aClassIsAddedWithItsConstantAndSetup(@TempDir Path root) {
         BotIndex index = index(root);
         JavaValue setup = GRAMMAR.spellAny("Shop").orElseThrow();
-        String added = assertInstanceOf(Refactor.Planned.class, ManagedClasses.add(index, ID, "FAVORED_SHOP",
+        String added = assertInstanceOf(Refactor.Planned.class, NestedClasses.add(index, ID, "FAVORED_SHOP",
                 TestScreen.class, SET.setup(), setup, GRAMMAR)).rewrites().get(screens(root));
         assertTrue(added.contains("public static final class FavoredShop extends TestScreen"), added);
         assertTrue(added.contains("public static final FavoredShop FAVORED_SHOP = new FavoredShop();"), added);
         assertTrue(added.contains("@Override"), added);
         assertTrue(added.contains("return \"Shop\";"), added);
         assertTrue(added.indexOf("FAVORED_SHOP") > added.indexOf("MARKET = new Market()"), "after the last class");
-        assertInstanceOf(Refactor.Refused.class, ManagedClasses.add(index, ID, "MARKET", TestScreen.class,
+        assertInstanceOf(Refactor.Refused.class, NestedClasses.add(index, ID, "MARKET", TestScreen.class,
                 SET.setup(), setup, GRAMMAR), "MARKET is taken");
     }
 
     @Test
     void aClassIsRenamedWithItsConstantAndRemovedOnlyWhenNothingOutsideUsesIt(@TempDir Path root) {
         BotIndex index = index(root);
-        ManagedClasses.Nested market = ManagedClasses.named(index, ID, "MARKET", GRAMMAR, "setup").orElseThrow();
+        NestedClasses.Nested market = NestedClasses.named(index, ID, "MARKET", GRAMMAR, "setup").orElseThrow();
         Map<Path, String> renamed = assertInstanceOf(Refactor.Planned.class,
-                ManagedClasses.rename(index, market, "BAZAAR")).rewrites();
+                NestedClasses.rename(index, market, "BAZAAR")).rewrites();
         String screens = renamed.get(screens(root));
         assertTrue(screens.contains("public static final Bazaar BAZAAR = new Bazaar();"), screens);
         assertTrue(screens.contains("class Bazaar extends TestScreen"), screens);
         assertTrue(screens.contains("Screens.BAZAAR.close"), screens);
         assertTrue(renamed.get(root.resolve("Bot.java")).contains("Screens.BAZAAR.buy"), renamed.toString());
 
-        Refactor.Refused used = assertInstanceOf(Refactor.Refused.class, ManagedClasses.remove(index, market));
+        Refactor.Refused used = assertInstanceOf(Refactor.Refused.class, NestedClasses.remove(index, market));
         // Screens.MARKET.buy uses the constant and the field: two uses, one line.
         assertTrue(used.reason().contains("Screens.MARKET is still used 2 times, in Bot.java:7"), used.reason());
-        ManagedClasses.Nested home = ManagedClasses.named(index, ID, "HOME", GRAMMAR, "setup").orElseThrow();
-        String removed = assertInstanceOf(Refactor.Planned.class, ManagedClasses.remove(index, home)).rewrites()
+        NestedClasses.Nested home = NestedClasses.named(index, ID, "HOME", GRAMMAR, "setup").orElseThrow();
+        String removed = assertInstanceOf(Refactor.Planned.class, NestedClasses.remove(index, home)).rewrites()
                 .get(screens(root));
         assertFalse(removed.contains("Home"), removed);
         assertTrue(removed.contains("class Market"), removed);
@@ -175,13 +176,13 @@ class ManagedClassesTest {
     @Test
     void aSetupAndAFieldAreWrittenInPlace() {
         JavaValue shop = GRAMMAR.spellAny("Shop").orElseThrow();
-        String setup = ManagedClasses.setupSet(SCREENS, "Screens", "HOME", "setup", shop);
+        String setup = NestedClasses.setupSet(SCREENS, "Screens", "HOME", "setup", shop);
         assertTrue(setup.contains("return \"Shop\";"), setup);
         assertTrue(setup.contains("return \"Market\" + Screens.MARKET.close;"), "the other class is untouched");
-        String field = ManagedClasses.fieldSet(SCREENS, "Screens", "MARKET", "close", shop);
+        String field = NestedClasses.fieldSet(SCREENS, "Screens", "MARKET", "close", shop);
         assertTrue(field.contains("public final String close = \"Shop\";"), field);
-        assertEquals(SCREENS, ManagedClasses.setupSet(SCREENS, "Screens", "NOWHERE", "setup", shop));
-        assertEquals("FavoredShop", ManagedClasses.className("FAVORED_SHOP"));
+        assertEquals(SCREENS, NestedClasses.setupSet(SCREENS, "Screens", "NOWHERE", "setup", shop));
+        assertEquals("FavoredShop", NestedClasses.className("FAVORED_SHOP"));
     }
 
     @Test

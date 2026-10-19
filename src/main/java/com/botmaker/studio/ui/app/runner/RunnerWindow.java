@@ -299,7 +299,7 @@ public final class RunnerWindow implements ProjectWindow {
         rows.clear();
         HostParamScope scope = HostParamScope.over(HostPluginValues.live());
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
-            // A plugin's conditional parameter only while it applies (ManagedValue.Reason.when, 2026-10-12).
+            // A plugin's conditional parameter only while it applies (ManagedParam.ConditionStep.when, 2026-10-12).
             if (entry.row().isPublic() && entry.editable() && scope.shown(entry)) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.grammar());

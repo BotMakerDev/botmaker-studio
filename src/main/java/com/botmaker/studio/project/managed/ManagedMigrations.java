@@ -2,6 +2,8 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Migrated;
+import com.botmaker.plugin.api.source.ManagedClasses;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.migrate.Template;
@@ -272,7 +274,7 @@ public final class ManagedMigrations {
             return new Run(new Refactor.Refused(top.get().qualified() + " " + top.get().problem() + "."), none);
         }
         List<ManagedValue<?>> targets = declared.stream()
-                .filter(value -> value.isOpenSet() && !value.isEnum() && !value.isGrouped() && named(value.type(), to))
+                .filter(value -> holdsValues(value) && named(value.type(), to))
                 .toList();
         if (targets.size() != 1) {
             return new Run(new Refactor.Refused(targets.isEmpty()
@@ -291,7 +293,7 @@ public final class ManagedMigrations {
         Map<String, JavaValue> results = new LinkedHashMap<>();
         List<String> failed = new ArrayList<>();
         for (ManagedValue<?> set : declared) {
-            if (!set.isOpenSet() || set.isEnum() || set.isGrouped() || !named(set.type(), from)) continue;
+            if (!holdsValues(set) || !named(set.type(), from)) continue;
             for (ManagedSets.Member member : ManagedSets.members(index, set.id(), grammar)) {
                 if (member.initializer() == null) {
                     failed.add(member.qualified() + ": it has no initialiser to read");
@@ -512,6 +514,11 @@ public final class ManagedMigrations {
             if (fragment.getName().getIdentifier().equals(name)) return fragment;
         }
         return null;
+    }
+
+    /** Whether {@code value} is an open set whose members hold values — constants or nested classes, not enums. */
+    static boolean holdsValues(ManagedValue<?> value) {
+        return value instanceof ManagedOpenSet.OfConstants<?> || value instanceof ManagedClasses<?>;
     }
 
     /** Whether {@code type} is {@code cls}, by name, a primitive and its box alike. */

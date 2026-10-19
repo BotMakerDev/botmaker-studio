@@ -429,8 +429,7 @@ public final class MigrationCleanup {
                                               Class<?> type) {
         List<ManagedSets.Member> out = new ArrayList<>();
         for (ManagedValue<?> set : declared) {
-            if (set != null && set.isOpenSet() && !set.isEnum() && !set.isGrouped()
-                    && ManagedMigrations.named(set.type(), type)) {
+            if (ManagedMigrations.holdsValues(set) && ManagedMigrations.named(set.type(), type)) {
                 out.addAll(ManagedSets.members(index, set.id(), grammar));
             }
         }
@@ -465,8 +464,8 @@ public final class MigrationCleanup {
     }
 
     private static Optional<ManagedValue<?>> single(List<ManagedValue<?>> declared, Class<?> type) {
-        List<ManagedValue<?>> sets = declared.stream().filter(set -> set != null && set.isOpenSet() && !set.isEnum()
-                && !set.isGrouped() && ManagedMigrations.named(set.type(), type)).toList();
+        List<ManagedValue<?>> sets = declared.stream().filter(set -> ManagedMigrations.holdsValues(set)
+                && ManagedMigrations.named(set.type(), type)).toList();
         return sets.size() == 1 ? Optional.of(sets.getFirst()) : Optional.empty();
     }
 

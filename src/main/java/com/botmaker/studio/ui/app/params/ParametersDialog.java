@@ -251,7 +251,7 @@ public final class ParametersDialog {
      */
     private void reload() {
         rows.clear();
-        // A plugin's conditional parameter is listed only while it applies (ManagedValue.Reason.when, 2026-10-12).
+        // A plugin's conditional parameter is listed only while it applies (ManagedParam.ConditionStep.when, 2026-10-12).
         HostParamScope scope = HostParamScope.over(HostPluginValues.live());
         JavaParameters.scan(config, state).stream().filter(scope::shown).forEach(rows::add);
         // Read once per reload, beside the rows they belong to: a value cell for a field typed with one of

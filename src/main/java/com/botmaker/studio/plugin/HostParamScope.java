@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.ParamScope;
 import com.botmaker.plugin.api.source.PluginValues;
@@ -11,7 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The open bot as a conditional parameter's condition reads it ({@code ManagedValue.Reason.when}): each of the
+ * The open bot as a conditional parameter's condition reads it ({@code ManagedParam.ConditionStep.when}): each of the
  * plugin's values as the bot's Java holds it, through {@link PluginValues#open}. And the one question the host asks
  * with it — whether a parameter applies — before writing it into a bot or listing it.
  *
@@ -55,8 +56,11 @@ public final class HostParamScope implements ParamScope {
     }
 
     /** The parameter {@code id} names among {@code known}. */
-    static Optional<ManagedValue<?>> declaration(String id, List<ManagedValue<?>> known) {
+    static Optional<ManagedParam<?>> declaration(String id, List<ManagedValue<?>> known) {
         if (id == null || id.isEmpty() || known == null) return Optional.empty();
-        return known.stream().filter(value -> value != null && value.isParam() && id.equals(value.id())).findFirst();
+        return known.stream()
+                .<ManagedParam<?>>flatMap(value -> value instanceof ManagedParam<?> param && id.equals(param.id())
+                        ? java.util.stream.Stream.of(param) : java.util.stream.Stream.empty())
+                .findFirst();
     }
 }

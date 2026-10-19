@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
@@ -50,14 +51,16 @@ public final class LeftoverFields {
         if (!parameter.declaredByPlugin()) {
             return new Refactor.Refused(name + " is the bot's own parameter: params set_default sets it.");
         }
-        Optional<ManagedValue<?>> declared = live.stream()
-                .filter(value -> value != null && value.isParam() && value.id().equals(parameter.managedId()))
+        Optional<ManagedParam<?>> declared = live.stream()
+                .<ManagedParam<?>>flatMap(value -> value instanceof ManagedParam<?> param
+                        && param.id().equals(parameter.managedId())
+                        ? java.util.stream.Stream.of(param) : java.util.stream.Stream.empty())
                 .findFirst();
         if (declared.isEmpty()) {
             return new Refactor.Refused(name + " is no longer one of its plugin's parameters: delete_field removes it"
                     + " once nothing uses it.");
         }
-        ManagedValue<?> value = declared.get();
+        ManagedParam<?> value = declared.get();
         Path file = parameter.file().toAbsolutePath().normalize();
         String text = index.sources().get(file);
         if (text == null) return new Refactor.Refused(name + "'s file is not part of the bot any more.");

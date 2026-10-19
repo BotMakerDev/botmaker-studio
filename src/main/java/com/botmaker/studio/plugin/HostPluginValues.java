@@ -3,6 +3,9 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.ValueContext;
+import com.botmaker.plugin.api.source.ManagedClasses;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
+import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -17,7 +20,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.BotMethods;
 import com.botmaker.studio.project.managed.JavaManagedValues;
-import com.botmaker.studio.project.managed.ManagedClasses;
+import com.botmaker.studio.project.managed.NestedClasses;
 import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedIds;
@@ -155,7 +158,7 @@ public final class HostPluginValues implements PluginValues {
                 if (!id.equals(value.id())) continue;
                 // A method value its holder lacks, or a parameter (2026-10-12: a conditional one, now that its
                 // condition holds), is written into the holder the bot has.
-                java.util.Map<Path, List<ManagedValue<?>>> kept = value.isOpenSet()
+                java.util.Map<Path, List<ManagedValue<?>>> kept = value instanceof ManagedOpenSet<?>
                         ? java.util.Map.of()
                         : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.id(), List.of(value)));
                 if (!kept.isEmpty()) {
@@ -202,14 +205,15 @@ public final class HostPluginValues implements PluginValues {
     private List<String> writeMissing() {
         java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
         // A conditional parameter that does not apply to this bot is not written (2026-10-12):
-        // ManagedValue.Reason.when, read against the bot as it stands, once for every plugin.
+        // ManagedParam.ConditionStep.when, read against the bot as it stands, once for every plugin.
         HostParamScope scope = HostParamScope.over(this);
         for (StudioPlugin plugin : PluginHost.plugins()) {
             try {
                 List<ManagedValue<?>> offered = plugin.managedValues();
                 List<ManagedValue<?>> declared = offered == null ? List.of()
                         : offered.stream().filter(java.util.Objects::nonNull)
-                                .filter(value -> !value.isParam() || value.appliesIn(scope)).toList();
+                                .filter(value -> !(value instanceof ManagedParam<?> param) || param.appliesIn(scope))
+                                .toList();
                 if (!declared.isEmpty()) byPlugin.put(plugin.id(), declared);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.
@@ -241,7 +245,7 @@ public final class HostPluginValues implements PluginValues {
         // when a plugin window asks for it (2026-10-12).
         java.util.Map<String, List<ManagedValue<?>>> params = new java.util.LinkedHashMap<>();
         byPlugin.forEach((plugin, declared) ->
-                params.put(plugin, declared.stream().filter(ManagedValue::isParam).toList()));
+                params.put(plugin, declared.stream().filter(ManagedParam.class::isInstance).toList()));
         keep(ManagedHolders.valuesToKeep(index(), params))
                 .forEach(file -> written.add(config.projectPath().relativize(file).toString()));
         return List.copyOf(written);
@@ -314,7 +318,7 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<ValueContext> open(ManagedValue<?> value) {
         if (value == null) return Optional.empty();
-        return value.isParam() ? openParam(value) : open(value.id());
+        return value instanceof ManagedParam<?> ? openParam(value) : open(value.id());
     }
 
     /** A plugin's parameter field: the file it is in and its class and name. */
@@ -366,7 +370,7 @@ public final class HostPluginValues implements PluginValues {
     public Optional<String> create(ManagedValue<?> value) {
         // A parameter the bot already declares is there to open, or written by hand and left alone; only a missing
         // one is written. create(String) finds methods only.
-        if (value != null && value.isParam()) {
+        if (value instanceof ManagedParam<?>) {
             if (openParam(value).isPresent()) return Optional.empty();
             if (markedParam(value).isPresent()) {
                 return Optional.of(ManagedIds.spelled(value.id(), PluginHost.managedValues())
@@ -385,14 +389,14 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<ValueContext> open(ManagedValue<?> set, Member member) {
         if (set == null || member == null) return Optional.empty();
-        if (set.isClasses() && !member.grouped()) return openSetup(set, member.name());
+        if (set instanceof ManagedClasses<?> classes && !member.grouped()) return openSetup(classes, member.name());
         return open(set.id(), member.toString());
     }
 
     /** What the setup of the class whose constant is {@code constant} returns, as a value of the setup's type. */
-    private Optional<ValueContext> openSetup(ManagedValue<?> set, String constant) {
+    private Optional<ValueContext> openSetup(ManagedClasses<?> set, String constant) {
         String setup = set.setup().getName();
-        return ManagedClasses.named(index(), set.id(), constant, PluginHost.grammar(), setup)
+        return NestedClasses.named(index(), set.id(), constant, PluginHost.grammar(), setup)
                 .filter(nested -> nested.setup() != null)
                 .map(nested -> HostValueContext.of(set.setup().getGenericReturnType(), nested.setup(), services,
                         expression -> {
@@ -400,7 +404,7 @@ public final class HostPluginValues implements PluginValues {
                             recorded(() -> {
                                 snapshot();
                                 BotSources.forEach(config, state, (visited, source) -> visited.equals(file)
-                                        ? ManagedClasses.setupSet(source, nested.holder(), nested.constant(), setup,
+                                        ? NestedClasses.setupSet(source, nested.holder(), nested.constant(), setup,
                                                 imported(expression)) : null);
                             });
                             redraw(java.util.Set.of(file));
@@ -408,8 +412,8 @@ public final class HostPluginValues implements PluginValues {
     }
 
     @Override
-    public Optional<String> addClass(ManagedValue<?> set, String member, Object setup) {
-        if (set == null || !set.isClasses()) {
+    public Optional<String> addClass(ManagedValue<?> declared, String member, Object setup) {
+        if (!(declared instanceof ManagedClasses<?> set)) {
             return Optional.of("No plugin in this project declares that set as a set of classes.");
         }
         if (setup == null) return Optional.of("No setup was given for " + member + ".");
@@ -423,7 +427,7 @@ public final class HostPluginValues implements PluginValues {
             return Optional.of("No plugin in this project declares " + type.getSimpleName() + ", so " + member
                     + " cannot be written.");
         }
-        return apply(ManagedClasses.add(index(), set.id(), member, set.type(), set.setup(), imported(written.get()),
+        return apply(NestedClasses.add(index(), set.id(), member, set.type(), set.setup(), imported(written.get()),
                 PluginHost.grammar()));
     }
 
@@ -465,9 +469,9 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public List<String> groups(ManagedValue<?> set) {
         if (set == null) return List.of();
-        if (set.isClasses()) {
-            return ManagedClasses.all(index(), set.id(), PluginHost.grammar(), null).stream()
-                    .map(ManagedClasses.Nested::constant).toList();
+        if (set instanceof ManagedClasses<?>) {
+            return NestedClasses.all(index(), set.id(), PluginHost.grammar(), null).stream()
+                    .map(NestedClasses.Nested::constant).toList();
         }
         return groups(set.id());
     }
@@ -480,10 +484,10 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<String> renameGroup(ManagedValue<?> set, String group, String newName) {
         if (set == null) return Optional.of("No set was named.");
-        if (set.isClasses()) {
+        if (set instanceof ManagedClasses<?>) {
             BotIndex index = index();
-            return ManagedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
-                    .map(nested -> apply(ManagedClasses.rename(index, nested, newName)))
+            return NestedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
+                    .map(nested -> apply(NestedClasses.rename(index, nested, newName)))
                     .orElseGet(() -> Optional.of(missing(set.id(), group)));
         }
         return renameGroup(set.id(), group, newName);
@@ -492,10 +496,10 @@ public final class HostPluginValues implements PluginValues {
     @Override
     public Optional<String> removeGroup(ManagedValue<?> set, String group) {
         if (set == null) return Optional.of("No set was named.");
-        if (set.isClasses()) {
+        if (set instanceof ManagedClasses<?>) {
             BotIndex index = index();
-            return ManagedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
-                    .map(nested -> apply(ManagedClasses.remove(index, nested)))
+            return NestedClasses.named(index, set.id(), group, PluginHost.grammar(), null)
+                    .map(nested -> apply(NestedClasses.remove(index, nested)))
                     .orElseGet(() -> Optional.of(missing(set.id(), group)));
         }
         return removeGroup(set.id(), group);
@@ -551,7 +555,8 @@ public final class HostPluginValues implements PluginValues {
     }
 
     public Optional<String> addGroup(String id, String group, List<String> constants) {
-        Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id).filter(ManagedValue::isGrouped);
+        Optional<ManagedOpenSet<?>> set = openSet(PluginHost.managedValues(), id)
+                .filter(ManagedOpenSet.EnumGroups.class::isInstance);
         if (set.isEmpty()) return Optional.of(notGrouped(id));
         return apply(ManagedSets.addGroup(index(), id, group, constants, set.get().type()));
     }
@@ -658,11 +663,12 @@ public final class HostPluginValues implements PluginValues {
 
     public Optional<String> add(String id, String member, Object value) {
         if (value == null) return Optional.of("No value was given for " + member + ".");
-        Optional<ManagedValue<?>> set = openSet(PluginHost.managedValues(), id);
+        Optional<ManagedOpenSet<?>> set = openSet(PluginHost.managedValues(), id);
         Optional<String> stranger = set.flatMap(declared -> notAnElement(declared, member, value));
         if (stranger.isPresent()) return stranger;
         // An enum's constant is its name: the value was only checked, and nothing of it is written.
-        if (set.filter(declared -> declared.isEnum() || declared.isGrouped()).isPresent()) {
+        if (set.filter(declared -> declared instanceof ManagedOpenSet.OneEnum<?>
+                || declared instanceof ManagedOpenSet.EnumGroups<?>).isPresent()) {
             return apply(ManagedSets.add(index(), id, member, null, null));
         }
         Class<?> type = value instanceof Enum<?> constant ? constant.getDeclaringClass() : value.getClass();
@@ -695,20 +701,24 @@ public final class HostPluginValues implements PluginValues {
     }
 
     /** The same, against the set already found. */
-    private static Optional<String> notAnElement(ManagedValue<?> set, String member, Object value) {
+    private static Optional<String> notAnElement(ManagedOpenSet<?> set, String member, Object value) {
         // A set of classes takes fields here, each of its field type; a whole class is addClass's.
-        Class<?> element = set.isClasses() ? set.fieldType() : set.type();
-        if (set.isClasses() && !member.contains(".")) {
+        boolean classes = set instanceof ManagedClasses<?>;
+        Class<?> element = set instanceof ManagedClasses<?> nested ? nested.fieldType() : set.type();
+        if (classes && !member.contains(".")) {
             return Optional.of(member + " names a whole class of " + set.holder() + ", which is added with its setup.");
         }
         if (element == null || isA(value.getClass(), element.getName())) return Optional.empty();
         return Optional.of(member + " cannot join " + set.holder() + ": it is " + article(value.getClass())
-                + ", and every " + (set.isClasses() ? "field" : "constant") + " there is " + article(element) + ".");
+                + ", and every " + (classes ? "field" : "constant") + " there is " + article(element) + ".");
     }
 
     /** The open set {@code id} among what the plugins declare, or empty. */
-    private static Optional<ManagedValue<?>> openSet(List<ManagedValue<?>> declared, String id) {
-        return declared.stream().filter(set -> set != null && set.isOpenSet() && set.id().equals(id)).findFirst();
+    private static Optional<ManagedOpenSet<?>> openSet(List<ManagedValue<?>> declared, String id) {
+        return declared.stream()
+                .<ManagedOpenSet<?>>flatMap(value -> value instanceof ManagedOpenSet<?> set && set.id().equals(id)
+                        ? java.util.stream.Stream.of(set) : java.util.stream.Stream.empty())
+                .findFirst();
     }
 
     private static boolean isA(Class<?> cls, String name) {
@@ -818,7 +828,7 @@ public final class HostPluginValues implements PluginValues {
             snapshot();
             // An edit makes a migrated value the author's: a rerun of the migration leaves it alone from now on.
             BotSources.forEach(config, state, (visited, source) -> !visited.equals(file) ? null
-                    : nested ? ManagedClasses.fieldSet(source, member.className(), member.group(), member.name(),
+                    : nested ? NestedClasses.fieldSet(source, member.className(), member.group(), member.name(),
                             expression)
                     : ManagedMigrations.unmarked(JavaParameterEdits.setValue(source, member.className(),
                             member.name(), expression), member.className(), member.name()));

@@ -292,7 +292,7 @@ class ManagedConstantsTest {
     @Test
     void aGroupedSetsEnumsAndTheirConstantsReadAndWriteAtAnyDepth() {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
-                .ofEnums(TestOutcome.class, ManagedConstantsTest::inGroup)
+                .ofEnumGroups(TestOutcome.class, ManagedConstantsTest::inGroup)
                 .groupedAs(Group.class, ManagedConstantsTest::group)
                 .in("Activities").because("Mine."));
         String activities = """
@@ -329,7 +329,7 @@ class ManagedConstantsTest {
     @Test
     void aConstantHoldingTheBotsNamesIsReadAndWrittenAsItself() {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
-                        .ofEnums(TestOutcome.class, ManagedConstantsTest::inGroup)
+                        .ofEnumGroups(TestOutcome.class, ManagedConstantsTest::inGroup)
                         .groupedAs(Group.class, ManagedConstantsTest::group)
                         .in("Activities").because("Mine."),
                 ManagedValue.openSet(TestValue.Id.FLOW).of(Step.class).in("Steps").because("Mine."));

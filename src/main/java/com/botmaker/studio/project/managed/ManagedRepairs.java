@@ -1,5 +1,8 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.source.ManagedMethod;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
+import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -44,7 +47,7 @@ import java.util.Set;
  *       — the user's code from then on — and said back in {@link Planned#left()}; a kept class whose name the
  *       plugin's own holder takes is renamed {@code <Class>Retired}, every use with it.</li>
  *   <li><b>Still the plugin's, but its expression no longer compiles</b>: it takes the declaration's first value
- *       ({@link ManagedValue#initial()}), marked {@code @Refactor} so the Review tab lists it.</li>
+ *       ({@link ManagedMethod#initial()}), marked {@code @Refactor} so the Review tab lists it.</li>
  * </ul>
  *
  * <p>A value the plugin declares and the bot lacks is not written here: a missing parameter is written on bind
@@ -178,10 +181,10 @@ public final class ManagedRepairs {
                 }
                 continue;
             }
-            if (!failsToCompile(current, mark)) continue;
+            if (!(value instanceof ManagedMethod<?> method) || !failsToCompile(current, mark)) continue;
             String text = sources.get(mark.file());
-            Optional<JavaValue> initial = value.initial() == null ? Optional.empty()
-                    : grammar.spell(value.type(), value.initial());
+            Optional<JavaValue> initial = method.initial() == null ? Optional.empty()
+                    : grammar.spell(method.type(), method.initial());
             String reset = initial.map(v -> JavaManagedEdits.setValue(text, mark.className(), mark.member(), v))
                     .orElse(text);
             Map<Path, String> tried = new LinkedHashMap<>(sources);
@@ -295,12 +298,13 @@ public final class ManagedRepairs {
     /** Whether {@code mark} is written the way {@code value} is declared now. */
     private static boolean fits(Mark mark, ManagedValue<?> value) {
         return switch (mark.kind()) {
-            case TYPE -> value.isOpenSet() && mark.enumType() == (value.isEnum() && !value.isGrouped());
+            case TYPE -> value instanceof ManagedOpenSet<?>
+                    && mark.enumType() == (value instanceof ManagedOpenSet.OneEnum<?>);
             // A method returning another type is the old shape: resetting its expression would not compile.
-            case METHOD -> !value.isOpenSet() && !value.isParam() && value.type().getName().equals(mark.returns());
+            case METHOD -> value instanceof ManagedMethod<?> && value.type().getName().equals(mark.returns());
             // A field of another type is the old shape too: the plugin reads it as its own type, and finds nothing.
-            case FIELD -> value.isParam() && (mark.returns() == null || spelled(value.form()) == null
-                    || mark.returns().equals(spelled(value.form())));
+            case FIELD -> value instanceof ManagedParam<?> param && (mark.returns() == null
+                    || spelled(param.form()) == null || mark.returns().equals(spelled(param.form())));
         };
     }
 

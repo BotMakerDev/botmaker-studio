@@ -45,9 +45,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * A set of nested classes ({@code ManagedValue.isClasses}, 2026-10-16): a holder of {@code public static final}
+ * A set of nested classes (the contract's {@code ManagedClasses}, 2026-10-16): a holder of {@code public static final}
  * classes, each with the constant holding its one instance, its {@code public final} fields and the one method it
- * overrides ({@code ManagedValue.setup}).
+ * overrides ({@code ManagedClasses.setup}).
  *
  * <pre>{@code
  * public final class Screens {
@@ -63,9 +63,9 @@ import java.util.Set;
  * the holder is a member class. Pure, as {@link ManagedSets} is: a plan or a refusal out, every plan compiled as the
  * whole bot, nothing written.
  */
-public final class ManagedClasses {
+public final class NestedClasses {
 
-    private ManagedClasses() {}
+    private NestedClasses() {}
 
     /**
      * One class of the set.
@@ -127,7 +127,7 @@ public final class ManagedClasses {
     public static List<Nested> all(BotIndex index, String id, ValueGrammar grammar, String setupName) {
         if (id == null || id.isBlank()) return List.of();
         // Once per index, set and bind: the setup window and a block ask it on every render (2026-10-18).
-        return index.memo(PluginHost.managedValues(), Arrays.asList(ManagedClasses.class, id, grammar, setupName),
+        return index.memo(PluginHost.managedValues(), Arrays.asList(NestedClasses.class, id, grammar, setupName),
                 units -> {
             for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
                 for (Object each : entry.getValue().types()) {

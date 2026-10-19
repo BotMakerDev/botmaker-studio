@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.meta.Migrate;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.migrate.Migration;
@@ -190,11 +191,11 @@ public final class MigrationSteps {
                                           List<ManagedValue<?>> own, List<ManagedValue<?>> target) {
         Set<String> kept = new HashSet<>();
         for (ManagedValue<?> set : target) {
-            if (set != null && set.isOpenSet()) kept.add(key(set));
+            if (set instanceof ManagedOpenSet<?>) kept.add(key(set));
         }
         List<Stranded> out = new ArrayList<>();
         for (ManagedValue<?> set : own) {
-            if (set == null || !set.isOpenSet() || kept.contains(key(set))) continue;
+            if (!(set instanceof ManagedOpenSet<?>) || kept.contains(key(set))) continue;
             List<ManagedSets.Member> members = ManagedSets.members(index, set.id(), grammar);
             boolean migratable = migratable(set) && !targets(grammar, declared, set.type()).isEmpty();
             Map<String, Class<?>> copies = migratable ? MigrationCleanup.copies(index, grammar, declared, set.type())
@@ -236,7 +237,7 @@ public final class MigrationSteps {
     }
 
     private static boolean migratable(ManagedValue<?> set) {
-        return set != null && set.isOpenSet() && !set.isEnum() && !set.isGrouped() && set.type() != null;
+        return ManagedMigrations.holdsValues(set) && set.type() != null;
     }
 
     // --- one pair's steps ----------------------------------------------------------------------------------

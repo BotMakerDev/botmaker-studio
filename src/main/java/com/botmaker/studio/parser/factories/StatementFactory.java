@@ -2,6 +2,8 @@ package com.botmaker.studio.parser.factories;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
+import com.botmaker.plugin.api.source.ManagedOpenSet;
+import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
@@ -365,13 +367,13 @@ public class StatementFactory {
                 // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed each
                 // plugin's parameter of the type an argument before them takes, then every plugin's holder of
                 // values: the arguments Studio knows and the author would look up.
-                List<ManagedValue<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
+                List<ManagedParam<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
                 // Each holder's file read once per insert: one nobody opened is parsed here.
                 java.util.Map<String, Optional<CompilationUnit>> units = new java.util.HashMap<>();
                 java.util.function.Function<String, Optional<CompilationUnit>> unitOf =
                         name -> units.computeIfAbsent(name, each -> holderUnit(ctx.state(), each));
                 for (ResolvedType p : params.subList(0, params.size() - 1)) {
-                    ManagedValue<?> field = fields.stream().filter(f -> erased(f.form()).equals(erased(p))).findFirst()
+                    ManagedParam<?> field = fields.stream().filter(f -> erased(f.form()).equals(erased(p))).findFirst()
                             .orElse(null);
                     if (field == null) {
                         mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
@@ -430,14 +432,16 @@ public class StatementFactory {
      * {@code facade} declares, in its order — never another plugin's, whose {@code boolean} would fit as well.
      * The serving plugin is the one whose class loader loaded the facade.
      */
-    private static List<ManagedValue<?>> pluginParams(List<String> holders, Class<?> facade) {
+    private static List<ManagedParam<?>> pluginParams(List<String> holders, Class<?> facade) {
         for (StudioPlugin plugin : PluginHost.plugins()) {
             if (plugin.getClass().getClassLoader() != facade.getClassLoader()) continue;
             try {
                 List<ManagedValue<?>> declared = plugin.managedValues();
                 if (declared == null) return List.of();
                 return declared.stream()
-                        .filter(v -> v != null && v.isParam() && holders.contains(v.holder()))
+                        .<ManagedParam<?>>flatMap(v -> v instanceof ManagedParam<?> param
+                                && holders.contains(param.holder()) ? java.util.stream.Stream.of(param)
+                                : java.util.stream.Stream.empty())
                         .toList();
             } catch (RuntimeException | LinkageError e) {
                 return List.of();
@@ -508,7 +512,7 @@ public class StatementFactory {
      * way {@code ManagedHolders} spells it — or {@code null} when the grammar writes none. Never the parameter
      * type's default: that is what wrote {@code new Flow()}.
      */
-    private static Expression freshValue(EditContext ctx, ManagedValue<?> field) {
+    private static Expression freshValue(EditContext ctx, ManagedParam<?> field) {
         var grammar = PluginHost.grammar();
         Optional<com.botmaker.studio.plugin.grammar.JavaValue> fresh = field.initial() != null
                 ? grammar.spell(field.form(), field.initial()) : grammar.freshSpelling(field.form());
@@ -535,7 +539,7 @@ public class StatementFactory {
         Set<String> declared = declaredTypes(state);
         Set<String> holders = new LinkedHashSet<>();
         for (ManagedValue<?> value : PluginHost.managedValues()) {
-            if (value == null || value.isOpenSet() || value.holder() == null) continue;
+            if (value == null || value instanceof ManagedOpenSet<?> || value.holder() == null) continue;
             if (declared.contains(value.holder())) holders.add(value.holder());
         }
         return List.copyOf(holders);
