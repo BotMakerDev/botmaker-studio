@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.SlotContext;
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.plugin.api.slot.TypeRef;
+import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
@@ -118,6 +119,11 @@ public final class HostSlotContext implements SlotContext {
     @Override
     public <T> Optional<T> value(Class<T> type) {
         return read(context, form(), new SourceNode(slot.node(), null)).flatMap(value -> ValueGrammar.as(value, type));
+    }
+
+    @Override
+    public <T> Optional<ComponentType<T>> declared(Class<T> type) {
+        return grammar().declared(type);
     }
 
     /**

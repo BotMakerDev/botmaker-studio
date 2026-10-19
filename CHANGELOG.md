@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **A plugin's `@Fills` methods declare types** (contract 0.11.0): each return type is declared beside the
+  plugin's own, starts as a call to the method and is drawn as a pill saying its label, with the Java in the
+  tooltip (`plugin/FilledType`). A refused method is a warning on bind.
+- **`ValueContext.declared(Class)`** is answered from the grammar, on a slot and on a value alike.
+
 ## [1.5.0] — 2026-10-18
 
 ### Added

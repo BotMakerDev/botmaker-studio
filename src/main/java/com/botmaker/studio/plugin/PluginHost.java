@@ -13,6 +13,7 @@ import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.EditableType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.plugin.host.FilledTypes;
 import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
@@ -23,6 +24,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -580,7 +582,7 @@ public final class PluginHost {
                     if (editor != null) merged.add(new OwnedEditor(plugin.id(), name, editor));
                 }
             }
-            List<PluginType<?>> types = quietly(plugin, "declare types", plugin::types);
+            List<PluginType<?>> types = quietly(plugin, "declare types", () -> typesOf(plugin));
             if (types == null) continue;
             for (PluginType<?> type : types) {
                 if (!(type instanceof EditableType<?> drawn)) continue;   // a plain type: somebody else draws it
@@ -600,7 +602,7 @@ public final class PluginHost {
     public static List<OwnedType> ownedTypes() {
         List<OwnedType> out = new ArrayList<>();
         for (StudioPlugin plugin : plugins()) {
-            List<PluginType<?>> types = quietly(plugin, "declare types", plugin::types);
+            List<PluginType<?>> types = quietly(plugin, "declare types", () -> typesOf(plugin));
             if (types == null) continue;
             String name = displayNameOf(plugin);
             for (PluginType<?> type : types) {
@@ -919,6 +921,24 @@ public final class PluginHost {
     // parameterDeclared went first, on 2026-09-17, offering a declared row to each plugin until one owned it.
 
     /**
+     * What {@code plugin} declares: its own {@code types()}, then one {@link FilledType} per {@code @Fills}
+     * method in its jar whose class it does not declare itself. Throws what {@code types()} throws; a refused
+     * {@code @Fills} method declares nothing ({@link #compose} warns of it, once per bind).
+     */
+    static List<PluginType<?>> typesOf(StudioPlugin plugin) {
+        List<PluginType<?>> own = plugin.types();
+        FilledTypes.Found found = FilledTypes.of(plugin);
+        if (found.filled().isEmpty()) return own;
+        List<PluginType<?>> types = new ArrayList<>(own == null ? List.of() : own);
+        Set<String> declared = new HashSet<>();
+        for (PluginType<?> type : types) if (type != null) declared.add(type.type().getName());
+        for (FilledTypes.Filled filled : found.filled()) {
+            if (declared.add(filled.type().getName())) types.add(FilledType.of(filled));
+        }
+        return types;
+    }
+
+    /**
      * Runs one plugin call, answering {@code null} when it throws.
      *
      * <p>The same containment every other pass over plugin code here uses: a plugin's failure costs that
@@ -970,7 +990,10 @@ public final class PluginHost {
             List<ComponentType<?>> parts;
             List<String> names = new ArrayList<>();
             try {
-                offered = plugin.types();
+                offered = typesOf(plugin);
+                for (String problem : FilledTypes.of(plugin).problems()) {
+                    System.err.println("Warning: plugin " + plugin.id() + ": " + problem);
+                }
                 parts = plugin.componentTypes();
                 if (offered != null) {
                     for (PluginType<?> type : offered) if (type != null) names.add(JavaNames.canonical(type.type()));
@@ -997,8 +1020,9 @@ public final class PluginHost {
     private static String clashMessage(List<String> clashes, Map<String, String> claimedBy) {
         String owner = claimedBy.getOrDefault(clashes.getFirst(), "another plugin");
         return "it was left out: it declares " + String.join(", ", clashes)
-                + ", which " + owner + " already declares. Two plugins cannot both own a type — install one "
-                + "of them, or move to a version of one that no longer declares it.";
+                + ", which " + owner + " already declares (a method marked @Fills declares its return type too)."
+                + " Two plugins cannot both own a type — install one of them, or move to a version of one that"
+                + " no longer declares it.";
     }
 
     /** {@code first} then {@code second}, as one immutable list. */

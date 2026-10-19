@@ -223,6 +223,15 @@ public final class ValueGrammar {
     }
 
     /**
+     * {@link #component} typed for an editor's {@code ValueContext.declared}: only a declaration of this very
+     * class, so the cast is sound — a class of the same name from another loader answers empty.
+     */
+    @SuppressWarnings("unchecked")
+    public <T> Optional<ComponentType<T>> declared(Class<T> type) {
+        return component(type).filter(component -> classOf(component) == type).map(c -> (ComponentType<T>) c);
+    }
+
+    /**
      * Whether every leaf in {@code type} is one this grammar can read or a plugin declares. A type with an
      * unknown leaf anywhere is displayed and never rewritten.
      */

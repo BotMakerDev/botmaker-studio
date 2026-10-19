@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNode;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -152,6 +153,11 @@ public final class HostValueContext implements ValueContext {
         Optional<Object> value = written != null ? Optional.ofNullable(held)
                 : seed == null ? Optional.empty() : ConstantValues.read(grammar, constants, form, seed);
         return value.flatMap(v -> ValueGrammar.as(v, type));
+    }
+
+    @Override
+    public <T> Optional<ComponentType<T>> declared(Class<T> type) {
+        return grammar.declared(type);
     }
 
     @Override
