@@ -1,8 +1,11 @@
 package com.botmaker.studio.project.vcs;
 
 import com.botmaker.studio.project.ProjectConfig;
+import org.eclipse.jgit.api.AddCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ResetCommand.ResetType;
+import org.eclipse.jgit.api.RmCommand;
+import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.ObjectId;
@@ -32,6 +35,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -211,9 +215,22 @@ public final class ProjectVcs {
         // Mid-update, "add everything" would record conflict markers as the user's decision.
         if (merging()) throw new IOException("An update is in progress — finish or cancel it in the Versions tab.");
         try (Git git = open()) {
-            git.add().addFilepattern(".").call();           // new + modified files
-            git.add().addFilepattern(".").setUpdate(true).call(); // deletions of tracked files
-            if (git.status().call().isClean()) return null;
+            // Status first, then only what it names: JGit's add of "." hashes every tracked file whatever its stat
+            // says, 2.3 s a call on a bot with 70 MB of screens, and it ran twice before each plugin write (2026-10-19).
+            Status status = git.status().call();
+            if (status.isClean()) return null;
+            Set<String> changed = new TreeSet<>(status.getModified());
+            changed.addAll(status.getUntracked());
+            if (!changed.isEmpty()) {
+                AddCommand add = git.add();
+                changed.forEach(add::addFilepattern);
+                add.call();
+            }
+            if (!status.getMissing().isEmpty()) {
+                RmCommand rm = git.rm().setCached(true);
+                status.getMissing().forEach(rm::addFilepattern);
+                rm.call();
+            }
             String first = label == null || label.isBlank() ? origin.displayName() : label;
             RevCommit c = git.commit().setAuthor(author).setCommitter(author)
                     .setMessage(origin.stamp(first)).call();

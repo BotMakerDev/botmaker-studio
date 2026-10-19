@@ -71,6 +71,8 @@ public class ToolbarManager {
             refreshItems();
             if (resolutionLabel != null) resolutionLabel.setText(resolutionText());
         }, true);
+        // A plugin's write to the bot's Java — its game or capture source is a @Param now — relabels the bar too.
+        eventBus.subscribe(CoreApplicationEvents.FilesRewrittenEvent.class, e -> refreshItems(), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> setAppState(AppState.RUNNING), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStoppedEvent.class, e -> setAppState(AppState.IDLE), true);
         eventBus.subscribe(CoreApplicationEvents.DebugSessionEvent.class, e -> {

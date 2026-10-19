@@ -19,6 +19,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   tooltip (`plugin/FilledType`). A refused method is a warning on bind.
 - **`ValueContext.declared(Class)`** is answered from the grammar, on a slot and on a value alike.
 
+### Fixed
+
+- **A plugin's write no longer waits seconds on Project History.** The safety version before it staged with
+  JGit's `add .`, which hashes every tracked file each call — 2.3 s a call, twice per write, on a bot with
+  70 MB of screens. It now stages only what `status` names: 40 ms (`ProjectVcs.checkpoint`).
+- **The toolbar relabels after a plugin writes the bot's Java** (`FilesRewrittenEvent`): picking a game showed
+  the previous one on 🎮 until the next settings change.
+
 ## [1.5.0] — 2026-10-18
 
 ### Added

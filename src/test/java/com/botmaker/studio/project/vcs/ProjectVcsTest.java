@@ -44,6 +44,23 @@ class ProjectVcsTest {
     }
 
     @Test
+    void aCheckpointRecordsEditsNewFilesAndDeletionsInOneVersion(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        Files.writeString(dir.resolve("Old.java"), "class Old {}");
+        ProjectVcs vcs = new ProjectVcs(dir);
+        vcs.init();
+
+        Files.writeString(dir.resolve("Bot.java"), "class Bot { int a; }");
+        Files.createDirectories(dir.resolve("screens"));
+        Files.writeString(dir.resolve("screens/New.java"), "class New {}");
+        Files.delete(dir.resolve("Old.java"));
+
+        assertTrue(vcs.checkpoint(VersionOrigin.SAVE, "all three") != null);
+        assertEquals(2, vcs.history().size());
+        assertNull(vcs.checkpoint(VersionOrigin.AUTO, "again"), "the one version took the edit, the new file and the deletion");
+    }
+
+    @Test
     void everyVersionStudioWritesSaysWhoWroteIt(@TempDir Path dir) throws IOException {
         ProjectVcs vcs = new ProjectVcs(dir);
         Files.writeString(dir.resolve("Bot.java"), "v1");
