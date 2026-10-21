@@ -29,7 +29,7 @@ import java.nio.file.Path;
  *                    when the field also carries that plugin's mark, {@code @SdkValue(SdkValue.Id.DO_SETUP)};
  *                    blank for the bot's own parameter (2026-10-11)
  * @param managedId   the id of the plugin's mark on the field, {@code …SdkValue$Id.VM}, which names the
- *                    declaration (and its condition, {@code ManagedValue.appliesIn}); blank for the bot's own
+ *                    declaration (and its condition, {@code ManagedParam.appliesIn}); blank for the bot's own
  */
 public record JavaParameter(Path file, String className, ParameterRow row, Type form, String initializer,
                             boolean editable, String note, String owner, String managedId) {
