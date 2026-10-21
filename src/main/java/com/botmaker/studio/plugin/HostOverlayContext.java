@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.studio.project.ProjectConfig;
 
@@ -22,7 +23,7 @@ public final class HostOverlayContext implements ActionContext {
 
     private final HostActionContext base;
     private final Supplier<String> windowTitle;
-    private final Supplier<ActionContext.Area> bounds;
+    private final Supplier<Area> bounds;
 
     /**
      * @param project     where the currently open project comes from; may answer null
@@ -30,7 +31,7 @@ public final class HostOverlayContext implements ActionContext {
      * @param bounds      where that window sits <em>right now</em>; null reads as none
      */
     public HostOverlayContext(Supplier<ProjectConfig> project, Supplier<String> windowTitle,
-                              Supplier<ActionContext.Area> bounds) {
+                              Supplier<Area> bounds) {
         this.base = new HostActionContext(project);
         this.windowTitle = windowTitle;
         this.bounds = bounds;
@@ -48,7 +49,7 @@ public final class HostOverlayContext implements ActionContext {
     }
 
     @Override
-    public Optional<ActionContext.Area> overBounds() {
+    public Optional<Area> overBounds() {
         return Optional.ofNullable(bounds == null ? null : bounds.get());
     }
 }

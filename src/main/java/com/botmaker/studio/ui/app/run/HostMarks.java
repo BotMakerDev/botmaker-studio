@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.run;
 
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.Marks;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.scene.Node;

@@ -2,12 +2,12 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.assist.AssistedSetting;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.assist.PluginMove;

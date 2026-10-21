@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayContext;
 import com.botmaker.plugin.api.overlay.Marks;
 import com.botmaker.plugin.api.overlay.OverlayPart;
@@ -8,7 +9,6 @@ import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.toolbar.ActionContext;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.plugin.api.toolbar.Pressed;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;

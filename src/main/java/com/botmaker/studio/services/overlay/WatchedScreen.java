@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.overlay;
 
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.services.capture.TargetCapture;
 
 import java.awt.Rectangle;

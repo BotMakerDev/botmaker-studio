@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.studio.services.capture.DesktopGrab;
 import com.botmaker.studio.services.capture.Grab;
 import com.botmaker.studio.services.capture.ScreenShot;

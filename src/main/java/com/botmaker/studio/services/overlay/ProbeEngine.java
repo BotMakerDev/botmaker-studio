@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.ProbeContext;
 import com.botmaker.plugin.api.overlay.ProbeResult;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 
 import java.awt.image.BufferedImage;

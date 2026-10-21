@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.overlay;
 
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Probe;
 import com.botmaker.plugin.api.overlay.ProbeResult;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
 import com.botmaker.studio.plugin.PluginHost;
 import org.junit.jupiter.api.Test;
 

@@ -1,9 +1,9 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.plugin.api.palette.Fills;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.EditableType;
-import com.botmaker.plugin.api.value.Fills;
 import com.botmaker.plugin.host.FilledTypes;
 import javafx.scene.Node;
 import javafx.scene.control.Label;

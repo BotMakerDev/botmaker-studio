@@ -3,7 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.plugin.api.assist.Key;
-import com.botmaker.plugin.api.toolbar.ActionContext.Area;
+import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.studio.services.ClassFiles;
 
 import java.util.ArrayList;
