@@ -21,6 +21,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **A plugin's holder is found by plugin and name, never by its class name alone** (`project/managed/HolderFiles`).
+  A bot class, or another plugin's holder, that shares a holder's name no longer stops that holder being
+  written on bind, and an entry point's `Sdk.class`-style arguments no longer read or import the wrong class;
+  a second holder of one simple name in the same call is written in full. A holder the user moved still counts
+  while it carries its plugin's mark.
 - **A plugin's write no longer waits seconds on Project History.** The safety version before it staged with
   JGit's `add .`, which hashes every tracked file each call — 2.3 s a call, twice per write, on a bot with
   70 MB of screens. It now stages only what `status` names: 40 ms (`ProjectVcs.checkpoint`).

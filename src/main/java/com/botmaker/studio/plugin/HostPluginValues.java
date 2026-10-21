@@ -19,6 +19,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.BotMethods;
+import com.botmaker.studio.project.managed.HolderFiles;
 import com.botmaker.studio.project.managed.JavaManagedValues;
 import com.botmaker.studio.project.managed.NestedClasses;
 import com.botmaker.studio.project.managed.ManagedHolders;
@@ -204,28 +205,31 @@ public final class HostPluginValues implements PluginValues {
 
     private List<String> writeMissing() {
         java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
+        // A holder is found by every value its plugin declares: one the user moved may carry only the marks of
+        // conditional parameters that no longer apply.
+        java.util.Map<String, List<ManagedValue<?>>> allByPlugin = new java.util.LinkedHashMap<>();
         // A conditional parameter that does not apply to this bot is not written (2026-10-12):
         // ManagedParam.ConditionStep.when, read against the bot as it stands, once for every plugin.
         HostParamScope scope = HostParamScope.over(this);
         for (StudioPlugin plugin : PluginHost.plugins()) {
             try {
                 List<ManagedValue<?>> offered = plugin.managedValues();
-                List<ManagedValue<?>> declared = offered == null ? List.of()
-                        : offered.stream().filter(java.util.Objects::nonNull)
-                                .filter(value -> !(value instanceof ManagedParam<?> param) || param.appliesIn(scope))
-                                .toList();
+                List<ManagedValue<?>> all = offered == null ? List.of()
+                        : offered.stream().filter(java.util.Objects::nonNull).toList();
+                List<ManagedValue<?>> declared = all.stream()
+                        .filter(value -> !(value instanceof ManagedParam<?> param) || param.appliesIn(scope))
+                        .toList();
                 if (!declared.isEmpty()) byPlugin.put(plugin.id(), declared);
+                if (!all.isEmpty()) allByPlugin.put(plugin.id(), all);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.
             }
         }
         if (byPlugin.isEmpty()) return List.of();
-        java.util.Set<String> fileNames = new java.util.HashSet<>();
-        com.botmaker.studio.services.BotSources.scan(config, state,
-                (file, source) -> fileNames.add(file.getFileName().toString()));
+        java.util.Set<HolderFiles.Key> present = index().read(units -> HolderFiles.find(units, allByPlugin)).keySet();
         List<String> written = new ArrayList<>();
         for (ManagedHolders.Plan plan : ManagedHolders.missing(config, byPlugin, java.util.Set.copyOf(ids()),
-                fileNames, PluginHost.grammar())) {
+                present, PluginHost.grammar())) {
             if (plan instanceof ManagedHolders.Plan.Refused refused) {
                 System.err.println("Warning: " + refused.reason());
                 continue;

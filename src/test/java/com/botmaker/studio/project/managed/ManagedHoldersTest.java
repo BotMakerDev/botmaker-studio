@@ -147,7 +147,7 @@ class ManagedHoldersTest {
     void onBindEveryMissingHolderIsPlannedOnce() {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of("com.botmaker.sdk", DECLARED),
-                java.util.Set.of(), java.util.Set.of("Main.java"), TestValues.GRAMMAR);
+                java.util.Set.of(), java.util.Set.of(), TestValues.GRAMMAR);
         assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), plans.stream()
                 .map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList());
     }
@@ -159,9 +159,13 @@ class ManagedHoldersTest {
         // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
         assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
                 java.util.Set.of(ManagedValue.idOf(TestValue.Id.REST_BETWEEN)), java.util.Set.of(), TestValues.GRAMMAR)));
-        // A source of that name exists elsewhere in the bot.
+        // The bot has it ({@link HolderFiles#find}): written, or moved and still marked.
         assertEquals(List.of("plugins/sdk/Sdk.java"), relatives(ManagedHolders.missing(config, sdk,
-                java.util.Set.of(), java.util.Set.of("Pictures.java"), TestValues.GRAMMAR)));
+                java.util.Set.of(), java.util.Set.of(new HolderFiles.Key("sdk", "Pictures")), TestValues.GRAMMAR)));
+        // Another plugin's holder of that name is not this one's.
+        assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(
+                config, sdk, java.util.Set.of(), java.util.Set.of(new HolderFiles.Key("other", "Pictures")),
+                TestValues.GRAMMAR)));
         // Its file is on disk, whatever it holds.
         ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan(TestValue.Id.GREETING);
         Files.createDirectories(write.file().getParent());
@@ -246,6 +250,36 @@ class ManagedHoldersTest {
         assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
         assertTrue(ManagedHolders.valuesToKeep(index, java.util.Map.of("com.botmaker.other", List.of(DO_SETUP)))
                 .isEmpty());
+    }
+
+    /**
+     * A holder is found by plugin and name (2026-10-21): a moved one by the plugin's mark on it, never a class
+     * that only shares its name — the bot's own, or another plugin's.
+     */
+    @Test
+    void aHolderIsFoundByPluginAndNameNeverBySimpleNameAlone() {
+        Path moved = dir.resolve("src/main/java/com/bot/Sdk.java");
+        Path own = dir.resolve("src/main/java/com/bot/Pictures.java");
+        String marked = """
+                package com.bot;
+
+                import %s;
+
+                public final class Sdk {
+
+                    @TestValue(TestValue.Id.GREETING)
+                    public static String greeting() {
+                        return "hi";
+                    }
+                }
+                """.formatted(TestValue.class.getCanonicalName());
+        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+                java.util.Map.of(moved, marked, own, "package com.bot;\npublic final class Pictures {}\n"),
+                Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), dir);
+
+        java.util.Map<HolderFiles.Key, Path> found = index.read(units -> HolderFiles.find(units,
+                java.util.Map.of("com.botmaker.sdk", DECLARED, "com.acme.other", List.of(DO_SETUP))));
+        assertEquals(java.util.Map.of(new HolderFiles.Key("sdk", "Sdk"), moved), found);
     }
 
     /** A field of the parameter's name from before the plugin declared it is marked, never declared twice. */

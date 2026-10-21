@@ -7,6 +7,7 @@ import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.project.managed.HolderFiles;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -182,13 +183,53 @@ class LibraryCallImportsTest {
                 TestSupport.runtimeClassPath(), HOST, TestSupport.SOURCE_ROOT);
         EditContext ctx = EditContext.of(cu, new ProjectAnalyzer(new TypeSummaryManager(Set.of(PKG)), state), state);
 
-        assertTrue(StatementFactory.declaredTypes(state).contains("Sdk"));
-        CompilationUnit sdk = StatementFactory.holderUnit(state, "Sdk").orElseThrow();
+        HolderFiles.Key key = new HolderFiles.Key("sdk", "Sdk");
+        CompilationUnit sdk = StatementFactory.holderUnits(state, java.util.Map.of("com.botmaker.sdk", List.of()))
+                .get(key);
+        assertNotNull(sdk);
         assertTrue(StatementFactory.declaresField(sdk, "Sdk", "flow"));
         assertTrue(!StatementFactory.declaresField(sdk, "Sdk", "skip"), "a field the holder lacks is not named");
 
-        StatementFactory.importHolder(ctx, "Sdk", java.util.Optional.of(sdk));
+        StatementFactory.holderName(ctx, new StatementFactory.HolderUnit(key, sdk), new java.util.HashMap<>());
         assertTrue(ctx.applyTo(HOST).contains("import com.mybot.plugins.sdk.Sdk;"), ctx.applyTo(HOST));
+    }
+
+    /**
+     * Two plugins' holders of one simple name are two holders (2026-10-21): each is found under its own plugin,
+     * the bot's own class of that name is neither, and the second one written in a call is named in full.
+     */
+    @Test
+    void holdersOfOneSimpleNameAreToldApartByPlugin() {
+        ProjectState state = new ProjectState();
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/sdk/Pictures.java"), """
+                package com.mybot.plugins.sdk;
+                public final class Pictures {}
+                """));
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/other/Pictures.java"), """
+                package com.mybot.plugins.other;
+                public final class Pictures {}
+                """));
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/Tags.java"), """
+                package com.mybot;
+                public final class Tags {}
+                """));
+        java.util.Map<HolderFiles.Key, CompilationUnit> units = StatementFactory.holderUnits(state,
+                java.util.Map.of("com.botmaker.sdk", List.of(), "com.acme.other", List.of()));
+        HolderFiles.Key sdk = new HolderFiles.Key("sdk", "Pictures");
+        HolderFiles.Key other = new HolderFiles.Key("other", "Pictures");
+        assertEquals(Set.of(sdk, other), units.keySet(), "the bot's own Tags is no plugin's holder");
+
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
+                TestSupport.runtimeClassPath(), HOST, TestSupport.SOURCE_ROOT);
+        EditContext ctx = EditContext.of(cu, new ProjectAnalyzer(new TypeSummaryManager(Set.of(PKG)), state), state);
+        java.util.Map<String, HolderFiles.Key> named = new java.util.HashMap<>();
+        assertEquals("Pictures", StatementFactory.holderName(ctx,
+                new StatementFactory.HolderUnit(sdk, units.get(sdk)), named).getFullyQualifiedName());
+        assertEquals("com.mybot.plugins.other.Pictures", StatementFactory.holderName(ctx,
+                new StatementFactory.HolderUnit(other, units.get(other)), named).getFullyQualifiedName());
+        String imports = ctx.applyTo(HOST);
+        assertTrue(imports.contains("import com.mybot.plugins.sdk.Pictures;"), imports);
+        assertTrue(!imports.contains("import com.mybot.plugins.other.Pictures;"), imports);
     }
 
     @Test

@@ -267,19 +267,21 @@ public final class ManagedHolders {
      * Every holder the project lacks, one plan per holder, in plugin then declaration order.
      *
      * <p>A holder is lacking only when none of its values is declared anywhere in the bot
-     * ({@code declaredIds}), no source file already carries its class name ({@code fileNames}, so a
-     * {@code Sdk.java} the user moved to another package still counts), and its file is not on disk. What
-     * comes back is written by the caller; nothing here touches the filesystem but to look.
+     * ({@code declaredIds}), the bot has no holder of that plugin and name ({@code present}, so a {@code Sdk.java}
+     * the user moved to another package still counts while it carries the plugin's mark), and its file is not on
+     * disk. A class of the name that is another plugin's or the bot's own is no holder (2026-10-21: one used to hide
+     * it, and the holder was never written). What comes back is written by the caller; nothing here touches the
+     * filesystem but to look.
      *
      * @param byPlugin    each plugin's id and every value it declares
      * @param declaredIds the ids the bot's sources already declare
-     * @param fileNames   the file names of every bot source, {@code Sdk.java} and the like
+     * @param present     the holders the bot declares ({@link HolderFiles#find})
      */
     public static List<Plan> missing(ProjectConfig config, java.util.Map<String, List<ManagedValue<?>>> byPlugin,
-                                     java.util.Set<String> declaredIds, java.util.Set<String> fileNames,
+                                     java.util.Set<String> declaredIds, java.util.Set<HolderFiles.Key> present,
                                      ValueGrammar grammar) {
         List<Plan> out = new ArrayList<>();
-        java.util.Set<String> planned = new java.util.HashSet<>(fileNames);
+        java.util.Set<HolderFiles.Key> planned = new java.util.HashSet<>(present);
         byPlugin.forEach((pluginId, declared) -> {
             java.util.Set<String> holders = new java.util.LinkedHashSet<>();
             for (ManagedValue<?> value : declared) {
@@ -288,11 +290,12 @@ public final class ManagedHolders {
             for (String holder : holders) {
                 List<ManagedValue<?>> held = declared.stream()
                         .filter(v -> v != null && holder.equals(v.holder())).toList();
-                if (planned.contains(holder + ".java")) continue;
+                HolderFiles.Key key = HolderFiles.Key.of(pluginId, holder);
+                if (planned.contains(key)) continue;
                 if (held.stream().anyMatch(v -> declaredIds.contains(v.id()))) continue;
                 Plan plan = plan(config, pluginId, held.getFirst(), declared, grammar);
                 if (plan instanceof Plan.Write write && java.nio.file.Files.exists(write.file())) continue;
-                planned.add(holder + ".java");
+                planned.add(key);
                 out.add(plan);
             }
         });
@@ -481,7 +484,7 @@ public final class ManagedHolders {
 
     /**
      * Which file each plugin value is kept in on a bind ({@link #keptValues}): every parameter, in the file whose
-     * field carries its mark or else in its holder — a class of that name in {@code plugins/<segment>/} — and
+     * field carries its mark or else in its holder ({@link HolderFiles}) — and
      * every method-shaped value no declaration in the bot carries the mark of, in its holder (2026-10-12: a
      * {@code Sdk.java} an older plugin wrote lacked {@code run()}, and nothing ever wrote it). A value whose holder
      * the bot does not have is left out: {@link #missing} writes it with the holder. Nothing here writes.
@@ -492,8 +495,7 @@ public final class ManagedHolders {
             com.botmaker.studio.project.source.BotIndex index, java.util.Map<String, List<ManagedValue<?>>> byPlugin) {
         List<ManagedValue<?>> known = byPlugin.values().stream().flatMap(List::stream).toList();
         java.util.Map<String, Path> marked = new java.util.HashMap<>();
-        java.util.Map<String, Path> holders = new java.util.HashMap<>();
-        index.read(units -> {
+        java.util.Map<HolderFiles.Key, Path> holders = index.read(units -> {
             units.forEach((file, unit) -> unit.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
                 @Override
                 public boolean visit(FieldDeclaration field) {
@@ -508,27 +510,17 @@ public final class ManagedHolders {
                     if (!id.isEmpty()) marked.putIfAbsent(id, file);
                     return false;
                 }
-
-                @Override
-                public boolean visit(TypeDeclaration type) {
-                    Path folder = file.getParent();
-                    if (type.isPackageMemberTypeDeclaration() && folder != null && folder.getParent() != null
-                            && folder.getParent().getFileName().toString().equals("plugins")) {
-                        holders.putIfAbsent(folder.getFileName() + "/" + type.getName().getIdentifier(), file);
-                    }
-                    return true;
-                }
             }));
-            return null;
+            return HolderFiles.find(units, byPlugin);
         });
         java.util.Map<Path, List<ManagedValue<?>>> kept = new java.util.LinkedHashMap<>();
         byPlugin.forEach((pluginId, declared) -> {
-            String segment = segment(pluginId);
             for (ManagedValue<?> value : declared) {
                 if (value == null) continue;
                 boolean method = value instanceof ManagedMethod<?>;
                 if (!(value instanceof ManagedParam<?>) && !(method && !marked.containsKey(value.id()))) continue;
-                Path file = marked.getOrDefault(value.id(), holders.get(segment + "/" + value.holder()));
+                HolderFiles.Key key = HolderFiles.Key.of(pluginId, value.holder());
+                Path file = marked.getOrDefault(value.id(), key == null ? null : holders.get(key));
                 if (file != null) kept.computeIfAbsent(file, f -> new ArrayList<>()).add(value);
             }
         });

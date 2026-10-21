@@ -13,9 +13,10 @@ import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.project.managed.HolderFiles;
 import com.botmaker.studio.project.managed.ManagedHolders;
-import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
@@ -25,10 +26,11 @@ import org.eclipse.jdt.core.dom.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -361,43 +363,38 @@ public class StatementFactory {
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
             MethodSignature overload = defaultOverload(l, ctx.state(), ctx.analyzer());
             List<ResolvedType> params = overload == null ? null : overload.paramTypes();
-            List<String> holders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l)
-                    ? valuesHolders(ctx.state()) : List.of();
+            boolean takesHolders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l);
+            Map<String, List<ManagedValue<?>>> byPlugin = takesHolders ? pluginValues() : Map.of();
+            List<HolderUnit> holders = takesHolders ? valuesHolders(ctx.state(), byPlugin) : List.of();
             if (!holders.isEmpty()) {
                 // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed each
                 // plugin's parameter of the type an argument before them takes, then every plugin's holder of
                 // values: the arguments Studio knows and the author would look up.
-                List<ManagedParam<?>> fields = new ArrayList<>(pluginParams(holders, l.facade()));
-                // Each holder's file read once per insert: one nobody opened is parsed here.
-                java.util.Map<String, Optional<CompilationUnit>> units = new java.util.HashMap<>();
-                java.util.function.Function<String, Optional<CompilationUnit>> unitOf =
-                        name -> units.computeIfAbsent(name, each -> holderUnit(ctx.state(), each));
+                List<HeldParam> fields = new ArrayList<>(pluginParams(holders, l.facade(), byPlugin));
+                Map<String, HolderFiles.Key> named = new HashMap<>();
                 for (ResolvedType p : params.subList(0, params.size() - 1)) {
-                    ManagedParam<?> field = fields.stream().filter(f -> erased(f.form()).equals(erased(p))).findFirst()
-                            .orElse(null);
+                    HeldParam field = fields.stream().filter(f -> erased(f.param().form()).equals(erased(p)))
+                            .findFirst().orElse(null);
                     if (field == null) {
                         mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
                         ctx.addImportForType(p);
                         continue;
                     }
                     fields.remove(field);
-                    String member = ManagedHolders.memberName(field);
-                    Optional<CompilationUnit> holder = unitOf.apply(field.holder());
-                    if (holder.isEmpty() || !declaresField(holder.get(), field.holder(), member)) {
+                    String member = ManagedHolders.memberName(field.param());
+                    if (!declaresField(field.holder().unit(), field.holder().key().name(), member)) {
                         // A holder an older plugin wrote may lack the field until the next bind: its first value
                         // compiles where naming the field would not.
-                        mi.arguments().add(freshValue(ctx, field));
+                        mi.arguments().add(freshValue(ctx, field.param()));
                         continue;
                     }
-                    mi.arguments().add(ast.newQualifiedName(ast.newSimpleName(field.holder()),
+                    mi.arguments().add(ast.newQualifiedName(holderName(ctx, field.holder(), named),
                             ast.newSimpleName(member)));
-                    importHolder(ctx, field.holder(), holder);
                 }
-                for (String holder : holders) {
+                for (HolderUnit holder : holders) {
                     TypeLiteral literal = ast.newTypeLiteral();
-                    literal.setType(ast.newSimpleType(ast.newSimpleName(holder)));
+                    literal.setType(ast.newSimpleType(holderName(ctx, holder, named)));
                     mi.arguments().add(literal);
-                    importHolder(ctx, holder, unitOf.apply(holder));
                 }
             } else if (params != null) {
                 // Each seed names its type by simple name (`new Point(0, 0)`, `Duration.ofSeconds(1)`), so the
@@ -432,20 +429,18 @@ public class StatementFactory {
      * {@code facade} declares, in its order — never another plugin's, whose {@code boolean} would fit as well.
      * The serving plugin is the one whose class loader loaded the facade.
      */
-    private static List<ManagedParam<?>> pluginParams(List<String> holders, Class<?> facade) {
+    private static List<HeldParam> pluginParams(List<HolderUnit> holders, Class<?> facade,
+                                                Map<String, List<ManagedValue<?>>> byPlugin) {
         for (StudioPlugin plugin : PluginHost.plugins()) {
             if (plugin.getClass().getClassLoader() != facade.getClassLoader()) continue;
-            try {
-                List<ManagedValue<?>> declared = plugin.managedValues();
-                if (declared == null) return List.of();
-                return declared.stream()
-                        .<ManagedParam<?>>flatMap(v -> v instanceof ManagedParam<?> param
-                                && holders.contains(param.holder()) ? java.util.stream.Stream.of(param)
-                                : java.util.stream.Stream.empty())
-                        .toList();
-            } catch (RuntimeException | LinkageError e) {
-                return List.of();
+            List<HeldParam> held = new ArrayList<>();
+            for (ManagedValue<?> value : byPlugin.getOrDefault(plugin.id(), List.of())) {
+                if (!(value instanceof ManagedParam<?> param)) continue;
+                HolderFiles.Key key = HolderFiles.Key.of(plugin.id(), param.holder());
+                holders.stream().filter(h -> h.key().equals(key)).findFirst()
+                        .ifPresent(holder -> held.add(new HeldParam(param, holder)));
             }
+            return held;
         }
         return List.of();
     }
@@ -462,22 +457,62 @@ public class StatementFactory {
         return generic < 0 ? name : name.substring(0, generic);
     }
 
+    /** A plugin's holder the bot declares, and the tree of its file. */
+    record HolderUnit(HolderFiles.Key key, CompilationUnit unit) {
+    }
+
+    /** A plugin's parameter and the holder it lives in. */
+    private record HeldParam(ManagedParam<?> param, HolderUnit holder) {
+    }
+
     /**
-     * The tree of the bot's file declaring {@code holder}, by its name: parsed here when nobody opened it, so the
-     * insert does not depend on which files the editor happened to show.
+     * Each plugin's holder the bot declares ({@link HolderFiles}), by plugin and name, never by simple name alone:
+     * another plugin's {@code Pictures} or the bot's own {@code Tags} is no holder (2026-10-21). Read off the
+     * project's cached index, so a file nobody opened counts and the insert does not depend on which files the
+     * editor happened to show.
      */
-    static Optional<CompilationUnit> holderUnit(ProjectState state, String holder) {
-        if (state == null) return Optional.empty();
-        for (ProjectFile file : state.getAllFiles()) {
-            if (!holder.equals(file.getClassName())) continue;
-            if (file.getAst() != null) return Optional.of(file.getAst());
-            try {
-                return Optional.of(com.botmaker.studio.project.source.BotParser.syntax(file.getContent()));
-            } catch (RuntimeException unreadable) {
-                return Optional.empty();
+    static Map<HolderFiles.Key, CompilationUnit> holderUnits(ProjectState state,
+                                                             Map<String, List<ManagedValue<?>>> byPlugin) {
+        if (state == null) return Map.of();
+        return BotIndex.of(state).read(trees -> {
+            Map<HolderFiles.Key, CompilationUnit> units = new HashMap<>();
+            HolderFiles.find(trees, byPlugin).forEach((key, path) -> units.put(key, trees.get(path)));
+            return units;
+        });
+    }
+
+    /**
+     * The name {@code holder} is written by: short and imported, or in full when the edited file already names
+     * another class by its simple name, or another holder of it was written first in this call ({@code named}) —
+     * two plugins may each hold a {@code Pictures}.
+     */
+    static Name holderName(EditContext ctx, HolderUnit holder, Map<String, HolderFiles.Key> named) {
+        String simple = holder.key().name();
+        PackageDeclaration pkg = holder.unit().getPackage();
+        String full = pkg == null ? simple : pkg.getName().getFullyQualifiedName() + "." + simple;
+        HolderFiles.Key first = named.putIfAbsent(simple, holder.key());
+        if ((first == null || first.equals(holder.key())) && !namesAnother(ctx.cu(), simple, full)) {
+            importHolder(ctx, simple, Optional.of(holder.unit()));
+            return ctx.ast().newSimpleName(simple);
+        }
+        return ctx.ast().newName(full);
+    }
+
+    /** Whether {@code cu} imports or declares a class {@code simple} other than {@code full}. */
+    private static boolean namesAnother(CompilationUnit cu, String simple, String full) {
+        if (cu == null) return false;
+        for (Object each : cu.imports()) {
+            ImportDeclaration declaration = (ImportDeclaration) each;
+            if (declaration.isStatic() || declaration.isOnDemand()) continue;
+            String name = declaration.getName().getFullyQualifiedName();
+            if (name.endsWith("." + simple) && !name.equals(full)) return true;
+        }
+        for (Object each : cu.types()) {
+            if (each instanceof AbstractTypeDeclaration type && type.getName().getIdentifier().equals(simple)) {
+                return true;
             }
         }
-        return Optional.empty();
+        return false;
     }
 
     /** Whether {@code unit}'s class {@code holder} declares a field {@code name}. */
@@ -531,39 +566,36 @@ public class StatementFactory {
     }
 
     /**
-     * The bot's classes holding plugin values — each holder a loaded plugin's managed values name that holds a
-     * value rather than an open set's constants — that a file of {@code state} declares, by simple name, in plugin
-     * order. A holder the project lacks is left out: naming it would not compile.
+     * The bot's classes holding plugin values — each holder of {@code byPlugin} that holds a value rather than an
+     * open set's constants — that a file of {@code state} declares ({@link #holderUnits}), in plugin order. A holder
+     * the project lacks is left out: naming it would not compile. A file nobody opened counts too — {@code Sdk.java}
+     * never had a tree, so Run activity flow was seeded {@code new Flow()} (2026-10-12).
      */
-    static List<String> valuesHolders(ProjectState state) {
-        Set<String> declared = declaredTypes(state);
-        Set<String> holders = new LinkedHashSet<>();
-        for (ManagedValue<?> value : PluginHost.managedValues()) {
-            if (value == null || value instanceof ManagedOpenSet<?> || value.holder() == null) continue;
-            if (declared.contains(value.holder())) holders.add(value.holder());
-        }
-        return List.copyOf(holders);
+    static List<HolderUnit> valuesHolders(ProjectState state, Map<String, List<ManagedValue<?>>> byPlugin) {
+        Map<HolderFiles.Key, CompilationUnit> units = holderUnits(state, byPlugin);
+        Map<HolderFiles.Key, HolderUnit> holders = new LinkedHashMap<>();
+        byPlugin.forEach((pluginId, declared) -> {
+            for (ManagedValue<?> value : declared) {
+                if (value == null || value instanceof ManagedOpenSet<?> || value.holder() == null) continue;
+                HolderFiles.Key key = HolderFiles.Key.of(pluginId, value.holder());
+                if (key != null && units.containsKey(key)) holders.putIfAbsent(key, new HolderUnit(key, units.get(key)));
+            }
+        });
+        return List.copyOf(holders.values());
     }
 
-    /**
-     * The simple names of the top-level types {@code state}'s files declare. A file nobody opened has no tree yet
-     * — {@code Sdk.java} never had, so Run activity flow was seeded {@code new Flow()} (2026-10-12) — and counts
-     * by its name, the class it is named after.
-     */
-    static Set<String> declaredTypes(ProjectState state) {
-        Set<String> names = new LinkedHashSet<>();
-        if (state == null) return names;
-        for (ProjectFile file : state.getAllFiles()) {
-            CompilationUnit cu = file.getAst();
-            if (cu == null) {
-                names.add(file.getClassName());
-                continue;
-            }
-            for (Object type : cu.types()) {
-                if (type instanceof AbstractTypeDeclaration declaration) names.add(declaration.getName().getIdentifier());
+    /** Each loaded plugin's id and the values it declares, in plugin order; a plugin that cannot say costs only itself. */
+    private static Map<String, List<ManagedValue<?>>> pluginValues() {
+        Map<String, List<ManagedValue<?>>> byPlugin = new LinkedHashMap<>();
+        for (StudioPlugin plugin : PluginHost.plugins()) {
+            try {
+                List<ManagedValue<?>> declared = plugin.managedValues();
+                if (declared != null) byPlugin.put(plugin.id(), declared);
+            } catch (RuntimeException | LinkageError e) {
+                // Its holders are left out; every other plugin's are still handed over.
             }
         }
-        return names;
+        return byPlugin;
     }
 
     /**
