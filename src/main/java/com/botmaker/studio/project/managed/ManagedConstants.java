@@ -370,9 +370,7 @@ public final class ManagedConstants {
                 Function<String, Object> referred = known.stream()
                         .filter(value -> value != null && value.id().equals(id))
                         .<Function<String, Object>>flatMap(value -> switch (value) {
-                            case ManagedOpenSet.OfConstants<?> set when set.isReferredByName() ->
-                                    Stream.of(set::byReference);
-                            case ManagedClasses<?> set when set.isReferredByName() -> Stream.of(set::byReference);
+                            case ManagedOpenSet<?> set when set.isReferredByName() -> Stream.of(set::byReference);
                             default -> Stream.empty();
                         })
                         .findFirst().orElse(null);

@@ -374,7 +374,7 @@ public final class ManagedHolders {
         imports.add(Param.class.getCanonicalName());
         List<MemberValuePair> members = new ArrayList<>();
         if (!value.category().isBlank()) members.add(member(ast, "category", string(ast, value.category())));
-        if (Param.PUBLIC.equals(value.visibility())) {
+        if (value.visibility() == Param.Visibility.PUBLIC) {
             members.add(member(ast, "visibility", ast.newName(Param.class.getSimpleName() + ".PUBLIC")));
         }
         if (!value.description().isBlank()) {
@@ -661,7 +661,7 @@ public final class ManagedHolders {
             drift.put("description", value.description());
         }
         boolean isPublic = Param.PUBLIC.equals(String.valueOf(members.getOrDefault("visibility", "")));
-        if (isPublic != Param.PUBLIC.equals(value.visibility())) {
+        if (isPublic != (value.visibility() == Param.Visibility.PUBLIC)) {
             drift.put("visibility", isPublic ? "" : Param.PUBLIC);
         }
         return drift;

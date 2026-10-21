@@ -515,8 +515,12 @@ public final class HostPluginValues implements PluginValues {
     }
 
     @Override
-    public List<String> voidMethods() {
-        return methods((String) null, null);
+    public List<String> methods(MethodShape shape) {
+        return switch (shape) {
+            case VOID -> methods((String) null, null);
+            case BOOLEAN -> BotMethods.returning(index(), BotMethods.BOOLEAN);
+            case null -> List.of();
+        };
     }
 
     @Override
@@ -531,18 +535,12 @@ public final class HostPluginValues implements PluginValues {
     }
 
     @Override
-    public MethodWrite createVoidMethod(String className, String method) {
-        return createMethod((String) null, null, className, method);
-    }
-
-    @Override
-    public List<String> booleanMethods() {
-        return BotMethods.returning(index(), BotMethods.BOOLEAN);
-    }
-
-    @Override
-    public MethodWrite createBooleanMethod(String className, String method) {
-        return written(index(), className, method, BotMethods.BOOLEAN, null, null);
+    public MethodWrite createMethod(MethodShape shape, String className, String method) {
+        return switch (shape) {
+            case VOID -> createMethod((String) null, null, className, method);
+            case BOOLEAN -> written(index(), className, method, BotMethods.BOOLEAN, null, null);
+            case null -> new MethodWrite(null, "No kind of method was named.");
+        };
     }
 
     // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────
