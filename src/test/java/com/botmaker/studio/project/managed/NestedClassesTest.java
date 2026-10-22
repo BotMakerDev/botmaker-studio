@@ -136,6 +136,27 @@ class NestedClassesTest {
                 "a field keeps its class's order");
     }
 
+    /** Studio's rename of a set's member, asked from a use: planned as the plugin's own rename (2026-10-22). */
+    @Test
+    void aRenameAskedFromAUseIsTheSetsOwn(@TempDir Path root) {
+        BotIndex index = index(root);
+        Path bot = root.resolve("Bot.java");
+        Map<Path, String> renamed = assertInstanceOf(Refactor.Planned.class, ManagedRenames.plan(index, bot,
+                BOT.indexOf("MARKET"), "BAZAAR", List.of(SET), GRAMMAR).orElseThrow()).rewrites();
+        assertTrue(renamed.get(screens(root)).contains("public static final Bazaar BAZAAR = new Bazaar();"),
+                "the class is renamed with its constant");
+        assertTrue(renamed.get(bot).contains("Screens.BAZAAR.buy"), renamed.toString());
+
+        Map<Path, String> field = assertInstanceOf(Refactor.Planned.class, ManagedRenames.plan(index, bot,
+                BOT.indexOf("buy"), "purchase", List.of(SET), GRAMMAR).orElseThrow()).rewrites();
+        assertTrue(field.get(bot).contains("Screens.MARKET.purchase"), field.toString());
+
+        assertTrue(ManagedRenames.plan(index, bot, BOT.indexOf("chore"), "task", List.of(SET), GRAMMAR).isEmpty(),
+                "the bot's own method is no member of a set");
+        assertTrue(ManagedRenames.plan(index, bot, BOT.indexOf("MARKET"), "BAZAAR", List.of(), GRAMMAR).isEmpty(),
+                "no plugin declares the set: an ordinary rename");
+    }
+
     @Test
     void aClassIsAddedWithItsConstantAndSetup(@TempDir Path root) {
         BotIndex index = index(root);

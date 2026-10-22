@@ -3,13 +3,18 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
+import com.botmaker.studio.plugin.HostPluginValues;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.project.managed.ManagedRenames;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.Node;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.SimpleName;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -34,6 +39,21 @@ public final class Refactors {
         ProjectFile active = context.getState().getActiveFile();
         if (active == null || active.getPath() == null || name == null) return;
         BotIndex index = BotIndex.of(context.getConfig(), context.getState());
+        // A plugin's set member is renamed as its plugin would have it, past the lock on the plugin's file.
+        Optional<Refactor.Outcome> managed = ManagedRenames.plan(index, active.getPath(), name.getStartPosition(),
+                newName, PluginHost.managedValues(), PluginHost.grammar());
+        if (managed.isPresent()) {
+            switch (managed.get()) {
+                case Refactor.Planned plan -> HostPluginValues.applyRename(plan)
+                        .ifPresent(refused -> RefusalDialog.show(windowOf(anchor),
+                                name.getIdentifier() + " wasn't renamed", new Refactor.Refused(refused, List.of(),
+                                        List.of()), reveal(context), fix -> {}));
+                case Refactor.Refused refused -> RefusalDialog.show(windowOf(anchor),
+                        name.getIdentifier() + " wasn't renamed", refused, reveal(context),
+                        fix -> HostPluginValues.applyRename(fix));
+            }
+            return;
+        }
         Refactor.Outcome outcome = Refactor.rename(index, active.getPath(), name.getStartPosition(), newName);
         switch (outcome) {
             case Refactor.Planned plan -> context.getCodeEditor().applyRefactor(plan, name);

@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.studio.parser.helpers.SourceFormatter;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.source.BotParser;
@@ -63,7 +64,7 @@ public final class JavaManagedEdits {
         });
         if (!found[0]) return source;
         addImports(unit, ast, rewrite, expression.imports());
-        return AstRewriteHelper.applyRewrite(rewrite, source);
+        return SourceFormatter.formatValue(source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /**

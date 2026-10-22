@@ -114,6 +114,15 @@ public final class Refactor {
     }
 
     /**
+     * What the name at {@code start} in {@code file} binds to, as a key two names compare by: the same for a
+     * declaration and each of its uses; empty when it cannot be resolved.
+     */
+    public static Optional<String> keyAt(BotIndex index, Path file, int start) {
+        Path at = file == null ? null : file.toAbsolutePath().normalize();
+        return Optional.ofNullable(index.read(units -> Target.at(units.get(at), start))).map(Target::key);
+    }
+
+    /**
      * Every place the declaration named at {@code start} in {@code file} is used, the declaration left out —
      * empty when it cannot be resolved, which is not the same answer as "nothing uses it".
      */

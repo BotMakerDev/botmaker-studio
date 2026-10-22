@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Rename works on a plugin's set members.** Renaming a member of a plugin's open set, such as a screen's constant
+  `Screens.MARKET`, a picture or an activity, is no longer refused for being in the plugin's file. Studio renames it
+  as the plugin itself would, so a screen's class is renamed with its constant. This works from the canvas at any
+  use, and from the assistant's `rename`. Every other edit of a plugin's file stays the plugin's.
+- **A plugin's long value is laid out one call per line.** A managed value whose chain passes 120 columns, such as
+  a screen's `setup()`, is written one call per line. A short one stays on its line, and only what the write
+  changed is laid out.
 - **A plugin can append a call to a bot's method** (`PluginValues.appendCall`, contract 0.11.0). Studio writes
   `Owner.call(arguments…);` as the method's last statement, before a closing `return`, and imports the class. Each
   argument is written as its parameter's type, or as the named constant or field of a plugin's set. The bot must

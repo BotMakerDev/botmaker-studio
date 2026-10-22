@@ -55,6 +55,9 @@ public final class SourceFormatter {
      */
     private static final CodeFormatter SNIPPETS = ToolFactory.createCodeFormatter(snippetOptions());
 
+    /** The file's layout, with a chain that does not fit wrapped one call per line: {@link #formatValue}. */
+    private static final CodeFormatter CHAINS = ToolFactory.createCodeFormatter(chainOptions());
+
     /**
      * {@code source} laid out, or {@code source} unchanged when the formatter declines it. Never null for
      * non-null input, and never throws: this sits on the edit path, where failing closed means losing a user's
@@ -90,6 +93,19 @@ public final class SourceFormatter {
      * block it sits in.
      */
     public static String formatChanged(String previous, String source) {
+        return formatChanged(FORMATTER, previous, source);
+    }
+
+    /**
+     * {@link #formatChanged} for a managed value the host wrote (2026-10-22): a chain that fits the line stays on
+     * it, one that does not is one call per line. A screen map's {@code setup()} grows a call per edit, and JDT's
+     * default packs the calls into as few lines as fit, which reads as one wall.
+     */
+    public static String formatValue(String previous, String source) {
+        return formatChanged(CHAINS, previous, source);
+    }
+
+    private static String formatChanged(CodeFormatter formatter, String previous, String source) {
         if (source == null || source.isBlank()) return source;
         if (previous == null) return format(source);
         if (SourceParser.hasSyntaxErrors(SourceParser.parse(source))) return source;
@@ -108,7 +124,7 @@ public final class SourceFormatter {
         end = end < 0 ? source.length() : end;
         if (end <= start) return source;                     // nothing left on the changed line to lay out
         try {
-            TextEdit edit = FORMATTER.format(
+            TextEdit edit = formatter.format(
                     CodeFormatter.K_COMPILATION_UNIT, source, start, end - start, 0, LINE_SEPARATOR);
             if (edit == null) return source;
             IDocument document = new Document(source);
@@ -163,6 +179,14 @@ public final class SourceFormatter {
     private static Map<String, String> snippetOptions() {
         Map<String, String> options = options();
         options.put(DefaultCodeFormatterConstants.FORMATTER_LINE_SPLIT, String.valueOf(Integer.MAX_VALUE / 2));
+        return options;
+    }
+
+    private static Map<String, String> chainOptions() {
+        Map<String, String> options = options();
+        options.put(DefaultCodeFormatterConstants.FORMATTER_ALIGNMENT_FOR_SELECTOR_IN_METHOD_INVOCATION,
+                DefaultCodeFormatterConstants.createAlignmentValue(false,
+                        DefaultCodeFormatterConstants.WRAP_ONE_PER_LINE, DefaultCodeFormatterConstants.INDENT_DEFAULT));
         return options;
     }
 

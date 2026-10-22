@@ -113,6 +113,16 @@ public final class HostPluginValues implements PluginValues {
         current = null;
     }
 
+    /**
+     * Writes {@code plan}, a rename of a plugin's open-set member the author asked for ({@code ManagedRenames}), as
+     * the host writes one a plugin asks for: past the lock on the plugin's file, one step of the history. Empty when
+     * written, else why not.
+     */
+    public static Optional<String> applyRename(Refactor.Planned plan) {
+        HostPluginValues live = current;
+        return live == null ? Optional.of(NO_SOURCE_TREE) : live.apply(plan);
+    }
+
     /** The live values, or {@link PluginValues#NONE} when no project is open. Never null. */
     public static PluginValues live() {
         HostPluginValues live = current;

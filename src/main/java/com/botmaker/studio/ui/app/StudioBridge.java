@@ -29,11 +29,13 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.plugin.HostHistory;
+import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.managed.ManagedHolders;
+import com.botmaker.studio.project.managed.ManagedRenames;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
@@ -373,6 +375,19 @@ final class StudioBridge implements StudioDriver {
                     throw new IllegalArgumentException("The rename stopped part-way (" + failed.getMessage()
                             + "); versions revert goes back to the safety version from before.");
                 }
+            });
+        }
+        // A plugin's set member (a screen, a picture) is renamed as its plugin would have it, past the file's lock.
+        Optional<Refactor.Outcome> managed = ManagedRenames.plan(index, at.file(), at.start(), to,
+                PluginHost.managedValues(), PluginHost.grammar());
+        if (managed.isPresent()) {
+            Refactor.Planned plan = planned(managed.get());
+            return onFx(() -> {
+                unchangedSince(index, plan);
+                HostPluginValues.applyRename(plan).ifPresent(refused -> {
+                    throw new IllegalArgumentException("Studio did not rename it: " + refused);
+                });
+                return plan.summary() + " — " + plan.rewrites().size() + " file(s), one undo step.";
             });
         }
         Refactor.Planned plan = planned(Refactor.rename(index, at.file(), at.start(), to));
