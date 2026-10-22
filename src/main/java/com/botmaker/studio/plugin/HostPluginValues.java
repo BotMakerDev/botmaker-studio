@@ -8,6 +8,7 @@ import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.plugin.api.value.Ref;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
@@ -36,6 +37,10 @@ import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
 
+import java.lang.reflect.Executable;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -541,6 +546,47 @@ public final class HostPluginValues implements PluginValues {
             case BOOLEAN -> written(index(), className, method, BotMethods.BOOLEAN, null, null);
             case null -> new MethodWrite(null, "No kind of method was named.");
         };
+    }
+
+    // ── a call written into the bot's method ──────────────────────────────────────────────────────────────
+
+    @Override
+    public Optional<String> appendCall(String method, Ref call, Argument... arguments) {
+        if (call == null) return Optional.of("No call was named.");
+        Executable resolved;
+        try {
+            resolved = Ref.resolve(call);
+        } catch (RuntimeException notAReference) {
+            return Optional.of("The call is not a method reference BotMaker can read.");
+        }
+        if (!(resolved instanceof Method target) || !Modifier.isStatic(target.getModifiers())
+                || !Modifier.isPublic(target.getModifiers())) {
+            return Optional.of(resolved.getName() + " is no public static method, so nothing was written.");
+        }
+        Argument[] given = arguments == null ? new Argument[0] : arguments;
+        Type[] parameters = target.getGenericParameterTypes();
+        if (given.length != parameters.length) {
+            return Optional.of(target.getName() + " takes " + parameters.length + " argument(s), not "
+                    + given.length + ".");
+        }
+        ManagedConstants.Lookup names = new ManagedConstants.Lookup(constants(), PluginHost.grammar());
+        List<JavaValue> written = new ArrayList<>();
+        for (int i = 0; i < given.length; i++) {
+            Argument argument = given[i];
+            Optional<JavaValue> value;
+            if (argument.member() != null) {
+                value = names.member(argument.set().id(), argument.member().toString())
+                        .map(ManagedConstants.Lookup::reference);
+                if (value.isEmpty()) return Optional.of("The bot declares no " + argument.member() + " to name.");
+            } else {
+                value = ConstantValues.write(PluginHost.grammar(), this::constants, parameters[i], argument.value());
+                if (value.isEmpty()) return Optional.of(ConstantValues.refusal(PluginHost.grammar(), parameters[i],
+                        argument.value()));
+            }
+            written.add(imported(value.get()));
+        }
+        return apply(BotMethods.appendCall(index(), method, target.getDeclaringClass().getCanonicalName(),
+                target.getName(), written));
     }
 
     // ── an open set: ManagedSets planned, written here ────────────────────────────────────────────────────

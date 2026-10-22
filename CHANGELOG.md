@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A plugin can append a call to a bot's method** (`PluginValues.appendCall`, contract 0.11.0). Studio writes
+  `Owner.call(arguments…);` as the method's last statement, before a closing `return`, and imports the class. Each
+  argument is written as its parameter's type, or as the named constant or field of a plugin's set. The bot must
+  still compile, and the write is one History step. The SDK's 🗺 *Record into* is its first user.
+
 - **A plugin's `@Fills` methods declare types** (contract 0.11.0): each return type is declared beside the
   plugin's own, starts as a call to the method and is drawn as a pill saying its label, with the Java in the
   tooltip (`plugin/FilledType`). A refused method is a warning on bind.

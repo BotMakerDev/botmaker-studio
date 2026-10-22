@@ -4,6 +4,7 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.helpers.SourceFormatter;
+import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.SourceNames;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
@@ -11,7 +12,9 @@ import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.PrimitiveType;
 import org.eclipse.jdt.core.dom.ReturnStatement;
@@ -197,6 +200,76 @@ public final class BotMethods {
         if (imported != null) ImportManager.addImport(unit, rewrite, imported);
         // The rewrite writes a new node flat: only what it added is laid out, the rest of the file kept as written.
         return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /**
+     * {@code <owner's simple name>.<call>(<arguments>);} appended to the bot's method {@code method}
+     * ({@code Tavern::body}, a top-level class's method with no parameter), before its closing {@code return} when
+     * it ends in one; {@code owner} and each argument's imports are added. Refused when the bot has no such method,
+     * or the bot would not compile with it.
+     *
+     * @param owner     the canonical name of the class declaring the called method, {@code com.botmaker.sdk.api.screens.Navigate}
+     * @param arguments each already written as a value of its parameter
+     */
+    public static Refactor.Outcome appendCall(BotIndex index, String method, String owner, String call,
+                                              List<JavaValue> arguments) {
+        int split = method == null ? -1 : method.indexOf("::");
+        if (split <= 0) return new Refactor.Refused("“" + method + "” names no method of the bot.");
+        String className = method.substring(0, split);
+        String name = method.substring(split + 2);
+        Path file = index.read(units -> {
+            for (Map.Entry<Path, CompilationUnit> entry : units.entrySet()) {
+                if (target(entry.getValue(), className, name) != null) return entry.getKey();
+            }
+            return null;
+        });
+        if (file == null) return new Refactor.Refused("The bot has no method " + method + ".");
+        String source = index.sources().get(file);
+        String written = withCall(source, className, name, owner, call, arguments);
+        if (written.equals(source)) return new Refactor.Refused(method + " could not be written.");
+        String simple = owner.substring(owner.lastIndexOf('.') + 1);
+        return Refactor.checked(index, new Refactor.Planned("Added " + simple + "." + call + " to " + method,
+                Map.of(file, written), Map.of()), "Adding " + simple + "." + call + " to " + method);
+    }
+
+    /** {@code source} with the call appended to {@code className.name}, or unchanged when it has no such method. */
+    static String withCall(String source, String className, String name, String owner, String call,
+                           List<JavaValue> arguments) {
+        CompilationUnit unit = BotParser.syntax(source);
+        MethodDeclaration target = target(unit, className, name);
+        if (target == null || target.getBody() == null) return source;
+        AST ast = unit.getAST();
+        MethodInvocation invocation = ast.newMethodInvocation();
+        invocation.setExpression(ast.newSimpleName(owner.substring(owner.lastIndexOf('.') + 1)));
+        invocation.setName(ast.newSimpleName(call));
+        @SuppressWarnings("unchecked")
+        List<Object> passed = invocation.arguments();
+        for (JavaValue argument : arguments) passed.add(argument.copyInto(ast));
+        ExpressionStatement statement = ast.newExpressionStatement(invocation);
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        ListRewrite statements = rewrite.getListRewrite(target.getBody(), Block.STATEMENTS_PROPERTY);
+        List<?> existing = target.getBody().statements();
+        if (!existing.isEmpty() && existing.getLast() instanceof ReturnStatement closing) {
+            statements.insertBefore(statement, closing, null);
+        } else {
+            statements.insertLast(statement, null);
+        }
+        ImportManager.addImport(unit, rewrite, owner);
+        for (JavaValue argument : arguments) {
+            for (String imported : argument.imports()) ImportManager.addImport(unit, rewrite, imported);
+        }
+        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /** The top-level class {@code className}'s method {@code name} with no parameter, or null. */
+    private static MethodDeclaration target(CompilationUnit unit, String className, String name) {
+        for (Object each : unit.types()) {
+            if (!(each instanceof TypeDeclaration type) || !type.getName().getIdentifier().equals(className)) continue;
+            for (MethodDeclaration declared : type.getMethods()) {
+                if (declared.getName().getIdentifier().equals(name) && declared.parameters().isEmpty()) return declared;
+            }
+        }
+        return null;
     }
 
     private static boolean isJavaName(String name) {
