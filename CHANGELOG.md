@@ -35,6 +35,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **An update compiles before it is saved.** When *Get vX.Y* merges the author's release, Studio compiles the result
   first. If it has errors, a sheet lists them: *Fix them first* keeps the update open in the editor, and *Finish the
   update…* checks again. *Finish anyway* saves it with the errors, and *Undo the update* puts the project back.
+  The check runs no annotation processor, so a dependency the update adds runs no code of its own before you accept.
 - **The assistant names a bot by owner/repo when two share a name.** `create_project` refuses a name that two listed
   bots have, and `list_bots` quotes each description as its author's words.
 
