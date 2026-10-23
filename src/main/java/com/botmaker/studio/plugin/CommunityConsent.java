@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.prefs.Preferences;
 
 /**
@@ -82,35 +83,42 @@ public record CommunityConsent(Set<String> allowed) {
     /**
      * Whether loading {@code version} of the plugin at {@code coordinate} needs the user's yes first.
      *
-     * <p>Never for a dev build (the user built it on this computer), nor for the signed-in user's own plugin.
-     * Never for an official or trusted catalog row at the release it lists — and only that one (the user's call,
-     * 2026-10-23): any pom may name its own Maven repository and serve another version under the same
-     * coordinate, so a rank vouches for the tag the catalog's check passed and nothing else. Always for a
-     * community row and for a coordinate the catalog does not list — except, when no catalog could be read at all
-     * (offline on a first start, none kept), a coordinate under BotMaker's own groupId: the SDK and basics must
-     * load with no prompt.
+     * <p>Never for a dev build (the user built it on this computer). Never for an official or trusted catalog
+     * row, nor the signed-in user's own row, at the release it lists — and only that one (the user's call,
+     * 2026-10-23): any pom may name its own Maven repository and serve another version, or another jar at the
+     * same version, under the same coordinate, so a row vouches for the jar JitPack built at the tag the
+     * catalog's check passed ({@code isRelease}) and nothing else. Always for a community row and for a
+     * coordinate the catalog does not list, the user's own groupId included (Phase 7b: any repository can serve
+     * {@code com.github.<login>}) — except, when no catalog could be read at all (offline on a first start, none
+     * kept), a coordinate under BotMaker's own groupId: the SDK and basics must load with no prompt.
      *
      * @param coordinate    {@code groupId:artifactId}, blank when the jar's could not be read
      * @param version       the jar's version, as its repository directory spells it
      * @param row           the catalog row for that coordinate, empty when none lists it
      * @param catalogRead   whether a catalog was read, from GitHub or kept from the last read
      * @param signedInLogin the GitHub login signed in here, blank or null when nobody is
+     * @param isRelease     whether the jar is the one JitPack built for the row's tag; asked only of a row that
+     *                      vouches at that tag
      */
     public static boolean needsAsking(String coordinate, String version, Optional<PluginRegistry.Plugin> row,
-                                      boolean catalogRead, String signedInLogin, boolean devBuild) {
+                                      boolean catalogRead, String signedInLogin, boolean devBuild,
+                                      BooleanSupplier isRelease) {
         if (devBuild) return false;
-        String login = signedInLogin == null ? "" : signedInLogin.trim();
+        if (row.isPresent()) {
+            PluginRegistry.Plugin r = row.get();
+            boolean vouches = r.rank() != PublisherRank.COMMUNITY || isOwn(r, signedInLogin);
+            return !(vouches && vouchedFor(r, version) && isRelease.getAsBoolean());
+        }
         int colon = coordinate == null ? -1 : coordinate.indexOf(':');
         String group = colon < 0 ? "" : coordinate.substring(0, colon);
-        if (!login.isEmpty()) {
-            String owner = row.map(r -> r.repo().contains("/") ? r.repo().substring(0, r.repo().indexOf('/')) : "")
-                    .orElse(group.startsWith("com.github.") ? group.substring("com.github.".length()) : "");
-            if (owner.equalsIgnoreCase(login)) return false;
-        }
-        if (row.isPresent()) {
-            return row.get().rank() == PublisherRank.COMMUNITY || !vouchedFor(row.get(), version);
-        }
         return catalogRead || !DuplicatePlugins.isBotMakerGroup(group);
+    }
+
+    /** Whether {@code row}'s repository belongs to the signed-in login. */
+    private static boolean isOwn(PluginRegistry.Plugin row, String signedInLogin) {
+        String login = signedInLogin == null ? "" : signedInLogin.trim();
+        int slash = row.repo().indexOf('/');
+        return !login.isEmpty() && slash > 0 && row.repo().substring(0, slash).equalsIgnoreCase(login);
     }
 
     /** Whether {@code version} is the release {@code row} lists: its tag as git spells it. */

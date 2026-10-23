@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **The consent gate's four bypasses are closed since 2026-10-23** (umbrella catalog plan, Phase 7b, after a
+> security review of Phase 6). In `plugin/PluginGate.admit`: a library with classes in an admitted plugin's package
+> is left off (`packagesOf`, `shadows`); a row vouches only for the jar JitPack built at its tag
+> (`ReleaseChecksums`: the jar's SHA-1 against JitPack's `.jar.sha1`, remembered per `groupId:artifactId@tag` in the
+> preference `catalog.releaseChecksums`; never checked and offline = not the release); the user's own plugin is
+> exempt only as their catalog row at its tag, no longer by `com.github.<login>`; and `installedHere` also needs
+> `maven-metadata-local.xml` and no other `maven-metadata-*.xml` beside the jar.
+
 > **Publishing lists a bot by the catalog's pull request since 2026-10-23.** `BotPublisher`'s `LISTING` step
 > writes the description and the tags (as topics; `GitHubConfig.TOPIC` is no longer written), checks rules 3 and 5
 > on the release (`CatalogListing.refusal`), then `CatalogListing.put` opens or updates the pull request for

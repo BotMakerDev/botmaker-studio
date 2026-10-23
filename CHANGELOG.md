@@ -29,10 +29,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   its publisher; an official one says nothing.
 - **Studio asks before it first runs a community plugin.** Before a project loads a community plugin, or one the
   catalog does not list, on this computer, Studio asks you. A yes is remembered for that plugin; a no leaves it
-  unloaded, says so in *Plugins & Libraries*, and asks again next time. Your own plugins, dev builds you installed on
-  this computer, and official and trusted plugins at the release the catalog lists are never asked about; any other
-  version of an official or trusted plugin is asked once per version. Offline with no catalog ever read, BotMaker's
-  own plugins load as before.
+  unloaded, says so in *Plugins & Libraries*, and asks again next time. Dev builds you installed on this computer are
+  never asked about, nor are official and trusted plugins, or your own listed plugin, at the release the catalog
+  lists, provided the jar is the one JitPack built for that release (Studio checks its checksum once per release).
+  Any other version, or another jar at that version, is asked once per version. Offline with no catalog ever read,
+  BotMaker's own plugins load as before.
+- **A library cannot stand in for a plugin.** A jar that declares no plugin but has classes in a loaded plugin's
+  package is not loaded, and *Plugins & Libraries* names the package and the plugin.
 - **A plugin must be the one its listing names.** A plugin loaded from a catalog listing whose id is not the
   listing's is not loaded, and *Plugins & Libraries* says which id it has and which the catalog lists.
 - **The assistant's `list_templates` is now `list_bots`.** `create_project` takes `bot`, may start from any listed
