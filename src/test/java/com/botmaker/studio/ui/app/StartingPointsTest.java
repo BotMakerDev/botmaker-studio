@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** New Project starts from Blank or any published bot (2026-10-23): Blank first, the bots below it. */
@@ -97,5 +98,25 @@ class StartingPointsTest {
     void aBotIsLabelledByItsCapitalisedName() {
         assertEquals("Farm — A farm bot.  (LiQiyeDev)", StartChoice.of(bot("farm")).label());
         assertEquals("Loading published bots…", StartChoice.LOADING.label());
+        assertEquals("Farm — A farm bot.  (LiQiyeDev, based on alice/farm)",
+                StartChoice.of(bot("farm").withBasedOn("alice/farm")).label(), "a fork that follows its author");
+    }
+
+    /** Anyone can list a bot under any name: the assistant names one by owner/repo when two share it. */
+    @Test
+    void theAssistantsBotIsNamedWithoutGuessing() {
+        GalleryEntry alices = new GalleryEntry("farm", "alice", "farm", "", List.of());
+        GalleryEntry bobs = new GalleryEntry("farm", "bob", "farm", "", List.of());
+        GalleryEntry miner = new GalleryEntry("miner", "carol", "miner-bot", "", List.of());
+        List<GalleryEntry> listed = List.of(alices, bobs, miner);
+
+        assertEquals(bobs, StudioBridge.pickBot(listed, "Bob/Farm"));
+        assertEquals(miner, StudioBridge.pickBot(listed, "miner"));
+        assertEquals(miner, StudioBridge.pickBot(listed, "miner-bot"));
+        IllegalArgumentException twice = assertThrows(IllegalArgumentException.class,
+                () -> StudioBridge.pickBot(listed, "farm"));
+        assertEquals("Several bots are called farm: alice/farm, bob/farm. Name one by owner/repo.", twice.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> StudioBridge.pickBot(listed, "nope"));
+        assertThrows(IllegalArgumentException.class, () -> StudioBridge.pickBot(List.of(), "farm"));
     }
 }

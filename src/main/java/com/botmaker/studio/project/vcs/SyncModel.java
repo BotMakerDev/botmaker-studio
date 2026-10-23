@@ -24,8 +24,13 @@ public record SyncModel(Ownership ownership, Facts facts) {
         OWN_NEW,
         /** The user's own bot, with {@code mine} on their account and no author above it. */
         OWN_PUBLISHED,
-        /** Someone else's bot: {@code original} belongs to another account. */
-        OTHERS
+        /** Someone else's bot: {@code original} belongs to another account, and the user has no fork of it yet. */
+        OTHERS,
+        /**
+         * The user's fork of someone else's bot (2026-10-23): {@code original} is another account's, {@code mine}
+         * the user's. Still linked — the author's releases merge in — and publishable as a bot of its own.
+         */
+        FORK
     }
 
     /** A button the strip can offer. */
@@ -37,8 +42,10 @@ public record SyncModel(Ownership ownership, Facts facts) {
         /** Merge the original's newer release; the label names it — {@link #label}. */
         GET_UPDATE("Get update"),
         SUGGEST("Suggest to author…"),
-        /** An update was left half done (conflicts to decide): reopen its sheet. */
-        FINISH_UPDATE("Finish the update…");
+        /** An update was left half done (conflicts to decide, or errors to fix): reopen it. */
+        FINISH_UPDATE("Finish the update…"),
+        /** Unlink from the original (2026-10-23): no update notice, no suggestion, the bot the user's own. */
+        STOP_FOLLOWING("Stop following…");
 
         private final String label;
 
@@ -62,14 +69,16 @@ public record SyncModel(Ownership ownership, Facts facts) {
      * @param notInMyCopy  versions this computer has that {@code mine} lacks; -1 when nothing was pushed there
      * @param installedTag the release this bot was installed from, or null
      * @param availableTag a newer release of the original, or null
-     * @param updating     whether an update is half done, its conflicts not all decided
+     * @param updating     whether an update is half done: files to decide, or errors to fix
+     * @param pushedBeside whether {@code mine} already carries this computer's line as {@code studio/<branch>} —
+     *                     a fork that stopped following keeps pushing there, beside the author's {@code main}
      */
     public record Facts(String login, String mineUrl, String originalUrl, int unsaved, int notInMyCopy,
-                        String installedTag, String availableTag, boolean updating) {
+                        String installedTag, String availableTag, boolean updating, boolean pushedBeside) {
 
         /** Nothing known yet: signed out, no remote, no change. */
         public static Facts none() {
-            return new Facts(null, null, null, 0, -1, null, null, false);
+            return new Facts(null, null, null, 0, -1, null, null, false, false);
         }
 
         public boolean signedIn() {
@@ -122,7 +131,9 @@ public record SyncModel(Ownership ownership, Facts facts) {
         String login = f.login().toLowerCase(Locale.ROOT);
         Optional<Slug> original = slug(f.originalUrl());
         if (original.isPresent() && !original.get().owner().toLowerCase(Locale.ROOT).equals(login)) {
-            return Ownership.OTHERS;
+            Optional<Slug> mine = slug(f.mineUrl());
+            return mine.isPresent() && mine.get().owner().toLowerCase(Locale.ROOT).equals(login)
+                    ? Ownership.FORK : Ownership.OTHERS;
         }
         // An author who installed their own bot has its repository as the original: it is their copy.
         return f.mineUrl() != null || original.isPresent() ? Ownership.OWN_PUBLISHED : Ownership.OWN_NEW;
@@ -134,7 +145,7 @@ public record SyncModel(Ownership ownership, Facts facts) {
         return switch (ownership) {
             case LOCAL_ONLY -> Action.SAVE_VERSION;
             case OWN_NEW -> Action.PUBLISH;
-            case OWN_PUBLISHED, OTHERS -> Action.SAVE_TO_MY_COPY;
+            case OWN_PUBLISHED, OTHERS, FORK -> Action.SAVE_TO_MY_COPY;
         };
     }
 
@@ -151,7 +162,12 @@ public record SyncModel(Ownership ownership, Facts facts) {
             case OWN_NEW -> out.add(Action.SAVE_TO_MY_COPY);
             case OWN_PUBLISHED -> out.add(Action.PUBLISH);
             case OTHERS -> out.add(Action.SUGGEST);
+            case FORK -> {
+                out.add(Action.PUBLISH);
+                out.add(Action.SUGGEST);
+            }
         }
+        if (ownership == Ownership.OTHERS || ownership == Ownership.FORK) out.add(Action.STOP_FOLLOWING);
         return List.copyOf(out);
     }
 
@@ -161,9 +177,9 @@ public record SyncModel(Ownership ownership, Facts facts) {
                 ? "Get " + facts.availableTag() : action.label();
     }
 
-    /** "3 unsaved changes" / "Saved" / "Updating — files to decide". */
+    /** "3 unsaved changes" / "Saved" / "Updating — not finished" (files to decide, or errors to fix). */
     public String thisComputer() {
-        if (facts.updating()) return "Updating — files to decide";
+        if (facts.updating()) return "Updating — not finished";
         int n = facts.unsaved();
         return n == 0 ? "Saved" : n + (n == 1 ? " unsaved change" : " unsaved changes");
     }
@@ -201,7 +217,8 @@ public record SyncModel(Ownership ownership, Facts facts) {
      * moved on.
      */
     public String remoteBranch(String branch) {
-        return ownership == Ownership.OTHERS ? "studio/" + branch : branch;
+        return ownership == Ownership.OTHERS || ownership == Ownership.FORK || facts.pushedBeside()
+                ? "studio/" + branch : branch;
     }
 
     /** The newest release among {@code tags} after {@code installed}, or null when none is newer. */

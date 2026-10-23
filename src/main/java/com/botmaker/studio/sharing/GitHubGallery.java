@@ -43,6 +43,8 @@ public final class GitHubGallery {
      * repository nobody pushed to since is never asked twice in one run.
      */
     private static final Map<String, Boolean> IS_BOT = new ConcurrentHashMap<>();
+    /** What a following fork is based on, by {@code owner/repo@pushed_at}, as {@link #IS_BOT}. */
+    private static final Map<String, String> PARENT = new ConcurrentHashMap<>();
     /** The stars and last push the last search said, by {@code owner/repo} lower-cased. */
     private static final Map<String, RepoMeta> SEARCHED = new ConcurrentHashMap<>();
 
@@ -69,15 +71,45 @@ public final class GitHubGallery {
         CompletableFuture<List<PluginRegistry.Plugin>> plugins = registry.entries().exceptionally(e -> List.of());
         return search(1, new ArrayList<>()).thenCombine(plugins, (found, known) -> {
             List<CompletableFuture<Optional<GalleryEntry>>> checked = found.stream()
-                    .map(item -> isBot(item, known).thenApply(bot -> bot ? Optional.of(item.entry()) : Optional.<GalleryEntry>empty()))
+                    .map(item -> isBot(item, known).thenCompose(bot -> !bot
+                            ? CompletableFuture.completedFuture(Optional.<GalleryEntry>empty())
+                            : basedOn(item).thenApply(parent -> Optional.of(item.entry().withBasedOn(parent)))))
                     .toList();
             return CompletableFuture.allOf(checked.toArray(CompletableFuture[]::new))
                     .thenApply(done -> checked.stream().map(CompletableFuture::join).flatMap(Optional::stream).toList());
         }).thenCompose(all -> all);
     }
 
-    /** One search result: the entry it reads as, and its stars and last push. */
-    record Found(GalleryEntry entry, RepoMeta meta) {
+    /**
+     * One search result: the entry it reads as, its stars and last push, and whether it is a fork that still
+     * follows its original — GitHub's {@code fork}, unless the repository carries
+     * {@link BotPublisher#DETACHED_TOPIC}.
+     */
+    record Found(GalleryEntry entry, RepoMeta meta, boolean following) {
+    }
+
+    /**
+     * The {@code owner/repo} a following fork is based on, from its repository's {@code parent}: the search does
+     * not say, so one read per fork, remembered like {@link #IS_BOT}. Blank for a bot of its own, or when GitHub
+     * did not answer (not remembered, so asked again).
+     */
+    private CompletableFuture<String> basedOn(Found found) {
+        if (!found.following()) return CompletableFuture.completedFuture("");
+        String key = key(found.entry().owner(), found.entry().repo()) + "@" + found.meta().pushedAt();
+        String known = PARENT.get(key);
+        if (known != null) return CompletableFuture.completedFuture(known);
+        String url = GitHubConfig.API_BASE + "/repos/" + found.entry().owner() + "/" + found.entry().repo();
+        return client.get(url, token()).exceptionally(e -> null).thenApply(repo -> {
+            if (repo == null) return "";
+            String parent = parentOf(repo);
+            PARENT.put(key, parent);
+            return parent;
+        });
+    }
+
+    /** {@code parent.full_name} of a repository answer, blank when it is no fork. */
+    static String parentOf(JsonNode repo) {
+        return repo == null ? "" : repo.path("parent").path("full_name").asText("");
     }
 
     /** Pages through the topic search from {@code page}, adding to {@code into}; what was read when one fails. */
@@ -104,13 +136,16 @@ public final class GitHubGallery {
             String repo = item.path("name").asText("");
             if (owner.isBlank() || repo.isBlank()) continue;
             List<String> tags = new ArrayList<>();
+            boolean detached = false;
             for (JsonNode topic : item.path("topics")) {
                 String t = topic.asText("");
+                detached |= t.equals(BotPublisher.DETACHED_TOPIC);
                 if (!t.isBlank() && !t.startsWith(OWN_TOPIC_PREFIX)) tags.add(t);
             }
             out.add(new Found(new GalleryEntry(repo, owner, repo, item.path("description").asText(""), tags),
                     new RepoMeta(item.path("stargazers_count").asInt(0),
-                            parseInstant(item.path("pushed_at").asText(null)))));
+                            parseInstant(item.path("pushed_at").asText(null))),
+                    item.path("fork").asBoolean(false) && !detached));
         }
         return out;
     }

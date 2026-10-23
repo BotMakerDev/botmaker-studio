@@ -32,8 +32,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **A copy's link to its author is its git remote alone.** Nothing new writes `botmaker-source.json`; older projects
   that have one keep working. A bot whose author deleted its repository keeps running but can no longer be
   installed.
+- **An update compiles before it is saved.** When *Get vX.Y* merges the author's release, Studio compiles the result
+  first. If it has errors, a sheet lists them: *Fix them first* keeps the update open in the editor, and *Finish the
+  update…* checks again. *Finish anyway* saves it with the errors, and *Undo the update* puts the project back.
+- **The assistant names a bot by owner/repo when two share a name.** `create_project` refuses a name that two listed
+  bots have, and `list_bots` quotes each description as its author's words.
 
 ### Added
+
+- **Publish your copy of someone else's bot as a bot of its own.** Once *Save to my copy* has made your fork,
+  *Publish vX.Y…* releases it there and lists it. It stays linked: the author's new releases still reach you, and
+  Browse Bots and New Project show it as "based on" the author's bot. Your fork also opens for editing on every
+  computer.
+- **Stop following.** The Versions tab's *Stop following…* unlinks a copy from the bot it came from: no more update
+  notices and no *Suggest to author…*, and the bot becomes your own. A published fork stops showing "based on …".
+  Adding a remote named `original` in Dev follows it again.
 
 - **Rename works on a plugin's set members.** Renaming a member of a plugin's open set, such as a screen's constant
   `Screens.MARKET`, a picture or an activity, is no longer refused for being in the plugin's file. Studio renames it

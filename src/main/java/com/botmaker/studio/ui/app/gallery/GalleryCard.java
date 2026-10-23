@@ -29,6 +29,10 @@ public final class GalleryCard {
         meta.getStyleClass().add("gallery-card-note");
         meta.setWrapText(true);
         VBox text = new VBox(2, name, meta);
+        if (!entry.basedOnLine().isBlank()) {
+            // A fork that still follows its author: the author's releases reach it, so say whose they are.
+            text.getChildren().add(note(entry.basedOnLine()));
+        }
 
         if (!entry.tags().isEmpty()) {
             text.getChildren().add(note("Tags: " + String.join(", ", entry.tags())));

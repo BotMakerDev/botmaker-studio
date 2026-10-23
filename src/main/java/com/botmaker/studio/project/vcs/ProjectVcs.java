@@ -8,6 +8,7 @@ import org.eclipse.jgit.api.RmCommand;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -483,6 +484,11 @@ public final class ProjectVcs {
         try (Git git = open()) {
             Repository repo = git.getRepository();
             ObjectId had = repo.resolve("refs/tags/" + tag + "^{commit}");
+            if (had != null && repo.exactRef(OWN_RELEASES + tag) != null) {
+                // One tag name, two releases: the fork's, made here, and the author's, asked for now.
+                throw new IOException("Your own copy was published as " + tag + ", the number the author has "
+                        + "since used for their release, so it cannot be taken here.");
+            }
             var fetch = git.fetch().setRemote(remote.id())
                     .setRefSpecs(new RefSpec("refs/tags/" + tag + ":refs/tags/" + tag))
                     .setTagOpt(org.eclipse.jgit.transport.TagOpt.NO_TAGS);
@@ -830,6 +836,36 @@ public final class ProjectVcs {
         }
     }
 
+    /** Whether this computer has seen {@code branch} on {@code remote}: its remote-tracking ref exists. */
+    public boolean hasRemoteBranch(Remote remote, String branch) {
+        if (!isRepo()) return false;
+        try (Git git = open()) {
+            return git.getRepository().exactRef(Constants.R_REMOTES + remote.id() + "/" + branch) != null;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Removes {@code remote} and its remote-tracking refs; nothing when there is none. The tags it brought stay:
+     * they are commits of this history. <i>Stop following</i> ({@code 39} §7, 2026-10-23).
+     */
+    public void removeRemote(Remote remote) throws IOException {
+        if (!isRepo() || remoteUrl(remote) == null) return;
+        try (Git git = open()) {
+            git.remoteRemove().setRemoteName(remote.id()).call();
+            // JGit unsets the config section only.
+            Repository repo = git.getRepository();
+            for (Ref tracking : repo.getRefDatabase().getRefsByPrefix(Constants.R_REMOTES + remote.id() + "/")) {
+                org.eclipse.jgit.lib.RefUpdate drop = repo.updateRef(tracking.getName());
+                drop.setForceUpdate(true);
+                drop.delete();
+            }
+        } catch (Exception e) {
+            throw new IOException("Could not remove the remote " + remote.id() + ": " + e.getMessage(), e);
+        }
+    }
+
     /**
      * Renames the old backup remote {@code origin} to {@link Remote#MINE}, with its remote-tracking refs, when
      * the project has the one and not the other. Returns whether it did. Idempotent.
@@ -1141,10 +1177,61 @@ public final class ProjectVcs {
     public String releaseTag() {
         if (!isRepo()) return "";
         try (Git git = open()) {
-            String described = git.describe().setTags(true).call();
+            Repository repo = git.getRepository();
+            // A fork's own releases (markOwnRelease) are the user's, not the original's: an update is offered
+            // against the author's release the fork is at, never against the fork's own number.
+            List<String> theirs = new ArrayList<>();
+            for (Ref tag : repo.getRefDatabase().getRefsByPrefix(Constants.R_TAGS)) {
+                String name = tag.getName().substring(Constants.R_TAGS.length());
+                if (repo.exactRef(OWN_RELEASES + name) == null) theirs.add(name);
+            }
+            if (theirs.isEmpty()) return "";
+            String described = git.describe().setTags(true).setMatch(theirs.toArray(String[]::new)).call();
             return described == null ? "" : described.replaceFirst("-\\d+-g[0-9a-f]+$", "");
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /**
+     * Where a fork's own release tags are marked: a ref per tag, named like it, beside it. Local only — never
+     * pushed — so the mark says "made on this computer for the user's fork" and nothing more.
+     */
+    static final String OWN_RELEASES = "refs/botmaker/own-releases/";
+
+    /**
+     * Marks the tag {@code name} as a release of the user's fork rather than of the original (2026-10-23), so
+     * {@link #releaseTag} keeps naming the author's release the project is at. Idempotent.
+     */
+    public void markOwnRelease(String name) throws IOException {
+        try (Git git = open()) {
+            Repository repo = git.getRepository();
+            ObjectId tag = repo.resolve(Constants.R_TAGS + name.trim());
+            if (tag == null) throw new IOException("No tag " + name + " to mark.");
+            org.eclipse.jgit.lib.RefUpdate mark = repo.updateRef(OWN_RELEASES + name.trim());
+            mark.setNewObjectId(tag);
+            mark.setForceUpdate(true);
+            mark.update();
+        }
+    }
+
+    /** Whether this project has the tag {@code name}. */
+    public boolean hasTag(String name) {
+        if (!isRepo()) return false;
+        try (Git git = open()) {
+            return git.getRepository().exactRef(Constants.R_TAGS + name.trim()) != null;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Whether {@code name} is one of the user's fork's own releases ({@link #markOwnRelease}). */
+    public boolean isOwnRelease(String name) {
+        if (!isRepo()) return false;
+        try (Git git = open()) {
+            return git.getRepository().exactRef(OWN_RELEASES + name.trim()) != null;
+        } catch (IOException e) {
+            return false;
         }
     }
 

@@ -45,6 +45,29 @@ class BotSearchTest {
         assertEquals(new GitHubGallery.RepoMeta(12, 1792483200L), found.getFirst().meta());
     }
 
+    /** A fork reads "based on" its parent until its author marks it detached (Stop following, 2026-10-23). */
+    @Test
+    void aForkFollowsItsParentUntilItIsMarkedDetached() throws Exception {
+        List<GitHubGallery.Found> found = GitHubGallery.parseSearch(MAPPER.readTree("""
+                {"items": [
+                  {"name": "a", "owner": {"login": "alice"}, "topics": ["botmaker-bot"], "fork": false},
+                  {"name": "b", "owner": {"login": "bob"}, "topics": ["botmaker-bot"], "fork": true},
+                  {"name": "c", "owner": {"login": "carol"}, "topics": ["botmaker-bot", "botmaker-detached"],
+                   "fork": true}
+                ]}
+                """));
+        assertEquals(List.of(false, true, false), found.stream().map(GitHubGallery.Found::following).toList());
+
+        assertEquals("alice/a", GitHubGallery.parentOf(MAPPER.readTree(
+                "{\"fork\": true, \"parent\": {\"full_name\": \"alice/a\"}}")));
+        assertEquals("", GitHubGallery.parentOf(MAPPER.readTree("{\"fork\": false}")));
+        assertEquals("", GitHubGallery.parentOf(null));
+
+        GalleryEntry fork = new GalleryEntry("b", "bob", "b", "", List.of()).withBasedOn("alice/a");
+        assertEquals("based on alice/a", fork.basedOnLine());
+        assertEquals("", fork.withBasedOn("").basedOnLine());
+    }
+
     @Test
     void noAnswerIsNoListing() throws Exception {
         assertTrue(GitHubGallery.parseSearch(null).isEmpty());

@@ -38,6 +38,12 @@ import java.util.function.Consumer;
  */
 public final class BotPublisher {
 
+    /**
+     * The topic on a published fork that no longer follows its original (2026-10-23): it is listed as a bot of
+     * its own, with no "based on …". Studio's own, so never a bot's tag.
+     */
+    public static final String DETACHED_TOPIC = "botmaker-detached";
+
     /** GitHub's most topics on one repository. */
     static final int MAX_TOPICS = 20;
     /** GitHub's longest topic. */
@@ -69,6 +75,15 @@ public final class BotPublisher {
     public static String ownerFor(String login, Optional<SyncModel.Slug> mine, boolean canPushToMine) {
         if (mine.isEmpty() || mine.get().owner().equalsIgnoreCase(login)) return login;
         return canPushToMine ? mine.get().owner() : login;
+    }
+
+    /**
+     * Whether publishing into {@code owner}'s repository publishes a fork: the project follows an original under
+     * another account ({@code 39} §8, 2026-10-23).
+     */
+    static boolean isFork(ProjectVcs vcs, String owner) {
+        return SyncModel.slug(vcs.remoteUrl(Remote.ORIGINAL))
+                .filter(original -> !original.owner().equalsIgnoreCase(owner)).isPresent();
     }
 
     /**
@@ -233,11 +248,25 @@ public final class BotPublisher {
          */
         private String push() throws IOException {
             if (branch == null) ensureRepository();
-            boolean joined = vcs.joinUnrelated(Remote.MINE, branch,
+            // A fork's main keeps tracking its author; the user's line is studio/<branch>, as Save to my copy
+            // pushes it, and the release tags that line's head (2026-10-23). A fork shares its author's history,
+            // so there is nothing to join.
+            boolean fork = isFork(vcs, owner);
+            // A fork that stopped following keeps its line where it pushed it as one.
+            boolean beside = fork || vcs.hasRemoteBranch(Remote.MINE, "studio/" + vcs.branch());
+            String target = beside ? "studio/" + vcs.branch() : branch;
+            if (fork && vcs.hasTag(request.version()) && !vcs.isOwnRelease(request.version())) {
+                // The author's release by that number is here already: marking it the fork's would hide it.
+                throw new IOException("The original already has a release " + request.version()
+                        + ". Pick a higher version for your copy.");
+            }
+            boolean joined = !beside && vcs.joinUnrelated(Remote.MINE, branch,
                     "Joined the versions already on github.com/" + slug(), token);
             commitSha = vcs.tagHead(request.version(), "Published " + request.botName() + " " + request.version());
-            vcs.push(Remote.MINE, branch, token);
-            return commitSha.substring(0, 7) + (joined ? ", joined to the history on GitHub" : "");
+            if (fork) vcs.markOwnRelease(request.version());
+            vcs.push(Remote.MINE, target, token);
+            return commitSha.substring(0, 7) + (beside ? " on " + target : "")
+                    + (joined ? ", joined to the history on GitHub" : "");
         }
 
         /**
@@ -368,6 +397,43 @@ public final class BotPublisher {
             throw new IOException("Couldn't take the topic " + GitHubConfig.TOPIC + " off " + owner + "/" + repoName
                     + ": " + rootMessage(e), e);
         }
+    }
+
+    /**
+     * Marks the user's published fork as no longer following its original, or following it again
+     * ({@link #DETACHED_TOPIC}): Browse Bots and New Project stop, or start again, saying "based on …". GitHub
+     * still calls the repository a fork, and that is all it knows. Blocking; run off the FX thread.
+     */
+    public void setDetached(String owner, String repoName, boolean detached) throws IOException {
+        if (!auth.isAuthenticated()) {
+            throw new IOException("Not signed in to GitHub.");
+        }
+        String api = repoApi(owner, repoName);
+        try {
+            client.put(api + "/topics", mapOf("names", detachedTopics(currentTopics(api, auth.token()), detached)),
+                    auth.token()).join();
+        } catch (Exception e) {
+            throw new IOException("Couldn't " + (detached ? "add" : "take off") + " the topic " + DETACHED_TOPIC
+                    + " on " + owner + "/" + repoName + ": " + rootMessage(e), e);
+        }
+    }
+
+    /** {@code current} with {@link #DETACHED_TOPIC} added, room made for it, or taken off. */
+    static List<String> detachedTopics(List<String> current, boolean detached) {
+        Set<String> out = new LinkedHashSet<>();
+        for (String t : current) {
+            if (!t.isBlank() && !t.equals(DETACHED_TOPIC)) out.add(t);
+        }
+        if (!detached) return List.copyOf(out);
+        List<String> kept = new ArrayList<>(out);
+        // The listing topic first, then the mark: a fork that had twenty topics loses its last own one.
+        int at = kept.indexOf(GitHubConfig.TOPIC) + 1;
+        kept.add(at, DETACHED_TOPIC);
+        for (int i = kept.size() - 1; kept.size() > MAX_TOPICS && i >= 0; i--) {
+            String t = kept.get(i);
+            if (!t.equals(GitHubConfig.TOPIC) && !t.equals(DETACHED_TOPIC)) kept.remove(i);
+        }
+        return List.copyOf(kept);
     }
 
     /**

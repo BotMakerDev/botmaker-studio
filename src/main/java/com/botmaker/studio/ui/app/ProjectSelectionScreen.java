@@ -5,6 +5,7 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.project.ProjectInfo;
+import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.services.JitPackSearch;
@@ -303,8 +304,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
     private Ownership ownershipOf(ProjectInfo project) {
         Optional<BotSource> source = BotSource.read(project.projectPath());
         if (source.isEmpty()) return Ownership.LOCAL;
-        boolean mine = myLogin != null && myLogin.equalsIgnoreCase(source.get().owner());
-        return mine ? Ownership.MINE : Ownership.IMPORTED;
+        return ProjectMode.isYours(project.projectPath(), source.get(), myLogin) ? Ownership.MINE : Ownership.IMPORTED;
     }
 
     private void selectNearestProjectRow() {

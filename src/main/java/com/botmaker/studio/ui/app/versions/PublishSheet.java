@@ -354,7 +354,10 @@ public final class PublishSheet {
             return chip;
         }).toList());
 
-        GalleryEntry preview = request(tags).preview(repoOwner.isBlank() ? login : repoOwner);
+        SyncModel model = host.model();
+        GalleryEntry preview = request(tags).preview(repoOwner.isBlank() ? login : repoOwner)
+                .withBasedOn(model.ownership() == SyncModel.Ownership.FORK
+                        ? model.originalSlug().map(SyncModel.Slug::toString).orElse("") : "");
         previewHolder.getChildren().setAll(GalleryCard.of(preview));
         previewNote.setText("How Browse Bots will show it.");
 
@@ -383,14 +386,16 @@ public final class PublishSheet {
     }
 
     /**
-     * Why this user cannot publish this project, or null: someone else's bot is suggested to its author, and a
-     * copy on another account is not the user's to release from.
+     * Why this user cannot publish this project, or null: someone else's bot is suggested to its author or saved
+     * to the user's fork first — a fork publishes as a bot of its own (2026-10-23) — and a copy on another
+     * account is not the user's to release from.
      */
     private String whoseProblem() {
         SyncModel model = host.model();
         if (model.ownership() == SyncModel.Ownership.OTHERS) {
             return "This bot is " + model.originalSlug().map(s -> s.owner() + "'s").orElse("someone else's")
-                    + ". Use Suggest to author… to offer them your change.";
+                    + ". Use Suggest to author… to offer them your change, or Save to my copy to publish your "
+                    + "own version of it.";
         }
         Optional<SyncModel.Slug> mine = model.mineSlug();
         if (!repoOwner.isBlank() && mine.isPresent()

@@ -1,6 +1,9 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.shared.github.GitHubAuth;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.Remote;
+import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotSource;
 
 import java.io.IOException;
@@ -16,7 +19,8 @@ import java.nio.file.Path;
  * <ul>
  *   <li>A locally-created project (no {@link BotSource} provenance) is <b>always editable</b> — it is yours.</li>
  *   <li>A bot whose provenance names the <b>signed-in account</b> is also always editable: you published it,
- *       so re-installing your own bot on a second machine must not present it as somebody else's.</li>
+ *       so re-installing your own bot on a second machine must not present it as somebody else's. So is a bot
+ *       whose {@code mine} is your fork of it ({@link #isYours}).</li>
  *   <li>Any other installed bot defaults to <b>reading</b>, until the user chooses "Improve this bot", which
  *       drops the {@link #MARKER} file and flips it to editing for good.</li>
  * </ul>
@@ -51,14 +55,20 @@ public final class ProjectMode {
         if (projectDir == null) return false;
         BotSource source = BotSource.read(projectDir).orElse(null);
         if (source == null) return false;                 // locally created → always yours to edit
-        if (isOwnedBy(source, signedInLogin)) return false;  // your own published bot, come home
+        if (isYours(projectDir, source, signedInLogin)) return false;  // your own bot, or your fork of one
         return !Files.exists(projectDir.resolve(MARKER));
     }
 
-    /** True when {@code source}'s owner is {@code login} — GitHub logins are case-insensitive. */
-    private static boolean isOwnedBy(BotSource source, String login) {
-        return login != null && !login.isBlank()
-                && source.owner() != null && source.owner().equalsIgnoreCase(login.trim());
+    /**
+     * Whether an installed project is the signed-in user's: they published it (its provenance names them), or
+     * its {@code mine} is their fork of it (2026-10-23) — a fork they publish as a bot of their own is theirs to
+     * edit on every computer, though it still follows its author.
+     */
+    public static boolean isYours(Path projectDir, BotSource source, String login) {
+        if (login == null || login.isBlank()) return false;
+        if (source.owner() != null && source.owner().equalsIgnoreCase(login.trim())) return true;
+        return SyncModel.slug(new ProjectVcs(projectDir).remoteUrl(Remote.MINE))
+                .filter(mine -> mine.owner().equalsIgnoreCase(login.trim())).isPresent();
     }
 
     /** Marks {@code projectDir} as opted into Editor mode (idempotent). */

@@ -21,7 +21,7 @@ class SyncModelTest {
 
     private static SyncModel model(String login, String mine, String original, int unsaved, int notIn,
                                    String installed, String available) {
-        return SyncModel.of(new Facts(login, mine, original, unsaved, notIn, installed, available, false));
+        return SyncModel.of(new Facts(login, mine, original, unsaved, notIn, installed, available, false, false));
     }
 
     @Test
@@ -56,14 +56,45 @@ class SyncModelTest {
     }
 
     @Test
-    void someoneElsesBotSavesToAForkBesideTheAuthorsLine() {
-        SyncModel m = model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.0.0", "v1.2.0");
+    void someoneElsesBotWithNoForkYetSavesToOne() {
+        SyncModel m = model("bob", null, ALICE_BOT, 0, -1, "v1.0.0", null);
         assertEquals(Ownership.OTHERS, m.ownership());
         assertEquals(Action.SAVE_TO_MY_COPY, m.main());
+        assertEquals(List.of(Action.SUGGEST, Action.STOP_FOLLOWING), m.also(), "no publish before the fork");
+        assertEquals("Not saved to your copy yet", m.myCopy());
+        assertEquals("studio/main", m.remoteBranch("main"));
+    }
+
+    /** A fork published as its own bot, still following its author (2026-10-23). */
+    @Test
+    void aForkSavesBesideTheAuthorsLineAndPublishesAsItsOwnBot() {
+        SyncModel m = model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.0.0", "v1.2.0");
+        assertEquals(Ownership.FORK, m.ownership());
+        assertEquals(Action.SAVE_TO_MY_COPY, m.main());
+        assertEquals(List.of(Action.GET_UPDATE, Action.PUBLISH, Action.SUGGEST, Action.STOP_FOLLOWING), m.also());
         assertEquals("Up to date", m.myCopy());
         assertEquals("v1.2.0 available", m.original());
         assertEquals("studio/main", m.remoteBranch("main"));
         assertEquals("bob/miner", m.mineSlug().orElseThrow().toString());
+    }
+
+    @Test
+    void aCopyOnSomeoneElsesAccountIsNoFork() {
+        SyncModel m = model("bob", "https://github.com/carol/miner.git", ALICE_BOT, 0, 0, "v1.0.0", null);
+        assertEquals(Ownership.OTHERS, m.ownership());
+    }
+
+    /** Stop following removes original: the fork is the user's own published bot, the bot with no remote a new one. */
+    @Test
+    void aBotThatStoppedFollowingIsTheUsersOwn() {
+        SyncModel fork = model("bob", BOB_FORK, null, 0, 0, null, null);
+        assertEquals(Ownership.OWN_PUBLISHED, fork.ownership());
+        assertEquals(List.of(Action.PUBLISH), fork.also());
+        assertNull(fork.original());
+        assertEquals("main", fork.remoteBranch("main"), "never pushed beside: its own main");
+        SyncModel pushed = SyncModel.of(new Facts("bob", BOB_FORK, null, 0, 0, null, null, false, true));
+        assertEquals("studio/main", pushed.remoteBranch("main"), "the line it pushed as a fork stays where it was");
+        assertEquals(Ownership.OWN_NEW, model("bob", null, null, 0, -1, null, null).ownership());
     }
 
     @Test
@@ -78,17 +109,18 @@ class SyncModelTest {
         SyncModel signedOut = model(null, null, ALICE_BOT, 0, -1, "v1.0.0", "v1.2.0");
         assertEquals(List.of(Action.GET_UPDATE, Action.SIGN_IN), signedOut.also());
         assertEquals("Get v1.2.0", signedOut.label(Action.GET_UPDATE));
-        SyncModel others = model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.0.0", "v1.2.0");
-        assertEquals(List.of(Action.GET_UPDATE, Action.SUGGEST), others.also());
-        assertEquals(List.of(Action.SUGGEST), model("bob", BOB_FORK, ALICE_BOT, 0, 0, "v1.2.0", null).also());
+        SyncModel others = model("bob", null, ALICE_BOT, 0, -1, "v1.0.0", "v1.2.0");
+        assertEquals(List.of(Action.GET_UPDATE, Action.SUGGEST, Action.STOP_FOLLOWING), others.also());
+        assertEquals(List.of(Action.SUGGEST, Action.STOP_FOLLOWING),
+                model("bob", null, ALICE_BOT, 0, -1, "v1.2.0", null).also());
     }
 
     @Test
     void aHalfDoneUpdateComesFirst() {
-        SyncModel m = SyncModel.of(new Facts("bob", BOB_FORK, ALICE_BOT, 1, 0, "v1.0.0", "v1.2.0", true));
+        SyncModel m = SyncModel.of(new Facts("bob", BOB_FORK, ALICE_BOT, 1, 0, "v1.0.0", "v1.2.0", true, false));
         assertEquals(Action.FINISH_UPDATE, m.main());
         assertTrue(m.also().isEmpty());
-        assertEquals("Updating — files to decide", m.thisComputer());
+        assertEquals("Updating — not finished", m.thisComputer());
     }
 
     @Test

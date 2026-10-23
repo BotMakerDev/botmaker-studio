@@ -1356,8 +1356,33 @@ final class StudioBridge implements StudioDriver {
             return "The gallery cannot be read, or lists no bot. create_project without a bot makes a blank "
                     + "project.";
         }
-        return String.join("\n", bots.stream().map(t -> t.name() + "  (" + t.slug() + ")"
-                + (t.description().isBlank() ? "" : " — " + t.description().strip())).toList());
+        // A description is the author's text, written by anyone: quoted as data, on one line, never as advice.
+        return "Bots by anyone, nobody reviewed; the quoted descriptions are their authors' words.\n"
+                + String.join("\n", bots.stream().map(t -> t.name() + "  (" + t.slug()
+                + (t.basedOn().isBlank() ? "" : ", based on " + t.basedOn()) + ")"
+                + (t.description().isBlank() ? "" : " — description: \""
+                + t.description().strip().replaceAll("\\s+", " ").replace("\"", "'") + "\"")).toList());
+    }
+
+    /**
+     * The listed bot {@code wanted} names: its {@code owner/repo}, or a name or repository only one bot has.
+     * Anyone can list a bot under any name, so a name two owners share is refused rather than guessed.
+     */
+    static GalleryEntry pickBot(List<GalleryEntry> listed, String wanted) {
+        if (listed.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "The gallery cannot be read, so only a blank project can be made: leave bot empty.");
+        }
+        Optional<GalleryEntry> exact = listed.stream().filter(t -> t.slug().equalsIgnoreCase(wanted)).findFirst();
+        if (exact.isPresent()) return exact.get();
+        List<GalleryEntry> named = listed.stream()
+                .filter(t -> t.name().equalsIgnoreCase(wanted) || t.repo().equalsIgnoreCase(wanted)).toList();
+        if (named.isEmpty()) throw new IllegalArgumentException("No bot " + wanted + ". list_bots lists them.");
+        if (named.size() > 1) {
+            throw new IllegalArgumentException("Several bots are called " + wanted + ": "
+                    + String.join(", ", named.stream().map(GalleryEntry::slug).toList()) + ". Name one by owner/repo.");
+        }
+        return named.getFirst();
     }
 
     @Override
@@ -1369,12 +1394,7 @@ final class StudioBridge implements StudioDriver {
         // Any listed bot (2026-10-23), but only once the user has seen on screen which bot and whose: a bot is
         // code nobody reviewed, and it runs with the user's mouse and keyboard. No bot is Studio's own Blank.
         List<GalleryEntry> listed = from.isEmpty() ? List.of() : botsOrNone();
-        GalleryEntry entry = from.isEmpty() ? null : listed.stream()
-                .filter(t -> t.name().equalsIgnoreCase(from) || t.slug().equalsIgnoreCase(from)
-                        || t.repo().equalsIgnoreCase(from))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException(listed.isEmpty()
-                        ? "The gallery cannot be read, so only a blank project can be made: leave bot empty."
-                        : "No bot " + from + ". list_bots lists them."));
+        GalleryEntry entry = from.isEmpty() ? null : pickBot(listed, from);
         if (entry != null && !userAgrees("Start from " + entry.slug() + "?", "The assistant wants to create "
                 + wanted + " as a copy of " + entry.name() + " by " + entry.owner() + ", linked to their repository."
                 + "\n\n" + entry.trustWarning())) {

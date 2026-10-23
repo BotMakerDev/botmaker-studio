@@ -122,6 +122,32 @@ class PublishFlowTest {
         assertEquals(List.of("botmaker-bot", "t0"), full.subList(0, 2));
     }
 
+    /** Stop following on a published fork marks it, after the listing topic; following again takes the mark off. */
+    @Test
+    void aDetachedForkCarriesItsMarkAndLosesItWhenItFollowsAgain() {
+        assertEquals(List.of("botmaker-bot", "botmaker-detached", "game"),
+                BotPublisher.detachedTopics(List.of("botmaker-bot", "game"), true));
+        assertEquals(List.of("botmaker-bot", "game"),
+                BotPublisher.detachedTopics(List.of("botmaker-bot", "botmaker-detached", "game"), false));
+        assertEquals(List.of("botmaker-detached"), BotPublisher.detachedTopics(List.of(), true), "an unlisted fork");
+
+        List<String> twenty = new java.util.ArrayList<>(List.of("botmaker-bot"));
+        java.util.stream.IntStream.range(0, 19).forEach(i -> twenty.add("t" + i));
+        List<String> marked = BotPublisher.detachedTopics(twenty, true);
+        assertEquals(BotPublisher.MAX_TOPICS, marked.size());
+        assertEquals(List.of("botmaker-bot", "botmaker-detached"), marked.subList(0, 2));
+        assertFalse(marked.contains("t18"), "the last own topic makes room");
+        List<String> listedLast = new java.util.ArrayList<>(twenty.subList(1, 20));
+        listedLast.add("botmaker-bot");
+        List<String> stillMarked = BotPublisher.detachedTopics(listedLast, true);
+        assertEquals(BotPublisher.MAX_TOPICS, stillMarked.size());
+        assertEquals(List.of("botmaker-bot", "botmaker-detached"), stillMarked.subList(18, 20),
+                "the listing topic last: the mark still fits");
+        assertEquals(List.of("botmaker-bot", "botmaker-detached", "x"),
+                BotPublisher.topics(List.of("botmaker-bot", "botmaker-detached"), List.of("x"), true),
+                "a re-publish keeps the mark");
+    }
+
     @Test
     void aRepositoryReadsAsItsListing() throws Exception {
         BotPublisher.Listing listing = BotPublisher.Listing.of(MAPPER.readTree(

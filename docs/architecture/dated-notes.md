@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **A fork is a bot of its own since 2026-10-23** (umbrella `docs/refactor/39-versions.md` §2, §7, §8).
+> `SyncModel.Ownership.FORK` (someone else's `original`, the user's `mine`) offers *Publish vX.Y…*, whose push tags
+> `studio/<branch>` on the fork and marks the tag as the fork's own (`ProjectVcs.markOwnRelease`), so `releaseTag`
+> still names the author's release. `GalleryEntry.basedOn` is read from a fork's `parent` unless it has the topic
+> `botmaker-detached`, which *Stop following…* sets after removing `original`. An update compiles the merged tree
+> (`runtime/TreeCompile`) before it commits. `ProjectMode.isYours` makes a fork the user owns editable.
+
 > **There is no gallery repository since 2026-10-23.** `GitHubGallery.browse` is one GitHub search for the topic
 > `botmaker-bot` (forks included); a result is listed when its newest release's pom declares a registry plugin.
 > Publishing adds the topic (the plan's `LISTING` step), unpublishing removes it, and `HiddenBots` is this

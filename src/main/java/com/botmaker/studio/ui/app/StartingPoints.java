@@ -79,7 +79,8 @@ final class StartingPoints {
         String label() {
             if (entry == null) return kind.displayName();
             String description = entry.description().isBlank() ? "" : " — " + entry.description();
-            return displayName() + description + "  (" + entry.owner() + ")";
+            String basedOn = entry.basedOnLine().isBlank() ? "" : ", " + entry.basedOnLine();
+            return displayName() + description + "  (" + entry.owner() + basedOn + ")";
         }
 
         /**

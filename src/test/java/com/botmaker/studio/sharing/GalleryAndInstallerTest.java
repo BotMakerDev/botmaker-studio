@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -7,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -14,6 +16,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GalleryAndInstallerTest {
@@ -70,6 +74,66 @@ class GalleryAndInstallerTest {
         vcs.checkpoint(VersionOrigin.SAVE, "an edit after the release");
         assertEquals("v1.0.0", BotSource.read(dir).orElseThrow().tag(), "an edit keeps the release it started from");
         assertFalse(Files.exists(dir.resolve(BotSource.FILE_NAME)));
+    }
+
+    /**
+     * A fork published as its own bot (2026-10-23): its release is the user's, and the project still says it is at
+     * the author's release, so the author's next one is still offered. The same number from the author refuses.
+     */
+    @Test
+    void aForksOwnReleaseIsNotTheReleaseItFollows(@TempDir Path dir) throws Exception {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        vcs.checkpoint(VersionOrigin.INSTALL, "Installed v1.0.0");
+        vcs.tagHead("v1.0.0", "Release v1.0.0");
+        vcs.setRemote(Remote.ORIGINAL, "https://github.com/alice/clicker-bot.git");
+        vcs.setRemote(Remote.MINE, "https://github.com/bob/clicker-bot.git");
+        Files.writeString(dir.resolve("Bot.java"), "class Bot { int bobs; }");
+        vcs.checkpoint(VersionOrigin.PUBLISH, "v1.0.1 published");
+        vcs.tagHead("v1.0.1", "Published v1.0.1");
+        assertEquals("v1.0.1", BotSource.read(dir).orElseThrow().tag(), "unmarked, any tag is the nearest");
+
+        vcs.markOwnRelease("v1.0.1");
+        assertTrue(vcs.isOwnRelease("v1.0.1"));
+        assertFalse(vcs.isOwnRelease("v1.0.0"));
+        assertEquals("v1.0.0", BotSource.read(dir).orElseThrow().tag());
+        IOException clash = assertThrows(IOException.class, () -> vcs.fetchTag(Remote.ORIGINAL, "v1.0.1", null));
+        assertTrue(clash.getMessage().startsWith("Your own copy was published as v1.0.1"), clash.getMessage());
+
+        assertTrue(BotPublisher.isFork(vcs, "bob"), "publishing into bob's repository publishes the fork");
+        assertFalse(BotPublisher.isFork(vcs, "Alice"), "the author publishing their own");
+    }
+
+    /** A fork the user owns is theirs to edit; someone else's bot opens for reading. */
+    @Test
+    void aForkOfYoursOpensForEditing(@TempDir Path dir) throws Exception {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        vcs.checkpoint(VersionOrigin.INSTALL, "Installed");
+        vcs.setRemote(Remote.ORIGINAL, "https://github.com/alice/clicker-bot.git");
+        assertTrue(ProjectMode.isReader(dir, "bob"), "no fork yet: alice's bot");
+        vcs.setRemote(Remote.MINE, "https://github.com/Bob/clicker-bot.git");
+        assertFalse(ProjectMode.isReader(dir, "bob"));
+        assertTrue(ProjectMode.isReader(dir, "carol"));
+        assertFalse(ProjectMode.isReader(dir, "alice"), "the author");
+    }
+
+    /** Stop following: the original goes, the user's copy stays, and nothing links the project back. */
+    @Test
+    void stopFollowingRemovesOnlyTheOriginal(@TempDir Path dir) throws Exception {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        vcs.checkpoint(VersionOrigin.INSTALL, "Installed");
+        vcs.setRemote(Remote.ORIGINAL, "https://github.com/alice/clicker-bot.git");
+        vcs.setRemote(Remote.MINE, "https://github.com/bob/clicker-bot.git");
+
+        vcs.removeRemote(Remote.ORIGINAL);
+        assertNull(vcs.remoteUrl(Remote.ORIGINAL));
+        assertEquals("https://github.com/bob/clicker-bot.git", vcs.remoteUrl(Remote.MINE));
+        assertTrue(BotSource.read(dir).isEmpty());
+        assertFalse(ProjectMode.isReader(dir, "carol"), "no provenance: the project's own");
+        vcs.removeRemote(Remote.ORIGINAL);
+        assertFalse(vcs.hasRemoteBranch(Remote.MINE, "studio/main"), "never pushed");
     }
 
     @Test

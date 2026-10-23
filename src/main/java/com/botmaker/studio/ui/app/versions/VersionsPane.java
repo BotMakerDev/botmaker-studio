@@ -22,6 +22,7 @@ import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.MyCopy;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.sharing.Suggestion;
+import com.botmaker.studio.runtime.TreeCompile;
 import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -30,6 +31,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.geometry.Orientation;
 import javafx.scene.control.CheckBox;
@@ -486,6 +488,53 @@ public final class VersionsPane {
             case GET_UPDATE -> getUpdate(model.facts().availableTag());
             case FINISH_UPDATE -> resumeUpdate();
             case SUGGEST -> suggest();
+            case STOP_FOLLOWING -> stopFollowing();
+        }
+    }
+
+    /**
+     * <i>Stop following…</i> (2026-10-23): after a confirmation the {@code original} remote goes, and with it the
+     * update notice and <i>Suggest to author…</i> — the bot becomes the user's own. A listed fork gets
+     * {@link BotPublisher#DETACHED_TOPIC}, so Browse Bots stops saying "based on …". Dev's <i>Add remote…</i>
+     * named {@code original} follows it again.
+     */
+    private void stopFollowing() {
+        String from = model.originalSlug().map(SyncModel.Slug::toString).orElse("the original");
+        Optional<SyncModel.Slug> fork = model.ownership() == SyncModel.Ownership.FORK && client != null
+                ? model.mineSlug() : Optional.empty();
+        Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
+                "You will no longer hear of " + from + "'s new releases, and Suggest to author… goes: the bot "
+                        + "becomes your own. Nothing in it changes."
+                        + (fork.isPresent() ? "\n\nIf your copy is published, Browse Bots stops showing it as "
+                        + "based on " + from + "." : "")
+                        + "\n\nTo follow it again, add a remote named original with its address in Dev.",
+                ButtonType.OK, ButtonType.CANCEL);
+        confirm.initOwner(owner);
+        confirm.setHeaderText("Stop following " + from + "?");
+        if (confirm.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) return;
+        run(() -> {
+            vcs().removeRemote(Remote.ORIGINAL);
+            // An older install's provenance file would link it again (sync's attach); the remote is the link now.
+            Files.deleteIfExists(projectDir.resolve(BotSource.FILE_NAME));
+            return fork.map(f -> markDetached(f, true)).orElse("");
+        }, problem -> {
+            available = null;
+            status("No longer following " + from + "." + problem);
+        });
+    }
+
+    /**
+     * Sets or takes off {@link BotPublisher#DETACHED_TOPIC} on the user's fork {@code fork} when it is listed;
+     * {@code ""}, or a sentence saying it could not. Off the FX thread.
+     */
+    private String markDetached(SyncModel.Slug fork, boolean detached) {
+        BotPublisher publisher = new BotPublisher(client, auth);
+        if (!publisher.listing(fork.owner(), fork.repo()).listed()) return "";
+        try {
+            publisher.setDetached(fork.owner(), fork.repo(), detached);
+            return "";
+        } catch (IOException e) {
+            return " " + e.getMessage();
         }
     }
 
@@ -597,11 +646,22 @@ public final class VersionsPane {
         });
     }
 
-    /** Reopens the sheet of an update Studio was closed in the middle of. */
+    /**
+     * Reopens an update left half done: its conflict sheet, or — every file decided — its compile check. With no
+     * file left to decide the editor shows the merged tree (it reloaded, or Studio reopened on it), so what the
+     * user fixed there is put on disk before the check.
+     */
     private void resumeUpdate() {
+        if (editorBeforeMerge) {
+            status("The project is still reloading on the update — try again in a moment.");
+            return;
+        }
+        ProjectState.Snapshot editor = ctx.state().snapshot();
         run(() -> {
             ProjectVcs vcs = vcs();
-            return Map.entry(vcs.unresolved(), Optional.ofNullable(vcs.mergeRelease()).orElse("the new release"));
+            List<String> unresolved = vcs.unresolved();
+            if (unresolved.isEmpty()) Checkpoints.flush(editor);
+            return Map.entry(unresolved, Optional.ofNullable(vcs.mergeRelease()).orElse("the new release"));
         }, read -> Platform.runLater(() -> {
             if (read.getKey().isEmpty()) {
                 finishUpdate(read.getValue(), Map.of());
@@ -626,13 +686,75 @@ public final class VersionsPane {
     }
 
     /**
-     * Applies the decisions and commits the {@code UPDATE}. The merge contains the release's tag, which is how
-     * the project says what it is at from then on ({@link BotSource}); nothing else records it.
+     * Applies the decisions, then compiles the merged tree before anything is committed (2026-10-23): an update
+     * that compiles is committed ({@link #commitUpdate}); one that does not asks first ({@link #updateErrors}).
      */
     private void finishUpdate(String release, Map<String, ProjectVcs.Side> decided) {
         run(() -> {
             ProjectVcs vcs = vcs();
             for (var e : decided.entrySet()) vcs.resolve(e.getKey(), e.getValue());
+            return TreeCompile.errors(ctx.config());
+        }, errors -> {
+            if (errors.isEmpty()) {
+                commitUpdate(release);
+            } else {
+                Platform.runLater(() -> updateErrors(release, errors));
+            }
+        });
+    }
+
+    /**
+     * The merged tree does not compile: <i>Fix them first</i> leaves the merge open and shows it in the editor —
+     * <i>Finish the update…</i> checks again — <i>Finish anyway</i> commits it with the errors, and <i>Undo the
+     * update</i> puts the project back as it was. Closing the sheet is <i>Fix them first</i>: nothing is lost.
+     */
+    private void updateErrors(String release, List<String> errors) {
+        ButtonType fix = new ButtonType("Fix them first", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType anyway = new ButtonType("Finish anyway", ButtonBar.ButtonData.OTHER);
+        ButtonType undo = new ButtonType("Undo the update", ButtonBar.ButtonData.OTHER);
+        Alert ask = ThemedWindows.alert(Alert.AlertType.WARNING, (errors.size() == 1 ? "One error" : errors.size()
+                        + " errors") + " after merging " + release + " with your changes. Fix them in the editor, "
+                        + "then Finish the update… in this tab; or finish with the errors; or undo the update.",
+                fix, anyway, undo);
+        ask.initOwner(owner);
+        ask.setHeaderText("The update does not compile");
+        TextArea list = new TextArea(String.join("\n", errors));
+        list.setEditable(false);
+        list.setWrapText(true);
+        list.setPrefRowCount(Math.min(12, errors.size() + 1));
+        ask.getDialogPane().setExpandableContent(list);
+        ask.getDialogPane().setExpanded(true);
+        ButtonType picked = ask.showAndWait().orElse(fix);
+        if (picked == anyway) {
+            commitUpdate(release);
+        } else if (picked == undo) {
+            run(() -> {
+                vcs().abortMerge();
+                return null;
+            }, done -> {
+                status("Update undone — nothing changed.");
+                ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+            });
+        } else {
+            editorBeforeMerge = true;
+            status("Fix the errors, then Finish the update….");
+            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+        }
+    }
+
+    /**
+     * Set when <i>Fix them first</i> asked for the reload: until it has run, the editor this pane belongs to still
+     * holds the sources from before the merge, which must never be written over it. A reload builds a new pane.
+     */
+    private boolean editorBeforeMerge;
+
+    /**
+     * Commits the {@code UPDATE}. The merge contains the release's tag, which is how the project says what it is
+     * at from then on ({@link BotSource}); nothing else records it.
+     */
+    private void commitUpdate(String release) {
+        run(() -> {
+            ProjectVcs vcs = vcs();
             Optional<BotSource> source = BotSource.read(projectDir);
             String by = source.map(s -> " (" + s.owner() + ")").orElse("");
             vcs.finishMerge("Updated to " + release + by);
@@ -771,13 +893,14 @@ public final class VersionsPane {
             }
         }
         int unsavedNow = vcs.status().labelled().size();
+        boolean beside = vcs.hasRemoteBranch(Remote.MINE, "studio/" + vcs.branch());
         SyncModel.Facts facts = new SyncModel.Facts(authorName, vcs.remoteUrl(Remote.MINE), originalUrl,
-                unsavedNow, -1, installed, available, updating);
+                unsavedNow, -1, installed, available, updating, beside);
         SyncModel first = SyncModel.of(facts);
         if (facts.mineUrl() == null) return first;
         int notIn = vcs.notIn(Remote.MINE, first.remoteBranch(vcs.branch()));
         return SyncModel.of(new SyncModel.Facts(facts.login(), facts.mineUrl(), originalUrl, unsavedNow, notIn,
-                installed, available, updating));
+                installed, available, updating, beside));
     }
 
     private void rebuild() {
@@ -1182,10 +1305,17 @@ public final class VersionsPane {
         if (dialog.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) return;
         String n = name.getText() == null ? "" : name.getText().strip();
         String u = url.getText() == null ? "" : url.getText().strip();
+        // Adding original back follows it again: a listed fork loses the detached topic it got on Stop following.
+        Optional<SyncModel.Slug> mine = n.equals(Remote.ORIGINAL.id()) && client != null && authorName != null
+                ? SyncModel.slug(vcs().remoteUrl(Remote.MINE)).filter(s -> s.owner().equalsIgnoreCase(authorName))
+                : Optional.empty();
         run(() -> {
             vcs().addRemote(n, u);
-            return null;
-        }, done -> status("Added " + n + "."));
+            return mine.map(f -> markDetached(f, false)).orElse("");
+        }, problem -> {
+            if (n.equals(Remote.ORIGINAL.id())) askOriginal = true;
+            status("Added " + n + "." + problem);
+        });
     }
 
     private Optional<String> ask(String title, String header, String prompt, String initial) {
