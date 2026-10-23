@@ -24,7 +24,7 @@ import java.util.function.Predicate;
  * JitPack build that fails costs a tag. Publish still refuses the pins.
  *
  * <p><b>Only plugins are refused.</b> A SNAPSHOT library that declares no {@code StudioPlugin} stays on the
- * classpath: it is the bot's business, and Maven builds (the umbrella's {@code -Ptemplates}, CI) still use
+ * classpath: it is the bot's business, and Maven builds (the umbrella's reactor, CI) still use
  * SNAPSHOTs freely. The version is the Maven repository's own: the directory a resolved jar sits in.
  *
  * <p>The way back is <i>Project ▸ Plugins &amp; Libraries ▸ Installed</i>, which seeds a dev row with a

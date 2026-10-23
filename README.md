@@ -7,8 +7,7 @@ standard Maven project you could open in any IDE.
 Studio is a **plugin host**. It edits, runs, debugs and publishes Java; what a bot can *do* — see the screen,
 click, launch a game, walk an activity flow — comes from the plugins the project declares in its own
 `pom.xml`. Studio bundles none of them. The usual one is the
-**[BotMaker SDK](https://github.com/BotMakerDev/botmaker-sdk)**, which every bot made from the *Gamebot*
-template already has.
+**[BotMaker SDK](https://github.com/BotMakerDev/botmaker-sdk)**, offered in New Project's *Plugins* checklist.
 
 Built with **JavaFX**, editing real Java through the **Eclipse JDT** AST.
 
@@ -95,9 +94,9 @@ from inside Studio.
 
 ## Quick start
 
-1. Launch Studio, press **Create New Project**, and start from **Gamebot** (the SDK's worked example) or
-   **Base** (a blank bot). The list comes from the gallery; offline, Studio offers a **Blank** project of
-   its own. The *Plugins* checklist adds plugins to any of them.
+1. Launch Studio, press **Create New Project**, and start from **Blank** or from any published bot (cloned
+   at its newest release and linked to its author, so their later versions merge in). The *Plugins*
+   checklist adds plugins to either.
 2. With the SDK: pick the game and what to watch (📋 **Project Setup** lists what is missing), capture the
    pictures (✂ **Capture Templates**), and draw the activities (🔀 **Activity Flow**).
 3. Write each activity's blocks, and press **Run**.
@@ -107,13 +106,13 @@ diagram of how a run loops. The same text is in the app under **Help ▸ Getting
 from one source, so they cannot say different things.
 
 Projects are standard **Maven** projects, under `~/BotMakerProjects/<ProjectName>/` unless you open one from
-another folder with **Open Folder…**. A Gamebot project looks like this:
+another folder with **Open Folder…**. A bot using the SDK looks like this:
 
 ```
 ~/BotMakerProjects/MyBot/
 ├── pom.xml                          # a normal Maven pom; declares the plugins and pins their versions
 ├── src/main/java/com/mybot/
-│   ├── Gamebot.java                 # main() — Bot.runFlow(Sdk.class); a template keeps its class names
+│   ├── MyBot.java                   # main() — Bot.runFlow(Sdk.class); a cloned bot keeps its class names
 │   ├── Collect.java, Battle.java…   # one class per activity — this is where your blocks live
 │   ├── Parameters.java              # the @Param fields Project ▸ Parameters edits
 │   └── plugins/sdk/                 # the SDK plugin's values, edited through its windows

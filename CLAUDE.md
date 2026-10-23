@@ -23,7 +23,7 @@ which older text in the other files is history now.
 | plugin registry, install, what left Studio for a plugin | `plugins.md` |
 | capture (`services/capture/`), value editors and pictures that moved to the SDK plugin | `capture-and-moved-editors.md` |
 | gallery, GitHub, publishing a bot | `sharing.md`, `tiers-and-publish.md` |
-| New Project's templates | `templates.md` |
+| New Project (templates until 2026-10-23; history) | `templates.md` |
 | diagnostics, `ErrorTranslator` | `validation.md` |
 
 `docs/architecture/` holds history as well as rules; the umbrella `CLAUDE.md` and its `docs/refactor/` win
@@ -111,7 +111,7 @@ by its directory, not its name (2026-09-18)**: *Open Folder…* opens one anywhe
 and `ProjectConfig.forDirectory` is the door. The list still scans only the default root — a folder of
 repositories holds every other Maven project too — and a project elsewhere is found one remembered directory
 at a time. Archive, restore and delete move folders, so they act only on the root's projects; an outside one
-is *Removed from Recents*, never moved. The template (`../botmaker-gamebot`) is opened this way, and its SDK
-upgrade goes through *Project ▸ Upgrade…*, not a hand edit. Each project is a standard **Maven** project with
-the layout `src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a template, the package of
-its class holding `main`. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.
+is *Removed from Recents*, never moved. A project's SDK upgrade goes through *Project ▸ Upgrade…*, not a
+hand edit. Each project is a standard **Maven** project with the layout
+`src/main/java/com/<projectnamelowercase>/<ProjectName>.java` — or, for a bot cloned from someone else's, the
+package of its class holding `main`. The BotMaker-Studio app itself is also a Maven project (`pom.xml`): build with `mvn compile`, run with `mvn javafx:run`, test with `mvn test`.

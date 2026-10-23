@@ -122,10 +122,10 @@ public record ProjectConfig(
     }
 
     /**
-     * The project directory as a window names it — {@code ~/IdeaProjects/gamebot}.
+     * The project directory as a window names it — {@code ~/IdeaProjects/mybot}.
      *
-     * <p>Shown because two checkouts of one template is the ordinary case here (the umbrella's
-     * {@code botmaker-gamebot/} and a clone beside it), and a window naming only the project could be editing
+     * <p>Shown because two checkouts of one bot is the ordinary case here (a repository's working copy and
+     * a clone beside it), and a window naming only the project could be editing
      * either: an edit made in Studio then looks lost from the IDE open on the other copy.
      */
     public String displayDirectory() {
