@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -92,7 +91,7 @@ public final class EditorCompanions {
         if (allowed.isEmpty()) return false;
         List<UserLibrary> declared = MavenService.readDeclaredLibraries(projectDir);
         progress.message("Checking the libraries your plugins need…");
-        List<PluginRegistry.Plugin> registry = new PluginRegistry(new GitHubClient()).entries()
+        List<PluginRegistry.Plugin> registry = new PluginRegistry().browse()
                 .completeOnTimeout(List.of(), REGISTRY_TIMEOUT_S, TimeUnit.SECONDS)
                 .exceptionally(failure -> List.of())
                 .join();

@@ -18,15 +18,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   copy linked to its author's repository, as Browse Bots' *Install* does: it keeps their package and classes, and
   their later releases arrive in the Versions tab. The "template" kind is gone, from New Project and from the
   Publish sheet.
-- **No vetted tier and no launch targets.** Every bot installs and updates to its newest release. The Vetted and
+- **No vetted tier and no launch targets.** Every bot installs and updates to its listed release. The Vetted and
   Community badges, the tier filter, the *Show community bots* toggle and the Publish sheet's *Tested on* boxes are
   gone. Every way to start from a bot shows the same warning: nobody reviewed its code.
 - **The assistant's `list_templates` is now `list_bots`.** `create_project` takes `bot`, may start from any listed
   bot, and asks you on screen first, naming the bot and its author.
-- **Bots are found on GitHub itself.** Browse Bots and New Project list every repository with the topic
-  `botmaker-bot` whose newest release is a BotMaker bot — no gallery to submit to and nothing to wait for. Publishing
-  adds the topic, and the repository's description and topics are the listing; *Unpublish* takes the topic off. A
-  newly published bot shows within a few minutes.
+- **One catalog lists every bot and plugin.** Browse Bots, New Project and *Plugins & Libraries* read one file,
+  `catalog.json` from `BotMakerDev/botmaker-catalog`, instead of a GitHub search, a pom read per bot and the plugin
+  registry. Each listing names one release that a machine check passed: installing a bot or a plugin, and a bot's
+  update, go to that release, never to a newer one. New Project shows a bot's plugins from the catalog without
+  reading its pom. The last catalog read is kept on this computer and used when GitHub cannot be reached.
+  Publishing still adds the topic `botmaker-bot`, which nothing reads any more.
 - **Hide a bot.** Browse Bots' *Hide* keeps a bot out of Browse Bots, New Project and the assistant's list on this
   computer; *Show hidden* brings it back.
 - **A copy's link to its author is its git remote alone.** Nothing new writes `botmaker-source.json`; older projects

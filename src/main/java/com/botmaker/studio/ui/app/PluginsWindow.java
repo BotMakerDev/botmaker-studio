@@ -126,7 +126,7 @@ public final class PluginsWindow {
                     stage.close();
                     onMigrateRules.run();
                 });
-        browse = new BrowsePluginsTab(libraryService, registry, jitpack, this::localBuilds,
+        browse = new BrowsePluginsTab(libraryService, registry, this::localBuilds,
                 () -> select(Section.INSTALLED), this::afterBrowseChanged);
         libraries = new LibrariesTab(libraryService, mavenCentral, jitpack,
                 InstalledPlugin.jarDeclaresPlugin(config.projectPath()), registry, () -> select(Section.INSTALLED),

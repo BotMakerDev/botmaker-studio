@@ -106,11 +106,14 @@ public final class BotInstaller {
     // unpackTemplate() — a release unzipped with no provenance, renamed into the user's package — went on
     // 2026-10-23 with templates: New Project clones through install() now.
 
-    /** The release an installed bot should move to — its author's newest — else empty ({@link GalleryEntry#updateTarget}). */
+    /**
+     * The release an installed bot should move to — the one the catalog lists, never a newer one no check passed
+     * (2026-10-23) — else empty ({@link GalleryEntry#updateTarget}).
+     */
     public Optional<String> checkForUpdate(Path projectDir) {
         Optional<BotSource> src = BotSource.read(projectDir);
         if (src.isEmpty()) return Optional.empty();
-        String latest = gallery.latestReleaseTag(src.get().owner(), src.get().repo()).join();
+        String latest = gallery.listedTag(src.get().owner(), src.get().repo()).join();
         return GalleryEntry.updateTarget(src.get().tag(), latest);
     }
 

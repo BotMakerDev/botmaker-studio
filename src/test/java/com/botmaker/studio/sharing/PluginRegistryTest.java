@@ -4,14 +4,13 @@ import com.botmaker.studio.project.UserLibrary;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The half of Manage Plugins that has no JavaFX in it: what an entry means, and whether a plugin is already
+ * The half of Manage Plugins that has no JavaFX in it: what a catalog row means, and whether a plugin is already
  * on this project.
  *
  * <p>The dialog is a browser and an Install button; everything it decides is here, so the decisions are
@@ -19,61 +18,41 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PluginRegistryTest {
 
-    private static final String INDEX = """
-            [ {
+    private static final String CATALOG = """
+            {"schemaVersion": 3, "plugins": [ {
               "id" : "com.example.discord",
               "name" : "Discord Notifier",
-              "coordinate" : "com.github.someone:botmaker-discord-plugin",
               "repo" : "someone/botmaker-discord-plugin",
+              "tag" : "v0.1.0",
+              "rank" : "community",
+              "coordinate" : "com.github.someone:botmaker-discord-plugin",
               "description" : "Sends a message when a bot finishes",
               "tags" : [ "notifications" ],
-              "minContractVersion" : "1.0.0",
-              "valueTypeIds" : [ "discord.channel" ],
-              "verifiedVersion" : "v0.1.0",
-              "verifiedAt" : "2026-08-28"
-            } ]
+              "minContractVersion" : "v0.11.0"
+            } ] }
             """;
 
+    private static PluginRegistry.Plugin discord() {
+        return CatalogIndex.parse(CATALOG).plugins().getFirst();
+    }
+
     @Test
-    void an_entry_reads_back_whole() {
-        PluginRegistry.Plugin plugin = PluginRegistry.parse(INDEX).getFirst();
+    void a_row_reads_back_whole_and_installs_its_tag() {
+        PluginRegistry.Plugin plugin = discord();
 
         assertEquals("com.example.discord", plugin.id());
         assertEquals("com.github.someone", plugin.groupId());
         assertEquals("botmaker-discord-plugin", plugin.artifactId());
-        assertEquals("", plugin.version(), "the index's verifiedVersion is read past: JitPack says the version");
+        assertEquals("v0.1.0", plugin.tag());
+        assertEquals("v0.1.0", plugin.version(), "a pin is the tag name, never a newer release");
+        assertEquals(PublisherRank.COMMUNITY, plugin.rank());
         assertEquals("https://github.com/someone/botmaker-discord-plugin", plugin.htmlUrl());
     }
 
-    /** Each entry installs JitPack's newest; one JitPack would not answer is blank, never a lost catalog. */
     @Test
-    void each_entry_takes_jitpacks_newest_and_a_failure_is_blank() {
-        List<PluginRegistry.Plugin> entries = PluginRegistry.parse("""
-                [{"id":"a","coordinate":"g:a","verifiedVersion":"v1.4.2"}, {"id":"b","coordinate":"g:b"}]""");
-
-        List<PluginRegistry.Plugin> resolved = PluginRegistry.withNewest(entries, plugin -> plugin.id().equals("a")
-                ? CompletableFuture.completedFuture("v1.4.4")
-                : CompletableFuture.failedFuture(new IllegalStateException("offline"))).join();
-
-        assertEquals(List.of("v1.4.4", ""), resolved.stream().map(PluginRegistry.Plugin::version).toList());
-    }
-
-    /** This Studio is the reader that lags, so a field a newer `botmaker publish` writes must not break it. */
-    @Test
-    void an_unknown_field_does_not_lose_the_catalog() {
-        List<PluginRegistry.Plugin> plugins =
-                PluginRegistry.parse("[{\"id\":\"a.b\",\"coordinate\":\"g:a\",\"whatIsThis\":42}]");
-
-        assertEquals(1, plugins.size());
-        assertEquals("a.b", plugins.getFirst().id());
-    }
-
-    /** Every failure resolves to an empty catalog: the dialog degrades to a message, never an exception. */
-    @Test
-    void a_missing_or_broken_index_is_an_empty_catalog() {
-        assertTrue(PluginRegistry.parse(null).isEmpty());
-        assertTrue(PluginRegistry.parse("").isEmpty());
-        assertTrue(PluginRegistry.parse("not json at all").isEmpty());
+    void a_dev_build_keeps_its_own_version_over_the_tag() {
+        assertEquals("1.6.0-SNAPSHOT", discord().withVersion("1.6.0-SNAPSHOT").version());
+        assertEquals("v0.1.0", discord().withVersion("1.6.0-SNAPSHOT").tag());
     }
 
     /**
@@ -82,7 +61,7 @@ class PluginRegistryTest {
      */
     @Test
     void installed_is_by_coordinate_not_by_version() {
-        PluginRegistry.Plugin plugin = PluginRegistry.parse(INDEX).getFirst();
+        PluginRegistry.Plugin plugin = discord();
         List<UserLibrary> older = List.of(
                 new UserLibrary("com.github.someone", "botmaker-discord-plugin", "v0.0.9"));
 
@@ -102,16 +81,17 @@ class PluginRegistryTest {
     }
 
     @Test
-    void an_entry_with_no_coordinate_is_not_installable() {
-        PluginRegistry.Plugin plugin = PluginRegistry.parse("[{\"id\":\"a.b\",\"name\":\"A\"}]").getFirst();
+    void a_row_with_no_coordinate_is_not_installable() {
+        PluginRegistry.Plugin plugin = CatalogIndex.parse(
+                "{\"plugins\":[{\"id\":\"a.b\",\"repo\":\"o/a\",\"tag\":\"v1\"}]}").plugins().getFirst();
 
         assertFalse(plugin.isInstallable());
-        assertEquals("", plugin.htmlUrl());
+        assertEquals("a", plugin.name(), "no name: the repository's");
     }
 
     @Test
     void search_matches_name_id_description_and_tags() {
-        PluginRegistry.Plugin plugin = PluginRegistry.parse(INDEX).getFirst();
+        PluginRegistry.Plugin plugin = discord();
 
         assertTrue(plugin.matches(""));
         assertTrue(plugin.matches(null));

@@ -1,17 +1,12 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.shared.github.GitHubClient;
-import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.services.JitPackSearch;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 
 /**
- * Read side of the plugin registry — the answer to "which plugins exist?", which
+ * Read side of the catalog's plugins — the answer to "which plugins exist?", which
  * {@code META-INF/services} cannot give.
  *
  * <p>`ServiceLoader` is how the host <em>instantiates</em> a plugin already on the classpath; getting it
@@ -20,49 +15,44 @@ import java.util.function.Function;
  * platform's whole point is that a plugin is a normal library, and a bespoke install path would be a
  * privilege the first-party plugin has and a third party's does not.
  *
- * <p>Deliberately shaped like {@link GitHubGallery}: one unauthenticated request for a generated
- * {@code index.json} on the raw CDN — no API rate limit, no account — and any failure resolving to an empty
- * catalog rather than throwing. The dialog degrades to a message; a registry nobody can reach must never
- * stop somebody editing their bot.
- *
- * <p><b>The registry names a plugin; JitPack says its version (2026-10-12).</b> An entry's
- * {@code verifiedVersion} was what got installed, moved by a pull request each release opened; the ones moving
- * the SDK to v1.4.3 and v1.4.4 failed the registry's gate (its CI pinned a cli whose contract lacked members
- * 1.4.4 links) and sat unmerged, so Studio kept installing v1.4.2. {@link #browse} now fills each entry's
- * {@link Plugin#version} with JitPack's newest build of its coordinate — the same rule as a template, which
- * copies its newest release — and the index's {@code verifiedVersion} is read past.
+ * <p><b>The catalog says the version (2026-10-23).</b> Since 2026-10-12 a plugin installed JitPack's newest
+ * build, because the registry's {@code verifiedVersion} lagged behind pull requests that failed its gate. The
+ * catalog's entries are checked by machine and merged automatically, so an entry's {@code tag} is the release
+ * that passed the check, and nothing newer is installed. Read through {@link CatalogClient}, one request per
+ * session; any failure is the catalog kept from the last read, else empty, and never stops anybody editing
+ * their bot.
  */
 public final class PluginRegistry {
 
-    private final GitHubClient client;
-    private final JitPackSearch jitpack;
+    private final CatalogClient catalog;
 
-    public PluginRegistry(GitHubClient client) {
-        this.client = client;
-        this.jitpack = new JitPackSearch();
+    public PluginRegistry() {
+        this(CatalogClient.session());
+    }
+
+    PluginRegistry(CatalogClient catalog) {
+        this.catalog = catalog;
     }
 
     /**
-     * One plugin's entry, as the registry's CI generated it.
+     * One plugin's row of {@code catalog.json}.
      *
-     * <p>Unknown properties are ignored because this Studio is the reader that lags: a field a newer
-     * {@code botmaker publish} writes must not make the whole catalog unreadable. The same rule drops
-     * {@code valueTypeIds}, which entries written before 2026-09-23 still carry and nothing reads.
-     *
-     * @param coordinate {@code groupId:artifactId}, with no version — the index names a plugin, not a
+     * @param coordinate {@code groupId:artifactId}, with no version — the catalog names a plugin, not a
      *                   release
-     * @param version what gets installed: JitPack's newest build, filled by {@link #browse}; blank when JitPack
-     *                did not answer, and creation then resolves the newest itself
+     * @param version what gets installed: the catalog's {@code tag}, spelled as git has it (a pin is the tag
+     *                name, {@code 43-real-versions.md}); a dev build's own version for a dev-mode row
      * @param editorDependencies {@code groupId:artifactId:version} of everything this plugin needs on the
      *                           <em>editor's</em> classpath and does not bring itself — the dependencies it
      *                           declares {@code optional}, which is exactly the set a resolve does not reach.
      *                           Absent is the ordinary case: a plugin whose dependencies are ordinary needs
      *                           no list, because they are transitive. See {@code MavenService.installPlugin}.
+     * @param tag the release the catalog's check passed
+     * @param rank who published it
      */
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record Plugin(String id, String name, String coordinate, String repo, String description,
                          List<String> tags, String minContractVersion,
-                         List<String> editorDependencies, String version) {
+                         List<String> editorDependencies, String version, String tag, PublisherRank rank,
+                         int stars) {
 
         public Plugin {
             editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
@@ -73,13 +63,23 @@ public final class PluginRegistry {
             description = description == null ? "" : description;
             tags = tags == null ? List.of() : List.copyOf(tags);
             minContractVersion = minContractVersion == null ? "" : minContractVersion.trim();
-            version = version == null ? "" : version.trim();
+            tag = tag == null ? "" : tag.trim();
+            version = version == null || version.isBlank() ? tag : version.trim();
+            rank = rank == null ? PublisherRank.COMMUNITY : rank;
+        }
+
+        /** A row the catalog did not rank — a dev build, a test's: community, installing {@code version}. */
+        public Plugin(String id, String name, String coordinate, String repo, String description,
+                      List<String> tags, String minContractVersion, List<String> editorDependencies,
+                      String version) {
+            this(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
+                    "", PublisherRank.COMMUNITY, 0);
         }
 
         /** This entry installing {@code newVersion}. */
         public Plugin withVersion(String newVersion) {
             return new Plugin(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies,
-                    newVersion);
+                    newVersion, tag, rank, stars);
         }
 
         public String groupId() {
@@ -98,7 +98,7 @@ public final class PluginRegistry {
          *
          * <p>Skipping rather than throwing, for the reason the whole parse is lenient: <b>this Studio is the
          * reader that lags</b>. A malformed entry costs one plugin one dependency; refusing the catalog over
-         * it would cost the user every plugin. The registry's own gate is where a malformed list is an error,
+         * it would cost the user every plugin. The catalog's own builder is where a malformed list is an error,
          * because that is the reader who can tell somebody to fix it.
          */
         public List<UserLibrary> editorLibraries() {
@@ -154,51 +154,8 @@ public final class PluginRegistry {
                         .findFirst());
     }
 
-    /**
-     * Fetches the whole catalog, each entry at JitPack's newest build. Empty when the registry is unset,
-     * unreachable or malformed.
-     */
+    /** Every listed plugin, each at its catalog tag. Empty when no catalog can be read. */
     public CompletableFuture<List<Plugin>> browse() {
-        return entries().thenCompose(entries -> withNewest(entries,
-                plugin -> jitpack.fetchLatestVersion(plugin.groupId(), plugin.artifactId())));
-    }
-
-    /**
-     * The index alone, every {@link Plugin#version} blank: for a reader that needs names and editor dependencies
-     * and must not wait on JitPack, like opening a project. Empty when the registry is unset, unreachable or
-     * malformed.
-     */
-    public CompletableFuture<List<Plugin>> entries() {
-        if (!GitHubConfig.isRegistryConfigured()) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        return client.getFirstString(GitHubConfig.registryIndexRawUrls()).thenApply(PluginRegistry::parse);
-    }
-
-    /**
-     * {@code entries}, each installable one at the version {@code newest} answers, asked side by side; an
-     * answer that fails is blank. Package-private and static so it can be tested without a network.
-     */
-    static CompletableFuture<List<Plugin>> withNewest(List<Plugin> entries,
-                                                      Function<Plugin, CompletableFuture<String>> newest) {
-        List<CompletableFuture<Plugin>> asked = entries.stream()
-                .map(plugin -> plugin.isInstallable()
-                        ? newest.apply(plugin).exceptionally(failure -> "").thenApply(plugin::withVersion)
-                        : CompletableFuture.completedFuture(plugin))
-                .toList();
-        return CompletableFuture.allOf(asked.toArray(CompletableFuture[]::new))
-                .thenApply(done -> asked.stream().map(CompletableFuture::join).toList());
-    }
-
-    /** Package-private and static so the parse can be tested without a network or a client. */
-    static List<Plugin> parse(String body) {
-        if (body == null || body.isBlank()) return List.of();
-        try {
-            return List.of(new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readValue(body, Plugin[].class));
-        } catch (Exception e) {
-            System.err.println("Failed to parse the plugin registry index.json: " + e.getMessage());
-            return List.of();
-        }
+        return catalog.fetch().thenApply(CatalogIndex::plugins);
     }
 }

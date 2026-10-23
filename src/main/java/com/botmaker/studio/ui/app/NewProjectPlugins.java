@@ -15,17 +15,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * New Project's plugin checklist (2026-10-01): the rows <i>Plugins &amp; Libraries ▸ Browse</i> offers
  * ({@link PluginCatalog}), each a tick box.
  *
- * <p>The chosen bot's own plugins are ticked and locked, read off the pom of the release New Project clones
- * ({@link PublishedBotPlugins}, since 2026-10-12; a gallery entry's {@code requires} said it until then, and went
- * stale): its code may call them, and creation offers no version choice, so there is nothing to decide about
+ * <p>The chosen bot's own plugins are ticked and locked, as the catalog read them off the pom of the release New
+ * Project clones ({@link GalleryEntry#plugins}, 2026-10-23; Studio read that pom itself from 2026-10-12, and a
+ * gallery entry's {@code requires} said it before, and went stale): its code may call them, and creation offers no version choice, so there is nothing to decide about
  * them. What this hands back is only the user's extra ticks. Each row names the version the project gets
  * ({@link #label}). Offline the list is empty with a sentence, and creating still works — a plugin is one visit
  * to Plugins &amp; Libraries away afterwards.
@@ -35,25 +33,14 @@ final class NewProjectPlugins {
     private final ListView<PluginRegistry.Plugin> list = new ListView<>();
     private final Set<PluginRegistry.Plugin> ticked = new LinkedHashSet<>();
     private final Runnable onChange;
-    private final CompletableFuture<List<PluginRegistry.Plugin>> rows;
-    private final Function<GalleryEntry, CompletableFuture<String>> pomOf;
     private Map<String, PublishedBotPlugins.Pin> locked = Map.of();
-    /** The entry {@link #lockFor} was last asked about; an older entry's pom that answers late is dropped. */
-    private GalleryEntry lockingFor;
 
-    /**
-     * @param pomOf the pom of the release a bot is cloned at ({@code GitHubGallery.pomAtInstallTag}),
-     *              {@code ""} when it cannot be had
-     */
-    NewProjectPlugins(PluginCatalog catalog, Function<GalleryEntry, CompletableFuture<String>> pomOf,
-                      Runnable onChange) {
+    NewProjectPlugins(PluginCatalog catalog, Runnable onChange) {
         this.onChange = onChange;
-        this.pomOf = pomOf;
         list.setPrefHeight(150);
         list.setCellFactory(view -> new Row());
         list.setPlaceholder(new Label("Loading plugins…"));
-        rows = catalog.rows();
-        rows.whenComplete((answered, failure) -> Platform.runLater(() -> {
+        catalog.rows().whenComplete((answered, failure) -> Platform.runLater(() -> {
             List<PluginRegistry.Plugin> installable = answered == null ? List.of()
                     : answered.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
             list.getItems().setAll(installable);
@@ -67,24 +54,13 @@ final class NewProjectPlugins {
     }
 
     /**
-     * Re-marks the rows for {@code entry}, or for Studio's own blank project when it is null. A bot's rows
-     * lock once its pom answers; until then, and when it cannot be read, nothing is locked — creation still skips
-     * a coordinate the cloned pom declares.
+     * Re-marks the rows for {@code entry}, or for Studio's own blank project when it is null: a bot's own plugins
+     * lock. Creation still skips a coordinate the cloned pom declares.
      */
     void lockFor(GalleryEntry entry) {
-        lockingFor = entry;
-        locked = Map.of();
+        locked = entry == null ? Map.of() : locked(entry.plugins());
         list.refresh();
         onChange.run();
-        if (entry == null) return;
-        pomOf.apply(entry)
-                .thenCombine(rows.exceptionally(failure -> List.of()), PublishedBotPlugins::of)
-                .whenComplete((pins, failure) -> Platform.runLater(() -> {
-                    if (entry != lockingFor || pins == null) return;
-                    locked = locked(pins);
-                    list.refresh();
-                    onChange.run();
-                }));
     }
 
     /** The user's ticks, the bot's own plugins left out. */
@@ -100,8 +76,7 @@ final class NewProjectPlugins {
 
     /**
      * A row's text: the plugin's name and the version the project gets — the bot's pin for its own
-     * plugins, JitPack's newest build for the rest. A version JitPack did not give is left out: the plugin
-     * resolves its newest release only at creation.
+     * plugins, the catalog's tag for the rest. A version nobody gave is left out.
      */
     static String label(PluginRegistry.Plugin plugin, PublishedBotPlugins.Pin own) {
         String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();

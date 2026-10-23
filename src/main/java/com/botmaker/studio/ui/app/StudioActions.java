@@ -62,7 +62,7 @@ final class StudioActions {
     /** Opens the block a use is in — the canvas's, so {@link UIManager} sets it once the canvas exists. */
     private java.util.function.Consumer<com.botmaker.studio.nav.Usages.Usage> onReveal = null;
     // Reads the plugin index off the same raw CDN the gallery uses, with the same client and no account.
-    private final PluginRegistry pluginRegistry = new PluginRegistry(gitHubClient);
+    private final PluginRegistry pluginRegistry = new PluginRegistry();
 
     /**
      * Six of the thirteen parameters this took were the project's own services, re-listed here after

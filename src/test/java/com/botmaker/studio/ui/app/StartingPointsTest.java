@@ -4,7 +4,6 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.StartingPoints.Fetch;
 import com.botmaker.studio.ui.app.StartingPoints.Kind;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -18,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** New Project starts from Blank or any published bot (2026-10-23): Blank first, the bots below it. */
 class StartingPointsTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static GalleryEntry bot(String name) {
         return new GalleryEntry(name, "LiQiyeDev", "botmaker-" + name, "A " + name + " bot.",
@@ -76,23 +74,6 @@ class StartingPointsTest {
         assertEquals(Optional.empty(), StartingPoints.same(rows, StartChoice.LOADING));
     }
 
-    /** Every listed bot is remembered, an old {@code template} tag or not. */
-    @Test
-    void theRememberedListReadsBackAsTheCatalogDoes() {
-        GalleryEntry tagged = new GalleryEntry("old", "someone", "old", "", List.of("template"));
-        List<GalleryEntry> entries = List.of(bot("farm"), tagged, bot("mine"));
-
-        String json = StartingPoints.toJson(MAPPER, entries).orElseThrow();
-
-        assertEquals(entries, StartingPoints.fromJson(MAPPER, json));
-    }
-
-    @Test
-    void anEmptyListIsNotRemembered() {
-        assertTrue(StartingPoints.toJson(MAPPER, List.of()).isEmpty());
-        assertEquals(List.of(), StartingPoints.fromJson(MAPPER, null));
-        assertEquals(List.of(), StartingPoints.fromJson(MAPPER, "not json"));
-    }
 
     @Test
     void aBotIsLabelledByItsCapitalisedName() {

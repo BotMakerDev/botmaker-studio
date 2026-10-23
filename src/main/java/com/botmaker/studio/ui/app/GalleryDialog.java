@@ -146,9 +146,10 @@ public class GalleryDialog {
         list.setCellFactory(lv -> new BrowseCell());
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        // The gallery repository went on 2026-10-23: a bot is listed by its repository's topic.
-        Hyperlink repoLink = new Hyperlink("Every repository with the topic " + GitHubConfig.TOPIC + " on GitHub");
-        repoLink.setOnAction(e -> BrowserLauncher.open("https://github.com/topics/" + GitHubConfig.TOPIC));
+        // Every listing is one file of the catalog repository (2026-10-23).
+        String catalogRepo = GitHubConfig.CATALOG_OWNER + "/" + GitHubConfig.CATALOG_REPO;
+        Hyperlink repoLink = new Hyperlink("Every listing, in " + catalogRepo + " on GitHub");
+        repoLink.setOnAction(e -> BrowserLauncher.open("https://github.com/" + catalogRepo));
 
         VBox box = new VBox(10, searchRow, list, repoLink);
         box.setPadding(new Insets(14));
@@ -290,11 +291,9 @@ public class GalleryDialog {
         installBtn.setText("Installing…");
         CompletableFuture
                 .supplyAsync(() -> {
-                    String tag = gallery.installTag(entry).join();
+                    String tag = entry.tag();
                     if (tag.isBlank()) {
-                        throw new RuntimeException("No release was found for " + entry.owner() + "/"
-                                + entry.repo() + ". Either its author hasn't published one yet, or the repo "
-                                + "isn't public — signing in to GitHub lets the gallery read your own.");
+                        throw new RuntimeException("The catalog lists no release of " + entry.slug() + ".");
                     }
                     try {
                         return installer.install(entry, tag).getFileName().toString();

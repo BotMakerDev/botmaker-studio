@@ -80,7 +80,6 @@ import com.botmaker.studio.project.managed.MigrationCleanup;
 import com.botmaker.studio.project.managed.MigrationMapping;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.managed.MigrationSummary;
-import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -142,7 +141,7 @@ final class StudioBridge implements StudioDriver {
     private final JitPackSearch jitpack = new JitPackSearch();
     private final GitHubClient github = new GitHubClient();
     // The plugin index, read off the same raw CDN as Plugins & Libraries, with no account.
-    private final PluginRegistry registry = new PluginRegistry(github);
+    private final PluginRegistry registry = new PluginRegistry();
 
     StudioBridge(StudioContext ctx, Trials trials, RunLog log, Supplier<Window> owner) {
         this.ctx = ctx;
@@ -712,9 +711,9 @@ final class StudioBridge implements StudioDriver {
         String provided = BrowsePluginsTab.alreadyProvided(plugin, declared,
                 PluginHost.plugins().stream().map(StudioPlugin::id).toList());
         if (!provided.isEmpty()) throw new IllegalArgumentException(provided);
-        String version = waitFor(new PluginCatalog(registry, jitpack).version(plugin), 30, "find " + name + "'s version");
-        if (version == null || version.isBlank()) {
-            throw new IllegalArgumentException("No version of " + plugin.coordinate() + " could be found.");
+        String version = plugin.version();
+        if (version.isBlank()) {
+            throw new IllegalArgumentException("The catalog lists no release of " + plugin.coordinate() + ".");
         }
         if (!userAgrees("Add a plugin?", "The assistant wants to add " + name + " " + version + " ("
                 + plugin.coordinate() + ") to this bot.\n\nA plugin runs with Studio's own permissions. Registry "
@@ -1446,7 +1445,7 @@ final class StudioBridge implements StudioDriver {
     private List<GalleryEntry> botsOrNone() {
         try {
             return GalleryEntry.startingPoints(HiddenBots.load().without(waitFor(
-                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "search the published bots")));
+                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "read the catalog")));
         } catch (IllegalArgumentException e) {
             return List.of();
         }

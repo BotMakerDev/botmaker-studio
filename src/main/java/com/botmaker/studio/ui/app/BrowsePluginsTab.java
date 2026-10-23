@@ -103,11 +103,11 @@ final class BrowsePluginsTab {
      * @param onShowInstalled an installed row's <i>Manage…</i>: the window switches to Installed
      * @param onChanged       after an install wrote the pom, so the window's other tabs read it again
      */
-    BrowsePluginsTab(LibraryService libraryService, PluginRegistry registry, JitPackSearch jitpack,
+    BrowsePluginsTab(LibraryService libraryService, PluginRegistry registry,
                      Supplier<CompletableFuture<List<LocalBuilds.Build>>> localBuilds,
                      Runnable onShowInstalled, Runnable onChanged) {
         this.libraryService = libraryService;
-        this.catalog = new PluginCatalog(registry, jitpack);
+        this.catalog = new PluginCatalog(registry);
         this.localBuilds = localBuilds;
         this.onShowInstalled = onShowInstalled;
         this.onChanged = onChanged;

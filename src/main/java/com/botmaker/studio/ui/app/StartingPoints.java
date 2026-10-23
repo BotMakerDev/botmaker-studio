@@ -1,27 +1,21 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.sharing.GalleryEntry;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.prefs.Preferences;
 import java.util.stream.Stream;
 
 /**
- * New Project's "Start from" rows, and the bot list it remembers between opens.
+ * New Project's "Start from" rows.
  *
  * <p>Every published bot is a starting point (2026-10-23; only bots tagged {@code template} were until then), and
  * a bot row is cloned linked to its author, as Browse Bots installs it. Blank, Studio's own project, is the first
- * row and the default ({@link #rows}). Below it the dialog shows the bots the gallery listed last time, so it
+ * row and the default ({@link #rows}). Below it the dialog shows the bots of the catalog read last time, so it
  * starts where it will end up; the fresh list replaces them when it lands, and only a fresh row is created from.
  * New Project still works offline: Blank stays.
  */
 final class StartingPoints {
-
-    private static final String PREFS_NODE = "/com/botmaker/studio";
-    /** Renamed with the template concept (2026-10-23): the old {@code newProject.templates} list is never read. */
-    private static final String PREFS_KEY = "newProject.bots";
 
     private StartingPoints() {}
 
@@ -87,8 +81,7 @@ final class StartingPoints {
          * The entry's name with its first letter capitalized, for display only.
          *
          * <p>A gallery entry's name may come from its repository, lowercase. Nothing may capitalize it anywhere
-         * but here: {@code entry.name()} is what {@code BotInstaller} resolves and what
-         * {@code GitHubConfig.entryPath} keys on.
+         * but here: {@code entry.name()} is what {@code BotInstaller} resolves.
          */
         String displayName() {
             String name = entry.name();
@@ -149,55 +142,6 @@ final class StartingPoints {
                 .findFirst();
     }
 
-    /** The remembered entries, or empty when nothing was remembered or it no longer reads. */
-    static List<GalleryEntry> remembered(ObjectMapper mapper) {
-        try {
-            return fromJson(mapper, Preferences.userRoot().node(PREFS_NODE).get(PREFS_KEY, null));
-        } catch (RuntimeException e) {
-            return List.of();
-        }
-    }
-
-    /**
-     * Remembers {@code entries} for the next open. Nothing is written when there are none: a fetch that failed
-     * must not forget the list that worked.
-     */
-    static void remember(ObjectMapper mapper, List<GalleryEntry> entries) {
-        toJson(mapper, entries).ifPresent(json -> {
-            try {
-                Preferences prefs = Preferences.userRoot().node(PREFS_NODE);
-                prefs.put(PREFS_KEY, json);
-                prefs.flush();
-            } catch (Exception e) {
-                // Not remembered: the next open shows the loading row, then the same list.
-            }
-        });
-    }
-
-    /**
-     * {@code entries} as a JSON array, read back by {@link #fromJson}; empty when there are none or they outgrow
-     * what a preference holds.
-     */
-    static Optional<String> toJson(ObjectMapper mapper, List<GalleryEntry> entries) {
-        if (entries.isEmpty()) return Optional.empty();
-        try {
-            String json = mapper.writeValueAsString(entries);
-            return json.length() <= Preferences.MAX_VALUE_LENGTH ? Optional.of(json) : Optional.empty();
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * The remembered list; empty when there is none or it does not read — the catalog-shaped object written before
-     * the gallery repository went (2026-10-23) among them, which the next fetch replaces.
-     */
-    static List<GalleryEntry> fromJson(ObjectMapper mapper, String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return List.of(mapper.readValue(json, GalleryEntry[].class));
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
+    // remembered()/remember(), a copy of the bot list in a preference, went on 2026-10-23: the catalog read last
+    // time is kept on disk whole (CatalogClient.kept), and a list of catalog rows outgrew what a preference holds.
 }

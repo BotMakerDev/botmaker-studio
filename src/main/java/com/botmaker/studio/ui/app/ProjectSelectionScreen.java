@@ -12,6 +12,7 @@ import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
@@ -520,7 +521,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // below it the bots published last time, refreshed in the background — see loadBots. The ones hidden in
         // Browse Bots on this computer are left out (HiddenBots).
         List<StartChoice> initial = StartingPoints.rows(
-                GalleryEntry.startingPoints(HiddenBots.load().without(StartingPoints.remembered(gitHubClient.mapper()))),
+                GalleryEntry.startingPoints(HiddenBots.load().without(CatalogClient.session().kept().bots())),
                 StartingPoints.Fetch.PENDING);
         ComboBox<StartChoice> startCombo = new ComboBox<>(
                 javafx.collections.FXCollections.observableArrayList(initial));
@@ -578,10 +579,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                                     : "It brings its own plugins — change them later in Project ▸ Plugins & "
                                             + "Libraries.") + "\n" + now.entry().trustWarning());
         };
-        GitHubGallery botRepos = new GitHubGallery(gitHubClient, gitHubAuth);
-        plugins[0] = new NewProjectPlugins(
-                new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch()),
-                botRepos::pomAtInstallTag, describeChoice);
+        plugins[0] = new NewProjectPlugins(new PluginCatalog(new PluginRegistry()), describeChoice);
         startCombo.valueProperty().addListener((o, was, now) ->
                 plugins[0].lockFor(now == null ? null : now.entry()));
         plugins[0].lockFor(startCombo.getValue().entry());
@@ -651,9 +649,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         new GitHubGallery(gitHubClient, gitHubAuth).browse()
                 .exceptionally(error -> List.of())
                 .thenAccept(entries -> Platform.runLater(() -> {
-                    boolean answered = !entries.isEmpty();
-                    if (answered) StartingPoints.remember(gitHubClient.mapper(), entries);
-                    StartingPoints.Fetch fetch = answered
+                    StartingPoints.Fetch fetch = !entries.isEmpty()
                             ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
                     fillStarts(combo, StartingPoints.rows(
                             GalleryEntry.startingPoints(HiddenBots.load().without(entries)), fetch));

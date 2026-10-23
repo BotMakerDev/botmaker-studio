@@ -1,6 +1,5 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LocalBuilds;
 
 import java.util.ArrayList;
@@ -20,14 +19,12 @@ import java.util.concurrent.CompletableFuture;
 public final class PluginCatalog {
 
     private final PluginRegistry registry;
-    private final JitPackSearch jitpack;
 
-    public PluginCatalog(PluginRegistry registry, JitPackSearch jitpack) {
+    public PluginCatalog(PluginRegistry registry) {
         this.registry = registry;
-        this.jitpack = jitpack;
     }
 
-    /** The rows to offer: the registry's entries, empty when it cannot be read. */
+    /** The rows to offer: the catalog's plugins, empty when it cannot be read. */
     public CompletableFuture<List<PluginRegistry.Plugin>> rows() {
         return registry.browse();
     }
@@ -85,11 +82,11 @@ public final class PluginCatalog {
     /** What a local build's own row says about it. */
     public static final String LOCAL_BUILD_DESCRIPTION = "Built on this computer into ~/.m2 — not published.";
 
-    /** The version {@link PluginRegistry#browse} found, or — when JitPack did not answer then — JitPack's newest. */
+    /**
+     * The version {@code plugin} installs at: its catalog tag (a dev build's own version in dev mode), never JitPack's
+     * newest, which no check has passed (2026-10-23). Blank for a row that names none.
+     */
     public CompletableFuture<String> version(PluginRegistry.Plugin plugin) {
-        if (!plugin.version().isBlank()) {
-            return CompletableFuture.completedFuture(plugin.version());
-        }
-        return jitpack.fetchLatestVersion(plugin.groupId(), plugin.artifactId());
+        return CompletableFuture.completedFuture(plugin.version());
     }
 }
