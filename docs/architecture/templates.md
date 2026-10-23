@@ -1,7 +1,7 @@
 # Templates — a starting point is a published bot (2026-08-30)
 
-> **History since 2026-10-23.** There are no templates: New Project offers Blank or any published bot (topic
-> `botmaker-bot`), cloned linked to its author by the remote `original`, no package rename (umbrella
+> **History since 2026-10-23.** There are no templates: New Project offers Blank or any bot `botmaker-catalog`
+> lists, cloned at its listed tag and linked to its author by the remote `original`, no package rename (umbrella
 > `docs/superpowers/specs/2026-10-22-no-templates-design.md`, `sharing.md`). What follows is the old design.
 
 **New Project lists the gallery.** An entry whose `tags` carry `GalleryEntry.TEMPLATE_TAG` (`"template"`) is

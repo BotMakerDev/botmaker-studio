@@ -1,5 +1,9 @@
 # Plugins — the registry answers "where is it", and installing is an ordinary dependency
 
+> **2026-10-23:** the registry is `botmaker-catalog` and its `index.json` is `catalog.json`. The version installed
+> is the entry's `tag`, the release its check passed, no longer JitPack's newest; a community plugin asks before its
+> first load (`PluginGate`). See `dated-notes.md`. Installing through `LibraryService` still holds.
+
 **Project ▸ Manage Plugins…** (`ui/app/ManagePluginsDialog` over `sharing/PluginRegistry`) browses the
 generated `index.json` in `botmaker-plugin-registry` and installs through **`LibraryService`**, the same path
 Manage Libraries uses. That is the whole design and it is deliberate: `META-INF/services` says how the host

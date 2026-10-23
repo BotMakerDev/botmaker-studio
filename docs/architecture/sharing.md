@@ -1,8 +1,11 @@
 # Sharing — the gallery is read whole and written one file at a time
 
 > **2026-10-23: the gallery repository is gone**, so the two halves below the line (its read URL, its entry
-> files) are history. Bots are found by the GitHub topic `botmaker-bot` and published by adding it — see
-> `dated-notes.md`. The first part, what belongs in `botmaker-shared`, still holds.
+> files) are history. Bots and plugins are listed in `botmaker-catalog`: Studio reads its generated
+> `catalog.json` (`CatalogClient`, shared's `GitHubConfig.catalogRawUrls()`) and Publish opens one pull request
+> adding the bot's entry (`CatalogListing`), which the catalog's check merges — see `dated-notes.md` and the
+> umbrella's `docs/superpowers/specs/2026-10-23-catalog-design.md`. The first part, what belongs in
+> `botmaker-shared`, still holds.
 
 **The HTTP layer under all of this is `botmaker-shared`'s since 2026-09-05.** `GitHubClient`, `GitHubAuth`,
 `GitHubConfig` and `SemVer` are `com.botmaker.shared.github` — moved verbatim, imports only on this side.

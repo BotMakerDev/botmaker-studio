@@ -9,7 +9,7 @@
 > `maven-metadata-local.xml` and no other `maven-metadata-*.xml` beside the jar.
 
 > **Publishing lists a bot by the catalog's pull request since 2026-10-23.** `BotPublisher`'s `LISTING` step
-> writes the description and the tags (as topics; `GitHubConfig.TOPIC` is no longer written), checks rules 3 and 5
+> writes the description and the tags (as topics; `GitHubConfig.TOPIC` is no longer written, and was removed from shared the same day), checks rules 3 and 5
 > on the release (`CatalogListing.refusal`), then `CatalogListing.put` opens or updates the pull request for
 > `bots/<owner>__<repo>.json` on the branch `entry/<path>` — of the catalog itself for an account that can push
 > there, else of the account's fork — as the cli's `CatalogPr` does through `gh`. `ListingStatus` reads it back
