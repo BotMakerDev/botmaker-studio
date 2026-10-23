@@ -25,24 +25,22 @@ import java.util.function.Consumer;
  * <p>Publishing a bot is {@link PublishPlan.Step}'s five steps: ensure the author's GitHub repo exists and is
  * public and is the project's {@code mine}, tag the saved version and push it there (JGit, the token per call),
  * cut a release, check that the release downloads without signing in, and — when listed — give the repository
- * the topic {@link GitHubConfig#TOPIC}, its description and its tags. The repository is the whole listing
- * (2026-10-23): Browse Bots searches GitHub for the topic ({@link GitHubGallery#browse}), so there is no gallery
- * to submit to, nothing to wait for, and unpublishing is the topic taken off.
+ * its description and its tags (as topics, which the catalog shows) and open the catalog's pull request for its
+ * entry ({@link CatalogListing}, 2026-10-23). The catalog's check merges it; nobody reviews it. Unpublishing and
+ * <i>Stop following</i> are pull requests too: the entry removed, or marked {@code detached}.
  *
  * <p><b>A publish is a {@link Run}, resumed rather than restarted.</b> Each step is written so that running
  * it again after a partial failure is safe — the repository is found rather than recreated, a release whose
- * tag exists is taken as cut, a topic already there is kept — so a retry continues from the step that failed.
+ * tag exists is taken as cut, the entry's open pull request is updated rather than duplicated — so a retry
+ * continues from the step that failed.
  *
  * <p>Blocking — intended to run off the FX thread (the Versions tab's publish sheet wraps it in a background
  * task).
  */
 public final class BotPublisher {
 
-    /**
-     * The topic on a published fork that no longer follows its original (2026-10-23): it is listed as a bot of
-     * its own, with no "based on …". Studio's own, so never a bot's tag.
-     */
-    public static final String DETACHED_TOPIC = "botmaker-detached";
+    // DETACHED_TOPIC (botmaker-detached) went on 2026-10-23: a fork that stopped following is an entry's
+    // "detached": true, set by pull request (setDetached).
 
     /** GitHub's most topics on one repository. */
     static final int MAX_TOPICS = 20;
@@ -51,10 +49,12 @@ public final class BotPublisher {
 
     private final GitHubClient client;
     private final GitHubAuth auth;
+    private final CatalogListing catalog;
 
     public BotPublisher(GitHubClient client, GitHubAuth auth) {
         this.client = client;
         this.auth = auth;
+        this.catalog = new CatalogListing(client);
     }
 
     /**
@@ -118,8 +118,11 @@ public final class BotPublisher {
         private String token;
         private String repoApi;
         private String repoUrl;
+        /** {@code owner/name} as GitHub spells it, which is what the catalog's entry names. */
+        private String fullName;
         private String branch;
         private String commitSha;
+        private ListingStatus listing = ListingStatus.of(ListingStatus.State.NOT_LISTED);
 
         private Run(PublishRequest request, ProjectVcs vcs, String owner) {
             this.request = request;
@@ -139,6 +142,11 @@ public final class BotPublisher {
 
         public PublishPlan plan() {
             return plan;
+        }
+
+        /** What the catalog said when the listing step last ran. */
+        public ListingStatus listing() {
+            return listing;
         }
 
         /** The repository's page, blank until the repository step has run. */
@@ -237,6 +245,7 @@ public final class BotPublisher {
                 }
             }
             repoUrl = repo.path("html_url").asText("https://github.com/" + slug());
+            fullName = repo.path("full_name").asText(slug());
             branch = repo.path("default_branch").asText("main");
             return madePublic ? repoUrl + " (made public)" : repoUrl;
         }
@@ -309,65 +318,69 @@ public final class BotPublisher {
         }
 
         /**
-         * Step 5: the repository's description, and its topics with {@link GitHubConfig#TOPIC} and the bot's tags
-         * added — the ones already there are kept ({@link #topics}).
+         * Step 5: what Studio can check of the catalog's rules ({@link CatalogListing#refusal}), then the
+         * repository's description and its tags as topics (the catalog shows a bot's topics as its tags; the ones
+         * already there are kept, {@link #topics}), then the catalog's pull request for the entry. A fork that
+         * stopped following keeps {@code detached} through a re-publish, even while that pull request is open.
          */
         private String list() throws IOException {
-            account();
+            if (fullName == null) ensureRepository();
+            JsonNode release = client.get(repoApi + "/releases/tags/" + request.version(), token).join();
+            Optional<String> refused = CatalogListing.refusal(release, login, owner);
+            if (refused.isPresent()) throw new IOException(refused.get());
             try {
                 if (!request.description().isBlank()) {
                     client.patch(repoApi, mapOf("description", request.description()), token).join();
                 }
-                client.put(repoApi + "/topics", mapOf("names",
-                        topics(currentTopics(repoApi, token), request.tags(), true)), token).join();
+                List<String> tagged = topics(currentTopics(repoApi, token), request.tags());
+                client.put(repoApi + "/topics", mapOf("names", tagged), token).join();
             } catch (Exception e) {
-                throw new IOException("Couldn't set the topic " + GitHubConfig.TOPIC + " on " + slug() + ": "
+                throw new IOException("Couldn't set the description and tags of " + slug() + ": "
                         + rootMessage(e), e);
             }
-            return "Listed. Browse Bots finds it within a few minutes, once GitHub's search has caught up.";
+            boolean detached = catalog.pending(fullName, login, token).map(CatalogListing.BotEntry::detached)
+                    .orElse(false);
+            listing = catalog.put(new CatalogListing.BotEntry(fullName, request.version(), detached), login, token);
+            return listing.describe();
         }
     }
 
     // -------------------------------------------------------------------------
-    // The listing: the repository's own topics (2026-10-23)
+    // The listing: the catalog's entry, by pull request (2026-10-23)
     // -------------------------------------------------------------------------
 
-    // The gallery's listing pull request (submit, ListingStatus, an entry file per bot on a branch of the
-    // author's fork of the gallery) went on 2026-10-23 with the gallery repository: the topic is the listing.
-
     /**
-     * What GitHub says of {@code owner/repoName} as a listing: whether it has the topic, and the description and
-     * tags a re-publish starts from.
+     * What a re-publish starts from and what the catalog says: the repository's description and tags, and the
+     * entry's state.
      *
-     * @param listed      whether the repository carries {@link GitHubConfig#TOPIC}
+     * @param status      the catalog's entry and its newest pull request
      * @param description the repository's description, blank when it has none
      * @param tags        its topics, Studio's own ({@code botmaker-…}) left out
      */
-    public record Listing(boolean listed, String description, List<String> tags) {
+    public record Listing(ListingStatus status, String description, List<String> tags) {
 
-        public static final Listing NONE = new Listing(false, "", List.of());
+        public static final Listing NONE = new Listing(ListingStatus.of(ListingStatus.State.NOT_LISTED), "",
+                List.of());
 
         public Listing {
             description = description == null ? "" : description;
             tags = List.copyOf(tags);
         }
 
-        /** Reads a repository object; {@link #NONE} when there is none. */
-        static Listing of(JsonNode repo) {
+        /** Reads a repository object beside the catalog's {@code status}; {@link #NONE} when there is no repository. */
+        static Listing of(JsonNode repo, ListingStatus status) {
             if (repo == null) return NONE;
-            boolean listed = false;
             List<String> tags = new ArrayList<>();
             for (JsonNode topic : repo.path("topics")) {
                 String t = topic.asText("");
-                if (t.equals(GitHubConfig.TOPIC)) listed = true;
-                else if (!t.isBlank() && !t.startsWith("botmaker-")) tags.add(t);
+                if (!t.isBlank() && !t.startsWith("botmaker-")) tags.add(t);
             }
-            return new Listing(listed, repo.path("description").asText(""), tags);
+            return new Listing(status, repo.path("description").asText(""), tags);
         }
 
-        /** One line for the sheet. */
-        public String describe() {
-            return listed ? "Listed in Browse Bots." : "Not listed in Browse Bots.";
+        /** Whether the catalog's {@code main} holds the entry. */
+        public boolean listed() {
+            return status.state() == ListingStatus.State.LISTED;
         }
     }
 
@@ -375,65 +388,58 @@ public final class BotPublisher {
     public Listing listing(String owner, String repoName) {
         String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
         try {
-            return Listing.of(client.get(repoApi(owner, repoName), token).join());
+            JsonNode repo = client.get(repoApi(owner, repoName), token).join();
+            if (repo == null) return Listing.NONE;
+            String login = token == null ? "" : auth.login(client).join();
+            String fullName = repo.path("full_name").asText(owner + "/" + repoName);
+            ListingStatus status = login == null || login.isBlank()
+                    ? catalog.listed(fullName, token).map(e -> ListingStatus.of(ListingStatus.State.LISTED))
+                            .orElse(ListingStatus.of(ListingStatus.State.NOT_LISTED))
+                    : catalog.status(fullName, login, token);
+            return Listing.of(repo, status);
         } catch (Exception unreadable) {
             return Listing.NONE;
         }
     }
 
     /**
-     * Delists a bot: takes {@link GitHubConfig#TOPIC} off its repository, every other topic kept. The repository
-     * and its releases are left intact, and whoever started from it stays linked. Blocking; run off the FX thread.
+     * Delists a bot: the pull request removing its catalog entry. The repository and its releases are left
+     * intact, and whoever started from it stays linked. Blocking; run off the FX thread.
      */
-    public void unpublish(String owner, String repoName) throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        String api = repoApi(owner, repoName);
-        try {
-            client.put(api + "/topics", mapOf("names",
-                    topics(currentTopics(api, auth.token()), List.of(), false)), auth.token()).join();
-        } catch (Exception e) {
-            throw new IOException("Couldn't take the topic " + GitHubConfig.TOPIC + " off " + owner + "/" + repoName
-                    + ": " + rootMessage(e), e);
-        }
+    public ListingStatus unpublish(String owner, String repoName) throws IOException {
+        String login = signedIn();
+        return catalog.remove(fullName(owner, repoName), login, auth.token());
     }
 
     /**
-     * Marks the user's published fork as no longer following its original, or following it again
-     * ({@link #DETACHED_TOPIC}): Browse Bots and New Project stop, or start again, saying "based on …". GitHub
-     * still calls the repository a fork, and that is all it knows. Blocking; run off the FX thread.
+     * Marks the user's published fork as no longer following its original, or following it again: the pull request
+     * setting the entry's {@code detached}, so Browse Bots and New Project stop, or start again, saying "based on
+     * …". GitHub still calls the repository a fork. {@link ListingStatus.State#NOT_LISTED} when the catalog does not
+     * list it, which leaves nothing to mark. Blocking; run off the FX thread.
      */
-    public void setDetached(String owner, String repoName, boolean detached) throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        String api = repoApi(owner, repoName);
-        try {
-            client.put(api + "/topics", mapOf("names", detachedTopics(currentTopics(api, auth.token()), detached)),
-                    auth.token()).join();
-        } catch (Exception e) {
-            throw new IOException("Couldn't " + (detached ? "add" : "take off") + " the topic " + DETACHED_TOPIC
-                    + " on " + owner + "/" + repoName + ": " + rootMessage(e), e);
-        }
+    public ListingStatus setDetached(String owner, String repoName, boolean detached) throws IOException {
+        String login = signedIn();
+        Optional<CatalogListing.BotEntry> entry = catalog.pending(fullName(owner, repoName), login, auth.token());
+        if (entry.isEmpty()) return ListingStatus.of(ListingStatus.State.NOT_LISTED);
+        return catalog.put(new CatalogListing.BotEntry(entry.get().repo(), entry.get().tag(), detached), login,
+                auth.token());
     }
 
-    /** {@code current} with {@link #DETACHED_TOPIC} added, room made for it, or taken off. */
-    static List<String> detachedTopics(List<String> current, boolean detached) {
-        Set<String> out = new LinkedHashSet<>();
-        for (String t : current) {
-            if (!t.isBlank() && !t.equals(DETACHED_TOPIC)) out.add(t);
+    private String signedIn() throws IOException {
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new IOException("Not signed in to GitHub.");
         }
-        if (!detached) return List.copyOf(out);
-        List<String> kept = new ArrayList<>(out);
-        // The listing topic first, then the mark: a fork that had twenty topics loses its last own one.
-        int at = kept.indexOf(GitHubConfig.TOPIC) + 1;
-        kept.add(at, DETACHED_TOPIC);
-        for (int i = kept.size() - 1; kept.size() > MAX_TOPICS && i >= 0; i--) {
-            String t = kept.get(i);
-            if (!t.equals(GitHubConfig.TOPIC) && !t.equals(DETACHED_TOPIC)) kept.remove(i);
+        String login = auth.login(client).join();
+        if (login == null || login.isBlank()) {
+            throw new IOException("Could not read your GitHub account.");
         }
-        return List.copyOf(kept);
+        return login;
+    }
+
+    /** {@code owner/repoName} as GitHub spells it, as typed when the repository cannot be read. */
+    private String fullName(String owner, String repoName) {
+        JsonNode repo = client.get(repoApi(owner, repoName), auth.token()).join();
+        return repo == null ? owner + "/" + repoName : repo.path("full_name").asText(owner + "/" + repoName);
     }
 
     /**
@@ -448,22 +454,18 @@ public final class BotPublisher {
     }
 
     /**
-     * The topics a repository should carry: {@code current} with the bot's {@code tags} (as topics) and
-     * {@link GitHubConfig#TOPIC} added when {@code listed}, or {@link GitHubConfig#TOPIC} taken out when not. A
-     * topic is never removed otherwise, so what an author set on github.com stays — except the last of twenty,
-     * which makes room for the listing's: at most {@link #MAX_TOPICS}, the listing's own topic first.
+     * The topics a repository should carry: {@code current} with the bot's {@code tags} added as topics. A topic
+     * is never removed, so what an author set on github.com stays; at most {@link #MAX_TOPICS}, and no tag spelt
+     * like Studio's own ({@code botmaker-…}).
      */
-    static List<String> topics(List<String> current, List<String> tags, boolean listed) {
+    static List<String> topics(List<String> current, List<String> tags) {
         Set<String> out = new LinkedHashSet<>();
-        if (listed) out.add(GitHubConfig.TOPIC);
         for (String t : current) {
-            if (!t.isBlank() && (listed || !t.equals(GitHubConfig.TOPIC)) && out.size() < MAX_TOPICS) out.add(t);
+            if (!t.isBlank() && out.size() < MAX_TOPICS) out.add(t);
         }
-        if (listed) {
-            for (String tag : tags) {
-                String topic = asTopic(tag);
-                if (!topic.isEmpty() && !topic.startsWith("botmaker-") && out.size() < MAX_TOPICS) out.add(topic);
-            }
+        for (String tag : tags) {
+            String topic = asTopic(tag);
+            if (!topic.isEmpty() && !topic.startsWith("botmaker-") && out.size() < MAX_TOPICS) out.add(topic);
         }
         return List.copyOf(out);
     }

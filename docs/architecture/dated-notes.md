@@ -1,5 +1,14 @@
 # Dated notes — read these before the other files here
 
+> **Publishing lists a bot by the catalog's pull request since 2026-10-23.** `BotPublisher`'s `LISTING` step
+> writes the description and the tags (as topics; `GitHubConfig.TOPIC` is no longer written), checks rules 3 and 5
+> on the release (`CatalogListing.refusal`), then `CatalogListing.put` opens or updates the pull request for
+> `bots/<owner>__<repo>.json` on the branch `entry/<path>` — of the catalog itself for an account that can push
+> there, else of the account's fork — as the cli's `CatalogPr` does through `gh`. `ListingStatus` reads it back
+> (check run, `waiting` label, the `<!-- botmaker-catalog -->` comment, a refusal's annotations). Unpublish is
+> `CatalogListing.remove`; *Stop following* and *Add remote…* `original` are `BotPublisher.setDetached`, the
+> entry's `detached` by pull request. The `botmaker-detached` topic in the note below is gone.
+
 > **Bots and plugins come from one catalog since 2026-10-23** (umbrella spec
 > `docs/superpowers/specs/2026-10-23-catalog-design.md`): `sharing/CatalogClient` reads `catalog.json` once a
 > session and keeps the last read in `UserDirs.cache()`; `CatalogIndex` turns it into `PluginRegistry.Plugin` and

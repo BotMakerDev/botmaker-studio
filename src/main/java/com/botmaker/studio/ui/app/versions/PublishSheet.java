@@ -5,13 +5,16 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.PublishPlan;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
@@ -54,7 +57,8 @@ import java.util.concurrent.CompletableFuture;
  * Publishing, as the Versions tab's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
  * — <i>Kind</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
  * Browse Bots card built from the form as it stands, the publish's steps with a Retry for the one that failed,
- * and whether the repository is listed (its topic, 2026-10-23), with Unpublish.
+ * and what the catalog says of the bot's entry (its pull request: open, waiting, listed or refused with the
+ * check's reason, 2026-10-23), with Unpublish.
  *
  * <p>It replaced {@code PublishDialog} (2026-09-25), a window of its own beside the tab that also pushed. A
  * publish is now a version like any other: the {@link Host} saves it ({@code PUBLISH}), and the run pushes that
@@ -132,6 +136,11 @@ public final class PublishSheet {
     private volatile String repoOwner = "";
     /** The pom's pins nobody else can resolve ({@link PublishRequest#unreleasedPins}); Publish waits on none. */
     private List<String> unreleased = List.of();
+    /**
+     * Whether the pom declares no plugin the catalog lists ({@link PublishRequest#catalogPlugins}), which the
+     * catalog's check refuses. False while the catalog is unread: the check itself still says so.
+     */
+    private volatile boolean noCatalogPlugin;
 
     /** The publish shown in the checklist; null before the first. */
     private BotPublisher.Run run;
@@ -205,15 +214,21 @@ public final class PublishSheet {
 
     /** Re-reads the pom's unreleased pins — the pom may have changed since the sheet was last shown. */
     private void readPins() {
-        unreleased = PublishRequest.unreleasedPins(MavenService.readDeclaredLibraries(projectDir),
-                MavenService.readProperties(projectDir));
+        List<UserLibrary> declared = MavenService.readDeclaredLibraries(projectDir);
+        unreleased = PublishRequest.unreleasedPins(declared, MavenService.readProperties(projectDir));
+        CatalogClient.session().fetch().thenAccept(catalog -> Platform.runLater(() -> {
+            noCatalogPlugin = !catalog.isEmpty() && PublishRequest.catalogPlugins(declared, catalog.plugins()).isEmpty();
+            refreshAll();
+        }));
     }
 
     private VBox buildForm() {
         // Listed/Unlisted stood here until 2026-09-26. Publishing is listing: a release on GitHub alone is
         // what "Save to my copy" already gives, so the choice only asked a question with one useful answer.
-        // The gallery's checks, its 3-a-day limit and its pull request went on 2026-10-23: the topic is the listing.
-        Label listingHelp = note("Publishing gives your repository the topic botmaker-bot, which lists it in Browse "
+        // Since 2026-10-23 the listing is the catalog's entry, by pull request: checked by machine, merged by
+        // itself, read by nobody.
+        Label listingHelp = note("Publishing opens a pull request in the BotMaker catalog from your account. The "
+                + "catalog's check builds your bot and merges it when it passes, and then it is listed in Browse "
                 + "Bots and New Project, where people start from a copy linked to yours. Its description and tags "
                 + "are the repository's own. To keep it unlisted, use Save to my copy instead.");
 
@@ -257,7 +272,7 @@ public final class PublishSheet {
                 + "your copy on GitHub, which becomes public — earlier versions included.");
 
         return new VBox(8,
-                section("Browse Bots"), listingHelp,
+                section("Catalog"), listingHelp,
                 section("Details"), details,
                 section("Release"), release, releaseHelp);
     }
@@ -376,6 +391,8 @@ public final class PublishSheet {
                 : whoseProblem() != null ? whoseProblem()
                 : !unreleased.isEmpty() ? "This bot depends on a build only this computer has: "
                         + String.join(", ", unreleased) + ". Pin a released version in Plugins & Libraries first."
+                : noCatalogPlugin ? "This bot uses no plugin from the catalog, and the catalog lists a bot only when "
+                        + "it does. Add one in Plugins & Libraries (the BotMaker SDK, for most bots)."
                 : repoName().isBlank() ? "A repository name is required."
                 : !SemVer.isValid(version) ? "Version must look like MAJOR.MINOR.PATCH (e.g. 1.0.0)."
                 : !SemVer.isGreater(version, latestTag)
@@ -438,8 +455,9 @@ public final class PublishSheet {
         return row;
     }
 
-    private void renderListing(BotPublisher.Listing listing) {
-        listingLabel.setText(listing.describe());
+    private void renderListing(ListingStatus status) {
+        listingLabel.setText(status.describe());
+        listingLabel.setTooltip(status.url().isBlank() ? null : new Tooltip(status.url()));
     }
 
     // -------------------------------------------------------------------------
@@ -482,7 +500,10 @@ public final class PublishSheet {
         refreshAll();
     }
 
-    /** The repository's word on its listing: the topic, and the description and tags a re-publish starts from. */
+    /**
+     * The catalog's word on the bot's entry, and the repository's description and tags a re-publish starts from.
+     * Refresh reads it again: the check takes minutes, and nothing tells Studio when it is done.
+     */
     private void refreshListing() {
         if (!auth.isAuthenticated()) {
             listingLabel.setText("Sign in to see your listing.");
@@ -495,7 +516,7 @@ public final class PublishSheet {
         CompletableFuture
                 .supplyAsync(() -> publisher.listing(name, repo))
                 .thenAccept(listing -> Platform.runLater(() -> {
-                    renderListing(listing);
+                    renderListing(listing.status());
                     // A re-publish starts from what the repository already says, so updating a release does not
                     // quietly blank the description and tags the author wrote last time. Only into empty fields,
                     // never over what has been typed.
@@ -515,7 +536,7 @@ public final class PublishSheet {
     private void doPublish() {
         String to = repoOwner;
         readPins();
-        if (whoseProblem() != null || to.isBlank() || !unreleased.isEmpty()
+        if (whoseProblem() != null || to.isBlank() || !unreleased.isEmpty() || noCatalogPlugin
                 || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
             refreshAll();
             return;
@@ -563,7 +584,7 @@ public final class PublishSheet {
                     if (plan.finished()) {
                         seedVersions(current.request().version()); // the new baseline
                         statusLabel.setText("Published " + current.request().version() + ".");
-                        refreshListing();
+                        renderListing(current.listing());
                     } else {
                         statusLabel.setText(plan.failure()
                                 .map(f -> f.step().label() + " failed. Fix the cause and retry; the steps done "
@@ -574,16 +595,17 @@ public final class PublishSheet {
     }
 
     /**
-     * Delists the bot (the reverse of the listing step): the topic comes off. The author's GitHub repo and releases
-     * are left intact — this only removes it from discovery. Runs off the FX thread.
+     * Delists the bot (the reverse of the listing step): the catalog's pull request removing its entry. The
+     * author's GitHub repo and releases are left intact — this only removes it from discovery. Runs off the FX
+     * thread.
      */
     private void doUnpublish() {
         String repo = repoName();
         String from = repoOwner;
         if (repo.isBlank() || from.isBlank()) return;
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                "Remove “" + repo + "” from Browse Bots? Your GitHub repo and releases stay intact — this takes "
-                        + "the topic botmaker-bot off it, and people who started from it stay linked.",
+                "Remove “" + repo + "” from Browse Bots? Your GitHub repo and releases stay intact — this opens "
+                        + "the catalog's pull request removing its entry, and people who started from it stay linked.",
                 ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(owner);
         confirm.setHeaderText("Unpublish from Browse Bots?");
@@ -595,19 +617,20 @@ public final class PublishSheet {
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        publisher.unpublish(from, repo);
-                        return null;
+                        return publisher.unpublish(from, repo);
                     } catch (Exception ex) {
                         throw new RuntimeException(ex.getMessage(), ex);
                     }
                 })
-                .whenComplete((done, err) -> Platform.runLater(() -> {
+                .whenComplete((status, err) -> Platform.runLater(() -> {
                     setBusy(false);
                     if (err != null) {
                         statusLabel.setText("Unpublish failed: " + ShareActions.rootMessage(err));
                     } else {
-                        statusLabel.setText("Unpublished. Browse Bots stops listing it within a few minutes.");
-                        refreshListing();
+                        statusLabel.setText(status.state() == ListingStatus.State.NOT_LISTED
+                                ? "The catalog does not list it; nothing to remove."
+                                : "Removal requested. Browse Bots stops listing it once the catalog merges it.");
+                        renderListing(status);
                     }
                 }));
     }

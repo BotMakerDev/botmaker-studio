@@ -42,7 +42,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   registry. Each listing names one release that a machine check passed: installing a bot or a plugin, and a bot's
   update, go to that release, never to a newer one. New Project shows a bot's plugins from the catalog without
   reading its pom. The last catalog read is kept on this computer and used when GitHub cannot be reached.
-  Publishing still adds the topic `botmaker-bot`, which nothing reads any more.
+- **Publishing lists a bot through the catalog.** After the release, Publish opens a pull request in
+  `BotMakerDev/botmaker-catalog` from your account, adding or updating your bot's entry; the catalog's check builds
+  the bot and merges it when it passes, and nobody reviews it. The Publish sheet shows where it stands — open,
+  waiting for the new-entries limit, listed, or refused with the check's reason — and *Refresh* reads it again.
+  Before opening it, Studio refuses what the check would: a release that is a draft or a prerelease or was made by
+  someone else, and a bot whose pom uses no catalog plugin. *Unpublish* opens the pull request removing the entry,
+  and *Stop following…* on a published fork the one marking it `detached` (adding `original` back clears it). The
+  topic `botmaker-bot` is no longer written; your tags are still added to the repository's topics, which the
+  catalog shows.
 - **Hide a bot.** Browse Bots' *Hide* keeps a bot out of Browse Bots, New Project and the assistant's list on this
   computer; *Show hidden* brings it back.
 - **A copy's link to its author is its git remote alone.** Nothing new writes `botmaker-source.json`; older projects

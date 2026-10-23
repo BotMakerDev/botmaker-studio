@@ -19,6 +19,7 @@ import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.MyCopy;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.sharing.Suggestion;
@@ -494,9 +495,9 @@ public final class VersionsPane {
 
     /**
      * <i>Stop following…</i> (2026-10-23): after a confirmation the {@code original} remote goes, and with it the
-     * update notice and <i>Suggest to author…</i> — the bot becomes the user's own. A listed fork gets
-     * {@link BotPublisher#DETACHED_TOPIC}, so Browse Bots stops saying "based on …". Dev's <i>Add remote…</i>
-     * named {@code original} follows it again.
+     * update notice and <i>Suggest to author…</i> — the bot becomes the user's own. A listed fork gets the
+     * catalog's pull request setting its entry's {@code "detached": true}, so Browse Bots stops saying "based on
+     * …". Dev's <i>Add remote…</i> named {@code original} follows it again.
      */
     private void stopFollowing() {
         String from = model.originalSlug().map(SyncModel.Slug::toString).orElse("the original");
@@ -505,8 +506,8 @@ public final class VersionsPane {
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
                 "You will no longer hear of " + from + "'s new releases, and Suggest to author… goes: the bot "
                         + "becomes your own. Nothing in it changes."
-                        + (fork.isPresent() ? "\n\nIf your copy is published, Browse Bots stops showing it as "
-                        + "based on " + from + "." : "")
+                        + (fork.isPresent() ? "\n\nIf your copy is published, a pull request in the catalog asks "
+                        + "Browse Bots to stop showing it as based on " + from + "." : "")
                         + "\n\nTo follow it again, add a remote named original with its address in Dev.",
                 ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(owner);
@@ -524,15 +525,18 @@ public final class VersionsPane {
     }
 
     /**
-     * Sets or takes off {@link BotPublisher#DETACHED_TOPIC} on the user's fork {@code fork} when it is listed;
-     * {@code ""}, or a sentence saying it could not. Off the FX thread.
+     * Opens the catalog's pull request setting, or clearing, {@code detached} on the user's fork {@code fork} when
+     * the catalog lists it; {@code ""} when it does not, else a sentence saying what the catalog was asked or why
+     * it could not be. Off the FX thread.
      */
     private String markDetached(SyncModel.Slug fork, boolean detached) {
-        BotPublisher publisher = new BotPublisher(client, auth);
-        if (!publisher.listing(fork.owner(), fork.repo()).listed()) return "";
         try {
-            publisher.setDetached(fork.owner(), fork.repo(), detached);
-            return "";
+            ListingStatus status = new BotPublisher(client, auth).setDetached(fork.owner(), fork.repo(), detached);
+            return switch (status.state()) {
+                case NOT_LISTED, UNCHANGED -> "";
+                default -> " The catalog was asked to " + (detached ? "stop showing" : "show") + " it as based on its "
+                        + "original: " + status.describe();
+            };
         } catch (IOException e) {
             return " " + e.getMessage();
         }
@@ -1305,7 +1309,7 @@ public final class VersionsPane {
         if (dialog.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) return;
         String n = name.getText() == null ? "" : name.getText().strip();
         String u = url.getText() == null ? "" : url.getText().strip();
-        // Adding original back follows it again: a listed fork loses the detached topic it got on Stop following.
+        // Adding original back follows it again: a listed fork's entry loses the detached it got on Stop following.
         Optional<SyncModel.Slug> mine = n.equals(Remote.ORIGINAL.id()) && client != null && authorName != null
                 ? SyncModel.slug(vcs().remoteUrl(Remote.MINE)).filter(s -> s.owner().equalsIgnoreCase(authorName))
                 : Optional.empty();

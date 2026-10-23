@@ -4,8 +4,11 @@ import com.botmaker.studio.project.UserLibrary;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Everything a publish is asked to do, fixed when Publish is pressed.
@@ -16,8 +19,8 @@ import java.util.Map;
  * @param botName      the project's name
  * @param repoName     the repository under the signed-in account
  * @param description  the repository's description, which is what Browse Bots shows
- * @param tags         added to the repository's topics
- * @param listed       whether the bot is listed in Browse Bots at all (the topic)
+ * @param tags         added to the repository's topics, which the catalog shows as the bot's tags
+ * @param listed       whether the bot is listed in the catalog at all (its pull request)
  */
 public record PublishRequest(Path projectDir, String botName, String repoName, String description, String version,
                              List<String> tags, boolean listed) {
@@ -30,16 +33,23 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 
-    // entry() — the gallery's entry file — went on 2026-10-23 with the gallery repository: the repository's
-    // description and topics are the listing (BotPublisher).
-
     /**
      * How this bot would read in Browse Bots once listed, for the sheet's preview: named by its repository, as
-     * the search finds it ({@link GitHubGallery#browse}), with its tags as topics.
+     * the catalog names a bot, with its tags as topics.
      */
     public GalleryEntry preview(String owner) {
-        return new GalleryEntry(repoName, owner, repoName, description,
-                BotPublisher.topics(List.of(), tags, true).stream().filter(t -> !t.startsWith("botmaker-")).toList());
+        return new GalleryEntry(repoName, owner, repoName, description, BotPublisher.topics(List.of(), tags));
+    }
+
+    /**
+     * The catalog's plugins among {@code declared}, by coordinate: the catalog lists a bot only when its pom
+     * declares at least one (its check's rule 6), so Publish waits while this is empty and the catalog was read.
+     */
+    public static List<String> catalogPlugins(List<UserLibrary> declared, List<PluginRegistry.Plugin> listed) {
+        Set<String> coordinates = new HashSet<>();
+        for (PluginRegistry.Plugin plugin : listed) coordinates.add(plugin.coordinate().toLowerCase(Locale.ROOT));
+        return declared.stream().map(UserLibrary::groupArtifact)
+                .filter(c -> coordinates.contains(c.toLowerCase(Locale.ROOT))).toList();
     }
 
     /**
@@ -54,7 +64,7 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         for (UserLibrary library : declared) {
             if (library.version().isBlank()) continue;
             String version = interpolate(library.version(), properties);
-            if (version.toUpperCase(java.util.Locale.ROOT).contains("SNAPSHOT") || version.contains("${")) {
+            if (version.toUpperCase(Locale.ROOT).contains("SNAPSHOT") || version.contains("${")) {
                 out.add(library.groupArtifact() + ":" + version);
             }
         }
