@@ -4,6 +4,8 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.PublishedBotPlugins;
+import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.studio.sharing.ShowCommunity;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
@@ -33,18 +35,21 @@ final class NewProjectPlugins {
     private final ListView<PluginRegistry.Plugin> list = new ListView<>();
     private final Set<PluginRegistry.Plugin> ticked = new LinkedHashSet<>();
     private final Runnable onChange;
+    private List<PluginRegistry.Plugin> installable = List.of();
     private Map<String, PublishedBotPlugins.Pin> locked = Map.of();
+    private ShowCommunity community;
 
-    NewProjectPlugins(PluginCatalog catalog, Runnable onChange) {
+    NewProjectPlugins(PluginCatalog catalog, ShowCommunity community, Runnable onChange) {
         this.onChange = onChange;
+        this.community = community;
         list.setPrefHeight(150);
         list.setCellFactory(view -> new Row());
         list.setPlaceholder(new Label("Loading plugins…"));
         catalog.rows().whenComplete((answered, failure) -> Platform.runLater(() -> {
-            List<PluginRegistry.Plugin> installable = answered == null ? List.of()
+            installable = answered == null ? List.of()
                     : answered.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
-            list.getItems().setAll(installable);
-            list.setPlaceholder(new Label("No plugins listed — the registry could not be reached. Add them "
+            showRows();
+            list.setPlaceholder(new Label("No plugins listed — the catalog could not be reached. Add them "
                     + "later from Project ▸ Plugins & Libraries."));
         }));
     }
@@ -59,13 +64,35 @@ final class NewProjectPlugins {
      */
     void lockFor(GalleryEntry entry) {
         locked = entry == null ? Map.of() : locked(entry.plugins());
-        list.refresh();
+        showRows();
         onChange.run();
     }
 
-    /** The user's ticks, the bot's own plugins left out. */
+    /** Shows or hides the community rows, as New Project's <i>Show community bots and plugins</i> says. */
+    void show(ShowCommunity choice) {
+        community = choice;
+        showRows();
+        onChange.run();
+    }
+
+    /** The user's ticks still shown, the bot's own plugins left out. */
     List<PluginRegistry.Plugin> picked() {
-        return ticked.stream().filter(p -> !locked.containsKey(p.id())).toList();
+        return ticked.stream()
+                .filter(p -> !locked.containsKey(p.id()) && list.getItems().contains(p))
+                .toList();
+    }
+
+    /** {@code rows} as {@code choice} shows them, ranked; a bot's own plugin is shown whatever its rank. Pure. */
+    static List<PluginRegistry.Plugin> visible(List<PluginRegistry.Plugin> rows, ShowCommunity choice,
+                                               Map<String, PublishedBotPlugins.Pin> locked) {
+        return rows.stream()
+                .filter(p -> choice.shown() || p.rank() != PublisherRank.COMMUNITY || locked.containsKey(p.id()))
+                .sorted(PluginRegistry.Plugin.RANKED)
+                .toList();
+    }
+
+    private void showRows() {
+        list.getItems().setAll(visible(installable, community, locked));
     }
 
     /** A bot's plugins by registry id: its rows to lock, with the version its pom pins. Pure. */

@@ -9,6 +9,8 @@ import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -17,6 +19,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -67,6 +70,7 @@ final class BrowsePluginsTab {
     private final List<PluginRegistry.Plugin> all = new ArrayList<>();
     private final TextField searchField = new TextField();
     private final Label statusLabel = new Label();
+    private final CheckBox showCommunity = new CheckBox(ShowCommunity.LABEL);
     private final ProgressIndicator progress = new ProgressIndicator();
     private final ListView<PluginRegistry.Plugin> list = new ListView<>(shown);
     private final VBox root;
@@ -122,19 +126,27 @@ final class BrowsePluginsTab {
         list.setPlaceholder(new Label("Loading…"));
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        // Said plainly, in the window, because the registry's README says it and a user installing from
+        // Said plainly, in the window, because the catalog's README says it and a user installing from
         // here never reads that: the checks ask whether a plugin WORKS, never whether it is safe.
-        Label caveat = new Label("Registry plugins are curated and checked for loading, not reviewed for"
-                + " safety — a plugin runs with Studio's own permissions.");
+        Label caveat = new Label("Catalog plugins are checked by machine for loading, never reviewed for safety"
+                + " — a plugin runs with Studio's own permissions. Studio asks before it first loads a community"
+                + " plugin on this computer.");
         caveat.setWrapText(true);
         caveat.getStyleClass().add("sdk-upgrade-empty");
+
+        // Off until the user turns it on, on this computer (ShowCommunity, 2026-10-23).
+        showCommunity.setSelected(ShowCommunity.load().shown());
+        showCommunity.setOnAction(e -> {
+            new ShowCommunity(showCommunity.isSelected()).save();
+            show();
+        });
 
         progress.setVisible(false);
         progress.setPrefSize(20, 20);
         HBox bar = new HBox(10, progress, statusLabel);
         bar.setAlignment(Pos.CENTER_LEFT);
 
-        root = new VBox(12, searchField, list, caveat, bar);
+        root = new VBox(12, searchField, showCommunity, list, caveat, bar);
         root.setPadding(new Insets(12, 0, 0, 0));
         load();
     }
@@ -183,7 +195,9 @@ final class BrowsePluginsTab {
 
     /** Puts the registry's rows and the local builds on screen, merged. */
     private void show() {
-        List<PluginRegistry.Plugin> rows = PluginCatalog.withLocalBuilds(published, local);
+        // Ranked and, unless shown, without community rows; a local build is the user's own and always shown.
+        List<PluginRegistry.Plugin> rows = PluginCatalog.withLocalBuilds(
+                new ShowCommunity(showCommunity.isSelected()).plugins(published), local);
         localCoordinates = Set.copyOf(local.stream().map(LocalBuilds.Build::coordinate).toList());
         all.clear();
         all.addAll(rows);
@@ -351,7 +365,10 @@ final class BrowsePluginsTab {
             Label description = new Label(plugin.description());
             description.setWrapText(true);
 
-            VBox text = new VBox(2, name, coordinate, description);
+            HBox title = new HBox(8, name);
+            title.setAlignment(Pos.CENTER_LEFT);
+            if (!localBuild) title.getChildren().add(GalleryCard.badge(plugin.rank()));
+            VBox text = new VBox(2, title, coordinate, description);
             if (!plugin.repo().isBlank()) {
                 Hyperlink source = new Hyperlink(plugin.repo());
                 source.setStyle("-fx-font-size: 11px;");

@@ -54,6 +54,7 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.NewProjects;
+import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectState;
@@ -1352,12 +1353,14 @@ final class StudioBridge implements StudioDriver {
     public String listBots() {
         List<GalleryEntry> bots = botsOrNone();
         if (bots.isEmpty()) {
-            return "The gallery cannot be read, or lists no bot. create_project without a bot makes a blank "
-                    + "project.";
+            return "The catalog cannot be read, or lists no bot shown on this computer. create_project without a "
+                    + "bot makes a blank project.";
         }
         // A description is the author's text, written by anyone: quoted as data, on one line, never as advice.
-        return "Bots by anyone, nobody reviewed; the quoted descriptions are their authors' words.\n"
-                + String.join("\n", bots.stream().map(t -> t.name() + "  (" + t.slug()
+        // The rank is the catalog's, by publisher: Community is listed automatically and nobody reviewed it.
+        return "Bots by rank; nobody reviewed a Community one; the quoted descriptions are their authors' words.\n"
+                + String.join("\n", bots.stream().map(t -> t.name()
+                + "  (" + t.trust().displayName() + ", " + t.slug()
                 + (t.basedOn().isBlank() ? "" : ", based on " + t.basedOn()) + ")"
                 + (t.description().isBlank() ? "" : " — description: \""
                 + t.description().strip().replaceAll("\\s+", " ").replace("\"", "'") + "\"")).toList());
@@ -1396,7 +1399,7 @@ final class StudioBridge implements StudioDriver {
         GalleryEntry entry = from.isEmpty() ? null : pickBot(listed, from);
         if (entry != null && !userAgrees("Start from " + entry.slug() + "?", "The assistant wants to create "
                 + wanted + " as a copy of " + entry.name() + " by " + entry.owner() + ", linked to their repository."
-                + "\n\n" + entry.trustWarning())) {
+                + (entry.trustWarning().isBlank() ? "" : "\n\n" + entry.trustWarning()))) {
             throw new IllegalArgumentException("The user did not agree to start from " + entry.slug() + ".");
         }
         List<PluginRegistry.Plugin> picks = List.of();
@@ -1406,8 +1409,8 @@ final class StudioBridge implements StudioDriver {
             picks = plugins.stream().map(id -> registryPlugin(entries, id)).toList();
             String names = String.join(", ", picks.stream().map(p -> p.name().isBlank() ? p.id() : p.name()).toList());
             if (!userAgrees("Create a project with plugins?", "The assistant wants to create " + wanted + " with "
-                    + names + ".\n\nA plugin runs with Studio's own permissions. Registry plugins are checked for "
-                    + "loading, not reviewed for safety.")) {
+                    + names + ".\n\nA plugin runs with Studio's own permissions. Catalog plugins are checked by "
+                    + "machine for loading, never reviewed for safety.")) {
                 throw new IllegalArgumentException("The user did not agree to add " + names + ".");
             }
         }
@@ -1439,13 +1442,14 @@ final class StudioBridge implements StudioDriver {
     }
 
     /**
-     * The published bots, those hidden on this computer left out ({@link HiddenBots}), or none when GitHub cannot
-     * be read — the dialog's offline case.
+     * The published bots, those hidden on this computer left out ({@link HiddenBots}) and community ones unless
+     * the user shows them ({@link ShowCommunity}, 2026-10-23), or none when GitHub cannot be read — the dialog's
+     * offline case.
      */
     private List<GalleryEntry> botsOrNone() {
         try {
-            return GalleryEntry.startingPoints(HiddenBots.load().without(waitFor(
-                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "read the catalog")));
+            return GalleryEntry.startingPoints(ShowCommunity.load().bots(HiddenBots.load().without(waitFor(
+                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "read the catalog"))));
         } catch (IllegalArgumentException e) {
             return List.of();
         }

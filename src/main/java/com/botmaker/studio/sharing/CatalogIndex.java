@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -62,19 +64,25 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
                     texts(row, "editorDependencies"), "", text(row, "tag"),
                     PublisherRank.fromId(text(row, "rank")), row.path("stars").asInt(0)));
         }
+        Map<String, PublisherRank> rankById = new HashMap<>();
+        for (PluginRegistry.Plugin plugin : plugins) rankById.putIfAbsent(plugin.id(), plugin.rank());
         List<GalleryEntry> bots = new ArrayList<>();
         for (JsonNode row : root.path("bots")) {
             String repo = text(row, "repo");
             if (!isSlug(repo)) continue;
             List<PublishedBotPlugins.Pin> pins = new ArrayList<>();
+            // A plugin no row lists vouches for nothing, as an unknown rank does.
+            PublisherRank pluginsRank = PublisherRank.ADMIN;
             for (JsonNode pin : row.path("plugins")) {
                 String id = text(pin, "id");
-                if (!id.isBlank()) pins.add(new PublishedBotPlugins.Pin(id, text(pin, "version")));
+                if (id.isBlank()) continue;
+                pins.add(new PublishedBotPlugins.Pin(id, text(pin, "version")));
+                pluginsRank = PublisherRank.lower(pluginsRank, rankById.getOrDefault(id, PublisherRank.COMMUNITY));
             }
             String name = repoName(repo);
             bots.add(new GalleryEntry(name, repo.substring(0, repo.indexOf('/')), name, text(row, "description"),
                     texts(row, "tags"), text(row, "forkOf"), text(row, "tag"),
-                    PublisherRank.fromId(text(row, "rank")), row.path("stars").asInt(0), pins));
+                    PublisherRank.fromId(text(row, "rank")), row.path("stars").asInt(0), pins, pluginsRank));
         }
         return Optional.of(new CatalogIndex(plugins, bots));
     }

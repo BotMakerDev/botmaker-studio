@@ -62,6 +62,16 @@ class PluginFailureTextTest {
         assertTrue(text.contains("a.One") && text.contains("b.Two"), text);
     }
 
+    /** A community plugin the user declined is a failure that says why and what would load it (2026-10-23). */
+    @Test
+    void a_declined_community_plugin_says_it_was_not_agreed_to() {
+        String text = PluginsWindow.failureText(List.of(new PluginLoader.PluginFailure("farm v1.0.0",
+                new IllegalStateException("not loaded: you have not agreed to run this community plugin on this "
+                        + "computer"))));
+
+        assertTrue(text.contains("farm v1.0.0 — not loaded: you have not agreed to run this community plugin"), text);
+    }
+
     /** A cause with no message still says something, because a blank line is a line nobody can act on. */
     @Test
     void a_cause_with_no_message_falls_back_to_its_type() {

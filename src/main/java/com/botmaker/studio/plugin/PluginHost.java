@@ -19,6 +19,7 @@ import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.studio.sharing.CatalogIndex;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -238,17 +239,31 @@ public final class PluginHost {
      * {@link #bind(List, StudioServices)}, binding the classpath's dev builds too when {@code devMode} — the
      * project's own setting, {@code StudioProjectSettings.devMode}. See {@link #devBuilds()}.
      */
-    public static synchronized void bind(List<String> resolvedClasspath, StudioServices services,
-                                         boolean devMode) {
-        opening = services;
+    public static void bind(List<String> resolvedClasspath, StudioServices services, boolean devMode) {
         // A dev build of a plugin is bound only in dev mode (ReleasedPlugins); otherwise it is reported beside
         // what failed to load.
         ReleasedPlugins.Split released = ReleasedPlugins.split(resolvedClasspath, devMode);
         // One groupId's copy of each artifact a pom names under both of BotMaker's (DuplicatePlugins): two
         // copies on one loader is a mix of the two versions, class by class.
         DuplicatePlugins.Split single = DuplicatePlugins.split(released.loadable());
-        PluginLoader.Loaded loaded = PluginLoader.openReporting(single.loadable());
-        failures = concat(concat(released.refused(), single.dropped()), loaded.failures());
+        // A community plugin loads only once the user agreed to run it here, and a catalog plugin binds only
+        // under its entry's id (PluginGate, 2026-10-23). Asked before the lock is taken: the question waits for
+        // the FX thread, which may itself be waiting on the lock to unbind.
+        PluginGate checking = gate;
+        CatalogIndex listed = checking == null ? CatalogIndex.EMPTY : checking.catalog();
+        PluginGate.Admitted admitted = checking == null
+                ? new PluginGate.Admitted(single.loadable(), List.of())
+                : checking.admit(listed, single.loadable(), released.dev());
+        bindAdmitted(services, released, single, checking, listed, admitted);
+    }
+
+    private static synchronized void bindAdmitted(StudioServices services, ReleasedPlugins.Split released,
+                                                  DuplicatePlugins.Split single, PluginGate checking,
+                                                  CatalogIndex listed, PluginGate.Admitted admitted) {
+        opening = services;
+        PluginLoader.Loaded loaded = PluginLoader.openReporting(admitted.loadable());
+        failures = concat(concat(concat(released.refused(), single.dropped()), admitted.refused()),
+                loaded.failures());
         PluginLoader opened = loaded.loader();
         if (opened == null) {
             // Not unbind(): a classpath that would not open is still a project opening, and the bundled set
@@ -259,10 +274,38 @@ public final class PluginHost {
             serving = true;
             return;
         }
-        swap(opened, opened.plugins());
+        List<StudioPlugin> incoming = opened.plugins();
+        if (checking != null) {
+            PluginGate.Checked checked = checking.checkIds(listed, incoming, PluginHost::jarOf, released.dev());
+            incoming = checked.bound();
+            failures = concat(failures, checked.refused());
+        }
+        swap(opened, incoming);
         devBuilds = bound(released.dev());
         loadedJars = loadedJars();
         serving = true;
+    }
+
+    /** What each {@link #bind} checks against the catalog; none until Studio installs one ({@link #guard}). */
+    private static volatile PluginGate gate;
+
+    /**
+     * Makes every later {@link #bind} ask before a community plugin loads and refuse a catalog plugin whose id is
+     * not its entry's ({@link PluginGate}). Studio calls it once at start; a host that never does binds as before.
+     */
+    public static void guard(PluginGate checking) {
+        gate = checking;
+    }
+
+    /** The jar {@code plugin}'s class came from, empty for one from no file. */
+    private static Optional<Path> jarOf(StudioPlugin plugin) {
+        java.net.URL where = codeSource(plugin.getClass());
+        if (where == null) return Optional.empty();
+        try {
+            return Optional.of(Path.of(where.toURI()));
+        } catch (java.net.URISyntaxException | RuntimeException e) {
+            return Optional.empty();
+        }
     }
 
     /**

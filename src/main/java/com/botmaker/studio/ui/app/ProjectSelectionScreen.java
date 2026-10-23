@@ -19,6 +19,7 @@ import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -41,6 +42,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Project selection screen shown on startup with project creation capability.
@@ -519,10 +521,12 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // The starting point: Studio's own Blank, or any published bot, cloned and linked to its author as Browse
         // Bots installs it (2026-10-23; only bots tagged `template`, copied and renamed, until then). Blank leads;
         // below it the bots published last time, refreshed in the background — see loadBots. The ones hidden in
-        // Browse Bots on this computer are left out (HiddenBots).
-        List<StartChoice> initial = StartingPoints.rows(
-                GalleryEntry.startingPoints(HiddenBots.load().without(CatalogClient.session().kept().bots())),
-                StartingPoints.Fetch.PENDING);
+        // Browse Bots on this computer are left out (HiddenBots), and community ones unless the user shows them
+        // (ShowCommunity, 2026-10-23).
+        CheckBox showCommunity = new CheckBox(ShowCommunity.LABEL);
+        showCommunity.setSelected(ShowCommunity.load().shown());
+        List<GalleryEntry> kept = CatalogClient.session().kept().bots();
+        List<StartChoice> initial = startRows(kept, StartingPoints.Fetch.PENDING, showCommunity.isSelected());
         ComboBox<StartChoice> startCombo = new ComboBox<>(
                 javafx.collections.FXCollections.observableArrayList(initial));
         startCombo.setValue(initial.getFirst());
@@ -541,9 +545,13 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 setText(empty || t == null ? startCombo.getPromptText() : t.label());
             }
         });
-        // Every listed bot since 2026-10-23 (no vetted tier, no community toggle): the note under the row carries
-        // the one trust warning Browse Bots' Install shows too.
-        loadBots(startCombo);
+        // The note under the row carries the trust warning Browse Bots' Install shows too, by rank (2026-10-23).
+        List<List<GalleryEntry>> fresh = new ArrayList<>(1);   // the catalog's answer, once it is in
+        loadBots(entries -> {
+            fresh.clear();
+            fresh.add(entries);
+            fillStarts(startCombo, startRows(entries, fetchOf(entries), showCommunity.isSelected()));
+        });
 
         // One line under the dropdown, saying what the chosen row actually gives you. It matters more than
         // it looks: "Blank" means a plain Java project with no bot API in it, and a user who reaches it
@@ -577,12 +585,22 @@ public class ProjectSelectionScreen implements ProjectWindow {
                             + "Versions tab. " + (extra
                                     ? "The plugins ticked below are added to its own."
                                     : "It brings its own plugins — change them later in Project ▸ Plugins & "
-                                            + "Libraries.") + "\n" + now.entry().trustWarning());
+                                            + "Libraries.")
+                            + (now.entry().trustWarning().isBlank() ? "" : "\n" + now.entry().trustWarning()));
         };
-        plugins[0] = new NewProjectPlugins(new PluginCatalog(new PluginRegistry()), describeChoice);
+        plugins[0] = new NewProjectPlugins(new PluginCatalog(new PluginRegistry()),
+                new ShowCommunity(showCommunity.isSelected()), describeChoice);
         startCombo.valueProperty().addListener((o, was, now) ->
                 plugins[0].lockFor(now == null ? null : now.entry()));
         plugins[0].lockFor(startCombo.getValue().entry());
+        showCommunity.setOnAction(e -> {
+            ShowCommunity choice = new ShowCommunity(showCommunity.isSelected());
+            choice.save();
+            fillStarts(startCombo, fresh.isEmpty()
+                    ? startRows(kept, StartingPoints.Fetch.PENDING, choice.shown())
+                    : startRows(fresh.getFirst(), fetchOf(fresh.getFirst()), choice.shown()));
+            plugins[0].show(choice);
+        });
 
         content.getChildren().addAll(
                 new Label("Project Name:"),
@@ -595,6 +613,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 new Label("Start from:"),
                 startCombo,
                 startNote,
+                showCommunity,
                 new Label("Plugins:"),
                 plugins[0].node()
         );
@@ -633,27 +652,33 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Puts the gallery's fresh bots into {@code combo} below Blank, off the FX thread, and remembers them for
-     * the next open ({@link StartingPoints}).
+     * Hands the catalog's fresh bots to {@code onAnswer} on the FX thread, which puts them below Blank.
      *
-     * <p>When the gallery cannot be reached Blank is the only row — the remembered bots go then, since nothing
+     * <p>When the catalog cannot be reached Blank is the only row — the kept bots go then, since nothing
      * confirms them and each clones at creation. New Project has to work on a plane, which is the only reason
      * Studio composes a starting project at all ({@code project/StarterSources}).
-     *
-     * <p>By name ({@link GalleryEntry#startingPoints}), so the list reads the same on every launch.
      *
      * <p>Failure is silent on purpose: Blank replaces the rows. An error
      * dialog in front of a working New Project dialog would be the network's problem presented as the user's.
      */
-    private void loadBots(ComboBox<StartChoice> combo) {
+    private void loadBots(Consumer<List<GalleryEntry>> onAnswer) {
         new GitHubGallery(gitHubClient, gitHubAuth).browse()
                 .exceptionally(error -> List.of())
-                .thenAccept(entries -> Platform.runLater(() -> {
-                    StartingPoints.Fetch fetch = !entries.isEmpty()
-                            ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
-                    fillStarts(combo, StartingPoints.rows(
-                            GalleryEntry.startingPoints(HiddenBots.load().without(entries)), fetch));
-                }));
+                .thenAccept(entries -> Platform.runLater(() -> onAnswer.accept(entries)));
+    }
+
+    private static StartingPoints.Fetch fetchOf(List<GalleryEntry> answered) {
+        return answered.isEmpty() ? StartingPoints.Fetch.FAILED : StartingPoints.Fetch.ANSWERED;
+    }
+
+    /**
+     * New Project's rows for {@code entries}: those hidden on this computer left out, community ones unless
+     * {@code community}, ranked ({@link GalleryEntry#startingPoints}) so the list reads the same on every launch.
+     */
+    private static List<StartChoice> startRows(List<GalleryEntry> entries, StartingPoints.Fetch fetch,
+                                               boolean community) {
+        return StartingPoints.rows(GalleryEntry.startingPoints(
+                new ShowCommunity(community).bots(HiddenBots.load().without(entries))), fetch);
     }
 
     /**

@@ -25,11 +25,14 @@ import java.util.Optional;
  * @param stars       GitHub's star count when the catalog was built
  * @param plugins     the catalog plugins the bot's pom at {@code tag} declares, with the versions it pins; an id
  *                    that names no plugin row is kept and matches nothing
+ * @param pluginsRank the lowest rank among {@code plugins} as the catalog ranks them — community for an id that
+ *                    names no row — and {@link PublisherRank#ADMIN} for a bot that uses none: a bot runs its
+ *                    plugins' code too, so it is trusted no further than they are ({@link #trust})
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
                            String basedOn, String tag, PublisherRank rank, int stars,
-                           List<PublishedBotPlugins.Pin> plugins) {
+                           List<PublishedBotPlugins.Pin> plugins, PublisherRank pluginsRank) {
 
     // TEMPLATE_TAG went on 2026-10-23, with the template concept: every published bot is a starting point, and
     // New Project clones it linked to its author as Browse Bots' Install does. An entry still tagged "template"
@@ -46,16 +49,23 @@ public record GalleryEntry(String name, String owner, String repo, String descri
         tag = tag == null ? "" : tag.trim();
         rank = rank == null ? PublisherRank.COMMUNITY : rank;
         plugins = plugins == null ? List.of() : List.copyOf(plugins);
+        pluginsRank = pluginsRank == null ? PublisherRank.COMMUNITY : pluginsRank;
     }
 
     /** A bot of its own the catalog did not list — one being published, a test's: community, no tag. */
     public GalleryEntry(String name, String owner, String repo, String description, List<String> tags) {
-        this(name, owner, repo, description, tags, "", "", PublisherRank.COMMUNITY, 0, List.of());
+        this(name, owner, repo, description, tags, "", "", PublisherRank.COMMUNITY, 0, List.of(),
+                PublisherRank.ADMIN);
     }
 
     /** This listing, read as a fork of {@code slug}, or as nothing's when it is blank. */
     public GalleryEntry withBasedOn(String slug) {
-        return new GalleryEntry(name, owner, repo, description, tags, slug, tag, rank, stars, plugins);
+        return new GalleryEntry(name, owner, repo, description, tags, slug, tag, rank, stars, plugins, pluginsRank);
+    }
+
+    /** How far this bot is trusted: its publisher's rank, or its plugins' when one of theirs is lower. */
+    public PublisherRank trust() {
+        return PublisherRank.lower(rank, pluginsRank);
     }
 
     /** "based on alice/miner", or blank for a bot of its own. */
@@ -64,14 +74,20 @@ public record GalleryEntry(String name, String owner, String repo, String descri
     }
 
     /**
-     * The bots among {@code entries} New Project offers to start from, by name.
+     * The order every list of bots is shown in (2026-10-23): official first, then trusted, then community
+     * ({@link #trust}), the most starred first within a rank, then by name.
+     */
+    public static final Comparator<GalleryEntry> RANKED = Comparator.comparing(GalleryEntry::trust)
+            .thenComparing(Comparator.comparingInt(GalleryEntry::stars).reversed())
+            .thenComparing(GalleryEntry::name, String.CASE_INSENSITIVE_ORDER);
+
+    /**
+     * The bots among {@code entries} New Project offers to start from, {@link #RANKED}.
      *
      * <p>Sorted rather than left in the catalog's order so the list reads the same on every launch.
      */
     public static List<GalleryEntry> startingPoints(List<GalleryEntry> entries) {
-        return entries.stream()
-                .sorted(Comparator.comparing(GalleryEntry::name, String.CASE_INSENSITIVE_ORDER))
-                .toList();
+        return entries.stream().sorted(RANKED).toList();
     }
 
     /**
@@ -93,11 +109,27 @@ public record GalleryEntry(String name, String owner, String repo, String descri
 
     /**
      * What every door that starts from this bot says first — Browse Bots' Install, New Project, the assistant's
-     * {@code create_project}: nobody reviews a listing's code.
+     * {@code create_project} — by {@link #trust} (2026-10-23): nothing for an official bot, who published it for
+     * a trusted one, and for a community one that nobody reviewed its code. Only a community bot is confirmed
+     * before it is installed ({@link #asksFirst}).
      */
     public String trustWarning() {
-        return "“" + name + "” by " + owner + " is a bot that can control your mouse, keyboard and screen. It was "
-                + "listed automatically, and nobody reviewed its code. Only start from bots by authors you trust.";
+        return switch (trust()) {
+            case ADMIN -> "";
+            case TRUSTED -> "By " + owner + ", a vetted developer.";
+            case COMMUNITY -> rank == PublisherRank.COMMUNITY
+                    ? "“" + name + "” by " + owner + " is a bot that can control your mouse, keyboard and screen. "
+                    + "It was listed automatically, and nobody reviewed its code. Only start from bots by authors "
+                    + "you trust."
+                    : "“" + name + "” by " + owner + " uses a community plugin, which can control your mouse, "
+                    + "keyboard and screen. It was listed automatically, and nobody reviewed its code. Only start "
+                    + "from bots whose plugins are by authors you trust.";
+        };
+    }
+
+    /** Whether starting from this bot is confirmed first: a community bot, or one using a community plugin. */
+    public boolean asksFirst() {
+        return trust() == PublisherRank.COMMUNITY;
     }
 
     public String htmlUrl() {

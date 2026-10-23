@@ -6,12 +6,15 @@ import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
 import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.config.Constants;
+import com.botmaker.studio.plugin.PluginGate;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.project.migration.ProjectSchema;
 import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
+import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
 import com.botmaker.studio.ui.app.ProjectSelectionScreen;
 import com.botmaker.studio.ui.app.ProjectWindow;
@@ -92,6 +95,9 @@ public class BotMakerStudio extends Application {
         // Opt-in record of every move and resize of the shell and who made it (BOTMAKER_TRACE_GEOMETRY=1).
         com.botmaker.studio.ui.app.GeometryTrace.install(primaryStage, "main");
         configureWindow(primaryStage);
+        // Before the first project binds: a community plugin is asked about before it loads, and a catalog
+        // plugin binds only under its entry's id (2026-10-23).
+        PluginHost.guard(PluginGate.studio(CommunityPluginPrompt::agrees));
         Path requested = requestedProject();
         Path toOpen = requested != null ? requested : ProjectPreferences.getLastOpened();
         if (toOpen != null && projectExists(toOpen)) {

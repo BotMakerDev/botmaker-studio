@@ -1438,6 +1438,29 @@
     -fx-text-fill: -bm-muted;
 }
 
+/* Who published a catalog row (GalleryCard.badge, 2026-10-23). Every colour is a theme token, so each theme
+   redraws them: Official on the on-switch green with its white letters, Trusted outlined in the accent, Community
+   as quiet as a type badge. */
+.rank-badge {
+    -fx-background-radius: 3;
+    -fx-border-radius: 3;
+    -fx-padding: 1 6 1 6;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+.rank-badge-admin {
+    -fx-background-color: -bm-switch-on-bg;
+    -fx-text-fill: -bm-switch-text;
+}
+.rank-badge-trusted {
+    -fx-border-color: -bm-accent-dark;
+    -fx-border-width: 1;
+}
+.rank-badge-community {
+    -fx-background-color: -bm-divider;
+    -fx-font-weight: normal;
+}
+
 /* A secondary line on a gallery card: what the bot requires, what New Project's toggle does. */
 .gallery-card-note {
     -fx-text-fill: -bm-muted;

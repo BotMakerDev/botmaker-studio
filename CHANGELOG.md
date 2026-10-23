@@ -18,9 +18,23 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   copy linked to its author's repository, as Browse Bots' *Install* does: it keeps their package and classes, and
   their later releases arrive in the Versions tab. The "template" kind is gone, from New Project and from the
   Publish sheet.
-- **No vetted tier and no launch targets.** Every bot installs and updates to its listed release. The Vetted and
-  Community badges, the tier filter, the *Show community bots* toggle and the Publish sheet's *Tested on* boxes are
-  gone. Every way to start from a bot shows the same warning: nobody reviewed its code.
+- **No vetted tier and no launch targets.** Every bot installs and updates to its listed release. The Vetted
+  badge, the tier filter and the Publish sheet's *Tested on* boxes are gone.
+- **Listings are ranked by who published them.** Every bot and plugin row has a badge: *Official* (BotMaker),
+  *Trusted* (a vetted developer) or *Community* (anyone, listed automatically). Lists show official first, then
+  trusted, then community, the most starred first. A bot that uses a community plugin counts as community.
+  Community rows are hidden until you tick *Show community bots and plugins* (Browse Bots, New Project, *Plugins &
+  Libraries ▸ Browse*; remembered on this computer), and the assistant's `list_bots` follows the same choice.
+  Starting from a community bot shows the warning that nobody reviewed its code and asks first; a trusted one names
+  its publisher; an official one says nothing.
+- **Studio asks before it first runs a community plugin.** Before a project loads a community plugin, or one the
+  catalog does not list, on this computer, Studio asks you. A yes is remembered for that plugin; a no leaves it
+  unloaded, says so in *Plugins & Libraries*, and asks again next time. Your own plugins, dev builds you installed on
+  this computer, and official and trusted plugins at the release the catalog lists are never asked about; any other
+  version of an official or trusted plugin is asked once per version. Offline with no catalog ever read, BotMaker's
+  own plugins load as before.
+- **A plugin must be the one its listing names.** A plugin loaded from a catalog listing whose id is not the
+  listing's is not loaded, and *Plugins & Libraries* says which id it has and which the catalog lists.
 - **The assistant's `list_templates` is now `list_bots`.** `create_project` takes `bot`, may start from any listed
   bot, and asks you on screen first, naming the bot and its author.
 - **One catalog lists every bot and plugin.** Browse Bots, New Project and *Plugins & Libraries* read one file,

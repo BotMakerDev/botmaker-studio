@@ -2,6 +2,8 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.PublishedBotPlugins;
+import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.studio.sharing.ShowCommunity;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -29,6 +31,22 @@ class NewProjectPluginsLabelTest {
 
         assertEquals("Basics  v0.0.8  — comes with the bot",
                 NewProjectPlugins.label(plugin("basics", "Basics", "v0.1.1"), pin));
+    }
+
+    /** Community rows are hidden unless shown (2026-10-23), but a bot's own plugin stays whatever its rank. */
+    @Test
+    void aBotsOwnCommunityPluginIsShownWithTheToggleOff() {
+        PluginRegistry.Plugin official = new PluginRegistry.Plugin("sdk", "SDK", "g:sdk", "o/sdk", "", null, null,
+                null, "", "v1", PublisherRank.ADMIN, 0);
+        PluginRegistry.Plugin farm = plugin("farm", "Farm", "v1");   // the 9-argument row: community
+        PluginRegistry.Plugin other = plugin("other", "Other", "v1");
+        List<PluginRegistry.Plugin> rows = List.of(other, farm, official);
+        Map<String, PublishedBotPlugins.Pin> locked = NewProjectPlugins.locked(
+                List.of(new PublishedBotPlugins.Pin("farm", "v1")));
+
+        assertEquals(List.of(official), NewProjectPlugins.visible(rows, new ShowCommunity(false), Map.of()));
+        assertEquals(List.of(official, farm), NewProjectPlugins.visible(rows, new ShowCommunity(false), locked));
+        assertEquals(List.of(official, farm, other), NewProjectPlugins.visible(rows, new ShowCommunity(true), locked));
     }
 
     @Test

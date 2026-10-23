@@ -10,6 +10,7 @@ import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
+import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
@@ -76,6 +77,7 @@ public class GalleryDialog {
     private final ProgressIndicator browseProgress = new ProgressIndicator();
     private final javafx.scene.control.ComboBox<Sort> sortBox = new javafx.scene.control.ComboBox<>();
     private final CheckBox showHidden = new CheckBox("Show hidden");
+    private final CheckBox showCommunity = new CheckBox(ShowCommunity.LABEL);
     private HiddenBots hidden = HiddenBots.load();
     private String currentQuery = "";
     private Stage stage;
@@ -135,6 +137,12 @@ public class GalleryDialog {
         Label sortLabel = new Label("Sort:");
 
         showHidden.setOnAction(e -> applyFilter());
+        // Off until the user turns it on, on this computer (ShowCommunity, 2026-10-23).
+        showCommunity.setSelected(ShowCommunity.load().shown());
+        showCommunity.setOnAction(e -> {
+            new ShowCommunity(showCommunity.isSelected()).save();
+            applyFilter();
+        });
 
         browseProgress.setVisible(false);
         browseProgress.setPrefSize(18, 18);
@@ -151,7 +159,7 @@ public class GalleryDialog {
         Hyperlink repoLink = new Hyperlink("Every listing, in " + catalogRepo + " on GitHub");
         repoLink.setOnAction(e -> BrowserLauncher.open("https://github.com/" + catalogRepo));
 
-        VBox box = new VBox(10, searchRow, list, repoLink);
+        VBox box = new VBox(10, searchRow, showCommunity, list, repoLink);
         box.setPadding(new Insets(14));
         return box;
     }
@@ -178,22 +186,29 @@ public class GalleryDialog {
 
     private void applyFilter() {
         List<GalleryEntry> filtered = new ArrayList<>();
-        for (GalleryEntry e : allEntries) {
+        for (GalleryEntry e : new ShowCommunity(showCommunity.isSelected()).bots(allEntries)) {
             if (e.matches(currentQuery) && (showHidden.isSelected() || !hidden.hides(e))) filtered.add(e);
         }
         Sort sort = sortBox.getSelectionModel().getSelectedItem();
         if (sort == null) sort = Sort.STARS;
         java.util.Comparator<GalleryEntry> cmp = switch (sort) {
             case NAME -> java.util.Comparator.comparing(e -> e.name().toLowerCase());
-            case STARS -> java.util.Comparator.comparingInt((GalleryEntry e) -> metaOf(e).stars()).reversed();
+            case STARS -> java.util.Comparator.comparingInt(this::stars).reversed();
             case UPDATED -> java.util.Comparator.comparingLong((GalleryEntry e) -> metaOf(e).pushedAt()).reversed();
         };
-        filtered.sort(cmp);
+        // Official first, then trusted, then community, whichever order is picked within a rank (2026-10-23).
+        filtered.sort(java.util.Comparator.comparing(GalleryEntry::trust).thenComparing(cmp));
         shownEntries.setAll(filtered);
     }
 
     private GitHubGallery.RepoMeta metaOf(GalleryEntry e) {
         return metaBySlug.getOrDefault(slug(e), GitHubGallery.RepoMeta.UNKNOWN);
+    }
+
+    /** GitHub's live count once it answered, the catalog's until then. */
+    private int stars(GalleryEntry e) {
+        GitHubGallery.RepoMeta meta = metaBySlug.get(slug(e));
+        return meta == null ? e.stars() : meta.stars();
     }
 
     private static String slug(GalleryEntry e) {
@@ -215,7 +230,7 @@ public class GalleryDialog {
             Region spacer = new Region();
             HBox.setHgrow(spacer, Priority.ALWAYS);
 
-            int stars = metaOf(entry).stars();
+            int stars = stars(entry);
             Label starCount = new Label("★ " + stars);
             starCount.setStyle("-fx-text-fill: #9a6700; -fx-font-size: 11px;");
 
@@ -273,19 +288,22 @@ public class GalleryDialog {
                     starBtn.setText(nowStarred ? "Starred" : "Star");
                     // Reflect the optimistic count locally and refresh from GitHub.
                     GitHubGallery.RepoMeta m = metaOf(entry);
-                    int updated = Math.max(0, m.stars() + (nowStarred ? 1 : -1));
+                    int updated = Math.max(0, stars(entry) + (nowStarred ? 1 : -1));
                     metaBySlug.put(slug(entry), new GitHubGallery.RepoMeta(updated, m.pushedAt()));
                     starCount.setText("★ " + updated);
                 }));
     }
 
     private void installEntry(GalleryEntry entry, Button installBtn) {
-        Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                entry.trustWarning() + "\n\nInstall it now?", ButtonType.OK, ButtonType.CANCEL);
-        confirm.initOwner(stage);
-        confirm.setHeaderText("Install this bot?");
-        Optional<ButtonType> choice = confirm.showAndWait();
-        if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
+        // Only a community bot, or one using a community plugin, is confirmed first (2026-10-23).
+        if (entry.asksFirst()) {
+            Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
+                    entry.trustWarning() + "\n\nInstall it now?", ButtonType.OK, ButtonType.CANCEL);
+            confirm.initOwner(stage);
+            confirm.setHeaderText("Install this bot?");
+            Optional<ButtonType> choice = confirm.showAndWait();
+            if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
+        }
 
         installBtn.setDisable(true);
         installBtn.setText("Installing…");

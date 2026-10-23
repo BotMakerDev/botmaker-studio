@@ -31,6 +31,11 @@ public enum PublisherRank {
         return displayName;
     }
 
+    /** The less trusted of {@code a} and {@code b}; the constants are declared most trusted first. */
+    public static PublisherRank lower(PublisherRank a, PublisherRank b) {
+        return a.compareTo(b) >= 0 ? a : b;
+    }
+
     /**
      * The rank {@code id} names. An id this Studio does not know is {@link #COMMUNITY}: a reader that lags must
      * never rank a row above what it can vouch for.

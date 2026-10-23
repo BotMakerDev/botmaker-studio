@@ -1,5 +1,18 @@
 # Dated notes — read these before the other files here
 
+> **Bots and plugins come from one catalog since 2026-10-23** (umbrella spec
+> `docs/superpowers/specs/2026-10-23-catalog-design.md`): `sharing/CatalogClient` reads `catalog.json` once a
+> session and keeps the last read in `UserDirs.cache()`; `CatalogIndex` turns it into `PluginRegistry.Plugin` and
+> `GalleryEntry` rows, each with its listed `tag`, `PublisherRank` and stars. The topic search in the note below is
+> gone. A bot's `trust()` is the lower of its rank and its plugins' (`pluginsRank`); `ShowCommunity` (one preference)
+> hides community rows everywhere, and lists sort `RANKED`. `PluginHost.guard` installs `plugin/PluginGate` at start:
+> before a jar loads, a community or unlisted plugin needs the user's yes (`CommunityConsent`, kept per
+> `owner/repo#id`), and so does an official or trusted one at any version but its listed tag (per version, the
+> user's call: a pom may serve another version from its own repository); a dev build skips it only when Maven
+> installed it here (`_remote.repositories`). After construction, a plugin at a catalog coordinate whose `id()` is
+> not its entry's is dropped. The questions are put before `bind` takes its lock. A host that installs no gate
+> (tests, headless) binds as before.
+
 > **A fork is a bot of its own since 2026-10-23** (umbrella `docs/refactor/39-versions.md` §2, §7, §8).
 > `SyncModel.Ownership.FORK` (someone else's `original`, the user's `mine`) offers *Publish vX.Y…*, whose push tags
 > `studio/<branch>` on the fork and marks the tag as the fork's own (`ProjectVcs.markOwnRelease`), so `releaseTag`

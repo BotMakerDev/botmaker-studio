@@ -2,6 +2,7 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.studio.project.UserLibrary;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -67,6 +68,14 @@ public final class PluginRegistry {
             version = version == null || version.isBlank() ? tag : version.trim();
             rank = rank == null ? PublisherRank.COMMUNITY : rank;
         }
+
+        /**
+         * The order every list of plugins is shown in (2026-10-23): official first, then trusted, then
+         * community, the most starred first within a rank, then by name.
+         */
+        public static final Comparator<Plugin> RANKED = Comparator.comparing(Plugin::rank)
+                .thenComparing(Comparator.comparingInt(Plugin::stars).reversed())
+                .thenComparing(Plugin::name, String.CASE_INSENSITIVE_ORDER);
 
         /** A row the catalog did not rank — a dev build, a test's: community, installing {@code version}. */
         public Plugin(String id, String name, String coordinate, String repo, String description,
