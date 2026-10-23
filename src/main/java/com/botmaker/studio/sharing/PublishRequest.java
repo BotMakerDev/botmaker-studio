@@ -4,26 +4,23 @@ import com.botmaker.studio.project.UserLibrary;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Everything a publish is asked to do, fixed when Publish is pressed.
  *
- * <p>Fixed on purpose: a retry resumes a publish half done, so the release it cuts and the entry it lists must
+ * <p>Fixed on purpose: a retry resumes a publish half done, so the release it cuts and the listing it sets must
  * be the ones the steps already done were for — not whatever the form says after the author kept typing.
  *
- * @param botName      the project's name, which is the entry's {@code name}
+ * @param botName      the project's name
  * @param repoName     the repository under the signed-in account
- * @param tags         the entry's tags
- * @param listed       whether the bot is listed in the gallery at all
+ * @param description  the repository's description, which is what Browse Bots shows
+ * @param tags         added to the repository's topics
+ * @param listed       whether the bot is listed in Browse Bots at all (the topic)
  */
 public record PublishRequest(Path projectDir, String botName, String repoName, String description, String version,
                              List<String> tags, boolean listed) {
-
-    /** The entry schema this Studio writes. The gallery's gate refuses a newer one than it knows. */
-    public static final int SCHEMA_VERSION = 2;
 
     public PublishRequest {
         botName = botName == null ? "" : botName.trim();
@@ -33,28 +30,16 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 
-    /**
-     * The entry file's fields, in the order {@code botmaker-cli}'s {@code GalleryEntry} writes them, so a
-     * publish from Studio and one from {@code botmaker bot publish} diff as the same file.
-     *
-     * <p>No {@code requires} since 2026-10-12: what the pom declares is read off the installed release's pom
-     * ({@link PublishedBotPlugins}). No {@code launchTargets} since 2026-10-23: what a bot launches is the SDK's
-     * business.
-     */
-    public Map<String, Object> entry(String owner) {
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("schemaVersion", SCHEMA_VERSION);
-        entry.put("name", botName);
-        entry.put("owner", owner);
-        entry.put("repo", repoName);
-        entry.put("description", description);
-        entry.put("tags", tags);
-        return entry;
-    }
+    // entry() — the gallery's entry file — went on 2026-10-23 with the gallery repository: the repository's
+    // description and topics are the listing (BotPublisher).
 
-    /** How this bot would read in the gallery once listed, for the dialog's preview. */
+    /**
+     * How this bot would read in Browse Bots once listed, for the sheet's preview: named by its repository, as
+     * the search finds it ({@link GitHubGallery#browse}), with its tags as topics.
+     */
     public GalleryEntry preview(String owner) {
-        return new GalleryEntry(botName, owner, repoName, description, tags);
+        return new GalleryEntry(repoName, owner, repoName, description,
+                BotPublisher.topics(List.of(), tags, true).stream().filter(t -> !t.startsWith("botmaker-")).toList());
     }
 
     /**

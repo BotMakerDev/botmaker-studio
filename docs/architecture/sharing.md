@@ -1,5 +1,9 @@
 # Sharing — the gallery is read whole and written one file at a time
 
+> **2026-10-23: the gallery repository is gone**, so the two halves below the line (its read URL, its entry
+> files) are history. Bots are found by the GitHub topic `botmaker-bot` and published by adding it — see
+> `dated-notes.md`. The first part, what belongs in `botmaker-shared`, still holds.
+
 **The HTTP layer under all of this is `botmaker-shared`'s since 2026-09-05.** `GitHubClient`, `GitHubAuth`,
 `GitHubConfig` and `SemVer` are `com.botmaker.shared.github` — moved verbatim, imports only on this side.
 What stayed here is every **reader** built on them (`BotPublisher`, `GitHubGallery`, `PluginRegistry`,

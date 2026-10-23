@@ -57,7 +57,7 @@ final class StudioActions {
     private final GitHubClient gitHubClient = new GitHubClient();
     private final GitHubAuth gitHubAuth = new GitHubAuth();
     private final GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-    private final BotInstaller botInstaller = new BotInstaller(gitHubClient, gallery);
+    private final BotInstaller botInstaller = new BotInstaller(gallery);
     private Runnable onPublish = () -> { };
     /** Opens the block a use is in — the canvas's, so {@link UIManager} sets it once the canvas exists. */
     private java.util.function.Consumer<com.botmaker.studio.nav.Usages.Usage> onReveal = null;

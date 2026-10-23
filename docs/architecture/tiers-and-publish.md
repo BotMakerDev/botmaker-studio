@@ -1,5 +1,8 @@
 # Tiers, and a publish that resumes (2026-09-16)
 
+> **History since 2026-10-23**, except the resumable `PublishPlan` and the one `GalleryCard`: tiers went, then
+> the gallery repository. The listing step adds the repository topic `botmaker-bot`; see `dated-notes.md`.
+
 **The gallery lists as Vetted or Community, and nobody merges a Community listing by hand.** The gallery's CI
 runs `botmaker-cli`'s `GalleryGate` on a listing pull request and its `ListingPolicy` merges it, unless the
 author is over 3 new listings in 24 hours (`waiting`) or the change needs a maintainer (`needs-maintainer`).

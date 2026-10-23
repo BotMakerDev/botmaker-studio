@@ -1,11 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GitHubGallery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.prefs.Preferences;
 import java.util.stream.Stream;
@@ -176,20 +174,29 @@ final class StartingPoints {
     }
 
     /**
-     * {@code entries} in the catalog's own shape, read back by {@link GitHubGallery#parseCatalog}; empty when
-     * there are none or they outgrow what a preference holds.
+     * {@code entries} as a JSON array, read back by {@link #fromJson}; empty when there are none or they outgrow
+     * what a preference holds.
      */
     static Optional<String> toJson(ObjectMapper mapper, List<GalleryEntry> entries) {
         if (entries.isEmpty()) return Optional.empty();
         try {
-            String json = mapper.writeValueAsString(Map.of("bots", entries));
+            String json = mapper.writeValueAsString(entries);
             return json.length() <= Preferences.MAX_VALUE_LENGTH ? Optional.of(json) : Optional.empty();
         } catch (Exception e) {
             return Optional.empty();
         }
     }
 
+    /**
+     * The remembered list; empty when there is none or it does not read — the catalog-shaped object written before
+     * the gallery repository went (2026-10-23) among them, which the next fetch replaces.
+     */
     static List<GalleryEntry> fromJson(ObjectMapper mapper, String json) {
-        return GitHubGallery.parseCatalog(mapper, json).orElse(List.of());
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return List.of(mapper.readValue(json, GalleryEntry[].class));
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

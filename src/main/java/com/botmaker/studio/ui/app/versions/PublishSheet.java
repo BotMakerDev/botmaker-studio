@@ -12,13 +12,11 @@ import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
-import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.PublishPlan;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
-import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -27,7 +25,6 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
@@ -57,7 +54,7 @@ import java.util.concurrent.CompletableFuture;
  * Publishing, as the Versions tab's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
  * — <i>Kind</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
  * Browse Bots card built from the form as it stands, the publish's steps with a Retry for the one that failed,
- * and the listing as the gallery has it, with Unpublish.
+ * and whether the repository is listed (its topic, 2026-10-23), with Unpublish.
  *
  * <p>It replaced {@code PublishDialog} (2026-09-25), a window of its own beside the tab that also pushed. A
  * publish is now a version like any other: the {@link Host} saves it ({@code PUBLISH}), and the run pushes that
@@ -113,7 +110,6 @@ public final class PublishSheet {
     private final VBox checklist = new VBox(4);
     private final Button retryButton = new Button("Retry");
     private final Label listingLabel = new Label("Sign in to see your listing.");
-    private final Hyperlink pullRequestLink = new Hyperlink();
     private final Button refreshListingButton = new Button("Refresh");
     private final Button unpublishButton = new Button("Unpublish");
 
@@ -126,7 +122,7 @@ public final class PublishSheet {
 
     /** The repo's latest published release tag (""=none); each new version must be strictly greater. */
     private volatile String latestTag = "";
-    /** The signed-in login, once known: who submits the listing. */
+    /** The signed-in login, once known: who publishes. */
     private volatile String login = "";
     /**
      * Whose repository a publish goes to, once known ({@link BotPublisher#ownerFor}): the login, or the owner of
@@ -136,8 +132,6 @@ public final class PublishSheet {
     private volatile String repoOwner = "";
     /** The pom's pins nobody else can resolve ({@link PublishRequest#unreleasedPins}); Publish waits on none. */
     private List<String> unreleased = List.of();
-    /** The gallery's listing of this repo, when it has one: a re-publish starts from its description and tags. */
-    private volatile GalleryEntry currentListing;
 
     /** The publish shown in the checklist; null before the first. */
     private BotPublisher.Run run;
@@ -218,11 +212,10 @@ public final class PublishSheet {
     private VBox buildForm() {
         // Listed/Unlisted stood here until 2026-09-26. Publishing is listing: a release on GitHub alone is
         // what "Save to my copy" already gives, so the choice only asked a question with one useful answer.
-        Label listingHelp = note("Publishing lists the bot in the gallery as Community once its checks pass, with "
-                + "no one to wait for: the entry is well formed, you own the repository, and the release downloads. "
-                + "Up to 3 new listings a day; updating yours never counts. A maintainer may later vet a release. "
-                + "To keep it off the gallery, use Save to my copy instead. People find it in Browse Bots and in "
-                + "New Project, where they start from a copy linked to yours.");
+        // The gallery's checks, its 3-a-day limit and its pull request went on 2026-10-23: the topic is the listing.
+        Label listingHelp = note("Publishing gives your repository the topic botmaker-bot, which lists it in Browse "
+                + "Bots and New Project, where people start from a copy linked to yours. Its description and tags "
+                + "are the repository's own. To keep it unlisted, use Save to my copy instead.");
 
         repoField.setText(projectName);
         repoField.textProperty().addListener((o, was, now) -> refreshAll());
@@ -233,7 +226,7 @@ public final class PublishSheet {
                 refreshListing();
             }
         });
-        descriptionField.setPromptText("One sentence shown in the gallery");
+        descriptionField.setPromptText("One sentence shown in Browse Bots");
         descriptionField.textProperty().addListener((o, was, now) -> refreshAll());
         tagsField.setPromptText("Comma-separated, e.g. clicker, farming");
         tagsField.textProperty().addListener((o, was, now) -> refreshAll());
@@ -264,7 +257,7 @@ public final class PublishSheet {
                 + "your copy on GitHub, which becomes public — earlier versions included.");
 
         return new VBox(8,
-                section("Gallery"), listingHelp,
+                section("Browse Bots"), listingHelp,
                 section("Details"), details,
                 section("Release"), release, releaseHelp);
     }
@@ -279,20 +272,17 @@ public final class PublishSheet {
         retryButton.setOnAction(e -> resume());
 
         listingLabel.setWrapText(true);
-        pullRequestLink.setVisible(false);
-        pullRequestLink.setManaged(false);
-        pullRequestLink.setOnAction(e -> BrowserLauncher.open(pullRequestLink.getText()));
         refreshListingButton.setOnAction(e -> refreshListing());
         // Delist-only: leaves the author's repo and releases intact, removes the bot from discovery.
         unpublishButton.setOnAction(e -> doUnpublish());
-        // A footer rather than a section (2026-09-26): what the gallery has is a status line, not a form.
+        // A footer rather than a section (2026-09-26): whether it is listed is a status line, not a form.
         Region listingSpacer = new Region();
         HBox.setHgrow(listingSpacer, Priority.ALWAYS);
         HBox.setHgrow(listingLabel, Priority.ALWAYS);
         listingLabel.getStyleClass().add("gallery-card-note");
         HBox listingRow = new HBox(8, listingLabel, listingSpacer, refreshListingButton, unpublishButton);
         listingRow.setAlignment(Pos.CENTER_LEFT);
-        VBox listingFooter = new VBox(2, listingRow, pullRequestLink);
+        VBox listingFooter = new VBox(2, listingRow);
         listingFooter.setPadding(new Insets(8, 0, 0, 0));
         listingFooter.getStyleClass().add("publish-listing-footer");
 
@@ -443,12 +433,8 @@ public final class PublishSheet {
         return row;
     }
 
-    private void renderListing(ListingStatus status) {
-        listingLabel.setText(status.describe());
-        boolean hasPr = !status.url().isBlank();
-        pullRequestLink.setText(status.url());
-        pullRequestLink.setVisible(hasPr);
-        pullRequestLink.setManaged(hasPr);
+    private void renderListing(BotPublisher.Listing listing) {
+        listingLabel.setText(listing.describe());
     }
 
     // -------------------------------------------------------------------------
@@ -491,7 +477,7 @@ public final class PublishSheet {
         refreshAll();
     }
 
-    /** The gallery's word on this repo: its listing in the catalog, and the listing pull request's state. */
+    /** The repository's word on its listing: the topic, and the description and tags a re-publish starts from. */
     private void refreshListing() {
         if (!auth.isAuthenticated()) {
             listingLabel.setText("Sign in to see your listing.");
@@ -500,35 +486,20 @@ public final class PublishSheet {
         String repo = repoName();
         String name = repoOwner;
         if (repo.isBlank() || name.isBlank()) return;
-        listingLabel.setText("Reading the gallery…");
+        listingLabel.setText("Reading the repository…");
         CompletableFuture
-                .supplyAsync(() -> {
-                    try {
-                        return publisher.listingStatus(name, repo);
-                    } catch (Exception ex) {
-                        throw new RuntimeException(ex.getMessage(), ex);
+                .supplyAsync(() -> publisher.listing(name, repo))
+                .thenAccept(listing -> Platform.runLater(() -> {
+                    renderListing(listing);
+                    // A re-publish starts from what the repository already says, so updating a release does not
+                    // quietly blank the description and tags the author wrote last time. Only into empty fields,
+                    // never over what has been typed.
+                    if (!busy) {
+                        if (descriptionField.getText().isBlank()) descriptionField.setText(listing.description());
+                        if (tagsField.getText().isBlank()) tagsField.setText(String.join(", ", listing.tags()));
                     }
-                })
-                .whenComplete((status, err) -> Platform.runLater(() -> {
-                    if (err != null) {
-                        listingLabel.setText("Couldn't read the listing: " + ShareActions.rootMessage(err));
-                    } else {
-                        renderListing(status);
-                    }
+                    refreshAll();
                 }));
-        gallery.browse().thenAccept(catalog -> Platform.runLater(() -> {
-            currentListing = GitHubGallery.find(catalog, name, repo).orElse(null);
-            // A re-publish starts from what the gallery already says, so updating a release does not quietly
-            // blank the description and tags the author wrote last time. Only into empty fields, never over
-            // what has been typed.
-            if (currentListing != null && !busy) {
-                if (descriptionField.getText().isBlank()) descriptionField.setText(currentListing.description());
-                if (tagsField.getText().isBlank()) {
-                    tagsField.setText(String.join(", ", currentListing.tags()));
-                }
-            }
-            refreshAll();
-        }));
     }
 
     // -------------------------------------------------------------------------
@@ -587,7 +558,6 @@ public final class PublishSheet {
                     if (plan.finished()) {
                         seedVersions(current.request().version()); // the new baseline
                         statusLabel.setText("Published " + current.request().version() + ".");
-                        if (current.request().listed()) renderListing(current.listing());
                         refreshListing();
                     } else {
                         statusLabel.setText(plan.failure()
@@ -599,19 +569,19 @@ public final class PublishSheet {
     }
 
     /**
-     * Delists the bot (the reverse of the listing step). The author's GitHub repo and releases are left intact —
-     * this only removes it from discovery. Runs off the FX thread.
+     * Delists the bot (the reverse of the listing step): the topic comes off. The author's GitHub repo and releases
+     * are left intact — this only removes it from discovery. Runs off the FX thread.
      */
     private void doUnpublish() {
         String repo = repoName();
         String from = repoOwner;
         if (repo.isBlank() || from.isBlank()) return;
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                "Remove “" + repo + "” from the gallery? Your GitHub repo and releases stay intact — "
-                        + "this only delists it from discovery, through the same kind of pull request a listing is.",
+                "Remove “" + repo + "” from Browse Bots? Your GitHub repo and releases stay intact — this takes "
+                        + "the topic botmaker-bot off it, and people who started from it stay linked.",
                 ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(owner);
-        confirm.setHeaderText("Unpublish from the gallery?");
+        confirm.setHeaderText("Unpublish from Browse Bots?");
         Optional<ButtonType> choice = confirm.showAndWait();
         if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
 
@@ -620,18 +590,19 @@ public final class PublishSheet {
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        return publisher.unpublish(from, repo);
+                        publisher.unpublish(from, repo);
+                        return null;
                     } catch (Exception ex) {
                         throw new RuntimeException(ex.getMessage(), ex);
                     }
                 })
-                .whenComplete((status, err) -> Platform.runLater(() -> {
+                .whenComplete((done, err) -> Platform.runLater(() -> {
                     setBusy(false);
                     if (err != null) {
                         statusLabel.setText("Unpublish failed: " + ShareActions.rootMessage(err));
                     } else {
-                        statusLabel.setText("Removal submitted.");
-                        renderListing(status);
+                        statusLabel.setText("Unpublished. Browse Bots stops listing it within a few minutes.");
+                        refreshListing();
                     }
                 }));
     }

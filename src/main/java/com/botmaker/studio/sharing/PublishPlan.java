@@ -8,7 +8,7 @@ import java.util.Optional;
  * Where a publish has got to: one {@link StepState} per {@link Step}, in order.
  *
  * <p>Publishing is five network operations that cannot be made one transaction — a repository, a push, a
- * release, a download check and a gallery listing. It used to be one method, so a failure at the fourth
+ * release, a download check and a listing (the topic). It used to be one method, so a failure at the fourth
  * reported as "Publish failed" and pressing Publish again started from the first, where the release step then
  * refused a tag that already existed. A plan says which steps are done, so a retry resumes at the one that
  * failed and a success is shown step by step rather than as one sentence.
@@ -24,7 +24,7 @@ public record PublishPlan(List<StepState> steps) {
         PUSH("Push", "Tag the saved version and push it to your copy on GitHub"),
         RELEASE("Release", "Cut the release other people install"),
         ARCHIVE("Download check", "Check that the release downloads without signing in"),
-        LISTING("Gallery listing", "Submit the gallery entry");
+        LISTING("Browse Bots", "Add the topic botmaker-bot to the repository, which lists it in Browse Bots");
 
         private final String label;
         private final String description;

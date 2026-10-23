@@ -52,6 +52,7 @@ import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.ProjectCreator;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -1418,11 +1419,14 @@ final class StudioBridge implements StudioDriver {
                 + "back on the same address once it is open.";
     }
 
-    /** The gallery's bots, or none when it cannot be read — the dialog's offline case. */
+    /**
+     * The published bots, those hidden on this computer left out ({@link HiddenBots}), or none when GitHub cannot
+     * be read — the dialog's offline case.
+     */
     private List<GalleryEntry> botsOrNone() {
         try {
-            return GalleryEntry.startingPoints(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
-                    "read the gallery"));
+            return GalleryEntry.startingPoints(HiddenBots.load().without(waitFor(
+                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "search the published bots")));
         } catch (IllegalArgumentException e) {
             return List.of();
         }

@@ -53,7 +53,7 @@ public final class NewProjects {
             return;
         }
         GitHubGallery gallery = new GitHubGallery(client, auth);
-        BotInstaller installer = new BotInstaller(client, gallery);
+        BotInstaller installer = new BotInstaller(gallery);
         String tag;
         try {
             tag = gallery.installTag(bot).orTimeout(NETWORK_SECONDS, TimeUnit.SECONDS).join();

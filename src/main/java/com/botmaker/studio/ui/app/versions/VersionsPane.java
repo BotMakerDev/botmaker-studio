@@ -535,14 +535,13 @@ public final class VersionsPane {
     private final class Publishing implements PublishSheet.Host {
 
         /**
-         * Writes the provenance file first, so the version published names its own release, then saves the
-         * project as a {@code PUBLISH} version. An unchanged project publishes the version it is at.
+         * Saves the project as a {@code PUBLISH} version. An unchanged project publishes the version it is at. No
+         * provenance file is written since 2026-10-23: the release is the tag the publish puts on that version.
          */
         @Override
         public java.util.concurrent.Callable<ProjectVcs> prepare(PublishRequest request, String repoOwner) {
             ProjectState.Snapshot editor = ctx.state().snapshot();
             return () -> {
-                new BotSource(repoOwner, request.repoName(), request.version()).write(projectDir);
                 Checkpoints.save(projectDir, editor, VersionOrigin.PUBLISH, request.version() + " published");
                 return vcs();
             };
@@ -626,16 +625,15 @@ public final class VersionsPane {
                 }, done -> status("Merge cancelled — nothing changed.")));
     }
 
-    /** Applies the decisions, records the release in the provenance file and commits the {@code UPDATE}. */
+    /**
+     * Applies the decisions and commits the {@code UPDATE}. The merge contains the release's tag, which is how
+     * the project says what it is at from then on ({@link BotSource}); nothing else records it.
+     */
     private void finishUpdate(String release, Map<String, ProjectVcs.Side> decided) {
         run(() -> {
             ProjectVcs vcs = vcs();
             for (var e : decided.entrySet()) vcs.resolve(e.getKey(), e.getValue());
             Optional<BotSource> source = BotSource.read(projectDir);
-            // A release is a tag; a resumed update whose commit no tag names leaves the record as it was.
-            if (source.isPresent() && !release.matches("[0-9a-f]{7}|the new release")) {
-                new BotSource(source.get().owner(), source.get().repo(), release).write(projectDir);
-            }
             String by = source.map(s -> " (" + s.owner() + ")").orElse("");
             vcs.finishMerge("Updated to " + release + by);
             return null;

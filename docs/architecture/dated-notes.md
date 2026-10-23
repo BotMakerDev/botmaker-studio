@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **There is no gallery repository since 2026-10-23.** `GitHubGallery.browse` is one GitHub search for the topic
+> `botmaker-bot` (forks included); a result is listed when its newest release's pom declares a registry plugin.
+> Publishing adds the topic (the plan's `LISTING` step), unpublishing removes it, and `HiddenBots` is this
+> computer's *Hide* list. `catalog.json`, `index.json`, entry files, listing pull requests, `ListingStatus`,
+> `GalleryMirror` and tiers are gone: read `sharing.md` and `tiers-and-publish.md` as history. Provenance is the
+> `original` remote and the nearest tag (`BotSource.read`); nothing writes `botmaker-source.json` any more.
+
 > **The type index holds `index/LibraryType` records since 2026-10-18**, not ClassGraph's `ClassInfo`.
 > ClassGraph 6 removed `ScanResult.toJSON`/`fromJSON`, so `TypeSummaryManager` scans a jar, keeps what Studio
 > reads of each public class (modifiers, supertypes, type-parameter count, public methods, constructors and

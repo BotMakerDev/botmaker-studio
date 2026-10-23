@@ -13,6 +13,7 @@ import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -516,9 +517,10 @@ public class ProjectSelectionScreen implements ProjectWindow {
 
         // The starting point: Studio's own Blank, or any published bot, cloned and linked to its author as Browse
         // Bots installs it (2026-10-23; only bots tagged `template`, copied and renamed, until then). Blank leads;
-        // below it the bots the gallery listed last time, refreshed in the background — see loadBots.
+        // below it the bots published last time, refreshed in the background — see loadBots. The ones hidden in
+        // Browse Bots on this computer are left out (HiddenBots).
         List<StartChoice> initial = StartingPoints.rows(
-                GalleryEntry.startingPoints(StartingPoints.remembered(gitHubClient.mapper())),
+                GalleryEntry.startingPoints(HiddenBots.load().without(StartingPoints.remembered(gitHubClient.mapper()))),
                 StartingPoints.Fetch.PENDING);
         ComboBox<StartChoice> startCombo = new ComboBox<>(
                 javafx.collections.FXCollections.observableArrayList(initial));
@@ -653,7 +655,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
                     if (answered) StartingPoints.remember(gitHubClient.mapper(), entries);
                     StartingPoints.Fetch fetch = answered
                             ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
-                    fillStarts(combo, StartingPoints.rows(GalleryEntry.startingPoints(entries), fetch));
+                    fillStarts(combo, StartingPoints.rows(
+                            GalleryEntry.startingPoints(HiddenBots.load().without(entries)), fetch));
                 }));
     }
 
@@ -686,7 +689,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
 
     private void showGallery() {
         GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-        BotInstaller installer = new BotInstaller(gitHubClient, gallery);
+        BotInstaller installer = new BotInstaller(gallery);
         GalleryDialog dialog = new GalleryDialog(stage, gallery, installer, gitHubAuth, gitHubClient);
         // Installs land new projects in PROJECTS_ROOT; reflect them when the gallery closes.
         dialog.show(this::refreshProjectList);

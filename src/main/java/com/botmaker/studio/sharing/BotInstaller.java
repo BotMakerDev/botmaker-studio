@@ -1,36 +1,30 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Optional;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
- * Installs bots from their GitHub repos and says when a newer release is out (no account needed). Installing clones the author's
- * repository at the release tag into {@code ~/BotMakerProjects/} and records provenance ({@link BotSource}).
- * Browse Bots' Install and New Project's bot rows both clone here (2026-10-23): a project started from a bot
- * stays linked to its author, so their later releases merge in.
+ * Installs bots from their GitHub repos and says when a newer release is out (no account needed). Installing
+ * clones the author's repository at the release tag into {@code ~/BotMakerProjects/}; the clone's remote
+ * {@code original} is the whole record of where it came from ({@link BotSource}, 2026-10-23). Browse Bots'
+ * Install and New Project's bot rows both clone here (2026-10-23): a project started from a bot stays linked to
+ * its author, so their later releases merge in.
  *
  * <p>The blocking methods here are intended to run off the FX thread (the dialog wraps them in a
  * background task).
  */
 public final class BotInstaller {
 
-    private final GitHubClient client;
     private final GitHubGallery gallery;
 
-    public BotInstaller(GitHubClient client, GitHubGallery gallery) {
-        this.client = client;
+    public BotInstaller(GitHubGallery gallery) {
         this.gallery = gallery;
     }
 
@@ -46,8 +40,8 @@ public final class BotInstaller {
     /**
      * Installs {@code entry} at release {@code tag} as a <b>clone</b> of its author's repository
      * ({@code docs/refactor/39-versions.md} §7): the remote is {@code original}, branch {@code main} starts at
-     * the tag, and {@link BotSource} is written as the gallery's provenance record — one {@code INSTALL}
-     * version, only when that (or the ignore file) changed anything. An update is then a real merge.
+     * the tag — one {@code INSTALL} version, only when the ignore file changed anything. An update is then a
+     * real merge.
      *
      * @return the installed project directory
      * @throws IOException if the project already exists or the clone fails
@@ -66,19 +60,17 @@ public final class BotInstaller {
             throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
         try {
-            String label = "Installed " + tag;
             try {
                 ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, dest, gallery.token());
             } catch (IOException cloneFailed) {
-                // Only a repository GitHub says is gone falls back: offline, the copy is out of reach too, and
-                // a clone that failed for any other reason is worth its own message.
-                if (!authorGone(entry.owner(), entry.repo())) throw cloneFailed;
-                deleteRecursively(dest);
-                installFromMirror(entry.owner(), entry.repo(), tag, dest);
-                label = "Installed " + tag + " from the gallery's copy — its author removed the repository";
+                // The gallery's copy of a removed repository went with the gallery (2026-10-23): say why instead.
+                if (authorGone(entry.owner(), entry.repo())) {
+                    throw new IOException("The repository " + entry.slug() + " was removed by its author, so "
+                            + "it can no longer be installed.", cloneFailed);
+                }
+                throw cloneFailed;
             }
-            new BotSource(entry.owner(), entry.repo(), tag).write(dest);
-            new ProjectVcs(dest).checkpoint(VersionOrigin.INSTALL, label);
+            new ProjectVcs(dest).checkpoint(VersionOrigin.INSTALL, "Installed " + tag);
         } catch (IOException e) {
             deleteRecursively(dest);
             throw e;
@@ -86,22 +78,8 @@ public final class BotInstaller {
         return dest;
     }
 
-    /**
-     * A bot whose repository is gone, unpacked from the gallery's copy into a history of its own. There is no
-     * {@code original} to merge an update from, so none is offered ({@link #authorGone(Path)}).
-     */
-    private void installFromMirror(String owner, String repo, String tag, Path dest) throws IOException {
-        byte[] zip;
-        try {
-            zip = client.getBytes(GalleryMirror.downloadUrl(owner, repo, tag), gallery.token()).join();
-        } catch (Exception e) {
-            throw new IOException("The repository " + owner + "/" + repo + " was removed by its author, and the "
-                    + "gallery keeps no copy of " + tag + ": " + rootMessage(e), e);
-        }
-        Files.createDirectories(dest);
-        unzipStrippingTopDir(zip, dest);
-        new ProjectVcs(dest).init();
-    }
+    // installFromMirror() — a removed repository unpacked from the gallery's copy — went on 2026-10-23 with the
+    // gallery repository.
 
     /** Whether GitHub says {@code owner/repo} no longer exists. Blocking; false when GitHub cannot be asked. */
     public boolean authorGone(String owner, String repo) {
@@ -138,44 +116,6 @@ public final class BotInstaller {
 
     // update() — re-download the release and replace the project in place — was deleted on 2026-09-25: an
     // update is a real merge of the author's tag now, from the bot's Versions tab (39 §7).
-
-    // -------------------------------------------------------------------------
-    // Unzip
-    // -------------------------------------------------------------------------
-
-    /**
-     * Unzips a GitHub archive into {@code dest}, stripping the single top-level {@code repo-tag/} directory
-     * that GitHub wraps every entry in. Guards against zip-slip.
-     */
-    private static void unzipStrippingTopDir(byte[] zipBytes, Path dest) throws IOException {
-        Path destRoot = dest.toAbsolutePath().normalize();
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String stripped = stripFirstSegment(entry.getName());
-                if (stripped.isEmpty()) continue; // the top-level dir entry itself
-
-                Path target = destRoot.resolve(stripped).normalize();
-                if (!target.startsWith(destRoot)) {
-                    throw new IOException("Blocked unsafe zip entry: " + entry.getName());
-                }
-                if (entry.isDirectory()) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.createDirectories(target.getParent());
-                    try (OutputStream out = Files.newOutputStream(target)) {
-                        zis.transferTo(out);
-                    }
-                }
-                zis.closeEntry();
-            }
-        }
-    }
-
-    private static String stripFirstSegment(String path) {
-        int slash = path.indexOf('/');
-        return slash < 0 ? "" : path.substring(slash + 1);
-    }
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -216,10 +156,5 @@ public final class BotInstaller {
             if (e.getCause() instanceof IOException io) throw io;
             throw e;
         }
-    }
-
-    private static String rootMessage(Throwable t) {
-        while (t.getCause() != null) t = t.getCause();
-        return t.getMessage() != null ? t.getMessage() : t.toString();
     }
 }

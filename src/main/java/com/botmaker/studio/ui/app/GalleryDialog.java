@@ -9,6 +9,7 @@ import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
@@ -20,6 +21,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -28,6 +30,7 @@ import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -42,10 +45,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Browse / install / update bots from the federated GitHub gallery (no GitHub account required). Reads the
- * catalog via {@link GitHubGallery}; installs and updates run off the FX thread via
- * {@link BotInstaller}. Installing a bot means running someone else's automation code, so installs are gated
- * by a trust/attribution confirmation.
+ * Browse / install / update published bots (no GitHub account required). Finds them on GitHub by their topic via
+ * {@link GitHubGallery}; installs and updates run off the FX thread via {@link BotInstaller}. Installing a bot
+ * means running someone else's automation code, so installs are gated by a trust/attribution confirmation.
+ *
+ * <p>Anyone can publish, so anyone's bot can turn up: <i>Hide</i> keeps one out of this computer's lists
+ * ({@link HiddenBots}, 2026-10-23), and <i>Show hidden</i> brings them back to unhide.
  */
 public class GalleryDialog {
 
@@ -70,10 +75,12 @@ public class GalleryDialog {
 
     private final ProgressIndicator browseProgress = new ProgressIndicator();
     private final javafx.scene.control.ComboBox<Sort> sortBox = new javafx.scene.control.ComboBox<>();
+    private final CheckBox showHidden = new CheckBox("Show hidden");
+    private HiddenBots hidden = HiddenBots.load();
     private String currentQuery = "";
     private Stage stage;
 
-    /** The gallery's listings, fetched once per window, for Browse. */
+    /** The published bots, searched once per window, for Browse. */
     private CompletableFuture<List<GalleryEntry>> catalog = CompletableFuture.completedFuture(List.of());
 
     public GalleryDialog(Window owner, GitHubGallery gallery, BotInstaller installer,
@@ -118,7 +125,7 @@ public class GalleryDialog {
 
     private VBox buildBrowseTab() {
         TextField searchField = new TextField();
-        searchField.setPromptText("Search the gallery…");
+        searchField.setPromptText("Search published bots…");
         searchField.textProperty().addListener((o, old, q) -> { currentQuery = q; applyFilter(); });
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
@@ -127,21 +134,21 @@ public class GalleryDialog {
         sortBox.setOnAction(e -> applyFilter());
         Label sortLabel = new Label("Sort:");
 
+        showHidden.setOnAction(e -> applyFilter());
+
         browseProgress.setVisible(false);
         browseProgress.setPrefSize(18, 18);
-        HBox searchRow = new HBox(8, searchField, sortLabel, sortBox, browseProgress);
+        HBox searchRow = new HBox(8, searchField, sortLabel, sortBox, showHidden, browseProgress);
         searchRow.setAlignment(Pos.CENTER_LEFT);
 
         ListView<GalleryEntry> list = new ListView<>(shownEntries);
-        list.setPlaceholder(new Label(GitHubConfig.isGalleryConfigured()
-                ? "No bots found. Be the first to publish one!"
-                : "The gallery is not configured yet."));
+        list.setPlaceholder(new Label("No bots found. Be the first to publish one!"));
         list.setCellFactory(lv -> new BrowseCell());
         VBox.setVgrow(list, Priority.ALWAYS);
 
-        Hyperlink repoLink = new Hyperlink("View gallery repo on GitHub");
-        repoLink.setOnAction(e -> BrowserLauncher.open(
-                "https://github.com/" + GitHubConfig.INDEX_OWNER + "/" + GitHubConfig.INDEX_REPO));
+        // The gallery repository went on 2026-10-23: a bot is listed by its repository's topic.
+        Hyperlink repoLink = new Hyperlink("Every repository with the topic " + GitHubConfig.TOPIC + " on GitHub");
+        repoLink.setOnAction(e -> BrowserLauncher.open("https://github.com/topics/" + GitHubConfig.TOPIC));
 
         VBox box = new VBox(10, searchRow, list, repoLink);
         box.setPadding(new Insets(14));
@@ -171,7 +178,7 @@ public class GalleryDialog {
     private void applyFilter() {
         List<GalleryEntry> filtered = new ArrayList<>();
         for (GalleryEntry e : allEntries) {
-            if (e.matches(currentQuery)) filtered.add(e);
+            if (e.matches(currentQuery) && (showHidden.isSelected() || !hidden.hides(e))) filtered.add(e);
         }
         Sort sort = sortBox.getSelectionModel().getSelectedItem();
         if (sort == null) sort = Sort.STARS;
@@ -219,10 +226,24 @@ public class GalleryDialog {
             installBtn.setDisable(installer.isInstalled(entry.name()));
             installBtn.setOnAction(e -> installEntry(entry, installBtn));
 
-            HBox row = new HBox(10, text, spacer, starCount, starBtn, installBtn);
+            boolean isHidden = hidden.hides(entry);
+            Button hideBtn = new Button(isHidden ? "Unhide" : "Hide");
+            hideBtn.setTooltip(new Tooltip(isHidden
+                    ? "Show this bot again in Browse Bots and New Project"
+                    : "Hide this bot from Browse Bots and New Project on this computer"));
+            hideBtn.setOnAction(e -> setHidden(entry, !isHidden));
+
+            HBox row = new HBox(10, text, spacer, starCount, starBtn, installBtn, hideBtn);
             row.setAlignment(Pos.CENTER_LEFT);
             setGraphic(row);
         }
+    }
+
+    /** Hides {@code entry} on this computer, or shows it again, and remembers the list. */
+    private void setHidden(GalleryEntry entry, boolean hide) {
+        hidden = hidden.with(entry, hide);
+        hidden.save();
+        applyFilter();
     }
 
     /** Reflects whether the signed-in user has starred this bot (best-effort; leaves "Star" when signed out). */
@@ -350,8 +371,7 @@ public class GalleryDialog {
 
             // Resolve update availability off-thread.
             // A bot whose author removed the repository has no original to merge an update from; it keeps
-            // running and keeps its own history, and the gallery's copy of its releases is what installs it.
-            // null: gone. An empty Optional: up to date.
+            // running and keeps its own history; nobody else can install it any more. null: gone. An empty Optional: up to date.
             CompletableFuture
                     .supplyAsync(() -> installer.authorGone(bot.info().projectPath()) ? null
                             : installer.checkForUpdate(bot.info().projectPath()))

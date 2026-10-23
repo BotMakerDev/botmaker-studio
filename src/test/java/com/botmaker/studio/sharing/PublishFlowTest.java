@@ -1,13 +1,10 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.studio.project.UserLibrary;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The publish flow's rules with no network: the plan's retry, the entry it writes, and how a listing is read. */
+/** The publish flow's rules with no network: the plan's retry, the topics it sets, and how a listing is read. */
 class PublishFlowTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -66,19 +63,6 @@ class PublishFlowTest {
     // --- PublishRequest --------------------------------------------------------------------------------------
 
     @Test
-    void theEntryIsSchemaTwoInTheCliOrder() throws Exception {
-        PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala-bot", " Mines ", "1.0.0",
-                List.of("mining"), true);
-
-        String json = new String(BotPublisher.entryJson(MAPPER, request.entry("alice")), StandardCharsets.UTF_8);
-        assertEquals(List.of("schemaVersion", "name", "owner", "repo", "description", "tags"),
-                fieldNames(MAPPER.readTree(json)), "no requires, no launch targets");
-        JsonNode node = MAPPER.readTree(json);
-        assertEquals(2, node.get("schemaVersion").asInt());
-        assertEquals("Mines", node.get("description").asText());
-    }
-
-    @Test
     void aPropertyNobodyDefinesIsLeftAsWritten() {
         assertEquals("${missing}", PublishRequest.interpolate("${missing}", Map.of()));
     }
@@ -91,70 +75,60 @@ class PublishFlowTest {
         assertEquals(PublishRequest.MAX_SUBSTITUTIONS + "${a}".length(), cycle.length(), cycle);
     }
 
+    /** Named by its repository, as the topic search finds it, with its tags as GitHub would take them. */
     @Test
-    void thePreviewIsTheListingTheGalleryWouldShow() {
-        PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "d", "1.0.0", List.of("x"),
-                true);
-        assertEquals(new GalleryEntry("Koala", "alice", "koala", "d", List.of("x")), request.preview("alice"));
+    void thePreviewIsTheListingBrowseBotsWouldShow() {
+        PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "d", "1.0.0",
+                List.of("Idle Game", "x"), true);
+        assertEquals(new GalleryEntry("koala", "alice", "koala", "d", List.of("idle-game", "x")),
+                request.preview("alice"));
     }
 
-    // --- ListingStatus ---------------------------------------------------------------------------------------
+    // --- The listing: topics (2026-10-23) --------------------------------------------------------------------
 
     @Test
-    void aListingPullRequestReadsAsItsState() throws Exception {
-        assertEquals(ListingStatus.State.LISTED,
-                status("{\"state\":\"closed\",\"merged_at\":\"2026-09-16T10:00:00Z\"}", "", "").state());
-        assertEquals(ListingStatus.State.CLOSED,
-                status("{\"state\":\"closed\",\"merged_at\":null}", "", "").state());
-        assertEquals(ListingStatus.State.REFUSED, status("{\"state\":\"open\"}", "failure", "").state());
-        assertEquals(ListingStatus.State.CHECKING, status("{\"state\":\"open\"}", "", "").state());
-        assertEquals(ListingStatus.State.CHECKING, status("{\"state\":\"open\"}", "success", "").state());
-
-        ListingStatus waiting = status("{\"state\":\"open\",\"html_url\":\"https://x/1\","
-                + "\"labels\":[{\"name\":\"waiting\"}]}", "success",
-                ListingStatus.MARKER + "\nThis pull request passes the gallery's checks. It merges after 12:00.");
-        assertEquals(ListingStatus.State.WAITING, waiting.state());
-        assertEquals("https://x/1", waiting.url());
-        assertTrue(waiting.describe().endsWith("It merges after 12:00."), waiting.describe());
-
-        assertEquals(ListingStatus.State.NEEDS_MAINTAINER, status("{\"state\":\"open\","
-                + "\"labels\":[{\"name\":\"needs-maintainer\"}]}", "success", "").state());
+    void publishingAddsTheTopicAndTheTagsAndKeepsTheAuthorsTopics() {
+        assertEquals(List.of("botmaker-bot", "game", "farming", "idle-game"),
+                BotPublisher.topics(List.of("game"), List.of("Farming", "idle_game", "game"), true));
+        assertEquals(List.of("botmaker-bot"), BotPublisher.topics(List.of("botmaker-bot"), List.of(), true),
+                "a re-publish adds nothing twice");
     }
 
     @Test
-    void aCommentThatIsNotTheGallerysIsNoReason() {
-        assertEquals("", ListingStatus.reasonOf("LGTM"));
-        assertEquals("", ListingStatus.reasonOf(null));
+    void unpublishingTakesOnlyTheTopicOff() {
+        assertEquals(List.of("game", "botmaker-detached"),
+                BotPublisher.topics(List.of("game", "botmaker-bot", "botmaker-detached"), List.of("x"), false));
     }
 
     @Test
-    void anEntryIdenticalToTheGallerysIsNotResubmitted() throws Exception {
-        PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "", "1.0.0", List.of("a"),
-                true);
-        Map<String, Object> entry = request.entry("alice");
-        // The Contents API wraps base64 at 60 columns; the comparison must not care.
-        String encoded = Base64.getMimeEncoder().encodeToString(BotPublisher.entryJson(MAPPER, entry));
-        JsonNode contents = MAPPER.createObjectNode().put("content", encoded);
-
-        assertTrue(BotPublisher.sameEntry(MAPPER, contents, entry));
-        Map<String, Object> changed = new PublishRequest(Path.of("."), "Koala", "koala", "new", "1.0.0",
-                List.of("a"), true).entry("alice");
-        assertFalse(BotPublisher.sameEntry(MAPPER, contents, changed));
+    void aTagIsMadeATopicGitHubAccepts() {
+        assertEquals("idle-game", BotPublisher.asTopic("  Idle _ Game!! "));
+        assertEquals("c-bot", BotPublisher.asTopic("C# bot"));
+        assertEquals("", BotPublisher.asTopic("!!!"));
+        assertEquals(50, BotPublisher.asTopic("a".repeat(80)).length());
+        assertEquals(List.of("botmaker-bot"), BotPublisher.topics(List.of(), List.of("botmaker-detached"), true),
+                "an author cannot detach by tag");
     }
 
     @Test
-    void eachBotHasItsOwnListingBranch() {
-        assertEquals("listing/koala", BotPublisher.listingBranch("koala"));
+    void neverMoreTopicsThanGitHubTakes() {
+        List<String> many = java.util.stream.IntStream.range(0, 30).mapToObj(i -> "t" + i).toList();
+        List<String> topics = BotPublisher.topics(List.of(), many, true);
+        assertEquals(BotPublisher.MAX_TOPICS, topics.size());
+        assertEquals("botmaker-bot", topics.getFirst());
+
+        List<String> full = BotPublisher.topics(many.subList(0, 20), List.of(), true);
+        assertEquals(BotPublisher.MAX_TOPICS, full.size(), "twenty already: the last makes room");
+        assertEquals(List.of("botmaker-bot", "t0"), full.subList(0, 2));
     }
 
-    private static ListingStatus status(String pr, String conclusion, String comment) throws Exception {
-        return ListingStatus.ofPullRequest(MAPPER.readTree(pr), conclusion, comment);
-    }
-
-    private static List<String> fieldNames(JsonNode node) {
-        List<String> names = new java.util.ArrayList<>();
-        node.fieldNames().forEachRemaining(names::add);
-        return names;
+    @Test
+    void aRepositoryReadsAsItsListing() throws Exception {
+        BotPublisher.Listing listing = BotPublisher.Listing.of(MAPPER.readTree(
+                "{\"description\":\"Mines\",\"topics\":[\"botmaker-bot\",\"mining\",\"botmaker-detached\"]}"));
+        assertEquals(new BotPublisher.Listing(true, "Mines", List.of("mining")), listing);
+        assertFalse(BotPublisher.Listing.of(MAPPER.readTree("{\"topics\":[\"mining\"]}")).listed());
+        assertEquals(BotPublisher.Listing.NONE, BotPublisher.Listing.of(null), "no repository yet");
     }
 
     /** A bot pinned to a build only this computer has would compile here and nowhere else, so Publish waits. */

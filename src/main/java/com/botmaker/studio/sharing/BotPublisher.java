@@ -7,39 +7,41 @@ import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Publish side of the federated gallery (requires authentication via {@link GitHubAuth}).
+ * Publish side of Browse Bots (requires authentication via {@link GitHubAuth}).
  *
  * <p>Publishing a bot is {@link PublishPlan.Step}'s five steps: ensure the author's GitHub repo exists and is
  * public and is the project's {@code mine}, tag the saved version and push it there (JGit, the token per call),
- * cut a release, check that the release downloads without signing in, and — when listed — submit the bot's
- * entry to the gallery. The repo and release are the source of truth for installs and updates; the listing only
- * adds the bot to discovery.
+ * cut a release, check that the release downloads without signing in, and — when listed — give the repository
+ * the topic {@link GitHubConfig#TOPIC}, its description and its tags. The repository is the whole listing
+ * (2026-10-23): Browse Bots searches GitHub for the topic ({@link GitHubGallery#browse}), so there is no gallery
+ * to submit to, nothing to wait for, and unpublishing is the topic taken off.
  *
  * <p><b>A publish is a {@link Run}, resumed rather than restarted.</b> Each step is written so that running
  * it again after a partial failure is safe — the repository is found rather than recreated, a release whose
- * tag exists is taken as cut, a listing identical to the gallery's is not submitted — so a retry continues
- * from the step that failed.
- *
- * <p><b>A listing is a pull request the gallery merges by itself.</b> The gallery's CI runs the same gate
- * {@code botmaker bot publish} runs, and merges a passing pull request unless the author is over the
- * new-listings limit or the change needs a maintainer. {@link ListingStatus} reads which of those happened.
+ * tag exists is taken as cut, a topic already there is kept — so a retry continues from the step that failed.
  *
  * <p>Blocking — intended to run off the FX thread (the Versions tab's publish sheet wraps it in a background
  * task).
  */
 public final class BotPublisher {
+
+    /** GitHub's most topics on one repository. */
+    static final int MAX_TOPICS = 20;
+    /** GitHub's longest topic. */
+    private static final int MAX_TOPIC_LENGTH = 50;
 
     private final GitHubClient client;
     private final GitHubAuth auth;
@@ -96,7 +98,6 @@ public final class BotPublisher {
         /** Whose repository this publishes: the account, or an owner it can push to. */
         private final String owner;
         private PublishPlan plan;
-        private ListingStatus listing = ListingStatus.of(ListingStatus.State.NOT_LISTED);
 
         private String login;
         private String token;
@@ -123,11 +124,6 @@ public final class BotPublisher {
 
         public PublishPlan plan() {
             return plan;
-        }
-
-        /** What the gallery did with the listing; {@code NOT_LISTED} until the listing step has run. */
-        public ListingStatus listing() {
-            return listing;
         }
 
         /** The repository's page, blank until the repository step has run. */
@@ -162,7 +158,7 @@ public final class BotPublisher {
                 case PUSH -> push();
                 case RELEASE -> release();
                 case ARCHIVE -> checkArchive();
-                case LISTING -> submitListing();
+                case LISTING -> list();
             };
         }
 
@@ -177,7 +173,7 @@ public final class BotPublisher {
             }
             token = auth.token();
             login = name;
-            repoApi = GitHubConfig.API_BASE + "/repos/" + owner + "/" + request.repoName();
+            repoApi = repoApi(owner, request.repoName());
         }
 
         private String slug() {
@@ -212,7 +208,7 @@ public final class BotPublisher {
             if (mine == null) vcs.setRemote(Remote.MINE, url);
 
             // ensureRepo returns an existing repo as-is, and Save to my copy creates that repo private.
-            // Publishing into it would cut a release nobody but the author can see — the gallery reads it back
+            // Publishing into it would cut a release nobody but the author can see — Browse Bots reads it back
             // as "no release yet" and the install fails. So widen it here, and never the reverse.
             boolean madePublic = false;
             if (repo.path("private").asBoolean(false)) {
@@ -258,15 +254,13 @@ public final class BotPublisher {
                         "target_commitish", commitSha != null ? commitSha : branch,
                         "body", "Published from BotMaker Studio"), token).join();
             }
-            // The provenance file is written by the caller, into the version this publishes — written here, it
-            // would be an unsaved change the moment the publish ended.
             return existing == null ? version : version + " (already existed)";
         }
 
         /**
-         * Step 4: the release downloads <em>without</em> a token, which is what somebody installing it has —
-         * and what the gallery's gate checks before it lists anything. GitHub can take a moment to serve a new
-         * tag's archive, so it is asked a few times before this is called a failure.
+         * Step 4: the release downloads <em>without</em> a token, which is what somebody installing it has.
+         * GitHub can take a moment to serve a new tag's archive, so it is asked a few times before this is called
+         * a failure.
          */
         private String checkArchive() throws IOException {
             account();
@@ -282,222 +276,144 @@ public final class BotPublisher {
                 }
             }
             throw new IOException("The release " + request.version() + " does not download without signing in ("
-                    + rootMessage(last) + "). The gallery refuses a listing whose release cannot be installed.",
-                    last);
+                    + rootMessage(last) + "), so nobody else could install it.", last);
         }
 
-        /** Step 5: the topic signal, then the entry — see {@link #submit}. */
-        private String submitListing() throws IOException {
+        /**
+         * Step 5: the repository's description, and its topics with {@link GitHubConfig#TOPIC} and the bot's tags
+         * added — the ones already there are kept ({@link #topics}).
+         */
+        private String list() throws IOException {
             account();
             try {
-                client.put(repoApi + "/topics", mapOf("names", List.of(GitHubConfig.TOPIC)), token).join();
-            } catch (Exception ignored) {
-                // A secondary signal only; the gallery is authoritative.
+                if (!request.description().isBlank()) {
+                    client.patch(repoApi, mapOf("description", request.description()), token).join();
+                }
+                client.put(repoApi + "/topics", mapOf("names",
+                        topics(currentTopics(repoApi, token), request.tags(), true)), token).join();
+            } catch (Exception e) {
+                throw new IOException("Couldn't set the topic " + GitHubConfig.TOPIC + " on " + slug() + ": "
+                        + rootMessage(e), e);
             }
-            listing = submit(login, token, owner, request.repoName(), request.entry(owner));
-            return listing.describe();
+            return "Listed. Browse Bots finds it within a few minutes, once GitHub's search has caught up.";
         }
     }
 
     // -------------------------------------------------------------------------
-    // Listing (one entry file, through a pull request on a branch of its own)
+    // The listing: the repository's own topics (2026-10-23)
     // -------------------------------------------------------------------------
 
-    /**
-     * Delists a bot: removes its entry file from the gallery, by pull request. The author's repository and
-     * releases are left intact — this only removes the bot from discovery. Blocking; run off the FX thread.
-     */
-    public ListingStatus unpublish(String owner, String repoName) throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        String login = auth.login(client).join();
-        if (login == null || login.isBlank()) {
-            throw new IOException("Could not read your GitHub account.");
-        }
-        return submit(login, auth.token(), owner, repoName, null);
-    }
+    // The gallery's listing pull request (submit, ListingStatus, an entry file per bot on a branch of the
+    // author's fork of the gallery) went on 2026-10-23 with the gallery repository: the topic is the listing.
 
     /**
-     * What the gallery currently says about {@code owner/repoName}'s listing: the newest listing pull request
-     * from this Studio's branch for it, read through its check run, labels and the gallery's comment, or — with
-     * none — whether the entry file exists. Blocking; run off the FX thread.
-     */
-    public ListingStatus listingStatus(String owner, String repoName) throws IOException {
-        if (!auth.isAuthenticated()) {
-            throw new IOException("Not signed in to GitHub.");
-        }
-        String login = auth.login(client).join();
-        if (login == null || login.isBlank()) {
-            throw new IOException("Could not read your GitHub account.");
-        }
-        String token = auth.token();
-        boolean inGallery = client.get(upstreamApi() + "/contents/" + GitHubConfig.entryPath(owner, repoName)
-                + "?ref=" + GitHubConfig.INDEX_BRANCH, token).join() != null;
-        if (!login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
-            JsonNode prs = client.get(upstreamApi() + "/pulls?state=all&per_page=1&head=" + login + ":"
-                    + listingBranch(repoName), token).join();
-            if (prs != null && prs.isArray() && !prs.isEmpty()) {
-                ListingStatus status = statusOf(prs.get(0), token);
-                // The newest pull request may have been a removal; what is in the gallery settles it.
-                if (status.state() == ListingStatus.State.LISTED && !inGallery) {
-                    return ListingStatus.of(ListingStatus.State.NOT_LISTED);
-                }
-                if (status.state() != ListingStatus.State.CLOSED) return status;
-            }
-        }
-        return ListingStatus.of(inGallery ? ListingStatus.State.LISTED : ListingStatus.State.NOT_LISTED);
-    }
-
-    /**
-     * Writes ({@code entry} non-null) or removes ({@code entry} null) {@code bots/<owner>-<repoName>.json}, as
-     * {@code login} — who commits or opens the pull request, and is not always the repository's owner.
+     * What GitHub says of {@code owner/repoName} as a listing: whether it has the topic, and the description and
+     * tags a re-publish starts from.
      *
-     * <p>The maintainer commits directly, since they cannot fork their own repository. The comparison is
-     * against {@link GitHubConfig#MAINTAINER} — the person — rather than the gallery's owner, which is an
-     * organization since 2026-09-18 and equals nobody's login; against the owner, the maintainer would take
-     * the fork path and GitHub would refuse the fork. Everyone
-     * else gets a fork, a branch of that fork named for the bot and started from the gallery's current tip,
-     * and one pull request from it. The branch is why re-publishing works: a fork's {@code main} diverges
-     * from the gallery the first time a listing is squash-merged, so a second pull request from it would carry
-     * the first listing again. A branch reset to the gallery's tip carries exactly one file's change, and an
-     * open pull request from it is updated in place rather than duplicated.
+     * @param listed      whether the repository carries {@link GitHubConfig#TOPIC}
+     * @param description the repository's description, blank when it has none
+     * @param tags        its topics, Studio's own ({@code botmaker-…}) left out
      */
-    private ListingStatus submit(String login, String token, String owner, String repoName,
-                                 Map<String, Object> entry) throws IOException {
-        if (!GitHubConfig.isGalleryConfigured()) {
-            throw new IOException("The gallery is not configured in this build.");
-        }
-        String path = GitHubConfig.entryPath(owner, repoName);
-        JsonNode current = client.get(upstreamApi() + "/contents/" + path + "?ref=" + GitHubConfig.INDEX_BRANCH,
-                token).join();
-        if (entry != null && current != null && sameEntry(client.mapper(), current, entry)) {
-            return ListingStatus.of(ListingStatus.State.UNCHANGED);
-        }
-        if (entry == null && current == null) {
-            return ListingStatus.of(ListingStatus.State.NOT_LISTED);
+    public record Listing(boolean listed, String description, List<String> tags) {
+
+        public static final Listing NONE = new Listing(false, "", List.of());
+
+        public Listing {
+            description = description == null ? "" : description;
+            tags = List.copyOf(tags);
         }
 
+        /** Reads a repository object; {@link #NONE} when there is none. */
+        static Listing of(JsonNode repo) {
+            if (repo == null) return NONE;
+            boolean listed = false;
+            List<String> tags = new ArrayList<>();
+            for (JsonNode topic : repo.path("topics")) {
+                String t = topic.asText("");
+                if (t.equals(GitHubConfig.TOPIC)) listed = true;
+                else if (!t.isBlank() && !t.startsWith("botmaker-")) tags.add(t);
+            }
+            return new Listing(listed, repo.path("description").asText(""), tags);
+        }
+
+        /** One line for the sheet. */
+        public String describe() {
+            return listed ? "Listed in Browse Bots." : "Not listed in Browse Bots.";
+        }
+    }
+
+    /** {@code owner/repoName} as a listing. Blocking; run off the FX thread. */
+    public Listing listing(String owner, String repoName) {
+        String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
         try {
-            if (login.equalsIgnoreCase(GitHubConfig.MAINTAINER)) {
-                if (entry != null) {
-                    writeEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, entry, owner, repoName);
-                } else {
-                    deleteEntry(GitHubConfig.INDEX_OWNER, GitHubConfig.INDEX_BRANCH, token, owner, repoName);
-                }
-                return ListingStatus.of(entry != null ? ListingStatus.State.COMMITTED
-                        : ListingStatus.State.NOT_LISTED);
-            }
-
-            client.post(upstreamApi() + "/forks", Map.of(), token).join();
-            if (!awaitFork(login, token)) {
-                throw new IOException("Couldn't reach your fork of the gallery yet — retry in a minute.");
-            }
-            String branch = listingBranch(repoName);
-            prepareBranch(login, branch, token);
-            if (entry != null) {
-                writeEntry(login, branch, token, entry, owner, repoName);
-            } else {
-                deleteEntry(login, branch, token, owner, repoName);
-            }
-
-            JsonNode open = client.get(upstreamApi() + "/pulls?state=open&head=" + login + ":" + branch, token)
-                    .join();
-            if (open != null && open.isArray() && !open.isEmpty()) {
-                return statusOf(open.get(0), token);
-            }
-            String slug = owner + "/" + repoName;
-            JsonNode pr = client.post(upstreamApi() + "/pulls", mapOf(
-                    "title", (entry != null ? (current == null ? "Add " : "Update ") : "Remove ") + slug,
-                    "head", login + ":" + branch,
-                    "base", GitHubConfig.INDEX_BRANCH,
-                    "body", entry != null
-                            ? "Submitted from BotMaker Studio. The gallery's checks run on this pull request, "
-                                    + "and it merges by itself when they pass."
-                            : "Unpublished from BotMaker Studio."), token).join();
-            return ListingStatus.ofPullRequest(pr, "", "");
-        } catch (IOException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IOException("The gallery submission failed: " + rootMessage(e), e);
-        }
-    }
-
-    /** The branch of the author's fork that carries one bot's listing. */
-    static String listingBranch(String repoName) {
-        return "listing/" + repoName;
-    }
-
-    /**
-     * Points {@code branch} of the author's fork at the gallery's current tip, creating it if needed.
-     *
-     * <p>A fork shares its network's objects, so a ref may name a commit only the gallery has. Should GitHub
-     * refuse that anyway, the fork's {@code main} is synced first and the branch starts there.
-     */
-    private void prepareBranch(String login, String branch, String token) {
-        String forkApi = GitHubConfig.API_BASE + "/repos/" + login + "/" + GitHubConfig.INDEX_REPO;
-        JsonNode tip = client.get(upstreamApi() + "/git/refs/heads/" + GitHubConfig.INDEX_BRANCH, token).join();
-        String sha = tip == null ? null : tip.path("object").path("sha").asText(null);
-        try {
-            pointBranch(forkApi, branch, sha, token);
-        } catch (Exception refused) {
-            client.post(forkApi + "/merge-upstream", mapOf("branch", GitHubConfig.INDEX_BRANCH), token).join();
-            JsonNode forkMain = client.get(forkApi + "/git/refs/heads/" + GitHubConfig.INDEX_BRANCH, token).join();
-            pointBranch(forkApi, branch, forkMain.path("object").path("sha").asText(), token);
-        }
-    }
-
-    private void pointBranch(String forkApi, String branch, String sha, String token) {
-        if (sha == null) throw new IllegalStateException("The gallery's " + GitHubConfig.INDEX_BRANCH
-                + " branch could not be read.");
-        String refUrl = forkApi + "/git/refs/heads/" + branch;
-        if (client.get(refUrl, token).join() != null) {
-            client.patch(refUrl, mapOf("sha", sha, "force", true), token).join();
-        } else {
-            client.post(forkApi + "/git/refs", mapOf("ref", "refs/heads/" + branch, "sha", sha), token).join();
-        }
-    }
-
-    /** Reads one listing pull request: its {@code validate} run and the gallery's comment, when it is open. */
-    private ListingStatus statusOf(JsonNode pr, String token) {
-        if (!"open".equals(pr.path("state").asText())) {
-            return ListingStatus.ofPullRequest(pr, "", "");
-        }
-        String conclusion = "";
-        String sha = pr.path("head").path("sha").asText("");
-        if (!sha.isBlank()) {
-            JsonNode runs = client.get(upstreamApi() + "/commits/" + sha + "/check-runs?check_name="
-                    + ListingStatus.CHECK_NAME, token).join();
-            if (runs != null && runs.path("check_runs").size() > 0) {
-                JsonNode run = runs.path("check_runs").get(0);
-                conclusion = run.hasNonNull("conclusion") ? run.get("conclusion").asText("") : "";
-            }
-        }
-        String comment = "";
-        JsonNode comments = client.get(upstreamApi() + "/issues/" + pr.path("number").asInt()
-                + "/comments?per_page=100", token).join();
-        if (comments != null) {
-            for (JsonNode c : comments) {
-                String body = c.path("body").asText("");
-                if (body.startsWith(ListingStatus.MARKER)) comment = body;
-            }
-        }
-        return ListingStatus.ofPullRequest(pr, conclusion, comment);
-    }
-
-    /** True when the Contents API's {@code current} file already holds {@code entry}, compared as JSON. */
-    static boolean sameEntry(ObjectMapper mapper, JsonNode current, Map<String, Object> entry) {
-        try {
-            String encoded = current.path("content").asText("").replaceAll("\\s", "");
-            JsonNode existing = mapper.readTree(Base64.getDecoder().decode(encoded));
-            return existing.equals(mapper.valueToTree(entry));
+            return Listing.of(client.get(repoApi(owner, repoName), token).join());
         } catch (Exception unreadable) {
-            return false;
+            return Listing.NONE;
         }
     }
 
-    private static String upstreamApi() {
-        return GitHubConfig.API_BASE + "/repos/" + GitHubConfig.INDEX_OWNER + "/" + GitHubConfig.INDEX_REPO;
+    /**
+     * Delists a bot: takes {@link GitHubConfig#TOPIC} off its repository, every other topic kept. The repository
+     * and its releases are left intact, and whoever started from it stays linked. Blocking; run off the FX thread.
+     */
+    public void unpublish(String owner, String repoName) throws IOException {
+        if (!auth.isAuthenticated()) {
+            throw new IOException("Not signed in to GitHub.");
+        }
+        String api = repoApi(owner, repoName);
+        try {
+            client.put(api + "/topics", mapOf("names",
+                    topics(currentTopics(api, auth.token()), List.of(), false)), auth.token()).join();
+        } catch (Exception e) {
+            throw new IOException("Couldn't take the topic " + GitHubConfig.TOPIC + " off " + owner + "/" + repoName
+                    + ": " + rootMessage(e), e);
+        }
+    }
+
+    /**
+     * The repository's topics now. Fails when they cannot be read: the PUT that follows replaces them all, so an
+     * unread list would wipe every topic the author set.
+     */
+    private List<String> currentTopics(String repoApi, String token) {
+        JsonNode body = client.getOrFail(repoApi + "/topics", token).join();
+        List<String> names = new ArrayList<>();
+        body.path("names").forEach(n -> names.add(n.asText("")));
+        return names;
+    }
+
+    /**
+     * The topics a repository should carry: {@code current} with the bot's {@code tags} (as topics) and
+     * {@link GitHubConfig#TOPIC} added when {@code listed}, or {@link GitHubConfig#TOPIC} taken out when not. A
+     * topic is never removed otherwise, so what an author set on github.com stays — except the last of twenty,
+     * which makes room for the listing's: at most {@link #MAX_TOPICS}, the listing's own topic first.
+     */
+    static List<String> topics(List<String> current, List<String> tags, boolean listed) {
+        Set<String> out = new LinkedHashSet<>();
+        if (listed) out.add(GitHubConfig.TOPIC);
+        for (String t : current) {
+            if (!t.isBlank() && (listed || !t.equals(GitHubConfig.TOPIC)) && out.size() < MAX_TOPICS) out.add(t);
+        }
+        if (listed) {
+            for (String tag : tags) {
+                String topic = asTopic(tag);
+                if (!topic.isEmpty() && !topic.startsWith("botmaker-") && out.size() < MAX_TOPICS) out.add(topic);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * {@code tag} as GitHub takes a topic: lower case, letters, digits and hyphens, a space or {@code _} a hyphen,
+     * at most 50 characters. Blank when nothing is left.
+     */
+    static String asTopic(String tag) {
+        String t = tag.trim().toLowerCase(Locale.ROOT).replaceAll("[\\s_]+", "-").replaceAll("[^a-z0-9-]", "")
+                .replaceAll("-{2,}", "-").replaceAll("^-|-$", "");
+        return t.length() > MAX_TOPIC_LENGTH ? t.substring(0, MAX_TOPIC_LENGTH).replaceAll("-$", "") : t;
+    }
+
+    private static String repoApi(String owner, String repoName) {
+        return GitHubConfig.API_BASE + "/repos/" + owner + "/" + repoName;
     }
 
     // Community patching (submitPatch: a snapshot tree force-pushed to the fork's editor-<login> branch) and
@@ -511,90 +427,6 @@ public final class BotPublisher {
         var x = SyncModel.slug(a);
         var y = SyncModel.slug(b);
         return x.isPresent() && y.isPresent() && x.get().toString().equalsIgnoreCase(y.get().toString());
-    }
-
-    /**
-     * Deletes {@code bots/<owner>-<repo>.json} from {@code branch} of {@code repoOwner}'s copy of the gallery.
-     *
-     * <p><b>A deletion, which is the half of this layout worth having.</b> Delisting used to rewrite the
-     * whole array, so the diff a maintainer had to review was the entire gallery and the one line that
-     * mattered was somewhere inside it.
-     */
-    private void deleteEntry(String repoOwner, String branch, String token, String owner, String repoName)
-            throws IOException {
-        String path = GitHubConfig.entryPath(owner, repoName);
-        String contentsUrl = GitHubConfig.API_BASE + "/repos/" + repoOwner + "/" + GitHubConfig.INDEX_REPO
-                + "/contents/" + path;
-
-        String sha = fileSha(contentsUrl, branch, token);
-        if (sha == null) {
-            throw new IOException("No " + path + " in " + repoOwner + "/" + GitHubConfig.INDEX_REPO
-                    + " — nothing to remove.");
-        }
-        client.delete(contentsUrl, mapOf(
-                "message", "Remove " + owner + "/" + repoName + " from the gallery",
-                "sha", sha,
-                "branch", branch), token).join();
-    }
-
-    /**
-     * Writes {@code bots/<owner>-<repo>.json} into {@code branch} of {@code repoOwner}'s copy of the gallery.
-     *
-     * <p><b>One file, and never {@code index.json} or {@code catalog.json}</b> — both are generated by the
-     * gallery's own CI and a pull request editing either is refused. Re-publishing is idempotent by
-     * construction: the entry's path is its identity, so a second publish replaces the author's own file and
-     * touches no line of anybody else's.
-     */
-    private void writeEntry(String repoOwner, String branch, String token, Map<String, Object> entry, String owner,
-                            String repoName) throws IOException {
-        String path = GitHubConfig.entryPath(owner, repoName);
-        String contentsUrl = GitHubConfig.API_BASE + "/repos/" + repoOwner + "/" + GitHubConfig.INDEX_REPO
-                + "/contents/" + path;
-
-        Map<String, Object> body = mapOf(
-                "message", "List " + owner + "/" + repoName + " in the gallery",
-                "content", Base64.getEncoder().encodeToString(entryJson(client.mapper(), entry)),
-                "branch", branch);
-        // An UPDATE needs the file's current sha and a CREATE must not carry one, so the absence of the file
-        // is a normal outcome here rather than an error.
-        String sha = fileSha(contentsUrl, branch, token);
-        if (sha != null) {
-            body.put("sha", sha);
-        }
-        client.put(contentsUrl, body, token).join();
-    }
-
-    /** One entry as the bytes of its own file: pretty-printed, newline-terminated. */
-    static byte[] entryJson(ObjectMapper mapper, Map<String, Object> entry) throws IOException {
-        return (mapper.writerWithDefaultPrettyPrinter().writeValueAsString(entry) + "\n")
-                .getBytes(StandardCharsets.UTF_8);
-    }
-
-    /** The sha of a file on {@code branch} of a repo, or null when it is not there. */
-    private String fileSha(String contentsUrl, String branch, String token) {
-        try {
-            JsonNode contents = client.get(contentsUrl + "?ref=" + branch, token).join();
-            return contents == null ? null : contents.path("sha").asText(null);
-        } catch (Exception absent) {
-            return null;
-        }
-    }
-
-    /**
-     * Polls until the signed-in user's fork of the gallery is readable (fork creation is asynchronous).
-     *
-     * <p>Still {@code index.json} rather than the entries directory: it is the one file the gallery always
-     * has, generated or not, and an empty {@code bots/} would answer 404 forever.
-     */
-    private boolean awaitFork(String login, String token) {
-        String url = GitHubConfig.API_BASE + "/repos/" + login + "/" + GitHubConfig.INDEX_REPO
-                + "/contents/" + GitHubConfig.INDEX_PATH + "?ref=" + GitHubConfig.INDEX_BRANCH;
-        for (int attempt = 0; attempt < 10; attempt++) {
-            JsonNode n = client.get(url, token).join();
-            if (n != null && n.hasNonNull("content")) return true;
-            if (!sleep(1500)) break;
-        }
-        return false;
     }
 
     // -------------------------------------------------------------------------

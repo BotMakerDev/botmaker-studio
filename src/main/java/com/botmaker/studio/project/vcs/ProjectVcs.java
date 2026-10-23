@@ -1133,6 +1133,22 @@ public final class ProjectVcs {
     }
 
     /**
+     * The nearest tag {@code HEAD} contains, as {@code git describe --tags --abbrev=0} says it: for a bot started
+     * from someone else's, the release it was installed at or last updated to — an update's merge contains the
+     * release it merged, which is nearer than every older one. {@code ""} when no tag is reachable or the project
+     * has no history.
+     */
+    public String releaseTag() {
+        if (!isRepo()) return "";
+        try (Git git = open()) {
+            String described = git.describe().setTags(true).call();
+            return described == null ? "" : described.replaceFirst("-\\d+-g[0-9a-f]+$", "");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
      * An annotated tag {@code name} at {@code HEAD}, unless the tag exists already — a publish resumed after
      * its tag was made keeps the commit it named then. Returns the commit the tag names.
      */

@@ -23,6 +23,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   gone. Every way to start from a bot shows the same warning: nobody reviewed its code.
 - **The assistant's `list_templates` is now `list_bots`.** `create_project` takes `bot`, may start from any listed
   bot, and asks you on screen first, naming the bot and its author.
+- **Bots are found on GitHub itself.** Browse Bots and New Project list every repository with the topic
+  `botmaker-bot` whose newest release is a BotMaker bot — no gallery to submit to and nothing to wait for. Publishing
+  adds the topic, and the repository's description and topics are the listing; *Unpublish* takes the topic off. A
+  newly published bot shows within a few minutes.
+- **Hide a bot.** Browse Bots' *Hide* keeps a bot out of Browse Bots, New Project and the assistant's list on this
+  computer; *Show hidden* brings it back.
+- **A copy's link to its author is its git remote alone.** Nothing new writes `botmaker-source.json`; older projects
+  that have one keep working. A bot whose author deleted its repository keeps running but can no longer be
+  installed.
 
 ### Added
 
