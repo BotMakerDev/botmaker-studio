@@ -40,12 +40,11 @@ public final class GitHubGallery {
     }
 
     /**
-     * Fetches every listing with its tier: {@code catalog.json}, or — when that cannot be fetched or read —
-     * the legacy {@code index.json}, whose entries are all Vetted. Empty if neither can be had.
+     * Fetches every listing: {@code catalog.json}, or — when that cannot be fetched or read — the legacy
+     * {@code index.json}. Empty if neither can be had.
      *
      * <p>The fallback is what keeps Browse Bots working against a gallery that has not published a catalog
-     * yet, and through a CDN hiccup on one file. It costs a Community bot nothing: the legacy index does not
-     * hold any.
+     * yet, and through a CDN hiccup on one file.
      */
     public CompletableFuture<List<GalleryEntry>> browse() {
         if (!GitHubConfig.isGalleryConfigured()) {
@@ -79,13 +78,11 @@ public final class GitHubGallery {
         }
     }
 
-    /** Reads the legacy {@code index.json} array, marking every entry Vetted — which is all that file holds. */
+    /** Reads the legacy {@code index.json} array. */
     static List<GalleryEntry> parseLegacyIndex(ObjectMapper mapper, String body) {
         if (body == null || body.isBlank()) return List.of();
         try {
-            return Arrays.stream(mapper.readValue(body, GalleryEntry[].class))
-                    .map(e -> e.withTier(GalleryTier.VETTED))
-                    .toList();
+            return Arrays.asList(mapper.readValue(body, GalleryEntry[].class));
         } catch (Exception e) {
             System.err.println("Failed to parse gallery " + GitHubConfig.INDEX_PATH + ": " + e.getMessage());
             return List.of();
@@ -135,20 +132,17 @@ public final class GitHubGallery {
     }
 
     /**
-     * The release installing {@code entry} downloads — see {@link GalleryEntry#installTag}. The newest
-     * release is asked for only when the entry pins none, so a Vetted bot installs with no API call at all.
-     * {@code ""} when there is nothing to install.
+     * The release installing {@code entry} downloads: its newest (2026-10-23; a Vetted bot's vetted release until
+     * tiers went). {@code ""} when there is nothing to install.
      */
     public CompletableFuture<String> installTag(GalleryEntry entry) {
-        String pinned = entry.installTag("");
-        if (!pinned.isEmpty()) return CompletableFuture.completedFuture(pinned);
         return latestReleaseTag(entry.owner(), entry.repo());
     }
 
     /**
      * {@code pom.xml} at the release installing {@code entry} downloads ({@link #installTag}); {@code ""} when
-     * there is none or GitHub cannot be reached. What New Project reads a template's plugins from
-     * ({@link TemplatePlugins}).
+     * there is none or GitHub cannot be reached. What New Project reads a bot's plugins from
+     * ({@link PublishedBotPlugins}).
      */
     public CompletableFuture<String> pomAtInstallTag(GalleryEntry entry) {
         return installTag(entry).thenCompose(tag -> tag.isEmpty()

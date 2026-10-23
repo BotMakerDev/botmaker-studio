@@ -1,11 +1,9 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.launch.SupportedTargets;
 import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.ui.app.StartingPoints.Fetch;
 import com.botmaker.studio.ui.app.StartingPoints.Kind;
-import com.botmaker.studio.ui.app.StartingPoints.TemplateChoice;
+import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -16,89 +14,88 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** New Project opens on the templates, never on Blank while they load. */
+/** New Project starts from Blank or any published bot (2026-10-23): Blank first, the bots below it. */
 class StartingPointsTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static GalleryEntry template(String name) {
+    private static GalleryEntry bot(String name) {
         return new GalleryEntry(name, "LiQiyeDev", "botmaker-" + name, "A " + name + " bot.",
-                List.of(GalleryEntry.TEMPLATE_TAG), SupportedTargets.any(), GalleryTier.VETTED, "v1.0.0");
+                List.of("game"));
     }
 
-    private static List<Kind> kinds(List<TemplateChoice> rows) {
-        return rows.stream().map(TemplateChoice::kind).toList();
+    private static List<Kind> kinds(List<StartChoice> rows) {
+        return rows.stream().map(StartChoice::kind).toList();
     }
 
     /** Shown at once, and never created from: the gallery may since have delisted one or changed its release. */
     @Test
-    void rememberedTemplatesAreTheFirstRowsButWaitForTheGallery() {
-        List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base"), template("gamebot")), Fetch.PENDING);
+    void rememberedBotsFollowBlankButWaitForTheGallery() {
+        List<StartChoice> rows = StartingPoints.rows(List.of(bot("farm"), bot("mine")), Fetch.PENDING);
 
-        assertEquals(List.of(Kind.REMEMBERED, Kind.REMEMBERED), kinds(rows));
-        assertEquals("Base — A base bot.  (LiQiyeDev)", rows.getFirst().label());
-        assertFalse(rows.getFirst().isCreatable());
+        assertEquals(List.of(Kind.BLANK, Kind.REMEMBERED, Kind.REMEMBERED), kinds(rows));
+        assertTrue(rows.getFirst().isCreatable(), "Blank needs no gallery");
+        assertEquals("Farm — A farm bot.  (LiQiyeDev)", rows.get(1).label());
+        assertFalse(rows.get(1).isCreatable());
     }
 
     @Test
-    void nothingRememberedShowsLoadingNotBlank() {
-        List<TemplateChoice> rows = StartingPoints.rows(List.of(), Fetch.PENDING);
-
-        assertEquals(List.of(TemplateChoice.LOADING), rows);
-        assertFalse(rows.getFirst().isCreatable());
+    void nothingRememberedShowsLoadingBelowBlank() {
+        assertEquals(List.of(StartChoice.BLANK, StartChoice.LOADING), StartingPoints.rows(List.of(), Fetch.PENDING));
+        assertFalse(StartChoice.LOADING.isCreatable());
     }
 
     @Test
-    void freshTemplatesAreCreatableAndNeverListBlank() {
-        List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base")), Fetch.ANSWERED);
+    void freshBotsAreCreatableBelowBlank() {
+        List<StartChoice> rows = StartingPoints.rows(List.of(bot("farm")), Fetch.ANSWERED);
 
-        assertEquals(List.of(Kind.TEMPLATE), kinds(rows));
-        assertTrue(rows.getFirst().isCreatable());
-        assertEquals(List.of(TemplateChoice.BLANK), StartingPoints.rows(List.of(), Fetch.ANSWERED));
+        assertEquals(List.of(Kind.BLANK, Kind.BOT), kinds(rows));
+        assertTrue(rows.get(1).isCreatable());
+        assertEquals(List.of(StartChoice.BLANK), StartingPoints.rows(List.of(), Fetch.ANSWERED));
     }
 
-    /** Nothing confirms a remembered entry offline, and it downloads at creation anyway. */
+    /** Nothing confirms a remembered entry offline, and it clones at creation anyway. */
     @Test
     void anUnreachableGalleryLeavesBlankAlone() {
-        assertEquals(List.of(TemplateChoice.BLANK), StartingPoints.rows(List.of(template("base")), Fetch.FAILED));
-        assertTrue(TemplateChoice.BLANK.isCreatable());
+        assertEquals(List.of(StartChoice.BLANK), StartingPoints.rows(List.of(bot("farm")), Fetch.FAILED));
+        assertTrue(StartChoice.BLANK.isCreatable());
     }
 
     /** A remembered row picked while loading is still picked once the gallery lists it, changed or not. */
     @Test
-    void thePickedTemplateSurvivesARefreshThatChangedIt() {
-        GalleryEntry picked = template("gamebot");
+    void thePickedBotSurvivesARefreshThatChangedIt() {
+        GalleryEntry picked = bot("mine");
         GalleryEntry refreshed = new GalleryEntry(picked.name(), picked.owner(), picked.repo(), "Newer words.",
-                picked.tags(), picked.launchTargets(), picked.tier(), "v2.0.0");
-        TemplateChoice remembered = StartingPoints.rows(List.of(picked), Fetch.PENDING).getFirst();
-        List<TemplateChoice> rows = StartingPoints.rows(List.of(template("base"), refreshed), Fetch.ANSWERED);
+                List.of("game", "farming"));
+        StartChoice remembered = StartingPoints.rows(List.of(picked), Fetch.PENDING).get(1);
+        List<StartChoice> rows = StartingPoints.rows(List.of(bot("farm"), refreshed), Fetch.ANSWERED);
 
-        assertEquals(Optional.of(TemplateChoice.of(refreshed)), StartingPoints.same(rows, remembered));
-        assertEquals(Optional.empty(), StartingPoints.same(rows, TemplateChoice.LOADING));
+        assertEquals(Optional.of(StartChoice.of(refreshed)), StartingPoints.same(rows, remembered));
+        assertEquals(Optional.of(StartChoice.BLANK), StartingPoints.same(rows, StartChoice.BLANK));
+        assertEquals(Optional.empty(), StartingPoints.same(rows, StartChoice.LOADING));
     }
 
+    /** Every listed bot is remembered, an old {@code template} tag or not. */
     @Test
     void theRememberedListReadsBackAsTheCatalogDoes() {
-        GalleryEntry bot = new GalleryEntry("farm", "someone", "farm", "", List.of(), SupportedTargets.any());
-        List<GalleryEntry> entries = List.of(template("base"), bot, template("gamebot"));
+        GalleryEntry tagged = new GalleryEntry("old", "someone", "old", "", List.of("template"));
+        List<GalleryEntry> entries = List.of(bot("farm"), tagged, bot("mine"));
 
         String json = StartingPoints.toJson(MAPPER, entries).orElseThrow();
 
-        assertEquals(List.of(template("base"), template("gamebot")), StartingPoints.fromJson(MAPPER, json));
+        assertEquals(entries, StartingPoints.fromJson(MAPPER, json));
     }
 
     @Test
-    void aListWithNoTemplateIsNotRemembered() {
-        GalleryEntry bot = new GalleryEntry("farm", "someone", "farm", "", List.of(), SupportedTargets.any());
-
-        assertTrue(StartingPoints.toJson(MAPPER, List.of(bot)).isEmpty());
+    void anEmptyListIsNotRemembered() {
+        assertTrue(StartingPoints.toJson(MAPPER, List.of()).isEmpty());
         assertEquals(List.of(), StartingPoints.fromJson(MAPPER, null));
         assertEquals(List.of(), StartingPoints.fromJson(MAPPER, "not json"));
     }
 
     @Test
-    void aTemplateIsLabelledByItsCapitalisedName() {
-        assertEquals("Base — A base bot.  (LiQiyeDev)", TemplateChoice.of(template("base")).label());
-        assertEquals("Loading templates…", TemplateChoice.LOADING.label());
+    void aBotIsLabelledByItsCapitalisedName() {
+        assertEquals("Farm — A farm bot.  (LiQiyeDev)", StartChoice.of(bot("farm")).label());
+        assertEquals("Loading published bots…", StartChoice.LOADING.label());
     }
 }

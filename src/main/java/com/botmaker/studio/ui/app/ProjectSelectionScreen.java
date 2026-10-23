@@ -16,7 +16,7 @@ import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.ui.app.StartingPoints.TemplateChoice;
+import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -503,8 +503,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
 
         // There is no SDK version row here any more (2026-09-04), and its absence is the visible half of the
         // blank-project split. A blank project names no plugin at all, so there is no version to pin; a
-        // template brings its author's own pom, versions and libraries, and keeping it is the point of a
-        // template being a real published bot. Neither shape has a question to ask, so the control, its
+        // published bot brings its author's own pom, versions and libraries, and keeping them is the point of
+        // starting from it. Neither shape has a question to ask, so the control, its
         // JitPack fetch, the local-build decoration and the show/hide listener that toggled it against the
         // template row are all gone. A project's SDK version is Project ▸ Plugins & Libraries' business, which
         // is where every other version already lives.
@@ -514,39 +514,33 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // toolbar item on the first capture — so New Project no longer asks for it, and a fresh project has
         // no capture.width/capture.height until a picture is taken.
 
-        // The starting point: a published bot tagged `template` in the gallery. The list opens on the templates
-        // the gallery listed last time and is refreshed in the background — see loadTemplates. Studio's own
-        // Blank is the row only when the gallery answered with no template or cannot be reached.
-        List<TemplateChoice> initial = StartingPoints.rows(
-                GalleryEntry.templates(StartingPoints.remembered(gitHubClient.mapper()), false),
+        // The starting point: Studio's own Blank, or any published bot, cloned and linked to its author as Browse
+        // Bots installs it (2026-10-23; only bots tagged `template`, copied and renamed, until then). Blank leads;
+        // below it the bots the gallery listed last time, refreshed in the background — see loadBots.
+        List<StartChoice> initial = StartingPoints.rows(
+                GalleryEntry.startingPoints(StartingPoints.remembered(gitHubClient.mapper())),
                 StartingPoints.Fetch.PENDING);
-        ComboBox<TemplateChoice> templateCombo = new ComboBox<>(
+        ComboBox<StartChoice> startCombo = new ComboBox<>(
                 javafx.collections.FXCollections.observableArrayList(initial));
-        templateCombo.setValue(initial.getFirst());
-        templateCombo.setMaxWidth(Double.MAX_VALUE);
-        templateCombo.setConverter(new javafx.util.StringConverter<>() {
-            @Override public String toString(TemplateChoice t) {
+        startCombo.setValue(initial.getFirst());
+        startCombo.setMaxWidth(Double.MAX_VALUE);
+        startCombo.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(StartChoice t) {
                 return t == null ? "" : t.label();
             }
-            @Override public TemplateChoice fromString(String s) { return null; }
+            @Override public StartChoice fromString(String s) { return null; }
         });
-        // Its own button cell: the default one shows no prompt once a value has been cleared, and fillTemplates
-        // clears it to say a picked template left the gallery.
-        templateCombo.setButtonCell(new ListCell<>() {
-            @Override protected void updateItem(TemplateChoice t, boolean empty) {
+        // Its own button cell: the default one shows no prompt once a value has been cleared, and fillStarts
+        // clears it to say a picked bot left the gallery.
+        startCombo.setButtonCell(new ListCell<>() {
+            @Override protected void updateItem(StartChoice t, boolean empty) {
                 super.updateItem(t, empty);
-                setText(empty || t == null ? templateCombo.getPromptText() : t.label());
+                setText(empty || t == null ? startCombo.getPromptText() : t.label());
             }
         });
-        // Vetted templates only, until asked. A template is somebody's project you start from and build, so
-        // New Project leads with the ones a maintainer looked at. The toggle stays hidden until the gallery has
-        // a Community template to show, so it never offers nothing.
-        CheckBox showCommunity = new CheckBox("Show community templates");
-        showCommunity.setTooltip(new javafx.scene.control.Tooltip(
-                "Community templates are listed automatically. Nobody reviewed their code."));
-        showCommunity.setVisible(false);
-        showCommunity.setManaged(false);
-        loadTemplates(templateCombo, showCommunity);
+        // Every listed bot since 2026-10-23 (no vetted tier, no community toggle): the note under the row carries
+        // the one trust warning Browse Bots' Install shows too.
+        loadBots(startCombo);
 
         // One line under the dropdown, saying what the chosen row actually gives you. It matters more than
         // it looks: "Blank" means a plain Java project with no bot API in it, and a user who reaches it
@@ -556,10 +550,10 @@ public class ProjectSelectionScreen implements ProjectWindow {
         startNote.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         startNote.setWrapText(true);
         // The plugins to add at creation (2026-10-01), for any starting point: the rows Plugins & Libraries ▸
-        // Browse offers, with the template's own ticked and locked.
+        // Browse offers, with the bot's own ticked and locked.
         NewProjectPlugins[] plugins = new NewProjectPlugins[1];
         Runnable describeChoice = () -> {
-            TemplateChoice now = templateCombo.getValue();
+            StartChoice now = startCombo.getValue();
             boolean blank = now == null || now.isBlank();
             boolean extra = plugins[0] != null && !plugins[0].picked().isEmpty();
             if (now == null) {
@@ -567,7 +561,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 return;
             }
             if (!now.isCreatable()) {
-                startNote.setText("Asking the gallery for its templates…");
+                startNote.setText("Asking the gallery for its bots…");
                 return;
             }
             startNote.setText(blank
@@ -575,18 +569,20 @@ public class ProjectSelectionScreen implements ProjectWindow {
                             + "ticked below."
                             : "A plain Java project — a pom, a source folder and a main(). Tick a plugin below, "
                             + "or add one later from Project ▸ Plugins & Libraries.")
-                    : (extra ? "This template brings its own plugins and libraries, and the ones ticked below "
-                            + "are added to them."
-                            : "This template brings its own plugins and libraries — change them later in "
-                            + "Project ▸ Plugins & Libraries."));
+                    : "A copy of " + now.displayName() + " linked to " + now.entry().owner() + "'s repository: "
+                            + "it keeps their package and classes, and their later releases arrive in the "
+                            + "Versions tab. " + (extra
+                                    ? "The plugins ticked below are added to its own."
+                                    : "It brings its own plugins — change them later in Project ▸ Plugins & "
+                                            + "Libraries.") + "\n" + now.entry().trustWarning());
         };
-        GitHubGallery templateRepos = new GitHubGallery(gitHubClient, gitHubAuth);
+        GitHubGallery botRepos = new GitHubGallery(gitHubClient, gitHubAuth);
         plugins[0] = new NewProjectPlugins(
                 new PluginCatalog(new PluginRegistry(gitHubClient), new JitPackSearch()),
-                templateRepos::pomAtInstallTag, describeChoice);
-        templateCombo.valueProperty().addListener((o, was, now) ->
+                botRepos::pomAtInstallTag, describeChoice);
+        startCombo.valueProperty().addListener((o, was, now) ->
                 plugins[0].lockFor(now == null ? null : now.entry()));
-        plugins[0].lockFor(templateCombo.getValue().entry());
+        plugins[0].lockFor(startCombo.getValue().entry());
 
         content.getChildren().addAll(
                 new Label("Project Name:"),
@@ -597,8 +593,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 rule3,
                 exampleLabel,
                 new Label("Start from:"),
-                templateCombo,
-                showCommunity,
+                startCombo,
                 startNote,
                 new Label("Plugins:"),
                 plugins[0].node()
@@ -607,11 +602,11 @@ public class ProjectSelectionScreen implements ProjectWindow {
         dialog.getDialogPane().setContent(content);
 
         Button createButton = (Button) dialog.getDialogPane().lookupButton(createButtonType);
-        // Create waits for a valid name and for a row it can create from: not "Loading templates…".
+        // Create waits for a valid name and for a row it can create from: not "Loading published bots…".
         Runnable updateCreate = () -> createButton.setDisable(!isValidProjectName(projectNameField.getText())
-                || templateCombo.getValue() == null || !templateCombo.getValue().isCreatable());
+                || startCombo.getValue() == null || !startCombo.getValue().isCreatable());
         updateCreate.run();
-        templateCombo.valueProperty().addListener((o, was, now) -> updateCreate.run());
+        startCombo.valueProperty().addListener((o, was, now) -> updateCreate.run());
 
         projectNameField.textProperty().addListener((observable, oldValue, newValue) -> {
             boolean isValid = isValidProjectName(newValue);
@@ -627,7 +622,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         javafx.application.Platform.runLater(projectNameField::requestFocus);
 
         dialog.setResultConverter(dialogButton -> {
-            TemplateChoice choice = templateCombo.getValue();
+            StartChoice choice = startCombo.getValue();
             if (dialogButton == createButtonType && choice != null && choice.isCreatable()) {
                 return new CreateRequest(projectNameField.getText(), choice, plugins[0].picked());
             }
@@ -638,52 +633,42 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Puts the gallery's fresh templates into {@code combo}, off the FX thread, and remembers them for the next
-     * open ({@link StartingPoints}).
+     * Puts the gallery's fresh bots into {@code combo} below Blank, off the FX thread, and remembers them for
+     * the next open ({@link StartingPoints}).
      *
-     * <p>Blank is never listed beside templates: {@code botmaker-base} is what Blank used to be, so both would
-     * offer the same thing under two names. It is the row when the gallery cannot be reached — the remembered
-     * templates go then, since nothing confirms them and each downloads at creation. New Project has to work
-     * on a plane, which is the only reason Studio composes a starting project at all
-     * ({@code project/StarterSources}).
+     * <p>When the gallery cannot be reached Blank is the only row — the remembered bots go then, since nothing
+     * confirms them and each clones at creation. New Project has to work on a plane, which is the only reason
+     * Studio composes a starting project at all ({@code project/StarterSources}).
      *
-     * <p>Vetted first and then by name ({@link GalleryEntry#templates}), so the default is the same row on
-     * every launch. Community templates join only while {@code showCommunity} is ticked, and the toggle is
-     * revealed only when there is one.
+     * <p>By name ({@link GalleryEntry#startingPoints}), so the list reads the same on every launch.
      *
      * <p>Failure is silent on purpose: Blank replaces the rows. An error
      * dialog in front of a working New Project dialog would be the network's problem presented as the user's.
      */
-    private void loadTemplates(ComboBox<TemplateChoice> combo, CheckBox showCommunity) {
+    private void loadBots(ComboBox<StartChoice> combo) {
         new GitHubGallery(gitHubClient, gitHubAuth).browse()
                 .exceptionally(error -> List.of())
                 .thenAccept(entries -> Platform.runLater(() -> {
-                    boolean answered = entries.stream().anyMatch(GalleryEntry::isTemplate);
+                    boolean answered = !entries.isEmpty();
                     if (answered) StartingPoints.remember(gitHubClient.mapper(), entries);
-                    boolean anyCommunity = entries.stream().anyMatch(e -> e.isTemplate() && !e.isVetted());
-                    showCommunity.setVisible(anyCommunity);
-                    showCommunity.setManaged(anyCommunity);
                     StartingPoints.Fetch fetch = answered
                             ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
-                    Runnable fill = () -> fillTemplates(combo, StartingPoints.rows(
-                            GalleryEntry.templates(entries, showCommunity.isSelected()), fetch));
-                    showCommunity.selectedProperty().addListener((o, was, now) -> fill.run());
-                    fill.run();
+                    fillStarts(combo, StartingPoints.rows(GalleryEntry.startingPoints(entries), fetch));
                 }));
     }
 
     /**
      * Replaces the combo's rows with {@code rows}, keeping the current choice when it is still offered.
      *
-     * <p>A template the gallery no longer lists is not swapped for another one silently: the choice is
+     * <p>A bot the gallery no longer lists is not swapped for another one silently: the choice is
      * cleared, the prompt says why, and Create waits for a new pick. Otherwise the value is set before the old
      * rows go, so no listener sees a dialog with nothing chosen.
      */
-    private static void fillTemplates(ComboBox<TemplateChoice> combo, List<TemplateChoice> rows) {
-        TemplateChoice was = combo.getValue();
-        Optional<TemplateChoice> same = StartingPoints.same(rows, was);
+    private static void fillStarts(ComboBox<StartChoice> combo, List<StartChoice> rows) {
+        StartChoice was = combo.getValue();
+        Optional<StartChoice> same = StartingPoints.same(rows, was);
         boolean dropped = same.isEmpty() && was != null && was.entry() != null;
-        TemplateChoice keep = dropped ? null : same.orElse(rows.getFirst());
+        StartChoice keep = dropped ? null : same.orElse(rows.getFirst());
         if (dropped) combo.setPromptText(was.displayName() + " is no longer listed — pick where to start");
         combo.getItems().addAll(rows.stream().filter(r -> !combo.getItems().contains(r)).toList());
         combo.setValue(keep);
@@ -696,8 +681,8 @@ public class ProjectSelectionScreen implements ProjectWindow {
     // Project asks for no SDK version now, so they had nothing to fill. MavenService.localSdkVersions()
     // survives for VersionInfo; a project's SDK version is chosen in Plugins & Libraries ▸ Installed.
 
-    /** Result of the create-project dialog: {@code plugins} are the extra ticks, the template's own left out. */
-    private record CreateRequest(String projectName, TemplateChoice template, List<PluginRegistry.Plugin> plugins) {}
+    /** Result of the create-project dialog: {@code plugins} are the extra ticks, the bot's own left out. */
+    private record CreateRequest(String projectName, StartChoice start, List<PluginRegistry.Plugin> plugins) {}
 
     private void showGallery() {
         GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
@@ -719,15 +704,15 @@ public class ProjectSelectionScreen implements ProjectWindow {
     }
 
     /**
-     * Creates the project and opens it — Studio's blank one, or {@code entry}'s release (the vetted one for a
-     * Vetted template, else the newest) made into {@code projectName} — with the ticked plugins declared.
+     * Creates the project and opens it — Studio's blank one, or a bot's newest release cloned into {@code projectName}, linked to its author — with the ticked plugins
+     * declared.
      *
      * <p>It used to rebuild the list and select the new row, which left the user looking at a list of projects
      * having just said which one they wanted — and if the list was long or sorted by name, their new project
      * was somewhere off-screen. Creating a project <em>is</em> asking to work on it.
      *
      * <p>Both shapes run off the FX thread since 2026-10-01: a ticked plugin's version may be a JitPack lookup,
-     * and the download, the unpack and the check for a plugin another one brings are slow and failable too.
+     * and the clone and the check for a plugin another one brings are slow and failable too.
      * Everything the user sees about a failure is one dialog, because a creation that fails leaves nothing
      * behind ({@link NewProjects#create}).
      */
@@ -735,7 +720,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         String projectName = req.projectName();
         new Thread(() -> {
             try {
-                NewProjects.create(projectName, req.template().entry(), req.plugins(), gitHubClient, gitHubAuth);
+                NewProjects.create(projectName, req.start().entry(), req.plugins(), gitHubClient, gitHubAuth);
                 Platform.runLater(() -> onProjectSelected.open(
                         Constants.PROJECTS_ROOT.resolve(projectName), false, true));
             } catch (Exception e) {

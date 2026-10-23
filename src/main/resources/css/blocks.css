@@ -1397,22 +1397,6 @@
     -fx-opacity: 0.8;
 }
 
-/* A gallery listing's tier (GalleryDialog, New Project). Vetted takes the accent because it is the claim worth
-   noticing; Community is the quiet default, like a type badge, so a list of them does not read as a warning. */
-.gallery-tier-badge {
-    -fx-background-radius: 3;
-    -fx-padding: 1 6 1 6;
-    -fx-font-size: 10px;
-    -fx-font-weight: bold;
-}
-.gallery-tier-vetted {
-    -fx-background-color: -bm-accent;
-    -fx-text-fill: -bm-on-accent;
-}
-.gallery-tier-community {
-    -fx-background-color: -bm-divider;
-}
-
 .gallery-card-name {
     -fx-font-weight: bold;
     -fx-font-size: 14px;

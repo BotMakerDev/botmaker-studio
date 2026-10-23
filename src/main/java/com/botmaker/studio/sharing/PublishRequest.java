@@ -1,7 +1,6 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.project.launch.SupportedTargets;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,11 +16,11 @@ import java.util.Map;
  *
  * @param botName      the project's name, which is the entry's {@code name}
  * @param repoName     the repository under the signed-in account
- * @param tags         the entry's tags, {@code template} included for a template
+ * @param tags         the entry's tags
  * @param listed       whether the bot is listed in the gallery at all
  */
 public record PublishRequest(Path projectDir, String botName, String repoName, String description, String version,
-                             List<String> tags, SupportedTargets launchTargets, boolean listed) {
+                             List<String> tags, boolean listed) {
 
     /** The entry schema this Studio writes. The gallery's gate refuses a newer one than it knows. */
     public static final int SCHEMA_VERSION = 2;
@@ -32,20 +31,15 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         description = description == null ? "" : description.trim();
         version = version == null ? "" : version.trim();
         tags = tags == null ? List.of() : List.copyOf(tags);
-        launchTargets = launchTargets == null ? SupportedTargets.any() : launchTargets;
-    }
-
-    public boolean isTemplate() {
-        return tags.stream().anyMatch(GalleryEntry.TEMPLATE_TAG::equalsIgnoreCase);
     }
 
     /**
      * The entry file's fields, in the order {@code botmaker-cli}'s {@code GalleryEntry} writes them, so a
      * publish from Studio and one from {@code botmaker bot publish} diff as the same file.
      *
-     * <p>{@code launchTargets} goes in as wire ids, and is left out when the author declared none: an absent
-     * field reads as "the author never said" in every Studio, which is the truth. No {@code requires} since
-     * 2026-10-12: what the pom declares is read off the installed release's pom ({@link TemplatePlugins}).
+     * <p>No {@code requires} since 2026-10-12: what the pom declares is read off the installed release's pom
+     * ({@link PublishedBotPlugins}). No {@code launchTargets} since 2026-10-23: what a bot launches is the SDK's
+     * business.
      */
     public Map<String, Object> entry(String owner) {
         Map<String, Object> entry = new LinkedHashMap<>();
@@ -55,13 +49,12 @@ public record PublishRequest(Path projectDir, String botName, String repoName, S
         entry.put("repo", repoName);
         entry.put("description", description);
         entry.put("tags", tags);
-        if (launchTargets.declared()) entry.put("launchTargets", launchTargets.ids());
         return entry;
     }
 
     /** How this bot would read in the gallery once listed, for the dialog's preview. */
-    public GalleryEntry preview(String owner, GalleryTier tier, String vettedVersion) {
-        return new GalleryEntry(botName, owner, repoName, description, tags, launchTargets, tier, vettedVersion);
+    public GalleryEntry preview(String owner) {
+        return new GalleryEntry(botName, owner, repoName, description, tags);
     }
 
     /**

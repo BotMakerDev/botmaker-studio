@@ -7,7 +7,7 @@ package com.botmaker.studio.project;
  * <p>It used to be a <em>choice of scaffold</em> and the New Project dropdown's item list, which is why the
  * two values below read like starting points. Since 2026-08-30 there is exactly one starting point Studio
  * composes — {@link #EMPTY} — and every richer one is a published bot downloaded from the gallery
- * ({@link #FROM_TEMPLATE}, see {@code TemplateProject}). So this is now a record of provenance rather than a
+ * ({@link #FROM_TEMPLATE}). So this is now a record of provenance rather than a
  * menu, and it survives because two things still read it: {@code ProjectSpecs} (whether the SDK writes an
  * {@code activities.json}) and the runtime defaults a new project is seeded with.
  *
@@ -16,14 +16,16 @@ package com.botmaker.studio.project;
  *       because projects made before 2026-08-30 have it written in their {@code settings.json} and must keep
  *       opening.</li>
  *   <li>{@link #EMPTY} — a pom, an empty {@code src} tree and a {@code main} that prints a line.</li>
- *   <li>{@link #FROM_TEMPLATE} — unpacked from somebody's published bot and renamed. Every file in it,
- *       including the pom and its versions, is the template author's work and then the user's.</li>
+ *   <li>{@link #FROM_TEMPLATE} — started from somebody's published bot: cloned and linked to its author since
+ *       2026-10-23 (unpacked and renamed into the user's package before). Every file in it, including the pom
+ *       and its versions, is the author's work and then the user's. The constant keeps its name because
+ *       {@code settings.json} persists it.</li>
  * </ul>
  */
 public enum ProjectTemplate {
     GAME_BOT("Game bot", "Supervised loop, activity flow, go-home recovery hook."),
     EMPTY("Blank", "A pom, an empty source tree and a main() — start from scratch."),
-    FROM_TEMPLATE("From a template", "Unpacked from a published template and renamed.");
+    FROM_TEMPLATE("From a published bot", "Cloned from a published bot, linked to its author.");
 
     private final String displayName;
     private final String description;

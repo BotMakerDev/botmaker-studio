@@ -1,6 +1,5 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.studio.project.launch.SupportedTargets;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -8,15 +7,17 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The tiered catalog as Studio reads it: parsing, the legacy fallback, and the release each tier installs. */
+/**
+ * The catalog as Studio reads it: parsing, the legacy fallback, and the release an installed bot moves to. No tier
+ * and no launch targets since 2026-10-23: an older catalog's fields for them are ignored.
+ */
 class GalleryCatalogReadTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** The shape the gallery's CatalogBuilder writes. */
+    /** The shape the gallery's CatalogBuilder wrote, tier and launch targets included. */
     private static final String CATALOG = """
             {
               "schemaVersion" : 2,
@@ -34,30 +35,24 @@ class GalleryCatalogReadTest {
             """;
 
     @Test
-    void catalogCarriesTierAndVettedReleaseAndAnOldRequiresIsIgnored() {
+    void anOldCatalogsTierTargetsAndRequiresAreIgnored() {
         List<GalleryEntry> bots = GitHubGallery.parseCatalog(MAPPER, CATALOG).orElseThrow();
 
-        assertEquals(2, bots.size());
-        GalleryEntry gamebot = bots.get(0);
-        assertEquals(GalleryTier.VETTED, gamebot.tier());
-        assertEquals("v0.1.0", gamebot.vettedVersion());
-        assertTrue(gamebot.launchTargets().declared());
-        assertTrue(gamebot.isTemplate());
-
-        GalleryEntry update = bots.get(1);
-        assertEquals(GalleryTier.COMMUNITY, update.tier());
-        assertEquals("", update.vettedVersion());
+        assertEquals(List.of(
+                new GalleryEntry("gamebot", "LiQiyeDev", "botmaker-gamebot", "A game bot to start from.",
+                        List.of("game", "template")),
+                new GalleryEntry("Update", "LiQiyeDev", "Update", "", List.of())), bots);
     }
 
     @Test
-    void anUnknownTierReadsAsCommunityAndANewerSchemaStillReads() {
+    void aNewerSchemaStillReads() {
         String newer = """
                 {"schemaVersion": 9, "bots": [
                   {"name": "x", "owner": "a", "repo": "x", "tier": "platinum", "somethingNew": {"k": 1}}
                 ]}
                 """;
         List<GalleryEntry> bots = GitHubGallery.parseCatalog(MAPPER, newer).orElseThrow();
-        assertEquals(GalleryTier.COMMUNITY, bots.get(0).tier());
+        assertEquals("x", bots.get(0).name());
     }
 
     @Test
@@ -70,91 +65,53 @@ class GalleryCatalogReadTest {
     }
 
     @Test
-    void theLegacyIndexIsAllVetted() {
+    void theLegacyIndexReads() {
         String index = """
                 [ {"name": "base", "owner": "LiQiyeDev", "repo": "botmaker-base", "tags": ["template"]} ]
                 """;
         List<GalleryEntry> bots = GitHubGallery.parseLegacyIndex(MAPPER, index);
-        assertEquals(1, bots.size());
-        assertEquals(GalleryTier.VETTED, bots.get(0).tier());
-        // It names no release, so it installs the newest, which is what every Studio before tiers did.
-        assertEquals("v2.0.0", bots.get(0).installTag("v2.0.0"));
+        assertEquals(List.of(new GalleryEntry("base", "LiQiyeDev", "botmaker-base", "", List.of("template"))), bots);
         assertTrue(GitHubGallery.parseLegacyIndex(MAPPER, "{").isEmpty());
     }
 
     @Test
-    void anEntryWithNoTierIsCommunity() {
-        GalleryEntry legacy = new GalleryEntry("x", "a", "x", "", List.of(), SupportedTargets.any());
-        assertEquals(GalleryTier.COMMUNITY, legacy.tier());
-        assertFalse(legacy.isVetted());
+    void anUpdateOffersTheNewestReleaseWhenItIsNotTheOneInstalled() {
+        assertEquals(Optional.of("v0.5.0"), GalleryEntry.updateTarget("v0.1.0", "v0.5.0"));
+        assertEquals(Optional.empty(), GalleryEntry.updateTarget("v0.5.0", "v0.5.0"));
+        assertEquals(Optional.empty(), GalleryEntry.updateTarget("v0.1.0", ""));
+        assertEquals(Optional.empty(), GalleryEntry.updateTarget("v0.1.0", null));
+    }
+
+    /** The newest release older than the one installed: a release deleted since, never offered as an update. */
+    @Test
+    void anUpdateNeverGoesBackwards() {
+        assertEquals(Optional.empty(), GalleryEntry.updateTarget("v0.4.0", "v0.3.0"));
     }
 
     @Test
-    void aVettedBotInstallsItsVettedReleaseAndACommunityBotTheNewest() {
-        GalleryEntry vetted = entry(GalleryTier.VETTED, "v0.1.0");
-        GalleryEntry community = entry(GalleryTier.COMMUNITY, "");
+    void startingPointsListEveryBotByName() {
+        GalleryEntry zeta = bot("zeta");
+        GalleryEntry alpha = bot("Alpha");
+        GalleryEntry aardvark = bot("aardvark");
 
-        assertEquals("v0.1.0", vetted.installTag("v0.3.0"));
-        assertEquals("v0.1.0", vetted.installTag(""));
-        assertEquals("v0.3.0", community.installTag("v0.3.0"));
-        assertEquals("", community.installTag(null));
+        assertEquals(List.of(aardvark, alpha, zeta), GalleryEntry.startingPoints(List.of(zeta, aardvark, alpha)));
     }
 
     @Test
-    void aVettedTemplateInstallsItsNewestRelease() {
-        // 2026-10-12: the gamebot was vetted at v0.2.0 and New Project kept copying it with v0.2.6 out.
-        GalleryEntry template = new GalleryEntry("gamebot", "o", "gamebot", "", List.of("template"), null,
-                GalleryTier.VETTED, "v0.2.0");
-
-        assertEquals("v0.2.6", template.installTag("v0.2.6"));
-        assertEquals(Optional.of("v0.2.6"), GalleryEntry.updateTarget(template, "v0.2.0", "v0.2.6"));
-    }
-
-    @Test
-    void anUpdateOffersTheVettedReleaseAndNeverAnOlderOne() {
-        GalleryEntry vetted = entry(GalleryTier.VETTED, "v0.2.0");
-
-        assertEquals(Optional.of("v0.2.0"), GalleryEntry.updateTarget(vetted, "v0.1.0", "v0.5.0"));
-        assertEquals(Optional.empty(), GalleryEntry.updateTarget(vetted, "v0.2.0", "v0.5.0"));
-        // Installed a newer release while it was Community, or before a maintainer pinned an older one.
-        assertEquals(Optional.empty(), GalleryEntry.updateTarget(vetted, "v0.4.0", "v0.5.0"));
-    }
-
-    @Test
-    void anUpdateOffersTheNewestForCommunityAndForABotNoLongerListed() {
-        GalleryEntry community = entry(GalleryTier.COMMUNITY, "");
-
-        assertEquals(Optional.of("v0.5.0"), GalleryEntry.updateTarget(community, "v0.1.0", "v0.5.0"));
-        assertEquals(Optional.empty(), GalleryEntry.updateTarget(community, "v0.5.0", "v0.5.0"));
-        assertEquals(Optional.of("v0.5.0"), GalleryEntry.updateTarget(null, "v0.1.0", "v0.5.0"));
-        assertEquals(Optional.empty(), GalleryEntry.updateTarget(null, "v0.1.0", ""));
-    }
-
-    @Test
-    void templatesListVettedFirstAndCommunityOnlyWhenAsked() {
-        GalleryEntry vettedZ = template("zeta", GalleryTier.VETTED);
-        GalleryEntry vettedA = template("Alpha", GalleryTier.VETTED);
-        GalleryEntry community = template("aardvark", GalleryTier.COMMUNITY);
-        GalleryEntry bot = new GalleryEntry("bot", "o", "bot", "", List.of("game"), null, GalleryTier.VETTED,
-                null);
-        List<GalleryEntry> all = List.of(vettedZ, community, bot, vettedA);
-
-        assertEquals(List.of(vettedA, vettedZ), GalleryEntry.templates(all, false));
-        assertEquals(List.of(vettedA, vettedZ, community), GalleryEntry.templates(all, true));
+    void theTrustWarningNamesTheBotAndItsAuthor() {
+        String warning = new GalleryEntry("Farm", "alice", "farm", "", List.of()).trustWarning();
+        assertTrue(warning.contains("Farm") && warning.contains("alice") && warning.contains("nobody reviewed"),
+                warning);
     }
 
     @Test
     void findIgnoresCase() {
-        GalleryEntry e = entry(GalleryTier.VETTED, "v1.0.0");
-        assertEquals(Optional.of(e), GitHubGallery.find(List.of(e), "OWNER", "BOT"));
-        assertTrue(GitHubGallery.find(List.of(e), "owner", "other").isEmpty());
+        GalleryEntry e = bot("bot");
+        assertEquals(Optional.of(e), GitHubGallery.find(List.of(e), "O", "BOT"));
+        assertTrue(GitHubGallery.find(List.of(e), "o", "other").isEmpty());
     }
 
-    private static GalleryEntry entry(GalleryTier tier, String vettedVersion) {
-        return new GalleryEntry("bot", "owner", "bot", "", List.of(), null, tier, vettedVersion);
-    }
-
-    private static GalleryEntry template(String name, GalleryTier tier) {
-        return new GalleryEntry(name, "o", name, "", List.of("template"), null, tier, null);
+    private static GalleryEntry bot(String name) {
+        return new GalleryEntry(name, "o", name, "", List.of());
     }
 }

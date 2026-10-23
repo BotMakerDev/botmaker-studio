@@ -194,7 +194,7 @@ public final class McpTools {
      * nor its plugins, so they answer while a plugin moves.
      */
     static final Set<String> WHILE_MOVING = Set.of("plugins list", "plugins search", "versions list",
-            "list_templates", "plugin_guide", "get_settings", "run_state", "read_trace", "stop", "quit_studio");
+            "list_bots", "plugin_guide", "get_settings", "run_state", "read_trace", "stop", "quit_studio");
 
     /** The action a call chose, as the contract reads it; empty for a tool of one action. */
     private static String actionOf(CallToolRequest request) {

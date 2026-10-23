@@ -1,7 +1,6 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.shared.github.GitHubClient;
-import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -12,15 +11,15 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
  * Installs bots from their GitHub repos and says when a newer release is out (no account needed). Installing clones the author's
- * repository at the release tag into {@code ~/BotMakerProjects/} and records provenance ({@link BotSource});
- * a template is still unpacked from the release zip, since a project started from one is the user's own.
+ * repository at the release tag into {@code ~/BotMakerProjects/} and records provenance ({@link BotSource}).
+ * Browse Bots' Install and New Project's bot rows both clone here (2026-10-23): a project started from a bot
+ * stays linked to its author, so their later releases merge in.
  *
  * <p>The blocking methods here are intended to run off the FX thread (the dialog wraps them in a
  * background task).
@@ -54,7 +53,15 @@ public final class BotInstaller {
      * @throws IOException if the project already exists or the clone fails
      */
     public Path install(GalleryEntry entry, String tag) throws IOException {
-        Path dest = installDir(entry.name());
+        return install(entry, tag, installDir(entry.name()));
+    }
+
+    /**
+     * {@link #install(GalleryEntry, String)} into {@code dest}, a folder named as New Project's user chose. Only
+     * the folder takes their name: the bot keeps its author's package and classes, since a rename would make
+     * every later update conflict ({@code ProjectConfig.forDirectory} reads the package off {@code main}).
+     */
+    public Path install(GalleryEntry entry, String tag, Path dest) throws IOException {
         if (Files.exists(dest)) {
             throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
@@ -118,67 +125,23 @@ public final class BotInstaller {
         return "https://github.com/" + owner + "/" + repo + ".git";
     }
 
-    /**
-     * Unpacks {@code entry} at release {@code tag} into {@code dest} as the <b>starting point of a new
-     * project</b>, and deliberately writes <b>no</b> {@link BotSource}.
-     *
-     * <p>That absence is the whole difference from {@link #install}, and it is load-bearing. Provenance is
-     * what makes a project an <em>installed bot</em>: it is what {@link #checkForUpdate} reads and what an
-     * update merges from. A project created from a template is the user's from the second it lands — a later
-     * release of the template is a different starting point, not a newer version of their bot — so there must
-     * be nothing here for an update to find.
-     *
-     * @return the project directory
-     */
-    public Path unpackTemplate(GalleryEntry entry, String tag, Path dest) throws IOException {
-        if (Files.exists(dest)) {
-            throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
-        }
-        downloadInto(entry.owner(), entry.repo(), tag, dest);
-        // A template author may have installed their own template from the gallery while writing it; their
-        // provenance file must not become the new project's.
-        Files.deleteIfExists(dest.resolve(BotSource.FILE_NAME));
-        return dest;
-    }
+    // unpackTemplate() — a release unzipped with no provenance, renamed into the user's package — went on
+    // 2026-10-23 with templates: New Project clones through install() now.
 
-    /**
-     * The release an installed bot should move to, else empty — see {@link GalleryEntry#updateTarget}: a
-     * Vetted bot is offered its vetted release, anything else the newest.
-     *
-     * @param catalog the gallery's current listings; a bot it does not name is offered its newest release
-     */
-    public Optional<String> checkForUpdate(Path projectDir, List<GalleryEntry> catalog) {
+    /** The release an installed bot should move to — its author's newest — else empty ({@link GalleryEntry#updateTarget}). */
+    public Optional<String> checkForUpdate(Path projectDir) {
         Optional<BotSource> src = BotSource.read(projectDir);
         if (src.isEmpty()) return Optional.empty();
         String latest = gallery.latestReleaseTag(src.get().owner(), src.get().repo()).join();
-        GalleryEntry listing = GitHubGallery.find(catalog, src.get().owner(), src.get().repo()).orElse(null);
-        return GalleryEntry.updateTarget(listing, src.get().tag(), latest);
+        return GalleryEntry.updateTarget(src.get().tag(), latest);
     }
 
     // update() — re-download the release and replace the project in place — was deleted on 2026-09-25: an
     // update is a real merge of the author's tag now, from the bot's Versions tab (39 §7).
 
     // -------------------------------------------------------------------------
-    // Download + unzip
+    // Unzip
     // -------------------------------------------------------------------------
-
-    private void downloadInto(String owner, String repo, String tag, Path dest) throws IOException {
-        byte[] zip;
-        try {
-            zip = client.getBytes(GitHubConfig.archiveUrl(owner, repo, tag), gallery.token()).join();
-        } catch (Exception e) {
-            // The gallery's copy of the same archive (GalleryMirror), for a template whose repository is gone.
-            // The author's error is the one reported: it is the one the user can act on.
-            try {
-                zip = client.getBytes(GalleryMirror.downloadUrl(owner, repo, tag), gallery.token()).join();
-            } catch (Exception mirrorFailed) {
-                throw new IOException("Failed to download " + owner + "/" + repo + "@" + tag + ": "
-                        + rootMessage(e), e);
-            }
-        }
-        Files.createDirectories(dest);
-        unzipStrippingTopDir(zip, dest);
-    }
 
     /**
      * Unzips a GitHub archive into {@code dest}, stripping the single top-level {@code repo-tag/} directory

@@ -159,8 +159,8 @@ class McpEndpointTest {
         final Steps steps = new Steps(new ArrayList<>(List.of("Set the slot", "Move 3 cards")));
         @Override public String undo() { return HostHistory.step(steps, true); }
         @Override public String redo() { return HostHistory.step(steps, false); }
-        @Override public String createProject(String name, String template, List<String> plugins) {
-            asked.add("create " + name + " " + template + " " + plugins);
+        @Override public String createProject(String name, String bot, List<String> plugins) {
+            asked.add("create " + name + " " + bot + " " + plugins);
             return "created";
         }
 
@@ -347,7 +347,7 @@ class McpEndpointTest {
                 "rename", "open", "review", "undo", "redo",
                 "run_bot", "run_activity", "try_statement", "stop", "quit_studio", "run_state", "read_trace",
                 "versions", "plugins", "plugin_guide", "migration", "params", "delete_field", "get_settings",
-                "set_setting", "list_templates", "create_project", "fake_snap"), names,
+                "set_setting", "list_bots", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         for (String passes : McpTools.WHILE_MOVING) {
             String[] key = passes.split(" ");
@@ -397,12 +397,12 @@ class McpEndpointTest {
     }
 
     @Test
-    void createProjectSplitsItsPluginsAndTakesNoTemplateAsBlank() throws Exception {
+    void createProjectSplitsItsPluginsAndTakesNoBotAsBlank() throws Exception {
         initialize();
         assertEquals("created", text(call("create_project",
-                "{\"name\":\"Firestone\",\"template\":\"gamebot\",\"plugins\":\" a, b ,\"}")));
+                "{\"name\":\"Firestone\",\"bot\":\"farm\",\"plugins\":\" a, b ,\"}")));
         assertEquals("created", text(call("create_project", "{\"name\":\"Plain\"}")));
-        assertEquals(List.of("create Firestone gamebot [a, b]", "create Plain  []"), driver.asked);
+        assertEquals(List.of("create Firestone farm [a, b]", "create Plain  []"), driver.asked);
     }
 
     @Test

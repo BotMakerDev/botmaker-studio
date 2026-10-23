@@ -157,9 +157,9 @@ final class ProjectTools {
     }
 
     record NewProject(@Describe("one word of letters and digits, starting with a letter: Firestone") String name,
-                      @Describe(value = "a template's name from list_templates; empty only when the gallery cannot "
-                              + "be read, for a blank project", optional = true) String template,
-                      @Describe(value = "registry plugin ids to add besides the template's, comma-separated; the "
+                      @Describe(value = "a published bot's name from list_bots, cloned linked to its author; empty "
+                              + "for a blank project", optional = true) String bot,
+                      @Describe(value = "registry plugin ids to add besides the bot's, comma-separated; the "
                               + "user is asked on screen first", optional = true) String plugins) {
     }
 
@@ -233,14 +233,14 @@ final class ProjectTools {
                                 if (call.key() == AssistedSetting.DEV_MODE) pluginsChanged.run();
                             }
                         }),
-                said("list_templates", "List the vetted templates create_project starts a bot from.",
-                        driver::listTemplates),
+                said("list_bots", "List the published bots create_project can start from.",
+                        driver::listBots),
                 said("create_project",
-                        "Create a bot project from a template's release, or blank when the gallery cannot be read, "
-                                + "and open it in place of this one. The switch ends this connection: reconnect "
-                                + "once the new project is open, and tell the user before.",
+                        "Create a project, blank or cloned from a published bot's release, and open it in place of "
+                                + "this one. The switch ends this connection: reconnect once the new project is "
+                                + "open, and tell the user before.",
                         NewProject.class, call -> idle(log, () -> driver.createProject(call.name(),
-                                given(call.template()), Arrays.stream(given(call.plugins()).split(","))
+                                given(call.bot()), Arrays.stream(given(call.plugins()).split(","))
                                         .map(String::strip).filter(s -> !s.isEmpty()).toList()))));
     }
 

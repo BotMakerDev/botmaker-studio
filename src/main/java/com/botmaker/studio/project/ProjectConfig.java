@@ -1,9 +1,16 @@
 package com.botmaker.studio.project;
 
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Immutable configuration for a single project.
@@ -40,29 +47,53 @@ public record ProjectConfig(
 
     /**
      * The project <b>in</b> {@code projectDir}, wherever that is — the way to open one Studio did not create
-     * under {@code ~/BotMakerProjects}, such as a template kept in its own repository.
+     * under {@code ~/BotMakerProjects}, such as a bot kept in its own repository.
      *
-     * <p>The name is still the folder's name. The package is not always derivable from it: a folder called
-     * {@code botmaker-gamebot} holds {@code com.botmaker.gamebot}, and no rule gets from one to the other. A
-     * template's {@code main} says which package it is in ({@link TemplateProject#read}), so that answer wins
-     * when there is one and it names a
-     * {@code com.} package; otherwise the package is derived exactly as
-     * {@link #forProject} derives it, which keeps a project under the default root reading the same through
-     * either door.
+     * <p>The name is still the folder's name. The package is not always derivable from it: a bot cloned from
+     * the gallery into a folder its user named keeps its author's package ({@code com.farm} in {@code MyFarm}),
+     * and no rule gets from one to the other. The class holding {@code main} says which package it is in
+     * ({@link #mainPackage}), so that answer wins when there is one and it names a {@code com.} package;
+     * otherwise the package is derived exactly as {@link #forProject} derives it, which keeps a project under
+     * the default root reading the same through either door.
      */
     public static ProjectConfig forDirectory(Path projectDir) {
         Path dir = projectDir.toAbsolutePath().normalize();
         String projectName = dir.getFileName().toString();
-        String packageName = projectName.toLowerCase();
-        try {
-            String declared = TemplateProject.read(dir).packageName();
-            if (declared.startsWith("com.") && declared.length() > "com.".length()) {
-                packageName = declared.substring("com.".length());
-            }
-        } catch (java.io.IOException notATemplate) {
-            // An ordinary project: the derived package is the answer.
-        }
+        String packageName = mainPackage(dir)
+                .filter(declared -> declared.startsWith("com.") && declared.length() > "com.".length())
+                .map(declared -> declared.substring("com.".length()))
+                .orElse(projectName.toLowerCase());
         return of(projectName, packageName, dir);
+    }
+
+    private static final Pattern PACKAGE = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
+    private static final Pattern MAIN = Pattern.compile("public\\s+static\\s+void\\s+main\\s*\\(");
+
+    /**
+     * The package of the class holding {@code public static void main}. When several classes do, the one whose
+     * package every other lies under — a bot's entry sits at its root, helpers below it. Empty when no class in
+     * a package has one, when they sit in packages that share no root, or when the sources cannot be read.
+     */
+    static Optional<String> mainPackage(Path projectDir) {
+        Path sources = projectDir.resolve("src/main/java");
+        TreeSet<String> packages = new TreeSet<>(
+                Comparator.comparingInt(String::length).thenComparing(Comparator.naturalOrder()));
+        if (Files.isDirectory(sources)) {
+            try (var walk = Files.walk(sources)) {
+                for (Path java : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                    String text = Files.readString(java);
+                    if (!MAIN.matcher(text).find()) continue;
+                    var pkg = PACKAGE.matcher(text);
+                    if (pkg.find()) packages.add(pkg.group(1));
+                }
+            } catch (IOException | UncheckedIOException unreadable) {
+                return Optional.empty();
+            }
+        }
+        if (packages.isEmpty()) return Optional.empty();
+        String root = packages.first();
+        boolean oneRoot = packages.stream().allMatch(p -> p.equals(root) || p.startsWith(root + "."));
+        return oneRoot ? Optional.of(root) : Optional.empty();
     }
 
     private static ProjectConfig of(String projectName, String packageName, Path projectPath) {
@@ -116,7 +147,7 @@ public record ProjectConfig(
      * <p>{@link #mainSourceFile()} is the file a project Studio created <em>starts</em> with, named after the
      * project. That is a fact about creation and not about the project, and two things break it: a user who
      * renames or splits their entry class (their file, their call), and a project made from a published
-     * template, which arrives exactly as its author shipped it and whose entry class is called whatever they
+     * bot, which arrives exactly as its author shipped it and whose entry class is called whatever they
      * called it.
      *
      * <p>So: the derived path when it is there, otherwise the one source in the bot's package that declares a
@@ -140,7 +171,7 @@ public record ProjectConfig(
 
     /**
      * The fully-qualified class {@code java -cp …} is given — {@link #entrySourceFile()}'s class, so a
-     * renamed entry point or a template's own is launched rather than a name that no longer exists.
+     * renamed entry point or a published bot's own is launched rather than a name that no longer exists.
      */
     public String entryClassName() {
         String file = entrySourceFile().getFileName().toString();

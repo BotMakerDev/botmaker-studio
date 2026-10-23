@@ -2,16 +2,13 @@ package com.botmaker.studio.ui.app.gallery;
 
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.util.BrowserLauncher;
-import javafx.geometry.Pos;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 /**
- * How one gallery listing reads: its name and tier, author and description, what it was tested on, and a link
- * to its repository.
+ * How one gallery listing reads: its name, author and description, its tags, and a link to its repository.
  *
  * <p>One builder for two windows. Browse Bots draws a row from it, with its own star and install buttons
  * beside; the publish dialog draws its preview from it. Two copies would be a preview that promises one card
@@ -25,21 +22,14 @@ public final class GalleryCard {
     public static VBox of(GalleryEntry entry) {
         Label name = new Label(entry.name().isBlank() ? "(no name)" : entry.name());
         name.getStyleClass().add("gallery-card-name");
-        HBox title = new HBox(8, name, tierBadge(entry));
-        title.setAlignment(Pos.CENTER_LEFT);
-
+        // No tier badge and no "Tested on" line since 2026-10-23: no listing is vouched for above another, and
+        // what a bot launches is the SDK's business.
         Label meta = new Label("by " + (entry.owner().isBlank() ? "you" : entry.owner())
                 + (entry.description().isBlank() ? "" : " — " + entry.description()));
         meta.getStyleClass().add("gallery-card-note");
         meta.setWrapText(true);
-        VBox text = new VBox(2, title, meta);
+        VBox text = new VBox(2, name, meta);
 
-        // Only when the author declared something: "tested on: any launch target" would be noise on every entry
-        // published before the field existed. "Tested on" rather than "runs on" because installing never
-        // restricts what you may launch — see LaunchTargetDialog.
-        if (entry.launchTargets().declared()) {
-            text.getChildren().add(note("Tested on: " + entry.launchTargets().describe()));
-        }
         if (!entry.tags().isEmpty()) {
             text.getChildren().add(note("Tags: " + String.join(", ", entry.tags())));
         }
@@ -53,24 +43,6 @@ public final class GalleryCard {
         repoLink.setDisable(entry.owner().isBlank() || entry.repo().isBlank());
         text.getChildren().add(repoLink);
         return text;
-    }
-
-    /**
-     * The tier as a small badge, with the sentence behind it on hover. A Vetted badge names the release that was
-     * looked at, because that — not the bot — is what a maintainer vouched for.
-     */
-    public static Label tierBadge(GalleryEntry entry) {
-        Label badge = new Label(entry.tier().displayName());
-        badge.getStyleClass().addAll("gallery-tier-badge",
-                entry.isVetted() ? "gallery-tier-vetted" : "gallery-tier-community");
-        String tip = entry.isVetted()
-                ? "A maintainer looked at "
-                        + (entry.vettedVersion().isEmpty() ? "a release" : "release " + entry.vettedVersion())
-                        + " and chose to list it. Not a security review."
-                : "Listed automatically: its author owns the repository and its release downloads. "
-                        + "Nobody reviewed its code.";
-        badge.setTooltip(new Tooltip(tip));
-        return badge;
     }
 
     private static Label note(String text) {

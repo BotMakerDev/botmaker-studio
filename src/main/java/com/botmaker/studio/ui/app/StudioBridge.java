@@ -1349,36 +1349,36 @@ final class StudioBridge implements StudioDriver {
     // ---- new projects --------------------------------------------------------------------------------------
 
     @Override
-    public String listTemplates() {
-        List<GalleryEntry> templates = vettedTemplatesOrNone();
-        if (templates.isEmpty()) {
-            return "The gallery cannot be read, or lists no vetted template. create_project without a template "
-                    + "makes a blank project.";
+    public String listBots() {
+        List<GalleryEntry> bots = botsOrNone();
+        if (bots.isEmpty()) {
+            return "The gallery cannot be read, or lists no bot. create_project without a bot makes a blank "
+                    + "project.";
         }
-        return String.join("\n", templates.stream().map(t -> t.name() + "  (" + t.slug() + ")"
+        return String.join("\n", bots.stream().map(t -> t.name() + "  (" + t.slug() + ")"
                 + (t.description().isBlank() ? "" : " — " + t.description().strip())).toList());
     }
 
     @Override
-    public String createProject(String name, String template, List<String> plugins) {
+    public String createProject(String name, String bot, List<String> plugins) {
         String wanted = name == null ? "" : name.strip();
         String problem = new ProjectCreator().nameProblem(wanted);
         if (problem != null) throw new IllegalArgumentException(problem);
-        String from = template == null ? "" : template.strip();
-        // Vetted only, as New Project offers by default: a community template is code nobody reviewed, and the
-        // user would not see which one was picked. Blank only when the gallery cannot answer, as in the dialog:
-        // botmaker-base is what Blank became.
-        List<GalleryEntry> vetted = vettedTemplatesOrNone();
-        if (from.isEmpty() && !vetted.isEmpty()) {
-            throw new IllegalArgumentException("Name a template: " + String.join(", ", vetted.stream()
-                    .map(GalleryEntry::name).toList()) + ". list_templates says what each is.");
-        }
-        GalleryEntry entry = from.isEmpty() ? null : vetted.stream()
+        String from = bot == null ? "" : bot.strip();
+        // Any listed bot (2026-10-23), but only once the user has seen on screen which bot and whose: a bot is
+        // code nobody reviewed, and it runs with the user's mouse and keyboard. No bot is Studio's own Blank.
+        List<GalleryEntry> listed = from.isEmpty() ? List.of() : botsOrNone();
+        GalleryEntry entry = from.isEmpty() ? null : listed.stream()
                 .filter(t -> t.name().equalsIgnoreCase(from) || t.slug().equalsIgnoreCase(from)
                         || t.repo().equalsIgnoreCase(from))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException(vetted.isEmpty()
-                        ? "The gallery cannot be read, so only a blank project can be made: leave template empty."
-                        : "No vetted template " + from + ". list_templates lists them."));
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(listed.isEmpty()
+                        ? "The gallery cannot be read, so only a blank project can be made: leave bot empty."
+                        : "No bot " + from + ". list_bots lists them."));
+        if (entry != null && !userAgrees("Start from " + entry.slug() + "?", "The assistant wants to create "
+                + wanted + " as a copy of " + entry.name() + " by " + entry.owner() + ", linked to their repository."
+                + "\n\n" + entry.trustWarning())) {
+            throw new IllegalArgumentException("The user did not agree to start from " + entry.slug() + ".");
+        }
         List<PluginRegistry.Plugin> picks = List.of();
         if (!plugins.isEmpty()) {
             List<PluginRegistry.Plugin> entries = registryEntries();
@@ -1391,7 +1391,7 @@ final class StudioBridge implements StudioDriver {
                 throw new IllegalArgumentException("The user did not agree to add " + names + ".");
             }
         }
-        // From here to the switch nothing may start: a run or an edit begun while the template downloads would be
+        // From here to the switch nothing may start: a run or an edit begun while the bot clones would be
         // torn down by the switch.
         reloading = true;
         try {
@@ -1418,11 +1418,11 @@ final class StudioBridge implements StudioDriver {
                 + "back on the same address once it is open.";
     }
 
-    /** The gallery's vetted templates, or none when it cannot be read — the dialog's offline case. */
-    private List<GalleryEntry> vettedTemplatesOrNone() {
+    /** The gallery's bots, or none when it cannot be read — the dialog's offline case. */
+    private List<GalleryEntry> botsOrNone() {
         try {
-            return GalleryEntry.templates(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
-                    "read the gallery"), false);
+            return GalleryEntry.startingPoints(waitFor(new GitHubGallery(github, new GitHubAuth()).browse(), 30,
+                    "read the gallery"));
         } catch (IllegalArgumentException e) {
             return List.of();
         }

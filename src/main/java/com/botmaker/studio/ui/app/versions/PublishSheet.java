@@ -5,16 +5,12 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.TemplateProject;
-import com.botmaker.studio.project.launch.SupportedTargets;
-import com.botmaker.shared.launch.LaunchKind;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.PublishPlan;
@@ -30,15 +26,12 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
@@ -52,11 +45,9 @@ import javafx.stage.Window;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -100,33 +91,19 @@ public final class PublishSheet {
     private final Host host;
     private final String projectName;
     private final Path projectDir;
-    /**
-     * What the author tested the bot on, one box per launch kind — written into the gallery entry and nowhere
-     * else (2026-09-27; it was a {@code launch.supported} key in {@code botmaker-project.properties} that nothing
-     * wrote). A re-publish starts from what the listing says, until the author ticks a box themselves.
-     */
-    private final Map<LaunchKind, CheckBox> targetBoxes = new EnumMap<>(LaunchKind.class);
-    private boolean targetsTouched;
 
-    /**
-     * Whether the author picked bot or template themselves. Until then a listing tagged {@code template} picks
-     * template (2026-09-27; a {@code botmaker-template.properties} at the project root decided it before).
-     */
-    private boolean kindTouched;
+    // The "Tested on" boxes went on 2026-10-23: what a bot launches is the SDK's business, not the listing's.
+    // The Kind choice (a bot, or a starting template for New Project) went on 2026-10-23: every published bot is
+    // a starting point, and New Project clones it as Browse Bots installs it.
 
     private final VBox root = new VBox(8);
     private GitHubAccountBar accountBar;
-
-    private final RadioButton kindBot = new RadioButton("A bot people install");
-    private final RadioButton kindTemplate = new RadioButton("A starting template for New Project");
-    private final Label templateProblem = new Label();
 
 
     private final TextField repoField = new TextField();
     private final TextField descriptionField = new TextField();
     private final TextField tagsField = new TextField();
     private final FlowPane tagChips = new FlowPane(6, 4);
-    private final Label targetsLabel = new Label();
 
     private final ComboBox<String> versionCombo = new ComboBox<>();
     private final Label lastPublished = new Label();
@@ -136,7 +113,6 @@ public final class PublishSheet {
     private final VBox checklist = new VBox(4);
     private final Button retryButton = new Button("Retry");
     private final Label listingLabel = new Label("Sign in to see your listing.");
-    private final Label tierLabel = new Label();
     private final Hyperlink pullRequestLink = new Hyperlink();
     private final Button refreshListingButton = new Button("Refresh");
     private final Button unpublishButton = new Button("Unpublish");
@@ -160,7 +136,7 @@ public final class PublishSheet {
     private volatile String repoOwner = "";
     /** The pom's pins nobody else can resolve ({@link PublishRequest#unreleasedPins}); Publish waits on none. */
     private List<String> unreleased = List.of();
-    /** The gallery's listing of this repo, when it has one: its tier is what the preview shows. */
+    /** The gallery's listing of this repo, when it has one: a re-publish starts from its description and tags. */
     private volatile GalleryEntry currentListing;
 
     /** The publish shown in the checklist; null before the first. */
@@ -240,26 +216,13 @@ public final class PublishSheet {
     }
 
     private VBox buildForm() {
-        ToggleGroup kind = new ToggleGroup();
-        kindBot.setToggleGroup(kind);
-        kindTemplate.setToggleGroup(kind);
-        // A bot until the listing says otherwise: a re-publish of a template starts as one once the listing is
-        // read, and the author can change it either way.
-        kindBot.setSelected(true);
-        kindBot.setOnAction(e -> kindTouched = true);
-        kindTemplate.setOnAction(e -> kindTouched = true);
-        kind.selectedToggleProperty().addListener((o, was, now) -> refreshAll());
-        templateProblem.getStyleClass().add("form-problem");
-        templateProblem.setWrapText(true);
-        Label kindHelp = note("A template is listed in New Project, where people start their own project from it "
-                + "under their own package — the package of your class with main, renamed to theirs.");
-
         // Listed/Unlisted stood here until 2026-09-26. Publishing is listing: a release on GitHub alone is
         // what "Save to my copy" already gives, so the choice only asked a question with one useful answer.
         Label listingHelp = note("Publishing lists the bot in the gallery as Community once its checks pass, with "
                 + "no one to wait for: the entry is well formed, you own the repository, and the release downloads. "
                 + "Up to 3 new listings a day; updating yours never counts. A maintainer may later vet a release. "
-                + "To keep it off the gallery, use Save to my copy instead.");
+                + "To keep it off the gallery, use Save to my copy instead. People find it in Browse Bots and in "
+                + "New Project, where they start from a copy linked to yours.");
 
         repoField.setText(projectName);
         repoField.textProperty().addListener((o, was, now) -> refreshAll());
@@ -274,17 +237,6 @@ public final class PublishSheet {
         descriptionField.textProperty().addListener((o, was, now) -> refreshAll());
         tagsField.setPromptText("Comma-separated, e.g. clicker, farming");
         tagsField.textProperty().addListener((o, was, now) -> refreshAll());
-        targetsLabel.setWrapText(true);
-        targetsLabel.setText("None ticked reads as \"the author never said\".");
-        targetsLabel.getStyleClass().add("gallery-card-note");
-        for (LaunchKind launch : SupportedTargets.selectable()) {
-            CheckBox box = new CheckBox(launch.displayName());
-            box.setOnAction(e -> targetsTouched = true);
-            targetBoxes.put(launch, box);
-        }
-        FlowPane targets = new FlowPane(10, 4);
-        targets.getChildren().addAll(targetBoxes.values());
-        VBox targetsCell = new VBox(4, targets, targetsLabel);
 
         GridPane details = new GridPane();
         details.setHgap(10);
@@ -293,7 +245,6 @@ public final class PublishSheet {
         details.addRow(1, new Label("Description:"), descriptionField);
         details.addRow(2, new Label("Tags:"), tagsField);
         details.add(tagChips, 1, 3);
-        details.addRow(4, new Label("Tested on:"), targetsCell);
         GridPane.setHgrow(repoField, Priority.ALWAYS);
 
         versionCombo.setEditable(true);
@@ -313,7 +264,7 @@ public final class PublishSheet {
                 + "your copy on GitHub, which becomes public — earlier versions included.");
 
         return new VBox(8,
-                section("Kind"), kindBot, kindTemplate, kindHelp, templateProblem, listingHelp,
+                section("Gallery"), listingHelp,
                 section("Details"), details,
                 section("Release"), release, releaseHelp);
     }
@@ -327,7 +278,6 @@ public final class PublishSheet {
         retryButton.setManaged(false);
         retryButton.setOnAction(e -> resume());
 
-        tierLabel.getStyleClass().add("gallery-card-note");
         listingLabel.setWrapText(true);
         pullRequestLink.setVisible(false);
         pullRequestLink.setManaged(false);
@@ -342,7 +292,7 @@ public final class PublishSheet {
         listingLabel.getStyleClass().add("gallery-card-note");
         HBox listingRow = new HBox(8, listingLabel, listingSpacer, refreshListingButton, unpublishButton);
         listingRow.setAlignment(Pos.CENTER_LEFT);
-        VBox listingFooter = new VBox(2, listingRow, tierLabel, pullRequestLink);
+        VBox listingFooter = new VBox(2, listingRow, pullRequestLink);
         listingFooter.setPadding(new Insets(8, 0, 0, 0));
         listingFooter.getStyleClass().add("publish-listing-footer");
 
@@ -404,7 +354,7 @@ public final class PublishSheet {
         repoField.setDisable(own || busy);
     }
 
-    /** Everything derived from the form: the preview, the tag chips, the template check and Publish's state. */
+    /** Everything derived from the form: the preview, the tag chips and Publish's state. */
     private void refreshAll() {
         if (accountBar == null) return;
         List<String> tags = effectiveTags();
@@ -414,29 +364,16 @@ public final class PublishSheet {
             return chip;
         }).toList());
 
-        String problem = kindTemplate.isSelected() ? templateProblem() : null;
-        templateProblem.setText(problem == null ? "" : problem);
-        templateProblem.setVisible(problem != null);
-        templateProblem.setManaged(problem != null);
-
-        GalleryEntry listing = currentListing;
-        GalleryTier tier = listing != null ? listing.tier() : GalleryTier.COMMUNITY;
-        String vetted = listing != null ? listing.vettedVersion() : "";
-        GalleryEntry preview = request(tags).preview(repoOwner.isBlank() ? login : repoOwner, tier, vetted);
+        GalleryEntry preview = request(tags).preview(repoOwner.isBlank() ? login : repoOwner);
         previewHolder.getChildren().setAll(GalleryCard.of(preview));
-        previewNote.setText(listing != null && listing.isVetted()
-                        ? "Vetted at " + vetted + ". People keep installing that release; this one is not vetted "
-                                + "until a maintainer looks at it."
-                        : kindTemplate.isSelected()
-                                ? "Shown in New Project behind \"Show community templates\" until a maintainer vets it."
-                                : "How Browse Bots will show it.");
+        previewNote.setText("How Browse Bots will show it.");
 
         lastPublished.setText(latestTag.isBlank() ? "Never published." : "Last published: " + latestTag);
-        refreshPublishEnabled(problem);
+        refreshPublishEnabled();
     }
 
-    /** Publish is enabled only when signed in, idle, the bot is the user's, the template sound, the version valid. */
-    private void refreshPublishEnabled(String templateProblem) {
+    /** Publish is enabled only when signed in, idle, the bot is the user's and the version valid. */
+    private void refreshPublishEnabled() {
         boolean signedIn = auth.isAuthenticated();
         unpublishButton.setDisable(busy || !signedIn);
         refreshListingButton.setDisable(busy || !signedIn);
@@ -447,7 +384,6 @@ public final class PublishSheet {
                 : !unreleased.isEmpty() ? "This bot depends on a build only this computer has: "
                         + String.join(", ", unreleased) + ". Pin a released version in Plugins & Libraries first."
                 : repoName().isBlank() ? "A repository name is required."
-                : templateProblem != null ? "Fix the template first, or publish it as a bot."
                 : !SemVer.isValid(version) ? "Version must look like MAJOR.MINOR.PATCH (e.g. 1.0.0)."
                 : !SemVer.isGreater(version, latestTag)
                         ? "Version must be higher than the last published version (" + latestTag + ")."
@@ -515,14 +451,6 @@ public final class PublishSheet {
         pullRequestLink.setManaged(hasPr);
     }
 
-    private void renderTier() {
-        GalleryEntry listing = currentListing;
-        tierLabel.setText(listing == null ? ""
-                : listing.isVetted()
-                        ? "Tier: Vetted" + (listing.vettedVersion().isEmpty() ? "" : " at " + listing.vettedVersion())
-                        : "Tier: Community");
-    }
-
     // -------------------------------------------------------------------------
     // Background reads
     // -------------------------------------------------------------------------
@@ -563,7 +491,7 @@ public final class PublishSheet {
         refreshAll();
     }
 
-    /** The gallery's word on this repo: its tier from the catalog, and the listing pull request's state. */
+    /** The gallery's word on this repo: its listing in the catalog, and the listing pull request's state. */
     private void refreshListing() {
         if (!auth.isAuthenticated()) {
             listingLabel.setText("Sign in to see your listing.");
@@ -596,19 +524,9 @@ public final class PublishSheet {
             if (currentListing != null && !busy) {
                 if (descriptionField.getText().isBlank()) descriptionField.setText(currentListing.description());
                 if (tagsField.getText().isBlank()) {
-                    tagsField.setText(String.join(", ", currentListing.tags().stream()
-                            .filter(t -> !GalleryEntry.TEMPLATE_TAG.equalsIgnoreCase(t)).toList()));
-                }
-                if (!kindTouched && currentListing.tags().stream()
-                        .anyMatch(GalleryEntry.TEMPLATE_TAG::equalsIgnoreCase)) {
-                    kindTemplate.setSelected(true);
-                }
-                if (!targetsTouched) {
-                    SupportedTargets listed = currentListing.launchTargets();
-                    targetBoxes.forEach((kind, box) -> box.setSelected(listed.kinds().contains(kind)));
+                    tagsField.setText(String.join(", ", currentListing.tags()));
                 }
             }
-            renderTier();
             refreshAll();
         }));
     }
@@ -619,10 +537,9 @@ public final class PublishSheet {
 
     /** Saves the version being published (the {@link Host}'s part), then runs the steps from the first. */
     private void doPublish() {
-        String problem = kindTemplate.isSelected() ? templateProblem() : null;
         String to = repoOwner;
         readPins();
-        if (problem != null || whoseProblem() != null || to.isBlank() || !unreleased.isEmpty()
+        if (whoseProblem() != null || to.isBlank() || !unreleased.isEmpty()
                 || !SemVer.isGreater(currentVersion(), latestTag) || repoName().isBlank()) {
             refreshAll();
             return;
@@ -722,7 +639,7 @@ public final class PublishSheet {
     private void setBusy(boolean value) {
         busy = value;
         progress.setVisible(value);
-        for (Node n : List.of(kindBot, kindTemplate, descriptionField, tagsField, versionCombo)) {
+        for (Node n : List.of(descriptionField, tagsField, versionCombo)) {
             n.setDisable(value);
         }
         lockToMyCopy();
@@ -736,21 +653,12 @@ public final class PublishSheet {
 
     private PublishRequest request(List<String> tags) {
         return new PublishRequest(projectDir, projectName, repoName(), descriptionField.getText(), currentVersion(),
-                tags, testedOn(), true);
+                tags, true);
     }
 
-    /** The ticked launch kinds; none ticked is undeclared. */
-    private SupportedTargets testedOn() {
-        return SupportedTargets.of(targetBoxes.entrySet().stream()
-                .filter(e -> e.getValue().isSelected()).map(Map.Entry::getKey).toList());
-    }
-
-    /** The typed tags, with {@code template} added for a template and taken out for a bot. */
+    /** The typed tags. */
     private List<String> effectiveTags() {
-        List<String> tags = new ArrayList<>(parseTags(tagsField.getText()));
-        tags.removeIf(GalleryEntry.TEMPLATE_TAG::equalsIgnoreCase);
-        if (kindTemplate.isSelected()) tags.add(GalleryEntry.TEMPLATE_TAG);
-        return tags;
+        return parseTags(tagsField.getText());
     }
 
     private String repoName() {
@@ -762,25 +670,6 @@ public final class PublishSheet {
         String typed = versionCombo.getEditor().getText();
         String v = typed == null || typed.isBlank() ? versionCombo.getValue() : typed;
         return v == null ? "" : v.trim();
-    }
-
-    /**
-     * Why this project cannot be published as a template, or null when it can.
-     *
-     * <p>The one check worth making, and it is made here because it is the only failure whose result still
-     * <em>compiles</em>: a template whose declared package is not the one its sources are in unpacks into
-     * somebody's New Project, has nothing replaced, and hands them a working project sitting in the author's
-     * package. Every other way a template can be wrong shows up as an ordinary broken project.
-     */
-    private String templateProblem() {
-        try {
-            return TemplateProject.read(projectDir).matches(projectDir)
-                    ? null
-                    : "The package of your class with main has no sources in it, so nothing would be renamed"
-                            + " when somebody starts from this template.";
-        } catch (java.io.IOException missing) {
-            return missing.getMessage();
-        }
     }
 
     /** Splits a comma-separated tag string into trimmed, de-duped, non-blank tags. */

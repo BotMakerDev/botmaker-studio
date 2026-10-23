@@ -307,16 +307,17 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no settings here.");
     }
 
-    /** The vetted templates New Project offers, each with its name and what it is. */
-    default String listTemplates() {
-        throw new IllegalArgumentException("Studio has no templates here.");
+    /** The published bots New Project offers to start from, each with its name and what it is. */
+    default String listBots() {
+        throw new IllegalArgumentException("Studio lists no bots here.");
     }
 
     /**
-     * Creates the project {@code name} as New Project does — from the vetted template {@code template}, blank when
-     * it is empty, with the registry's {@code plugins} declared — then opens it in place of this one.
+     * Creates the project {@code name} as New Project does — cloned from the published bot {@code bot} once the
+     * user agrees on screen, linked to its author, or blank when it is empty, with the registry's {@code plugins} declared — then opens
+     * it in place of this one.
      */
-    default String createProject(String name, String template, List<String> plugins) {
+    default String createProject(String name, String bot, List<String> plugins) {
         throw new IllegalArgumentException("Studio cannot create a project here.");
     }
 

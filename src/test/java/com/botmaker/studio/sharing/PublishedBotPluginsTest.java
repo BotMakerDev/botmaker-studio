@@ -6,14 +6,14 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/** 2026-10-12: New Project said gamebot needs SDK 1.2.3, a gallery entry's copy; its release's pom said 1.4.4. */
-class TemplatePluginsTest {
+/** 2026-10-12: New Project said a bot needs SDK 1.2.3, a gallery entry's copy; its release's pom said 1.4.4. */
+class PublishedBotPluginsTest {
 
     private static final String POM = """
             <project>
                 <modelVersion>4.0.0</modelVersion>
-                <groupId>com.botmaker.gamebot</groupId>
-                <artifactId>gamebot</artifactId>
+                <groupId>com.farm</groupId>
+                <artifactId>farm</artifactId>
                 <version>0.0.1-SNAPSHOT</version>
                 <properties>
                     <botmaker.sdk.version>1.4.4</botmaker.sdk.version>
@@ -38,13 +38,14 @@ class TemplatePluginsTest {
 
     @Test
     void theRegistrysPluginsInThePomWithTheirInterpolatedVersion() {
-        assertEquals(List.of(new TemplatePlugins.Pin("com.botmaker.sdk", "1.4.4")), TemplatePlugins.of(POM, REGISTRY));
+        assertEquals(List.of(new PublishedBotPlugins.Pin("com.botmaker.sdk", "1.4.4")),
+                PublishedBotPlugins.of(POM, REGISTRY));
     }
 
     @Test
     void anUnreadablePomBringsNothing() {
-        assertEquals(List.of(), TemplatePlugins.of("", REGISTRY));
-        assertEquals(List.of(), TemplatePlugins.of("<not a pom", REGISTRY));
-        assertEquals(List.of(), TemplatePlugins.of(POM, List.of()));
+        assertEquals(List.of(), PublishedBotPlugins.of("", REGISTRY));
+        assertEquals(List.of(), PublishedBotPlugins.of("<not a pom", REGISTRY));
+        assertEquals(List.of(), PublishedBotPlugins.of(POM, List.of()));
     }
 }

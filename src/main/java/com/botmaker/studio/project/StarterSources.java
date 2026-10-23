@@ -14,8 +14,9 @@ import java.util.Map;
  *
  * <p>The game bot went too, on 2026-08-30. It was not Studio's to write: <b>it is a bot project that calls
  * the SDK's static API</b>, which is exactly what the gallery already publishes, browses and installs. So a
- * richer starting point is now a published bot carrying the {@code template} tag — see
- * {@link TemplateProject} — and anybody can write one without a Studio release.
+ * richer starting point is now any published bot, which New Project clones linked to its author (2026-10-23;
+ * only bots tagged {@code template}, copied and renamed, until then) — and anybody can publish one without a
+ * Studio release.
  *
  * <p>What is left here is the starting point that must work with <b>no network and no gallery</b>, which is
  * the reason Studio composes any at all. It is deliberately the smallest honest thing: a class, a
@@ -41,8 +42,8 @@ public final class StarterSources {
      * The project's starting files, keyed by path relative to the project root — what
      * {@code Authoring.createProject} is handed as {@code callerFiles} beside the pom.
      *
-     * <p>Only {@link ProjectTemplate#EMPTY} reaches here. A project made from a gallery template gets its
-     * files by unpacking that template, and a caller asking for one of those by name is a bug rather than a
+     * <p>Only {@link ProjectTemplate#EMPTY} reaches here. A project made from a published bot gets its
+     * files by cloning that bot, and a caller asking for one of those by name is a bug rather than a
      * case to handle.
      *
      * @param cfg the project being created, for its package and entry class name
@@ -77,7 +78,7 @@ public final class StarterSources {
                  * <p>This is a plain Java project: it has a pom, a source folder and this main(). To make it
                  * a bot, add the BotMaker SDK from <b>Project ▸ Plugins & Libraries</b> — it is a plugin like any
                  * other, and installing it brings the palette, the pictures, the capture tools and the rest.
-                 * Or start from a published template instead, which arrives with all of that already pinned.
+                 * Or start from a published bot instead, which arrives with all of that already pinned.
                  */
                 public class %2$s {
 

@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.sharing.TemplatePlugins;
+import com.botmaker.studio.sharing.PublishedBotPlugins;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -24,23 +24,23 @@ class NewProjectPluginsLabelTest {
     }
 
     @Test
-    void aTemplatesOwnRowShowsItsPinNotTheRegistrys() {
-        TemplatePlugins.Pin pin = new TemplatePlugins.Pin("basics", "v0.0.8");
+    void aBotsOwnRowShowsItsPinNotTheRegistrys() {
+        PublishedBotPlugins.Pin pin = new PublishedBotPlugins.Pin("basics", "v0.0.8");
 
-        assertEquals("Basics  v0.0.8  — comes with the template",
+        assertEquals("Basics  v0.0.8  — comes with the bot",
                 NewProjectPlugins.label(plugin("basics", "Basics", "v0.1.1"), pin));
     }
 
     @Test
     void aVersionNobodyPinnedIsLeftOut() {
         assertEquals("Extra", NewProjectPlugins.label(plugin("extra", "Extra", ""), null));
-        assertEquals("Basics  — comes with the template", NewProjectPlugins.label(plugin("basics", "Basics", "v1"),
-                new TemplatePlugins.Pin("basics", "")));
+        assertEquals("Basics  — comes with the bot", NewProjectPlugins.label(plugin("basics", "Basics", "v1"),
+                new PublishedBotPlugins.Pin("basics", "")));
     }
 
     @Test
-    void theTemplatesPinsAreItsLockedRows() {
-        TemplatePlugins.Pin basics = new TemplatePlugins.Pin("basics", "v0.0.8");
+    void theBotsPinsAreItsLockedRows() {
+        PublishedBotPlugins.Pin basics = new PublishedBotPlugins.Pin("basics", "v0.0.8");
 
         assertEquals(Map.of("basics", basics), NewProjectPlugins.locked(List.of(basics, basics)));
         assertEquals(Map.of(), NewProjectPlugins.locked(List.of()));

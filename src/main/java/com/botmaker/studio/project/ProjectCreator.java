@@ -1,6 +1,7 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.MavenService;
 
 import java.io.IOException;
@@ -87,10 +88,6 @@ public class ProjectCreator {
         createProject(projectName, template, List.of());
     }
 
-    public void createFromTemplate(String projectName, TemplateUnpack unpack) throws IOException {
-        createFromTemplate(projectName, unpack, List.of());
-    }
-
     /**
      * Creates a new project. {@code template} records how it was started.
      *
@@ -98,8 +95,8 @@ public class ProjectCreator {
      * {@link MavenService#blankPomXml}, whose whole dependency list is a test framework. Every project
      * created here used to pin {@code botmaker-sdk} plus eight entries serving its plugin half, which made
      * "blank" a bot project with a {@code System.out.println} in it and left a user who wanted a plain Java
-     * project without one. The richer starting point is a published bot carrying the {@code template} tag —
-     * {@link #createFromTemplate} — and the SDK is one install away in Manage Plugins.
+     * project without one. The richer starting point is a published bot —
+     * {@link #createFromBot} — and the SDK is one install away in Manage Plugins.
      *
      * <p><b>No capture resolution is chosen here (2026-09-01).</b> The size templates are captured at is
      * the capturing plugin's, seeded by its own toolbar item the first time a picture is taken; a project
@@ -165,32 +162,24 @@ public class ProjectCreator {
     }
 
     /**
-     * Creates a project from a published template: download the release, rename it into the user's own
-     * package and class, and record how it was made.
+     * Creates a project from a published bot (2026-10-23): a clone of its author's repository at the release,
+     * linked to it as Browse Bots' Install links one, so the author's later releases merge in from the Versions
+     * tab.
      *
-     * <p><b>Nothing composed here reaches the result.</b> The pom is the template author's, versions and all,
-     * and so are {@code activities.json}, the runtime settings and every {@code .java}. That is the point of
-     * a template being a real published bot rather than a set of holes: what the user gets is a project that
-     * demonstrably built for its author. Changing the SDK pin afterwards is <b>Project ▸ Manage Libraries</b>,
-     * which is the same path any other version change takes.
+     * <p><b>Nothing is renamed.</b> The folder takes the user's name; the package, the classes, the pom and its
+     * versions stay the author's — a renamed copy conflicts with every update ({@code docs/refactor/39-versions.md}
+     * §7). {@link ProjectConfig#forDirectory} reads the package off {@code main}.
      *
-     * <p>The only thing written is the one Studio owns and the template cannot know: {@code settings.json},
-     * whose {@code template} is {@link ProjectTemplate#FROM_TEMPLATE}. Whatever
-     * {@code botmaker-project.properties} the template shipped is left exactly as its author wrote it.
+     * <p>Written beside the clone: the plugins ticked, and {@code settings.json} with
+     * {@link ProjectTemplate#FROM_TEMPLATE} (Studio's own, never versioned), then one version for the pom when a
+     * plugin changed it. A failure anywhere deletes the folder.
      *
-     * <p>All-or-none is kept the crude way rather than the {@code createProject} way: the unpack writes a
-     * whole directory tree that {@code Authoring} never sees, so a failure anywhere in here deletes the
-     * directory. A half-unpacked project the user has to remove by hand is exactly what the atomic pass on
-     * the other path exists to prevent.
-     *
-     * @param projectName the user's name for it, which becomes the directory, the package and the class
-     * @param unpack      downloads the release into the directory it is handed — {@code BotInstaller
-     *                    ::unpackTemplate} bound to the chosen entry and tag, passed in so this class keeps
-     *                    knowing nothing about GitHub
-     * @param plugins     the ones the user ticked beside the template's own, declared before the first commit
+     * @param projectName the user's name for it, which becomes the folder
+     * @param clone       clones the release into the folder it is handed — {@code BotInstaller::install} bound to
+     *                    the chosen entry and tag, passed in so this class keeps knowing nothing about GitHub
+     * @param plugins     the ones the user ticked beside the bot's own
      */
-    public void createFromTemplate(String projectName, TemplateUnpack unpack, List<PluginPick> plugins)
-            throws IOException {
+    public void createFromBot(String projectName, BotClone clone, List<PluginPick> plugins) throws IOException {
         validateProjectName(projectName);
 
         ProjectConfig cfg = ProjectConfig.forProject(projectName, root);
@@ -200,22 +189,21 @@ public class ProjectCreator {
         }
 
         System.out.println("------------------------------------------------");
-        System.out.println("Creating Project: " + projectName + " (from a template)");
+        System.out.println("Creating Project: " + projectName + " (from a published bot)");
         System.out.println("Location: " + projectPath);
         System.out.println("------------------------------------------------");
 
         try {
-            System.out.println("1. Downloading the template...");
-            unpack.into(projectPath);
+            System.out.println("1. Cloning the bot...");
+            clone.into(projectPath);
 
-            System.out.println("2. Making it yours...");
-            TemplateProject.read(projectPath).renameInto(projectPath, "com." + cfg.packageName());
+            System.out.println("2. Adding the plugins...");
             installPlugins(projectPath, plugins, shadows);
 
             System.out.println("3. Generating settings...");
             seedSettings(cfg, ProjectTemplate.FROM_TEMPLATE);
 
-            new ProjectVcs(projectPath).init();
+            new ProjectVcs(projectPath).checkpoint(VersionOrigin.CREATE, "Added the plugins ticked in New Project");
 
             System.out.println("------------------------------------------------");
             System.out.println("SUCCESS: Project created at " + projectPath);
@@ -223,7 +211,7 @@ public class ProjectCreator {
         } catch (Exception e) {
             deleteRecursively(projectPath);
             System.err.println("!!! ERROR during project creation !!!");
-            throw new IOException("Failed to create project from the template: " + e.getMessage(), e);
+            throw new IOException("Failed to create project from the bot: " + e.getMessage(), e);
         }
     }
 
@@ -232,7 +220,7 @@ public class ProjectCreator {
      * <i>Plugins &amp; Libraries ▸ Browse</i> takes, so a project made with the SDK ticked on Base has no direct
      * basics entry, exactly as one that installed it afterwards.
      *
-     * <p>A plugin the pom already declares is skipped: it is the template's own, pinned the way its author pinned
+     * <p>A plugin the pom already declares is skipped: it is the published bot's own, pinned the way its author pinned
      * it (often a {@code ${property}} its upgrade moves), and a pick has no business re-versioning it.
      */
     static List<MavenService.Shadowed> installPlugins(Path projectDir, List<PluginPick> plugins, ShadowCheck shadows)
@@ -255,9 +243,9 @@ public class ProjectCreator {
         return dropped;
     }
 
-    /** Downloads a chosen template release into {@code dest}. */
+    /** Clones a chosen bot's release into {@code dest}. */
     @FunctionalInterface
-    public interface TemplateUnpack {
+    public interface BotClone {
         void into(Path dest) throws IOException;
     }
 

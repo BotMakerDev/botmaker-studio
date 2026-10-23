@@ -11,20 +11,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The plugins a template brings, read off the pom of the release New Project copies.
+ * The plugins a published bot brings, read off the pom of the release New Project clones.
  *
- * <p>Since 2026-10-12 the gallery stores a template's repository and nothing about its pom: a {@code requires}
- * list written at publish time said gamebot needs SDK 1.2.3 while the release New Project copies pinned 1.4.4.
+ * <p>Since 2026-10-12 the gallery stores a bot's repository and nothing about its pom: a {@code requires}
+ * list written at publish time said a bot needed SDK 1.2.3 while the release New Project copied pinned 1.4.4.
  * The pom at the tag is the one source, so it is the one read.
  *
  * <p>Keyed by the plugin registry, as publishing was: what makes a dependency a plugin is having an entry there.
  */
-public final class TemplatePlugins {
+public final class PublishedBotPlugins {
 
-    private TemplatePlugins() {
+    private PublishedBotPlugins() {
     }
 
-    /** A plugin a template's pom declares: its registry id and the version the pom pins, which may be blank. */
+    /** A plugin a bot's pom declares: its registry id and the version the pom pins, which may be blank. */
     public record Pin(String id, String version) {
         public Pin {
             id = id == null ? "" : id.trim();

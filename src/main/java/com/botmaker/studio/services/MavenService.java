@@ -157,7 +157,7 @@ public final class MavenService {
      * no pilot</b>. That is not a degraded state to be minimised — it is what a project with no plugins
      * installed looks like, and it is reachable in one step from **Project ▸ Manage Plugins…**, which
      * installs the SDK as an ordinary dependency exactly as it installs anybody else's plugin. The richer
-     * starting point is a published bot carrying the {@code template} tag; see {@code TemplateProject}.
+     * starting point is a published bot, cloned by New Project.
      *
      * <p>JUnit is here rather than in {@link #BOT_DEPENDENCIES} because it is the one entry that is not about
      * BotMaker at all: it is what a Maven project is expected to come with, and a user who writes a test on
@@ -172,8 +172,8 @@ public final class MavenService {
      * What a pom that names the SDK plugin has to carry — <b>the list, kept, for a project that wants one</b>.
      *
      * <p>Nothing Studio creates writes this any more: a blank project takes {@link #BLANK_DEPENDENCIES} and a
-     * project made from a gallery template brings its author's own pom, versions and all. It stays because it
-     * is the written statement of the paragraph below, which a template author needs and which is not
+     * project made from a published bot brings its author's own pom, versions and all. It stays because it
+     * is the written statement of the paragraph below, which a bot's author needs and which is not
      * derivable from anywhere else, and because {@link #DEFAULT_GROUP_ARTIFACTS} must go on recognising every
      * one of these in the pom of a project that already exists.
      *

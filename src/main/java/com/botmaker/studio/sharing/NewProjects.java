@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Makes a project as New Project does — Studio's blank one, or a gallery template's release made into it — with
+ * Makes a project as New Project does — Studio's blank one, or a published bot's release cloned into it — with
  * the picked plugins declared. The dialog and the assistant's {@code create_project} both call it, so both make
  * the same project. It blocks on the network: call it off the FX thread.
  */
@@ -27,11 +27,13 @@ public final class NewProjects {
     private NewProjects() {}
 
     /**
-     * Creates {@code projectName} under the projects root from {@code template} (null for blank) with
-     * {@code plugins} declared. The versions are resolved before anything is created, so a lookup that fails
-     * leaves nothing behind; a failed creation deletes its own directory ({@link ProjectCreator}).
+     * Creates {@code projectName} under the projects root from {@code bot} (null for blank) with
+     * {@code plugins} declared. A bot is cloned at the release Browse Bots would install, linked to its author
+     * ({@link BotInstaller#install(GalleryEntry, String, java.nio.file.Path)}). The versions are resolved before
+     * anything is created, so a lookup that fails leaves nothing behind; a failed creation deletes its own
+     * directory ({@link ProjectCreator}).
      */
-    public static void create(String projectName, GalleryEntry template, List<PluginRegistry.Plugin> plugins,
+    public static void create(String projectName, GalleryEntry bot, List<PluginRegistry.Plugin> plugins,
                               GitHubClient client, GitHubAuth auth) throws IOException {
         PluginCatalog catalog = new PluginCatalog(new PluginRegistry(client), new JitPackSearch());
         List<ProjectCreator.PluginPick> picks = new ArrayList<>();
@@ -46,7 +48,7 @@ public final class NewProjects {
                     new UserLibrary(plugin.groupId(), plugin.artifactId(), version), plugin.editorLibraries()));
         }
         ProjectCreator creator = new ProjectCreator();
-        if (template == null) {
+        if (bot == null) {
             creator.createProject(projectName, ProjectTemplate.EMPTY, picks);
             return;
         }
@@ -54,16 +56,16 @@ public final class NewProjects {
         BotInstaller installer = new BotInstaller(client, gallery);
         String tag;
         try {
-            tag = gallery.installTag(template).orTimeout(NETWORK_SECONDS, TimeUnit.SECONDS).join();
+            tag = gallery.installTag(bot).orTimeout(NETWORK_SECONDS, TimeUnit.SECONDS).join();
         } catch (CompletionException e) {
             Throwable cause = e.getCause() instanceof TimeoutException ? null : e.getCause();
-            throw new IOException("Could not find " + template.name() + "'s release"
+            throw new IOException("Could not find " + bot.name() + "'s release"
                     + (cause == null ? " in " + NETWORK_SECONDS + "s." : ": " + cause.getMessage()), e);
         }
         if (tag == null || tag.isBlank()) {
-            throw new IOException(template.name() + " has no published release yet, so there is nothing to start "
+            throw new IOException(bot.name() + " has no published release yet, so there is nothing to start "
                     + "from. Ask its author to cut one.");
         }
-        creator.createFromTemplate(projectName, dest -> installer.unpackTemplate(template, tag, dest), picks);
+        creator.createFromBot(projectName, dest -> installer.install(bot, tag, dest), picks);
     }
 }

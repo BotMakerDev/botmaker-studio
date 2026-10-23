@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **New Project starts from Blank or any published bot.** Blank is the first row and the default. A bot row makes a
+  copy linked to its author's repository, as Browse Bots' *Install* does: it keeps their package and classes, and
+  their later releases arrive in the Versions tab. The "template" kind is gone, from New Project and from the
+  Publish sheet.
+- **No vetted tier and no launch targets.** Every bot installs and updates to its newest release. The Vetted and
+  Community badges, the tier filter, the *Show community bots* toggle and the Publish sheet's *Tested on* boxes are
+  gone. Every way to start from a bot shows the same warning: nobody reviewed its code.
+- **The assistant's `list_templates` is now `list_bots`.** `create_project` takes `bot`, may start from any listed
+  bot, and asks you on screen first, naming the bot and its author.
+
 ### Added
 
 - **Rename works on a plugin's set members.** Renaming a member of a plugin's open set, such as a screen's constant

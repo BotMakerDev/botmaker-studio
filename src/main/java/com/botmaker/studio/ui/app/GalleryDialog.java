@@ -8,7 +8,6 @@ import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GalleryTier;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -44,7 +43,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Browse / install / update bots from the federated GitHub gallery (no GitHub account required). Reads the
- * curated catalog via {@link GitHubGallery}; installs and updates run off the FX thread via
+ * catalog via {@link GitHubGallery}; installs and updates run off the FX thread via
  * {@link BotInstaller}. Installing a bot means running someone else's automation code, so installs are gated
  * by a trust/attribution confirmation.
  */
@@ -53,14 +52,6 @@ public class GalleryDialog {
     /** How the browse list is ordered. */
     private enum Sort { STARS("Stars"), UPDATED("Recently updated"), NAME("Name");
         final String label; Sort(String label) { this.label = label; }
-        @Override public String toString() { return label; } }
-
-    /** Which tiers the browse list shows. {@code tier} is null for both. */
-    private enum TierFilter { ALL("All bots", null), VETTED("Vetted", GalleryTier.VETTED),
-        COMMUNITY("Community", GalleryTier.COMMUNITY);
-        final String label; final GalleryTier tier;
-        TierFilter(String label, GalleryTier tier) { this.label = label; this.tier = tier; }
-        boolean admits(GalleryEntry e) { return tier == null || e.tier() == tier; }
         @Override public String toString() { return label; } }
 
     private final Window owner;
@@ -79,14 +70,10 @@ public class GalleryDialog {
 
     private final ProgressIndicator browseProgress = new ProgressIndicator();
     private final javafx.scene.control.ComboBox<Sort> sortBox = new javafx.scene.control.ComboBox<>();
-    private final javafx.scene.control.ComboBox<TierFilter> tierBox = new javafx.scene.control.ComboBox<>();
     private String currentQuery = "";
     private Stage stage;
 
-    /**
-     * The gallery's listings, fetched once per window. Both tabs read it: Browse to list, Installed to know
-     * whether an installed bot is Vetted, which decides the release it is offered.
-     */
+    /** The gallery's listings, fetched once per window, for Browse. */
     private CompletableFuture<List<GalleryEntry>> catalog = CompletableFuture.completedFuture(List.of());
 
     public GalleryDialog(Window owner, GitHubGallery gallery, BotInstaller installer,
@@ -140,16 +127,9 @@ public class GalleryDialog {
         sortBox.setOnAction(e -> applyFilter());
         Label sortLabel = new Label("Sort:");
 
-        tierBox.getItems().setAll(TierFilter.values());
-        tierBox.getSelectionModel().select(TierFilter.ALL);
-        tierBox.setOnAction(e -> applyFilter());
-        tierBox.setTooltip(new javafx.scene.control.Tooltip(
-                "Vetted: a maintainer looked at one release of it.\n"
-                        + "Community: listed automatically. Nobody reviewed its code."));
-
         browseProgress.setVisible(false);
         browseProgress.setPrefSize(18, 18);
-        HBox searchRow = new HBox(8, searchField, tierBox, sortLabel, sortBox, browseProgress);
+        HBox searchRow = new HBox(8, searchField, sortLabel, sortBox, browseProgress);
         searchRow.setAlignment(Pos.CENTER_LEFT);
 
         ListView<GalleryEntry> list = new ListView<>(shownEntries);
@@ -172,12 +152,9 @@ public class GalleryDialog {
         browseProgress.setVisible(true);
         catalog.whenComplete((entries, err) -> Platform.runLater(() -> {
             browseProgress.setVisible(false);
-            // Templates are in the same index and are not bots to install: they are starting points, offered
-            // by New Project. Installing one would give the user somebody else's package and a project with
-            // no name of their own, which is exactly what the template path exists to avoid.
-            allEntries.setAll(entries == null
-                    ? List.of()
-                    : entries.stream().filter(e -> !e.isTemplate()).toList());
+            // Every listed bot, since templates went (2026-10-23): Install here and New Project's bot row are the
+            // same linked clone (BotInstaller.install), only the folder's name differs.
+            allEntries.setAll(entries == null ? List.of() : entries);
             applyFilter();
             // Fetch each repo's live stars/last-push so the Stars/Recently-updated sorts and the ★ counts work.
             for (GalleryEntry e : allEntries) {
@@ -193,10 +170,8 @@ public class GalleryDialog {
 
     private void applyFilter() {
         List<GalleryEntry> filtered = new ArrayList<>();
-        TierFilter tiers = tierBox.getSelectionModel().getSelectedItem();
-        if (tiers == null) tiers = TierFilter.ALL;
         for (GalleryEntry e : allEntries) {
-            if (e.matches(currentQuery) && tiers.admits(e)) filtered.add(e);
+            if (e.matches(currentQuery)) filtered.add(e);
         }
         Sort sort = sortBox.getSelectionModel().getSelectedItem();
         if (sort == null) sort = Sort.STARS;
@@ -217,7 +192,7 @@ public class GalleryDialog {
         return e.owner() + "/" + e.repo();
     }
 
-    /** A gallery row: name, tier + author + description, a link to the repo, with an Install button. */
+    /** A gallery row: name, author + description, a link to the repo, with an Install button. */
     private final class BrowseCell extends ListCell<GalleryEntry> {
         @Override
         protected void updateItem(GalleryEntry entry, boolean empty) {
@@ -283,19 +258,10 @@ public class GalleryDialog {
     }
 
     private void installEntry(GalleryEntry entry, Button installBtn) {
-        String vouched = entry.isVetted()
-                ? "A maintainer looked at "
-                        + (entry.vettedVersion().isEmpty() || entry.isTemplate()
-                                ? "a release of it" : "release " + entry.vettedVersion() + ", which is the one installed")
-                        + ". That is not a security review."
-                : "It is a Community bot: it was listed automatically, and nobody reviewed its code.";
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
-                "“" + entry.name() + "” by " + entry.owner() + " is a bot that can control your mouse, "
-                        + "keyboard and screen. " + vouched + " Only install bots from authors you trust."
-                        + "\n\nInstall it now?",
-                ButtonType.OK, ButtonType.CANCEL);
+                entry.trustWarning() + "\n\nInstall it now?", ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(stage);
-        confirm.setHeaderText(entry.isVetted() ? "Install a vetted bot?" : "Install a community bot?");
+        confirm.setHeaderText("Install this bot?");
         Optional<ButtonType> choice = confirm.showAndWait();
         if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
 
@@ -303,8 +269,6 @@ public class GalleryDialog {
         installBtn.setText("Installing…");
         CompletableFuture
                 .supplyAsync(() -> {
-                    // The vetted release when there is one, so a Vetted bot installs what was looked at rather
-                    // than whatever its author released since.
                     String tag = gallery.installTag(entry).join();
                     if (tag.isBlank()) {
                         throw new RuntimeException("No release was found for " + entry.owner() + "/"
@@ -390,7 +354,7 @@ public class GalleryDialog {
             // null: gone. An empty Optional: up to date.
             CompletableFuture
                     .supplyAsync(() -> installer.authorGone(bot.info().projectPath()) ? null
-                            : installer.checkForUpdate(bot.info().projectPath(), catalog.join()))
+                            : installer.checkForUpdate(bot.info().projectPath()))
                     .whenComplete((latest, err) -> Platform.runLater(() -> {
                         if (err == null && latest == null) {
                             status.setText("author removed the repository · no updates");

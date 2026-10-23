@@ -1,56 +1,35 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.shared.github.SemVer;
-import com.botmaker.studio.project.launch.SupportedTargets;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * One listing in the gallery's {@code catalog.json} (or, from an older gallery, its {@code index.json}): a
- * pointer to a bot's own GitHub repo. The release to install is NOT stored here, except for the one release
- * a maintainer vetted — the newest is fetched live from the author's repo
- * ({@link GitHubGallery#latestReleaseTag}) so a new release never requires editing the gallery.
+ * pointer to a bot's own GitHub repo. The release to install is NOT stored here — the newest is fetched live from
+ * the author's repo ({@link GitHubGallery#latestReleaseTag}) so a new release never requires editing the gallery.
  *
  * @param name        the bot's project name (PascalCase, as created in Studio) — also the install dir name
  * @param owner       GitHub repo owner (login)
  * @param repo        GitHub repo name
  * @param description short human description
  * @param tags        optional free-form tags for filtering
- * @param launchTargets the launch kinds the author declares the bot works on — so a browser can tell before
- *                      installing whether their platform is one of them. Absent in every entry written before
- *                      this field existed, which reads as {@link SupportedTargets#any()}: "the author never
- *                      said", never "works on nothing".
- * @param tier        how much somebody vouches for it. Absent reads as {@link GalleryTier#COMMUNITY}, the
- *                    safe side; {@link GitHubGallery} marks the legacy index's entries Vetted itself, because
- *                    that file holds only Vetted bots and cannot say so
- * @param vettedVersion the release tag a maintainer looked at, for a Vetted bot; blank otherwise
  *
- * <p>No {@code requires} since 2026-10-12: what a bot's pom declares is read off the pom of the release that is
- * installed ({@link TemplatePlugins}), never a copy made at publish time. An entry that still carries one has it
- * ignored.
+ * <p>Fields an older catalog still carries are ignored: {@code requires} since 2026-10-12 (a bot's plugins are read
+ * off the pom of the release that is installed, {@link PublishedBotPlugins}); {@code launchTargets}, {@code tier}
+ * and {@code vettedVersion} since 2026-10-23 (what a bot launches is the SDK's business, and no listing is vouched
+ * for above another: every bot installs its newest release).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
-                           SupportedTargets launchTargets, GalleryTier tier, String vettedVersion) {
+public record GalleryEntry(String name, String owner, String repo, String description, List<String> tags) {
 
-    /**
-     * The one reserved tag: an entry carrying it is a <b>starting template</b> rather than a bot to install.
-     *
-     * <p>A template is a published bot — same repo, same release, same install path — and that is the whole
-     * design. Studio composes one starting point of its own (a blank project: a pom, an empty {@code src}
-     * tree and a {@code main} that prints a line), and every richer one is somebody's published project that
-     * New Project downloads and renames. So a new kind of starting point needs no Studio release, and the
-     * people who write bots are the people who write the templates.
-     *
-     * <p>It is a value in the existing free-form {@code tags} list rather than a field of its own, which
-     * costs one thing worth stating: an author is free to tag an ordinary bot {@code "template"} and it will
-     * be offered as one. That is a curation problem in a curated index, not a correctness one — the entry is
-     * still a real project that unpacks and compiles.
-     */
-    public static final String TEMPLATE_TAG = "template";
+    // TEMPLATE_TAG went on 2026-10-23, with the template concept: every published bot is a starting point, and
+    // New Project clones it linked to its author as Browse Bots' Install does. An entry still tagged "template"
+    // reads as an ordinary bot with that tag.
 
     @JsonCreator
     public GalleryEntry {
@@ -59,72 +38,43 @@ public record GalleryEntry(String name, String owner, String repo, String descri
         repo = repo == null ? "" : repo.trim();
         description = description == null ? "" : description;
         tags = tags == null ? List.of() : List.copyOf(tags);
-        launchTargets = launchTargets == null ? SupportedTargets.any() : launchTargets;
-        tier = tier == null ? GalleryTier.COMMUNITY : tier;
-        vettedVersion = vettedVersion == null ? "" : vettedVersion.trim();
-    }
-
-    /** An entry as a legacy index spells it: no tier, no vetted release. */
-    public GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
-                        SupportedTargets launchTargets) {
-        this(name, owner, repo, description, tags, launchTargets, null, null);
     }
 
     /**
-     * The starting templates among {@code entries}, as New Project lists them: Vetted first, then by name,
-     * and Community ones only when asked for.
+     * The bots among {@code entries} New Project offers to start from, by name.
      *
-     * <p>Sorted rather than left in the catalog's order because the first row is the one preselected, and it
-     * must be the same row on every launch.
+     * <p>Sorted rather than left in the catalog's order so the list reads the same on every launch.
      */
-    public static List<GalleryEntry> templates(List<GalleryEntry> entries, boolean includeCommunity) {
+    public static List<GalleryEntry> startingPoints(List<GalleryEntry> entries) {
         return entries.stream()
-                .filter(GalleryEntry::isTemplate)
-                .filter(e -> includeCommunity || e.isVetted())
-                .sorted(java.util.Comparator.comparing((GalleryEntry e) -> !e.isVetted())
-                        .thenComparing(GalleryEntry::name, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator.comparing(GalleryEntry::name, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 
-    public GalleryEntry withTier(GalleryTier newTier) {
-        return new GalleryEntry(name, owner, repo, description, tags, launchTargets, newTier, vettedVersion);
-    }
-
-    public boolean isVetted() {
-        return tier == GalleryTier.VETTED;
-    }
-
     /**
-     * The release to install: the vetted one for a Vetted bot that names it, else {@code latest}.
+     * The release an installed copy should move to: the repo's newest when it is not the one installed. Pure, so
+     * the rule is tested without a network.
      *
-     * <p>A Vetted bot from the legacy index names no release, so it installs the newest, which is exactly what
-     * every Studio before tiers did. <b>A template installs its newest release, vetted or not</b> (2026-10-12):
-     * its releases are cut by the project's own release and gated there, and a vetted pin nobody moved left New
-     * Project copying gamebot v0.2.0 with v0.2.6 out.
-     */
-    public String installTag(String latest) {
-        return isVetted() && !isTemplate() && !vettedVersion.isEmpty() ? vettedVersion : (latest == null ? "" : latest);
-    }
-
-    /**
-     * The release an installed copy of this bot should move to, if any.
-     *
-     * <p>A Vetted bot offers its vetted release and never a lower one: somebody who installed a newer release
-     * of their own accord is not "updated" backwards. Everything else, including a bot no longer listed at all
-     * ({@code listing} null), offers the newest release. Pure, so the rule is tested without a network.
-     *
-     * @param listing   the bot's current listing, or {@code null} when the catalog does not name it
      * @param installed the tag the project was installed at
      * @param latest    the repo's newest release tag, blank when unknown
      */
-    public static Optional<String> updateTarget(GalleryEntry listing, String installed, String latest) {
-        String target = listing == null ? (latest == null ? "" : latest) : listing.installTag(latest);
+    public static Optional<String> updateTarget(String installed, String latest) {
+        String target = latest == null ? "" : latest;
         if (target.isBlank() || target.equals(installed)) return Optional.empty();
-        if (listing != null && listing.isVetted() && !listing.vettedVersion.isEmpty()
-                && SemVer.isValid(installed) && SemVer.compare(target, installed) < 0) {
+        // Never backwards: a newest release older than the one installed is a release deleted since.
+        if (SemVer.isValid(installed) && SemVer.isValid(target) && SemVer.compare(target, installed) < 0) {
             return Optional.empty();
         }
         return Optional.of(target);
+    }
+
+    /**
+     * What every door that starts from this bot says first — Browse Bots' Install, New Project, the assistant's
+     * {@code create_project}: nobody reviews a listing's code.
+     */
+    public String trustWarning() {
+        return "“" + name + "” by " + owner + " is a bot that can control your mouse, keyboard and screen. It was "
+                + "listed automatically, and nobody reviewed its code. Only start from bots by authors you trust.";
     }
 
     public String htmlUrl() {
@@ -134,11 +84,6 @@ public record GalleryEntry(String name, String owner, String repo, String descri
     /** {@code owner/repo}, the stable identity of a bot. */
     public String slug() {
         return owner + "/" + repo;
-    }
-
-    /** True when this entry is a starting template — see {@link #TEMPLATE_TAG}. */
-    public boolean isTemplate() {
-        return tags.stream().anyMatch(TEMPLATE_TAG::equalsIgnoreCase);
     }
 
     /** True if the entry matches a free-text query against name / description / owner / tags. */

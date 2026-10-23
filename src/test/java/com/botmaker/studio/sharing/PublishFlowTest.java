@@ -1,7 +1,6 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.project.launch.SupportedTargets;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -69,25 +68,18 @@ class PublishFlowTest {
     @Test
     void theEntryIsSchemaTwoInTheCliOrder() throws Exception {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala-bot", " Mines ", "1.0.0",
-                List.of("mining", "template"), SupportedTargets.fromIds(List.of("heroic")), true);
+                List.of("mining"), true);
 
         String json = new String(BotPublisher.entryJson(MAPPER, request.entry("alice")), StandardCharsets.UTF_8);
-        assertEquals(List.of("schemaVersion", "name", "owner", "repo", "description", "tags", "launchTargets"),
-                fieldNames(MAPPER.readTree(json)), "no requires: the installed release's pom says it");
+        assertEquals(List.of("schemaVersion", "name", "owner", "repo", "description", "tags"),
+                fieldNames(MAPPER.readTree(json)), "no requires, no launch targets");
         JsonNode node = MAPPER.readTree(json);
         assertEquals(2, node.get("schemaVersion").asInt());
         assertEquals("Mines", node.get("description").asText());
-        assertEquals("heroic", node.get("launchTargets").get(0).asText());
-        assertTrue(request.isTemplate());
     }
 
     @Test
-    void undeclaredTargetsAreLeftOut() {
-        PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "", "1.0.0", List.of(),
-                SupportedTargets.any(), true);
-        Map<String, Object> entry = request.entry("alice");
-        assertFalse(entry.containsKey("launchTargets"));
-        assertTrue(entry.containsKey("tags"));
+    void aPropertyNobodyDefinesIsLeftAsWritten() {
         assertEquals("${missing}", PublishRequest.interpolate("${missing}", Map.of()));
     }
 
@@ -102,10 +94,8 @@ class PublishFlowTest {
     @Test
     void thePreviewIsTheListingTheGalleryWouldShow() {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "d", "1.0.0", List.of("x"),
-                null, true);
-        GalleryEntry preview = request.preview("alice", GalleryTier.COMMUNITY, "");
-        assertEquals("alice/koala", preview.slug());
-        assertEquals(GalleryTier.COMMUNITY, preview.tier());
+                true);
+        assertEquals(new GalleryEntry("Koala", "alice", "koala", "d", List.of("x")), request.preview("alice"));
     }
 
     // --- ListingStatus ---------------------------------------------------------------------------------------
@@ -140,7 +130,7 @@ class PublishFlowTest {
     @Test
     void anEntryIdenticalToTheGallerysIsNotResubmitted() throws Exception {
         PublishRequest request = new PublishRequest(Path.of("."), "Koala", "koala", "", "1.0.0", List.of("a"),
-                null, true);
+                true);
         Map<String, Object> entry = request.entry("alice");
         // The Contents API wraps base64 at 60 columns; the comparison must not care.
         String encoded = Base64.getMimeEncoder().encodeToString(BotPublisher.entryJson(MAPPER, entry));
@@ -148,7 +138,7 @@ class PublishFlowTest {
 
         assertTrue(BotPublisher.sameEntry(MAPPER, contents, entry));
         Map<String, Object> changed = new PublishRequest(Path.of("."), "Koala", "koala", "new", "1.0.0",
-                List.of("a"), null, true).entry("alice");
+                List.of("a"), true).entry("alice");
         assertFalse(BotPublisher.sameEntry(MAPPER, contents, changed));
     }
 
