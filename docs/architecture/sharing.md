@@ -1,7 +1,9 @@
 # Sharing — the gallery is read whole and written one file at a time
 
 > **2026-10-24: Publish is the cli's publish library** (`com.botmaker.cli.publish`, through `StudioPublishHost`), so
-> the pull request below is the cli's change, appending the release to the entry; see `dated-notes.md`.
+> the pull request below is the cli's change, appending the release to the entry; and `catalog.json` is read as the
+> cli's `Catalog` record (schema 4, every approved release pinned), installs and updates at the pinned commit; see
+> `dated-notes.md`.
 
 > **2026-10-23: the gallery repository is gone**, so the two halves below the line (its read URL, its entry
 > files) are history. Bots and plugins are listed in `botmaker-catalog`: Studio reads its generated

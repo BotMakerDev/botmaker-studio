@@ -84,10 +84,11 @@ public record CommunityConsent(Set<String> allowed) {
      * Whether loading {@code version} of the plugin at {@code coordinate} needs the user's yes first.
      *
      * <p>Never for a dev build (the user built it on this computer). Never for an official or trusted catalog
-     * row, nor the signed-in user's own row, at the release it lists — and only that one (the user's call,
-     * 2026-10-23): any pom may name its own Maven repository and serve another version, or another jar at the
-     * same version, under the same coordinate, so a row vouches for the jar JitPack built at the tag the
-     * catalog's check passed ({@code isRelease}) and nothing else. Always for a community row and for a
+     * row, nor the signed-in user's own row, at a release it approved — and only those (the user's call,
+     * 2026-10-23; every approved release since 2026-10-24): any pom may name its own Maven repository and serve
+     * another version, or another jar at the same version, under the same coordinate, so a row vouches for the
+     * files the catalog pinned at a release its check passed ({@code isRelease}) and nothing else. Always for a
+     * community row and for a
      * coordinate the catalog does not list, the user's own groupId included (Phase 7b: any repository can serve
      * {@code com.github.<login>}) — except, when no catalog could be read at all (offline on a first start, none
      * kept), a coordinate under BotMaker's own groupId: the SDK and basics must load with no prompt.
@@ -97,8 +98,8 @@ public record CommunityConsent(Set<String> allowed) {
      * @param row           the catalog row for that coordinate, empty when none lists it
      * @param catalogRead   whether a catalog was read, from GitHub or kept from the last read
      * @param signedInLogin the GitHub login signed in here, blank or null when nobody is
-     * @param isRelease     whether the jar is the one JitPack built for the row's tag; asked only of a row that
-     *                      vouches at that tag
+     * @param isRelease     whether the jar and its pom are the ones the catalog pinned at that release; asked only
+     *                      of a row that vouches at it
      */
     public static boolean needsAsking(String coordinate, String version, Optional<PluginRegistry.Plugin> row,
                                       boolean catalogRead, String signedInLogin, boolean devBuild,
@@ -121,8 +122,8 @@ public record CommunityConsent(Set<String> allowed) {
         return !login.isEmpty() && slash > 0 && row.repo().substring(0, slash).equalsIgnoreCase(login);
     }
 
-    /** Whether {@code version} is the release {@code row} lists: its tag as git spells it. */
+    /** Whether {@code version} is a release {@code row} approved, its tag as git spells it (any, since 2026-10-24). */
     public static boolean vouchedFor(PluginRegistry.Plugin row, String version) {
-        return !row.tag().isBlank() && row.tag().equals(version);
+        return row.release(version).isPresent();
     }
 }

@@ -1,5 +1,9 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.Catalog;
+import com.botmaker.cli.catalog.CatalogJson;
+import com.botmaker.cli.catalog.DerivedFacts;
+import com.botmaker.cli.catalog.Rank;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -14,16 +18,19 @@ import java.util.Optional;
  * the facts the catalog's CI derived. It is the only file Studio reads about published work — no topic search,
  * no pom read per row.
  *
+ * <p>Each row is read as the cli's own {@link Catalog} record (2026-10-24, schema 4), the one the catalog's index
+ * writes: every approved release, newest first, each pinned. The newest release is the row's {@code tag}.
+ *
  * <p>{@link #parse} never throws. This Studio is the reader that lags: a row it cannot read costs that row, a
- * field it does not know is skipped, and a body that is no catalog at all is {@link #EMPTY}. A bot's
- * {@code plugins} id that names no plugin row (a plugin unlisted since the catalog was built) is kept as a pin;
- * it simply matches no row.
+ * field it does not know is skipped, and a body that is no catalog at all is {@link #EMPTY}. A row with no
+ * release (the single {@code tag} of schema 3 is not read) is skipped. A bot's plugin id that names no plugin row
+ * (a plugin unlisted since the catalog was built) is kept as a pin; it simply matches no row.
  */
 public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntry> bots) {
 
     public static final CatalogIndex EMPTY = new CatalogIndex(List.of(), List.of());
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = CatalogJson.lenient();
 
     public CatalogIndex {
         plugins = List.copyOf(plugins);
@@ -55,36 +62,62 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
         if (root == null || !root.isObject()) return Optional.empty();
         List<PluginRegistry.Plugin> plugins = new ArrayList<>();
         for (JsonNode row : root.path("plugins")) {
-            String id = text(row, "id");
-            String repo = text(row, "repo");
-            if (id.isBlank() || !isSlug(repo)) continue;
-            String name = text(row, "name");
-            plugins.add(new PluginRegistry.Plugin(id, name.isBlank() ? repoName(repo) : name, text(row, "coordinate"),
-                    repo, text(row, "description"), texts(row, "tags"), text(row, "minContractVersion"),
-                    texts(row, "editorDependencies"), "", text(row, "tag"),
-                    PublisherRank.fromId(text(row, "rank")), row.path("stars").asInt(0)));
+            row(row, Catalog.Plugin.class).flatMap(CatalogIndex::plugin).ifPresent(plugins::add);
         }
         Map<String, PublisherRank> rankById = new HashMap<>();
         for (PluginRegistry.Plugin plugin : plugins) rankById.putIfAbsent(plugin.id(), plugin.rank());
         List<GalleryEntry> bots = new ArrayList<>();
         for (JsonNode row : root.path("bots")) {
-            String repo = text(row, "repo");
-            if (!isSlug(repo)) continue;
-            List<PublishedBotPlugins.Pin> pins = new ArrayList<>();
-            // A plugin no row lists vouches for nothing, as an unknown rank does.
-            PublisherRank pluginsRank = PublisherRank.ADMIN;
-            for (JsonNode pin : row.path("plugins")) {
-                String id = text(pin, "id");
-                if (id.isBlank()) continue;
-                pins.add(new PublishedBotPlugins.Pin(id, text(pin, "version")));
-                pluginsRank = PublisherRank.lower(pluginsRank, rankById.getOrDefault(id, PublisherRank.COMMUNITY));
-            }
-            String name = repoName(repo);
-            bots.add(new GalleryEntry(name, repo.substring(0, repo.indexOf('/')), name, text(row, "description"),
-                    texts(row, "tags"), text(row, "forkOf"), text(row, "tag"),
-                    PublisherRank.fromId(text(row, "rank")), row.path("stars").asInt(0), pins, pluginsRank));
+            row(row, Catalog.Bot.class).flatMap(bot -> bot(bot, rankById)).ifPresent(bots::add);
         }
         return Optional.of(new CatalogIndex(plugins, bots));
+    }
+
+    /** One row as the cli's record, empty when it does not read as one. */
+    private static <T> Optional<T> row(JsonNode row, Class<T> type) {
+        try {
+            return Optional.ofNullable(MAPPER.treeToValue(row, type));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<PluginRegistry.Plugin> plugin(Catalog.Plugin row) {
+        String id = trim(row.id());
+        String repo = trim(row.repo());
+        List<Catalog.Plugin.Release> releases = row.releases().stream()
+                .filter(r -> r != null && !trim(r.tag()).isEmpty()).toList();
+        if (id.isEmpty() || !isSlug(repo) || releases.isEmpty()) return Optional.empty();
+        Catalog.Plugin.Release newest = releases.getFirst();
+        String name = trim(row.name());
+        return Optional.of(new PluginRegistry.Plugin(id, name.isEmpty() ? repoName(repo) : name,
+                trim(row.coordinate()), repo, row.description(), row.tags(), trim(newest.minContractVersion()),
+                newest.editorDependencies(), "", newest.tag(), rank(row.rank()), row.stars(), releases));
+    }
+
+    private static Optional<GalleryEntry> bot(Catalog.Bot row, Map<String, PublisherRank> rankById) {
+        String repo = trim(row.repo());
+        List<Catalog.Bot.Release> releases = row.releases().stream()
+                .filter(r -> r != null && !trim(r.tag()).isEmpty()).toList();
+        if (!isSlug(repo) || releases.isEmpty()) return Optional.empty();
+        Catalog.Bot.Release newest = releases.getFirst();
+        List<PublishedBotPlugins.Pin> pins = new ArrayList<>();
+        // A plugin no row lists vouches for nothing, as an unknown rank does.
+        PublisherRank pluginsRank = PublisherRank.ADMIN;
+        for (DerivedFacts.Pin pin : newest.plugins()) {
+            String id = pin == null ? "" : trim(pin.id());
+            if (id.isEmpty()) continue;
+            pins.add(new PublishedBotPlugins.Pin(id, trim(pin.version())));
+            pluginsRank = PublisherRank.lower(pluginsRank, rankById.getOrDefault(id, PublisherRank.COMMUNITY));
+        }
+        String name = repoName(repo);
+        return Optional.of(new GalleryEntry(name, repo.substring(0, repo.indexOf('/')), name, row.description(),
+                row.tags(), trim(row.forkOf()), newest.tag(), rank(row.rank()), row.stars(), pins, pluginsRank,
+                releases));
+    }
+
+    private static PublisherRank rank(Rank rank) {
+        return PublisherRank.fromId(rank == null ? "" : rank.id());
     }
 
     /** {@code owner/repo}: one slash, neither side blank. */
@@ -97,16 +130,7 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
         return repo.substring(repo.indexOf('/') + 1);
     }
 
-    private static String text(JsonNode row, String field) {
-        JsonNode value = row.path(field);
-        return value.isTextual() ? value.asText().trim() : "";
-    }
-
-    private static List<String> texts(JsonNode row, String field) {
-        List<String> out = new ArrayList<>();
-        for (JsonNode value : row.path(field)) {
-            if (value.isTextual() && !value.asText().isBlank()) out.add(value.asText().trim());
-        }
-        return out;
+    private static String trim(String text) {
+        return text == null ? "" : text.trim();
     }
 }

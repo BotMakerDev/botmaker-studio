@@ -18,6 +18,8 @@ import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.CatalogClient;
+import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.MyCopy;
@@ -82,6 +84,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -134,6 +137,11 @@ public final class VersionsPane {
     private SyncModel model = SyncModel.of(SyncModel.Facts.none());
     /** A newer release of the original, asked of the network once per pane and again on ⟳. */
     private volatile String available;
+    /**
+     * The original's row in the catalog, read with {@link #available}; null when the catalog does not list it. A
+     * listed original updates only to a release the catalog approved, at the commit it pinned (2026-10-24).
+     */
+    private volatile GalleryEntry listedOriginal;
     private volatile boolean askOriginal = true;
     /** A zip install is linked to its original once per pane at most; a failure is retried next time. */
     private volatile boolean attachTried;
@@ -638,6 +646,11 @@ public final class VersionsPane {
             Checkpoints.save(projectDir, editor, VersionOrigin.SAFETY, "Before updating to " + tag);
             ProjectVcs vcs = vcs();
             vcs.fetchTag(Remote.ORIGINAL, tag, token);
+            GalleryEntry listed = listedOriginal;
+            if (listed != null && !vcs.tagCommit(tag).orElse("").equals(listed.commitOf(tag))) {
+                // A listed original updates to a release the catalog pinned, and only at that commit.
+                throw ProjectVcs.changedSinceApproved(tag);
+            }
             return vcs.mergeTag(tag);
         }, merge -> {
             if (merge.upToDate()) {
@@ -860,6 +873,13 @@ public final class VersionsPane {
                 .ifPresent(remoteBox::setValue);
     }
 
+    /** The catalog's bots: the session's read, or the kept one when GitHub is slow to answer. Blocking. */
+    private static List<GalleryEntry> catalogBots() {
+        CatalogClient client = CatalogClient.session();
+        // copy(): completing the session's shared answer here would make the kept catalog everybody's.
+        return client.fetch().copy().completeOnTimeout(client.kept(), 10, TimeUnit.SECONDS).join().bots();
+    }
+
     /**
      * Reads the three places off git (and, once per pane, the original's releases off the network). A project
      * installed from a zip is linked to its original here, the first time the strip needs it ({@code 39} §7).
@@ -890,8 +910,13 @@ public final class VersionsPane {
         String installed = source.map(BotSource::tag).orElse(null);
         if (askOriginal && vcs.remoteUrl(Remote.ORIGINAL) != null) {
             askOriginal = false;
+            GalleryEntry listed = SyncModel.slug(vcs.remoteUrl(Remote.ORIGINAL))
+                    .flatMap(s -> GitHubGallery.find(catalogBots(), s.owner(), s.repo()))
+                    .orElse(null);
+            listedOriginal = listed;
             try {
-                available = SyncModel.newest(vcs.remoteTags(Remote.ORIGINAL, token), installed);
+                available = listed != null ? SyncModel.newest(listed.approvedTags(), installed)
+                        : SyncModel.newest(vcs.remoteTags(Remote.ORIGINAL, token), installed);
             } catch (IOException e) {
                 System.err.println("Versions: " + e.getMessage());
             }

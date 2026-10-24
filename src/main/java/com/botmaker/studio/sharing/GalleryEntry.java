@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.shared.github.SemVer;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -28,11 +29,14 @@ import java.util.Optional;
  * @param pluginsRank the lowest rank among {@code plugins} as the catalog ranks them — community for an id that
  *                    names no row — and {@link PublisherRank#ADMIN} for a bot that uses none: a bot runs its
  *                    plugins' code too, so it is trusted no further than they are ({@link #trust})
+ * @param releases    every release the catalog approved, newest first, each pinned to its commit (2026-10-24):
+ *                    {@code tag} and {@code plugins} are the newest one's; empty for a row that is not the catalog's
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
                            String basedOn, String tag, PublisherRank rank, int stars,
-                           List<PublishedBotPlugins.Pin> plugins, PublisherRank pluginsRank) {
+                           List<PublishedBotPlugins.Pin> plugins, PublisherRank pluginsRank,
+                           List<Catalog.Bot.Release> releases) {
 
     // TEMPLATE_TAG went on 2026-10-23, with the template concept: every published bot is a starting point, and
     // New Project clones it linked to its author as Browse Bots' Install does. An entry still tagged "template"
@@ -50,6 +54,14 @@ public record GalleryEntry(String name, String owner, String repo, String descri
         rank = rank == null ? PublisherRank.COMMUNITY : rank;
         plugins = plugins == null ? List.of() : List.copyOf(plugins);
         pluginsRank = pluginsRank == null ? PublisherRank.COMMUNITY : pluginsRank;
+        releases = releases == null ? List.of() : List.copyOf(releases);
+    }
+
+    /** A row with no pinned releases: a test's. */
+    public GalleryEntry(String name, String owner, String repo, String description, List<String> tags,
+                        String basedOn, String tag, PublisherRank rank, int stars,
+                        List<PublishedBotPlugins.Pin> plugins, PublisherRank pluginsRank) {
+        this(name, owner, repo, description, tags, basedOn, tag, rank, stars, plugins, pluginsRank, List.of());
     }
 
     /** A bot of its own the catalog did not list — one being published, a test's: community, no tag. */
@@ -60,7 +72,22 @@ public record GalleryEntry(String name, String owner, String repo, String descri
 
     /** This listing, read as a fork of {@code slug}, or as nothing's when it is blank. */
     public GalleryEntry withBasedOn(String slug) {
-        return new GalleryEntry(name, owner, repo, description, tags, slug, tag, rank, stars, plugins, pluginsRank);
+        return new GalleryEntry(name, owner, repo, description, tags, slug, tag, rank, stars, plugins, pluginsRank,
+                releases);
+    }
+
+    /** The tags the catalog approved, newest first: what <i>Get vX.Y</i> picks from. */
+    public List<String> approvedTags() {
+        return releases.stream().map(Catalog.Bot.Release::tag).toList();
+    }
+
+    /**
+     * The commit the catalog approved {@code tag} at, which Install, New Project and <i>Get vX.Y</i> take; blank
+     * when it approved no such release (a row that is not the catalog's).
+     */
+    public String commitOf(String tag) {
+        return releases.stream().filter(r -> r.tag().equals(tag)).map(Catalog.Bot.Release::commit)
+                .filter(c -> c != null).findFirst().orElse("");
     }
 
     /** How far this bot is trusted: its publisher's rank, or its plugins' when one of theirs is lower. */

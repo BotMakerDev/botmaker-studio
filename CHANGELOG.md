@@ -17,6 +17,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Publish takes the same steps as `botmaker bot publish`.** It checks the saved version against the catalog's
   rules before tagging anything (a new *Check* row), and the catalog entry keeps every version you published, each
   pinned to its commit, instead of only the newest. A retry carries on from where the publish stopped.
+- **Every release the catalog approved is offered, and only those.** Plugins & Libraries lists a catalog plugin's
+  approved versions, newest first, and any of them loads without a question. A plugin whose jar or pom is not the
+  file the catalog approved is not loaded ("changed after the catalog approved it"), nor is a version the catalog
+  removed, which names the version to upgrade to. A bot installs, and *Get vX.Y* updates, only at the commit the
+  catalog approved, and *Get vX.Y* offers the newest approved release. Reads `catalog.json` schema 4 only.
 
 ## [1.6.0] — 2026-10-23
 

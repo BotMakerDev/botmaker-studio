@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.studio.project.ProjectMode;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
@@ -21,6 +22,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GalleryAndInstallerTest {
+
+    /** 2026-10-24: a catalog row's release with no pinned commit is not installed, and nothing is cloned. */
+    @Test
+    void aCatalogReleaseWithNoPinnedCommitIsNotInstalled(@TempDir Path dir) {
+        GalleryEntry entry = new GalleryEntry("farm", "alice", "farm", "", List.of(), "", "v1",
+                PublisherRank.TRUSTED, 0, List.of(), PublisherRank.ADMIN,
+                List.of(new Catalog.Bot.Release("v1", null, List.of())));
+        IOException refused = assertThrows(IOException.class,
+                () -> new BotInstaller(null).install(entry, "v1", dir.resolve("Farm")));
+        assertTrue(refused.getMessage().contains("pins no commit"), refused.getMessage());
+        assertFalse(Files.exists(dir.resolve("Farm")));
+    }
 
     @Test
     void indexJsonDeserializesToEntriesIgnoringUnknownFields() throws Exception {

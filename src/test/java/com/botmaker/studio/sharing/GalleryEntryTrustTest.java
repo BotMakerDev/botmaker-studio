@@ -12,14 +12,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GalleryEntryTrustTest {
 
     private static final String CATALOG = """
-            {"plugins": [{"id": "sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin"},
-                         {"id": "farm", "repo": "bob/farm", "rank": "community"}],
-             "bots": [{"repo": "BotMakerDev/official", "rank": "admin", "plugins": [{"id": "sdk"}]},
-                      {"repo": "carol/vetted", "rank": "trusted", "plugins": [{"id": "sdk"}]},
-                      {"repo": "carol/farmer", "rank": "trusted", "plugins": [{"id": "sdk"}, {"id": "farm"}]},
-                      {"repo": "carol/unlisted", "rank": "trusted", "plugins": [{"id": "gone"}]},
-                      {"repo": "carol/bare", "rank": "trusted"},
-                      {"repo": "eve/anyone", "rank": "community", "plugins": [{"id": "sdk"}]}]}""";
+            {"plugins": [{"id": "sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin", "releases": [{"tag": "v1"}]},
+                         {"id": "farm", "repo": "bob/farm", "rank": "community", "releases": [{"tag": "v1"}]}],
+             "bots": [{"repo": "BotMakerDev/official", "rank": "admin",
+                       "releases": [{"tag": "v1", "plugins": [{"id": "sdk"}]}]},
+                      {"repo": "carol/vetted", "rank": "trusted", "releases": [{"tag": "v1", "plugins": [{"id": "sdk"}]}]},
+                      {"repo": "carol/farmer", "rank": "trusted",
+                       "releases": [{"tag": "v1", "plugins": [{"id": "sdk"}, {"id": "farm"}]}]},
+                      {"repo": "carol/unlisted", "rank": "trusted", "releases": [{"tag": "v1", "plugins": [{"id": "gone"}]}]},
+                      {"repo": "carol/bare", "rank": "trusted", "releases": [{"tag": "v1"}]},
+                      {"repo": "eve/anyone", "rank": "community", "releases": [{"tag": "v1", "plugins": [{"id": "sdk"}]}]}]}""";
 
     private static GalleryEntry bot(String slug) {
         return CatalogIndex.parse(CATALOG).bots().stream().filter(b -> b.slug().equals(slug)).findFirst()

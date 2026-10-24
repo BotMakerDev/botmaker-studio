@@ -1071,12 +1071,28 @@ public final class ProjectVcs {
      * repository ({@code 39} §7).
      */
     public static void cloneAt(String url, String tag, Path dest, String token) throws IOException {
+        cloneAt(url, tag, "", dest, token);
+    }
+
+    /** The refusal of a release whose tag is no longer at the commit the catalog approved it at. */
+    public static IOException changedSinceApproved(String tag) {
+        return new IOException("The release " + tag + " changed after the catalog approved it: its tag points at "
+                + "another commit now, so nothing was taken.");
+    }
+
+    /**
+     * {@link #cloneAt(String, String, Path, String)}, refused unless the tag is at {@code commit}, the one the
+     * catalog approved it at (2026-10-24): a tag moved since holds code no check passed. A blank {@code commit}
+     * checks nothing.
+     */
+    public static void cloneAt(String url, String tag, String commit, Path dest, String token) throws IOException {
         var clone = Git.cloneRepository().setURI(url).setDirectory(dest.toFile())
                 .setRemote(Remote.ORIGINAL.id()).setNoCheckout(true);
         if (token != null && !token.isBlank()) clone.setCredentialsProvider(credentials(token));
         try (Git git = clone.call()) {
             ObjectId at = git.getRepository().resolve("refs/tags/" + tag + "^{commit}");
             if (at == null) throw new IOException("The release " + tag + " is not in " + url + ".");
+            if (commit != null && !commit.isBlank() && !at.name().equals(commit)) throw changedSinceApproved(tag);
             // The clone made a local branch at the author's default tip (named whatever theirs is): the user's
             // line is main, at the tag, whatever the author did after it.
             Repository repo = git.getRepository();

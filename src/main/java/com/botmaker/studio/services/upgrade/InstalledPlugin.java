@@ -28,7 +28,8 @@ import java.util.function.Predicate;
  * <i>could not check</i> rather than showing the user nothing.
  */
 public record InstalledPlugin(UserLibrary artifact, String displayName, String installed,
-                              String available, Source source, List<UserLibrary> editorDependencies) {
+                              String available, Source source, List<UserLibrary> editorDependencies,
+                              List<String> approved) {
 
     /**
      * How this row came to be known, which is also how far its {@link #available()} can be trusted.
@@ -37,7 +38,10 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
      * stops the upgrade window inventing a fourth.
      */
     public enum Source {
-        /** The plugin registry lists it. {@code available} is the entry's version, JitPack's newest build. */
+        /**
+         * The catalog lists it. {@code available} is the newest release it approved, and {@code approved} every
+         * one, newest first (2026-10-24): what the version menu offers.
+         */
         REGISTRY,
         /** The pom declares a plugin nothing else accounts for — published by hand, or not published. */
         UNLISTED
@@ -48,6 +52,7 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
         installed = installed == null ? "" : installed.trim();
         available = available == null ? "" : available.trim();
         editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
+        approved = approved == null ? List.of() : List.copyOf(approved);
     }
 
     /** {@code groupId:artifactId} — the identity, since the version is what the row is about. */
@@ -67,7 +72,7 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
 
     /** The same row with {@code available} filled in — how an async version lookup lands on a built row. */
     public InstalledPlugin withAvailable(String version) {
-        return new InstalledPlugin(artifact, displayName, installed, version, source, editorDependencies);
+        return new InstalledPlugin(artifact, displayName, installed, version, source, editorDependencies, approved);
     }
 
     /**
@@ -96,13 +101,14 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
                 // would pin a coordinate that tag was never released at.
                 boolean sameGroup = entry.groupId().equals(library.groupId());
                 rows.add(new InstalledPlugin(library, entry.name(), library.version(),
-                        sameGroup ? entry.version() : "", Source.REGISTRY, entry.editorLibraries()));
+                        sameGroup ? entry.version() : "", Source.REGISTRY, entry.editorLibraries(),
+                        sameGroup ? entry.approvedTags() : List.of()));
             } else if (isPlugin.test(library)) {
                 // No entry to read a name, a description or an editor-dependency list from. The coordinate
                 // is the whole of what is known, and an empty `available` is the truthful answer until
                 // somebody asks JitPack — which this does not, because nothing here reaches the network.
                 rows.add(new InstalledPlugin(library, library.artifactId(), library.version(),
-                        "", Source.UNLISTED, List.of()));
+                        "", Source.UNLISTED, List.of(), List.of()));
             }
         }
         return List.copyOf(rows);

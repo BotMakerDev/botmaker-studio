@@ -1,7 +1,8 @@
 # Tiers, and a publish that resumes (2026-09-16)
 
 > **Since 2026-10-24** the plan is REPO, CHECK, PUSH, RELEASE, ARCHIVE, LISTING, and every step after REPO is the
-> cli's publish library, run again whole on a retry (it skips what is done); see `dated-notes.md`.
+> cli's publish library, run again whole on a retry (it skips what is done). A listing's releases are all kept and
+> pinned, and Studio takes a bot or a plugin only at its pins; see `dated-notes.md`.
 
 > **History since 2026-10-23**, except the resumable `PublishPlan` and the one `GalleryCard`: tiers went, then
 > the gallery repository. The listing step opens the catalog's pull request (`CatalogListing`), and a rank

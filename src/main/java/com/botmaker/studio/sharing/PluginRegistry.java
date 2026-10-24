@@ -1,9 +1,11 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.studio.project.UserLibrary;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -18,8 +20,9 @@ import java.util.concurrent.CompletableFuture;
  *
  * <p><b>The catalog says the version (2026-10-23).</b> Since 2026-10-12 a plugin installed JitPack's newest
  * build, because the registry's {@code verifiedVersion} lagged behind pull requests that failed its gate. The
- * catalog's entries are checked by machine and merged automatically, so an entry's {@code tag} is the release
- * that passed the check, and nothing newer is installed. Read through {@link CatalogClient}, one request per
+ * catalog's entries are checked by machine and merged automatically, so an entry's releases are the ones that
+ * passed the check (every one kept since 2026-10-24, newest first), and nothing else is installed. Read through
+ * {@link CatalogClient}, one request per
  * session; any failure is the catalog kept from the last read, else empty, and never stops anybody editing
  * their bot.
  */
@@ -47,15 +50,19 @@ public final class PluginRegistry {
      *                           declares {@code optional}, which is exactly the set a resolve does not reach.
      *                           Absent is the ordinary case: a plugin whose dependencies are ordinary needs
      *                           no list, because they are transitive. See {@code MavenService.installPlugin}.
-     * @param tag the release the catalog's check passed
+     * @param tag the newest release the catalog approved
      * @param rank who published it
+     * @param releases every release the catalog approved, newest first, each pinned to its commit and the sha256
+     *                 of its jar and pom (2026-10-24); {@code minContractVersion} and {@code editorDependencies}
+     *                 are the newest one's
      */
     public record Plugin(String id, String name, String coordinate, String repo, String description,
                          List<String> tags, String minContractVersion,
                          List<String> editorDependencies, String version, String tag, PublisherRank rank,
-                         int stars) {
+                         int stars, List<Catalog.Plugin.Release> releases) {
 
         public Plugin {
+            releases = releases == null ? List.of() : List.copyOf(releases);
             editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
             id = id == null ? "" : id.trim();
             name = name == null ? "" : name.trim();
@@ -85,10 +92,30 @@ public final class PluginRegistry {
                     "", PublisherRank.COMMUNITY, 0);
         }
 
+        /** A row approving {@code tag} alone, with no pins: a test's, or one built by hand. */
+        public Plugin(String id, String name, String coordinate, String repo, String description,
+                      List<String> tags, String minContractVersion, List<String> editorDependencies,
+                      String version, String tag, PublisherRank rank, int stars) {
+            this(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
+                    tag, rank, stars, tag == null || tag.isBlank() ? List.of()
+                            : List.of(new Catalog.Plugin.Release(tag.trim(), null, null, null, minContractVersion,
+                            editorDependencies)));
+        }
+
         /** This entry installing {@code newVersion}. */
         public Plugin withVersion(String newVersion) {
             return new Plugin(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies,
-                    newVersion, tag, rank, stars);
+                    newVersion, tag, rank, stars, releases);
+        }
+
+        /** The release the catalog approved as {@code version}, spelled as git has it; empty when it approved none. */
+        public Optional<Catalog.Plugin.Release> release(String version) {
+            return releases.stream().filter(r -> r.tag().equals(version)).findFirst();
+        }
+
+        /** The tags the catalog approved, newest first: what Plugins & Libraries offers. */
+        public List<String> approvedTags() {
+            return releases.stream().map(Catalog.Plugin.Release::tag).toList();
         }
 
         public String groupId() {

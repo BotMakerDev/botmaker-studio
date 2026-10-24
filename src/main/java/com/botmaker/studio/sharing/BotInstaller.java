@@ -41,7 +41,8 @@ public final class BotInstaller {
      * Installs {@code entry} at release {@code tag} as a <b>clone</b> of its author's repository
      * ({@code docs/refactor/39-versions.md} §7): the remote is {@code original}, branch {@code main} starts at
      * the tag — one {@code INSTALL} version, only when the ignore file changed anything. An update is then a
-     * real merge.
+     * real merge. A catalog row's release installs only while its tag is at the commit the catalog pinned
+     * (2026-10-24).
      *
      * @return the installed project directory
      * @throws IOException if the project already exists or the clone fails
@@ -59,9 +60,15 @@ public final class BotInstaller {
         if (Files.exists(dest)) {
             throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
+        String commit = entry.commitOf(tag);
+        // A catalog row installs a release it pinned, and only at that commit.
+        if (!entry.releases().isEmpty() && commit.isEmpty()) {
+            throw new IOException("The catalog pins no commit for " + entry.slug() + " " + tag
+                    + ", so it was not installed.");
+        }
         try {
             try {
-                ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, dest, gallery.token());
+                ProjectVcs.cloneAt(cloneUrl(entry.owner(), entry.repo()), tag, commit, dest, gallery.token());
             } catch (IOException cloneFailed) {
                 // The gallery's copy of a removed repository went with the gallery (2026-10-23): say why instead.
                 if (authorGone(entry.owner(), entry.repo())) {

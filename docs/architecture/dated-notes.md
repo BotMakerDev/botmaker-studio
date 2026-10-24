@@ -1,5 +1,17 @@
 # Dated notes — read these before the other files here
 
+> **The catalog is read as the cli's `Catalog` record, schema 4, since 2026-10-24** (umbrella easy-publish plan,
+> Phase 4b). `sharing/CatalogIndex` reads each row as `Catalog.Plugin` / `Catalog.Bot` (a row that does not read is
+> skipped whole; one with no `releases` too — the schema-3 single `tag` is not read). `PluginRegistry.Plugin` and
+> `GalleryEntry` carry `releases`, newest first; `tag` is the newest. Plugins & Libraries offers a listed plugin's
+> approved tags only (`InstalledPlugin.approved`; JitPack is no longer asked for them). `plugin/ReleaseChecksums`
+> (JitPack's `.sha1`, one tag) is replaced by `plugin/ReleasePins`: the jar and the pom beside it in `~/.m2` against
+> the release's `jarSha256`/`pomSha256`, offline; a row vouches for every approved release. `PluginGate.admit`
+> refuses, without asking, a release whose files differ ("changed after the catalog approved it") and one this
+> computer saw approved that the catalog removed (preference `catalog.approvedReleases`; "removed from the catalog",
+> naming the newest to upgrade to). A bot installs (`ProjectVcs.cloneAt` with the commit) and *Get vX.Y* merges only
+> while the tag is at the pinned commit, and *Get vX.Y* offers the newest approved tag of a listed original.
+
 > **Publish runs the cli's publish library since 2026-10-24** (umbrella easy-publish plan, Phase 4a). Studio depends
 > on `botmaker-cli`'s main jar; `BotPublisher.Run` makes sure of the repository (REPO, Studio's own: made, public,
 > `mine`), then runs `com.botmaker.cli.publish.Publish` — the steps and rules of `botmaker bot publish` — through

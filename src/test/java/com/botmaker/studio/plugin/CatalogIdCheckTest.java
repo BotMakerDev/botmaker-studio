@@ -34,7 +34,8 @@ class CatalogIdCheckTest {
 
     private static PluginGate gate() {
         return new PluginGate(() -> LISTED, REPO, () -> "", () -> CommunityConsent.of(""), kept -> {},
-                asked -> true, jar -> true, jar -> true, (jar, row) -> true);
+                asked -> true, jar -> true, jar -> true,
+                (jar, row, version) -> ReleasePins.Verdict.APPROVED);
     }
 
     @Test

@@ -19,16 +19,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginRegistryTest {
 
     private static final String CATALOG = """
-            {"schemaVersion": 3, "plugins": [ {
+            {"schemaVersion": 4, "plugins": [ {
               "id" : "com.example.discord",
               "name" : "Discord Notifier",
               "repo" : "someone/botmaker-discord-plugin",
-              "tag" : "v0.1.0",
               "rank" : "community",
               "coordinate" : "com.github.someone:botmaker-discord-plugin",
               "description" : "Sends a message when a bot finishes",
               "tags" : [ "notifications" ],
-              "minContractVersion" : "v0.11.0"
+              "releases" : [ { "tag" : "v0.1.0", "minContractVersion" : "v0.11.0" } ]
             } ] }
             """;
 
@@ -83,7 +82,8 @@ class PluginRegistryTest {
     @Test
     void a_row_with_no_coordinate_is_not_installable() {
         PluginRegistry.Plugin plugin = CatalogIndex.parse(
-                "{\"plugins\":[{\"id\":\"a.b\",\"repo\":\"o/a\",\"tag\":\"v1\"}]}").plugins().getFirst();
+                "{\"plugins\":[{\"id\":\"a.b\",\"repo\":\"o/a\",\"releases\":[{\"tag\":\"v1\"}]}]}").plugins()
+                .getFirst();
 
         assertFalse(plugin.isInstallable());
         assertEquals("a", plugin.name(), "no name: the repository's");

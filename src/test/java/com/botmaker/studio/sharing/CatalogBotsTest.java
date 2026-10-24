@@ -21,7 +21,8 @@ class CatalogBotsTest {
         GalleryEntry fork = new GalleryEntry("b", "bob", "b", "", List.of()).withBasedOn("alice/a");
         assertEquals("based on alice/a", fork.basedOnLine());
         assertEquals("", fork.withBasedOn("").basedOnLine());
-        GalleryEntry detached = CatalogIndex.parse("{\"bots\":[{\"repo\":\"carol/c\",\"tag\":\"v1\"}]}").bots().getFirst();
+        GalleryEntry detached = CatalogIndex.parse(
+                "{\"bots\":[{\"repo\":\"carol/c\",\"releases\":[{\"tag\":\"v1\"}]}]}").bots().getFirst();
         assertEquals("", detached.basedOnLine());
     }
 

@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -52,9 +51,15 @@ import java.util.zip.ZipFile;
  *
  * <p>Four ways round the question were closed on 2026-10-23 (Phase 7b, after a security review): a library
  * sharing a package with a plugin let through is left off; a row vouches only for the jar JitPack built at its
- * tag ({@link ReleaseChecksums}), not for any jar at that version; the user's own plugin is exempt only as their
- * catalog row at its tag, not by groupId; and a dev build counts as installed here only when Maven's metadata
- * agrees with its {@code _remote.repositories}.
+ * tag, not for any jar at that version; the user's own plugin is exempt only as their catalog row at its tag, not
+ * by groupId; and a dev build counts as installed here only when Maven's metadata agrees with its
+ * {@code _remote.repositories}.
+ *
+ * <p><b>Every approved release, pinned (2026-10-24).</b> A row vouches for each release the catalog approved, and
+ * only for the jar and pom whose sha256 the catalog pinned ({@link ReleasePins}). Two are refused outright, never
+ * asked about: a release whose jar or pom is not the pinned one ("changed after the catalog approved it"), and a
+ * release this computer saw approved that the catalog removed since, which names the newest approved one to move
+ * to. A version the catalog never approved is asked about, as before.
  *
  * <p>Studio installs one at start ({@link PluginHost#guard}); a host with none (the tests, a headless run)
  * binds everything as before.
@@ -81,8 +86,9 @@ public final class PluginGate {
             String what = row.map(r -> "“" + (r.name().isBlank() ? r.id() : r.name()) + "” (" + jar + ") by "
                             + r.repo().substring(0, Math.max(0, r.repo().indexOf('/')))
                             + (r.rank() == PublisherRank.COMMUNITY ? " is a community plugin."
-                            : " is not the release the catalog lists (" + r.tag() + ") as JitPack built it, or "
-                            + "Studio could not check that, so its " + r.rank().displayName() + " rank does not "
+                            : " is not a release the catalog approved (its newest is " + r.tag() + "), or Studio "
+                            + "could not check its files against the catalog's, so its " + r.rank().displayName()
+                            + " rank does not "
                             + "vouch for it: any project can name its own Maven repository and serve another jar "
                             + "under this name."))
                     .orElse(jar + (coordinate.isBlank() ? "" : " (" + coordinate + ")")
@@ -127,7 +133,13 @@ public final class PluginGate {
     private final Asker asker;
     private final Predicate<Path> declaresPlugin;
     private final Predicate<Path> builtHere;
-    private final BiPredicate<Path, PluginRegistry.Plugin> isRelease;
+    private final Pins pins;
+
+    /** What the catalog says of a jar at a version ({@link ReleasePins#check}). */
+    @FunctionalInterface
+    interface Pins {
+        ReleasePins.Verdict check(Path jar, PluginRegistry.Plugin row, String version);
+    }
 
     /**
      * @param repository     the Maven repository the classpath's jars are in, which a jar's coordinate is read
@@ -135,13 +147,12 @@ public final class PluginGate {
      * @param declaresPlugin whether a jar carries the {@code StudioPlugin} service entry
      * @param builtHere      whether a jar was installed on this computer rather than downloaded
      *                       ({@link #installedHere}): only such a dev build skips the question
-     * @param isRelease      whether a jar is the one JitPack built for a row's tag
-     *                       ({@link ReleaseChecksums#isRelease}): only such a jar loads on its row's word
+     * @param pins           what the catalog says of a jar at a version: only an {@code APPROVED} one loads on its
+     *                       row's word
      */
     PluginGate(Supplier<CatalogIndex> catalog, Path repository, Supplier<String> login,
                Supplier<CommunityConsent> consent, Consumer<CommunityConsent> keep, Asker asker,
-               Predicate<Path> declaresPlugin, Predicate<Path> builtHere,
-               BiPredicate<Path, PluginRegistry.Plugin> isRelease) {
+               Predicate<Path> declaresPlugin, Predicate<Path> builtHere, Pins pins) {
         this.catalog = catalog;
         this.repository = repository.toAbsolutePath().normalize();
         this.login = login;
@@ -150,7 +161,7 @@ public final class PluginGate {
         this.asker = asker;
         this.declaresPlugin = declaresPlugin;
         this.builtHere = builtHere;
-        this.isRelease = isRelease;
+        this.pins = pins;
     }
 
     /** Studio's gate: the session's catalog, {@code ~/.m2}, the signed-in login, this computer's yeses. */
@@ -158,7 +169,7 @@ public final class PluginGate {
         return new PluginGate(PluginGate::sessionCatalog,
                 Path.of(System.getProperty("user.home"), ".m2", "repository"), GitHubAuth::rememberedLogin,
                 CommunityConsent::load, CommunityConsent::save, asker, MavenService::declaresPlugin,
-                PluginGate::installedHere, ReleaseChecksums.studio()::isRelease);
+                PluginGate::installedHere, ReleasePins.studio()::check);
     }
 
     /**
@@ -235,8 +246,16 @@ public final class PluginGate {
             String coordinate = coordinateOf(jar);
             String version = ReleasedPlugins.versionOf(jar);
             Optional<PluginRegistry.Plugin> row = rowFor(listed, coordinate);
+            ReleasePins.Verdict verdict = row.isEmpty() || dev.contains(jar) ? ReleasePins.Verdict.NOT_APPROVED
+                    : pins.check(jar, row.get(), version);
+            Optional<String> refusal = refusal(verdict, row, version);
+            if (refusal.isPresent()) {
+                refused.add(new PluginLoader.PluginFailure(ReleasedPlugins.describe(entry),
+                        new IllegalStateException(refusal.get())));
+                continue;
+            }
             if (!CommunityConsent.needsAsking(coordinate, version, row, !listed.isEmpty(), who, dev.contains(jar),
-                    () -> isRelease.test(jar, row.orElseThrow()))) {
+                    () -> verdict == ReleasePins.Verdict.APPROVED)) {
                 plugins.add(entry);
                 continue;
             }
@@ -270,6 +289,25 @@ public final class PluginGate {
                 .filter(entry -> plugins.contains(entry) || libraries.contains(entry) && !shadowing.contains(entry))
                 .toList();
         return new Admitted(admitted, refused);
+    }
+
+    /**
+     * Why a plugin is left off whatever the user would answer, empty when it may load or be asked about: its files
+     * changed after the catalog approved its release, or the catalog removed that release, naming the newest
+     * approved one to move to (review focus 5, 2026-10-24).
+     */
+    static Optional<String> refusal(ReleasePins.Verdict verdict, Optional<PluginRegistry.Plugin> row,
+                                    String version) {
+        if (row.isEmpty()) return Optional.empty();
+        String plugin = row.get().name().isBlank() ? row.get().id() : row.get().name();
+        return switch (verdict) {
+            case CHANGED -> Optional.of("not loaded: " + plugin + " " + version + " changed after the catalog "
+                    + "approved it — its jar or pom is not the one the catalog's check passed");
+            case REMOVED -> Optional.of("not loaded: " + plugin + " " + version + " was removed from the catalog. "
+                    + (row.get().tag().isBlank() || row.get().tag().equals(version) ? "Pick another version"
+                    : "Upgrade it to " + row.get().tag()) + " in Plugins & Libraries");
+            case APPROVED, UNCHECKED, NOT_APPROVED -> Optional.empty();
+        };
     }
 
     /** The sentence a library left off for sharing a plugin's package is reported with, after its jar. */

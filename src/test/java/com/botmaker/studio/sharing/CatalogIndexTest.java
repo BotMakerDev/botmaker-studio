@@ -19,17 +19,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** {@code catalog.json} as Studio reads it: the spec's example, what a lagging reader skips, and offline. */
 class CatalogIndexTest {
 
-    /** The spec's example ({@code 2026-10-23-catalog-design.md} § catalog.json). */
+    private static final String JAR_V210 = "1".repeat(64);
+    private static final String POM_V210 = "2".repeat(64);
+    private static final String COMMIT_V120 = "c".repeat(40);
+
+    /** Schema 4 (2026-10-24): every approved release, newest first, each pinned; what the cli's index writes. */
     private static final String SPEC = """
-            { "schemaVersion": 3, "builtAt": "2026-10-23T18:00:00Z",
-              "plugins": [ { "id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "tag": "v2.1.0", "rank": "admin",
+            { "schemaVersion": 4, "builtAt": "2026-10-24T18:00:00Z",
+              "plugins": [ { "id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
                              "coordinate": "com.github.BotMakerDev:botmaker-sdk", "name": "BotMaker SDK",
-                             "description": "…", "tags": ["…"], "stars": 4, "minContractVersion": "v0.11.0",
-                             "editorDependencies": ["g:a:1"] } ],
-              "bots":    [ { "repo": "somedev/firestone-bot", "tag": "v1.2.0", "rank": "trusted",
+                             "description": "…", "tags": ["…"], "stars": 4,
+                             "releases": [ { "tag": "v2.1.0", "commit": "%s", "jarSha256": "%s", "pomSha256": "%s",
+                                             "minContractVersion": "v0.11.0", "editorDependencies": ["g:a:1"] },
+                                           { "tag": "v2.0.0", "commit": "%s", "minContractVersion": "v0.10.0" } ] } ],
+              "bots":    [ { "repo": "somedev/firestone-bot", "rank": "trusted",
                              "description": "…", "tags": ["…"], "stars": 3, "forkOf": "LiQiyeDev/firestone",
-                             "plugins": [ { "id": "com.botmaker.sdk", "version": "2.1.0" } ] } ] }
-            """;
+                             "releases": [ { "tag": "v1.2.0", "commit": "%s",
+                                             "plugins": [ { "id": "com.botmaker.sdk", "version": "2.1.0" } ] },
+                                           { "tag": "v1.1.0", "commit": "%s" } ] } ] }
+            """.formatted("a".repeat(40), JAR_V210, POM_V210, "b".repeat(40), COMMIT_V120, "d".repeat(40));
 
     @Test
     void theSpecsExampleReadsWhole() {
@@ -38,11 +46,15 @@ class CatalogIndexTest {
         PluginRegistry.Plugin sdk = index.plugins().getFirst();
         assertEquals("com.botmaker.sdk", sdk.id());
         assertEquals("BotMaker SDK", sdk.name());
-        assertEquals("v2.1.0", sdk.version());
+        assertEquals("v2.1.0", sdk.version(), "the newest approved release is installed");
         assertEquals(PublisherRank.ADMIN, sdk.rank());
         assertEquals(4, sdk.stars());
-        assertEquals("v0.11.0", sdk.minContractVersion());
+        assertEquals("v0.11.0", sdk.minContractVersion(), "the newest release's");
         assertEquals(List.of("g:a:1"), sdk.editorDependencies());
+        assertEquals(List.of("v2.1.0", "v2.0.0"), sdk.approvedTags());
+        assertEquals(JAR_V210, sdk.release("v2.1.0").orElseThrow().jarSha256());
+        assertEquals(POM_V210, sdk.release("v2.1.0").orElseThrow().pomSha256());
+        assertTrue(sdk.release("v1.0.0").isEmpty());
 
         GalleryEntry bot = index.bots().getFirst();
         assertEquals("somedev/firestone-bot", bot.slug());
@@ -52,6 +64,18 @@ class CatalogIndexTest {
         assertEquals(3, bot.stars());
         assertEquals("based on LiQiyeDev/firestone", bot.basedOnLine());
         assertEquals(List.of(new PublishedBotPlugins.Pin("com.botmaker.sdk", "2.1.0")), bot.plugins());
+        assertEquals(List.of("v1.2.0", "v1.1.0"), bot.approvedTags());
+        assertEquals(COMMIT_V120, bot.commitOf("v1.2.0"), "what Install and Get vX.Y take");
+        assertEquals("", bot.commitOf("v9.9.9"));
+    }
+
+    /** No reading of the old single {@code tag}: a schema-3 row has no release, so it is skipped. */
+    @Test
+    void aRowWithNoReleaseIsSkipped() {
+        CatalogIndex index = CatalogIndex.parse("""
+                {"schemaVersion": 3, "plugins": [{"id": "x", "repo": "o/x", "tag": "v1"}],
+                 "bots": [{"repo": "o/b", "tag": "v1"}, {"repo": "o/c", "releases": []}]}""");
+        assertTrue(index.isEmpty());
     }
 
     @Test
@@ -67,20 +91,26 @@ class CatalogIndexTest {
     @Test
     void aPinWhosePluginIsGoneIsKept() {
         CatalogIndex index = CatalogIndex.parse("""
-                {"plugins": [], "bots": [{"repo": "a/b", "tag": "v1", "plugins": [{"id": "gone.plugin"}]}]}""");
+                {"plugins": [], "bots": [{"repo": "a/b",
+                                          "releases": [{"tag": "v1", "plugins": [{"id": "gone.plugin"}]}]}]}""");
         assertEquals(List.of(new PublishedBotPlugins.Pin("gone.plugin", "")), index.bots().getFirst().plugins());
     }
 
     @Test
     void aRowItCannotReadCostsThatRowOnly() {
         CatalogIndex index = CatalogIndex.parse("""
-                {"plugins": [{"repo": "o/no-id"}, {"id": "x", "repo": "not-a-slug"}, 5,
-                             {"id": "ok", "repo": "o/ok", "tag": "v1", "rank": "galactic", "whatIsThis": 42}],
-                 "bots": [{"repo": "o/a/b"}, {"tag": "v1"}, {"repo": "o/fine", "stars": "many"}]}""");
+                {"plugins": [{"repo": "o/no-id", "releases": [{"tag": "v1"}]},
+                             {"id": "x", "repo": "not-a-slug", "releases": [{"tag": "v1"}]}, 5,
+                             {"id": "ok", "repo": "o/ok", "rank": "galactic", "whatIsThis": 42,
+                              "releases": [{"tag": "v1", "since": "a field this Studio does not know"}]}],
+                 "bots": [{"repo": "o/a/b", "releases": [{"tag": "v1"}]}, {"releases": [{"tag": "v1"}]},
+                          {"repo": "o/odd", "stars": "many", "releases": [{"tag": "v1"}]},
+                          {"repo": "o/fine", "releases": [{"tag": "v1"}]}]}""");
 
         assertEquals(List.of("ok"), index.plugins().stream().map(PluginRegistry.Plugin::id).toList());
         assertEquals(PublisherRank.COMMUNITY, index.plugins().getFirst().rank(), "an unknown rank vouches for nothing");
-        assertEquals(List.of("o/fine"), index.bots().stream().map(GalleryEntry::slug).toList());
+        assertEquals(List.of("o/fine"), index.bots().stream().map(GalleryEntry::slug).toList(),
+                "a row whose field is the wrong type costs that row");
         assertEquals(0, index.bots().getFirst().stars());
     }
 

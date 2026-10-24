@@ -7,10 +7,12 @@ import org.eclipse.jgit.revwalk.RevWalk;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -63,6 +65,20 @@ class RemotesTest {
         assertEquals(url(author), vcs.remoteUrl(Remote.ORIGINAL));
         assertTrue(Files.exists(dest.resolve(".gitignore")));
         assertTrue(vcs.remoteTags(Remote.ORIGINAL, null).contains("v1.0.0"));
+    }
+
+    /** 2026-10-24: a catalog release installs only while its tag is at the commit the catalog pinned. */
+    @Test
+    void anInstallAtAPinnedCommitRefusesATagMovedSince(@TempDir Path root) throws Exception {
+        Path author = author(root);
+        String approved = commitOf(author, "v1.0.0").name();
+        ProjectVcs.cloneAt(url(author), "v1.0.0", approved, root.resolve("Pinned"), null);
+        assertEquals(approved, commitOf(root.resolve("Pinned"), "HEAD").name());
+
+        String moved = commitOf(author, "main").name();
+        Exception refused = assertThrows(IOException.class,
+                () -> ProjectVcs.cloneAt(url(author), "v1.0.0", moved, root.resolve("Moved"), null));
+        assertTrue(refused.getMessage().contains("changed after the catalog approved it"), refused.getMessage());
     }
 
     @Test

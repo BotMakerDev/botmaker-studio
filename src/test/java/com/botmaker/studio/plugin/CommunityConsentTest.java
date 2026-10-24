@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.sharing.CatalogIndex;
@@ -12,14 +13,13 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.prefs.Preferences;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -77,7 +77,7 @@ class CommunityConsentTest {
         List<PluginGate.Asked> asked = new ArrayList<>();
         PluginGate gate = gate(LISTED, "", CommunityConsent.of(""), new AtomicReference<>(), asked, false);
         assertEquals(List.of(SDK_JAR), gate.admit(LISTED, List.of(SDK_JAR, SDK_ELSEWHERE_JAR), List.of()).loadable());
-        assertTrue(asked.getFirst().question().contains("not the release the catalog lists (v1.0.0)"),
+        assertTrue(asked.getFirst().question().contains("not a release the catalog approved (its newest is v1.0.0)"),
                 asked.getFirst().question());
     }
 
@@ -92,7 +92,7 @@ class CommunityConsentTest {
                 question -> {
                     asked.add(question);
                     return false;
-                }, jar -> true, jar -> false, (jar, row) -> false);
+                }, jar -> true, jar -> false, (jar, row, version) -> ReleasePins.Verdict.UNCHECKED);
         assertTrue(gate.admit(LISTED, List.of(SDK_JAR), List.of()).loadable().isEmpty());
         assertEquals(1, asked.size());
     }
@@ -174,9 +174,12 @@ class CommunityConsentTest {
         return new PluginGate(() -> listed, REPO, () -> login, kept::get, kept::set, question -> {
             asked.add(question);
             return answer;
-        }, jar -> !jar.toString().contains("slf4j"), jar -> !jar.toString().contains("downloaded"),
-                (jar, row) -> true);
+        }, jar -> !jar.toString().contains("slf4j"), jar -> !jar.toString().contains("downloaded"), PINNED);
     }
+
+    /** Pins that always match: every approved release is the catalog's files. */
+    private static final PluginGate.Pins PINNED = (jar, row, version) -> row.release(version).isPresent()
+            ? ReleasePins.Verdict.APPROVED : ReleasePins.Verdict.NOT_APPROVED;
 
     @Test
     void aCommunityPluginIsAskedAboutOnceAndAYesIsKept() {
@@ -289,7 +292,7 @@ class CommunityConsentTest {
                 "module-info.class");
         CatalogIndex listed = new CatalogIndex(List.of(SDK), List.of());
         PluginGate gate = new PluginGate(() -> listed, repo, () -> "", () -> CommunityConsent.of(""), kept -> {},
-                question -> true, MavenService::declaresPlugin, jar -> false, (jar, row) -> true);
+                question -> true, MavenService::declaresPlugin, jar -> false, PINNED);
 
         PluginGate.Admitted admitted = gate.admit(listed, List.of(sdk.toString(), evil.toString(), plain.toString()),
                 List.of());
@@ -311,76 +314,112 @@ class CommunityConsentTest {
         return path;
     }
 
-    /** Phase 7b: JitPack's checksum, fetched once and remembered; offline and never checked is not the release. */
+    /** The pom beside an SDK jar of this test, {@code botmaker-sdk-<tag>.pom}. */
+    private static Path pom(Path jar) {
+        String name = jar.getFileName().toString();
+        return jar.resolveSibling(name.substring(0, name.length() - ".jar".length()) + ".pom");
+    }
+
+    /** A release row pinning {@code jar} and the pom beside it at {@code tag}. */
+    private static Catalog.Plugin.Release pinned(String tag, Path jar) {
+        return new Catalog.Plugin.Release(tag, "a".repeat(40), ReleasePins.sha256(jar).orElseThrow(),
+                ReleasePins.sha256(pom(jar)).orElseThrow(), "", List.of());
+    }
+
+    private static PluginRegistry.Plugin sdkApproving(List<Catalog.Plugin.Release> releases) {
+        return new PluginRegistry.Plugin("com.botmaker.sdk", "SDK", "com.github.BotMakerDev:botmaker-sdk",
+                "BotMakerDev/botmaker-sdk", "", List.of(), "", List.of(), "", releases.getFirst().tag(),
+                PublisherRank.ADMIN, 0, releases);
+    }
+
+    /** 2026-10-24: the jar and its pom are the files the catalog pinned, or the release is not vouched for. */
     @Test
-    void aJarIsTheReleaseOnlyWhenItsChecksumIsJitPacks(@TempDir Path dir) throws Exception {
-        Path real = dir.resolve("real.jar");
-        Path fake = dir.resolve("fake.jar");
-        Files.writeString(real, "the release");
-        Files.writeString(fake, "something else");
-        String sum = ReleaseChecksums.sha1(real).orElseThrow();
-        Map<String, String> kept = new HashMap<>();
-        List<String> fetched = new ArrayList<>();
-        AtomicReference<Boolean> online = new AtomicReference<>(true);
-        ReleaseChecksums checksums = new ReleaseChecksums(url -> {
-            fetched.add(url);
-            return online.get() ? Optional.of(sum.toUpperCase(Locale.ROOT) + "  botmaker-sdk-v1.0.0.jar\n")
-                    : Optional.empty();
-        }, () -> kept, next -> {
-            kept.clear();
-            kept.putAll(next);
+    void aJarIsApprovedOnlyWhenItAndItsPomAreThePinnedFiles(@TempDir Path dir) throws Exception {
+        Path jar = dir.resolve("botmaker-sdk-v1.0.0.jar");
+        Files.writeString(jar, "the release");
+        Files.writeString(pom(jar), "<project/>");
+        assertEquals(dir.resolve("botmaker-sdk-v1.0.0.pom"),
+                ReleasePins.pomOf(dir.resolve("botmaker-sdk-v1.0.0-all.jar"), "botmaker-sdk", "v1.0.0"),
+                "a classifier's jar shares its version's pom");
+        Set<String> seen = new LinkedHashSet<>();
+        ReleasePins pins = new ReleasePins(() -> seen, next -> {
+            seen.clear();
+            seen.addAll(next);
         });
+        PluginRegistry.Plugin row = sdkApproving(List.of(pinned("v1.0.0", jar)));
 
-        assertEquals("https://jitpack.io/com/github/BotMakerDev/botmaker-sdk/v1.0.0/botmaker-sdk-v1.0.0.jar.sha1",
-                ReleaseChecksums.url(SDK));
-        assertTrue(checksums.isRelease(real, SDK));
-        assertEquals(Map.of("com.github.BotMakerDev:botmaker-sdk@v1.0.0", sum), kept);
-        assertTrue(checksums.isRelease(real, SDK));
-        assertEquals(1, fetched.size(), "a jar that matches the remembered checksum is not fetched again");
-        assertFalse(checksums.isRelease(fake, SDK));
-        assertEquals(2, fetched.size(), "a mismatch is compared once more with a fresh checksum");
+        assertEquals(ReleasePins.Verdict.APPROVED, pins.check(jar, row, "v1.0.0"));
+        assertEquals(Set.of("com.github.BotMakerDev:botmaker-sdk@v1.0.0"), seen);
+        assertEquals(ReleasePins.Verdict.NOT_APPROVED, pins.check(jar, row, "v0.9.0"));
+        assertEquals(ReleasePins.Verdict.UNCHECKED, pins.check(jar, SDK, "v1.0.0"), "a release with no pins");
 
-        online.set(false);
-        assertTrue(checksums.isRelease(real, SDK), "a tag checked once is checked offline");
-        kept.clear();
-        assertFalse(checksums.isRelease(real, SDK), "offline and never checked");
-        assertFalse(checksums.isRelease(dir.resolve("missing.jar"), SDK));
-        assertTrue(kept.isEmpty(), "nothing fetched, nothing remembered");
-        assertEquals(Map.of("a@v1", "abc"), ReleaseChecksums.of("a@v1 abc\n\n"));
+        Files.writeString(pom(jar), "<project><repositories/></project>");
+        assertEquals(ReleasePins.Verdict.CHANGED, pins.check(jar, row, "v1.0.0"), "the pom names the downloads");
+        Files.delete(pom(jar));
+        assertEquals(ReleasePins.Verdict.UNCHECKED, pins.check(jar, row, "v1.0.0"));
     }
 
-    /** Review finding: JitPack rebuilds an evicted tag, so a remembered checksum may be stale. */
+    /** Review focus 5: a release this computer saw approved and the catalog dropped reads as removed. */
     @Test
-    void aRebuiltReleaseReplacesTheRememberedChecksum(@TempDir Path dir) throws Exception {
-        Path rebuilt = dir.resolve("rebuilt.jar");
-        Files.writeString(rebuilt, "the rebuild");
-        String sum = ReleaseChecksums.sha1(rebuilt).orElseThrow();
-        Map<String, String> kept = new HashMap<>(Map.of(ReleaseChecksums.key(SDK), "0".repeat(40)));
-        ReleaseChecksums checksums = new ReleaseChecksums(url -> Optional.of(sum + "\n"), () -> kept, next -> {
-            kept.clear();
-            kept.putAll(next);
-        });
+    void aReleaseSeenApprovedThatTheCatalogDroppedIsRemoved(@TempDir Path dir) throws Exception {
+        Path jar = dir.resolve("botmaker-sdk-v1.0.0.jar");
+        Files.writeString(jar, "the release");
+        Files.writeString(pom(jar), "<project/>");
+        Set<String> seen = new LinkedHashSet<>(Set.of("com.github.BotMakerDev:botmaker-sdk@v1.0.0"));
+        ReleasePins pins = new ReleasePins(() -> seen, seen::addAll);
+        Path newer = dir.resolve("botmaker-sdk-v1.1.0.jar");
+        Files.writeString(newer, "the next release");
+        Files.writeString(pom(newer), "<project/>");
 
-        assertTrue(checksums.isRelease(rebuilt, SDK));
-        assertEquals(Map.of(ReleaseChecksums.key(SDK), sum), kept);
-    }
-
-    /** Review finding: one checksum per coordinate, so the preference never outgrows its 8192 characters. */
-    @Test
-    void anotherTagReplacesItsCoordinatesChecksum() {
-        Map<String, String> sums = Map.of("com.github.a:p@v1", "1", "com.github.a:plugin@v1", "2");
-        assertEquals(Map.of("com.github.a:p@v2", "3", "com.github.a:plugin@v1", "2"),
-                ReleaseChecksums.with(sums, "com.github.a:p@v2", "3"));
+        assertEquals(ReleasePins.Verdict.REMOVED, pins.check(jar, sdkApproving(List.of(pinned("v1.1.0", newer))),
+                "v1.0.0"));
     }
 
     @Test
-    void onlyABodyThatStartsWithTheChecksumIsOne() {
-        String sum = "921ae160788900cd0e31dc0f547b2de116f0b47d";
-        assertEquals(Optional.of(sum), ReleaseChecksums.parse(sum));
-        assertEquals(Optional.of(sum), ReleaseChecksums.parse("  " + sum.toUpperCase(Locale.ROOT) + "  x.jar\n"));
-        assertEquals(Optional.empty(), ReleaseChecksums.parse("<html>build " + sum + " failed</html>"));
-        assertEquals(Optional.empty(), ReleaseChecksums.parse(sum + "00"), "longer than a SHA-1");
-        assertEquals(Optional.empty(), ReleaseChecksums.parse(null));
+    void aChangedOrRemovedReleaseIsRefusedWithoutAsking() {
+        PluginRegistry.Plugin row = sdkApproving(List.of(
+                new Catalog.Plugin.Release("v1.1.0", null, null, null, "", List.of())));
+        CatalogIndex listed = new CatalogIndex(List.of(row), List.of());
+        List<PluginGate.Asked> asked = new ArrayList<>();
+        for (ReleasePins.Verdict verdict : List.of(ReleasePins.Verdict.CHANGED, ReleasePins.Verdict.REMOVED)) {
+            PluginGate gate = new PluginGate(() -> listed, REPO, () -> "", () -> CommunityConsent.of(""), kept -> {},
+                    question -> {
+                        asked.add(question);
+                        return true;
+                    }, jar -> true, jar -> false, (jar, r, version) -> verdict);
+            PluginGate.Admitted admitted = gate.admit(listed, List.of(SDK_JAR), List.of());
+            assertTrue(admitted.loadable().isEmpty(), verdict.name());
+            assertEquals("botmaker-sdk v1.0.0 — " + PluginGate.refusal(verdict, Optional.of(row), "v1.0.0")
+                    .orElseThrow(), admitted.refused().getFirst().describe());
+        }
+        assertTrue(asked.isEmpty());
+        assertEquals(Optional.of("not loaded: SDK v1.0.0 was removed from the catalog. Upgrade it to v1.1.0 in "
+                + "Plugins & Libraries"), PluginGate.refusal(ReleasePins.Verdict.REMOVED, Optional.of(row), "v1.0.0"));
+        assertTrue(PluginGate.refusal(ReleasePins.Verdict.CHANGED, Optional.of(row), "v1.0.0").orElseThrow()
+                .contains("changed after the catalog approved it"));
+        assertEquals(Optional.empty(), PluginGate.refusal(ReleasePins.Verdict.NOT_APPROVED, Optional.of(row), "v9"));
+    }
+
+    /** 2026-10-24: an official row vouches for each release it approved, not its newest alone. */
+    @Test
+    void anOlderApprovedReleaseOfAnOfficialRowIsNotAsked() {
+        PluginRegistry.Plugin row = sdkApproving(List.of(
+                new Catalog.Plugin.Release("v1.1.0", null, null, null, "", List.of()),
+                new Catalog.Plugin.Release("v1.0.0", null, null, null, "", List.of())));
+        assertFalse(CommunityConsent.needsAsking(row.coordinate(), "v1.0.0", Optional.of(row), true, "", false,
+                RELEASE));
+        assertEquals(List.of("v1.1.0", "v1.0.0"), row.approvedTags());
+    }
+
+    /** One preference holds 8192 characters: the oldest releases seen are dropped first. */
+    @Test
+    void theReleasesSeenKeepTheNewestThatFit() {
+        Set<String> keys = new LinkedHashSet<>();
+        for (int i = 0; i < 400; i++) keys.add("com.github.BotMakerDev:botmaker-sdk@v1.0." + i);
+        String stored = ReleasePins.stored(keys);
+        assertTrue(stored.length() <= Preferences.MAX_VALUE_LENGTH);
+        assertTrue(stored.endsWith("@v1.0.399"));
+        assertFalse(ReleasePins.of(stored).contains("com.github.BotMakerDev:botmaker-sdk@v1.0.0"));
     }
 
     @Test
@@ -388,7 +427,7 @@ class CommunityConsentTest {
         AtomicReference<CommunityConsent> kept = new AtomicReference<>(CommunityConsent.of(""));
         PluginGate gate = new PluginGate(() -> LISTED, REPO, () -> "", kept::get, kept::set, question -> {
             throw new IllegalStateException("no toolkit");
-        }, jar -> true, jar -> true, (jar, row) -> true);
+        }, jar -> true, jar -> true, PINNED);
 
         assertTrue(gate.admit(LISTED, List.of(COMMUNITY_JAR), List.of()).loadable().isEmpty());
     }

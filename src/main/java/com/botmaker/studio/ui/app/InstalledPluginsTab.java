@@ -617,10 +617,12 @@ public final class InstalledPluginsTab {
          *
          * <p>Seeded with what is already known — the installed version, the newest build, the
          * local build — so a row is usable before JitPack answers and stays usable if it never does. The list
-         * is then every version JitPack can build, which is what makes a downgrade reachable.
+         * is then every version JitPack can build, which is what makes a downgrade reachable. A plugin the
+         * catalog lists offers the releases it approved instead, newest first, and JitPack is not asked
+         * (2026-10-24): a build no check passed is not loaded on the catalog's word.
          */
         void loadVersions() {
-            List<String> known = new ArrayList<>();
+            List<String> known = new ArrayList<>(plugin.approved());
             for (String v : List.of(upgrades.currentVersion(), plugin.available(), localVersion())) {
                 if (!v.isBlank() && !known.contains(v)) known.add(v);
             }
@@ -631,6 +633,7 @@ public final class InstalledPluginsTab {
             versions.setDisable(twinned);
             versions.setPromptText(null);
             markDev();
+            if (!plugin.approved().isEmpty()) return;
 
             upgrades.availableVersions().thenAccept(fetched -> Platform.runLater(() -> {
                 if (fetched.isEmpty()) return;               // offline: the seed is still a real answer
