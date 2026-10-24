@@ -1,12 +1,28 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.ApprovedRelease;
+import com.botmaker.cli.catalog.BotEntry;
+import com.botmaker.cli.catalog.Catalog;
+import com.botmaker.cli.catalog.Entry;
+import com.botmaker.cli.catalog.EntryPath;
+import com.botmaker.cli.publish.CatalogPr;
+import com.botmaker.cli.publish.Checks;
+import com.botmaker.cli.publish.Listener;
+import com.botmaker.cli.publish.PublishHost;
+import com.botmaker.cli.publish.PublishTarget;
+import com.botmaker.cli.validate.CheckResult;
 import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +57,8 @@ class PublishFlowTest {
     void anUnlistedPublishSkipsTheListing() {
         PublishPlan plan = PublishPlan.start(false);
         assertEquals(PublishPlan.Status.SKIPPED, plan.state(PublishPlan.Step.LISTING).status());
-        for (PublishPlan.Step step : List.of(PublishPlan.Step.REPO, PublishPlan.Step.PUSH, PublishPlan.Step.RELEASE,
-                PublishPlan.Step.ARCHIVE)) {
+        for (PublishPlan.Step step : List.of(PublishPlan.Step.REPO, PublishPlan.Step.CHECK, PublishPlan.Step.PUSH,
+                PublishPlan.Step.RELEASE, PublishPlan.Step.ARCHIVE)) {
             plan = plan.done(step, "");
         }
         assertTrue(plan.finished());
@@ -52,6 +68,7 @@ class PublishFlowTest {
     void aRetryResumesAtTheFailedStepAndKeepsWhatWasDone() {
         PublishPlan plan = PublishPlan.start(true)
                 .done(PublishPlan.Step.REPO, "")
+                .done(PublishPlan.Step.CHECK, "")
                 .done(PublishPlan.Step.PUSH, "")
                 .done(PublishPlan.Step.RELEASE, "")
                 .failed(PublishPlan.Step.ARCHIVE, "404");
@@ -131,81 +148,99 @@ class PublishFlowTest {
 
     // --- The catalog's entry (2026-10-23) --------------------------------------------------------------------
 
+    /**
+     * The pull request is the cli's change (2026-10-24), on the branch Studio reads the catalog's answer from: an
+     * entry with the release appended, and Stop following marking the same releases detached.
+     */
     @Test
-    void aBotsEntryIsTheFileTheCliWrites() throws Exception {
-        CatalogListing.BotEntry entry = new CatalogListing.BotEntry("Alice/koala-bot", "1.2.0", false);
-        assertEquals("bots/Alice__koala-bot.json", entry.path());
-        assertEquals("entry/bots/Alice__koala-bot.json", CatalogListing.branch(entry.path()));
-        assertEquals("{\n  \"repo\" : \"Alice/koala-bot\",\n  \"tag\" : \"1.2.0\"\n}\n", entry.json(MAPPER)
-                .replace(System.lineSeparator(), "\n"), "detached only when true");
-        assertEquals("{\"repo\":\"Alice/koala-bot\",\"tag\":\"1.2.0\",\"detached\":true}",
-                MAPPER.readTree(new CatalogListing.BotEntry("Alice/koala-bot", "1.2.0", true).json(MAPPER))
-                        .toString());
+    void aBotsPullRequestIsTheClisChangeOnTheBranchStudioReads() throws Exception {
+        BotEntry v1 = new BotEntry("Alice/koala-bot", List.of(ApprovedRelease.ofBot("1.0.0", "a".repeat(40))), false);
+        CatalogPr.Change add = CatalogPr.Change.put(v1, BotPublisher.COMMAND);
+        assertEquals("bots/Alice__koala-bot.json", add.path().path());
+        assertEquals(CatalogListing.path("Alice/koala-bot"), add.path().path());
+        assertEquals(CatalogListing.branch(CatalogListing.path("Alice/koala-bot")), add.branch());
+        assertEquals("bot: Alice/koala-bot 1.0.0", add.title());
+
+        BotEntry v2 = (BotEntry) v1.appended(ApprovedRelease.ofBot("1.1.0", "b".repeat(40)));
+        JsonNode written = MAPPER.readTree(CatalogPr.Change.put(v2, BotPublisher.COMMAND).content().orElseThrow());
+        assertEquals(2, written.path("releases").size(), "every approved release kept");
+        assertEquals("1.1.0", written.path("releases").get(1).path("tag").asText(), "appended at the end");
+        assertFalse(written.has("detached"));
+
+        BotEntry detached = new BotEntry(v2.repo(), v2.releases(), true);
+        assertTrue(MAPPER.readTree(CatalogPr.Change.put(detached, BotPublisher.COMMAND).content().orElseThrow())
+                .path("detached").asBoolean());
     }
 
     @Test
-    void aContentsFileReadsBackAsItsEntry() throws Exception {
-        CatalogListing.BotEntry entry = new CatalogListing.BotEntry("a/b", "v1", true);
-        assertEquals(Optional.of(entry), CatalogListing.BotEntry.of(MAPPER, contents(entry.json(MAPPER))));
-        assertEquals(Optional.empty(), CatalogListing.BotEntry.of(MAPPER, null), "not listed");
-        assertEquals(Optional.empty(), CatalogListing.BotEntry.of(MAPPER, contents("{\"repo\":\"a/b\"}")),
-                "no tag");
-        assertEquals(Optional.empty(), CatalogListing.BotEntry.of(MAPPER, MAPPER.readTree("{\"content\":\"%%\"}")));
+    void aContentsFileReadsBackAsItsText() {
+        assertEquals(Optional.of("{\"repo\":\"a/b\"}\n"), CatalogListing.text(Optional.of(contents("{\"repo\":\"a/b\"}\n"))));
+        assertEquals(Optional.empty(), CatalogListing.text(Optional.empty()), "not listed");
     }
 
-    /** A first publish adds, a re-publish updates, and the same entry opens nothing. */
+    /**
+     * A fork's host leaves its author's releases out of {@code HEAD}'s tags, so the library never takes the author's
+     * tag for the fork's release; its own, marked, count.
+     */
     @Test
-    void publishingABotOpensOnePullRequestForItsEntry() throws Exception {
-        CatalogListing.BotEntry v1 = new CatalogListing.BotEntry("alice/koala", "1.0.0", false);
-        CatalogListing.Change add = CatalogListing.Change.put(MAPPER, v1, Optional.empty()).orElseThrow();
-        assertEquals("bots/alice__koala.json", add.path());
-        assertEquals("entry/bots/alice__koala.json", add.branch());
-        assertEquals("bot: add alice/koala 1.0.0", add.title());
-        assertEquals(v1.json(MAPPER), add.content().orElseThrow());
+    void aForksHostLeavesTheAuthorsReleasesOutOfHead(@TempDir Path dir) throws Exception {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "class Bot {}");
+        vcs.checkpoint(VersionOrigin.INSTALL, "Installed v1.0.0");
+        vcs.tagHead("v1.0.0", "Release v1.0.0");
+        PublishRequest request = new PublishRequest(dir, "Bot", "bot", "", "v1.0.1", List.of(), true);
+        StudioPublishHost fork = new StudioPublishHost(null, "", new PublishHost.Account("bob", 2), vcs, request,
+                "bob/bot", true, "main", step -> { });
+        StudioPublishHost own = new StudioPublishHost(null, "", new PublishHost.Account("alice", 1), vcs, request,
+                "alice/bot", false, "main", step -> { });
 
-        CatalogListing.BotEntry v2 = new CatalogListing.BotEntry("alice/koala", "1.1.0", false);
-        assertEquals("bot: update alice/koala 1.1.0",
-                CatalogListing.Change.put(MAPPER, v2, Optional.of(v1)).orElseThrow().title());
-        assertTrue(CatalogListing.Change.put(MAPPER, v1, Optional.of(v1)).isEmpty());
+        assertEquals(List.of(), fork.tagsAtHead(), "the author's release is no release of the fork's");
+        assertEquals(List.of("v1.0.0"), own.tagsAtHead());
+        assertEquals(List.of("v1.0.0"), fork.tagsMerged(), "but a bump goes past it");
+        assertEquals(vcs.headCommit(), fork.tagCommit("v1.0.0"));
+        assertEquals(Optional.of("v1.0.0"), fork.nearestTag());
+        assertTrue(fork.clean());
+
+        vcs.markOwnRelease("v1.0.0");
+        assertEquals(List.of("v1.0.0"), fork.tagsAtHead());
     }
 
+    /** Rule 6 refuses before anything is tagged, and the sheet's row says it was the check. */
     @Test
-    void unpublishingRemovesTheEntryAndNothingWhenUnlisted() {
-        CatalogListing.Change removal = CatalogListing.Change.remove("alice/koala",
-                Optional.of(new CatalogListing.BotEntry("alice/koala", "1.0.0", false))).orElseThrow();
-        assertEquals("bots/alice__koala.json", removal.path());
-        assertTrue(removal.content().isEmpty());
-        assertEquals("bot: remove alice/koala", removal.title());
-        assertTrue(CatalogListing.Change.remove("alice/koala", Optional.empty()).isEmpty());
+    void theSavedVersionMeetsTheCatalogsRulesBeforeAnyTag(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>a</groupId>"
+                + "<artifactId>b</artifactId><version>1</version></project>");
+        List<PublishPlan.Step> rows = new ArrayList<>();
+        CatalogPr.Reader empty = new CatalogPr.Reader() {
+            @Override
+            public Optional<Entry> listed(EntryPath path) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<Catalog> catalog() {
+                return Optional.empty();
+            }
+        };
+        Checks.Result result = new StudioChecks(empty, rows::add).folder(
+                new PublishTarget(dir, EntryPath.Kind.BOT, "alice/b", false, false), QUIET);
+        assertTrue(result.refusal().orElseThrow().contains("declares no plugin the catalog lists"),
+                result.refusal().orElseThrow());
+        assertEquals(List.of(PublishPlan.Step.CHECK), rows);
+        assertTrue(new StudioChecks(empty, rows::add).published("a:b:v1", QUIET).refusal().isPresent(),
+                "Studio publishes bots only");
     }
 
-    /** Stop following marks the listed entry at its own tag; following again takes the mark off. */
-    @Test
-    void stopFollowingMarksTheEntryDetached() throws Exception {
-        CatalogListing.BotEntry listed = new CatalogListing.BotEntry("bob/fork", "2.0.0", false);
-        CatalogListing.BotEntry detached = new CatalogListing.BotEntry(listed.repo(), listed.tag(), true);
-        CatalogListing.Change mark = CatalogListing.Change.put(MAPPER, detached, Optional.of(listed)).orElseThrow();
-        assertEquals("bot: update bob/fork 2.0.0", mark.title());
-        assertTrue(MAPPER.readTree(mark.content().orElseThrow()).path("detached").asBoolean());
-        assertFalse(MAPPER.readTree(CatalogListing.Change.put(MAPPER, listed, Optional.of(detached)).orElseThrow()
-                .content().orElseThrow()).has("detached"));
-    }
+    private static final Listener QUIET = new Listener() {
+        @Override
+        public void step(String message) {}
 
-    /** Rules 3 and 5, before anything is opened. */
-    @Test
-    void aReleaseTheCatalogWouldRefuseIsRefusedFirst() throws Exception {
-        assertEquals(Optional.empty(), CatalogListing.refusal(release("alice", false, false), "Alice", "alice"));
-        assertTrue(CatalogListing.refusal(release("alice", true, false), "alice", "alice").isPresent(), "a draft");
-        assertTrue(CatalogListing.refusal(release("alice", false, true), "alice", "alice").isPresent(),
-                "a prerelease");
-        assertTrue(CatalogListing.refusal(release("carol", false, false), "alice", "org").isPresent(),
-                "another member's release");
-        assertEquals(Optional.empty(), CatalogListing.refusal(release("github-actions[bot]", false, false),
-                "alice", "alice"), "an Action's release, published by the owner");
-        assertTrue(CatalogListing.refusal(release("github-actions[bot]", false, false), "alice", "SomeOrg")
-                .orElseThrow().contains("an Action's"));
-        assertTrue(CatalogListing.refusal(null, "alice", "alice").isPresent(), "no release");
-    }
+        @Override
+        public void warn(String message) {}
+
+        @Override
+        public void checks(List<CheckResult> results) {}
+    };
 
     // --- What the catalog says ------------------------------------------------------------------------------
 
@@ -291,8 +326,4 @@ class PublishFlowTest {
         return MAPPER.createObjectNode().put("content", encoded);
     }
 
-    private static JsonNode release(String author, boolean draft, boolean prerelease) throws Exception {
-        return MAPPER.readTree("{\"tag_name\":\"1.0.0\",\"draft\":" + draft + ",\"prerelease\":" + prerelease
-                + ",\"author\":{\"login\":\"" + author + "\"}}");
-    }
 }

@@ -1,10 +1,11 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.cli.catalog.EntryPath;
+import com.botmaker.cli.publish.CatalogPr;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.shared.github.GitHubError;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,15 +16,16 @@ import java.util.Optional;
 import java.util.concurrent.CompletionException;
 
 /**
- * A bot's entry in the catalog, {@code bots/<owner>__<repo>.json}, written or removed by one pull request from the
- * author's account (2026-10-23). Nobody reviews it: the catalog's {@code validate} check runs on it and
- * {@code automerge.yml} merges it when the check passes ({@code docs/superpowers/specs/2026-10-23-catalog-design.md}).
+ * Studio's transport for the catalog's pull requests, through GitHub's API with Studio's sign-in, and what the
+ * catalog says of a bot's entry (2026-10-23). What a pull request writes, and every rule it is held to, are the cli's
+ * ({@link CatalogPr.Change}, decided by {@code com.botmaker.cli.publish.Publish}, 2026-10-24); this only carries
+ * one, the way the cli's {@code CatalogPr.open} carries it through {@code gh}. Nobody reviews it: the catalog's
+ * {@code validate} check runs on it and {@code automerge.yml} merges it when the check passes.
  *
- * <p>The same steps as the cli's {@code CatalogPr}, through GitHub's API instead of {@code gh} — Studio never
- * calls the cli. An account that can push to the catalog gets a branch there; everyone else a fork, and a branch
- * of the fork. The branch is {@code entry/<path>}, reset to the catalog's {@code main} each time: a fork's
- * {@code main} diverges at the first squash-merge, so a second pull request from it would carry the first entry
- * again, and a branch per entry carries exactly one file's change, its open pull request updated in place.
+ * <p>An account that can push to the catalog gets a branch there; everyone else a fork, and a branch of the fork.
+ * The branch is the change's own ({@link CatalogPr.Change#branch}), reset to the catalog's {@code main} each time: a
+ * fork's {@code main} diverges at the first squash-merge, so a second pull request from it would carry the first
+ * entry again, and a branch per entry carries exactly one file's change, its open pull request updated in place.
  *
  * <p>Blocking; off the FX thread.
  */
@@ -35,55 +37,9 @@ public final class CatalogListing {
         this.client = client;
     }
 
-    /**
-     * What a bot's entry file holds, exactly: the cli's {@code BotEntry}, whose fields the check refuses any more
-     * of.
-     *
-     * @param repo     {@code owner/name}, as GitHub spells it
-     * @param tag      the release people start from, as git spells it
-     * @param detached a fork that stopped following its original (<i>Stop following</i>): no "based on …"
-     */
-    public record BotEntry(String repo, String tag, boolean detached) {
-
-        public BotEntry {
-            repo = repo == null ? "" : repo.trim();
-            tag = tag == null ? "" : tag.trim();
-        }
-
-        /** {@code bots/<owner>__<name>.json}: a login holds no underscore, so the first {@code __} splits it. */
-        public String path() {
-            return CatalogListing.path(repo);
-        }
-
-        /** The file's text as the cli writes it: pretty-printed, {@code detached} only when true. */
-        String json(ObjectMapper mapper) throws IOException {
-            Map<String, Object> fields = new LinkedHashMap<>();
-            fields.put("repo", repo);
-            fields.put("tag", tag);
-            if (detached) fields.put("detached", true);
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(fields) + "\n";
-        }
-
-        /** A Contents API file read as an entry; empty when it is not one. */
-        static Optional<BotEntry> of(ObjectMapper mapper, JsonNode file) {
-            if (file == null) return Optional.empty();
-            try {
-                String encoded = file.path("content").asText("").replaceAll("\\s", "");
-                JsonNode json = mapper.readTree(Base64.getDecoder().decode(encoded));
-                String repo = json.path("repo").asText("");
-                String tag = json.path("tag").asText("");
-                if (repo.isBlank() || tag.isBlank()) return Optional.empty();
-                return Optional.of(new BotEntry(repo, tag, json.path("detached").asBoolean(false)));
-            } catch (Exception unreadable) {
-                return Optional.empty();
-            }
-        }
-    }
-
-    /** The entry path of the bot at {@code owner/name}. */
+    /** {@code bots/<owner>__<name>.json}, the entry path of the bot at {@code owner/name}. */
     public static String path(String repo) {
-        int slash = repo.indexOf('/');
-        return "bots/" + repo.substring(0, Math.max(slash, 0)) + "__" + repo.substring(slash + 1) + ".json";
+        return EntryPath.bot(repo);
     }
 
     /** {@code entry/<path>}: one branch per entry, as the cli names it. */
@@ -92,99 +48,54 @@ public final class CatalogListing {
     }
 
     /**
-     * The bot's entry on the catalog's {@code main}, if it is listed. Fails when GitHub cannot say: only its 404
-     * means "not listed", never a rate limit or an outage.
+     * Whether the catalog's {@code main} holds the bot's entry. Fails when GitHub cannot say: only its 404 means "not
+     * listed", never a rate limit or an outage.
      */
-    public Optional<BotEntry> listed(String repo, String token) throws IOException {
-        return BotEntry.of(client.mapper(), read(contentsUrl(catalogApi(), path(repo)) + "?ref="
-                + GitHubConfig.CATALOG_BRANCH, token).orElse(null));
+    public boolean listed(String repo, String token) throws IOException {
+        return textOnMain(path(repo), token).isPresent();
     }
 
     /**
-     * The entry as it will stand once {@code login}'s open pull request for it merges — empty for a removal — or,
-     * with none open, as {@code main} has it. What a re-publish or <i>Stop following</i> builds on, so neither
-     * undoes the other while it waits for the check.
+     * Opens, or updates, {@code change}'s pull request as {@code login}. {@link ListingStatus.State#UNCHANGED} when
+     * {@code main} already reads so ({@link ListingStatus.State#NOT_LISTED} for a removal of nothing); an open pull
+     * request that would change it is then closed.
      */
-    public Optional<BotEntry> pending(String repo, String login, String token) throws IOException {
-        Optional<JsonNode> pr = openPullRequest(path(repo), login, token);
-        return pr.isPresent() ? entryAt(pr.get(), path(repo), token) : listed(repo, token);
-    }
-
-    /**
-     * One pull request's change, decided from what {@code main} holds: the cli's {@code CatalogPr.Change}.
-     *
-     * @param content the file's new text, or empty to remove it
-     */
-    record Change(String path, Optional<String> content, String title, String body) {
-
-        /** {@code entry/<path>}. */
-        String branch() {
-            return CatalogListing.branch(path);
-        }
-
-        /** Writes {@code entry} over {@code current}; empty when {@code current} already is it. */
-        static Optional<Change> put(ObjectMapper mapper, BotEntry entry, Optional<BotEntry> current)
-                throws IOException {
-            if (current.equals(Optional.of(entry))) return Optional.empty();
-            String verb = current.isEmpty() ? "add " : "update ";
-            return Optional.of(new Change(entry.path(), Optional.of(entry.json(mapper)),
-                    "bot: " + verb + entry.repo() + " " + entry.tag(),
-                    "Opened by BotMaker Studio. The catalog's check runs on it and merges it when it passes."));
-        }
-
-        /** Removes {@code repo}'s entry; empty when {@code current} says there is none. */
-        static Optional<Change> remove(String repo, Optional<BotEntry> current) {
-            if (current.isEmpty()) return Optional.empty();
-            return Optional.of(new Change(CatalogListing.path(repo), Optional.empty(), "bot: remove " + repo,
-                    "Unpublished from BotMaker Studio. The catalog's check runs on it and merges it when it passes."));
-        }
-    }
-
-    /**
-     * Opens, or updates, the pull request writing {@code entry}, as {@code login}. {@link ListingStatus.State#UNCHANGED}
-     * when {@code main} already says exactly this; an open pull request that would change it is then closed.
-     */
-    public ListingStatus put(BotEntry entry, String login, String token) throws IOException {
-        Optional<BotEntry> main = listed(entry.repo(), token);
-        Optional<JsonNode> pr = openPullRequest(entry.path(), login, token);
-        if (pr.isPresent() && entryAt(pr.get(), entry.path(), token).equals(Optional.of(entry))) {
-            return statusOf(pr.get(), token);
-        }
-        if (main.equals(Optional.of(entry))) {
+    public ListingStatus open(CatalogPr.Change change, String login, String token) throws IOException {
+        String path = change.path().path();
+        Optional<String> main = textOnMain(path, token);
+        Optional<JsonNode> pr = openPullRequest(change.branch(), login, token);
+        if (main.equals(change.content())) {
             close(pr, token);
-            return ListingStatus.of(ListingStatus.State.UNCHANGED);
+            return ListingStatus.of(main.isPresent() ? ListingStatus.State.UNCHANGED : ListingStatus.State.NOT_LISTED);
         }
-        return open(Change.put(client.mapper(), entry, main).orElseThrow(), login, token);
+        if (pr.isPresent() && textAt(pr.get(), path, token).equals(change.content())) return statusOf(pr.get(), token);
+        return push(change, login, token);
     }
 
-    /**
-     * Opens the pull request removing {@code repo}'s entry. {@link ListingStatus.State#NOT_LISTED} when {@code main}
-     * has none; an open pull request that would add it is then closed.
-     */
-    public ListingStatus remove(String repo, String login, String token) throws IOException {
-        Optional<BotEntry> main = listed(repo, token);
-        Optional<JsonNode> pr = openPullRequest(path(repo), login, token);
-        if (main.isEmpty()) {
-            close(pr, token);
-            return ListingStatus.of(ListingStatus.State.NOT_LISTED);
-        }
-        if (pr.isPresent() && entryAt(pr.get(), path(repo), token).isEmpty()) return statusOf(pr.get(), token);
-        return open(Change.remove(repo, main).orElseThrow(), login, token);
-    }
-
-    /** {@code login}'s open pull request for {@code path}, from the branch {@link #open} uses. */
-    private Optional<JsonNode> openPullRequest(String path, String login, String token) throws IOException {
-        JsonNode open = read(catalogApi() + "/pulls?state=open&head=" + headOwner(login, token) + ":" + branch(path),
+    /** {@code login}'s open pull request from {@code branch}, the branch {@link #push} uses. */
+    private Optional<JsonNode> openPullRequest(String branch, String login, String token) throws IOException {
+        JsonNode open = read(catalogApi() + "/pulls?state=open&head=" + headOwner(login, token) + ":" + branch,
                 token).orElse(null);
         return open != null && open.isArray() && !open.isEmpty() ? Optional.of(open.get(0)) : Optional.empty();
     }
 
-    /** The entry file on an open pull request's head branch; empty when the branch removes it. */
-    private Optional<BotEntry> entryAt(JsonNode pr, String path, String token) throws IOException {
+    /** The entry file's text on the catalog's {@code main}, or empty when there is none. */
+    private Optional<String> textOnMain(String path, String token) throws IOException {
+        return text(read(contentsUrl(catalogApi(), path) + "?ref=" + GitHubConfig.CATALOG_BRANCH, token));
+    }
+
+    /** The entry file's text on an open pull request's head branch; empty when the branch removes it. */
+    private Optional<String> textAt(JsonNode pr, String path, String token) throws IOException {
         String head = pr.path("head").path("repo").path("full_name").asText("");
         if (head.isBlank()) return Optional.empty();
-        return BotEntry.of(client.mapper(), read(contentsUrl(GitHubConfig.API_BASE + "/repos/" + head, path)
-                + "?ref=" + pr.path("head").path("ref").asText(""), token).orElse(null));
+        return text(read(contentsUrl(GitHubConfig.API_BASE + "/repos/" + head, path) + "?ref="
+                + pr.path("head").path("ref").asText(""), token));
+    }
+
+    /** A Contents API file's text. */
+    static Optional<String> text(Optional<JsonNode> file) {
+        return file.map(f -> new String(Base64.getDecoder().decode(f.path("content").asText("")
+                .replaceAll("\\s", "")), StandardCharsets.UTF_8));
     }
 
     /** Closes {@code pr}, a pull request whose change {@code main} already holds or no longer needs. */
@@ -204,7 +115,7 @@ public final class CatalogListing {
      * read through its check run, labels and the catalog's comment — or, with none, whether {@code main} lists it.
      */
     public ListingStatus status(String repo, String login, String token) throws IOException {
-        boolean listed = listed(repo, token).isPresent();
+        boolean listed = listed(repo, token);
         String head = headOwner(login, token) + ":" + branch(path(repo));
         JsonNode prs = client.get(catalogApi() + "/pulls?state=all&per_page=1&head=" + head, token).join();
         if (prs != null && prs.isArray() && !prs.isEmpty()) {
@@ -218,42 +129,17 @@ public final class CatalogListing {
         return ListingStatus.of(listed ? ListingStatus.State.LISTED : ListingStatus.State.NOT_LISTED);
     }
 
-    /**
-     * Why the catalog would refuse {@code login}'s entry for {@code release}, a repository's release object, or
-     * empty: the rules Studio can check before opening anything (rules 3 and 5; rules 1 and 2 hold by how
-     * {@link BotEntry} is built). A release made by an Action counts as the owner's.
-     *
-     * @param owner the repository's owner login
-     */
-    public static Optional<String> refusal(JsonNode release, String login, String owner) {
-        if (release == null) return Optional.of("The release is not on GitHub, so the catalog cannot list it.");
-        if (release.path("draft").asBoolean(false) || release.path("prerelease").asBoolean(false)) {
-            return Optional.of("The release " + release.path("tag_name").asText("") + " is a draft or a prerelease; "
-                    + "the catalog lists a published release only. Publish it on github.com, then retry.");
-        }
-        String author = release.path("author").path("login").asText("");
-        if (author.equalsIgnoreCase(login)) return Optional.empty();
-        if (author.equals(ACTIONS_BOT) && owner.equalsIgnoreCase(login)) return Optional.empty();
-        return Optional.of("The release " + release.path("tag_name").asText("") + " was made by "
-                + (author.isBlank() ? "someone else" : author) + ", and the catalog lists a release only from whoever "
-                + "made it" + (author.equals(ACTIONS_BOT) ? " (an Action's, from the repository's owner)" : "")
-                + ". Publish from that account, or cut a release of your own.");
-    }
-
-    /** Who makes a release from a workflow. */
-    static final String ACTIONS_BOT = "github-actions[bot]";
-
     // -------------------------------------------------------------------------
     // The pull request
     // -------------------------------------------------------------------------
 
-    private ListingStatus open(Change change, String login, String token) throws IOException {
+    private ListingStatus push(CatalogPr.Change change, String login, String token) throws IOException {
         try {
             boolean push = canPush(token);
             String headOwner = push ? GitHubConfig.CATALOG_OWNER : login;
             String headApi = push ? catalogApi() : fork(login, token);
             String branch = change.branch();
-            String path = change.path();
+            String path = change.path().path();
             prepareBranch(headApi, branch, token);
             String sha = fileSha(contentsUrl(headApi, path), branch, token);
             if (change.content().isPresent()) {

@@ -7,20 +7,23 @@ import java.util.Optional;
 /**
  * Where a publish has got to: one {@link StepState} per {@link Step}, in order.
  *
- * <p>Publishing is five network operations that cannot be made one transaction — a repository, a push, a
- * release, a download check and a listing (the catalog's pull request). It used to be one method, so a failure
+ * <p>Publishing is a check and five network operations that cannot be made one transaction — a repository, a
+ * push, a release, a download check and a listing (the catalog's pull request). It used to be one method, so a failure
  * at the fourth reported as "Publish failed" and pressing Publish again started from the first, where the
  * release step then refused a tag that already existed. A plan says which steps are done, so a retry resumes at the one that
  * failed and a success is shown step by step rather than as one sentence.
  *
  * <p>Pure and immutable: every transition returns a new plan. {@link BotPublisher.Run} performs the steps;
- * this only records them, which is what lets the rules be tested with no network.
+ * this only records them, which is what lets the rules be tested with no network. Since 2026-10-24 every step after
+ * the repository is the cli's publish library's ({@code com.botmaker.cli.publish.Publish}), run again whole on a
+ * retry: each of its parts is skipped when already done, and a step it skipped reads "done already".
  */
 public record PublishPlan(List<StepState> steps) {
 
     /** The steps of a publish, in the order they run. */
     public enum Step {
         REPO("Repository", "Create the GitHub repository, or make an existing one public"),
+        CHECK("Check", "Check the saved version against the catalog's rules before anything is tagged"),
         PUSH("Push", "Tag the saved version and push it to your copy on GitHub"),
         RELEASE("Release", "Cut the release other people install"),
         ARCHIVE("Download check", "Check that the release downloads without signing in"),

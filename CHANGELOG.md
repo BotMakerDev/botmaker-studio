@@ -10,6 +10,14 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- **Publish takes the same steps as `botmaker bot publish`.** It checks the saved version against the catalog's
+  rules before tagging anything (a new *Check* row), and the catalog entry keeps every version you published, each
+  pinned to its commit, instead of only the newest. A retry carries on from where the publish stopped.
+
 ## [1.6.0] — 2026-10-23
 
 ### Changed

@@ -17,9 +17,10 @@ import java.util.regex.Pattern;
  * Keeps the {@code botmaker} command-line tool current, on Linux, through the package manager.
  *
  * <p>Studio and the CLI are two hosts of one platform, not a library and its consumer: what they share lives
- * in {@code botmaker-studio-api} and {@code botmaker-plugin-host}, and <b>Studio has no Maven dependency on
- * {@code botmaker-cli} — there is deliberately none, and none is coming.</b> So there is no version to skew:
- * this class knows the CLI only as a package name, a {@code --version} line and a GitHub tag. That is also why
+ * in {@code botmaker-studio-api} and {@code botmaker-plugin-host}. Studio depends on {@code botmaker-cli}'s main jar
+ * since 2026-10-24, for its publish library only, and that copy travels inside Studio; the <i>command</i> this class
+ * upgrades is a separate install, so there is still no version to skew: this class knows the CLI only as a package
+ * name, a {@code --version} line and a GitHub tag. That is also why
  * the check reaches {@code BotMakerDev/botmaker-cli}'s releases rather than reading a constant baked in here —
  * a Studio that has not been re-released still learns about a newer CLI.
  *

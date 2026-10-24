@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -1232,6 +1233,71 @@ public final class ProjectVcs {
             return git.getRepository().exactRef(OWN_RELEASES + name.trim()) != null;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    /** The commit {@code HEAD} is, or empty before the first version. */
+    public Optional<String> headCommit() {
+        if (!isRepo()) return Optional.empty();
+        try (Git git = open()) {
+            return Optional.ofNullable(git.getRepository().resolve(Constants.HEAD)).map(ObjectId::name);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** The commit the tag {@code name} names, or empty when there is no such tag. */
+    public Optional<String> tagCommit(String name) {
+        if (!isRepo()) return Optional.empty();
+        try (Git git = open()) {
+            return Optional.ofNullable(git.getRepository().resolve(Constants.R_TAGS + name.trim() + "^{commit}"))
+                    .map(ObjectId::name);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** The tags whose commit is {@code HEAD}'s. */
+    public List<String> tagsAtHead() {
+        Optional<String> head = headCommit();
+        return head.isEmpty() ? List.of() : tags().stream().filter(t -> tagCommit(t).equals(head)).toList();
+    }
+
+    /** The tags whose commit {@code HEAD} contains, {@code git tag --merged HEAD}. */
+    public List<String> tagsMerged() {
+        if (headCommit().isEmpty()) return List.of();
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            RevCommit head = walk.parseCommit(git.getRepository().resolve(Constants.HEAD));
+            List<String> merged = new ArrayList<>();
+            for (String tag : tags()) {
+                Optional<String> at = tagCommit(tag);
+                if (at.isPresent() && walk.isMergedInto(walk.parseCommit(ObjectId.fromString(at.get())), head)) {
+                    merged.add(tag);
+                }
+            }
+            return merged;
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** The nearest tag {@code HEAD} contains, any tag, as {@code git describe --tags --abbrev=0}; empty when none. */
+    public Optional<String> nearestTag() {
+        if (headCommit().isEmpty()) return Optional.empty();
+        try (Git git = open()) {
+            String described = git.describe().setTags(true).call();
+            return Optional.ofNullable(described).map(d -> d.replaceFirst("-\\d+-g[0-9a-f]+$", ""));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private List<String> tags() {
+        try (Git git = open()) {
+            return git.getRepository().getRefDatabase().getRefsByPrefix(Constants.R_TAGS).stream()
+                    .map(ref -> ref.getName().substring(Constants.R_TAGS.length())).toList();
+        } catch (IOException e) {
+            return List.of();
         }
     }
 

@@ -1,5 +1,16 @@
 # Dated notes — read these before the other files here
 
+> **Publish runs the cli's publish library since 2026-10-24** (umbrella easy-publish plan, Phase 4a). Studio depends
+> on `botmaker-cli`'s main jar; `BotPublisher.Run` makes sure of the repository (REPO, Studio's own: made, public,
+> `mine`), then runs `com.botmaker.cli.publish.Publish` — the steps and rules of `botmaker bot publish` — through
+> `sharing/StudioPublishHost`, a `PublishHost` of JGit and Studio's sign-in that pushes to `mine` (a fork's line
+> `studio/<branch>`), makes the release, checks the download and opens the pull request with
+> `CatalogListing.open`, now only the transport of the cli's `CatalogPr.Change`. The local check is
+> `sharing/StudioChecks` (rules 6 and 8 without Maven; the new CHECK row). The entry appends the release, pinned to
+> its commit, and keeps every approved one. `CatalogListing.BotEntry`, `Change`, `refusal` (rules 3 and 5),
+> `put`, `remove` and `pending` are gone; Unpublish is the cli's `CatalogPr.unpublish`. A retry runs the library
+> again whole; it skips what is done. The note below is history for the steps it names.
+
 > **The consent gate's four bypasses are closed since 2026-10-23** (umbrella catalog plan, Phase 7b, after a
 > security review of Phase 6). In `plugin/PluginGate.admit`: a library with classes in an admitted plugin's package
 > is left off (`packagesOf`, `shadows`); a row vouches only for the jar JitPack built at its tag

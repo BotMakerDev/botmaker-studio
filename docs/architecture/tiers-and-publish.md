@@ -1,5 +1,8 @@
 # Tiers, and a publish that resumes (2026-09-16)
 
+> **Since 2026-10-24** the plan is REPO, CHECK, PUSH, RELEASE, ARCHIVE, LISTING, and every step after REPO is the
+> cli's publish library, run again whole on a retry (it skips what is done); see `dated-notes.md`.
+
 > **History since 2026-10-23**, except the resumable `PublishPlan` and the one `GalleryCard`: tiers went, then
 > the gallery repository. The listing step opens the catalog's pull request (`CatalogListing`), and a rank
 > (Official, Trusted, Community) replaces the tier; see `dated-notes.md`.

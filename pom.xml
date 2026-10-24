@@ -37,6 +37,8 @@
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
         <botmaker.pluginhost.version>0.7.1-SNAPSHOT</botmaker.pluginhost.version>
+        <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
+        <botmaker.cli.version>0.5.1-SNAPSHOT</botmaker.cli.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
         <mcp.version>2.1.0</mcp.version>
@@ -162,6 +164,16 @@
             <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-plugin-host</artifactId>
             <version>${botmaker.pluginhost.version}</version>
+        </dependency>
+
+        <!-- The cli's main jar (2026-10-24), for com.botmaker.cli.publish: Studio's Publish runs the same steps and
+             rules as `botmaker bot publish`, through a PublishHost of Studio's own (JGit and its sign-in, never the
+             `gh` program), and reads the catalog through the cli's model. Its contract and plugin-host are the two
+             above, nearest-wins; its picocli is optional and never reaches here. -->
+        <dependency>
+            <groupId>com.github.BotMakerDev</groupId>
+            <artifactId>botmaker-cli</artifactId>
+            <version>${botmaker.cli.version}</version>
         </dependency>
 
         <!-- botmaker-plugin-toolkit stood here at RUNTIME scope from 2026-08-28 and is GONE (2026-09-02),
@@ -840,8 +852,9 @@
                                          is the intended trade: a package installed BY HAND, from a downloaded
                                          file with that repository absent, now fails to resolve — the repo is
                                          the supported install path, and UpdateService's own dnf/apt path goes
-                                         through it. Studio declares no Maven dependency on botmaker-cli and
-                                         must not; see services/CliUpdateService. -->
+                                         through it. The package is the cli's command; the Maven dependency
+                                         on botmaker-cli's main jar (2026-10-24) is its silent library, and the
+                                         two are updated apart (services/CliUpdateService). -->
                                     <additionalOptions>
                                         <option>--linux-package-deps</option>
                                         <option>libgtk-3-0t64 | libgtk-3-0, libx11-6, libxtst6, libxi6, libxxf86vm1, libgl1, libfontconfig1, botmaker</option>
