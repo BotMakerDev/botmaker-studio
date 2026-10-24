@@ -77,6 +77,26 @@ jobs:
           repository: BotMakerDev/botmaker-session
           path: .deps/botmaker-session
 
+      # The cli's main jar is the publish library Studio's Publish runs (2026-10-24); it builds against the
+      # toolkit and bundles the archetype's template zip, so those two are installed before it.
+      - name: Check out botmaker-plugin-toolkit
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-plugin-toolkit
+          path: .deps/botmaker-plugin-toolkit
+
+      - name: Check out botmaker-plugin-archetype
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-plugin-archetype
+          path: .deps/botmaker-plugin-archetype
+
+      - name: Check out botmaker-cli
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-cli
+          path: .deps/botmaker-cli
+
       # botmaker-sdk was checked out here too, "for type identity (palette/SdkType)". SdkType was deleted
       # in plugin-platform phase 7, and on 2026-09-02 the dependency itself left this pom: Studio bundles
       # no plugin at all now and loads every one from the open project's own resolved classpath. Installing
@@ -87,11 +107,14 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Install the four upstreams (their main -SNAPSHOT)
+      - name: Install the upstreams (their main -SNAPSHOT)
         run: |
           source .github/mvn-retry.sh
           mvn_retry mvn -B -f .deps/botmaker-studio-api/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-cli/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-shared/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-session/pom.xml install -DskipTests
 
@@ -114,10 +137,11 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Install the four upstreams (their main -SNAPSHOT)
+      - name: Install the upstreams (their main -SNAPSHOT)
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-plugin-host botmaker-shared botmaker-session; do
+          for repo in botmaker-studio-api botmaker-plugin-host botmaker-plugin-toolkit botmaker-plugin-archetype \
+                      botmaker-cli botmaker-shared botmaker-session; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
           done
