@@ -1420,6 +1420,10 @@
     -fx-padding: 7;
 }
 .np-card-remembered { -fx-opacity: 0.7; }
+/* A plugin the project gets anyway: ticked, greyed, and its line says who gives it. */
+.np-card-locked { -fx-opacity: 0.6; }
+.np-card-locked.np-card-picked { -fx-border-color: -bm-divider; }
+.np-card-lock { -fx-text-fill: -bm-muted; -fx-font-style: italic; }
 .np-card-name { -fx-font-weight: bold; }
 .np-card-check {
     -fx-text-fill: -bm-accent-dark;

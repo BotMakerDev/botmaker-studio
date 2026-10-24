@@ -29,6 +29,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   replaced. The note under the cards is the picked bot's trust warning only.
 - **New Project offline keeps the kept bots on show**, greyed and not creatable, with "Offline — showing the bots
   from <date>" above them; until 2026-10-24 Blank was left alone.
+- **New Project's plugins are cards too**, the ✓ toggling each (a checklist until 2026-10-24). A plugin the project
+  gets anyway is shown ticked, greyed and not tickable, with who gives it: the picked bot's own "used by <bot>",
+  and one another plugin brings "brought by <plugin>", followed down the chain (`PluginLock`). A plugin the user
+  ticked turns locked once another ticked one brings it, and leaves the picks, so the pom never declares it beside
+  the plugin that brings it. The arrow keys pass over a locked card.
 
 ### Fixed
 

@@ -529,7 +529,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         boolean[] typedByUser = {false};
         boolean[] filling = {false};
         // The plugins to add at creation (2026-10-01), for any starting point: the rows Plugins & Libraries ▸
-        // Browse offers, with the bot's own ticked and locked.
+        // Browse offers, as cards (2026-10-24), with the bot's own and those a plugin brings ticked and locked.
         NewProjectPlugins[] plugins = new NewProjectPlugins[1];
         StartCards[] starts = new StartCards[1];
         // Create waits for a valid name and for a card it can create from: not a kept bot the catalog has not
@@ -540,7 +540,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                     || picked == null || !picked.isCreatable());
         };
         starts[0] = new StartCards(picked -> {
-            if (plugins[0] != null) plugins[0].lockFor(picked == null ? null : picked.entry());
+            if (plugins[0] != null) plugins[0].lockFor(picked);
             NewProjectForm.prefill(typedByUser[0], picked).ifPresent(name -> {
                 filling[0] = true;
                 try {
@@ -576,8 +576,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // project", "by <owner>"), and only the trust warning stays.
         plugins[0] = new NewProjectPlugins(new PluginCatalog(new PluginRegistry()),
                 new ShowCommunity(showCommunity.isSelected()), () -> {});
-        StartChoice first = starts[0].picked();
-        plugins[0].lockFor(first == null ? null : first.entry());
+        plugins[0].lockFor(starts[0].picked());
         showCommunity.setOnAction(e -> {
             ShowCommunity choice = new ShowCommunity(showCommunity.isSelected());
             choice.save();

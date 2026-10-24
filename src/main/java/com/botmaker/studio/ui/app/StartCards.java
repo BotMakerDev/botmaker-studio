@@ -30,7 +30,7 @@ import java.util.function.Consumer;
 final class StartCards {
 
     static final double CARD_WIDTH = 160;
-    private static final double GAP = 8;
+    static final double GAP = 8;
 
     private final TilePane tiles = new TilePane(GAP, GAP);
     private final Label empty = muted();
@@ -141,34 +141,45 @@ final class StartCards {
             card.requestFocus();
             pick(choice);
         });
+        keys(card, tiles, () -> pick(choice));
+        return card;
+    }
+
+    /** A card of {@code tiles}: Space or Enter does {@code act}, the arrow keys move to the card that way. */
+    static void keys(Node card, TilePane tiles, Runnable act) {
         card.addEventHandler(KeyEvent.KEY_PRESSED, e -> {
             switch (e.getCode()) {
-                case SPACE, ENTER -> pick(choice);
-                case LEFT -> move(card, -1);
-                case RIGHT -> move(card, 1);
-                case UP -> move(card, -columns());
-                case DOWN -> move(card, columns());
+                case SPACE, ENTER -> act.run();
+                case LEFT -> move(tiles, card, -1);
+                case RIGHT -> move(tiles, card, 1);
+                case UP -> move(tiles, card, -columns(tiles));
+                case DOWN -> move(tiles, card, columns(tiles));
                 default -> {
                     return;
                 }
             }
             e.consume();
         });
-        return card;
     }
 
-    private void move(Node from, int by) {
+    /** Focuses the card {@code by} away from {@code from}, skipping a card that takes no focus (a locked one). */
+    private static void move(TilePane tiles, Node from, int by) {
         List<Node> cards = tiles.getChildren();
-        int to = cards.indexOf(from) + by;
-        if (to >= 0 && to < cards.size()) cards.get(to).requestFocus();
+        for (int to = cards.indexOf(from) + by; to >= 0 && to < cards.size(); to += by) {
+            if (cards.get(to).isFocusTraversable()) {
+                cards.get(to).requestFocus();
+                return;
+            }
+        }
     }
 
     /** The columns the grid shows now, which its width decides. */
-    private int columns() {
+    private static int columns(TilePane tiles) {
         return Math.max(1, (int) ((tiles.getWidth() + GAP) / (CARD_WIDTH + GAP)));
     }
 
-    private static Label line(String text) {
+    /** A card's small line, wrapped. */
+    static Label line(String text) {
         Label label = new Label(text);
         label.getStyleClass().add("gallery-card-note");
         label.setWrapText(true);
