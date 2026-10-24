@@ -1,5 +1,13 @@
 # Sharing — the gallery is read whole and written one file at a time
 
+> **2026-10-24: New Project asks the catalog again on every open** (`CatalogClient.refresh()`, its `Reply` saying
+> whether the answer is fresh or the kept copy), so a bot published minutes ago is a *Start from* card. Bots and
+> plugins are cards (`StartCards`, `NewProjectPlugins`); a plugin card is locked when the picked bot's pom
+> declares it ("used by") or a plugin the project gets brings it ("brought by", `PluginLock.of`, read off
+> `PluginRegistry.Plugin.brings()`, the newest release's `plugins` in `catalog.json`). A locked plugin is never
+> added, so the pom never declares a plugin beside one that brings it. Spec: the umbrella's
+> `docs/superpowers/specs/2026-10-24-new-project-cards-design.md`.
+
 > **2026-10-24: Publish is the cli's publish library** (`com.botmaker.cli.publish`, through `StudioPublishHost`), so
 > the pull request below is the cli's change, appending the release to the entry; and `catalog.json` is read as the
 > cli's `Catalog` record (schema 4, every approved release pinned), installs and updates at the pinned commit; see
