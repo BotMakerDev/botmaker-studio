@@ -69,6 +69,18 @@ class CatalogIndexTest {
         assertEquals("", bot.commitOf("v9.9.9"));
     }
 
+    /** What a plugin brings is its newest release's {@code plugins}: New Project locks those cards. */
+    @Test
+    void pluginBringsFromNewestRelease() {
+        CatalogIndex index = CatalogIndex.parse("""
+                {"plugins": [{"id": "com.botmaker.sdk", "repo": "o/sdk",
+                              "releases": [{"tag": "v2", "plugins": [{"id": "com.botmaker.basics", "version": "v0.5.0"}]},
+                                           {"tag": "v1", "plugins": [{"id": "old.one", "version": "v1"}]}]},
+                             {"id": "com.botmaker.basics", "repo": "o/basics", "releases": [{"tag": "v0.5.0"}]}]}""");
+        assertEquals(List.of("com.botmaker.basics"), index.plugins().get(0).brings());
+        assertEquals(List.of(), index.plugins().get(1).brings());
+    }
+
     /** No reading of the old single {@code tag}: a schema-3 row has no release, so it is skipped. */
     @Test
     void aRowWithNoReleaseIsSkipped() {

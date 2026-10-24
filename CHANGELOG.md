@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **The catalog can be asked again within a session** (`CatalogClient.refresh`), with the date of the copy kept
+  for offline (`keptAt`), and each catalog plugin says which other catalog plugins it brings
+  (`PluginRegistry.Plugin.brings`, from its newest release). New Project uses both in its card rework.
+
 ### Fixed
 
 - **A bot is compiled for the Java its pom names**, whatever Java Studio itself runs on: every compile passes the

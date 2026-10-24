@@ -1,10 +1,12 @@
 package com.botmaker.studio.sharing;
 
 import com.botmaker.cli.catalog.Catalog;
+import com.botmaker.cli.catalog.DerivedFacts;
 import com.botmaker.studio.project.UserLibrary;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -111,6 +113,16 @@ public final class PluginRegistry {
         /** The release the catalog approved as {@code version}, spelled as git has it; empty when it approved none. */
         public Optional<Catalog.Plugin.Release> release(String version) {
             return releases.stream().filter(r -> r.tag().equals(version)).findFirst();
+        }
+
+        /**
+         * The catalog plugins this one brings: the ids its newest release's pom declares, which a project adding
+         * it gets transitively. New Project locks their cards "brought by" this one.
+         */
+        public List<String> brings() {
+            if (releases.isEmpty()) return List.of();
+            return releases.getFirst().plugins().stream().filter(Objects::nonNull).map(DerivedFacts.Pin::id)
+                    .filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().toList();
         }
 
         /** The tags the catalog approved, newest first: what Plugins & Libraries offers. */

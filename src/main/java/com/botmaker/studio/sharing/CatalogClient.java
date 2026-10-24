@@ -8,13 +8,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Reads {@code catalog.json} (2026-10-23): one unauthenticated request to the raw CDN — no API rate limit, no
- * account — answered once per session.
+ * account — answered once per session, unless a reader {@link #refresh refreshes} it.
  *
  * <p>The last catalog read is kept on disk and answers when GitHub does not, so Studio offline still knows
  * which plugins are listed and how they rank. A request that fails is not remembered: the next reader asks
@@ -52,7 +53,7 @@ public final class CatalogClient {
             try {
                 Optional<CatalogIndex> index = CatalogIndex.read(body);
                 if (index.isPresent()) {
-                    keep(body);
+                    keepIfCurrent(answer, body);
                     answer.complete(index.get());
                 } else {
                     forget(answer);
@@ -64,6 +65,25 @@ public final class CatalogClient {
             }
         });
         return answer;
+    }
+
+    /**
+     * The catalog asked again: the session's answer is dropped and later {@link #fetch} callers share the new one.
+     * New Project calls it on every open, so a bot published since Studio started is offered (2026-10-24).
+     */
+    public synchronized CompletableFuture<CatalogIndex> refresh() {
+        asked = null;
+        return fetch();
+    }
+
+    /** When the kept catalog was written: the date New Project names offline. Empty when none is kept. */
+    public Optional<Instant> keptAt() {
+        try {
+            return Files.isRegularFile(cacheFile)
+                    ? Optional.of(Files.getLastModifiedTime(cacheFile).toInstant()) : Optional.empty();
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
     }
 
     private synchronized void forget(CompletableFuture<CatalogIndex> failed) {
@@ -82,8 +102,13 @@ public final class CatalogClient {
         }
     }
 
-    /** Best effort: a catalog that cannot be kept is read from GitHub again next session. */
-    private void keep(String body) {
+    /**
+     * Keeps {@code body} unless a {@link #refresh} replaced {@code answer} meanwhile: an older reply that lands
+     * after a newer one never overwrites it. Under the lock, so two replies never share the {@code .part} file.
+     * Best effort: a catalog that cannot be kept is read from GitHub again next session.
+     */
+    private synchronized void keepIfCurrent(CompletableFuture<CatalogIndex> answer, String body) {
+        if (asked != answer) return;
         try {
             Files.createDirectories(cacheFile.toAbsolutePath().getParent());
             Path partial = cacheFile.resolveSibling(cacheFile.getFileName() + ".part");
