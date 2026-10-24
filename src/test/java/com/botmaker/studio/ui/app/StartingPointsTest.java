@@ -53,10 +53,17 @@ class StartingPointsTest {
         assertEquals(List.of(StartChoice.BLANK), StartingPoints.rows(List.of(), Fetch.ANSWERED));
     }
 
-    /** Nothing confirms a remembered entry offline, and it clones at creation anyway. */
+    /**
+     * Offline the kept bots stay on show (2026-10-24, never Blank alone), and none is created from: nothing confirms
+     * a remembered entry, and it clones at creation anyway.
+     */
     @Test
-    void anUnreachableGalleryLeavesBlankAlone() {
-        assertEquals(List.of(StartChoice.BLANK), StartingPoints.rows(List.of(bot("farm")), Fetch.FAILED));
+    void anUnreachableCatalogKeepsTheKeptBotsUncreatable() {
+        List<StartChoice> rows = StartingPoints.rows(List.of(bot("farm")), Fetch.FAILED);
+        assertEquals(List.of(Kind.BLANK, Kind.REMEMBERED), kinds(rows));
+        assertFalse(rows.get(1).isCreatable());
+        assertEquals(List.of(StartChoice.BLANK), StartingPoints.rows(List.of(), Fetch.FAILED),
+                "no loading row once the answer is in");
         assertTrue(StartChoice.BLANK.isCreatable());
     }
 

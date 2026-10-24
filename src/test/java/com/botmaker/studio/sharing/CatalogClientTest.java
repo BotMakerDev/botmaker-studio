@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** New Project asks the catalog again on every open (2026-10-24): a bot published since Studio started shows. */
@@ -65,7 +66,9 @@ class CatalogClientTest {
 
             served.answer().set(catalog("b/second"));
             assertEquals(List.of("a/first"), bots(client.fetch().join()), "fetch alone shares the session's answer");
-            assertEquals(List.of("b/second"), bots(client.refresh().join()));
+            CatalogClient.Reply refreshed = client.refresh().join();
+            assertEquals(List.of("b/second"), bots(refreshed.index()));
+            assertTrue(refreshed.fresh(), "GitHub answered");
             assertEquals(List.of("b/second"), bots(client.fetch().join()), "later readers share the new answer");
             assertEquals(2, served.requests().get(), "one more request, for the refresh only");
         } finally {
@@ -87,7 +90,9 @@ class CatalogClientTest {
         Instant written = Instant.parse("2026-10-20T08:00:00Z");
         Files.setLastModifiedTime(cache, FileTime.from(written));
 
-        assertEquals(List.of("k/kept"), bots(client.refresh().join()));
+        CatalogClient.Reply refreshed = client.refresh().join();
+        assertEquals(List.of("k/kept"), bots(refreshed.index()));
+        assertFalse(refreshed.fresh(), "the kept copy, which New Project calls offline");
         assertEquals(Optional.of(written), client.keptAt(), "the date the offline line names");
     }
 }

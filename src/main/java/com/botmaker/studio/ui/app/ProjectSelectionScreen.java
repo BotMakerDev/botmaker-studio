@@ -36,13 +36,15 @@ import javafx.stage.Stage;
 import java.io.File;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Project selection screen shown on startup with project creation capability.
@@ -479,31 +481,20 @@ public class ProjectSelectionScreen implements ProjectWindow {
         Dialog<CreateRequest> dialog = new Dialog<>();
         ThemedWindows.apply(dialog);
         dialog.setTitle("Create New Project");
-        dialog.setHeaderText("Enter project name");
 
         ButtonType createButtonType = new ButtonType("Create", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(createButtonType, ButtonType.CANCEL);
+        Button createButton = (Button) dialog.getDialogPane().lookupButton(createButtonType);
 
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-
+        // The name alone (2026-10-24): its rule shows only once the typed name breaks one, in ProjectCreator's own
+        // sentence under the field. The header text, the five grey rule labels and the green border went.
         TextField projectNameField = new TextField();
         projectNameField.setPromptText("ProjectName");
-
-        Label instructionLabel = new Label("Project name must:");
-        instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
-
-        Label rule1 = new Label("• Start with a letter");
-        rule1.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
-        Label rule2 = new Label("• Contain only letters and numbers");
-        rule2.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
-        Label rule3 = new Label("• Be between 2-50 characters");
-        rule3.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
-
-        Label exampleLabel = new Label("Example: MyFirstProject");
-        exampleLabel.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
+        Label nameError = new Label();
+        nameError.getStyleClass().add("np-error");
+        nameError.setWrapText(true);
+        nameError.managedProperty().bind(nameError.visibleProperty());
+        nameError.setVisible(false);
 
         // There is no SDK version row here any more (2026-09-04), and its absence is the visible half of the
         // blank-project split. A blank project names no plugin at all, so there is no version to pin; a
@@ -519,129 +510,114 @@ public class ProjectSelectionScreen implements ProjectWindow {
         // no capture.width/capture.height until a picture is taken.
 
         // The starting point: Studio's own Blank, or any published bot, cloned and linked to its author as Browse
-        // Bots installs it (2026-10-23; only bots tagged `template`, copied and renamed, until then). Blank leads;
-        // below it the bots published last time, refreshed in the background — see loadBots. The ones hidden in
-        // Browse Bots on this computer are left out (HiddenBots), and community ones unless the user shows them
-        // (ShowCommunity, 2026-10-23).
+        // Bots installs it (2026-10-23; only bots tagged `template`, copied and renamed, until then), as cards
+        // (StartCards, 2026-10-24; a combo until then). Blank leads; below it the bots of the catalog kept from the
+        // last read, while the catalog is asked again — on every open since 2026-10-24, so a bot published since
+        // Studio started is offered. The ones hidden in Browse Bots on this computer are left out (HiddenBots),
+        // and community ones unless the user shows them (ShowCommunity, 2026-10-23). Offline the kept cards stay,
+        // not creatable, and the line above them says so.
         CheckBox showCommunity = new CheckBox(ShowCommunity.LABEL);
         showCommunity.setSelected(ShowCommunity.load().shown());
-        List<GalleryEntry> kept = CatalogClient.session().kept().bots();
-        List<StartChoice> initial = startRows(kept, StartingPoints.Fetch.PENDING, showCommunity.isSelected());
-        ComboBox<StartChoice> startCombo = new ComboBox<>(
-                javafx.collections.FXCollections.observableArrayList(initial));
-        startCombo.setValue(initial.getFirst());
-        startCombo.setMaxWidth(Double.MAX_VALUE);
-        startCombo.setConverter(new javafx.util.StringConverter<>() {
-            @Override public String toString(StartChoice t) {
-                return t == null ? "" : t.label();
-            }
-            @Override public StartChoice fromString(String s) { return null; }
-        });
-        // Its own button cell: the default one shows no prompt once a value has been cleared, and fillStarts
-        // clears it to say a picked bot left the gallery.
-        startCombo.setButtonCell(new ListCell<>() {
-            @Override protected void updateItem(StartChoice t, boolean empty) {
-                super.updateItem(t, empty);
-                setText(empty || t == null ? startCombo.getPromptText() : t.label());
-            }
-        });
-        // The note under the row carries the trust warning Browse Bots' Install shows too, by rank (2026-10-23).
-        List<List<GalleryEntry>> fresh = new ArrayList<>(1);   // the catalog's answer, once it is in
-        loadBots(entries -> {
-            fresh.clear();
-            fresh.add(entries);
-            fillStarts(startCombo, startRows(entries, fetchOf(entries), showCommunity.isSelected()));
-        });
-
-        // One line under the dropdown, saying what the chosen row actually gives you. It matters more than
-        // it looks: "Blank" means a plain Java project with no bot API in it, and a user who reaches it
-        // — which now only happens when the gallery is unreachable — would otherwise find an empty palette
-        // and no explanation.
-        Label startNote = new Label();
-        startNote.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        CompletableFuture<CatalogClient.Reply> asking = CatalogClient.session().refresh();
+        AtomicReference<List<GalleryEntry>> bots = new AtomicReference<>(CatalogClient.session().kept().bots());
+        AtomicReference<StartingPoints.Fetch> fetch = new AtomicReference<>(StartingPoints.Fetch.PENDING);
+        Label catalogLine = shownWhenSaid(new Label());
+        // The note under the cards carries the trust warning Browse Bots' Install shows too, by rank (2026-10-23).
+        Label startNote = shownWhenSaid(new Label());
         startNote.setWrapText(true);
+        // A name the user typed is never replaced by a picked bot's; one they emptied again counts as none.
+        boolean[] typedByUser = {false};
+        boolean[] filling = {false};
         // The plugins to add at creation (2026-10-01), for any starting point: the rows Plugins & Libraries ▸
         // Browse offers, with the bot's own ticked and locked.
         NewProjectPlugins[] plugins = new NewProjectPlugins[1];
-        Runnable describeChoice = () -> {
-            StartChoice now = startCombo.getValue();
-            boolean blank = now == null || now.isBlank();
-            boolean extra = plugins[0] != null && !plugins[0].picked().isEmpty();
-            if (now == null) {
-                startNote.setText("");
-                return;
-            }
-            if (!now.isCreatable()) {
-                startNote.setText("Asking the gallery for its bots…");
-                return;
-            }
-            startNote.setText(blank
-                    ? (extra ? "A plain Java project — a pom, a source folder and a main() — with the plugins "
-                            + "ticked below."
-                            : "A plain Java project — a pom, a source folder and a main(). Tick a plugin below, "
-                            + "or add one later from Project ▸ Plugins & Libraries.")
-                    : "A copy of " + now.displayName() + " linked to " + now.entry().owner() + "'s repository: "
-                            + "it keeps their package and classes, and their later releases arrive in the "
-                            + "Versions tab. " + (extra
-                                    ? "The plugins ticked below are added to its own."
-                                    : "It brings its own plugins — change them later in Project ▸ Plugins & "
-                                            + "Libraries.")
-                            + (now.entry().trustWarning().isBlank() ? "" : "\n" + now.entry().trustWarning()));
+        StartCards[] starts = new StartCards[1];
+        // Create waits for a valid name and for a card it can create from: not a kept bot the catalog has not
+        // confirmed.
+        Runnable updateCreate = () -> {
+            StartChoice picked = starts[0] == null ? null : starts[0].picked();
+            createButton.setDisable(!isValidProjectName(projectNameField.getText())
+                    || picked == null || !picked.isCreatable());
         };
+        starts[0] = new StartCards(picked -> {
+            if (plugins[0] != null) plugins[0].lockFor(picked == null ? null : picked.entry());
+            NewProjectForm.prefill(typedByUser[0], picked).ifPresent(name -> {
+                filling[0] = true;
+                try {
+                    projectNameField.setText(name);
+                } finally {
+                    filling[0] = false;
+                }
+            });
+            say(startNote, NewProjectForm.startNote(picked, fetch.get()));
+            updateCreate.run();
+        });
+        // No line while asking (the one above says it), nor offline with nothing kept (likewise); otherwise why no
+        // bot card shows — offline too, when the kept bots are all community ones and those are unticked.
+        Runnable refill = () -> starts[0].fill(startRows(bots.get(), fetch.get(), showCommunity.isSelected()),
+                bots.get(),
+                fetch.get() == StartingPoints.Fetch.PENDING
+                        || fetch.get() == StartingPoints.Fetch.FAILED && bots.get().isEmpty()
+                        ? "" : NewProjectForm.emptyLine(showCommunity.isSelected()));
+        Runnable describeCatalog = () -> say(catalogLine, NewProjectForm.catalogLine(fetch.get(),
+                CatalogClient.session().keptAt(), !bots.get().isEmpty(), ZoneId.systemDefault()));
+        refill.run();
+        describeCatalog.run();
+        asking.thenAccept(reply -> Platform.runLater(() -> {
+            fetch.set(reply.fresh() ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED);
+            bots.set(reply.index().bots());
+            describeCatalog.run();
+            refill.run();
+            // A kept bot still picked offline keeps its pick, so the note is said again for the new state.
+            say(startNote, NewProjectForm.startNote(starts[0].picked(), fetch.get()));
+        }));
+
+        // The note that said what Blank or a bot gives you went on 2026-10-24: the cards say it ("An empty
+        // project", "by <owner>"), and only the trust warning stays.
         plugins[0] = new NewProjectPlugins(new PluginCatalog(new PluginRegistry()),
-                new ShowCommunity(showCommunity.isSelected()), describeChoice);
-        startCombo.valueProperty().addListener((o, was, now) ->
-                plugins[0].lockFor(now == null ? null : now.entry()));
-        plugins[0].lockFor(startCombo.getValue().entry());
+                new ShowCommunity(showCommunity.isSelected()), () -> {});
+        StartChoice first = starts[0].picked();
+        plugins[0].lockFor(first == null ? null : first.entry());
         showCommunity.setOnAction(e -> {
             ShowCommunity choice = new ShowCommunity(showCommunity.isSelected());
             choice.save();
-            fillStarts(startCombo, fresh.isEmpty()
-                    ? startRows(kept, StartingPoints.Fetch.PENDING, choice.shown())
-                    : startRows(fresh.getFirst(), fetchOf(fresh.getFirst()), choice.shown()));
+            refill.run();
             plugins[0].show(choice);
         });
 
-        content.getChildren().addAll(
-                new Label("Project Name:"),
-                projectNameField,
-                instructionLabel,
-                rule1,
-                rule2,
-                rule3,
-                exampleLabel,
-                new Label("Start from:"),
-                startCombo,
-                startNote,
-                showCommunity,
-                new Label("Plugins:"),
-                plugins[0].node()
-        );
+        // Both grids scroll in one pane; the name above and the toggle and buttons below stay put.
+        Label startHeading = new Label("Start from");
+        startHeading.getStyleClass().add("form-section-title");
+        Label pluginsHeading = new Label("Plugins");
+        pluginsHeading.getStyleClass().add("form-section-title");
+        VBox grids = new VBox(8, startHeading, starts[0].node(), startNote, pluginsHeading, plugins[0].node());
+        grids.setPadding(new Insets(0, 4, 0, 0));
+        ScrollPane scroll = new ScrollPane(grids);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setMaxHeight(420);
+        scroll.getStyleClass().add("np-scroll");
 
+        VBox content = new VBox(8, projectNameField, nameError, catalogLine, scroll, showCommunity);
+        content.setPadding(new Insets(16));
+        content.setPrefWidth(3 * StartCards.CARD_WIDTH + 2 * 8 + 2 * 16 + 24);
         dialog.getDialogPane().setContent(content);
 
-        Button createButton = (Button) dialog.getDialogPane().lookupButton(createButtonType);
-        // Create waits for a valid name and for a row it can create from: not "Loading published bots…".
-        Runnable updateCreate = () -> createButton.setDisable(!isValidProjectName(projectNameField.getText())
-                || startCombo.getValue() == null || !startCombo.getValue().isCreatable());
-        updateCreate.run();
-        startCombo.valueProperty().addListener((o, was, now) -> updateCreate.run());
-
         projectNameField.textProperty().addListener((observable, oldValue, newValue) -> {
-            boolean isValid = isValidProjectName(newValue);
+            if (!filling[0]) typedByUser[0] = !newValue.isEmpty();
+            // A keyword ("Class") is refused as well as a bad shape, so the sentence is ProjectCreator's.
+            Optional<String> problem = NewProjectForm.nameError(newValue, projectCreator::nameProblem);
+            say(nameError, problem.orElse(""));
+            projectNameField.getStyleClass().remove("np-name-error");
+            if (problem.isPresent()) projectNameField.getStyleClass().add("np-name-error");
             updateCreate.run();
-            if (newValue.isEmpty()) projectNameField.setStyle("");
-            else if (isValid) projectNameField.setStyle("-fx-border-color: green; -fx-border-width: 2px;");
-            else projectNameField.setStyle("-fx-border-color: red; -fx-border-width: 2px;");
-            // Red alone does not say why: a keyword ("Class") is refused as well as a bad shape.
-            String problem = newValue.isEmpty() ? null : projectCreator.nameProblem(newValue);
-            projectNameField.setTooltip(problem == null ? null : new Tooltip(problem));
         });
+        updateCreate.run();
 
-        javafx.application.Platform.runLater(projectNameField::requestFocus);
+        Platform.runLater(projectNameField::requestFocus);
 
         dialog.setResultConverter(dialogButton -> {
-            StartChoice choice = startCombo.getValue();
+            StartChoice choice = starts[0].picked();
             if (dialogButton == createButtonType && choice != null && choice.isCreatable()) {
                 return new CreateRequest(projectNameField.getText(), choice, plugins[0].picked());
             }
@@ -651,24 +627,22 @@ public class ProjectSelectionScreen implements ProjectWindow {
         dialog.showAndWait().ifPresent(this::create);
     }
 
-    /**
-     * Hands the catalog's fresh bots to {@code onAnswer} on the FX thread, which puts them below Blank.
-     *
-     * <p>When the catalog cannot be reached Blank is the only row — the kept bots go then, since nothing
-     * confirms them and each clones at creation. New Project has to work on a plane, which is the only reason
-     * Studio composes a starting project at all ({@code project/StarterSources}).
-     *
-     * <p>Failure is silent on purpose: Blank replaces the rows. An error
-     * dialog in front of a working New Project dialog would be the network's problem presented as the user's.
-     */
-    private void loadBots(Consumer<List<GalleryEntry>> onAnswer) {
-        new GitHubGallery(gitHubClient, gitHubAuth).browse()
-                .exceptionally(error -> List.of())
-                .thenAccept(entries -> Platform.runLater(() -> onAnswer.accept(entries)));
+    // loadBots went on 2026-10-24: New Project asks the catalog itself (CatalogClient.refresh), whose answer says
+    // whether GitHub gave it, and it tells offline by that, not by an empty list. Failure is still no error
+    // dialog: the line above the cards says it, and New Project works on a plane — the only reason Studio
+    // composes a starting project at all ({@code project/StarterSources}).
+
+    /** A label hidden, taking no room, while it says nothing. */
+    private static Label shownWhenSaid(Label label) {
+        label.getStyleClass().add("gallery-card-note");
+        label.managedProperty().bind(label.visibleProperty());
+        label.setVisible(false);
+        return label;
     }
 
-    private static StartingPoints.Fetch fetchOf(List<GalleryEntry> answered) {
-        return answered.isEmpty() ? StartingPoints.Fetch.FAILED : StartingPoints.Fetch.ANSWERED;
+    private static void say(Label label, String text) {
+        label.setText(text);
+        label.setVisible(!text.isEmpty());
     }
 
     /**
@@ -681,24 +655,7 @@ public class ProjectSelectionScreen implements ProjectWindow {
                 new ShowCommunity(community).bots(HiddenBots.load().without(entries))), fetch);
     }
 
-    /**
-     * Replaces the combo's rows with {@code rows}, keeping the current choice when it is still offered.
-     *
-     * <p>A bot the gallery no longer lists is not swapped for another one silently: the choice is
-     * cleared, the prompt says why, and Create waits for a new pick. Otherwise the value is set before the old
-     * rows go, so no listener sees a dialog with nothing chosen.
-     */
-    private static void fillStarts(ComboBox<StartChoice> combo, List<StartChoice> rows) {
-        StartChoice was = combo.getValue();
-        Optional<StartChoice> same = StartingPoints.same(rows, was);
-        boolean dropped = same.isEmpty() && was != null && was.entry() != null;
-        StartChoice keep = dropped ? null : same.orElse(rows.getFirst());
-        if (dropped) combo.setPromptText(was.displayName() + " is no longer listed — pick where to start");
-        combo.getItems().addAll(rows.stream().filter(r -> !combo.getItems().contains(r)).toList());
-        combo.setValue(keep);
-        combo.getItems().retainAll(rows);
-        combo.getItems().sort(Comparator.comparingInt(rows::indexOf));
-    }
+    // fillStarts, the combo's keep-the-pick refill, became StartCards.fill on 2026-10-24.
 
     // loadSdkVersions and decorateLocalBuilds were here until 2026-09-04, with the SDK version combo they
     // filled: a JitPack fetch, a "latest" convenience row and a cell factory badging ~/.m2 dev builds. New

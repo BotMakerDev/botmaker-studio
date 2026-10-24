@@ -1402,6 +1402,43 @@
     -fx-font-size: 14px;
 }
 
+/* New Project's cards (StartCards, 2026-10-24): one picked, in the theme's accent with a ✓; a kept bot the
+   catalog has not confirmed is quieter. Focus is a thinner accent ring, so the keyboard shows where it is. */
+.np-card {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+    -fx-padding: 8;
+    -fx-cursor: hand;
+}
+.np-card:focused { -fx-border-color: -bm-accent-dark; }
+.np-card-picked {
+    -fx-border-color: -bm-accent;
+    -fx-border-width: 2;
+    -fx-padding: 7;
+}
+.np-card-remembered { -fx-opacity: 0.7; }
+.np-card-name { -fx-font-weight: bold; }
+.np-card-check {
+    -fx-text-fill: -bm-accent-dark;
+    -fx-font-weight: bold;
+}
+.np-scroll, .np-scroll > .viewport { -fx-background-color: transparent; }
+.np-scroll { -fx-padding: 0; }
+
+/* New Project's name rule, shown only once the typed name breaks it. */
+.np-error {
+    -fx-text-fill: -bm-danger;
+    -fx-font-size: 11px;
+}
+.text-field.np-name-error {
+    -fx-border-color: -bm-danger;
+    -fx-border-radius: 3;
+    -fx-border-width: 1;
+}
+
 /* The publish dialog's preview: the Browse Bots card, framed so it reads as a sample rather than a control. */
 .gallery-card-preview {
     -fx-background-color: -fx-control-inner-background;

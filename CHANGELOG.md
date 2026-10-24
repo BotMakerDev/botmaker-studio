@@ -16,9 +16,24 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **The catalog can be asked again within a session** (`CatalogClient.refresh`), with the date of the copy kept
   for offline (`keptAt`), and each catalog plugin says which other catalog plugins it brings
-  (`PluginRegistry.Plugin.brings`, from its newest release). New Project uses both in its card rework.
+  (`PluginRegistry.Plugin.brings`, from its newest release). New Project uses both in its card rework. A refresh's
+  answer says whether GitHub gave it (`CatalogClient.Reply.fresh`).
+
+### Changed
+
+- **New Project: the name alone, and *Start from* as cards.** The name field has no rule labels and no example; a
+  name that breaks a rule shows the reason in one red line under it. *Start from* is a grid of cards — Blank
+  ("An empty project"), then each bot with its owner, "based on …" for a fork, its rank, newest tag and
+  description — one picked, by click, Space or Enter, the arrow keys moving between cards. Picking a bot fills in
+  its name when none was typed (a repository's `firestone-bot` becomes `FirestoneBot`); a typed name is never
+  replaced. The note under the cards is the picked bot's trust warning only.
+- **New Project offline keeps the kept bots on show**, greyed and not creatable, with "Offline — showing the bots
+  from <date>" above them; until 2026-10-24 Blank was left alone.
 
 ### Fixed
+
+- **New Project asks the catalog again each time it opens**, so a bot published since Studio started (Firestone)
+  is offered; "Checking for new bots…" shows meanwhile, over the cards of the catalog kept from the last read.
 
 - **A bot is compiled for the Java its pom names**, whatever Java Studio itself runs on: every compile passes the
   pom's `maven.compiler.release` to javac. A bot built by a Studio on a newer Java no longer stops another Studio

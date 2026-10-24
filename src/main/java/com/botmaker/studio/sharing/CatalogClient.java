@@ -30,7 +30,13 @@ public final class CatalogClient {
     private final List<String> urls;
     private final Path cacheFile;
     /** The answer every reader of this session shares; null until one is asked, and again after one failed. */
-    private CompletableFuture<CatalogIndex> asked;
+    private CompletableFuture<Reply> asked;
+
+    /**
+     * One answer and where it came from: {@code fresh} when GitHub gave it just now, false when it is the catalog
+     * kept from the last read or none. New Project says "Offline" by it (2026-10-24).
+     */
+    public record Reply(CatalogIndex index, boolean fresh) {}
 
     CatalogClient(GitHubClient client, List<String> urls, Path cacheFile) {
         this.client = client;
@@ -44,9 +50,22 @@ public final class CatalogClient {
     }
 
     /** The catalog: GitHub's copy, else the one kept from the last read, else {@link CatalogIndex#EMPTY}. */
-    public synchronized CompletableFuture<CatalogIndex> fetch() {
+    public CompletableFuture<CatalogIndex> fetch() {
+        return ask().thenApply(Reply::index);
+    }
+
+    /**
+     * The catalog asked again: the session's answer is dropped and later {@link #fetch} callers share the new one.
+     * New Project calls it on every open, so a bot published since Studio started is offered (2026-10-24).
+     */
+    public synchronized CompletableFuture<Reply> refresh() {
+        asked = null;
+        return ask();
+    }
+
+    private synchronized CompletableFuture<Reply> ask() {
         if (asked != null) return asked;
-        CompletableFuture<CatalogIndex> answer = new CompletableFuture<>();
+        CompletableFuture<Reply> answer = new CompletableFuture<>();
         asked = answer;
         client.getFirstString(urls).exceptionally(failure -> null).thenAccept(body -> {
             // Whatever happens below, the answer completes: every reader of the session waits on it.
@@ -54,26 +73,17 @@ public final class CatalogClient {
                 Optional<CatalogIndex> index = CatalogIndex.read(body);
                 if (index.isPresent()) {
                     keepIfCurrent(answer, body);
-                    answer.complete(index.get());
+                    answer.complete(new Reply(index.get(), true));
                 } else {
                     forget(answer);
-                    answer.complete(kept());
+                    answer.complete(new Reply(kept(), false));
                 }
             } catch (RuntimeException e) {
                 forget(answer);
-                answer.complete(CatalogIndex.EMPTY);
+                answer.complete(new Reply(CatalogIndex.EMPTY, false));
             }
         });
         return answer;
-    }
-
-    /**
-     * The catalog asked again: the session's answer is dropped and later {@link #fetch} callers share the new one.
-     * New Project calls it on every open, so a bot published since Studio started is offered (2026-10-24).
-     */
-    public synchronized CompletableFuture<CatalogIndex> refresh() {
-        asked = null;
-        return fetch();
     }
 
     /** When the kept catalog was written: the date New Project names offline. Empty when none is kept. */
@@ -86,7 +96,7 @@ public final class CatalogClient {
         }
     }
 
-    private synchronized void forget(CompletableFuture<CatalogIndex> failed) {
+    private synchronized void forget(CompletableFuture<Reply> failed) {
         if (asked == failed) asked = null;
     }
 
@@ -107,7 +117,7 @@ public final class CatalogClient {
      * after a newer one never overwrites it. Under the lock, so two replies never share the {@code .part} file.
      * Best effort: a catalog that cannot be kept is read from GitHub again next session.
      */
-    private synchronized void keepIfCurrent(CompletableFuture<CatalogIndex> answer, String body) {
+    private synchronized void keepIfCurrent(CompletableFuture<Reply> answer, String body) {
         if (asked != answer) return;
         try {
             Files.createDirectories(cacheFile.toAbsolutePath().getParent());

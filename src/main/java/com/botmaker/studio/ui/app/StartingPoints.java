@@ -116,17 +116,21 @@ final class StartingPoints {
      * The rows for {@code bots} (already ordered by {@link GalleryEntry#startingPoints}), Blank first in every
      * state: it is the one row that needs no network, and the default — starting from a bot runs somebody
      * else's code, so it is picked, never preselected. Pending: the remembered bots, shown and not creatable, or
-     * the loading row. Answered: the fresh bots. Failed: Blank alone — nothing confirms a remembered entry, and
-     * it clones at creation.
+     * the loading row. Answered: the fresh bots. Failed: the remembered bots again, still not creatable — nothing
+     * confirms a remembered entry, and it clones at creation — so the window says offline rather than looking
+     * empty (2026-10-24; Blank alone until then).
      */
     static List<StartChoice> rows(List<GalleryEntry> bots, Fetch fetch) {
         List<StartChoice> after = switch (fetch) {
-            case PENDING -> bots.isEmpty() ? List.of(StartChoice.LOADING)
-                    : bots.stream().map(e -> new StartChoice(Kind.REMEMBERED, e)).toList();
+            case PENDING -> bots.isEmpty() ? List.of(StartChoice.LOADING) : remembered(bots);
             case ANSWERED -> bots.stream().map(StartChoice::of).toList();
-            case FAILED -> List.of();
+            case FAILED -> remembered(bots);
         };
         return Stream.concat(Stream.of(StartChoice.BLANK), after.stream()).toList();
+    }
+
+    private static List<StartChoice> remembered(List<GalleryEntry> bots) {
+        return bots.stream().map(e -> new StartChoice(Kind.REMEMBERED, e)).toList();
     }
 
     /**
