@@ -326,8 +326,11 @@ public class CodeExecutionService {
         Files.createDirectories(source.getParent());
         Files.createDirectories(classes);
         Files.writeString(source, trial.text());
-        ProcessBuilder pb = new ProcessBuilder(config.javacExecutable(), "-encoding", "UTF-8",
-                "-cp", buildRuntimeClasspath(snapshot), "-d", classes.toString(), source.toString())
+        List<String> command = new ArrayList<>(List.of(config.javacExecutable(), "-encoding", "UTF-8",
+                "-cp", buildRuntimeClasspath(snapshot), "-d", classes.toString()));
+        command.addAll(JavacRelease.args(config.projectPath()));
+        command.add(source.toString());
+        ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(config.projectPath().toFile())
                 .redirectErrorStream(true);
         Process process = pb.start();
@@ -388,6 +391,7 @@ public class CodeExecutionService {
                 config.javacExecutable(),
                 "-cp", buildRuntimeClasspath(snapshot),
                 "-d", compiledOutputPath.toString()));
+        command.addAll(JavacRelease.args(config.projectPath()));
         command.addAll(sourceFiles);
 
         ProcessBuilder pb = new ProcessBuilder(command)

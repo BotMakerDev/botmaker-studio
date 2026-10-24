@@ -10,6 +10,14 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A bot is compiled for the Java its pom names**, whatever Java Studio itself runs on: every compile passes the
+  pom's `maven.compiler.release` to javac. A bot built by a Studio on a newer Java no longer stops another Studio
+  with "Unsupported class file version: 70".
+
 ## [1.7.0] — 2026-10-24
 
 ### Changed

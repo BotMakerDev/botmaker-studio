@@ -47,6 +47,7 @@ public final class TreeCompile {
                     "-d", out.toString(), "-encoding", "UTF-8", "-nowarn",
                     // a check, not a build: no annotation processor an update's new dependency brings runs here
                     "-proc:none"));
+            command.addAll(JavacRelease.args(config.projectPath()));
             command.addAll(sources);
             Process javac = new ProcessBuilder(command).directory(config.projectPath().toFile())
                     .redirectErrorStream(true).start();
