@@ -4,24 +4,23 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.studio.ui.app.botinfo.BotInfoSection;
 import com.botmaker.studio.util.MethodSignature;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.util.StringConverter;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -29,6 +28,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -36,10 +38,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * Editor-side dialog for per-project settings backed by {@link StudioProjectSettings}: the capture
+ * Editor-side dialog for per-project settings. On top, the bot's name, description and icon
+ * ({@link BotInfoSection}, 2026-10-25), written to the pom and {@code icon.png}. Then, backed by
+ * {@link StudioProjectSettings}: the capture
  * <b>reference (standard) resolution</b>, the project's <b>favourite methods per class</b> (surfaced
  * first in the overlay palette), and a read-only view of the <b>favourite overload per method</b>
  * (written by the block ⚙ menu). Applying delegates to {@link ProjectSettingsService#update}, which
@@ -48,6 +53,7 @@ import java.util.stream.Collectors;
 public class ProjectSettingsDialog {
 
     private final Window owner;
+    private final Path projectDir;
     private final ProjectSettingsService settingsService;
     /** SDK API surface for populating the favourite method/overload dropdowns (never manual typing). */
     private final ProjectAnalyzer projectAnalyzer;
@@ -55,6 +61,8 @@ public class ProjectSettingsDialog {
     private final Label statusLabel = new Label();
     private final ProgressIndicator progress = new ProgressIndicator();
     private Stage stage;
+    /** The bot's name, description and icon (2026-10-25): written by Apply before the settings. */
+    private BotInfoSection botInfo;
 
     // The Reference Resolution pane was here until 2026-09-01 — a dropdown of standard sizes and a
     // landscape/portrait toggle. It set the size image templates are captured at, which is the capturing
@@ -72,17 +80,19 @@ public class ProjectSettingsDialog {
     /** One method → chosen overload signature row (read-only). */
     public record FavOverloadRow(String methodKey, String signatureKey) {}
 
-    public ProjectSettingsDialog(Window owner, ProjectSettingsService settingsService,
+    public ProjectSettingsDialog(Window owner, Path projectDir, ProjectSettingsService settingsService,
                                  ProjectAnalyzer projectAnalyzer) {
         this.owner = owner;
+        this.projectDir = projectDir;
         this.settingsService = settingsService;
         this.projectAnalyzer = projectAnalyzer;
     }
 
     public void show() {
         StudioWindow window = StudioWindow.modal("project-settings", "Project Settings", owner)
-                .size(560, 560).minSize(480, 400);
+                .size(560, 720).minSize(480, 400);
         stage = window.stage();
+        botInfo = new BotInfoSection(projectDir, stage);
 
         StudioProjectSettings s = settingsService.current();
 
@@ -96,9 +106,11 @@ public class ProjectSettingsDialog {
 
         VBox root = new VBox(12);
         root.setPadding(new Insets(16));
-        root.getChildren().addAll(buildFavMethodsPane(), buildFavOverloadsPane(), buildButtonBar());
+        root.getChildren().addAll(botInfo.node(), buildFavMethodsPane(), buildFavOverloadsPane(), buildButtonBar());
 
-        window.show(root);
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        window.show(scroll);
     }
 
     private TitledPane buildFavMethodsPane() {
@@ -325,7 +337,15 @@ public class ProjectSettingsDialog {
         }
 
         setBusy(apply, cancel, true);
-        settingsService.update(s).whenComplete((ok, err) -> Platform.runLater(() -> {
+        StudioProjectSettings settings = s;
+        BotInfoSection.Pending bot = botInfo.pending();
+        CompletableFuture.runAsync(() -> {
+            try {
+                bot.save();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }).thenCompose(saved -> settingsService.update(settings)).whenComplete((ok, err) -> Platform.runLater(() -> {
             setBusy(apply, cancel, false);
             if (err != null) error(rootMessage(err));
             else stage.close();

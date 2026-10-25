@@ -16,6 +16,7 @@ import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
@@ -64,6 +65,8 @@ import java.util.function.Supplier;
 public final class RunHome implements ProjectWindow {
 
     static final double CARD_WIDTH = 220;
+    /** The side of a card's bot icon, on My bots and Get more bots. */
+    static final double ICON_SIZE = 36;
     private static final double GAP = 10;
     private static final DateTimeFormatter USED = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
 
@@ -246,8 +249,8 @@ public final class RunHome implements ProjectWindow {
 
     /** One My bots card: icon, name, who and which version, when last used, an update badge, its buttons. */
     private Node card(MyBot bot) {
-        Label icon = new Label(bot.name().isEmpty() ? "?" : bot.name().substring(0, 1).toUpperCase(Locale.ROOT));
-        icon.getStyleClass().add("mybots-icon");
+        Node icon = bot.state() == State.GONE ? BotIconView.letter(bot.name(), ICON_SIZE)
+                : BotIconView.local(bot.name(), bot.dir(), ICON_SIZE);
         Label name = new Label(bot.name());
         name.getStyleClass().add("np-card-name");
         Region spacer = new Region();

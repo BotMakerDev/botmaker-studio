@@ -27,6 +27,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -249,7 +250,8 @@ public final class RunnerWindow implements ProjectWindow {
             improve.setOnAction(e -> switchToEditorMode());
             extra.addAll(List.of(code, improve));
         }
-        header = new RunnerHeader(about, StopKeyPreference.name(), extra, new RunnerHeader.Actions() {
+        header = new RunnerHeader(about, BotIconView.local(about.name(), config.projectPath(),
+                RunnerHeader.ICON_SIZE), StopKeyPreference.name(), extra, new RunnerHeader.Actions() {
             @Override
             public void home() {
                 onHome.run();
@@ -300,7 +302,7 @@ public final class RunnerWindow implements ProjectWindow {
                 e.tag()));
         kept = RunnerValues.load(RunnerValues.keyOf(original.map(SyncModel.Slug::owner),
                 original.map(SyncModel.Slug::repo), dir));
-        return new RunnerHeader.About(config.projectName(), original.map(SyncModel.Slug::owner), facts.version(),
+        return new RunnerHeader.About(facts.title().orElse(config.projectName()), original.map(SyncModel.Slug::owner), facts.version(),
                 available);
     }
 

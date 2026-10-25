@@ -10,7 +10,6 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.util.List;
@@ -56,7 +55,11 @@ public final class RunnerHeader {
         void editInStudio();
     }
 
+    /** The side of the header's icon. */
+    public static final double ICON_SIZE = 48;
+
     private final About about;
+    private final Node icon;
     private final Actions actions;
     private final String stopKey;
     private final List<Node> extra;
@@ -75,11 +78,13 @@ public final class RunnerHeader {
     private boolean updating;
 
     /**
+     * @param icon    the bot's icon, {@link #ICON_SIZE} a side
      * @param stopKey the key that stops a run, by name ({@code "Pause"}, {@code "F12"})
      * @param extra   the window's own buttons, after the titles: the way back to editing, or a look at the code
      */
-    public RunnerHeader(About about, String stopKey, List<Node> extra, Actions actions) {
+    public RunnerHeader(About about, Node icon, String stopKey, List<Node> extra, Actions actions) {
         this.about = about;
+        this.icon = icon;
         this.stopKey = stopKey;
         this.extra = List.copyOf(extra);
         this.actions = actions;
@@ -88,15 +93,6 @@ public final class RunnerHeader {
     public Node node() {
         Button home = new Button("← My bots");
         home.setOnAction(e -> actions.home());
-
-        // Phase 4 puts the bot's icon here; until then its initial holds the place.
-        Label initial = new Label(about.name().isBlank() ? "?"
-                : about.name().substring(0, 1).toUpperCase(Locale.ROOT));
-        initial.getStyleClass().add("runner-icon-initial");
-        StackPane icon = new StackPane(initial);
-        icon.getStyleClass().add("runner-icon");
-        icon.setMinSize(48, 48);
-        icon.setMaxSize(48, 48);
 
         Label name = new Label(about.name());
         name.getStyleClass().add("runner-title");

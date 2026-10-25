@@ -5,6 +5,7 @@ import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
@@ -173,7 +174,10 @@ public final class GetBots {
         HBox.setHgrow(push, Priority.ALWAYS);
         HBox buttons = new HBox(6, stars, push, hide, get);
         buttons.setAlignment(Pos.CENTER_LEFT);
-        VBox card = new VBox(6, GalleryCard.of(entry), buttons, status);
+        Node icon = BotIconView.remote(entry.name(), entry.owner(), entry.repo(), entry.commitOf(entry.tag()),
+                RunHome.ICON_SIZE);
+        HBox top = new HBox(8, icon, GalleryCard.of(entry));
+        VBox card = new VBox(6, top, buttons, status);
         card.getStyleClass().addAll("np-card", "getbots-card");
         card.setPrefWidth(RunHome.CARD_WIDTH);
         return card;

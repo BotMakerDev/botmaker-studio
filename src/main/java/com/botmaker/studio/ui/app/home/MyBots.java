@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.PomInfo;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
@@ -138,9 +139,10 @@ public final class MyBots {
      * @param version     the nearest tag, empty for a bot never released
      * @param runnable    whether a class holds {@code main}; a project that is no bot is only edited
      * @param lastUsed    when Studio last opened it, else when its folder last changed
+     * @param title       the pom's {@code <name>}, set in Project Settings; the card shows the folder's without one
      */
     public record Facts(Optional<String> originalUrl, Optional<String> version, boolean runnable,
-                        LocalDateTime lastUsed) {}
+                        LocalDateTime lastUsed, Optional<String> title) {}
 
     /**
      * One card. {@code owner} is the author of a bot got from someone, empty for the user's own ("mine");
@@ -169,8 +171,8 @@ public final class MyBots {
             Optional<String> available = original
                     .map(s -> latestTagByRepo.get(key(s.owner(), s.repo())))
                     .flatMap(latest -> GalleryEntry.updateTarget(f.version().orElse(""), latest));
-            bots.add(new MyBot(dir, name, original.map(SyncModel.Slug::owner), f.version(), f.lastUsed(),
-                    available, f.runnable(), State.READY));
+            bots.add(new MyBot(dir, f.title().orElse(name), original.map(SyncModel.Slug::owner), f.version(),
+                    f.lastUsed(), available, f.runnable(), State.READY));
         }
         bots.sort(Comparator.comparing((MyBot b) -> b.state() == State.GONE)
                 .thenComparing(MyBot::lastUsed, Comparator.reverseOrder())
@@ -211,7 +213,7 @@ public final class MyBots {
         LocalDateTime opened = openedTimes.get(dir.toAbsolutePath().normalize());
         LocalDateTime used = opened != null && opened.isAfter(changed) ? opened : changed;
         return new Facts(Optional.ofNullable(vcs.remoteUrl(Remote.ORIGINAL)), vcs.nearestTag(),
-                ProjectConfig.hasMain(dir), used);
+                ProjectConfig.hasMain(dir), used, PomInfo.read(dir).name());
     }
 
     /** {@link ProjectManager#PROJECT_SHAPE}: a pom.xml and a src/main/java folder. */

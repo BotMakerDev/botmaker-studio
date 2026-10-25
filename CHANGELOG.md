@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A bot's icon** (2026-10-25): *Project ▸ Project Settings…* has a *Bot* section with the bot's name and
+  description (the pom's `<name>` and `<description>`, nothing else in the pom rewritten) and its icon: *Choose
+  file…* or *Cut from game…* (a window you pick), then a square crop. It is saved as `icon.png`, 256×256, at the
+  project's root. The icon shows on My bots, Get more bots and New Project's cards, and in the Run window's
+  header; a bot without one shows its first letter on a colour from its name. A catalog bot's icon is read from
+  GitHub at the release the catalog pinned. A name set there is the one My bots and the Run window show.
 - **The Run window's new header** (`ui/app/runner/RunnerHeader`, 2026-10-25): the bot's name, "by owner ·
   version" (or "mine"), and one status line saying whether it can start, from the plugins (the SDK: "Ready —
   game window found", "Not ready — signed out of Steam"…), asked again every 5 seconds. *▶ Start* and *⏹ Stop

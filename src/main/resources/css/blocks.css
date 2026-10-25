@@ -1358,18 +1358,9 @@
 .runner-title    { -fx-font-size: 18px; -fx-font-weight: bold; }
 .runner-subtitle { -fx-font-size: 12px; -fx-opacity: 0.75; }
 
-/* Header A (2026-10-25): the bot's icon (its initial until phase 4), and one status line coloured by how ready
-   the bot is, from the plugins' Readiness. */
-.runner-icon {
-    -fx-background-color: -bm-accent;
-    -fx-background-radius: 8;
-}
-.runner-icon-initial {
-    -fx-text-fill: -fx-control-inner-background;
-    -fx-font-weight: bold;
-    -fx-font-size: 22px;
-}
-.runner-status            { -fx-font-size: 12px; }
+/* Header A (2026-10-25): one status line coloured by how ready the bot is, from the plugins' Readiness. The
+   icon is .bot-icon, drawn (BotIconView). */
+.runner-status           { -fx-font-size: 12px; }
 .runner-status--ready     { -fx-text-fill: -bm-severity-ok-text; }
 .runner-status--waiting   { -fx-text-fill: -bm-severity-warning-text; }
 .runner-status--blocked   { -fx-text-fill: -bm-severity-error-text; }
@@ -1455,14 +1446,13 @@
 }
 .np-scroll, .np-scroll > .viewport { -fx-background-color: transparent; }
 /* The home's My bots cards (2026-10-25): New Project's card, a letter icon until the bot has its own, a badge. */
-.mybots-icon {
-    -fx-min-width: 32; -fx-min-height: 32; -fx-max-width: 32; -fx-max-height: 32;
-    -fx-alignment: center;
-    -fx-background-color: -bm-accent;
-    -fx-background-radius: 6;
-    -fx-text-fill: -fx-control-inner-background;
-    -fx-font-weight: bold;
-    -fx-font-size: 15px;
+/* A bot's icon (2026-10-25): icon.png or its letter, both pictures (BotIconView); the crop's square over a
+   picture (SquareCrop). */
+.bot-icon-crop {
+    -fx-fill: transparent;
+    -fx-stroke: -bm-accent;
+    -fx-stroke-width: 2;
+    -fx-stroke-type: inside;
 }
 .mybots-badge {
     -fx-text-fill: -bm-accent-dark;

@@ -38,7 +38,8 @@ class MyBotsTest {
     }
 
     private static Facts facts(String originalUrl, String version) {
-        return new Facts(Optional.ofNullable(originalUrl), Optional.ofNullable(version), true, MONDAY);
+        return new Facts(Optional.ofNullable(originalUrl), Optional.ofNullable(version), true, MONDAY,
+                Optional.empty());
     }
 
     private static MyBot only(List<MyBot> bots) {

@@ -194,7 +194,7 @@ final class StudioActions {
     }
 
     private void openProjectSettings() {
-        new ProjectSettingsDialog(primaryStage, projectSettingsService, projectAnalyzer).show();
+        new ProjectSettingsDialog(primaryStage, config.projectPath(), projectSettingsService, projectAnalyzer).show();
     }
 
     // openLaunchTarget stood here until 2026-09-01, showing the Launch Target dialog and — when the overlay

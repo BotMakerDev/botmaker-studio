@@ -5,6 +5,7 @@ import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -38,7 +39,7 @@ class RunnerWindowHeaderFxTest extends FxHeadlessTest {
     }
 
     private RunnerHeader header(RunnerHeader.About about) {
-        return new RunnerHeader(about, "Pause", List.of(), new RunnerHeader.Actions() {
+        return new RunnerHeader(about, new Region(), "Pause", List.of(), new RunnerHeader.Actions() {
             @Override
             public void home() {
                 asked.add("home");

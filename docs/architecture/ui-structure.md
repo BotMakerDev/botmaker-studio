@@ -32,7 +32,9 @@ The `ui/` package is split by concern:
   `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
   `ResourceManagerDialog`, …; `GalleryDialog` became the home's *Get more bots*, `ui/app/home/GetBots`, on
-  2026-10-25). The open-time source migrations are **not**
+  2026-10-25). A bot's icon is `ui/app/botinfo/` (2026-10-25): `BotIconView` draws it wherever a bot shows,
+  `BotInfoSection` is Project Settings' *Bot* section (name, description, icon); the file and the pom text are
+  `project/BotIcon` and `project/PomInfo`. The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before
   `FileExplorerManager` exists, since a migration can delete a file the tree would otherwise go on listing.
   There is **no `PaletteManager`** — this entry named one for a long time and no such file has ever existed;

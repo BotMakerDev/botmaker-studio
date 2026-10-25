@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.StartingPoints.Kind;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
+import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -31,6 +32,8 @@ final class StartCards {
 
     static final double CARD_WIDTH = 160;
     static final double GAP = 8;
+    /** The side of a bot card's icon. */
+    private static final double ICON_SIZE = 24;
 
     private final TilePane tiles = new TilePane(GAP, GAP);
     private final Label empty = muted();
@@ -114,7 +117,14 @@ final class StartCards {
         check.setVisible(isPicked);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        VBox card = new VBox(3, new HBox(4, name, spacer, check));
+        GalleryEntry bot = choice.entry();
+        HBox title = new HBox(6, name, spacer, check);
+        title.setAlignment(Pos.CENTER_LEFT);
+        if (bot != null) {
+            title.getChildren().addFirst(BotIconView.remote(bot.name(), bot.owner(), bot.repo(),
+                    bot.commitOf(bot.tag()), ICON_SIZE));
+        }
+        VBox card = new VBox(3, title);
         card.getStyleClass().add("np-card");
         if (isPicked) card.getStyleClass().add("np-card-picked");
         if (choice.kind() == Kind.REMEMBERED) card.getStyleClass().add("np-card-remembered");
