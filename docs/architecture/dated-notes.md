@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **`botmaker://run/<owner>/<repo>` opens a bot to run since 2026-10-25** (umbrella bmk-links plan). `sharing/BotLink`
+> parses a link; `services/StudioChannel` (`studio.sock`, a Unix socket in the cache, or in the sandbox home) hands it
+> to a Studio already running, and the one that receives it opens it on the loading page as *Get* does
+> (`ui/app/home/BmkFlow`). `sharing/LinkScheme` writes the
+> Windows `HKCU\Software\Classes\botmaker` key at start, in an installed Studio only, running PowerShell by its full
+> path. `UnpackedBots.dropOlder` deletes a run copy's older tag folders once a newer tag's `.botmaker-checked` marker
+> is written; a newer tag and the runner's values stay.
+
 > **A bot opens behind `ui/app/loading/LoadingPage` since 2026-10-25** (umbrella run-mode-fixes plan, phase 7).
 > `BotMakerStudio.openProject` drives it through a `ProgressReporter` whose `step(OpenStep)` names the step
 > (`services/OpenStep`: Dependencies, Libraries, Project, Files, Editor; ＋ New bot and Get add Copying or Downloading
