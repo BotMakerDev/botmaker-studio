@@ -96,12 +96,20 @@ Breakpoints also toggle via a gutter circle (`GutterDecorator` → `BreakpointTo
 ## D. Startup / project selection
 
 `ui/app/home/RunHome.java` (2026-10-25; `ProjectSelectionScreen` and `GalleryDialog` are gone) — constructor
-`(Stage, RunHome.Actions, Supplier<List<MyBot>>, GetBots.Shelf)`. `createScene()` builds a top bar (**"＋ New
-bot"** → `NewProjectDialog`, **"Open folder…"**, **"View archived…"**, `GitHubAccountBar`), then **My bots**
-cards (`.mybots-card`: **"▶ Run"** → `Actions.run`, **"Edit in Studio"** → `Actions.edit`, a **"⋯"** menu with
-Archive… / Remove from My bots) and **Get more bots** (`GetBots`: a search field, **"Show community bots and
+`(Stage, RunHome.Actions, Supplier<List<MyBot>>, GetBots.Shelf, Function<Path, CompileState>)`. `createScene()`
+builds a top bar (**"＋ New bot"** → `NewProjectDialog`, **"Open folder…"**, **"View archived…"**,
+`GitHubAccountBar`), then **My bots** cards (`.mybots-card`: **"▶ Run"** → `Actions.run`, disabled under
+`.mybots-broken` "Doesn't compile…" once `MyBots.compileState` says `ERRORS`; **"Edit in Studio"** →
+`Actions.edit`, a **"⋯"** menu with Archive… / Remove from My bots) and **Get more bots** (`GetBots`: a search field, **"Show community bots and
 plugins"** / **"Show hidden"** checkboxes, `.getbots-card` cards with **"Hide"/"Unhide"** and **"Get"**, which
 confirms a community bot through `RunHome`'s alert before `Shelf.get`).
+
+The runner window (`ui/app/runner/RunnerWindow`) is headed by `RunnerHeader` (2026-10-25, testable alone,
+`RunnerWindowHeaderFxTest`): **"← My bots"**, the icon slot, name, "by owner · version", a `.runner-status` line
+from `PluginHost.readiness()` (polled every 5 s), **"▶ Start"** (saves the values, then
+`ExecutionRequestedEvent`) and **"⏹ Stop (<stop key>)"** (`StopRunRequestedEvent`); under it `.runner-update`
+"<tag> is available — **Update** · **What changed** · **Later**", where Update runs `RunnerUpdate` and a
+conflict or compile error shows **"Edit in Studio"**.
 
 ⚠️ Rows and login touch **filesystem** (`~/BotMakerProjects`) and **GitHub network/auth** with no
 injection seam — assert only on the static controls (as `ProjectSelectionScreenSmokeTest` does).

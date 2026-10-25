@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
@@ -57,7 +58,7 @@ class RunHomeFxTest extends FxHeadlessTest {
             public boolean has(GalleryEntry entry) {
                 return false;
             }
-        });
+        }, dir -> dir.endsWith("PushTest") ? CompileState.ERRORS : CompileState.OK);
         stage.setScene(home.createScene());
         stage.setWidth(900);
         stage.setHeight(700);
@@ -106,6 +107,22 @@ class RunHomeFxTest extends FxHeadlessTest {
         assertTrue(says(gone, "This bot's folder is gone."));
         assertTrue(says(gone, "Remove from My bots"));
         assertTrue(!says(gone, "▶ Run") && !says(gone, "Edit in Studio"), "nothing to open");
+    }
+
+    @Test
+    void aBotThatDoesNotCompileSaysSoAndKeepsEdit() {
+        Node broken = cards().get(1);
+        try {
+            WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> broken.lookupAll(".mybots-broken").stream()
+                    .anyMatch(Node::isVisible));
+        } catch (TimeoutException e) {
+            throw new AssertionError("the compile state never showed", e);
+        }
+        Button run = (Button) broken.lookupAll(".button").stream()
+                .filter(n -> n instanceof Button b && "▶ Run".equals(b.getText())).findFirst().orElseThrow();
+        assertTrue(run.isDisabled(), "nothing to run until it compiles");
+        assertTrue(says(broken, "Edit in Studio"));
+        assertTrue(cards().get(0).lookupAll(".mybots-broken").stream().noneMatch(Node::isVisible));
     }
 
     @Test

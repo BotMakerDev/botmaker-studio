@@ -16,6 +16,7 @@ import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -49,6 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -77,6 +79,7 @@ public final class RunHome implements ProjectWindow {
     private final Stage stage;
     private final Actions actions;
     private final Supplier<List<MyBot>> bots;
+    private final Function<Path, CompileState> compiles;
     private final ProjectManager projectManager = new ProjectManager();
     private final GitHubClient gitHubClient = new GitHubClient();
     private final GitHubAuth gitHubAuth = new GitHubAuth();
@@ -92,12 +95,15 @@ public final class RunHome implements ProjectWindow {
 
     /**
      * {@code bots} is read off the FX thread on every {@link #reload}: it opens each project's repository.
-     * {@code shelf} is where <i>Get more bots</i> puts a bot.
+     * {@code shelf} is where <i>Get more bots</i> puts a bot. {@code compiles} checks a bot's folder in the
+     * background, once per change ({@link MyBots#compileState}).
      */
-    public RunHome(Stage stage, Actions actions, Supplier<List<MyBot>> bots, GetBots.Shelf shelf) {
+    public RunHome(Stage stage, Actions actions, Supplier<List<MyBot>> bots, GetBots.Shelf shelf,
+                   Function<Path, CompileState> compiles) {
         this.stage = stage;
         this.actions = actions;
         this.bots = bots;
+        this.compiles = compiles;
         this.getBots = new GetBots(shelf, this::agrees, this::reload, ShowCommunity.load(), HiddenBots.load());
     }
 
@@ -123,7 +129,7 @@ public final class RunHome implements ProjectWindow {
             public boolean has(GalleryEntry entry) {
                 return installer.isInstalled(entry.name());
             }
-        });
+        }, MyBots::compile);
         // Asked again on every visit, as New Project does, so a bot published since Studio started is offered.
         CatalogClient.session().refresh().thenAccept(reply -> Platform.runLater(() -> {
             home.getBots.show(reply.index().bots(), reply.fresh());
@@ -281,6 +287,17 @@ public final class RunHome implements ProjectWindow {
             run.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
             run.setOnAction(e -> actions.run(bot.dir()));
             buttons.getChildren().add(run);
+            // Checked in the background on the card's first show, then again only when a source changes.
+            Label broken = line("Doesn't compile: open it in Studio to fix it.");
+            broken.getStyleClass().add("mybots-broken");
+            broken.managedProperty().bind(broken.visibleProperty());
+            broken.setVisible(false);
+            card.getChildren().add(broken);
+            MyBots.compileState(bot.dir(), compiles).thenAccept(state -> Platform.runLater(() -> {
+                boolean errors = state == CompileState.ERRORS;
+                broken.setVisible(errors);
+                run.setDisable(errors);
+            }));
         } else {
             card.getChildren().add(line("No class with main yet: nothing to run."));
         }

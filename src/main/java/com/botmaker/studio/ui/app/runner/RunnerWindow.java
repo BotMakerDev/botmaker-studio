@@ -1,7 +1,15 @@
 package com.botmaker.studio.ui.app.runner;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.studio.project.params.ParameterRow;
+import com.botmaker.studio.project.params.RunnerValues;
+import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.studio.runtime.StopKeyPreference;
+import com.botmaker.studio.sharing.CatalogClient;
+import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.ui.app.home.MyBots;
+import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.HostParamScope;
@@ -35,6 +43,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -45,11 +54,18 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -94,6 +110,9 @@ public final class RunnerWindow implements ProjectWindow {
      */
     private static final double TILE_WIDTH = 300;
 
+    /** How often the header asks whether the bot can start: a game started or closed shows within this. */
+    private static final Duration READINESS_EVERY = Duration.ofSeconds(5);
+
     private final Stage stage;
     private final Origin origin;
     private final ProjectConfig config;
@@ -115,8 +134,24 @@ public final class RunnerWindow implements ProjectWindow {
     private Parent root;
     private TextArea log;
     private Label status;
-    private Button runButton;
-    private Button stopButton;
+    private RunnerHeader header;
+
+    /** Who made the bot, its release and the catalog's newer one — read once, when the window is built. */
+    private RunnerHeader.About about;
+    /** The bot's catalog listing, when it has one: the commit an update must land on. */
+    private Optional<GalleryEntry> listed = Optional.empty();
+    /** The author's repository, for <i>What changed</i>; empty for the user's own bot. */
+    private Optional<SyncModel.Slug> original = Optional.empty();
+
+    /** The runner's values for this bot, kept apart from it ({@link RunnerValues}, 2026-10-25). */
+    private RunnerValues kept;
+    /** The kept values this version of the bot no longer takes, said once at the top of the settings. */
+    private List<String> dropped = List.of();
+
+    /** Asks the plugins whether the bot can start, every few seconds while the window is open. */
+    private ScheduledExecutorService readinessPoll;
+    /** Set when the window is left; FX thread only. */
+    private boolean disposed;
 
     // The (group, row) pair was a record of this class until 2026-09-17, then ParameterSurface.Entry, and
     // since 2026-09-22 it is JavaParameter — the field itself, because a field is the only thing a row ever
@@ -152,6 +187,7 @@ public final class RunnerWindow implements ProjectWindow {
 
     @Override
     public Scene createScene() {
+        about = readAbout();
         BorderPane shell = new BorderPane();
         shell.getStyleClass().add("runner-root");
         shell.setTop(header());
@@ -166,6 +202,7 @@ public final class RunnerWindow implements ProjectWindow {
         shell.setMinHeight(0);
 
         subscribe();
+        pollReadiness();
 
         // Unsized on purpose — see UIManager.createScene(): this scene lands on the shell's stage, which
         // already has the geometry the user chose, and a sized one would fight it (or, maximized, lose to it
@@ -178,6 +215,8 @@ public final class RunnerWindow implements ProjectWindow {
     @Override
     public void dispose() {
         BlockTheme.removeThemeChangeListener(themeListener);
+        disposed = true;
+        if (readinessPoll != null) readinessPoll.shutdownNow();
         for (EventBus.Subscription s : subscriptions) {
             try {
                 s.close();
@@ -192,39 +231,143 @@ public final class RunnerWindow implements ProjectWindow {
     // HEADER
     // =========================================================================
 
+    /**
+     * Header A (2026-10-25, spec § 1a): {@link RunnerHeader}, with this window's way back to editing — or, on
+     * somebody else's bot, a look at the code and "Improve this bot" — after the titles.
+     */
     private Node header() {
-        Label name = new Label(config.projectName());
-        name.getStyleClass().add("runner-title");
-        Label subtitle = new Label(origin == Origin.PREVIEW
-                ? "This is what someone running your bot sees."
-                : "Set it up, choose what it should do, and press Run.");
-        subtitle.getStyleClass().add("runner-subtitle");
-
-        VBox titles = new VBox(2, name, subtitle);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button home = new Button("← My bots");
-        home.setOnAction(e -> onHome.run());
-        HBox bar = new HBox(10, home, titles, spacer);
-        bar.setAlignment(Pos.CENTER_LEFT);
-        bar.getStyleClass().add("runner-header");
-
+        List<Node> extra = new ArrayList<>();
         if (origin == Origin.PREVIEW) {
             Button back = new Button("← Back to editing");
             back.setOnAction(e -> onShowEditor.run());
-            bar.getChildren().add(back);
+            extra.add(back);
         } else {
             Button code = new Button("View the code");
-            code.setTooltip(new javafx.scene.control.Tooltip(
-                    "Read how this bot works. Nothing is editable until you make it yours."));
+            code.setTooltip(new Tooltip("Read how this bot works. Nothing is editable until you make it yours."));
             code.setOnAction(e -> onShowEditor.run());
             Button improve = new Button("Improve this bot");
-            improve.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
             improve.setOnAction(e -> switchToEditorMode());
-            bar.getChildren().addAll(code, improve);
+            extra.addAll(List.of(code, improve));
         }
-        return bar;
+        header = new RunnerHeader(about, StopKeyPreference.name(), extra, new RunnerHeader.Actions() {
+            @Override
+            public void home() {
+                onHome.run();
+            }
+
+            @Override
+            public void start() {
+                run();
+            }
+
+            @Override
+            public void stop() {
+                eventBus.publish(new CoreApplicationEvents.StopRunRequestedEvent());
+            }
+
+            @Override
+            public void update() {
+                getUpdate();
+            }
+
+            @Override
+            public void whatChanged() {
+                original.ifPresent(s -> about.available().ifPresent(tag -> BrowserLauncher.open(
+                        "https://github.com/" + s.owner() + "/" + s.repo() + "/releases/tag/" + tag)));
+            }
+
+            @Override
+            public void editInStudio() {
+                onShowEditor.run();
+            }
+        });
+        return header.node();
+    }
+
+    /**
+     * Who made the bot and which release it is at, off its repository, and the catalog's newer release from the
+     * copy kept on disk: quick reads, done once while the window is built. The runner's kept values are found by
+     * the same author ({@link RunnerValues#keyOf}).
+     */
+    private RunnerHeader.About readAbout() {
+        Path dir = config.projectPath();
+        MyBots.Facts facts = MyBots.read(dir, Map.of());
+        original = facts.originalUrl().flatMap(SyncModel::slug);
+        listed = original.flatMap(s -> CatalogClient.session().kept().bots().stream()
+                .filter(e -> MyBots.key(e.owner(), e.repo()).equals(MyBots.key(s.owner(), s.repo())))
+                .findFirst());
+        Optional<String> available = listed.flatMap(e -> GalleryEntry.updateTarget(facts.version().orElse(""),
+                e.tag()));
+        kept = RunnerValues.load(RunnerValues.keyOf(original.map(SyncModel.Slug::owner),
+                original.map(SyncModel.Slug::repo), dir));
+        return new RunnerHeader.About(config.projectName(), original.map(SyncModel.Slug::owner), facts.version(),
+                available);
+    }
+
+    /**
+     * Asks the plugins every few seconds whether the bot can start ({@link PluginHost#readiness}), off the FX
+     * thread: a plugin may list windows or read a launcher's files to answer.
+     */
+    private void pollReadiness() {
+        readinessPoll = Executors.newSingleThreadScheduledExecutor(task -> {
+            Thread thread = new Thread(task, "runner-readiness");
+            thread.setDaemon(true);
+            return thread;
+        });
+        readinessPoll.scheduleWithFixedDelay(() -> {
+            try {
+                Optional<Readiness> said = PluginHost.readiness();
+                Platform.runLater(() -> header.readiness(said));
+            } catch (RuntimeException | LinkageError e) {
+                // A failed ask must not end the polling: the next one may answer.
+                System.err.println("Could not ask whether the bot can start: " + e);
+            }
+        }, 0, READINESS_EVERY.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * <i>Update</i>: {@link RunnerUpdate} off the FX thread, then a reload onto the new release, where the
+     * runner's values are applied again. A conflict or a compile error is left for Studio.
+     */
+    private void getUpdate() {
+        String tag = about.available().orElse(null);
+        if (tag == null) return;
+        header.updating();
+        String pinned = listed.map(e -> e.commitOf(tag)).orElse("");
+        Thread update = new Thread(() -> {
+            String said;
+            boolean needsStudio = false;
+            boolean reload = false;
+            try {
+                switch (RunnerUpdate.update(config, tag, pinned)) {
+                    case UPDATED -> {
+                        said = "Updated to " + tag + ".";
+                        reload = true;
+                    }
+                    case UP_TO_DATE -> said = "This bot already has " + tag + ".";
+                    case NEEDS_STUDIO -> {
+                        said = "This update needs Studio to finish.";
+                        needsStudio = true;
+                    }
+                    default -> said = "";
+                }
+            } catch (IOException | RuntimeException e) {
+                said = "Couldn't update: " + rootMessage(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                said = "The update was stopped.";
+            }
+            String message = said;
+            boolean studio = needsStudio;
+            boolean thenReload = reload;
+            Platform.runLater(() -> {
+                if (disposed) return;   // the user left this bot: its project is no longer the open one
+                header.updateSaid(message, studio);
+                if (thenReload) eventBus.publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+            });
+        }, "runner-update");
+        update.setDaemon(true);
+        update.start();
     }
 
     /**
@@ -260,6 +403,11 @@ public final class RunnerWindow implements ProjectWindow {
         VBox column = new VBox(18);
         column.setPadding(new Insets(18));
         column.setMaxWidth(CONTENT_MAX_WIDTH);
+        if (!dropped.isEmpty()) {
+            // Said once: the values are forgotten as they are said (applyKeptValues).
+            column.getChildren().add(hint(about.name() + about.version().map(v -> " " + v).orElse("")
+                    + " no longer has: " + String.join(", ", dropped) + "."));
+        }
         column.getChildren().add(settingsSection());
 
         ScrollPane scroll = new ScrollPane(column);
@@ -303,11 +451,42 @@ public final class RunnerWindow implements ProjectWindow {
     private void reload() {
         rows.clear();
         HostParamScope scope = HostParamScope.over(HostPluginValues.live());
+        Set<String> declared = new HashSet<>();
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
+            declared.add(entry.qualified());
             // A plugin's conditional parameter only while it applies (ManagedParam.ConditionStep.when, 2026-10-12).
             if (entry.row().isPublic() && entry.editable() && scope.shown(entry)) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.grammar());
+        applyKeptValues(declared);
+    }
+
+    /**
+     * Writes the runner's kept values that the source lacks — an update brought the author's defaults back, or
+     * this is a newer release beside the old one — and forgets, once said, those this version no longer takes.
+     * A value whose field is still {@code declared} but not shown now (a conditional one, one whose plugin did
+     * not load) is kept for later, untouched.
+     */
+    private void applyKeptValues(Set<String> declared) {
+        RunnerValues.Applied applied = kept.applyTo(rows, declared, this::fits);
+        applied.values().forEach((entry, source) -> JavaValue.parse(source).ifPresent(value -> {
+            Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, value);
+            int at = rows.indexOf(entry);
+            stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
+        }));
+        dropped = applied.dropped();
+        if (!dropped.isEmpty()) {
+            kept = kept.without(dropped);
+            kept.save();
+        }
+    }
+
+    /** Whether {@code source} still reads as {@code entry}'s type: the grammar's, or one of the bot's records. */
+    private boolean fits(JavaParameter entry, String source) {
+        if (entry.form() instanceof ValueTypes.BotClass declared) {
+            return records.partsOf(declared, source).isPresent();
+        }
+        return PluginHost.grammar().valueOf(entry.form(), source).isPresent();
     }
 
     // sdkPin() stood here until 2026-09-22, reading the pom so the parameter data surface could be asked at
@@ -462,19 +641,12 @@ public final class RunnerWindow implements ProjectWindow {
     // RUN BAR
     // =========================================================================
 
+    /** The run's last message and its log. Start and Stop are in the header since 2026-10-25. */
     private Node runBar() {
-        runButton = new Button("▶ Run");
-        runButton.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-        runButton.setOnAction(e -> run());
-
-        stopButton = new Button("⏹ Stop");
-        stopButton.setDisable(true);
-        stopButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.StopRunRequestedEvent()));
-
-        status = new Label("Ready");
+        status = new Label("");
         status.getStyleClass().add("dialog-status");
 
-        HBox buttons = new HBox(8, runButton, stopButton, status);
+        HBox buttons = new HBox(8, status);
         buttons.setAlignment(Pos.CENTER_LEFT);
         buttons.setPadding(new Insets(8, 12, 8, 12));
 
@@ -501,20 +673,16 @@ public final class RunnerWindow implements ProjectWindow {
      * installed cannot lose its data because nothing here ever reads it.
      */
     private void run() {
-        runButton.setDisable(true);
         status.setText("Saving your choices…");
         try {
             flushValues();
         } catch (RuntimeException e) {
-            runButton.setDisable(false);
             status.setText("Couldn't save your choices: " + rootMessage(e));
             return;
         }
         status.setText("Starting…");
-        // Re-enabled before the publish, not after the run: a run that is refused (a compile error, an
-        // already-running bot) reports on the status line and never sends ProgramStarted/Stopped, so a
-        // button left disabled here would stay disabled for the rest of the session.
-        runButton.setDisable(false);
+        // Start stays enabled until ProgramStarted: a run that is refused (a compile error, an already-running
+        // bot) reports on the status line and never sends ProgramStarted/Stopped.
         eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent());
     }
 
@@ -525,8 +693,12 @@ public final class RunnerWindow implements ProjectWindow {
      * pressing Run twice writes nothing the second time. The answer is the row <em>as stored</em> — clamped,
      * canonicalised, pruned to the choices still on offer by the owning plugin — and it is kept, so a second
      * Run compares against what the bot will actually get rather than against what was typed.
+     *
+     * <p>Each value written is kept for the runner too ({@link RunnerValues}), so the next release of the bot
+     * gets it again.
      */
     private void flushValues() {
+        RunnerValues was = kept;
         for (ParamValueWidgets.ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {
                 JavaParameter entry = rows.get(i);
@@ -535,10 +707,14 @@ public final class RunnerWindow implements ProjectWindow {
                 if (typed.isEmpty() || typed.get().source().equals(entry.row().value())) break;
                 Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed.get());
                 int at = i;
-                stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
+                stored.ifPresent(row -> {
+                    rows.set(at, entry.withRow(row));
+                    kept = kept.with(entry.qualified(), row.value());
+                });
                 break;
             }
         }
+        if (kept != was) kept.save();
     }
 
     private static String rootMessage(Throwable t) {
@@ -565,7 +741,6 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     private void running(boolean isRunning) {
-        runButton.setDisable(isRunning);
-        stopButton.setDisable(!isRunning);
+        header.running(isRunning);
     }
 }

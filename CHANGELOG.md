@@ -14,6 +14,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The Run window's new header** (`ui/app/runner/RunnerHeader`, 2026-10-25): the bot's name, "by owner ·
+  version" (or "mine"), and one status line saying whether it can start, from the plugins (the SDK: "Ready —
+  game window found", "Not ready — signed out of Steam"…), asked again every 5 seconds. *▶ Start* and *⏹ Stop
+  (Pause)* moved up beside it; the Stop button names your stop key. When the catalog lists a newer release, a
+  strip under it says "1.1.0 is available — Update · What changed · Later". *Update* saves a version, fetches
+  the release and merges it. When a file conflicts or the result does not compile, nothing changes and the
+  window says "This update needs Studio to finish." with *Edit in Studio*.
+- **The runner's values are kept apart from the bot** (`project/params/RunnerValues`): each value *Start* writes
+  is also kept in the user data folder, per author and repository (`runner-values/<owner>/<repo>.json`). When
+  an update brings the author's defaults back, the window writes the kept values again. A kept value whose
+  setting is gone, or no longer fits its type, is said once ("Firestone 1.1.0 no longer has: Settings.speed.")
+  and forgotten.
+- **My bots says when a bot doesn't compile**: each card is compiled once in the background, again only after a
+  source changes. A bot with errors says "Doesn't compile: open it in Studio to fix it." and its *▶ Run* is off.
+
 - **BotMaker opens on your bot list** (`ui/app/home/RunHome`), in place of the project selection screen and of
   reopening the last project. *My bots* shows every project as a card: who it is by (or "mine"), its version,
   when it was last used, and a "<tag> available" badge when the catalog lists a newer release. Each card has

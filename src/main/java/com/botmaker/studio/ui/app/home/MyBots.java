@@ -7,7 +7,10 @@ import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.GalleryEntry;
 
+import com.botmaker.studio.runtime.TreeCompile;
+
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -21,7 +24,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * The home's <i>My bots</i> (2026-10-25, spec § 1a): every project on this computer, the root's and the remembered
@@ -35,6 +43,93 @@ public final class MyBots {
 
     /** Whether a card's folder is there to open. */
     public enum State { READY, GONE }
+
+    /** Whether a bot compiles as it is on disk (2026-10-25): unknown until checked, or when it could not be. */
+    public enum CompileState { UNKNOWN, OK, ERRORS }
+
+    /** One check: a fingerprint of the sources it was made on, and what it found. */
+    private record Checked(long fingerprint, CompileState state) {}
+
+    /** This session's checks, by folder: a card shown again is not compiled again until a source changes. */
+    private static final Map<Path, Checked> CHECKED = new ConcurrentHashMap<>();
+
+    /** One compile at a time, in the background: each is a resolve and a javac. */
+    private static final ExecutorService COMPILER = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "mybots-compile");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /** The checks under way, by folder: a home shown twice while one compiles waits on that one. */
+    private static final Map<Path, CompletableFuture<CompileState>> RUNNING = new ConcurrentHashMap<>();
+
+    /**
+     * Whether the bot in {@code dir} compiles: this session's answer while its sources are unchanged, else
+     * {@code check}'s, run on the background compiler. Reads no file on the caller's thread. Never fails: a check
+     * that throws is {@code UNKNOWN}, and is asked again next time.
+     */
+    public static CompletableFuture<CompileState> compileState(Path dir, Function<Path, CompileState> check) {
+        Path key = dir.toAbsolutePath().normalize();
+        CompletableFuture<CompileState> answer = RUNNING.computeIfAbsent(key, k -> CompletableFuture
+                .supplyAsync(() -> fingerprint(k))
+                .thenCompose(fingerprint -> {
+                    Checked known = CHECKED.get(k);
+                    if (known != null && known.fingerprint() == fingerprint) {
+                        return CompletableFuture.completedFuture(known.state());
+                    }
+                    return CompletableFuture.supplyAsync(() -> {
+                        CompileState state;
+                        try {
+                            state = check.apply(k);
+                        } catch (RuntimeException e) {
+                            state = CompileState.UNKNOWN;
+                        }
+                        if (state != CompileState.UNKNOWN) CHECKED.put(k, new Checked(fingerprint, state));
+                        return state;
+                    }, COMPILER);
+                }));
+        // Outside computeIfAbsent: a check already done would otherwise remove itself from inside the map's update.
+        answer.whenComplete((state, failed) -> RUNNING.remove(key, answer));
+        return answer;
+    }
+
+    /**
+     * The real check: {@link TreeCompile} over the folder, as an update's is. A dependency that did not resolve
+     * (offline, a repository down) says nothing about the bot's code, so it is {@code UNKNOWN}, never broken.
+     */
+    public static CompileState compile(Path dir) {
+        try {
+            List<String> errors = TreeCompile.errors(ProjectConfig.forDirectory(dir));
+            if (errors.stream().anyMatch(e -> e.startsWith(TreeCompile.UNRESOLVED))) return CompileState.UNKNOWN;
+            return errors.isEmpty() ? CompileState.OK : CompileState.ERRORS;
+        } catch (IOException e) {
+            return CompileState.UNKNOWN;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return CompileState.UNKNOWN;
+        }
+    }
+
+    /**
+     * The newest change time of the pom and of any source under {@code src/main/java}, with how many files there
+     * are: what a compile reads. Pictures under {@code resources} are left out, so a bot's screens cost no walk.
+     */
+    static long fingerprint(Path dir) {
+        long newest = 0;
+        long count = 0;
+        Path sources = dir.resolve("src/main/java");
+        try (Stream<Path> files = Stream.concat(Stream.of(dir.resolve("pom.xml")),
+                Files.isDirectory(sources) ? Files.walk(sources) : Stream.empty())) {
+            for (Path file : (Iterable<Path>) files::iterator) {
+                if (!Files.isRegularFile(file)) continue;
+                newest = Math.max(newest, Files.getLastModifiedTime(file).toMillis());
+                count++;
+            }
+        } catch (IOException | UncheckedIOException e) {
+            return -1;
+        }
+        return newest * 31 + count;
+    }
 
     /**
      * What one project's folder says, read off the disk ({@link #read}).

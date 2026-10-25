@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.home;
 
+import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.Facts;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
@@ -9,10 +10,14 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,5 +87,31 @@ class MyBotsTest {
         assertEquals(List.of("Here", "Gone"), bots.stream().map(MyBot::name).toList(), "gone ones last");
         assertEquals(State.GONE, bots.get(1).state());
         assertFalse(bots.get(1).runnable());
+    }
+
+    /** A card shown again is not compiled again; a changed source is, and a failed check is not kept. */
+    @Test
+    void aBotIsCompiledOncePerChange() throws Exception {
+        Path dir = project("Compiled");
+        Path main = Files.writeString(dir.resolve("src/main/java/Bot.java"), "class Bot {}");
+        AtomicInteger checks = new AtomicInteger();
+        Function<Path, CompileState> check = d -> {
+            checks.incrementAndGet();
+            return CompileState.ERRORS;
+        };
+
+        assertEquals(CompileState.ERRORS, MyBots.compileState(dir, check).get(5, TimeUnit.SECONDS));
+        assertEquals(CompileState.ERRORS, MyBots.compileState(dir, check).get(5, TimeUnit.SECONDS));
+        assertEquals(1, checks.get(), "the second show is answered from the first check");
+
+        Files.setLastModifiedTime(main, FileTime.fromMillis(Files.getLastModifiedTime(main).toMillis() + 5_000));
+        assertEquals(CompileState.OK, MyBots.compileState(dir, d -> CompileState.OK).get(5, TimeUnit.SECONDS));
+
+        Path other = project("Unread");
+        Function<Path, CompileState> throwing = d -> {
+            throw new IllegalStateException("no javac");
+        };
+        assertEquals(CompileState.UNKNOWN, MyBots.compileState(other, throwing).get(5, TimeUnit.SECONDS));
+        assertEquals(CompileState.OK, MyBots.compileState(other, d -> CompileState.OK).get(5, TimeUnit.SECONDS));
     }
 }

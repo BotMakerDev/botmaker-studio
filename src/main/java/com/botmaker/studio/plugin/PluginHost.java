@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
@@ -775,6 +776,32 @@ public final class PluginHost {
             runOverlayParts = parts;
         }
         return parts;
+    }
+
+    /**
+     * Whether the open project's bot can start now (2026-10-25): every bound plugin's {@link Readiness}, the least
+     * ready shown, the first plugin's among equals; empty when none has anything to say. Blocking — each plugin
+     * may read files or list windows — so never on the FX thread. A plugin whose check throws costs its own answer.
+     */
+    public static Optional<Readiness> readiness() {
+        return leastReady(plugins);
+    }
+
+    static Optional<Readiness> leastReady(List<StudioPlugin> set) {
+        Readiness least = null;
+        for (StudioPlugin plugin : set) {
+            Optional<Readiness> said;
+            try {
+                said = plugin.readiness();
+            } catch (RuntimeException | LinkageError e) {
+                // Includes a plugin built against a contract without this method: it has nothing to say.
+                System.err.println("Warning: " + plugin.id() + " could not say whether the bot can start: " + e);
+                continue;
+            }
+            if (said == null || said.isEmpty()) continue;
+            if (least == null || said.get().level().compareTo(least.level()) > 0) least = said.get();
+        }
+        return Optional.ofNullable(least);
     }
 
     static List<OwnedPart> mergeRunOverlayParts(List<StudioPlugin> set) {

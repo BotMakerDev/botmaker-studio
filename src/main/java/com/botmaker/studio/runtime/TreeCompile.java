@@ -30,6 +30,9 @@ public final class TreeCompile {
     /** {@code /abs/Path.java:12: error: cannot find symbol}, as javac prints it. */
     private static final Pattern ERROR = Pattern.compile("^(.+\\.java):(\\d+): error: (.*)$");
 
+    /** How a dependency that would not resolve starts its line in {@link #errors}: no fault of the code. */
+    public static final String UNRESOLVED = "Dependency ";
+
     private TreeCompile() {}
 
     /**
@@ -54,7 +57,7 @@ public final class TreeCompile {
             String output = new String(javac.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (javac.waitFor() == 0) return List.of();
             List<String> errors = new ArrayList<>(errorLines(output, config.projectPath()));
-            resolved.problems().forEach(p -> errors.add("Dependency " + p));
+            resolved.problems().forEach(p -> errors.add(UNRESOLVED + p));
             if (errors.isEmpty()) errors.add(output.isBlank() ? "javac failed and said nothing." : output.strip());
             return List.copyOf(errors);
         } finally {
