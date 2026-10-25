@@ -147,14 +147,19 @@ public final class BmkOpen {
             synchronized (BmkOpen.class) {
                 // Only this very file's folder opens straight away: another file of the same tag (one the user
                 // agreed to once, unchecked) is replaced by this one, through the trust sheet again.
-                if (UnpackedBots.at(root, dir).isPresent() && sha.equals(checkedSha(dir))) return new Opened(dir, bot);
+                if (UnpackedBots.at(root, dir).isPresent() && sha.equals(checkedSha(dir))) {
+                    UnpackedBots.dropOlder(root, dir);
+                    return new Opened(dir, bot);
+                }
                 if (!agreed && !(pinned.isPresent() && trusted.contains(trustKey(bot)))) {
                     return new NeedsTrust(bot, entry, pinned.isPresent());
                 }
                 // A folder an earlier open left half done, or another file's: unpacked again from this one.
                 deleteTree(dir);
                 BotFile.read(bmk, dir);
-                return finish(dir, bot, sha, fetch);
+                Result result = finish(dir, bot, sha, fetch);
+                if (result instanceof Opened) UnpackedBots.dropOlder(root, dir);
+                return result;
             }
         } catch (BotFile.Refused e) {
             return new Refused("This file cannot be opened: " + e.getMessage());

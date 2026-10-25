@@ -373,7 +373,9 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
             writeIfChanged(files.get(1), ico);
             if (same && Files.isRegularFile(files.get(0))) return;
             Files.createDirectories(folder);
-            ProcessBuilder shortcut = new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive", "-Command",
+            String exe = LinkScheme.powershell(System.getenv())
+                    .orElseThrow(() -> new IOException("SystemRoot is not set: PowerShell was not found."));
+            ProcessBuilder shortcut = new ProcessBuilder(exe, "-NoProfile", "-NonInteractive", "-Command",
                     "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:BMK_LNK); "
                             + "$s.TargetPath = $env:BMK_TARGET; $s.Arguments = $env:BMK_ARGS; "
                             + "$s.IconLocation = $env:BMK_ICON; $s.Description = $env:BMK_TITLE; $s.Save()");

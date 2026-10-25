@@ -59,8 +59,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   *Downloading* with a percentage and the size.
 - **A branch switch that changes files keeps the editor in view** (2026-10-25), dimmed under a small box:
   "Switching to *branch*…", a bar and how many files change.
+- **One folder per run copy** (2026-10-25): once a newer tag of a bot opened from a `.bmk` is checked, its older
+  tag folders are deleted. A newer tag is never deleted, a failed check deletes nothing, and the runner's values
+  stay.
 
 ### Fixed
+
+- **PowerShell is started by its full path** (2026-10-25): the Windows programs-menu shortcut and the
+  `botmaker://` registration run `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`, never a
+  `powershell` found first in Studio's own folder or the working directory.
 
 - **Every open goes through the loading page** (2026-10-25): a `.bmk` file opened from `--open`, a double-click or
   a drop unpacks on its first step, *Unpacking*, then the Run window opens; My bots no longer shows only

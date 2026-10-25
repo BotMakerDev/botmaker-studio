@@ -4,8 +4,10 @@ import com.botmaker.shared.platform.Os;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -50,6 +52,16 @@ public final class LinkScheme {
         return Base64.getEncoder().encodeToString(script().getBytes(StandardCharsets.UTF_16LE));
     }
 
+    /**
+     * Windows PowerShell by its full path under {@code %SystemRoot%}: a bare {@code powershell} is looked up in the
+     * launcher's own folder and the working directory first, where a planted one would run instead. Empty when
+     * {@code SystemRoot} is not set.
+     */
+    static Optional<String> powershell(Map<String, String> env) {
+        return Optional.ofNullable(env.get("SystemRoot")).filter(s -> !s.isBlank())
+                .map(s -> Path.of(s, "System32", "WindowsPowerShell", "v1.0", "powershell.exe").toString());
+    }
+
     /** The script's environment for {@code launcher}. */
     static Map<String, String> values(String launcher) {
         return Map.of("BMK_COMMAND", command(launcher), "BMK_ICON", launcher + ",0");
@@ -62,9 +74,11 @@ public final class LinkScheme {
     public static void registerOnWindows() {
         String launcher = System.getProperty("jpackage.app-path");
         if (!Os.current().isWindows() || launcher == null || launcher.isBlank()) return;
+        Optional<String> exe = powershell(System.getenv());
+        if (exe.isEmpty()) return;
         Thread write = new Thread(() -> {
             try {
-                ProcessBuilder powershell = new ProcessBuilder("powershell", "-NoProfile", "-NonInteractive",
+                ProcessBuilder powershell = new ProcessBuilder(exe.get(), "-NoProfile", "-NonInteractive",
                         "-EncodedCommand", encoded());
                 powershell.environment().putAll(values(launcher));
                 Process p = powershell.redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)

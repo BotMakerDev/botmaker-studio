@@ -109,7 +109,7 @@ public final class UnpackedBots {
 
     /**
      * Each bot's newest checked tag under {@code root}, one folder per {@code owner/repo}: what My bots lists. An
-     * older tag stays on disk beside it (spec, review focus 1) and is no card.
+     * older tag is deleted once a newer one is checked ({@link #dropOlder}); one left by an older Studio is no card.
      */
     public static List<Path> newest(Path root) {
         List<Path> out = new ArrayList<>();
@@ -138,6 +138,25 @@ public final class UnpackedBots {
         try (Stream<Path> left = Files.list(tag.getParent().getParent())) {
             if (left.findAny().isEmpty()) Files.delete(tag.getParent().getParent());
         }
+    }
+
+    /**
+     * Deletes every tag of {@code dir}'s bot older than {@code dir} (2026-10-25, the user's call: one folder per run
+     * copy), once {@code dir} is checked; a newer tag stays. The runner's values are keyed by {@code owner/repo}, so
+     * they stay too. A folder that will not go is left for the next open to try again: it never fails this one. Its
+     * {@link #CHECKED} goes first, so a delete cut short (a jar Windows holds) leaves no folder that passes for a bot.
+     */
+    static void dropOlder(Path root, Path dir) {
+        Path tag = dir.toAbsolutePath().normalize();
+        if (at(root, tag).isEmpty()) return;
+        children(tag.getParent()).filter(other -> NEWEST_LAST.compare(other, tag) < 0).forEach(older -> {
+            try {
+                Files.deleteIfExists(older.resolve(CHECKED));
+                BmkOpen.deleteTree(older);
+            } catch (IOException e) {
+                System.err.println("Could not delete " + older + ": " + e.getMessage());
+            }
+        });
     }
 
     /** By tag: semantic versions compared as versions, others by name, and a version after any other name. */

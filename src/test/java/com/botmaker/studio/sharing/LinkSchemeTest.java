@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -22,6 +24,14 @@ class LinkSchemeTest {
         assertEquals("\"" + LAUNCHER + "\" \"%1\"", LinkScheme.command(LAUNCHER));
         assertEquals(LinkScheme.command(LAUNCHER), LinkScheme.values(LAUNCHER).get("BMK_COMMAND"));
         assertEquals(LAUNCHER + ",0", LinkScheme.values(LAUNCHER).get("BMK_ICON"));
+    }
+
+    @Test
+    void powershellIsNamedByItsFullPath() {
+        String exe = LinkScheme.powershell(Map.of("SystemRoot", "C:\\Windows")).orElseThrow();
+        assertTrue(exe.endsWith("powershell.exe") && exe.contains("WindowsPowerShell"), exe);
+        assertTrue(exe.startsWith("C:\\Windows"), exe);
+        assertEquals(Optional.empty(), LinkScheme.powershell(Map.of()));
     }
 
     @Test
