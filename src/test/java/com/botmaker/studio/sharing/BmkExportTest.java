@@ -36,7 +36,7 @@ class BmkExportTest {
         new ProjectVcs(dir).init();
         try (Git git = Git.open(dir.toFile())) {
             StoredConfig config = git.getRepository().getConfig();
-            config.setString("remote", "mine", "url", "https://github.com/LiQiyeDev/Firestone.git");
+            config.setString("remote", "origin", "url", "https://github.com/LiQiyeDev/Firestone.git");
             config.save();
         }
         return dir;

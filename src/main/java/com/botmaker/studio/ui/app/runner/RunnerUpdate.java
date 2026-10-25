@@ -39,6 +39,7 @@ public final class RunnerUpdate {
     public static Outcome update(ProjectConfig config, String tag, String pinnedCommit)
             throws IOException, InterruptedException {
         ProjectVcs vcs = new ProjectVcs(config.projectPath());
+        vcs.adoptRemoteNames();   // the Run window opens a bot without the editor's open
         vcs.checkpoint(VersionOrigin.SAFETY, "Before updating to " + tag);
         vcs.fetchTag(Remote.ORIGINAL, tag, null);
         if (pinnedCommit != null && !pinnedCommit.isBlank()

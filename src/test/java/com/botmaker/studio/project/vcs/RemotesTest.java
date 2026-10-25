@@ -137,42 +137,152 @@ class RemotesTest {
         assertEquals(0, vcs.notIn(Remote.MINE, "studio/" + branch), "a fork's line lives beside its main");
     }
 
-    @Test
-    void theOldBackupRemoteBecomesMyCopy(@TempDir Path root) throws Exception {
+    private static ProjectVcs initialized(Path root) throws Exception {
         Path project = root.resolve("Project");
         Files.createDirectories(project);
         Files.writeString(project.resolve("Bot.java"), "class Bot {}");
         ProjectVcs vcs = new ProjectVcs(project);
         vcs.init();
-        try (Git git = Git.open(project.toFile())) {
+        return vcs;
+    }
+
+    /** A remote as git writes one, with a remote-tracking ref of its main at HEAD. */
+    private static void remote(ProjectVcs vcs, String name, String url) throws Exception {
+        try (Git git = vcs.open()) {
+            var repo = git.getRepository();
+            var config = repo.getConfig();
+            config.setString("remote", name, "url", url);
+            config.setString("remote", name, "fetch", "+refs/heads/*:refs/remotes/" + name + "/*");
+            config.save();
+            var ref = repo.updateRef("refs/remotes/" + name + "/main");
+            ref.setNewObjectId(repo.resolve("HEAD"));
+            ref.forceUpdate();
+        }
+    }
+
+    private static String config(ProjectVcs vcs, String section, String sub, String key) throws Exception {
+        try (Git git = vcs.open()) {
+            return git.getRepository().getConfig().getString(section, sub, key);
+        }
+    }
+
+    private static boolean hasRef(ProjectVcs vcs, String name) throws Exception {
+        try (Git git = vcs.open()) {
+            return git.getRepository().exactRef(name) != null;
+        }
+    }
+
+    @Test
+    void mineAndOriginalBecomeOriginAndUpstream(@TempDir Path root) throws Exception {
+        ProjectVcs vcs = initialized(root);
+        remote(vcs, "mine", "https://github.com/bob/Bot.git");
+        remote(vcs, "original", "https://github.com/alice/Bot.git");
+        try (Git git = vcs.open()) {
             var config = git.getRepository().getConfig();
-            config.setString("remote", "origin", "url", "https://github.com/bob/backup.git");
+            config.setString("branch", vcs.branch(), "remote", "original");
             config.save();
         }
 
-        assertTrue(vcs.adoptLegacyBackup());
-        assertEquals("https://github.com/bob/backup.git", vcs.remoteUrl(Remote.MINE));
-        try (Git git = Git.open(project.toFile())) {
-            assertNull(git.getRepository().getConfig().getString("remote", "origin", "url"));
-        }
-        assertFalse(vcs.adoptLegacyBackup(), "idempotent");
+        assertTrue(vcs.adoptRemoteNames());
+        assertEquals("https://github.com/bob/Bot.git", vcs.remoteUrl("origin"));
+        assertEquals("https://github.com/alice/Bot.git", vcs.remoteUrl("upstream"));
+        assertNull(vcs.remoteUrl("mine"));
+        assertNull(vcs.remoteUrl("original"));
+        assertEquals("+refs/heads/*:refs/remotes/upstream/*", config(vcs, "remote", "upstream", "fetch"));
+        assertEquals("upstream", config(vcs, "branch", vcs.branch(), "remote"), "the branch tracks it still");
+        assertTrue(hasRef(vcs, "refs/remotes/origin/main"));
+        assertFalse(hasRef(vcs, "refs/remotes/mine/main"));
+        assertFalse(vcs.adoptRemoteNames(), "idempotent");
     }
 
-    /** A submodule's {@code origin} is pushed to by name by another tool (the umbrella's release), so it stays. */
+    /** The old backup {@code origin} was always the user's own; Studio pushes to it over HTTPS with the token. */
     @Test
-    void aSubmodulesOriginIsCopiedNotMoved(@TempDir Path root) throws Exception {
+    void theOldBackupOriginStaysMyCopy(@TempDir Path root) throws Exception {
+        ProjectVcs vcs = initialized(root);
+        remote(vcs, "origin", "git@github.com:bob/backup.git");
+
+        assertTrue(vcs.adoptRemoteNames());
+        assertEquals("https://github.com/bob/backup.git", vcs.remoteUrl(Remote.MINE));
+        assertTrue(hasRef(vcs, "refs/remotes/origin/main"));
+        assertFalse(vcs.adoptRemoteNames(), "idempotent");
+    }
+
+    @Test
+    void anotherRepositoryNamedOriginIsMovedAside(@TempDir Path root) throws Exception {
+        ProjectVcs vcs = initialized(root);
+        remote(vcs, "origin", "https://example.org/someone/else.git");
+        remote(vcs, "mine", "https://github.com/bob/Bot.git");
+
+        assertTrue(vcs.adoptRemoteNames());
+        assertEquals("https://github.com/bob/Bot.git", vcs.remoteUrl(Remote.MINE));
+        assertEquals("https://example.org/someone/else.git", vcs.remoteUrl("old-origin"));
+        assertTrue(hasRef(vcs, "refs/remotes/old-origin/main"));
+    }
+
+    /**
+     * A submodule's {@code origin} is pushed to by name by another tool (the umbrella's release): Studio's copy
+     * of it, {@code mine}, is dropped and {@code origin} stays as it is.
+     */
+    @Test
+    void aSubmodulesOriginStaysAsItIs(@TempDir Path root) throws Exception {
         Path project = ProjectVcsTest.submoduleCheckout(root);
         ProjectVcs vcs = new ProjectVcs(project);
         try (Git git = vcs.open()) {
             var config = git.getRepository().getConfig();
             config.setString("remote", "origin", "url", "git@github.com:BotMakerDev/bot.git");
+            config.setString("remote", "mine", "url", "https://github.com/BotMakerDev/bot.git");
             config.save();
         }
 
-        assertTrue(vcs.adoptLegacyBackup());
-        assertEquals("https://github.com/BotMakerDev/bot.git", vcs.remoteUrl(Remote.MINE),
-                "the HTTPS form, which the token is sent to");
-        assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl("origin"));
-        assertEquals("BotMakerDev/bot", SyncModel.slug(vcs.remoteUrl(Remote.MINE)).orElseThrow().toString());
+        assertTrue(vcs.adoptRemoteNames());
+        assertEquals("git@github.com:BotMakerDev/bot.git", vcs.remoteUrl(Remote.MINE));
+        assertNull(vcs.remoteUrl("mine"));
+        assertFalse(vcs.adoptRemoteNames(), "idempotent");
+    }
+
+    @Test
+    void aMergedLineIsDeletedOnTheRemote(@TempDir Path root) throws Exception {
+        Path mine = root.resolve("mine.git");
+        Git.init().setBare(true).setDirectory(mine.toFile()).call().close();
+        ProjectVcs vcs = initialized(root);
+        vcs.setRemote(Remote.MINE, url(mine));
+        String branch = vcs.branch();
+        vcs.push(Remote.MINE, "studio/" + branch, TOKEN);
+        assertFalse(vcs.mergedInto(Remote.MINE, "studio/" + branch, branch), "main is not there yet");
+        vcs.push(Remote.MINE, branch, TOKEN);
+        vcs.fetch(Remote.MINE, TOKEN);
+        assertTrue(vcs.mergedInto(Remote.MINE, "studio/" + branch, branch));
+
+        vcs.deleteRemoteBranch(Remote.MINE, "studio/" + branch, TOKEN);
+        try (Git bare = Git.open(mine.toFile())) {
+            assertNull(bare.getRepository().exactRef("refs/heads/studio/" + branch));
+            assertNotNull(bare.getRepository().exactRef("refs/heads/" + branch));
+        }
+        assertFalse(vcs.hasRemoteBranch(Remote.MINE, "studio/" + branch));
+        assertThrows(IOException.class, () -> vcs.deleteRemoteBranch(Remote.MINE, "studio/" + branch, TOKEN),
+                "nothing read of it any more");
+    }
+
+    /** A line another computer pushed to since this one read it is refused, never erased. */
+    @Test
+    void aLineThatMovedOnTheRemoteIsNotDeleted(@TempDir Path root) throws Exception {
+        Path mine = root.resolve("mine.git");
+        Git.init().setBare(true).setDirectory(mine.toFile()).call().close();
+        ProjectVcs vcs = initialized(root);
+        vcs.setRemote(Remote.MINE, url(mine));
+        String line = "studio/" + vcs.branch();
+        vcs.push(Remote.MINE, line, TOKEN);
+
+        Path other = root.resolve("Other");
+        try (Git git = Git.cloneRepository().setURI(url(mine)).setDirectory(other.toFile()).setBranch(line).call()) {
+            Files.writeString(other.resolve("Bot.java"), "class Bot { int elsewhere; }");
+            git.add().addFilepattern(".").call();
+            git.commit().setMessage("elsewhere").setAuthor("bob", "b@x").setCommitter("bob", "b@x").call();
+            git.push().setRefSpecs(new org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/" + line)).call();
+        }
+
+        IOException refused = assertThrows(IOException.class, () -> vcs.deleteRemoteBranch(Remote.MINE, line, TOKEN));
+        assertTrue(refused.getMessage().contains("not read"), refused.getMessage());
+        assertEquals(commitOf(other, "HEAD"), commitOf(mine, "refs/heads/" + line));
     }
 }

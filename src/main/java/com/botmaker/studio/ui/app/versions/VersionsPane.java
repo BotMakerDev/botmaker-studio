@@ -886,7 +886,6 @@ public final class VersionsPane {
      * Off the FX thread.
      */
     private SyncModel sync(ProjectVcs vcs) throws Exception {
-        vcs.adoptLegacyBackup();
         boolean updating = vcs.merging();
         Optional<BotSource> source = BotSource.read(projectDir);
         String token = auth != null && auth.isAuthenticated() ? auth.token() : null;
@@ -923,6 +922,17 @@ public final class VersionsPane {
         }
         int unsavedNow = vcs.status().labelled().size();
         boolean beside = vcs.hasRemoteBranch(Remote.MINE, "studio/" + vcs.branch());
+        // A studio/ line merged into its branch on GitHub (a pull request) has nothing of its own left: it is
+        // deleted there, and pushes go to the branch again (2026-10-25).
+        if (beside && token != null && vcs.mergedInto(Remote.MINE, "studio/" + vcs.branch(), vcs.branch())) {
+            try {
+                vcs.deleteRemoteBranch(Remote.MINE, "studio/" + vcs.branch(), token);
+                beside = false;
+            } catch (IOException e) {
+                System.err.println("Versions: could not delete the merged studio/" + vcs.branch() + ": "
+                        + e.getMessage());
+            }
+        }
         SyncModel.Facts facts = new SyncModel.Facts(authorName, vcs.remoteUrl(Remote.MINE), originalUrl,
                 unsavedNow, -1, installed, available, updating, beside);
         SyncModel first = SyncModel.of(facts);
@@ -1186,17 +1196,19 @@ public final class VersionsPane {
         return auth != null && auth.isAuthenticated() ? auth.token() : null;
     }
 
-    /** Switches branch: an {@code AUTO} version of what is unsaved first, then the checkout, then a reload. */
+    /**
+     * Switches branch: an {@code AUTO} version of what is unsaved first, then the checkout, then a reload — only
+     * when the files changed (2026-10-25): a branch at the same version leaves the editor as it is.
+     */
     private void switchBranch(String name) {
         ProjectState.Snapshot editor = ctx.state().snapshot();
         run(() -> {
             Checkpoints.save(projectDir, editor, VersionOrigin.AUTO, "Before switching to " + name);
-            vcs().switchTo(name);
-            return null;
-        }, done -> {
+            return vcs().switchTo(name);
+        }, changed -> {
             shown = null;
             status("On " + name + ".");
-            ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+            if (changed) ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
         });
     }
 
@@ -1267,12 +1279,46 @@ public final class VersionsPane {
         });
     }
 
+    /**
+     * Deletes a merged branch here and, when the user's copy on GitHub has it and the box stays ticked, there
+     * too (2026-10-25): a branch left on GitHub outlives the one here. GitHub's is offered only when everything
+     * it had by the last fetch is in this branch, and its delete is leased on that commit
+     * ({@link ProjectVcs#deleteRemoteBranch}), so nothing only GitHub has is lost.
+     */
     private void deleteBranch() {
-        pickOtherBranch("Delete a branch", "Only a branch whose versions another branch has can be deleted.")
-                .ifPresent(name -> run(() -> {
-                    vcs().deleteBranch(name);
-                    return null;
-                }, done -> status("Deleted " + name + ".")));
+        Optional<String> picked = pickOtherBranch("Delete a branch",
+                "Only a branch whose versions another branch has can be deleted.");
+        if (picked.isEmpty()) return;
+        String name = picked.get();
+        // Someone else's bot pushes beside the author's branches, as studio/<name>: never a fork's main itself.
+        boolean own = model.ownership() != SyncModel.Ownership.OTHERS && model.ownership() != SyncModel.Ownership.FORK;
+        List<String> candidates = own ? List.of(name, "studio/" + name) : List.of("studio/" + name);
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            return candidates.stream().filter(b -> vcs.inLocal(Remote.MINE, b, name)).findFirst().orElse("");
+        }, there -> confirmDelete(name, there));
+    }
+
+    /** The delete itself, after asking when {@code there} (empty for none) is the branch's copy on GitHub. */
+    private void confirmDelete(String name, String there) {
+        CheckBox alsoThere = new CheckBox("Also delete it on GitHub (" + Remote.MINE.id() + "/" + there + ")");
+        alsoThere.setSelected(true);
+        if (!there.isEmpty()) {
+            Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL);
+            confirm.initOwner(owner);
+            confirm.setHeaderText("Delete the branch " + name + "?");
+            confirm.getDialogPane().setContent(new VBox(8,
+                    new Label("Its versions stay in the branches that merged them."), alsoThere));
+            if (confirm.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) return;
+        }
+        boolean remote = !there.isEmpty() && alsoThere.isSelected();
+        String token = token();
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            vcs.deleteBranch(name);
+            if (remote) vcs.deleteRemoteBranch(Remote.MINE, there, token);
+            return null;
+        }, done -> status("Deleted " + name + (remote ? " here and on GitHub." : ".")));
     }
 
     private void withRemote(Consumer<ProjectVcs.RemoteInfo> action) {

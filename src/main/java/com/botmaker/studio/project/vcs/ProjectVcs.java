@@ -19,6 +19,7 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.RefLeaseSpec;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
@@ -39,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -668,12 +670,6 @@ public final class ProjectVcs {
     // Remotes: My copy and Original (39 §2, §7)
     // -------------------------------------------------------------------------
 
-    /**
-     * The one remote Studio wrote before the Versions tab: the private backup repo of the old <i>Push</i>. It
-     * was always the user's own, so {@link #adoptLegacyBackup} makes it {@link Remote#MINE}.
-     */
-    private static final String LEGACY_BACKUP = "origin";
-
     /** {@code remote}'s URL, or null when the project has none. */
     public String remoteUrl(Remote remote) {
         return remoteUrl(remote.id());
@@ -727,13 +723,17 @@ public final class ProjectVcs {
 
     /**
      * Switches to {@code name}. The tree must be saved — the caller takes an {@code AUTO} version first — and
-     * no update or merge may be half done.
+     * no update or merge may be half done. Returns whether the files changed: a branch at the same tree needs no
+     * reload (2026-10-25).
      */
-    public void switchTo(String name) throws IOException {
+    public boolean switchTo(String name) throws IOException {
         if (merging()) throw new IOException("A merge is in progress — finish or cancel it first.");
         try (Git git = open()) {
             if (!git.status().call().isClean()) throw new IOException("Save your changes before switching.");
+            Repository repo = git.getRepository();
+            ObjectId before = repo.resolve("HEAD^{tree}");
             git.checkout().setName(name).call();
+            return !Objects.equals(before, repo.resolve("HEAD^{tree}"));
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
@@ -757,6 +757,73 @@ public final class ProjectVcs {
             throw e;
         } catch (Exception e) {
             throw new IOException("Could not delete " + name + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Whether {@code branch} on {@code remote}, by the last fetch, is merged into {@code into} there: every one
+     * of its versions is in {@code into}. False when either is unknown here.
+     */
+    public boolean mergedInto(Remote remote, String branch, String into) {
+        if (!isRepo()) return false;
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            Ref line = repo.exactRef(Constants.R_REMOTES + remote.id() + "/" + branch);
+            Ref target = repo.exactRef(Constants.R_REMOTES + remote.id() + "/" + into);
+            if (line == null || target == null) return false;
+            return walk.isMergedInto(walk.parseCommit(line.getObjectId()), walk.parseCommit(target.getObjectId()));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Whether {@code branch} on {@code remote}, by the last fetch, is in the local branch {@code local}. */
+    public boolean inLocal(Remote remote, String branch, String local) {
+        if (!isRepo()) return false;
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            Ref line = repo.exactRef(Constants.R_REMOTES + remote.id() + "/" + branch);
+            Ref here = repo.exactRef(Constants.R_HEADS + local);
+            if (line == null || here == null) return false;
+            return walk.isMergedInto(walk.parseCommit(line.getObjectId()), walk.parseCommit(here.getObjectId()));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Deletes {@code branch} on {@code remote} (a push of {@code :refs/heads/<branch>}) and its remote-tracking
+     * ref here. The push is leased on the commit this computer last saw there: a branch that moved since (a push
+     * from another computer) is refused, never erased. A branch already gone there passes. The token goes only
+     * to GitHub ({@link #tokenFor}).
+     */
+    public void deleteRemoteBranch(Remote remote, String branch, String token) throws IOException {
+        String url = remoteUrl(remote);
+        if (url == null) throw new IOException("This project has no '" + remote.id() + "' remote.");
+        String sent = tokenFor(url, token);
+        String tracking = Constants.R_REMOTES + remote.id() + "/" + branch;
+        try (Git git = open()) {
+            Ref seen = git.getRepository().exactRef(tracking);
+            if (seen == null) throw new IOException(branch + " was never read from " + remote.id() + "; fetch first.");
+            var push = git.push().setRemote(remote.id()).setRefSpecs(new RefSpec(":refs/heads/" + branch))
+                    .setRefLeaseSpecs(new RefLeaseSpec("refs/heads/" + branch, seen.getObjectId().name()));
+            if (sent != null) push.setCredentialsProvider(credentials(sent));
+            for (PushResult result : push.call()) {
+                for (RemoteRefUpdate update : result.getRemoteUpdates()) {
+                    if (update.getStatus() == RemoteRefUpdate.Status.REJECTED_REMOTE_CHANGED) {
+                        throw new IOException(branch + " on " + remote.id() + " has versions this computer has "
+                                + "not read, so it was not deleted.");
+                    }
+                    if (update.getStatus() != RemoteRefUpdate.Status.NON_EXISTING) checkUpdate(update);
+                }
+            }
+            org.eclipse.jgit.lib.RefUpdate gone = git.getRepository().updateRef(tracking);
+            gone.setForceUpdate(true);
+            gone.delete();
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw pushFailure(url, e);
         }
     }
 
@@ -875,42 +942,98 @@ public final class ProjectVcs {
     }
 
     /**
-     * Renames the old backup remote {@code origin} to {@link Remote#MINE}, with its remote-tracking refs, when
-     * the project has the one and not the other. Returns whether it did. Idempotent.
+     * Gives Studio's two remotes their git names, once, on open ({@code 39} §2, 2026-10-25): {@code mine}
+     * becomes {@link Remote#MINE} ({@code origin}) and {@code original} becomes {@link Remote#ORIGINAL}
+     * ({@code upstream}), each with its remote-tracking refs and the branches that track it. Returns whether
+     * anything changed. Idempotent.
+     *
+     * <p>A name already taken by a remote of the user's own is the same repository — the old backup
+     * {@code origin}, a submodule's {@code origin} Studio had copied — and then the old remote is dropped, or
+     * another one, renamed {@code old-<name>} first. An {@code origin} Studio never renamed (the old backup, a
+     * hand-made clone) was always the user's own, which is what {@code origin} means now; its SSH address is
+     * written as the same repository's HTTPS one, since Studio pushes with the GitHub token ({@link #tokenFor}).
      *
      * <p>A checkout whose {@code .git} is a <i>file</i> — a submodule, a linked worktree — belongs to another
-     * tool as well, which pushes to {@code origin} by name (the umbrella's release does, for the template). There
-     * the remote is <b>copied</b> to {@link Remote#MINE} and {@code origin} stays, refs and all.
+     * tool as well, which pushes to {@code origin} by name (the umbrella's release does): there no taken name is
+     * moved and no address rewritten.
      */
-    public boolean adoptLegacyBackup() throws IOException {
+    public boolean adoptRemoteNames() throws IOException {
         if (!isRepo()) return false;
         boolean shared = !Files.isDirectory(projectDir.resolve(".git"));
         try (Git git = open()) {
             Repository repo = git.getRepository();
+            boolean changed = false;
+            for (Remote remote : Remote.values()) changed |= rename(repo, remote.oldId(), remote.id(), shared);
             StoredConfig config = repo.getConfig();
-            String url = config.getString("remote", LEGACY_BACKUP, "url");
-            if (url == null || url.isBlank() || remoteUrl(Remote.MINE) != null) return false;
-            if (!shared) config.unsetSection("remote", LEGACY_BACKUP);
-            // Studio pushes with the GitHub token, which only travels over HTTPS ({@link #tokenFor}); a
-            // hand-made clone's SSH address is written as the same repository's HTTPS one.
-            String https = SyncModel.slug(url).map(s -> "https://github.com/" + s + ".git").orElse(url);
-            config.setString("remote", Remote.MINE.id(), "url", https);
-            config.setString("remote", Remote.MINE.id(), "fetch", "+refs/heads/*:refs/remotes/" + Remote.MINE.id() + "/*");
-            config.save();
-            if (shared) return true;
-            String from = "refs/remotes/" + LEGACY_BACKUP + "/";
-            for (Ref ref : repo.getRefDatabase().getRefsByPrefix(from)) {
-                org.eclipse.jgit.lib.RefUpdate moved = repo.updateRef(
-                        "refs/remotes/" + Remote.MINE.id() + "/" + ref.getName().substring(from.length()));
+            String url = config.getString("remote", Remote.MINE.id(), "url");
+            if (!shared && url != null && !url.startsWith("https://")) {
+                Optional<String> https = SyncModel.slug(url).map(s -> "https://github.com/" + s + ".git");
+                if (https.isPresent()) {
+                    config.setString("remote", Remote.MINE.id(), "url", https.get());
+                    config.save();
+                    changed = true;
+                }
+            }
+            return changed;
+        } catch (Exception e) {
+            throw new IOException("Could not rename the remotes: " + e.getMessage(), e);
+        }
+    }
+
+    /** Renames remote {@code from} to {@code to} as {@link #adoptRemoteNames} says; whether it did. */
+    private static boolean rename(Repository repo, String from, String to, boolean shared) throws IOException {
+        StoredConfig config = repo.getConfig();
+        String url = config.getString("remote", from, "url");
+        if (url == null) return false;
+        String taken = config.getString("remote", to, "url");
+        if (taken != null && !sameRepository(taken, url)) {
+            String aside = "old-" + to;
+            if (shared || config.getString("remote", aside, "url") != null) return false;
+            move(repo, to, aside);
+        }
+        move(repo, from, to);
+        return true;
+    }
+
+    private static boolean sameRepository(String a, String b) {
+        Optional<SyncModel.Slug> slug = SyncModel.slug(a);
+        return a.equals(b) || slug.isPresent() && slug.equals(SyncModel.slug(b));
+    }
+
+    /**
+     * Moves remote {@code from} to {@code to}: its config when {@code to} has none, its remote-tracking refs
+     * that {@code to} lacks, and every branch tracking it. Nothing of {@code from} is left.
+     */
+    private static void move(Repository repo, String from, String to) throws IOException {
+        StoredConfig config = repo.getConfig();
+        if (config.getString("remote", to, "url") == null) {
+            for (String key : config.getNames("remote", from)) {
+                List<String> values = List.of(config.getStringList("remote", from, key)).stream()
+                        .map(v -> key.equals("fetch") ? v.replace(Constants.R_REMOTES + from + "/",
+                                Constants.R_REMOTES + to + "/") : v)
+                        .toList();
+                config.setStringList("remote", to, key, values);
+            }
+        }
+        config.unsetSection("remote", from);
+        for (String branch : config.getSubsections("branch")) {
+            if (from.equals(config.getString("branch", branch, "remote"))) {
+                config.setString("branch", branch, "remote", to);
+            }
+        }
+        config.save();
+        String prefix = Constants.R_REMOTES + from + "/";
+        for (Ref ref : repo.getRefDatabase().getRefsByPrefix(prefix)) {
+            String name = Constants.R_REMOTES + to + "/" + ref.getName().substring(prefix.length());
+            // A symbolic HEAD a command-line clone leaves is not copied: the next fetch writes what it needs.
+            if (!ref.isSymbolic() && repo.exactRef(name) == null && ref.getObjectId() != null) {
+                org.eclipse.jgit.lib.RefUpdate moved = repo.updateRef(name);
                 moved.setNewObjectId(ref.getObjectId());
                 moved.forceUpdate();
-                org.eclipse.jgit.lib.RefUpdate gone = repo.updateRef(ref.getName());
-                gone.setForceUpdate(true);
-                gone.delete();
             }
-            return true;
-        } catch (Exception e) {
-            throw new IOException("Could not adopt the old backup remote: " + e.getMessage(), e);
+            org.eclipse.jgit.lib.RefUpdate gone = repo.getRefDatabase().newUpdate(ref.getName(), true);
+            gone.setForceUpdate(true);
+            gone.delete();
         }
     }
 

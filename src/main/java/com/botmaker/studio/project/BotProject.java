@@ -25,6 +25,8 @@ import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 
+import com.botmaker.studio.project.vcs.ProjectVcs;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -108,6 +110,12 @@ public class BotProject {
         // 2. Create state
         ProjectState state = new ProjectState();
         state.setSourcePath(config.sourceRoot());
+        // The remotes' git names first: everything below reads origin and upstream (2026-10-25).
+        try {
+            new ProjectVcs(config.projectPath()).adoptRemoteNames();
+        } catch (IOException e) {
+            System.err.println("Warning: " + e.getMessage());
+        }
         // Installed community bots open read-only until the user chooses to edit; local projects are editable.
         state.setReaderMode(ProjectMode.isReader(config.projectPath()));
 

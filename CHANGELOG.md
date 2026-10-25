@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Deleting a branch deletes it on GitHub too** (2026-10-25): *Delete…* of a branch your copy has asks first,
+  with *Also delete it on GitHub* ticked. A `studio/<branch>` line merged on GitHub is deleted there, and pushes
+  go to the branch again.
+- **The remotes are `origin` (your copy) and `upstream` (the author's)** (2026-10-25), git's usual names; a
+  project's `mine` and `original` are renamed when it opens.
+- **A branch switch reloads only when the files changed** (2026-10-25).
+
 - **A sandbox home for trying Studio** (2026-10-25): `BOTMAKER_HOME=<folder>` (or `-Dbotmaker.home`) keeps the
   projects, `botmaker-config.json`, the bots opened from a file, the settings, the preferences and the
   programs-menu entries under that folder, so a test never touches the user's own bots. The cache, which holds

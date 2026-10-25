@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The Dev view's git ({@code 39} §9): branches, a branch merge through the conflict path, remotes. */
@@ -79,6 +80,17 @@ class DevGitTest {
     }
 
     @Test
+    void aSwitchSaysWhetherTheFilesChanged(@TempDir Path root) throws Exception {
+        ProjectVcs vcs = project(root);
+        String main = vcs.branch();
+        vcs.createBranch("same");
+        assertFalse(vcs.switchTo("same"), "a new branch is the same tree: no reload");
+        edit(root, "class Bot {\n    int a = 7;\n}\n");
+        vcs.checkpoint(VersionOrigin.SAVE, "seven");
+        assertTrue(vcs.switchTo(main));
+    }
+
+    @Test
     void anUnmergedOrCurrentBranchIsNotDeleted(@TempDir Path root) throws Exception {
         ProjectVcs vcs = project(root);
         String main = vcs.branch();
@@ -109,13 +121,13 @@ class DevGitTest {
         vcs.setRemote(Remote.MINE, bare.toUri().toString());
 
         ProjectVcs.RemoteInfo before = vcs.remotes().getFirst();
-        assertEquals("mine", before.name());
+        assertEquals("origin", before.name());
         assertEquals(-1, before.ahead(), "never fetched");
 
-        vcs.push("mine", vcs.branch(), null, false);
+        vcs.push("origin", vcs.branch(), null, false);
         edit(root, "class Bot {\n    int a = 6;\n}\n");
         vcs.checkpoint(VersionOrigin.SAVE, "local");
-        vcs.fetch("mine", null);
+        vcs.fetch("origin", null);
         ProjectVcs.RemoteInfo after = vcs.remotes().getFirst();
         assertEquals(1, after.ahead());
         assertEquals(0, after.behind());
