@@ -8,9 +8,11 @@ import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.CatalogClient;
+import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.sharing.HiddenBots;
+import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
-import com.botmaker.studio.ui.app.GalleryDialog;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
@@ -39,6 +41,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -79,32 +82,82 @@ public final class RunHome implements ProjectWindow {
     private final GitHubAuth gitHubAuth = new GitHubAuth();
     private final TilePane myBots = new TilePane(GAP, GAP);
     private final Label myBotsLine = new Label("Looking for your bots…");
+    private final Label getMoreHeading = heading("Get more bots");
+    private final GetBots getBots;
+    private ScrollPane scroll;
+    /** Asked by {@link #scrollToGetBots} and not yet made after My bots' cards came; FX thread only. */
+    private boolean scrollPending;
     /** The reads {@link #reload} started, FX thread only. */
     private int reads;
 
-    /** {@code bots} is read off the FX thread on every {@link #reload}: it opens each project's repository. */
-    public RunHome(Stage stage, Actions actions, Supplier<List<MyBot>> bots) {
+    /**
+     * {@code bots} is read off the FX thread on every {@link #reload}: it opens each project's repository.
+     * {@code shelf} is where <i>Get more bots</i> puts a bot.
+     */
+    public RunHome(Stage stage, Actions actions, Supplier<List<MyBot>> bots, GetBots.Shelf shelf) {
         this.stage = stage;
         this.actions = actions;
         this.bots = bots;
+        this.getBots = new GetBots(shelf, this::agrees, this::reload, ShowCommunity.load(), HiddenBots.load());
     }
 
     /**
      * Studio's home: the root's projects and the remembered ones, with the catalog's kept tags for the
-     * "<tag> available" badge, read again once the catalog answers.
+     * "<tag> available" badge, read again once the catalog answers; the catalog's bots under them.
      */
     public static RunHome studio(Stage stage, Actions actions) {
         ProjectManager projects = new ProjectManager();
+        BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), new GitHubAuth()));
         RunHome home = new RunHome(stage, actions, () -> {
             var opened = ProjectPreferences.recentOpenTimes();
             return MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories()),
                     dir -> MyBots.read(dir, opened),
                     MyBots.latestTags(CatalogClient.session().kept().bots()));
+        }, new GetBots.Shelf() {
+            @Override
+            public Path get(GalleryEntry entry) throws IOException {
+                return installer.install(entry, entry.tag());
+            }
+
+            @Override
+            public boolean has(GalleryEntry entry) {
+                return installer.isInstalled(entry.name());
+            }
         });
-        CatalogClient.session().refresh().thenAccept(reply -> {
-            if (reply.fresh()) Platform.runLater(home::reload);
-        });
+        // Asked again on every visit, as New Project does, so a bot published since Studio started is offered.
+        CatalogClient.session().refresh().thenAccept(reply -> Platform.runLater(() -> {
+            home.getBots.show(reply.index().bots(), reply.fresh());
+            if (reply.fresh()) home.reload();
+        }));
         return home;
+    }
+
+    /**
+     * Scrolls the home to <i>Get more bots</i>: where the editor's menu item goes. My bots' cards arrive later, off
+     * the FX thread, and push the section down, so the scroll is made again once they are shown ({@link #reload}).
+     */
+    public void scrollToGetBots() {
+        scrollPending = true;
+        Platform.runLater(this::applyScroll);
+    }
+
+    private void applyScroll() {
+        if (scroll == null || scroll.getScene() == null) return;
+        scroll.applyCss();
+        scroll.layout();
+        double content = scroll.getContent().getBoundsInLocal().getHeight();
+        double viewport = scroll.getViewportBounds().getHeight();
+        if (content <= viewport) return;
+        scroll.setVvalue(Math.min(1, getMoreHeading.getBoundsInParent().getMinY() / (content - viewport)));
+    }
+
+    /** The trust warning of a bot nobody reviewed, confirmed before it is got. */
+    private boolean agrees(GalleryEntry entry) {
+        Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
+                entry.trustWarning() + "\n\nGet it now?", ButtonType.OK, ButtonType.CANCEL);
+        confirm.initOwner(stage);
+        confirm.setHeaderText("Get this bot?");
+        return confirm.showAndWait().filter(ButtonType.OK::equals).isPresent();
     }
 
     /** Nothing to release: the screen holds no listener outside its own scene. */
@@ -139,9 +192,9 @@ public final class RunHome implements ProjectWindow {
 
         VBox body = new VBox(10,
                 heading("My bots"), myBotsLine, myBots,
-                heading("Get more bots"), getMoreBots());
+                getMoreHeading, getBots.node());
         body.setPadding(new Insets(16));
-        ScrollPane scroll = new ScrollPane(body);
+        scroll = new ScrollPane(body);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.getStyleClass().add("np-scroll");
@@ -166,26 +219,17 @@ public final class RunHome implements ProjectWindow {
             }
             say(found.isEmpty() ? "No bots yet: ＋ New bot starts one, or get one below." : "");
             myBots.getChildren().setAll(found.stream().map(this::card).toList());
+            if (scrollPending) {
+                // Once, on the first cards: a later reload (a Get, a Remove) leaves the user's scroll alone.
+                scrollPending = false;
+                Platform.runLater(this::applyScroll);
+            }
         }));
     }
 
     private void say(String text) {
         myBotsLine.setText(text);
         myBotsLine.setVisible(!text.isEmpty());
-    }
-
-    // Get more bots is the Browse Bots dialog until the catalog's cards move here (plan phase 2).
-    private Node getMoreBots() {
-        Button browse = new Button("Browse bots…");
-        browse.setOnAction(e -> {
-            GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-            new GalleryDialog(stage, gallery, new BotInstaller(gallery), gitHubAuth, gitHubClient).show(this::reload);
-        });
-        Label line = new Label("Bots others published, checked by the catalog.");
-        line.getStyleClass().add("gallery-card-note");
-        HBox row = new HBox(10, line, browse);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
     }
 
     private static Label heading(String text) {

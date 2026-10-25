@@ -52,7 +52,7 @@ public class MenuBarManager {
     private Runnable onGettingStarted;
     /** Help ▸ Picker Gallery — present only in a dev build. See {@link #createHelpMenu()}. */
     private Runnable onPickerGallery;
-    private Runnable onBrowseGallery;
+    private Runnable onGetMoreBots;
     private Runnable onPublishGallery;
     private Runnable onShowHistory;
     /** What each Navigate item does; an item with no entry is greyed. */
@@ -286,10 +286,9 @@ public class MenuBarManager {
             if (onShowHistory != null) onShowHistory.run();
         });
 
-        MenuItem browseGalleryItem = new MenuItem("Browse Gallery...");
-        browseGalleryItem.setOnAction(e -> {
-            if (onBrowseGallery != null) onBrowseGallery.run();
-        });
+        // The home's Get more bots, where Browse Bots' cards moved (2026-10-25).
+        MenuItem browseGalleryItem = new MenuItem("Get More Bots...");
+        browseGalleryItem.setOnAction(e -> getMoreBots());
 
         MenuItem publishGalleryItem = new MenuItem("Publish to Gallery...");
         publishGalleryItem.setOnAction(e -> {
@@ -882,10 +881,15 @@ public class MenuBarManager {
     }
 
     /**
-     * Sets the callback for when "Browse Gallery..." is clicked
+     * Sets the callback for when "Get More Bots..." is clicked
      */
-    public void setOnBrowseGallery(Runnable callback) {
-        this.onBrowseGallery = callback;
+    public void setOnGetMoreBots(Runnable callback) {
+        this.onGetMoreBots = callback;
+    }
+
+    /** Does what "Get More Bots..." does, for Getting Started's step that names it. */
+    public void getMoreBots() {
+        if (onGetMoreBots != null) onGetMoreBots.run();
     }
 
     /**

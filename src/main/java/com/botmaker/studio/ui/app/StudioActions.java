@@ -14,9 +14,7 @@ import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
-import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotSource;
-import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
@@ -56,8 +54,6 @@ final class StudioActions {
 
     private final GitHubClient gitHubClient = new GitHubClient();
     private final GitHubAuth gitHubAuth = new GitHubAuth();
-    private final GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
-    private final BotInstaller botInstaller = new BotInstaller(gallery);
     private Runnable onPublish = () -> { };
     /** Opens the block a use is in — the canvas's, so {@link UIManager} sets it once the canvas exists. */
     private java.util.function.Consumer<com.botmaker.studio.nav.Usages.Usage> onReveal = null;
@@ -140,7 +136,7 @@ final class StudioActions {
         // the bar as a ToolbarItem like any other plugin's, so there is nothing for the shell to wire.
 
         // --- Sharing / VCS ---
-        menuBar.setOnBrowseGallery(this::openGallery);
+        // Get More Bots goes home, to its Get more bots section: the shell's, so UIManager wires it (2026-10-25).
         menuBar.setOnPublishGallery(this::openPublish);
         // Project History selects the Versions tab; UIManager wires it, since the tab is the window's.
         menuBar.setProjectRepoUrl(BotSource.read(config.projectPath())
@@ -170,10 +166,6 @@ final class StudioActions {
 
     void openPublish() {
         onPublish.run();
-    }
-
-    private void openGallery() {
-        new GalleryDialog(primaryStage, gallery, botInstaller, gitHubAuth, gitHubClient).show();
     }
 
     /**
@@ -281,7 +273,7 @@ final class StudioActions {
                 .on(StudioAction.PARAMETERS, this::openParameters)
                 .on(StudioAction.OVERLAY_EDITOR, this::openOverlayEditor)
                 .on(StudioAction.PUBLISH, this::openPublish)
-                .on(StudioAction.GALLERY, this::openGallery)
+                .on(StudioAction.GALLERY, menuBar::getMoreBots)
                 .build();
         new GettingStartedDialog(primaryStage, actions).show();
     }

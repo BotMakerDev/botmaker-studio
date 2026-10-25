@@ -164,6 +164,7 @@ public class UIManager implements ProjectWindow {
     private Consumer<Void> onSelectProject;
     /** View ▸ Preview as user — hands the project to the Runner window for this session only. */
     private Runnable onPreviewAsUser;
+    private Runnable onGetMoreBots;
 
     /**
      * Builds the window for {@code ctx}'s project on {@code primaryStage}.
@@ -366,6 +367,7 @@ public class UIManager implements ProjectWindow {
     @Override
     public Scene createScene() {
         menuBarManager.setOnSelectProject(v -> { if (onSelectProject != null) onSelectProject.accept(null); });
+        menuBarManager.setOnGetMoreBots(() -> { if (onGetMoreBots != null) onGetMoreBots.run(); });
         // Wired here rather than in StudioActions: what it opens is a tab of this window, and the actions
         // object knows nothing about the shell's tool window.
         menuBarManager.setOnReviewChanges(this::openReview);
@@ -875,6 +877,9 @@ public class UIManager implements ProjectWindow {
     }
 
     public void setOnSelectProject(Consumer<Void> callback) { this.onSelectProject = callback; }
+
+    /** Sets what Project ▸ Get More Bots does: the shell's home, at its Get more bots section. */
+    public void setOnGetMoreBots(Runnable callback) { this.onGetMoreBots = callback; }
 
     /**
      * Sets what View ▸ Preview as user does. The shell owns it rather than this window, because the answer is

@@ -31,7 +31,8 @@ The `ui/` package is split by concern:
   replaced `VcsPanel`/`VcsDialog` on 2026-09-25), `ProjectSelectionScreen`, `GitHubAccountBar` /
   `GoogleAccountBar`, and ~15 dialogs
   (`ProjectSetupDialog`, `LaunchTargetDialog`, `ManageCaptureTargetsDialog`, `ManageLibrariesDialog`,
-  `ResourceManagerDialog`, `GalleryDialog`, …). The open-time source migrations are **not**
+  `ResourceManagerDialog`, …; `GalleryDialog` became the home's *Get more bots*, `ui/app/home/GetBots`, on
+  2026-10-25). The open-time source migrations are **not**
   here — they are `project/ProjectOpenMigrations`, run from the shell's constructor before
   `FileExplorerManager` exists, since a migration can delete a file the tree would otherwise go on listing.
   There is **no `PaletteManager`** — this entry named one for a long time and no such file has ever existed;

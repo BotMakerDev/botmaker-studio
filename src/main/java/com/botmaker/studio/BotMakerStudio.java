@@ -118,7 +118,7 @@ public class BotMakerStudio extends Application {
     // =========================================================================
 
     /** The home: My bots over Get more bots ({@link RunHome}); it replaced the project selection screen. */
-    private void showProjectSelection(Stage primaryStage) {
+    private RunHome showProjectSelection(Stage primaryStage) {
         // The home becomes the current window, so whatever window and project an error path leaves open are let
         // go here: nothing else would dispose them, and the project's bus would still reopen it.
         disposeUi();
@@ -142,6 +142,7 @@ public class BotMakerStudio extends Application {
         primaryStage.setTitle("BotMaker");
         primaryStage.show();
         requestSceneLayout(primaryStage);
+        return home;
     }
 
     /** Opens {@code projectDir} in the Runner ({@code asUser}) or the editor, as a home card's button asked. */
@@ -408,6 +409,7 @@ public class BotMakerStudio extends Application {
     private UIManager getUiManager(Stage primaryStage, Path projectDir) {
         UIManager uiManager = new UIManager(currentProject.context(), primaryStage);
         uiManager.setOnSelectProject(v -> switchToProjectSelector(primaryStage));
+        uiManager.setOnGetMoreBots(() -> showProjectSelection(primaryStage).scrollToGetBots());
         uiManager.setOnPreviewAsUser(() -> {
             showAsUser = Boolean.TRUE;
             openProject(primaryStage, projectDir, false);

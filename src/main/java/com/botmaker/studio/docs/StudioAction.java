@@ -33,7 +33,7 @@ public enum StudioAction {
     OVERLAY_EDITOR("Open Overlay Editor ▸", "⧉ Overlay on the toolbar"),
     REMOTE_PILOT("Enable Remote Pilot ▸", "🎮 Pilot on the toolbar (contributed by the BotMaker SDK)"),
     PUBLISH("Open Publish ▸", "Project ▸ Publish to Gallery…"),
-    GALLERY("Open the Gallery ▸", "Project ▸ Browse Gallery…");
+    GALLERY("Get More Bots ▸", "Project ▸ Get More Bots… (the home's Get more bots)");
 
     private final String buttonLabel;
     private final String menuPath;

@@ -95,12 +95,13 @@ Breakpoints also toggle via a gutter circle (`GutterDecorator` → `BreakpointTo
 
 ## D. Startup / project selection
 
-`ui/app/ProjectSelectionScreen.java` — constructor `(Stage, BiConsumer<String,Boolean>)`, no-op
-callback OK. `createScene()` builds title **"Select a Project"** and buttons **"Open Project"** (default,
-→ `onProjectSelected.accept(name, false)`), **"Create New Project"** (→ create dialog), **"Browse
-Gallery"** (→ `GalleryDialog`), an **"Archive"/"Restore"** button, a **Sort** `ComboBox`, **"My projects
-only"** / **"Show archived projects"** checkboxes, a `ListView<Row>` (double-click a project row →
-open), and an embedded `GitHubAccountBar`.
+`ui/app/home/RunHome.java` (2026-10-25; `ProjectSelectionScreen` and `GalleryDialog` are gone) — constructor
+`(Stage, RunHome.Actions, Supplier<List<MyBot>>, GetBots.Shelf)`. `createScene()` builds a top bar (**"＋ New
+bot"** → `NewProjectDialog`, **"Open folder…"**, **"View archived…"**, `GitHubAccountBar`), then **My bots**
+cards (`.mybots-card`: **"▶ Run"** → `Actions.run`, **"Edit in Studio"** → `Actions.edit`, a **"⋯"** menu with
+Archive… / Remove from My bots) and **Get more bots** (`GetBots`: a search field, **"Show community bots and
+plugins"** / **"Show hidden"** checkboxes, `.getbots-card` cards with **"Hide"/"Unhide"** and **"Get"**, which
+confirms a community bot through `RunHome`'s alert before `Shelf.get`).
 
 ⚠️ Rows and login touch **filesystem** (`~/BotMakerProjects`) and **GitHub network/auth** with no
 injection seam — assert only on the static controls (as `ProjectSelectionScreenSmokeTest` does).
@@ -125,7 +126,7 @@ GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles a
   Cut/Copy/Paste are **disabled placeholders**.
 - **View** — Zoom In/Out/Reset = **disabled placeholders**.
 - **Project** — Plugins & Libraries… (Installed / Browse / Libraries tabs, Reload), Manage Activities…, Set Activity Values…,
-  Resource Manager…, Browse Gallery…, Publish to Gallery…, Project Repository on GitHub (disabled until
+  Resource Manager…, Get More Bots… (→ the home, at Get more bots), Publish to Gallery…, Project Repository on GitHub (disabled until
   published).
 - **Help** — Studio/SDK on GitHub, "Check for Updates…" (`UpdateService`, modal progress `Stage`),
   "About BotMaker".
@@ -187,7 +188,6 @@ Two more searchable popup menus mirror the statement menu — the **expression "
 
 | Dialog | Title | Heavy dep |
 |---|---|---|
-| `GalleryDialog` | "Bot Gallery" (Browse/Installed tabs) | **network** |
 | `PluginsWindow` | "Plugins & Libraries" (Installed / Browse / Libraries tabs) | **registry, JitPack/Maven network** |
 | `ManageActivitiesDialog` | "Manage Activities" (editable table) | network-free |
 | `SetActivityValuesDialog` | "Set Activity Values" (per-type widgets) | network-free |

@@ -13,8 +13,8 @@ import javafx.scene.layout.VBox;
 /**
  * How one gallery listing reads: its name, author and description, its tags, and a link to its repository.
  *
- * <p>One builder for two windows. Browse Bots draws a row from it, with its own star and install buttons
- * beside; the publish dialog draws its preview from it. Two copies would be a preview that promises one card
+ * <p>One builder for two windows. The home's <i>Get more bots</i> draws a card from it, with its own ★ count and
+ * buttons under it (Browse Bots did until 2026-10-25); the publish dialog draws its preview from it. Two copies would be a preview that promises one card
  * and a gallery that shows another the first time either changes.
  */
 public final class GalleryCard {

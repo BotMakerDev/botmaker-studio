@@ -22,6 +22,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   has *← My bots*. The list is most recently used first, and the sort menu and "My projects only" filter are
   gone. `--project` still opens a project straight away.
 
+- **Get more bots is on the home** (`ui/app/home/GetBots`), under My bots, in place of the Browse Bots window:
+  the catalog's bots as cards with search, *Show community bots and plugins*, *Hide* / *Show hidden*, the ★ count
+  and *Get*, the same linked clone Install made (a community bot is confirmed first). A bot got appears in My
+  bots, whose update badge replaces the Installed tab. *Project ▸ Get More Bots…* goes home, scrolled to it.
+  Starring a bot from Studio and the sort menu are gone: the ★ count is the catalog's, and the order is official,
+  trusted, then community, the most starred first.
+
 - **The catalog can be asked again within a session** (`CatalogClient.refresh`), with the date of the copy kept
   for offline (`keptAt`), and each catalog plugin says which other catalog plugins it brings
   (`PluginRegistry.Plugin.brings`, from its newest release). New Project uses both in its card rework. A refresh's

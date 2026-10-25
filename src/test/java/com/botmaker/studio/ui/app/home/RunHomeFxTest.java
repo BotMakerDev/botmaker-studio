@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.home;
 
+import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
@@ -46,7 +47,17 @@ class RunHomeFxTest extends FxHeadlessTest {
             public void edit(Path dir, boolean freshlyCreated) {
                 asked.add("edit " + dir.getFileName());
             }
-        }, () -> bots);
+        }, () -> bots, new GetBots.Shelf() {
+            @Override
+            public Path get(GalleryEntry entry) {
+                return Path.of("/p", entry.name());
+            }
+
+            @Override
+            public boolean has(GalleryEntry entry) {
+                return false;
+            }
+        });
         stage.setScene(home.createScene());
         stage.setWidth(900);
         stage.setHeight(700);
