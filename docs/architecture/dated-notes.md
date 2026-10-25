@@ -1,5 +1,16 @@
 # Dated notes — read these before the other files here
 
+> **Studio opens on the bot list since 2026-10-25** (umbrella run-mode-bmk plan). `ui/app/home/RunHome` (My bots
+> over Get more bots, one page; each card ▶ Run and *Edit in Studio*; ＋ New bot) is the startup screen unless
+> `--project`; Browse Bots and `GalleryDialog` are deleted (`ui/app/home/GetBots`). The Run window is the old
+> `RunnerWindow` with a status line (`StudioPlugin.readiness()`) and an update strip that keeps the runner's values
+> (`RunnerValues`, key `_local/<folder>` for own bots). A bot's icon is `icon.png` at the repository root
+> (`project/BotIcon`), set in Project Settings (`ui/app/botinfo/`). `sharing/BmkOpen`, `BmkEdit`, `BmkExport`,
+> `UnpackedBots` open and export a `.bmk` (format: the cli's `com.botmaker.cli.bmk`); an unpacked bot's classpath is
+> its `bot.json`, not the pom. The installers register `.bmk` (`packaging/bmk.properties`; on Linux the
+> `packaging/linux/BotMaker Studio.desktop` override adds `%f`), and `sharing/ProgramEntries` keeps one
+> programs-menu entry per runnable bot, only in an installed Studio (`jpackage.app-path`).
+
 > **The catalog is read as the cli's `Catalog` record, schema 4, since 2026-10-24** (umbrella easy-publish plan,
 > Phase 4b). `sharing/CatalogIndex` reads each row as `Catalog.Plugin` / `Catalog.Bot` (a row that does not read is
 > skipped whole; one with no `releases` too — the schema-3 single `tag` is not read). `PluginRegistry.Plugin` and
