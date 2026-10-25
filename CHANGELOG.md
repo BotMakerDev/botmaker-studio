@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **Export as .bmk and Publish write the same file in every time zone** (2026-10-25, cli 0.8.1): a `.bmk` written
+  east of Greenwich did not match the catalog's rebuild, so the catalog refused its release.
+
 ## [1.9.0] — 2026-10-25
 
 ### Added
