@@ -1,7 +1,6 @@
 package com.botmaker.studio;
 
 import com.botmaker.cli.bmk.BotJson;
-import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
@@ -9,6 +8,7 @@ import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.assist.HomeEndpoint;
 import com.botmaker.studio.config.AppPaths;
 import com.botmaker.studio.config.Constants;
+import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.plugin.PluginGate;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;
@@ -17,6 +17,8 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.shared.platform.Os;
+import com.botmaker.studio.services.OpenStep;
+import com.botmaker.studio.services.ProgressReporter;
 import com.botmaker.studio.sharing.BmkOpen;
 import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.studio.sharing.UnpackedBots;
@@ -28,22 +30,21 @@ import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.home.BmkFlow;
 import com.botmaker.studio.ui.app.home.MyBots;
 import com.botmaker.studio.ui.app.home.RunHome;
+import com.botmaker.studio.ui.app.loading.LoadingPage;
+import com.botmaker.studio.ui.app.loading.ReloadBox;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.UIManager;
 import com.botmaker.studio.ui.app.runner.RunnerWindow;
 import com.botmaker.studio.ui.render.theme.BlockFont;
+import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
-import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.image.Image;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.awt.Desktop;
@@ -53,8 +54,10 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 
 public class BotMakerStudio extends Application {
@@ -86,6 +89,8 @@ public class BotMakerStudio extends Application {
     private Boolean showAsUser;
     /** The project {@link #showAsUser} was chosen for. */
     private Path openProjectDir;
+    /** Bumped by every open and every making: a failure of an earlier one is not this one's. FX thread only. */
+    private int opens;
 
     /** The primary window, kept for owning dialogs. */
     private Stage primaryStage;
@@ -99,6 +104,9 @@ public class BotMakerStudio extends Application {
         // Before any window is shown: from here on every window gets the stylesheet and the theme class as it
         // appears, including the popups (context menus, tooltips, dropdowns) that no call site can reach.
         ThemedWindows.install();
+        // The saved theme before the first window too (2026-10-25): it loaded with the editor or the Runner, so the
+        // home and the loading page were always light, and a dark user's window flashed light on every open.
+        BlockTheme.initialize();
         // The fonts Studio ships and the ones the user imported, before a stylesheet names one: the Run
         // console asks for JetBrains Mono before any canvas would have loaded it.
         BlockFont.loadBundled();
@@ -204,6 +212,11 @@ public class BotMakerStudio extends Application {
             public void edit(Path dir, boolean freshlyCreated) {
                 editProject(primaryStage, dir, freshlyCreated);
             }
+
+            @Override
+            public void make(LoadingPage.Making making) {
+                BotMakerStudio.this.make(primaryStage, making);
+            }
         });
         this.currentWindow = home;
         setScenePreservingGeometry(primaryStage, home.createScene());
@@ -252,7 +265,19 @@ public class BotMakerStudio extends Application {
     // =========================================================================
 
     private void openProject(Stage primaryStage, Path projectDir, boolean freshlyCreated) {
-        String projectName = projectDir.getFileName().toString();
+        openProject(primaryStage, projectDir, freshlyCreated, null, Optional.empty());
+    }
+
+    /**
+     * Opens {@code projectDir} behind the loading page (2026-10-25, spec § 1b): {@code page} when a bot made on it
+     * opens there next, a new one otherwise. A branch switch that changed files ({@code filesOnly}) keeps the editor
+     * in view under the reload box instead.
+     */
+    private void openProject(Stage primaryStage, Path projectDir, boolean freshlyCreated, LoadingPage page,
+                             Optional<CoreApplicationEvents.BranchSwitch> filesOnly) {
+        // A run copy by its bot.json name, never its tag folder (2026-10-25).
+        String projectName = UnpackedBots.nameOf(projectDir);
+        int generation = ++opens;
         // 1. Close previous project — its window first. This is also the reload path (a VCS rollback publishes
         //    ProjectReloadRequestedEvent), so it runs far more often than "the user picked another project";
         //    without releasing the shell the Remote Pilot port and its nested display would survive every one.
@@ -270,60 +295,150 @@ public class BotMakerStudio extends Application {
         // 2. Save preference
         ProjectPreferences.updateLastOpened(projectDir);
 
-        // 3. Show the loading screen immediately so the window is never blank/frozen while the (slow,
-        //    possibly download-heavy) open runs off the FX thread.
-        Label statusLabel = new Label("Resolving dependencies…");
-        ProgressBar progressBar = new ProgressBar();
-        progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-        progressBar.setPrefWidth(320);
-        setScenePreservingGeometry(primaryStage, createLoadingScene(projectName, statusLabel, progressBar));
-        primaryStage.setTitle("BotMaker - Opening " + projectName + "…");
-        primaryStage.show();
-        requestSceneLayout(primaryStage);
+        // 3. Show the loading page immediately so the window is never blank/frozen while the (slow, possibly
+        //    download-heavy) open runs off the FX thread: each step ticked as it ends, the current one's bar a
+        //    real percentage while dependencies download. A branch switch's reload keeps the editor in view.
+        LoadingPage shown;
+        ProgressReporter progress;
+        if (filesOnly.isPresent() && page == null && primaryStage.getScene() != null) {
+            shown = null;
+            progress = ReloadBox.over(primaryStage.getScene(), filesOnly.get().branch(),
+                    filesOnly.get().changedFiles()).reporter();
+        } else {
+            shown = page != null ? page
+                    : new LoadingPage(LoadingPage.Bot.named(projectName, Optional.of(projectDir)), OpenStep.OPEN);
+            if (page == null) describeLater(shown, projectDir);
+            showPage(primaryStage, shown);
+            primaryStage.setTitle("BotMaker - Opening " + projectName + "…");
+            progress = shown.reporter();
+        }
 
-        // 4. Run BotProject.open() on a background thread; its progress feeds the status label AND a real
-        //    percentage bar during the (download-heavy) dependency resolution. Non-download phases report a
-        //    negative fraction, which JavaFX renders as an indeterminate bar.
+        // 4. Run BotProject.open() on a background thread; it reports each step to the page.
         Task<OpenedProject> openTask = new Task<>() {
             @Override
             protected OpenedProject call() {
-                BotProject project = BotProject.open(projectDir, false, (fraction, message) -> {
-                    updateProgress(fraction, 1.0);
-                    updateMessage(fraction >= 0
-                            ? message + " — " + Math.round(fraction * 100) + "%"
-                            : message);
-                });
-                // Reading the sources belongs here rather than in finishOpen: it is a disk walk plus one
-                // readString per file, and on FX it ran with the main window already shown — a project with a
-                // few dozen activities froze it for as long as the disk took.
-                updateProgress(-1, 1.0);
-                // A Claude Code session started in the bot's folder edits it only through Studio's tools.
-                BotGuard.ensure(projectDir);
-                updateMessage("Reading project files…");
-                return new OpenedProject(project, project.getCodeEditorService().readProjectSources());
+                BotProject project = BotProject.open(projectDir, false, progress);
+                try {
+                    // Reading the sources belongs here rather than in finishOpen: it is a disk walk plus one
+                    // readString per file, and on FX it ran with the main window already shown — a project with a
+                    // few dozen activities froze it for as long as the disk took.
+                    // A Claude Code session started in the bot's folder edits it only through Studio's tools.
+                    BotGuard.ensure(projectDir);
+                    progress.step(OpenStep.FILES);
+                    return new OpenedProject(project, project.getCodeEditorService().readProjectSources());
+                } catch (RuntimeException e) {
+                    // Nothing else holds it yet: a failure here is the project's last chance to be closed.
+                    project.close();
+                    throw e;
+                }
             }
         };
-        statusLabel.textProperty().bind(openTask.messageProperty());
-        progressBar.progressProperty().bind(openTask.progressProperty());
 
         openTask.setOnSucceeded(e -> {
-            statusLabel.textProperty().unbind();
-            progressBar.progressProperty().unbind();
             OpenedProject opened = openTask.getValue();
             currentProject = opened.project();
-            finishOpen(primaryStage, projectDir, freshlyCreated, opened.sources());
+            if (shown == null) {
+                finishOpen(primaryStage, projectDir, freshlyCreated, opened.sources(), null, generation);
+                return;
+            }
+            // One frame with the last step showing, so the checklist never jumps from Files to the window.
+            shown.step(OpenStep.EDITOR);
+            afterFirstPaint(() -> {
+                if (currentProject != opened.project()) return;
+                finishOpen(primaryStage, projectDir, freshlyCreated, opened.sources(), shown, generation);
+            });
         });
 
-        openTask.setOnFailed(e -> {
-            statusLabel.textProperty().unbind();
-            progressBar.progressProperty().unbind();
-            Throwable ex = openTask.getException();
-            if (ex != null) ex.printStackTrace();
-            showErrorDialog("Error opening project: " + (ex == null ? "unknown error" : ex.getMessage()));
-            showProjectSelection(primaryStage);
-        });
+        openTask.setOnFailed(e -> failOpen(primaryStage, projectDir, freshlyCreated, shown, openTask.getException(),
+                generation));
 
         Thread t = new Thread(openTask, "project-open");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Fills in {@code page}'s left side — who made the bot, its version and description — off the FX thread. */
+    private static void describeLater(LoadingPage page, Path projectDir) {
+        CompletableFuture.supplyAsync(() -> LoadingPage.Bot.of(projectDir)).thenAccept(bot ->
+                Platform.runLater(() -> page.describe(bot)));
+    }
+
+    /** Puts {@code page} on the shell, unless it is what the shell shows already. */
+    private void showPage(Stage primaryStage, LoadingPage page) {
+        if (primaryStage.getScene() == null || primaryStage.getScene().getRoot() != page.root()) {
+            setScenePreservingGeometry(primaryStage, page.scene());
+        }
+        primaryStage.show();
+        requestSceneLayout(primaryStage);
+    }
+
+    /**
+     * An open that failed says so on its page (2026-10-25, spec § 1b: no error alert): the sentence in the failed
+     * step's place, <i>Try again</i>, <i>Back to My bots</i> and <i>Details</i>. Whatever the open left is let go —
+     * unless another open started since ({@code generation}), whose project and page this failure must not touch.
+     */
+    private void failOpen(Stage primaryStage, Path projectDir, boolean freshlyCreated, LoadingPage page,
+                          Throwable ex, int generation) {
+        // A too-new project is a refusal, not a failure: its sentence says it all.
+        if (ex != null && !(ex instanceof ProjectSchemaTooNew)) ex.printStackTrace();
+        if (generation != opens) return;
+        disposeUi();
+        if (currentProject != null) {
+            currentProject.close();
+            currentProject = null;
+        }
+        String projectName = UnpackedBots.nameOf(projectDir);
+        LoadingPage failed = page != null ? page
+                : new LoadingPage(LoadingPage.Bot.named(projectName, Optional.of(projectDir)), OpenStep.OPEN);
+        showPage(primaryStage, failed);
+        primaryStage.setTitle("BotMaker - " + projectName + " did not open");
+        // A project saved by a newer Studio opens no better a second time: no Try again.
+        failed.fail(openFailure(ex), ex, ex instanceof ProjectSchemaTooNew ? null
+                        : () -> openProject(primaryStage, projectDir, freshlyCreated),
+                () -> showProjectSelection(primaryStage));
+    }
+
+    /** The failed step's sentence: a too-new project's own explanation, else what went wrong. */
+    static String openFailure(Throwable ex) {
+        // Not dressed as a failure: the message is a whole explanation with the way out in it.
+        if (ex instanceof ProjectSchemaTooNew) return ex.getMessage();
+        String why = ex == null ? null : ex.getMessage();
+        return "Could not open this bot: " + (why == null || why.isBlank() ? "an unknown error" : why);
+    }
+
+    /**
+     * A bot made on the loading page — ＋ New bot's copy, Get's download — then opened on the same page (2026-10-25,
+     * spec § 1b, P1). A failure says so there, and <i>Try again</i> makes it again.
+     */
+    private void make(Stage primaryStage, LoadingPage.Making making) {
+        disposeUi();
+        int generation = ++opens;
+        LoadingPage page = new LoadingPage(making.bot(), OpenStep.after(making.first()));
+        showPage(primaryStage, page);
+        primaryStage.setTitle("BotMaker - Opening " + making.bot().name() + "…");
+        page.step(making.first());
+        ProgressReporter progress = page.reporter();
+        Task<Path> task = new Task<>() {
+            @Override
+            protected Path call() throws Exception {
+                return making.work().make(progress);
+            }
+        };
+        task.setOnSucceeded(e -> {
+            if (generation != opens) return;
+            Path dir = task.getValue();
+            openProjectDir = dir;
+            showAsUser = making.run();
+            openProject(primaryStage, dir, !making.run(), page, Optional.empty());
+        });
+        task.setOnFailed(e -> {
+            Throwable ex = task.getException();
+            if (ex != null) ex.printStackTrace();
+            if (generation != opens) return;
+            String why = ex == null || ex.getMessage() == null ? "an unknown error" : ex.getMessage();
+            page.fail(why, ex, () -> make(primaryStage, making), () -> showProjectSelection(primaryStage));
+        });
+        Thread t = new Thread(task, "bot-make");
         t.setDaemon(true);
         t.start();
     }
@@ -343,8 +458,8 @@ public class BotMakerStudio extends Application {
      * dialog over one.
      */
     private void finishOpen(Stage primaryStage, Path projectDir, boolean freshlyCreated,
-                            java.util.List<ProjectFile> sources) {
-        String projectName = projectDir.getFileName().toString();
+                            java.util.List<ProjectFile> sources, LoadingPage page, int generation) {
+        String projectName = UnpackedBots.nameOf(projectDir);
         try {
             // A project saved by a newer Studio is refused here and not in ProjectOpenMigrations, because it
             // has to be refused for *both* audiences: a file shape this build cannot read is no more readable
@@ -362,10 +477,10 @@ public class BotMakerStudio extends Application {
             // this project gets; both ask for a reload. Subscribed before either window is built, because
             // both of them can raise it.
             currentProject.getEventBus().subscribe(
-                    com.botmaker.studio.events.CoreApplicationEvents.ProjectReloadRequestedEvent.class,
-                    e -> openProject(primaryStage, projectDir, false), true);
+                    CoreApplicationEvents.ProjectReloadRequestedEvent.class,
+                    e -> openProject(primaryStage, projectDir, false, null, e.filesOnly()), true);
             currentProject.getEventBus().subscribe(
-                    com.botmaker.studio.events.CoreApplicationEvents.OpenProjectRequestedEvent.class,
+                    CoreApplicationEvents.OpenProjectRequestedEvent.class,
                     e -> openProject(primaryStage, e.projectDir(), true), true);
 
             // The audience decides the whole window, not a set of hidden controls — so the branch is here,
@@ -406,20 +521,12 @@ public class BotMakerStudio extends Application {
                     // no handle on another plugin's item — the same precedent the Capture Templates and
                     // Capture Targets steps set. The button is on the bar the moment the project opens.
                 } catch (Exception e) {
-                    e.printStackTrace();
-                    showErrorDialog("Error opening project: " + e.getMessage());
-                    showProjectSelection(primaryStage);
+                    failOpen(primaryStage, projectDir, freshlyCreated, page, e, generation);
                 }
             });
-        } catch (ProjectSchemaTooNew ex) {
-            // Not a failure, so it is not dressed as one: the message is a whole explanation with the way out
-            // in it, and prefixing "Error opening project:" would bury that.
-            showErrorDialog(ex.getMessage());
-            showProjectSelection(primaryStage);
         } catch (Exception e) {
-            e.printStackTrace();
-            showErrorDialog("Error opening project: " + e.getMessage());
-            showProjectSelection(primaryStage);
+            // A too-new project's refusal too: openFailure keeps its own explanation.
+            failOpen(primaryStage, projectDir, freshlyCreated, page, e, generation);
         }
     }
 
@@ -444,20 +551,7 @@ public class BotMakerStudio extends Application {
         }.start();
     }
 
-    /** A minimal loading scene: title, a progress bar (bound to the open task), and a live status line. */
-    private Scene createLoadingScene(String projectName, Label statusLabel, ProgressBar progressBar) {
-        Label title = new Label("Opening " + projectName + "…");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
-
-        // Not inline: `gray` is a literal, and a literal survives the theme switch that everything around it obeys.
-        statusLabel.getStyleClass().add(StyleClasses.DIALOG_HINT);
-
-        VBox box = new VBox(15, title, progressBar, statusLabel);
-        box.setAlignment(Pos.CENTER);
-        // Deliberately unsized: this scene lands on a stage that already has the user's geometry, and a sized
-        // scene would impose 620×600 on it for the duration of the open.
-        return ThemedWindows.scene(box);
-    }
+    // createLoadingScene (a title, a bar and one grey line) became ui/app/loading/LoadingPage on 2026-10-25.
 
     /** True when this project should open in the Runner: the user said so, or it is somebody else's bot. */
     private boolean openAsUser() {
@@ -486,7 +580,7 @@ public class BotMakerStudio extends Application {
         this.currentWindow = runner;
 
         setScenePreservingGeometry(primaryStage, runner.createScene());
-        primaryStage.setTitle("BotMaker - " + projectDir.getFileName()
+        primaryStage.setTitle("BotMaker - " + UnpackedBots.nameOf(projectDir)
                 + " — " + ProjectConfig.displayDirectory(projectDir));
         primaryStage.show();
         requestSceneLayout(primaryStage);
@@ -707,13 +801,15 @@ public class BotMakerStudio extends Application {
         return Files.exists(projectDir) && Files.exists(projectDir.resolve("pom.xml"));
     }
 
-    private void showErrorDialog(String message) {
-        Alert alert = ThemedWindows.alert(Alert.AlertType.ERROR);
-        if (primaryStage != null) alert.initOwner(primaryStage);
-        alert.setTitle("Error");
-        alert.setHeaderText("Failed to open project");
-        alert.setContentText(message);
-        alert.showAndWait();
+    /**
+     * Every word Studio shows is English, JavaFX's own too (2026-10-25, the user's call: "Annuler" and
+     * "Avertissement" beside English text): its buttons and dialog titles follow the default locale, so that is
+     * English, before any control loads its words. Numbers and dates keep the computer's format.
+     */
+    static void speakEnglish() {
+        Locale format = Locale.getDefault(Locale.Category.FORMAT);
+        Locale.setDefault(Locale.ENGLISH);
+        Locale.setDefault(Locale.Category.FORMAT, format);
     }
 
     public static void main(String[] args) {
@@ -730,6 +826,7 @@ public class BotMakerStudio extends Application {
         if (System.getProperty("os.name", "").toLowerCase().contains("linux")) {
             X11ErrorTrap.install();
         }
+        speakEnglish();
         launch(args);
     }
 }

@@ -44,7 +44,10 @@ import java.util.function.Predicate;
  */
 public final class GetBots {
 
-    /** Where a got bot comes from. Both blocking, off the FX thread. */
+    /**
+     * Where a got bot comes from. Both blocking, off the FX thread: the download on the loading page's Downloading
+     * step ({@link Got#run}), the clone on the card.
+     */
     public interface Shelf {
         /** Downloads {@code entry}'s listed {@code .bmk} ({@link BmkDownload}), saying how far it got. */
         Path download(GalleryEntry entry, BmkDownload.Progress progress) throws IOException;
@@ -53,10 +56,10 @@ public final class GetBots {
         Path cloneOf(GalleryEntry entry) throws IOException;
     }
 
-    /** What is done with a bot once it is here, on the FX thread. */
+    /** What is done with a bot the user gets, on the FX thread. */
     public interface Got {
-        /** {@code bmk} was downloaded: open it to run. */
-        void downloaded(GalleryEntry entry, Path bmk);
+        /** Get on {@code entry}, agreed to: the loading page downloads it and opens it to run (spec § 1b, P1). */
+        void run(GalleryEntry entry);
 
         /** {@code dir} is the clone: open it in the editor. */
         void cloned(Path dir);
@@ -219,7 +222,11 @@ public final class GetBots {
         }
         Node icon = BotIconView.remote(entry.name(), entry.owner(), entry.repo(), entry.commitOf(entry.tag()),
                 RunHome.ICON_SIZE);
-        HBox top = new HBox(8, icon, GalleryCard.of(entry));
+        VBox text = GalleryCard.of(entry);
+        // The text takes the card's room and wraps in it, never cut (2026-10-25, spec § 1b, A).
+        text.setMinWidth(0);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        HBox top = new HBox(8, icon, text);
         VBox card = new VBox(6, top, buttons, status);
         card.getStyleClass().addAll("np-card", "getbots-card");
         card.setPrefWidth(RunHome.CARD_WIDTH);
@@ -237,11 +244,16 @@ public final class GetBots {
         // Only a community bot, or one using a community plugin, is confirmed first (2026-10-23).
         if (entry.asksFirst() && !agrees.test(entry)) return;
         failures.remove(slug);
-        getting.put(slug, way == Way.RUN ? "Downloading…" : "Getting its code…");
+        if (way == Way.RUN) {
+            // Straight to the loading page, its first step Downloading (2026-10-25, spec § 1b, P1).
+            got.run(entry);
+            return;
+        }
+        getting.put(slug, "Getting its code…");
         refilter();
         CompletableFuture.supplyAsync(() -> {
             try {
-                return way == Way.RUN ? shelf.download(entry, progress(slug)) : shelf.cloneOf(entry);
+                return shelf.cloneOf(entry);
             } catch (IOException ex) {
                 throw new IllegalStateException(ex.getMessage(), ex);
             }
@@ -249,27 +261,8 @@ public final class GetBots {
             getting.remove(slug);
             if (failed != null) failures.put(slug, "Could not get it: " + rootMessage(failed));
             refilter();
-            if (failed != null) return;
-            if (way == Way.RUN) got.downloaded(entry, path);
-            else got.cloned(path);
+            if (failed == null) got.cloned(path);
         }));
-    }
-
-    /** The card's line while {@code slug} downloads: shown again only when the percentage moves. */
-    private BmkDownload.Progress progress(String slug) {
-        int[] shown = {-1};
-        return (done, total) -> {
-            int percent = total > 0 ? (int) (done * 100 / total) : -1;
-            if (percent == shown[0]) return;
-            shown[0] = percent;
-            String text = "Downloading " + megabytes(done) + (total > 0 ? " of " + megabytes(total) + " (" + percent
-                    + " %)" : "") + "…";
-            Platform.runLater(() -> {
-                if (!getting.containsKey(slug)) return;
-                getting.put(slug, text);
-                refilter();
-            });
-        };
     }
 
     static String megabytes(long bytes) {

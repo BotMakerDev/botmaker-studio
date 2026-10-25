@@ -10,7 +10,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
@@ -30,7 +29,7 @@ import java.util.function.Consumer;
  */
 final class StartCards {
 
-    static final double CARD_WIDTH = 160;
+    static final double CARD_WIDTH = GalleryCard.WIDTH;
     static final double GAP = 8;
     /** The side of a bot card's icon. */
     private static final double ICON_SIZE = 24;
@@ -110,15 +109,13 @@ final class StartCards {
 
     private Node card(StartChoice choice) {
         boolean isPicked = choice.equals(picked);
-        Label name = new Label(choice.entry() == null ? "Blank" : choice.displayName());
-        name.getStyleClass().add("np-card-name");
+        Label name = GalleryCard.cardName(choice.entry() == null ? "Blank" : choice.displayName());
         Label check = new Label("✓");
         check.getStyleClass().add("np-card-check");
+        check.setMinWidth(Region.USE_PREF_SIZE);
         check.setVisible(isPicked);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
         GalleryEntry bot = choice.entry();
-        HBox title = new HBox(6, name, spacer, check);
+        HBox title = new HBox(6, name, check);
         title.setAlignment(Pos.CENTER_LEFT);
         if (bot != null) {
             title.getChildren().addFirst(BotIconView.remote(bot.name(), bot.owner(), bot.repo(),
@@ -142,9 +139,8 @@ final class StartCards {
             if (!entry.tag().isBlank()) facts.getChildren().add(line(entry.tag()));
             card.getChildren().add(facts);
             if (!entry.description().isBlank()) {
-                Label description = line(entry.description());
-                description.setMaxHeight(30);   // two lines at the note's 11px, then an ellipsis
-                card.getChildren().add(description);
+                // Whole: nothing on a card is cut (2026-10-25, spec § 1b, A); two lines and an ellipsis until then.
+                card.getChildren().add(line(entry.description()));
             }
         }
         card.setOnMouseClicked(e -> {

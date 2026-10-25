@@ -10,6 +10,7 @@ import com.botmaker.studio.ui.dnd.MoveBlockInfo;
 import org.eclipse.lsp4j.Diagnostic;
 
 import java.util.List;
+import java.util.Optional;
 
 public class CoreApplicationEvents {
 
@@ -118,8 +119,20 @@ public class CoreApplicationEvents {
      * Request to close and re-open the current project from disk — used after a VCS rollback rewrites the
      * working tree, since the in-memory ASTs are now stale and would otherwise be written back over the
      * restored files on the next save. Handled by {@code BotMakerStudio}, which re-runs its open path.
+     *
+     * <p>{@code filesOnly} is a branch switch that changed files (2026-10-25): the editor stays in view, dimmed,
+     * under a small box rather than the whole loading page.
      */
-    public record ProjectReloadRequestedEvent() implements ApplicationEvent {}
+    public record ProjectReloadRequestedEvent(Optional<BranchSwitch> filesOnly) implements ApplicationEvent {
+
+        /** A reload for anything but a branch switch: the loading page. */
+        public ProjectReloadRequestedEvent() {
+            this(Optional.empty());
+        }
+    }
+
+    /** A switch to {@code branch} that changed {@code changedFiles} files. */
+    public record BranchSwitch(String branch, int changedFiles) {}
 
     /**
      * Request to close the current project and open the new one at {@code projectDir} in its place, as New

@@ -1464,6 +1464,29 @@
 .mybots-broken { -fx-text-fill: -bm-severity-error-text; }
 .np-scroll { -fx-padding: 0; }
 
+/* The loading page (LoadingPage, 2026-10-25, spec § 1b, B): the bot left, its open's steps right; a step not
+   reached yet is grey, the current one bold, a failed one in the danger colour. */
+.loading-name {
+    -fx-font-weight: bold;
+    -fx-font-size: 20px;
+}
+.loading-mark { -fx-min-width: 16; }
+.loading-step-waiting .label { -fx-text-fill: -bm-muted; }
+.loading-step-current .loading-step-line .label { -fx-font-weight: bold; }
+.loading-step-done .loading-mark { -fx-text-fill: -bm-accent-dark; }
+.loading-step-failed .loading-mark { -fx-text-fill: -bm-danger; }
+.loading-trace { -fx-font-family: "JetBrains Mono", monospace; -fx-font-size: 11px; }
+/* A branch switch's reload (ReloadBox, layout R1): the editor dimmed under a small box. */
+.reload-dim { -fx-background-color: rgba(0, 0, 0, 0.35); }
+.reload-box {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 6;
+    -fx-padding: 14 18 14 18;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 12, 0, 0, 2);
+}
+
 /* New Project's name rule, shown only once the typed name breaks it. */
 .np-error {
     -fx-text-fill: -bm-danger;

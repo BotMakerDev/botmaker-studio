@@ -7,9 +7,14 @@ import com.botmaker.shared.tools.UserDirs;
 import com.botmaker.studio.config.AppVersion;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.studio.services.MavenService;
+import com.botmaker.studio.services.OpenStep;
+import com.botmaker.studio.services.ProgressReporter;
 import com.botmaker.studio.sharing.BmkDownload;
+import com.botmaker.studio.sharing.BmkOpen;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.CatalogClient;
+import com.botmaker.studio.sharing.CatalogIndex;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
@@ -22,10 +27,12 @@ import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
+import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.Removal;
 import com.botmaker.studio.ui.app.home.MyBots.State;
+import com.botmaker.studio.ui.app.loading.LoadingPage;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -39,7 +46,6 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
@@ -53,18 +59,18 @@ import javafx.stage.Stage;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -79,7 +85,7 @@ import java.util.stream.Collectors;
  */
 public final class RunHome implements ProjectWindow {
 
-    static final double CARD_WIDTH = 220;
+    static final double CARD_WIDTH = GalleryCard.WIDTH;
     /** The side of a card's bot icon, on My bots and Get more bots. */
     static final double ICON_SIZE = 36;
     private static final double GAP = 10;
@@ -92,6 +98,9 @@ public final class RunHome implements ProjectWindow {
 
         /** Opens the editor on the project; {@code freshlyCreated} for one New Project just made. */
         void edit(Path dir, boolean freshlyCreated);
+
+        /** Makes a bot on the loading page — ＋ New bot's copy, Get's download — then opens it (spec § 1b, P1). */
+        void make(LoadingPage.Making making);
     }
 
     private final Stage stage;
@@ -115,8 +124,7 @@ public final class RunHome implements ProjectWindow {
     /** Whether Select mode is on, and the folders ticked in it; FX thread only. */
     private boolean selecting;
     private final Set<Path> selected = new LinkedHashSet<>();
-    /** The bots ＋ New bot is making, by name, with the step under way; FX thread only. */
-    private final Map<String, String> creating = new LinkedHashMap<>();
+    private final GetBots.Shelf shelf;
     private ScrollPane scroll;
     /** Asked by {@link #scrollToGetBots} and not yet made after My bots' cards came; FX thread only. */
     private boolean scrollPending;
@@ -134,13 +142,13 @@ public final class RunHome implements ProjectWindow {
         this.actions = actions;
         this.bots = bots;
         this.compiles = compiles;
+        this.shelf = shelf;
         this.getBots = new GetBots(shelf, this::agrees, new GetBots.Got() {
             @Override
-            public void downloaded(GalleryEntry entry, Path bmk) {
-                new BmkFlow(stage, RunHome.this::say).openGot(bmk, entry, dir -> {
-                    reload();
-                    actions.run(dir);
-                });
+            public void run(GalleryEntry entry) {
+                actions.make(new LoadingPage.Making(new LoadingPage.Bot(entry.name(), "by " + entry.owner() + " · "
+                        + entry.tag(), Optional.of(entry.description()).filter(d -> !d.isBlank()), Optional.empty()),
+                        OpenStep.DOWNLOADING, progress -> got(entry, progress), true));
             }
 
             @Override
@@ -224,6 +232,36 @@ public final class RunHome implements ProjectWindow {
         scroll.setVvalue(Math.min(1, getMoreHeading.getBoundsInParent().getMinY() / (content - viewport)));
     }
 
+    /**
+     * Get's work on the loading page's Downloading step: {@code entry}'s listed {@code .bmk} downloaded, a percentage
+     * and the size said, then opened as the file the click agreed to ({@link BmkOpen#openGot}) and deleted, opened or
+     * not. Blocking; the unpacked folder, or why not.
+     */
+    private Path got(GalleryEntry entry, ProgressReporter progress) throws Exception {
+        Path bmk = shelf.download(entry, (done, total) -> progress.report(total > 0 ? (double) done / total : -1,
+                "Downloading " + GetBots.megabytes(done) + (total > 0 ? " of " + GetBots.megabytes(total) : "")));
+        try {
+            progress.message("Checking " + bmk.getFileName() + "…");
+            BmkOpen.Fetcher fetch = coordinates -> MavenService.fetch(coordinates, ProgressReporter.NONE);
+            CatalogIndex catalog;
+            try {
+                catalog = CatalogClient.session().fetch().join();
+            } catch (CompletionException e) {
+                throw e.getCause() instanceof Exception cause ? cause : e;
+            }
+            BmkOpen.Result result = BmkOpen.openGot(bmk, catalog, entry, UnpackedBots.root(), fetch);
+            return switch (result) {
+                case BmkOpen.Opened opened -> opened.dir();
+                case BmkOpen.Refused refused -> throw new IOException(refused.why());
+                // A got file is the one the click agreed to, so openGot never asks; said plainly should it ever.
+                case BmkOpen.NeedsTrust trust -> throw new IOException("The catalog lists no ready-to-run file for "
+                        + entry.slug() + " " + entry.tag() + ".");
+            };
+        } finally {
+            Files.deleteIfExists(bmk);
+        }
+    }
+
     /** The trust warning of a bot nobody reviewed, confirmed before it is got. */
     private boolean agrees(GalleryEntry entry) {
         Alert confirm = ThemedWindows.alert(Alert.AlertType.WARNING,
@@ -241,24 +279,11 @@ public final class RunHome implements ProjectWindow {
     public Scene createScene() {
         Label title = new Label("BotMaker");
         title.getStyleClass().add("runner-title");
-        Label version = new Label("v" + AppVersion.get());
+        Label version = new Label("v" + AppVersion.label());
         version.getStyleClass().add("gallery-card-note");
         Button newBot = new Button("＋ New bot");
         newBot.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-        newBot.setOnAction(e -> new NewProjectDialog(stage, gitHubClient, gitHubAuth, new NewProjectDialog.Creation() {
-            @Override
-            public void started(String name, String step) {
-                creating.put(name, step);
-                showCards();
-            }
-
-            @Override
-            public void ended(String name, Optional<Path> dir) {
-                creating.remove(name);
-                showCards();
-                dir.ifPresent(d -> actions.edit(d, true));
-            }
-        }).show());
+        newBot.setOnAction(e -> new NewProjectDialog(stage, gitHubClient, gitHubAuth, actions::make).show());
         Button openFolder = new Button("Open folder…");
         openFolder.setOnAction(e -> openFolder());
         Button archived = new Button("View archived…");
@@ -376,29 +401,17 @@ public final class RunHome implements ProjectWindow {
         }));
     }
 
-    /** The cards of {@link #shownBots}, after one per bot ＋ New bot is making; and Select mode's bar. */
+    /** The cards of {@link #shownBots}, and Select mode's bar. */
     private void showCards() {
-        List<Node> cards = new ArrayList<>();
-        creating.forEach((name, step) -> cards.add(creatingCard(name, step)));
-        shownBots.forEach(b -> cards.add(card(b)));
-        myBots.getChildren().setAll(cards);
+        myBots.getChildren().setAll(shownBots.stream().map(this::card).toList());
         select.setText(selecting ? "Done" : "Select");
         select.setDisable(!selecting && shownBots.isEmpty());
         selectionBar.setVisible(selecting);
         if (selecting) updateSelectionBar();
     }
 
-    /** A bot ＋ New bot is making: its name and the step under way, until it opens or fails. */
-    private Node creatingCard(String name, String step) {
-        Label title = new Label(name);
-        title.getStyleClass().add("np-card-name");
-        ProgressBar bar = new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
-        bar.setMaxWidth(Double.MAX_VALUE);
-        VBox card = new VBox(6, new HBox(8, BotIconView.letter(name, ICON_SIZE), title), line(step), bar);
-        card.getStyleClass().addAll("np-card", "mybots-card");
-        card.setPrefWidth(CARD_WIDTH);
-        return card;
-    }
+    // creatingCard, a card with a bar while ＋ New bot made a bot, went on 2026-10-25: the loading page's Copying
+    // step says it now (spec § 1b, P1).
 
     private void say(String text) {
         myBotsLine.setText(text);
@@ -415,15 +428,14 @@ public final class RunHome implements ProjectWindow {
     private Node card(MyBot bot) {
         Node icon = bot.state() == State.GONE ? BotIconView.letter(bot.name(), ICON_SIZE)
                 : BotIconView.local(bot.name(), bot.dir(), ICON_SIZE);
-        Label name = new Label(bot.name());
-        name.getStyleClass().add("np-card-name");
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox top = new HBox(8, icon, name, spacer);
+        Label name = GalleryCard.cardName(bot.name());
+        HBox top = new HBox(8, icon, name);
         top.setAlignment(Pos.CENTER_LEFT);
         bot.available().ifPresent(tag -> {
             Label badge = new Label(tag + " available");
             badge.getStyleClass().add("mybots-badge");
+            // Whole beside a long name, which wraps instead (spec § 1b, A).
+            badge.setMinWidth(Region.USE_PREF_SIZE);
             top.getChildren().add(badge);
         });
 

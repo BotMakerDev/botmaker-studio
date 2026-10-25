@@ -44,11 +44,25 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Select several bots in My bots** (2026-10-25): *Select* in the My bots heading puts a check box on each card.
   A bar at the bottom counts them and offers *Archive*, *Remove from My bots* and *Cancel*. Each button acts on
   the selected bots it applies to: Archive on Studio's own projects, Remove on the rest. *Done* leaves.
-- **＋ New bot shows what it is doing** (2026-10-25): while a bot is copied or made, My bots shows its card with a
-  bar, until its editor opens. A failure still says why in a window.
+- **A new loading page** (2026-10-25): the bot on the left (its icon, name, author, version and description),
+  the open's steps on the right — Dependencies, Libraries, Project, Files, Editor — each ticked with the time it
+  took, the current one with its own bar. A failure is said on the page, with *Try again*, *Back to My bots* and
+  *Details*, never an error window.
+- **＋ New bot and Get go straight to the loading page** (2026-10-25): its first step is *Copying*, or
+  *Downloading* with a percentage and the size.
+- **A branch switch that changes files keeps the editor in view** (2026-10-25), dimmed under a small box:
+  "Switching to *branch*…", a bar and how many files change.
 
 ### Fixed
 
+- **Nothing on a card is cut** (2026-10-25): every card in My bots, Get more bots and New Project is 280 px wide,
+  and a long name or description wraps. New Project opens at 940×680, three cards a row, smaller on a smaller
+  screen.
+- **Words, not records or ids** (2026-10-25): Versions ▸ Dev's remote list reads `upstream — LiQiyeDev/Firestone
+  · 4 versions to pull`; a bot opened from a file is called by its name, not its version folder ("1.0.2").
+- **A development Studio says its own version** (2026-10-25), the pom's, not v1.0.5.
+- **Every button is in English** (2026-10-25): *Cancel* and *Warning*, not the computer's language; numbers and
+  dates keep its format.
 - **Archiving a bot whose name is already archived** (2026-10-25): it is kept as *Name (2)* instead of failing
   with a bare path, and restoring it gives back its own name when that is free. A failed archive says why in a
   sentence. Archiving, restoring or deleting leaves no empty `.archive` folder.

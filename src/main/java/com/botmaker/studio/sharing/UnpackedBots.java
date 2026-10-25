@@ -93,6 +93,15 @@ public final class UnpackedBots {
                 .findFirst());
     }
 
+    /**
+     * What {@code dir} is called: an unpacked bot by its {@code bot.json} name, never by its tag folder ("1.0.2",
+     * 2026-10-25); any other folder by its own name.
+     */
+    public static String nameOf(Path dir) {
+        return at(dir).map(BotJson::name).filter(n -> !n.isBlank())
+                .orElseGet(() -> dir.getFileName() == null ? dir.toString() : dir.getFileName().toString());
+    }
+
     /** Whether {@code dir} is a checked unpacked bot under {@link #root()}. */
     public static boolean isUnpacked(Path dir) {
         return at(dir).isPresent();

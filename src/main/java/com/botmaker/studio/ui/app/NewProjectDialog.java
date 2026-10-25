@@ -11,11 +11,13 @@ import com.botmaker.studio.sharing.NewProjects;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.studio.services.OpenStep;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
+import com.botmaker.studio.ui.app.loading.LoadingPage;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
-import javafx.scene.control.Alert;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
@@ -24,10 +26,11 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.Screen;
 import javafx.stage.Window;
 
-import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -41,19 +44,23 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class NewProjectDialog {
 
+    /** The window's size where the screen has room (spec § 1b, N1). */
+    static final double WIDTH = 940;
+    static final double HEIGHT = 680;
+
     private final Window owner;
     private final ProjectCreator projectCreator = new ProjectCreator();
     private final GitHubClient gitHubClient;
     private final GitHubAuth gitHubAuth;
     private final Creation creation;
 
-    /** Hears a creation, on the FX thread, from the dialog's Create until the project is made or failed. */
+    /**
+     * Takes the creation the dialog's Create asks for, on the FX thread: the loading page makes it, then opens it
+     * (2026-10-25, spec § 1b, P1).
+     */
+    @FunctionalInterface
     public interface Creation {
-        /** {@code name} is being made; {@code step} says how, in a line ("Copying Firestone 1.0.2…"). */
-        void started(String name, String step);
-
-        /** {@code name} is made in {@code dir}, or failed (empty), which the dialog has said. */
-        void ended(String name, Optional<Path> dir);
+        void make(LoadingPage.Making making);
     }
 
     public NewProjectDialog(Window owner, GitHubClient gitHubClient, GitHubAuth gitHubAuth, Creation creation) {
@@ -182,13 +189,17 @@ public final class NewProjectDialog {
         ScrollPane scroll = new ScrollPane(grids);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setMaxHeight(420);
         scroll.getStyleClass().add("np-scroll");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
 
         VBox content = new VBox(8, projectNameField, nameError, catalogLine, scroll, showCommunity);
         content.setPadding(new Insets(16));
-        content.setPrefWidth(3 * StartCards.CARD_WIDTH + 2 * 8 + 2 * 16 + 24);
         dialog.getDialogPane().setContent(content);
+        // 940×680, three cards a row (2026-10-25, spec § 1b, N1); smaller on a smaller screen, and resizable.
+        Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+        dialog.getDialogPane().setPrefSize(Math.min(WIDTH, screen.getWidth() - 40),
+                Math.min(HEIGHT, screen.getHeight() - 40));
+        dialog.setResizable(true);
 
         projectNameField.textProperty().addListener((observable, oldValue, newValue) -> {
             if (!filling[0]) typedByUser[0] = !newValue.isEmpty();
@@ -270,32 +281,22 @@ public final class NewProjectDialog {
      * <p>Creating a project <em>is</em> asking to work on it, so it opens rather than going back to a list.
      *
      * <p>Both shapes run off the FX thread since 2026-10-01: a ticked plugin's version may be a JitPack lookup,
-     * and the clone and the check for a plugin another one brings are slow and failable too.
-     * Everything the user sees about a failure is one dialog, because a creation that fails leaves nothing
-     * behind ({@link NewProjects#create}).
+     * and the clone and the check for a plugin another one brings are slow and failable too. Since 2026-10-25 they
+     * run on the loading page, as its Copying step, and a failure is said there in ProjectCreator's own sentence,
+     * with Try again: a creation that fails leaves nothing behind ({@link NewProjects#create}).
      */
     private void create(CreateRequest req) {
         String projectName = req.projectName();
         GalleryEntry bot = req.start().entry();
-        creation.started(projectName, bot == null ? "Making a blank bot…"
-                : "Copying " + bot.name() + (bot.tag().isBlank() ? "" : " " + bot.tag()) + "…");
-        new Thread(() -> {
-            try {
-                NewProjects.create(projectName, bot, req.plugins(), gitHubClient, gitHubAuth);
-                Platform.runLater(() -> creation.ended(projectName,
-                        Optional.of(Constants.PROJECTS_ROOT.resolve(projectName))));
-            } catch (Exception e) {
-                // ProjectCreator's own sentence says it better than a header could.
-                Platform.runLater(() -> {
-                    creation.ended(projectName, Optional.empty());
-                    Alert error = ThemedWindows.alert(Alert.AlertType.ERROR);
-                    error.initOwner(owner);
-                    error.setTitle("Error");
-                    error.setHeaderText("Could not create the project");
-                    error.setContentText(e.getMessage());
-                    error.showAndWait();
-                });
-            }
-        }, "project-create").start();
+        String how = bot == null ? "Making a blank bot…"
+                : "Copying " + bot.name() + (bot.tag().isBlank() ? "" : " " + bot.tag()) + "…";
+        LoadingPage.Bot shown = new LoadingPage.Bot(projectName,
+                bot == null ? "mine" : "mine · from " + bot.name() + " by " + bot.owner(), Optional.empty(),
+                Optional.empty());
+        creation.make(new LoadingPage.Making(shown, OpenStep.COPYING, progress -> {
+            progress.message(how);
+            NewProjects.create(projectName, bot, req.plugins(), gitHubClient, gitHubAuth);
+            return Constants.PROJECTS_ROOT.resolve(projectName);
+        }, false));
     }
 }

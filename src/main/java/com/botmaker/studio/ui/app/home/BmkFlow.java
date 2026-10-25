@@ -12,7 +12,6 @@ import com.botmaker.studio.sharing.BmkEdit;
 import com.botmaker.studio.sharing.BmkOpen;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.CatalogClient;
-import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -24,10 +23,8 @@ import javafx.stage.Window;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -47,32 +44,18 @@ public final class BmkFlow {
 
     /** Opens {@code bmk}, asking the user when the bot needs their trust; {@code onOpened} gets the unpacked folder. */
     public void open(Path bmk, Consumer<Path> onOpened) {
-        open(bmk, false, Optional.empty(), onOpened, () -> { });
+        open(bmk, false, onOpened, () -> { });
     }
 
-    /**
-     * Opens {@code bmk}, the listed file <i>Get</i> downloaded for {@code got} ({@link GetBots}): the user agreed with
-     * that click, so no trust sheet for that bot's pinned file ({@link BmkOpen#openGot}), and the file, a copy in the
-     * cache, is deleted once the open is done, opened or not.
-     */
-    public void openGot(Path bmk, GalleryEntry got, Consumer<Path> onOpened) {
-        open(bmk, true, Optional.of(got), onOpened, () -> {
-            try {
-                Files.deleteIfExists(bmk);
-            } catch (IOException e) {
-                System.err.println("Could not delete " + bmk + ": " + e.getMessage());
-            }
-        });
-    }
+    // openGot, the file Get downloaded, went on 2026-10-25: the loading page's Downloading step opens it
+    // (RunHome.got, spec § 1b, P1).
 
-    private void open(Path bmk, boolean agreed, Optional<GalleryEntry> got, Consumer<Path> onOpened, Runnable done) {
+    private void open(Path bmk, boolean agreed, Consumer<Path> onOpened, Runnable done) {
         status.accept("Opening " + bmk.getFileName() + "…");
         BmkOpen.Fetcher fetch = coordinates -> MavenService.fetch(coordinates, ProgressReporter.NONE);
         CatalogClient.session().fetch()
-                .thenApplyAsync(catalog -> got.isPresent()
-                        ? BmkOpen.openGot(bmk, catalog, got.get(), UnpackedBots.root(), fetch)
-                        : BmkOpen.open(bmk, catalog, ProjectPreferences.trustedBots(), agreed, UnpackedBots.root(),
-                                fetch))
+                .thenApplyAsync(catalog -> BmkOpen.open(bmk, catalog, ProjectPreferences.trustedBots(), agreed,
+                        UnpackedBots.root(), fetch))
                 .whenComplete((result, failed) -> Platform.runLater(() -> {
                     status.accept("");
                     if (failed != null) {
@@ -95,7 +78,7 @@ public final class BmkFlow {
                                 return;
                             }
                             if (trust.listed()) ProjectPreferences.trustBot(trust.key());
-                            open(bmk, true, got, onOpened, done);
+                            open(bmk, true, onOpened, done);
                         }
                     }
                 }));

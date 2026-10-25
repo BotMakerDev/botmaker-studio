@@ -19,6 +19,7 @@ import com.botmaker.studio.services.DebuggingService;
 import com.botmaker.studio.services.EditorCompanions;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenService;
+import com.botmaker.studio.services.OpenStep;
 import com.botmaker.studio.services.ProgressReporter;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -97,9 +98,9 @@ public class BotProject {
     }
 
     /**
-     * As {@link #open(Path, boolean)}, but reports progress via {@code progress}: real download
-     * percentages during dependency resolution, and indeterminate status messages for the other phases
-     * ({@code "Resolving dependencies…"}, {@code "Loading project…"}). May be invoked from worker threads.
+     * As {@link #open(Path, boolean)}, but reports progress via {@code progress}: each {@link OpenStep} as it
+     * starts (dependencies, libraries, project), and real download percentages during dependency resolution.
+     * May be invoked from worker threads.
      */
     public static BotProject open(Path projectDir,
                                   boolean enableEventLogging,
@@ -127,7 +128,7 @@ public class BotProject {
         BlockDragAndDropManager dragAndDropManager = new BlockDragAndDropManager(eventBus);
 
         // 5. Resolve dependencies (Maven Resolver, reads pom.xml)
-        progress.message("Resolving dependencies…");
+        progress.step(OpenStep.DEPENDENCIES);
         List<String> classpath;
         try {
             classpath = MavenService.resolveClasspath(config.projectPath(), progress);
@@ -166,6 +167,7 @@ public class BotProject {
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
         // falls back to the bundled plugins; it never leaves Studio without an answer.
         // Read from the file, not state: the settings are loaded into state later in the open.
+        progress.step(OpenStep.LIBRARIES);
         PluginHost.bind(classpath, HostServices.forProject(config),
                 StudioProjectSettings.devModeIn(config.projectPath()));
         // 5-'. A -SNAPSHOT jar's bytes are kept as they load, so a rebuild in place leaves the old API readable
@@ -181,7 +183,6 @@ public class BotProject {
         // (HostPluginValues.createMissing, end of initializeServices).
 
         // 6. Build or load the type index for external libraries
-        progress.message("Indexing libraries…");
         TypeSummaryManager typeSummaryManager = TypeSummaryManager.buildOrLoad(classpath);
 
         // 7. Create the unified ProjectAnalyzer
@@ -220,11 +221,11 @@ public class BotProject {
 
         // 7d. Editor settings (capture targets, etc.); load existing settings into state. This also resolves
         //     the project's template, which FileRole/MethodLock read to tell scaffolding from user code.
+        progress.step(OpenStep.PROJECT);
         ProjectSettingsService projectSettingsService = new ProjectSettingsService(config, state, eventBus);
         projectSettingsService.load();
 
         // 8. Create code editing pipeline
-        progress.message("Loading project…");
         BlockConverter blockConverter = new BlockConverter(config, state);
 
         // 9. Assemble the project

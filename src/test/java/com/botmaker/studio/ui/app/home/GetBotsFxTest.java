@@ -71,8 +71,8 @@ class GetBotsFxTest extends FxHeadlessTest {
             return agree;
         }, new GetBots.Got() {
             @Override
-            public void downloaded(GalleryEntry entry, Path bmk) {
-                events.add("run " + bmk.getFileName());
+            public void run(GalleryEntry entry) {
+                events.add("run " + entry.name());
             }
 
             @Override
@@ -120,15 +120,16 @@ class GetBotsFxTest extends FxHeadlessTest {
 
         agree = true;
         clickOn(button("Tavern", "Get").orElseThrow());
-        waitFor(4);
-        assertEquals(List.of("asked Tavern", "asked Tavern", "downloaded Tavern", "run Tavern.bmk"), events);
+        waitFor(3);
+        // Agreed: straight to the loading page, which downloads it (spec § 1b, P1).
+        assertEquals(List.of("asked Tavern", "asked Tavern", "run Tavern"), events);
     }
 
     @Test
-    void anOfficialBotIsDownloadedWithoutAsking() {
+    void anOfficialBotGoesToTheLoadingPageWithoutAsking() {
         clickOn(button("Firestone", "Get").orElseThrow());
-        waitFor(2);
-        assertEquals(List.of("downloaded Firestone", "run Firestone.bmk"), events);
+        waitFor(1);
+        assertEquals(List.of("run Firestone"), events);
     }
 
     @Test

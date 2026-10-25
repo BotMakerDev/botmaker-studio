@@ -18,4 +18,9 @@ public interface ProgressReporter {
     default void message(String message) {
         report(-1, message);
     }
+
+    /** {@code step} starts; a reporter with no checklist shows its line. */
+    default void step(OpenStep step) {
+        message(step.message());
+    }
 }

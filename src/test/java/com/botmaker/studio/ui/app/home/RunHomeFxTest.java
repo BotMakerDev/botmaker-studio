@@ -5,6 +5,7 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
+import com.botmaker.studio.ui.app.loading.LoadingPage;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -48,6 +49,11 @@ class RunHomeFxTest extends FxHeadlessTest {
             @Override
             public void edit(Path dir, boolean freshlyCreated) {
                 asked.add("edit " + dir.getFileName());
+            }
+
+            @Override
+            public void make(LoadingPage.Making making) {
+                asked.add("make " + making.bot().name());
             }
         }, () -> bots, new GetBots.Shelf() {
             @Override

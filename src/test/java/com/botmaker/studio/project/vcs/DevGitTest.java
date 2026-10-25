@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The Dev view's git ({@code 39} §9): branches, a branch merge through the conflict path, remotes. */
@@ -80,14 +79,14 @@ class DevGitTest {
     }
 
     @Test
-    void aSwitchSaysWhetherTheFilesChanged(@TempDir Path root) throws Exception {
+    void aSwitchSaysHowManyFilesChanged(@TempDir Path root) throws Exception {
         ProjectVcs vcs = project(root);
         String main = vcs.branch();
         vcs.createBranch("same");
-        assertFalse(vcs.switchTo("same"), "a new branch is the same tree: no reload");
+        assertEquals(0, vcs.switchTo("same"), "a new branch is the same tree: no reload");
         edit(root, "class Bot {\n    int a = 7;\n}\n");
         vcs.checkpoint(VersionOrigin.SAVE, "seven");
-        assertTrue(vcs.switchTo(main));
+        assertEquals(1, vcs.switchTo(main), "one file differs");
     }
 
     @Test

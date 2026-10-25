@@ -68,6 +68,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
+import javafx.util.StringConverter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -78,6 +79,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -380,6 +382,18 @@ public final class VersionsPane {
         remoteBox.setPromptText("No remote");
         remoteBox.setCellFactory(list -> new RemoteCell());
         remoteBox.setButtonCell(new RemoteCell());
+        // The skin falls back on the converter when the list is refilled under a shown value: never a record's text.
+        remoteBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(ProjectVcs.RemoteInfo remote) {
+                return remote == null ? "" : remoteLabel(remote);
+            }
+
+            @Override
+            public ProjectVcs.RemoteInfo fromString(String text) {
+                return null;
+            }
+        });
         Button fetch = new Button("Fetch");
         fetch.setOnAction(e -> withRemote(this::fetch));
         Button pull = new Button("Pull");
@@ -1208,7 +1222,8 @@ public final class VersionsPane {
         }, changed -> {
             shown = null;
             status("On " + name + ".");
-            if (changed) ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent());
+            if (changed > 0) ctx.eventBus().publish(new CoreApplicationEvents.ProjectReloadRequestedEvent(
+                    Optional.of(new CoreApplicationEvents.BranchSwitch(name, changed))));
         });
     }
 
@@ -1413,10 +1428,32 @@ public final class VersionsPane {
                 setTooltip(null);
                 return;
             }
-            setText(remote.name() + (remote.ahead() < 0 ? " · not fetched"
-                    : " · ↑" + remote.ahead() + " ↓" + remote.behind()));
+            setText(remoteLabel(remote));
             setTooltip(new Tooltip(remote.url()));
         }
+    }
+
+    /**
+     * A remote as Dev's list says it (2026-10-25: a record's text showed): {@code upstream — LiQiyeDev/Firestone ·
+     * 4 versions to pull}; its address when it is no GitHub repository.
+     */
+    static String remoteLabel(ProjectVcs.RemoteInfo remote) {
+        String where = SyncModel.slug(remote.url()).map(s -> s.owner() + "/" + s.repo()).orElse(remote.url());
+        return remote.name() + " — " + where + " · " + standing(remote.ahead(), remote.behind());
+    }
+
+    /** How this branch stands on a remote, in words; {@code ahead} below 0 when it was never read. */
+    static String standing(int ahead, int behind) {
+        if (ahead < 0 || behind < 0) return "not read yet";
+        if (ahead == 0 && behind == 0) return "up to date";
+        List<String> parts = new ArrayList<>();
+        if (ahead > 0) parts.add(versions(ahead) + " to push");
+        if (behind > 0) parts.add((parts.isEmpty() ? versions(behind) : String.valueOf(behind)) + " to pull");
+        return String.join(", ", parts);
+    }
+
+    private static String versions(int n) {
+        return n + (n == 1 ? " version" : " versions");
     }
 
     private void restoreTo(CommitInfo target) {

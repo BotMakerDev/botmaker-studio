@@ -26,6 +26,7 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
 import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.TreeFilter;
 import org.eclipse.jgit.lib.FileMode;
 
 import java.io.ByteArrayOutputStream;
@@ -723,17 +724,27 @@ public final class ProjectVcs {
 
     /**
      * Switches to {@code name}. The tree must be saved — the caller takes an {@code AUTO} version first — and
-     * no update or merge may be half done. Returns whether the files changed: a branch at the same tree needs no
+     * no update or merge may be half done. Returns how many files changed: a branch at the same tree, 0, needs no
      * reload (2026-10-25).
      */
-    public boolean switchTo(String name) throws IOException {
+    public int switchTo(String name) throws IOException {
         if (merging()) throw new IOException("A merge is in progress — finish or cancel it first.");
         try (Git git = open()) {
             if (!git.status().call().isClean()) throw new IOException("Save your changes before switching.");
             Repository repo = git.getRepository();
             ObjectId before = repo.resolve("HEAD^{tree}");
             git.checkout().setName(name).call();
-            return !Objects.equals(before, repo.resolve("HEAD^{tree}"));
+            ObjectId after = repo.resolve("HEAD^{tree}");
+            if (Objects.equals(before, after)) return 0;
+            try (TreeWalk walk = new TreeWalk(repo)) {
+                walk.setRecursive(true);
+                walk.addTree(before);
+                walk.addTree(after);
+                walk.setFilter(TreeFilter.ANY_DIFF);
+                int changed = 0;
+                while (walk.next()) changed++;
+                return changed;
+            }
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {

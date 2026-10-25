@@ -14,7 +14,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
@@ -187,14 +186,12 @@ final class NewProjectPlugins {
     private Node card(PluginRegistry.Plugin plugin) {
         PluginLock lock = locks.get(plugin.id());
         boolean isTicked = lock != null || ticked.contains(plugin.id());
-        Label name = new Label(name(plugin));
-        name.getStyleClass().add("np-card-name");
+        Label name = GalleryCard.cardName(name(plugin));
         Label check = new Label("✓");
         check.getStyleClass().add("np-card-check");
+        check.setMinWidth(Region.USE_PREF_SIZE);
         check.setVisible(isTicked);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        VBox card = new VBox(3, new HBox(4, name, spacer, check));
+        VBox card = new VBox(3, new HBox(4, name, check));
         card.getStyleClass().add("np-card");
         if (isTicked) card.getStyleClass().add("np-card-picked");
         card.setPrefWidth(StartCards.CARD_WIDTH);
@@ -213,9 +210,8 @@ final class NewProjectPlugins {
         if (!version.isEmpty()) facts.getChildren().add(StartCards.line(version));
         card.getChildren().add(facts);
         if (!plugin.description().isBlank()) {
-            Label description = StartCards.line(plugin.description());
-            description.setMaxHeight(30);   // two lines at the note's 11px, then an ellipsis
-            card.getChildren().add(description);
+            // Whole: nothing on a card is cut (2026-10-25, spec § 1b, A).
+            card.getChildren().add(StartCards.line(plugin.description()));
             Tooltip.install(card, new Tooltip(plugin.description()));
         }
 
