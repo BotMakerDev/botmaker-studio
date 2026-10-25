@@ -60,14 +60,24 @@ public final class BmkExport {
                 .flatMap(PublishTarget::slugOf)
                 .orElseThrow(() -> new BotFile.Refused("This bot has no GitHub repository yet: a .bmk names the "
                         + "repository it was made from. Publish it first."));
+        return write(projectDir, tags.getFirst(), slug, outDir, jars);
+    }
+
+    /**
+     * {@code projectDir}'s saved version, released as {@code tag} of the GitHub repository {@code slug}, written
+     * into {@code outDir}: what Publish attaches to the release ({@code StudioPublishHost#bmk}), which knows both.
+     */
+    public static Path write(Path projectDir, String tag, String slug, Path outDir, Jars jars) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(projectDir);
+        String commit = vcs.headCommit().orElseThrow(() -> new BotFile.Refused("This project has no saved "
+                + "version."));
         Map<String, byte[]> sources;
         try {
             sources = vcs.filesAtHead(BotFile::isSource);
         } catch (IOException e) {
             throw new BotFile.Refused(e.getMessage() + " A .bmk holds files only.");
         }
-        BotJson.Head head = BotFiles.head(projectDir.resolve("pom.xml"), sources, tags.getFirst(), commit.get(),
-                slug);
+        BotJson.Head head = BotFiles.head(projectDir.resolve("pom.xml"), sources, tag, commit, slug);
         List<BotFile.Jar> resolved = jars.of(projectDir);
 
         Files.createDirectories(outDir);

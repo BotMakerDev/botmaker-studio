@@ -17,6 +17,7 @@ import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.graph.Exclusion;
 import org.eclipse.aether.repository.LocalRepository;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.repository.RepositoryPolicy;
@@ -30,6 +31,8 @@ import org.eclipse.aether.supplier.RepositorySystemSupplier;
 import org.eclipse.aether.transfer.AbstractTransferListener;
 import org.eclipse.aether.transfer.TransferEvent;
 import org.eclipse.aether.transfer.TransferResource;
+import org.eclipse.aether.util.artifact.JavaScopes;
+import org.eclipse.aether.util.filter.ScopeDependencyFilter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -570,8 +573,10 @@ public final class MavenService {
 
         CollectRequest collectRequest = new CollectRequest();
         collectRequest.setRepositories(remoteRepos);
+        // Test dependencies are collected, then left out of what is resolved: they take part in choosing versions,
+        // as in Maven. Left out of the graph, a library's older JUnit won over the pom's own and a bot's .bmk from
+        // Studio differed from the one `mvn dependency:list` makes, which the catalog rebuilds (2026-10-25).
         for (Dependency d : model.getDependencies()) {
-            if ("test".equals(d.getScope())) continue;
             if ("sources".equals(d.getClassifier())) continue;
             String classifier = d.getClassifier() == null ? "" : d.getClassifier();
             // A template pins its plugin as ${botmaker.sdk.version}; handed the placeholder, the resolver looked
@@ -579,10 +584,23 @@ public final class MavenService {
             Artifact artifact = new DefaultArtifact(
                     d.getGroupId(), d.getArtifactId(), classifier, "jar", versionOf(model, d));
             String scope = d.getScope() == null ? "compile" : d.getScope();
-            collectRequest.addDependency(new org.eclipse.aether.graph.Dependency(artifact, scope));
+            collectRequest.addDependency(new org.eclipse.aether.graph.Dependency(artifact, scope, false,
+                    exclusionsOf(d)));
+        }
+        // The pom's own <dependencyManagement> pins transitive versions as Maven does. An imported BOM is not read.
+        if (model.getDependencyManagement() != null) {
+            for (Dependency d : model.getDependencyManagement().getDependencies()) {
+                if ("import".equals(d.getScope())) continue;
+                String classifier = d.getClassifier() == null ? "" : d.getClassifier();
+                Artifact artifact = new DefaultArtifact(
+                        d.getGroupId(), d.getArtifactId(), classifier, "jar", versionOf(model, d));
+                collectRequest.addManagedDependency(new org.eclipse.aether.graph.Dependency(artifact,
+                        d.getScope() == null ? "" : d.getScope(), null, exclusionsOf(d)));
+            }
         }
 
-        DependencyRequest dependencyRequest = new DependencyRequest(collectRequest, null);
+        DependencyRequest dependencyRequest = new DependencyRequest(collectRequest,
+                new ScopeDependencyFilter(null, List.of(JavaScopes.TEST)));
         List<ArtifactResult> results = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         try {
@@ -949,6 +967,12 @@ public final class MavenService {
         model.getDependencies().remove(direct);
         writeModel(projectDir, model);
         return true;
+    }
+
+    /** {@code d}'s {@code <exclusions>}, as the resolver applies them below it. */
+    private static List<Exclusion> exclusionsOf(Dependency d) {
+        return d.getExclusions().stream().map(x -> new Exclusion(x.getGroupId(), x.getArtifactId(), "*", "*"))
+                .toList();
     }
 
     private static boolean excludes(Dependency d, UserLibrary library) {

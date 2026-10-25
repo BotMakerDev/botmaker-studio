@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Publish attaches the bot's `.bmk`** (2026-10-25): after the release, the bot at its tag is written as a `.bmk`
+  and attached to the GitHub Release, and the catalog entry pins its sha256; the catalog's check rebuilds it from
+  the commit. Publish refuses an `icon.png` that is no PNG or is over 512 KB, as the catalog does.
+- **A bot's libraries resolve to the versions Maven picks**: test dependencies now take part in choosing versions
+  before they are left out, and the pom's `<exclusions>` and own `<dependencyManagement>` apply, as in Maven.
+  Firestone ran with JUnit 5.7.2's platform jars that a library pulled, where Maven picks 1.9.3, so Studio's
+  `.bmk` differed from the cli's; both now give the same file. A BOM the pom imports is still not read.
 - **Open and export a `.bmk`** (2026-10-25): drop a `.bmk` on the bot list, or start `botmaker-studio
   --open=<file>`, and the bot opens in its Run window. A file the catalog lists must be the very file it pins;
   the first open of a catalog bot asks once ("… runs code on this computer"), and a file nobody checked asks

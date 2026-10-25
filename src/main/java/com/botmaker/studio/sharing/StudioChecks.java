@@ -39,6 +39,7 @@ final class StudioChecks implements Checks {
         try {
             List<Finding> findings = BotChecks.checkPom(target.dir().resolve("pom.xml"), path,
                     EntryGate.pluginIds(catalog.catalog()));
+            if (!Finding.refused(findings)) findings = BotChecks.checkIcon(target.dir(), path);
             if (!Finding.refused(findings)) {
                 Path classes = target.dir().resolve("target").resolve("classes");
                 if (Files.isDirectory(classes)) {

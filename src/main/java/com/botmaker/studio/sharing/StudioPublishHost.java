@@ -8,9 +8,11 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
+import com.botmaker.studio.services.MavenService;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -226,6 +228,35 @@ final class StudioPublishHost implements PublishHost {
         }
         throw new Refusal("the release " + tag + " does not download without signing in (" + rootMessage(last)
                 + "), so nobody else could install it.");
+    }
+
+    /** Studio's own resolver, which resolves as Maven does (test dependencies take part in choosing versions). */
+    @Override
+    public Path bmk(String repo, String tag, Path outDir) throws Refusal {
+        try {
+            return BmkExport.write(request.projectDir(), tag, repo, outDir, MavenService::resolvedJars);
+        } catch (IOException e) {
+            throw new Refusal("could not write the bot's .bmk: " + e.getMessage());
+        }
+    }
+
+    /** A file of the same name already on the release (an earlier try) is deleted first: GitHub keeps one per name. */
+    @Override
+    public void uploadAsset(String repo, String tag, Path file) throws Refusal {
+        String name = file.getFileName().toString();
+        try {
+            JsonNode release = client.getOrFail(GitHubConfig.API_BASE + "/repos/" + repo + "/releases/tags/" + tag,
+                    token).join();
+            for (JsonNode asset : release.path("assets")) {
+                if (name.equals(asset.path("name").asText())) {
+                    client.delete(GitHubConfig.API_BASE + "/repos/" + repo + "/releases/assets/"
+                            + asset.path("id").asLong(), token).join();
+                }
+            }
+            client.uploadAsset(release.path("upload_url").asText(), name, file, token).join();
+        } catch (Exception e) {
+            throw new Refusal("could not attach " + name + " to the release " + tag + ": " + rootMessage(e));
+        }
     }
 
     /**
