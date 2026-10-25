@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **A bot opens behind `ui/app/loading/LoadingPage` since 2026-10-25** (umbrella run-mode-fixes plan, phase 7).
+> `BotMakerStudio.openProject` drives it through a `ProgressReporter` whose `step(OpenStep)` names the step
+> (`services/OpenStep`: Dependencies, Libraries, Project, Files, Editor; ＋ New bot and Get add Copying or Downloading
+> first, `BotMakerStudio.make`); a failure is shown on the page (`fail`), never in an error window, and an `opens`
+> generation keeps a stale failure off a newer open. `createLoadingScene` is gone. A branch switch that changed files
+> (`ProjectReloadRequestedEvent` with a `BranchSwitch`) reloads under `ReloadBox`, over the dimmed editor. The saved
+> theme is applied in `start()`, before the first window, and JavaFX's own buttons are English (`speakEnglish`).
+
 > **A dev Studio can be driven over MCP since 2026-10-25.** `config/AppPaths` owns the per-user folders: with
 > `BOTMAKER_HOME` set, the projects root (`Constants.PROJECTS_ROOT`), `UserDirs`' data and config, Java's preferences
 > and `ProgramEntries`' folders all move under it (`AppPaths.apply`, in `BotMakerStudio`'s static block, before any
