@@ -8,6 +8,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -58,9 +59,12 @@ public final class BotIcon {
         } finally {
             g.dispose();
         }
-        Path next = projectDir.resolve(FILE + ".next");
+        // A fresh name, made new: a cloned bot may ship a symlink under any fixed name.
+        Path next = Files.createTempFile(projectDir, ".icon", ".next");
         try {
-            if (!ImageIO.write(out, "png", next.toFile())) throw new IOException("No PNG writer.");
+            try (OutputStream stream = Files.newOutputStream(next)) {
+                if (!ImageIO.write(out, "png", stream)) throw new IOException("No PNG writer.");
+            }
             Files.move(next, projectDir.resolve(FILE), StandardCopyOption.REPLACE_EXISTING,
                     StandardCopyOption.ATOMIC_MOVE);
         } finally {

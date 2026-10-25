@@ -63,7 +63,8 @@ public final class PomInfo {
         String before = Files.readString(pom);
         String after = with(with(before, "name", name), "description", description);
         if (after.equals(before)) return;
-        Path next = pom.resolveSibling("pom.xml.next");
+        // A fresh name, made new: a cloned bot may ship a symlink under any fixed name.
+        Path next = Files.createTempFile(projectDir, ".pom", ".next");
         try {
             Files.writeString(next, after);
             Files.move(next, pom, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

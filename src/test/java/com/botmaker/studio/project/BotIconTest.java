@@ -7,9 +7,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,7 +35,9 @@ class BotIconTest {
         assertEquals(256, icon.getWidth());
         assertEquals(256, icon.getHeight());
         assertEquals(0x00FF00, icon.getRGB(2, 128) & 0xFFFFFF, "the centre square: the red sides are cut off");
-        assertFalse(Files.exists(dir.resolve("icon.png.next")));
+        try (var left = Files.list(dir)) {
+            assertEquals(List.of("icon.png"), left.map(p -> p.getFileName().toString()).toList(), "no temp file left");
+        }
     }
 
     @Test
