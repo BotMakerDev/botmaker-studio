@@ -113,7 +113,8 @@ public final class RunHome implements ProjectWindow {
     private final TilePane myBots = new TilePane(GAP, GAP);
     private final Label myBotsLine = new Label("Looking for your bots…");
     private final Label getMoreHeading = heading("Get more bots");
-    private final GetBots getBots;
+    /** Package-private for {@code RunHomeFxTest}. */
+    final GetBots getBots;
     private final Button select = new Button("Select");
     private final Label selectedCount = new Label();
     private final Button archiveSelected = new Button("Archive");
@@ -143,18 +144,20 @@ public final class RunHome implements ProjectWindow {
         this.bots = bots;
         this.compiles = compiles;
         this.shelf = shelf;
-        this.getBots = new GetBots(shelf, this::agrees, new GetBots.Got() {
+        this.getBots = new GetBots(this::agrees, new GetBots.Got() {
             @Override
             public void run(GalleryEntry entry) {
-                actions.make(new LoadingPage.Making(new LoadingPage.Bot(entry.name(), "by " + entry.owner() + " · "
-                        + entry.tag(), Optional.of(entry.description()).filter(d -> !d.isBlank()), Optional.empty()),
-                        OpenStep.DOWNLOADING, progress -> got(entry, progress), true));
+                actions.make(new LoadingPage.Making(shown(entry), OpenStep.DOWNLOADING, progress -> got(entry, progress),
+                        LoadingPage.Opens.RUNNER));
             }
 
             @Override
-            public void cloned(Path dir) {
-                reload();
-                actions.edit(dir, false);
+            public void edit(GalleryEntry entry) {
+                // On the loading page's Copying step, not on the card (2026-10-25, N13).
+                actions.make(new LoadingPage.Making(shown(entry), OpenStep.COPYING, progress -> {
+                    progress.message("Getting " + entry.name() + " from " + entry.slug() + "…");
+                    return shelf.cloneOf(entry);
+                }, LoadingPage.Opens.EDITOR));
             }
         }, ShowCommunity.load(), HiddenBots.load());
     }
@@ -230,6 +233,12 @@ public final class RunHome implements ProjectWindow {
         double viewport = scroll.getViewportBounds().getHeight();
         if (content <= viewport) return;
         scroll.setVvalue(Math.min(1, getMoreHeading.getBoundsInParent().getMinY() / (content - viewport)));
+    }
+
+    /** What the loading page says about a catalog bot being got: "by <owner> · <tag>" and its description. */
+    private static LoadingPage.Bot shown(GalleryEntry entry) {
+        return new LoadingPage.Bot(entry.name(), "by " + entry.owner() + " · " + entry.tag(),
+                Optional.of(entry.description()).filter(d -> !d.isBlank()), Optional.empty());
     }
 
     /**
@@ -366,14 +375,11 @@ public final class RunHome implements ProjectWindow {
     }
 
     /**
-     * Opens a {@code .bmk} ({@link BmkFlow}: the trust sheet when it needs one), then shows it in My bots and opens
-     * its runner window. {@code botmaker-studio --open=<file>} comes here too.
+     * Opens a dropped or double-clicked {@code .bmk} on the loading page ({@link BmkFlow#opening}: the trust sheet
+     * when it needs one), then its runner window (N12). {@code botmaker-studio --open=<file>} goes there directly.
      */
     public void openBmk(Path bmk) {
-        new BmkFlow(stage, this::say).open(bmk, dir -> {
-            reload();
-            actions.run(dir);
-        });
+        actions.make(new BmkFlow(stage).opening(bmk));
     }
 
     /** Reads My bots again, off the FX thread, and shows the cards. */

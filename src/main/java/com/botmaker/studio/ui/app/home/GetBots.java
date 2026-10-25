@@ -9,7 +9,6 @@ import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.util.BrowserLauncher;
-import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -31,7 +30,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
 /**
@@ -45,8 +43,8 @@ import java.util.function.Predicate;
 public final class GetBots {
 
     /**
-     * Where a got bot comes from. Both blocking, off the FX thread: the download on the loading page's Downloading
-     * step ({@link Got#run}), the clone on the card.
+     * Where a got bot comes from. Both blocking, off the FX thread, on the loading page's first step: the download
+     * ({@link Got#run}) and the clone ({@link Got#edit}).
      */
     public interface Shelf {
         /** Downloads {@code entry}'s listed {@code .bmk} ({@link BmkDownload}), saying how far it got. */
@@ -61,14 +59,13 @@ public final class GetBots {
         /** Get on {@code entry}, agreed to: the loading page downloads it and opens it to run (spec § 1b, P1). */
         void run(GalleryEntry entry);
 
-        /** {@code dir} is the clone: open it in the editor. */
-        void cloned(Path dir);
+        /** Edit in Studio on {@code entry}, agreed to: the loading page clones it and opens it in the editor (N13). */
+        void edit(GalleryEntry entry);
     }
 
-    /** The two ways to get a bot, for the card's status while one is under way. */
+    /** The two ways to get a bot: its card's Get and Edit in Studio. */
     private enum Way { RUN, EDIT }
 
-    private final Shelf shelf;
     private final Predicate<GalleryEntry> agrees;
     private final Got got;
     private final TextField search = new TextField();
@@ -82,20 +79,18 @@ public final class GetBots {
     /** My bots' authors' repositories, {@link MyBots#key}: a bot among them is already here. FX thread only. */
     private Set<String> mine = Set.of();
     /**
-     * By {@link GalleryEntry#slug}, FX thread only: the gets under way with their progress line, and the last
-     * failure of each. Kept here, not on a card, because every keystroke or catalog answer rebuilds the cards; a
-     * card read from them shows the same state again, so a bot being got never offers a second <i>Get</i>.
+     * By {@link GalleryEntry#slug}, FX thread only: why a get was refused before the loading page. Kept here, not on
+     * a card, because every keystroke or catalog answer rebuilds the cards. A get under way is on the loading page
+     * (2026-10-25, N13), so no card shows one.
      */
-    private final Map<String, String> getting = new HashMap<>();
     private final Map<String, String> failures = new HashMap<>();
 
     /**
      * @param agrees asked before a bot is got, with its {@link GalleryEntry#trustWarning}; only a bot that
      *               {@link GalleryEntry#asksFirst} is asked about
      */
-    public GetBots(Shelf shelf, Predicate<GalleryEntry> agrees, Got got, ShowCommunity community,
+    public GetBots(Predicate<GalleryEntry> agrees, Got got, ShowCommunity community,
                    HiddenBots hidden) {
-        this.shelf = shelf;
         this.agrees = agrees;
         this.got = got;
         this.hidden = hidden;
@@ -186,10 +181,9 @@ public final class GetBots {
             refilter();
         });
         String slug = entry.slug();
-        boolean inFlight = getting.containsKey(slug);
-        boolean here = !inFlight && isMine(entry);
+        boolean here = isMine(entry);
         boolean ready = BmkDownload.ready(entry);
-        String note = inFlight ? getting.get(slug) : failures.getOrDefault(slug,
+        String note = failures.getOrDefault(slug,
                 ready || here ? "" : "No ready-to-run file yet: Edit in Studio gets its code.");
         Label status = new Label(note);
         status.getStyleClass().add("gallery-card-note");
@@ -208,14 +202,12 @@ public final class GetBots {
         } else {
             Button edit = new Button("Edit in Studio");
             edit.setTooltip(new Tooltip("Get its code, linked to its author, to change it"));
-            edit.setDisable(inFlight);
             edit.setOnAction(e -> get(entry, Way.EDIT));
             buttons.getChildren().add(edit);
             if (ready) {
                 Button get = new Button("Get");
                 get.setTooltip(new Tooltip("Download it and run it"));
                 get.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-                get.setDisable(inFlight);
                 get.setOnAction(e -> get(entry, Way.RUN));
                 buttons.getChildren().add(get);
             }
@@ -244,33 +236,12 @@ public final class GetBots {
         // Only a community bot, or one using a community plugin, is confirmed first (2026-10-23).
         if (entry.asksFirst() && !agrees.test(entry)) return;
         failures.remove(slug);
-        if (way == Way.RUN) {
-            // Straight to the loading page, its first step Downloading (2026-10-25, spec § 1b, P1).
-            got.run(entry);
-            return;
-        }
-        getting.put(slug, "Getting its code…");
-        refilter();
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return shelf.cloneOf(entry);
-            } catch (IOException ex) {
-                throw new IllegalStateException(ex.getMessage(), ex);
-            }
-        }).whenComplete((path, failed) -> Platform.runLater(() -> {
-            getting.remove(slug);
-            if (failed != null) failures.put(slug, "Could not get it: " + rootMessage(failed));
-            refilter();
-            if (failed == null) got.cloned(path);
-        }));
+        // Straight to the loading page, its first step Downloading or Copying (2026-10-25, spec § 1b, P1; N13).
+        if (way == Way.RUN) got.run(entry);
+        else got.edit(entry);
     }
 
     static String megabytes(long bytes) {
         return String.format(Locale.ROOT, "%.1f MB", bytes / 1_000_000.0);
-    }
-
-    private static String rootMessage(Throwable t) {
-        while (t.getCause() != null) t = t.getCause();
-        return t.getMessage() != null ? t.getMessage() : t.toString();
     }
 }

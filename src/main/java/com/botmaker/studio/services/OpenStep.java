@@ -4,12 +4,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * The steps the loading page ticks off while a bot opens (2026-10-25, run-mode spec § 1b): a bot ＋ New bot copies or
- * Get downloads first, then every open's own.
+ * The steps the loading page ticks off while a bot opens (2026-10-25, run-mode spec § 1b): a bot ＋ New bot or Edit in
+ * Studio copies, Get downloads or a {@code .bmk} file unpacks first, then every open's own.
  */
 public enum OpenStep {
     DOWNLOADING("downloading", "Downloading", "Downloading…"),
     COPYING("copying", "Copying", "Copying…"),
+    UNPACKING("unpacking", "Unpacking", "Unpacking…"),
     DEPENDENCIES("dependencies", "Dependencies", "Resolving dependencies…"),
     LIBRARIES("libraries", "Libraries", "Indexing libraries…"),
     PROJECT("project", "Project", "Loading project…"),

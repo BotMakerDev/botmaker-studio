@@ -297,6 +297,6 @@ public final class NewProjectDialog {
             progress.message(how);
             NewProjects.create(projectName, bot, req.plugins(), gitHubClient, gitHubAuth);
             return Constants.PROJECTS_ROOT.resolve(projectName);
-        }, false));
+        }, LoadingPage.Opens.NEW_BOT));
     }
 }

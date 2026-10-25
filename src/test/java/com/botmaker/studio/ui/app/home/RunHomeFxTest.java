@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.studio.sharing.BmkDownload;
 import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.sharing.PublisherRank;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.State;
@@ -30,6 +31,7 @@ class RunHomeFxTest extends FxHeadlessTest {
 
     private static final LocalDateTime MONDAY = LocalDateTime.of(2026, 10, 19, 9, 0);
     private final List<String> asked = new ArrayList<>();
+    private RunHome home;
 
     @Override
     public void start(Stage stage) {
@@ -53,7 +55,7 @@ class RunHomeFxTest extends FxHeadlessTest {
 
             @Override
             public void make(LoadingPage.Making making) {
-                asked.add("make " + making.bot().name());
+                asked.add("make " + making.bot().name() + " " + making.first() + " " + making.opens());
             }
         }, () -> bots, new GetBots.Shelf() {
             @Override
@@ -66,6 +68,7 @@ class RunHomeFxTest extends FxHeadlessTest {
                 return Path.of("/p", entry.name());
             }
         }, dir -> dir.endsWith("PushTest") ? CompileState.ERRORS : CompileState.OK);
+        this.home = home;
         stage.setScene(home.createScene());
         stage.setWidth(900);
         stage.setHeight(700);
@@ -150,6 +153,28 @@ class RunHomeFxTest extends FxHeadlessTest {
         assertTrue(run.isDisabled(), "nothing to run until it compiles");
         assertTrue(says(broken, "Edit in Studio"));
         assertTrue(cards().get(0).lookupAll(".mybots-broken").stream().noneMatch(Node::isVisible));
+    }
+
+    /** N12: a .bmk file opens on the loading page, its first step Unpacking, then the Runner; My bots says nothing. */
+    @Test
+    void aBmkFileOpensOnTheLoadingPage() {
+        cards();
+        interact(() -> home.openBmk(Path.of("/downloads/Firestone-1.0.2.bmk")));
+        assertEquals(List.of("make Firestone-1.0.2 UNPACKING RUNNER"), asked);
+        assertTrue(lookup(".label").queryAll().stream()
+                .noneMatch(n -> ((Label) n).getText() != null && ((Label) n).getText().startsWith("Opening ")));
+    }
+
+    /** N13: Edit in Studio on a catalog card copies on the loading page, then the editor; the card says nothing. */
+    @Test
+    void editInStudioOnACatalogBotCopiesOnTheLoadingPage() {
+        cards();
+        interact(() -> home.getBots.show(List.of(GetBotsTest.bot("Miner", "vetted", PublisherRank.TRUSTED,
+                "Mines ore")), true));
+        clickOn(lookup(".getbots-card").lookup("Edit in Studio").queryButton());
+        assertEquals(List.of("make Miner COPYING EDITOR"), asked);
+        assertTrue(lookup(".getbots-card").lookup(".label").queryAll().stream()
+                .noneMatch(n -> "Getting its code…".equals(((Label) n).getText())));
     }
 
     @Test

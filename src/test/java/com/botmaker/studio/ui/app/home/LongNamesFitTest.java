@@ -71,12 +71,12 @@ class LongNamesFitTest extends FxHeadlessTest {
         stage.setWidth(1200);
         stage.setHeight(800);
         stage.show();
-        GetBots getBots = new GetBots(shelf, e -> true, new GetBots.Got() {
+        GetBots getBots = new GetBots(e -> true, new GetBots.Got() {
             @Override
             public void run(GalleryEntry entry) {}
 
             @Override
-            public void cloned(Path dir) {}
+            public void edit(GalleryEntry entry) {}
         }, new ShowCommunity(true), new HiddenBots(Set.of()));
         getBots.show(List.of(got), true);
         Stage more = new Stage();

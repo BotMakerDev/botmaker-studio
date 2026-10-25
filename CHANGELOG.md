@@ -55,6 +55,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- **Every open goes through the loading page** (2026-10-25): a `.bmk` file opened from `--open`, a double-click or
+  a drop unpacks on its first step, *Unpacking*, then the Run window opens; My bots no longer shows only
+  "Opening <file>…". *Edit in Studio*, on a Get more bots card or a run copy, clones on the *Copying* step instead
+  of a "Getting its code…" line on the card. Cancelling the trust sheet goes back to My bots.
 - **Nothing on a card is cut** (2026-10-25): every card in My bots, Get more bots and New Project is 280 px wide,
   and a long name or description wraps. New Project opens at 940×680, three cards a row, smaller on a smaller
   screen.

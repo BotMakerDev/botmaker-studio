@@ -64,16 +64,33 @@ public final class LoadingPage {
     }
 
     /**
-     * A bot made on the page before it opens: ＋ New bot's copy ({@link OpenStep#COPYING}) or Get's download
-     * ({@link OpenStep#DOWNLOADING}). {@code work} runs off the FX thread and gives the folder to open, in the Runner
-     * when {@code run}, else in the editor as a bot just made.
+     * A bot made on the page before it opens: ＋ New bot's or Edit in Studio's copy ({@link OpenStep#COPYING}), Get's
+     * download ({@link OpenStep#DOWNLOADING}) or a {@code .bmk} file's unpack ({@link OpenStep#UNPACKING}).
+     * {@code work} runs off the FX thread and gives the folder to open where {@code opens} says.
      */
-    public record Making(Bot bot, OpenStep first, Work work, boolean run) {}
+    public record Making(Bot bot, OpenStep first, Work work, Opens opens) {}
+
+    /** Where a made bot opens. */
+    public enum Opens {
+        /** The Runner: a bot got or unpacked to run. */
+        RUNNER,
+        /** The editor, as a bot just made: ＋ New bot. */
+        NEW_BOT,
+        /** The editor: Edit in Studio's copy of a bot already made. */
+        EDITOR
+    }
 
     /** The making itself; it reports on the page's first step. */
     @FunctionalInterface
     public interface Work {
         Path make(ProgressReporter progress) throws Exception;
+    }
+
+    /** Thrown by a {@link Work} the user called off (a trust sheet's Cancel): the page goes back to My bots. */
+    public static final class Cancelled extends Exception {
+        public Cancelled() {
+            super("Cancelled");
+        }
     }
 
     /** Where a step stands. */

@@ -138,8 +138,8 @@ public class BotMakerStudio extends Application {
         HomeEndpoint.mainWindow(primaryStage);
         HomeEndpoint.serve();
         if (bmk.isPresent()) {
-            // A second launch is a Studio of its own (2026-10-25): it opens the file on its home.
-            showProjectSelection(primaryStage).openBmk(bmk.get());
+            // A second launch is a Studio of its own (2026-10-25): it opens the file on the loading page (N12).
+            make(primaryStage, new BmkFlow(primaryStage).opening(bmk.get()));
         } else if (run.isPresent()) {
             Optional<Path> dir = botByRepo(run.get());
             if (dir.isPresent()) {
@@ -227,8 +227,8 @@ public class BotMakerStudio extends Application {
     }
 
     /**
-     * Opens the editor on {@code projectDir}; a bot opened from a {@code .bmk} is cloned from its author first
-     * ({@link BmkFlow#edit}), and the editor opens on the clone (spec § 1a).
+     * Opens the editor on {@code projectDir}; a bot opened from a {@code .bmk} is cloned from its author first, on
+     * the loading page's Copying step ({@link BmkFlow#editing}), and the editor opens on the clone (spec § 1a, N13).
      */
     private void editProject(Stage primaryStage, Path projectDir, boolean freshlyCreated) {
         Optional<BotJson> unpacked = UnpackedBots.at(projectDir);
@@ -236,8 +236,7 @@ public class BotMakerStudio extends Application {
             openAs(primaryStage, projectDir, false, freshlyCreated);
             return;
         }
-        new BmkFlow(primaryStage, line -> {}).edit(projectDir, unpacked.get(),
-                clone -> openAs(primaryStage, clone, false, false));
+        make(primaryStage, new BmkFlow(primaryStage).editing(projectDir, unpacked.get()));
     }
 
     /** Opens {@code projectDir} in the Runner ({@code asUser}) or the editor, as a home card's button asked. */
@@ -407,8 +406,9 @@ public class BotMakerStudio extends Application {
     }
 
     /**
-     * A bot made on the loading page — ＋ New bot's copy, Get's download — then opened on the same page (2026-10-25,
-     * spec § 1b, P1). A failure says so there, and <i>Try again</i> makes it again.
+     * A bot made on the loading page — ＋ New bot's or Edit in Studio's copy, Get's download, a {@code .bmk} file's
+     * unpack — then opened on the same page (2026-10-25, spec § 1b, P1; N12, N13). A failure says so there, and
+     * <i>Try again</i> makes it again; a making the user called off goes back to My bots.
      */
     private void make(Stage primaryStage, LoadingPage.Making making) {
         disposeUi();
@@ -428,13 +428,19 @@ public class BotMakerStudio extends Application {
             if (generation != opens) return;
             Path dir = task.getValue();
             openProjectDir = dir;
-            showAsUser = making.run();
-            openProject(primaryStage, dir, !making.run(), page, Optional.empty());
+            showAsUser = making.opens() == LoadingPage.Opens.RUNNER;
+            // A .bmk file is known by its file name until it is unpacked: its bot.json says the rest.
+            if (making.bot().who().isEmpty()) describeLater(page, dir);
+            openProject(primaryStage, dir, making.opens() == LoadingPage.Opens.NEW_BOT, page, Optional.empty());
         });
         task.setOnFailed(e -> {
             Throwable ex = task.getException();
-            if (ex != null) ex.printStackTrace();
             if (generation != opens) return;
+            if (ex instanceof LoadingPage.Cancelled) {
+                showProjectSelection(primaryStage);
+                return;
+            }
+            if (ex != null) ex.printStackTrace();
             String why = ex == null || ex.getMessage() == null ? "an unknown error" : ex.getMessage();
             page.fail(why, ex, () -> make(primaryStage, making), () -> showProjectSelection(primaryStage));
         });
