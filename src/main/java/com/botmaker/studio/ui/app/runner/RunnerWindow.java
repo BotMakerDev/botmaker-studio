@@ -104,6 +104,8 @@ public final class RunnerWindow implements ProjectWindow {
 
     /** Leaves the Runner for the editor scene, without changing what the project is. Supplied by the shell. */
     private final Runnable onShowEditor;
+    /** Back to the home's bot list (2026-10-25: the home opens the Runner from a card's ▶ Run). */
+    private final Runnable onHome;
 
     /** Dropped from {@link BlockTheme}'s <b>static</b> listener list on dispose, like the editor's. */
     private final Consumer<BlockTheme.ThemeType> themeListener;
@@ -134,13 +136,14 @@ public final class RunnerWindow implements ProjectWindow {
     private ScrollPane bodyScroll;
     private final Map<String, Node> categoryCards = new LinkedHashMap<>();
 
-    public RunnerWindow(StudioContext ctx, Stage stage, Origin origin, Runnable onShowEditor) {
+    public RunnerWindow(StudioContext ctx, Stage stage, Origin origin, Runnable onShowEditor, Runnable onHome) {
         this.stage = stage;
         this.origin = origin;
         this.config = ctx.config();
         this.state = ctx.state();
         this.eventBus = ctx.eventBus();
         this.onShowEditor = onShowEditor;
+        this.onHome = onHome;
 
         BlockTheme.initialize();
         this.themeListener = theme -> { if (root != null) ThemedWindows.applyThemeClass(root); };
@@ -201,7 +204,9 @@ public final class RunnerWindow implements ProjectWindow {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(10, titles, spacer);
+        Button home = new Button("← My bots");
+        home.setOnAction(e -> onHome.run());
+        HBox bar = new HBox(10, home, titles, spacer);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("runner-header");
 

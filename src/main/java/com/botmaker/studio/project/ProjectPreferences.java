@@ -58,8 +58,8 @@ public class ProjectPreferences {
     // still carrying the two keys reads fine: this class ignores unknown properties.
     /** True once the user ticked "don't show again" on the Wayland → X11 notice. */
     private boolean hideWaylandNotice;
-    /** How the project list is sorted, by {@code ProjectSelectionScreen.SortMode} name. Null = the default. */
-    private String projectSortMode;
+    // The project list's sort order (`projectSortMode`) went with that list on 2026-10-25: the home's My bots is
+    // most recently used first. An older file still carrying the key reads fine (unknown properties).
     // The Assistant tab's model choice (`assistant`) lived here for a day, until 2026-09-25: the tab runs AI
     // CLIs now, each with its own login. An older file still carrying the key reads fine (unknown properties).
     /**
@@ -87,8 +87,6 @@ public class ProjectPreferences {
     }
     public boolean isHideWaylandNotice() { return hideWaylandNotice; }
     public void setHideWaylandNotice(boolean hide) { this.hideWaylandNotice = hide; }
-    public String getProjectSortMode() { return projectSortMode; }
-    public void setProjectSortMode(String mode) { this.projectSortMode = mode; }
     public List<String> getPinnedStatements() { return pinnedStatements; }
     public void setPinnedStatements(List<String> ids) {
         this.pinnedStatements = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
@@ -188,11 +186,6 @@ public class ProjectPreferences {
         prefs.save();
     }
 
-    /** The directory of the project last opened, or {@code null}. */
-    public static Path getLastOpened() {
-        return load().lastOpenedDirectory();
-    }
-
     /** The remembered projects' directories, newest first. */
     public static List<Path> recentDirectories() {
         return load().getRecentProjects().stream().map(ProjectEntry::directory).toList();
@@ -232,16 +225,6 @@ public class ProjectPreferences {
         prefs.save();
     }
 
-    /** The project list's sort order, or {@code null} to use the default. */
-    public static String getSortMode() {
-        return load().getProjectSortMode();
-    }
-
-    public static void updateSortMode(String mode) {
-        ProjectPreferences prefs = load();
-        prefs.setProjectSortMode(mode);
-        prefs.save();
-    }
 
     /** The persisted main-window geometry, or {@code null} if never saved. */
     public static WindowState loadWindowState() {

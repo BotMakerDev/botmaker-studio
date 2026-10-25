@@ -120,7 +120,7 @@ GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles a
 `light-theme`, `/css/blocks.css`, 1000×700.
 
 **Menu bar** (`MenuBarManager`):
-- **File** — "Select Project…" (`Ctrl+Shift+O`), "Exit" (`Ctrl+Q` → `Platform.exit()`).
+- **File** — "My Bots" (`Ctrl+Shift+O`, the home's bot list), "Exit" (`Ctrl+Q` → `Platform.exit()`).
 - **Edit** — "Undo" (`Ctrl+Z` → `UndoRequestedEvent`), "Redo" (`Ctrl+Y` → `RedoRequestedEvent`);
   Cut/Copy/Paste are **disabled placeholders**.
 - **View** — Zoom In/Out/Reset = **disabled placeholders**.

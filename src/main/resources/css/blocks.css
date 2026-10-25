@@ -1430,6 +1430,23 @@
     -fx-font-weight: bold;
 }
 .np-scroll, .np-scroll > .viewport { -fx-background-color: transparent; }
+/* The home's My bots cards (2026-10-25): New Project's card, a letter icon until the bot has its own, a badge. */
+.mybots-icon {
+    -fx-min-width: 32; -fx-min-height: 32; -fx-max-width: 32; -fx-max-height: 32;
+    -fx-alignment: center;
+    -fx-background-color: -bm-accent;
+    -fx-background-radius: 6;
+    -fx-text-fill: -fx-control-inner-background;
+    -fx-font-weight: bold;
+    -fx-font-size: 15px;
+}
+.mybots-badge {
+    -fx-text-fill: -bm-accent-dark;
+    -fx-border-color: -bm-accent;
+    -fx-border-radius: 8;
+    -fx-padding: 0 6 0 6;
+    -fx-font-size: 10px;
+}
 .np-scroll { -fx-padding: 0; }
 
 /* New Project's name rule, shown only once the typed name breaks it. */

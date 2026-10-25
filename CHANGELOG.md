@@ -14,6 +14,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **BotMaker opens on your bot list** (`ui/app/home/RunHome`), in place of the project selection screen and of
+  reopening the last project. *My bots* shows every project as a card: who it is by (or "mine"), its version,
+  when it was last used, and a "<tag> available" badge when the catalog lists a newer release. Each card has
+  *▶ Run*, which opens the bot's runner window, and *Edit in Studio*, which opens the editor. A remembered folder
+  that is gone says so and offers *Remove from My bots*. *＋ New bot* opens New Project, and the runner window
+  has *← My bots*. The list is most recently used first, and the sort menu and "My projects only" filter are
+  gone. `--project` still opens a project straight away.
+
 - **The catalog can be asked again within a session** (`CatalogClient.refresh`), with the date of the copy kept
   for offline (`keptAt`), and each catalog plugin says which other catalog plugins it brings
   (`PluginRegistry.Plugin.brings`, from its newest release). New Project uses both in its card rework. A refresh's

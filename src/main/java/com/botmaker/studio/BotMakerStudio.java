@@ -16,8 +16,8 @@ import com.botmaker.studio.project.migration.ProjectSchema;
 import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
-import com.botmaker.studio.ui.app.ProjectSelectionScreen;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.home.RunHome;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.UIManager;
 import com.botmaker.studio.ui.app.runner.RunnerWindow;
@@ -98,34 +98,57 @@ public class BotMakerStudio extends Application {
         // Before the first project binds: a community plugin is asked about before it loads, and a catalog
         // plugin binds only under its entry's id (2026-10-23).
         PluginHost.guard(PluginGate.studio(CommunityPluginPrompt::agrees));
+        // BotMaker opens on the bot list (2026-10-25, spec § 1a), not on the project last opened: only a project
+        // named on the command line opens straight away.
         Path requested = requestedProject();
-        Path toOpen = requested != null ? requested : ProjectPreferences.getLastOpened();
-        if (toOpen != null && projectExists(toOpen)) {
-            openProject(primaryStage, toOpen, false);
+        if (requested != null && projectExists(requested)) {
+            openProject(primaryStage, requested, false);
         } else {
             if (requested != null) {
-                // Named but absent: say so rather than silently showing the picker, because the caller was
-                // a program (`botmaker run --project`) and a picker is not an answer a program can read.
-                System.err.println("No project at " + requested + " — showing the project list instead.");
+                // Named but absent: say so rather than silently showing the list, because the caller was
+                // a program (`botmaker run --project`) and a list is not an answer a program can read.
+                System.err.println("No project at " + requested + " — showing the bot list instead.");
             }
             showProjectSelection(primaryStage);
         }
     }
 
     // =========================================================================
-    // PROJECT SELECTION
+    // HOME
     // =========================================================================
 
+    /** The home: My bots over Get more bots ({@link RunHome}); it replaced the project selection screen. */
     private void showProjectSelection(Stage primaryStage) {
-        ProjectSelectionScreen selectionScreen = new ProjectSelectionScreen(
-                primaryStage,
-                (projectDir, clearCache, freshlyCreated) ->
-                        openProject(primaryStage, projectDir, freshlyCreated)
-        );
-        setScenePreservingGeometry(primaryStage, selectionScreen.createScene());
-        primaryStage.setTitle("BotMaker - Select Project");
+        // The home becomes the current window, so whatever window and project an error path leaves open are let
+        // go here: nothing else would dispose them, and the project's bus would still reopen it.
+        disposeUi();
+        if (currentProject != null) {
+            currentProject.close();
+            currentProject = null;
+        }
+        RunHome home = RunHome.studio(primaryStage, new RunHome.Actions() {
+            @Override
+            public void run(Path dir) {
+                openAs(primaryStage, dir, true, false);
+            }
+
+            @Override
+            public void edit(Path dir, boolean freshlyCreated) {
+                openAs(primaryStage, dir, false, freshlyCreated);
+            }
+        });
+        this.currentWindow = home;
+        setScenePreservingGeometry(primaryStage, home.createScene());
+        primaryStage.setTitle("BotMaker");
         primaryStage.show();
         requestSceneLayout(primaryStage);
+    }
+
+    /** Opens {@code projectDir} in the Runner ({@code asUser}) or the editor, as a home card's button asked. */
+    private void openAs(Stage primaryStage, Path projectDir, boolean asUser, boolean freshlyCreated) {
+        openProjectDir = projectDir;
+        showAsUser = asUser;
+        openProject(primaryStage, projectDir, freshlyCreated);
     }
 
     /**
@@ -364,13 +387,15 @@ public class BotMakerStudio extends Application {
      * window being left behind can still be listening.
      */
     private void openRunner(Stage primaryStage, Path projectDir) {
-        RunnerWindow.Origin origin = Boolean.TRUE.equals(showAsUser)
-                ? RunnerWindow.Origin.PREVIEW
-                : RunnerWindow.Origin.INSTALLED;
+        // By what the project is, not by who asked (2026-10-25): the home's ▶ Run asks for the Runner on any bot,
+        // and somebody else's bot keeps "Improve this bot" while the user's own offers the way back to editing.
+        RunnerWindow.Origin origin = currentProject.context().state().isReaderMode()
+                ? RunnerWindow.Origin.INSTALLED
+                : RunnerWindow.Origin.PREVIEW;
         RunnerWindow runner = new RunnerWindow(currentProject.context(), primaryStage, origin, () -> {
             showAsUser = Boolean.FALSE;
             openProject(primaryStage, projectDir, false);
-        });
+        }, () -> switchToProjectSelector(primaryStage));
         this.currentWindow = runner;
 
         setScenePreservingGeometry(primaryStage, runner.createScene());
@@ -404,11 +429,6 @@ public class BotMakerStudio extends Application {
     }
 
     private void switchToProjectSelector(Stage primaryStage) {
-        disposeUi();
-        if (currentProject != null) {
-            currentProject.close();
-            currentProject = null;
-        }
         showProjectSelection(primaryStage);
     }
 

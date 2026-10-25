@@ -1,0 +1,327 @@
+package com.botmaker.studio.ui.app.home;
+
+import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.shared.github.GitHubAuth;
+import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.studio.config.AppVersion;
+import com.botmaker.studio.project.ProjectManager;
+import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.studio.sharing.BotInstaller;
+import com.botmaker.studio.sharing.CatalogClient;
+import com.botmaker.studio.sharing.GitHubGallery;
+import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
+import com.botmaker.studio.ui.app.GalleryDialog;
+import com.botmaker.studio.ui.app.GitHubAccountBar;
+import com.botmaker.studio.ui.app.NewProjectDialog;
+import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.home.MyBots.MyBot;
+import com.botmaker.studio.ui.app.home.MyBots.State;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.TilePane;
+import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.Stage;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
+
+/**
+ * The home BotMaker opens on (2026-10-25, spec § 1a, layout A): <i>My bots</i> over <i>Get more bots</i> in one
+ * scroll, <i>＋ New bot</i> and the account in the top bar. It replaced the project selection screen: a card's
+ * <i>▶ Run</i> opens the bot's runner window, <i>Edit in Studio</i> today's editor on it. There is no Run | Make
+ * switch (the user's call): the editor is reached from a card, unchanged.
+ *
+ * <p>It adds no editor control, as the runner window adds none.
+ */
+public final class RunHome implements ProjectWindow {
+
+    static final double CARD_WIDTH = 220;
+    private static final double GAP = 10;
+    private static final DateTimeFormatter USED = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
+
+    /** What a card's buttons ask of the shell. */
+    public interface Actions {
+        /** Opens the bot's runner window. */
+        void run(Path dir);
+
+        /** Opens the editor on the project; {@code freshlyCreated} for one New Project just made. */
+        void edit(Path dir, boolean freshlyCreated);
+    }
+
+    private final Stage stage;
+    private final Actions actions;
+    private final Supplier<List<MyBot>> bots;
+    private final ProjectManager projectManager = new ProjectManager();
+    private final GitHubClient gitHubClient = new GitHubClient();
+    private final GitHubAuth gitHubAuth = new GitHubAuth();
+    private final TilePane myBots = new TilePane(GAP, GAP);
+    private final Label myBotsLine = new Label("Looking for your bots…");
+    /** The reads {@link #reload} started, FX thread only. */
+    private int reads;
+
+    /** {@code bots} is read off the FX thread on every {@link #reload}: it opens each project's repository. */
+    public RunHome(Stage stage, Actions actions, Supplier<List<MyBot>> bots) {
+        this.stage = stage;
+        this.actions = actions;
+        this.bots = bots;
+    }
+
+    /**
+     * Studio's home: the root's projects and the remembered ones, with the catalog's kept tags for the
+     * "<tag> available" badge, read again once the catalog answers.
+     */
+    public static RunHome studio(Stage stage, Actions actions) {
+        ProjectManager projects = new ProjectManager();
+        RunHome home = new RunHome(stage, actions, () -> {
+            var opened = ProjectPreferences.recentOpenTimes();
+            return MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories()),
+                    dir -> MyBots.read(dir, opened),
+                    MyBots.latestTags(CatalogClient.session().kept().bots()));
+        });
+        CatalogClient.session().refresh().thenAccept(reply -> {
+            if (reply.fresh()) Platform.runLater(home::reload);
+        });
+        return home;
+    }
+
+    /** Nothing to release: the screen holds no listener outside its own scene. */
+    @Override
+    public void dispose() {}
+
+    @Override
+    public Scene createScene() {
+        Label title = new Label("BotMaker");
+        title.getStyleClass().add("runner-title");
+        Label version = new Label("v" + AppVersion.get());
+        version.getStyleClass().add("gallery-card-note");
+        Button newBot = new Button("＋ New bot");
+        newBot.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
+        newBot.setOnAction(e -> new NewProjectDialog(stage, gitHubClient, gitHubAuth,
+                dir -> actions.edit(dir, true)).show());
+        Button openFolder = new Button("Open folder…");
+        openFolder.setOnAction(e -> openFolder());
+        Button archived = new Button("View archived…");
+        archived.setOnAction(e -> new ArchivedProjectsDialog(stage, projectManager, this::reload).show());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox bar = new HBox(10, title, version, spacer, newBot, openFolder, archived,
+                new GitHubAccountBar(stage, gitHubAuth, gitHubClient, () -> {}));
+        bar.setAlignment(Pos.CENTER_LEFT);
+        bar.getStyleClass().add("runner-header");
+
+        myBots.setPrefTileWidth(CARD_WIDTH);
+        myBots.setTileAlignment(Pos.TOP_LEFT);
+        myBotsLine.getStyleClass().add("gallery-card-note");
+        myBotsLine.managedProperty().bind(myBotsLine.visibleProperty());
+
+        VBox body = new VBox(10,
+                heading("My bots"), myBotsLine, myBots,
+                heading("Get more bots"), getMoreBots());
+        body.setPadding(new Insets(16));
+        ScrollPane scroll = new ScrollPane(body);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.getStyleClass().add("np-scroll");
+
+        BorderPane root = new BorderPane(scroll);
+        root.setTop(bar);
+        reload();
+        // Unsized, as every scene swapped onto the shell's one stage: a sized one would resize the user's window.
+        return ThemedWindows.scene(root);
+    }
+
+    /** Reads My bots again, off the FX thread, and shows the cards. */
+    public void reload() {
+        // Reads overlap (a catalog answer during a Remove); only the latest one asked for is shown.
+        int asked = ++reads;
+        CompletableFuture.supplyAsync(bots).whenComplete((found, failed) -> Platform.runLater(() -> {
+            if (asked != reads) return;
+            if (failed != null) {
+                say("Could not list your bots: " + failed.getMessage());
+                myBots.getChildren().clear();
+                return;
+            }
+            say(found.isEmpty() ? "No bots yet: ＋ New bot starts one, or get one below." : "");
+            myBots.getChildren().setAll(found.stream().map(this::card).toList());
+        }));
+    }
+
+    private void say(String text) {
+        myBotsLine.setText(text);
+        myBotsLine.setVisible(!text.isEmpty());
+    }
+
+    // Get more bots is the Browse Bots dialog until the catalog's cards move here (plan phase 2).
+    private Node getMoreBots() {
+        Button browse = new Button("Browse bots…");
+        browse.setOnAction(e -> {
+            GitHubGallery gallery = new GitHubGallery(gitHubClient, gitHubAuth);
+            new GalleryDialog(stage, gallery, new BotInstaller(gallery), gitHubAuth, gitHubClient).show(this::reload);
+        });
+        Label line = new Label("Bots others published, checked by the catalog.");
+        line.getStyleClass().add("gallery-card-note");
+        HBox row = new HBox(10, line, browse);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private static Label heading(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("form-section-title");
+        return label;
+    }
+
+    /** One My bots card: icon, name, who and which version, when last used, an update badge, its buttons. */
+    private Node card(MyBot bot) {
+        Label icon = new Label(bot.name().isEmpty() ? "?" : bot.name().substring(0, 1).toUpperCase(Locale.ROOT));
+        icon.getStyleClass().add("mybots-icon");
+        Label name = new Label(bot.name());
+        name.getStyleClass().add("np-card-name");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox top = new HBox(8, icon, name, spacer);
+        top.setAlignment(Pos.CENTER_LEFT);
+        bot.available().ifPresent(tag -> {
+            Label badge = new Label(tag + " available");
+            badge.getStyleClass().add("mybots-badge");
+            top.getChildren().add(badge);
+        });
+
+        VBox card = new VBox(4, top);
+        card.getStyleClass().addAll("np-card", "mybots-card");
+        card.setPrefWidth(CARD_WIDTH);
+
+        if (bot.state() == State.GONE) {
+            card.getChildren().add(line("This bot's folder is gone."));
+            card.getChildren().add(line(bot.dir().toString()));
+            Button remove = new Button("Remove from My bots");
+            remove.setOnAction(e -> {
+                ProjectPreferences.removeRecent(bot.dir());
+                reload();
+            });
+            card.getChildren().add(remove);
+            return card;
+        }
+
+        card.getChildren().add(line(who(bot)));
+        if (!bot.lastUsed().equals(LocalDateTime.MIN)) card.getChildren().add(line("Used " + bot.lastUsed().format(USED)));
+        Button edit = new Button("Edit in Studio");
+        edit.setOnAction(e -> actions.edit(bot.dir(), false));
+        HBox buttons = new HBox(6);
+        buttons.setAlignment(Pos.CENTER_LEFT);
+        if (bot.runnable()) {
+            Button run = new Button("▶ Run");
+            run.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
+            run.setOnAction(e -> actions.run(bot.dir()));
+            buttons.getChildren().add(run);
+        } else {
+            card.getChildren().add(line("No class with main yet: nothing to run."));
+        }
+        Region push = new Region();
+        HBox.setHgrow(push, Priority.ALWAYS);
+        buttons.getChildren().addAll(edit, push, more(bot));
+        card.getChildren().add(buttons);
+        return card;
+    }
+
+    /** "by <owner> · <version>", or "mine · <version>"; no version for a bot never released. */
+    static String who(MyBot bot) {
+        String by = bot.owner().map(o -> "by " + o).orElse("mine");
+        return bot.version().map(v -> by + " · " + v).orElse(by);
+    }
+
+    /** The card's ⋯: archive a root project, forget one kept elsewhere. */
+    private Node more(MyBot bot) {
+        boolean elsewhere = !projectManager.isUnderRoot(bot.dir());
+        MenuItem item = new MenuItem(elsewhere ? "Remove from My bots" : "Archive…");
+        item.setOnAction(e -> {
+            if (elsewhere) {
+                // Not Studio's folder to move: forgetting it touches no file, and opening it again undoes it.
+                ProjectPreferences.removeRecent(bot.dir());
+                reload();
+            } else {
+                archive(bot);
+            }
+        });
+        MenuButton menu = new MenuButton("⋯");
+        menu.getItems().add(item);
+        return menu;
+    }
+
+    private void archive(MyBot bot) {
+        Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
+                "Archive “" + bot.name() + "”?\n\nIt will be moved to the archive and hidden from My bots. "
+                        + "You can restore or permanently delete it later via “View archived…”.",
+                ButtonType.OK, ButtonType.CANCEL);
+        confirm.initOwner(stage);
+        confirm.setHeaderText("Archive this bot?");
+        Optional<ButtonType> choice = confirm.showAndWait();
+        if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
+        try {
+            projectManager.archiveProject(bot.dir());
+            reload();
+        } catch (Exception ex) {
+            error("Failed to archive the bot", ex.getMessage());
+        }
+    }
+
+    /**
+     * Opens a project from a folder the user picks, anywhere, in the editor; refused, with the reason, when the
+     * folder is not a Maven project. It is remembered, so it shows in My bots from then on.
+     */
+    private void openFolder() {
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Open a project folder");
+        // A directory that does not exist is no directory at all — JavaFX throws rather than ignoring it.
+        File home = new File(System.getProperty("user.home"));
+        if (home.isDirectory()) chooser.setInitialDirectory(home);
+        File picked = chooser.showDialog(stage);
+        if (picked == null) return;
+        Path dir = picked.toPath().toAbsolutePath().normalize();
+        if (projectManager.projectAt(dir).isEmpty()) {
+            error("Not a project", dir + " has no " + ProjectManager.PROJECT_SHAPE
+                    + ", so there is no project here to open.");
+            return;
+        }
+        actions.edit(dir, false);
+    }
+
+    private static Label line(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("gallery-card-note");
+        label.setWrapText(true);
+        return label;
+    }
+
+    private void error(String header, String body) {
+        Alert alert = ThemedWindows.alert(Alert.AlertType.ERROR);
+        alert.initOwner(stage);
+        alert.setTitle("Error");
+        alert.setHeaderText(header);
+        alert.setContentText(body);
+        alert.showAndWait();
+    }
+}

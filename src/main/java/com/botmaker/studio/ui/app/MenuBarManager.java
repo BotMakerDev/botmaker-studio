@@ -138,8 +138,8 @@ public class MenuBarManager {
     private Menu createFileMenu() {
         Menu fileMenu = new Menu("File");
 
-        // Select Project
-        MenuItem selectProjectItem = new MenuItem("Select Project...");
+        // Back to the home's bot list (2026-10-25; "Select Project..." while the home was a project list)
+        MenuItem selectProjectItem = new MenuItem("My Bots");
         selectProjectItem.setAccelerator(new KeyCodeCombination(
                 KeyCode.O,
                 KeyCombination.CONTROL_DOWN,

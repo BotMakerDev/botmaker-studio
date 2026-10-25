@@ -327,7 +327,7 @@ public class GalleryDialog {
                     } else {
                         installBtn.setText("Installed");
                         info("Installed", "“" + entry.name() + "” was installed as project “" + dirName
-                                + "”.\nOpen it from File → Select Project.");
+                                + "”.\nIt is in My bots.");
                         refreshInstalled();
                     }
                 }));

@@ -96,6 +96,20 @@ public record ProjectConfig(
         return oneRoot ? Optional.of(root) : Optional.empty();
     }
 
+    /** Whether {@code projectDir} holds a bot: any class under {@code src/main/java} with {@code main}. */
+    public static boolean hasMain(Path projectDir) {
+        Path sources = projectDir.resolve("src/main/java");
+        if (!Files.isDirectory(sources)) return false;
+        try (var walk = Files.walk(sources)) {
+            for (Path java : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                if (MAIN.matcher(Files.readString(java)).find()) return true;
+            }
+            return false;
+        } catch (IOException | UncheckedIOException unreadable) {
+            return false;
+        }
+    }
+
     private static ProjectConfig of(String projectName, String packageName, Path projectPath) {
         String javaHome = System.getProperty("java.home");
         String className = toClassName(projectName);
