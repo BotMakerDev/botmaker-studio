@@ -14,6 +14,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Open and export a `.bmk`** (2026-10-25): drop a `.bmk` on the bot list, or start `botmaker-studio
+  --open=<file>`, and the bot opens in its Run window. A file the catalog lists must be the very file it pins;
+  the first open of a catalog bot asks once ("… runs code on this computer"), and a file nobody checked asks
+  every time, with a stronger warning. The bot is unpacked into the user data folder
+  (`bots/<owner>/<repo>/<tag>/`), its Maven Central jars fetched once and checked against the file's sha256s,
+  and it shows in My bots; *⋯ ▸ Remove from My bots…* deletes it. It runs with exactly the jars the file lists.
+  *Edit in Studio* on it clones the author's repository at that tag into your projects, linked as *Get* links
+  it (an unreachable repository gives an unlinked copy instead), and My bots then shows the clone.
+  `--run=<owner>/<repo>` opens a bot's Run window straight away. *Project ▸ Export .bmk…* writes the tagged,
+  saved version of a project as a `.bmk`.
 - **A bot's icon** (2026-10-25): *Project ▸ Project Settings…* has a *Bot* section with the bot's name and
   description (the pom's `<name>` and `<description>`, nothing else in the pom rewritten) and its icon: *Choose
   file…* or *Cut from game…* (a window you pick), then a square crop. It is saved as `icon.png`, 256×256, at the

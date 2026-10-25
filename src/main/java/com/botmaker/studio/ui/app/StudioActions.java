@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.docs.StudioAction;
@@ -11,9 +12,11 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
+import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
+import com.botmaker.studio.sharing.BmkExport;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -22,7 +25,18 @@ import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import com.botmaker.session.launch.BackgroundLauncher;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Every top-level action the shell offers, built once and wired into the menu bar and the toolbar.
@@ -138,6 +152,7 @@ final class StudioActions {
         // --- Sharing / VCS ---
         // Get More Bots goes home, to its Get more bots section: the shell's, so UIManager wires it (2026-10-25).
         menuBar.setOnPublishGallery(this::openPublish);
+        menuBar.setOnExportBmk(this::exportBmk);
         // Project History selects the Versions tab; UIManager wires it, since the tab is the window's.
         menuBar.setProjectRepoUrl(BotSource.read(config.projectPath())
                 .map(s -> "https://github.com/" + s.slug()).orElse(null));
@@ -166,6 +181,35 @@ final class StudioActions {
 
     void openPublish() {
         onPublish.run();
+    }
+
+    /**
+     * <b>Project ▸ Export .bmk…</b> (2026-10-25): the tagged version written as one file into a folder the user
+     * picks ({@link BmkExport}), off the FX thread; then where it went and its sha256, or why it was refused.
+     */
+    private void exportBmk() {
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Export .bmk into…");
+        chooser.setInitialDirectory(config.projectPath().toFile());
+        File picked = chooser.showDialog(primaryStage);
+        if (picked == null) return;
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                Path written = BmkExport.export(config.projectPath(), picked.toPath(), MavenService::resolvedJars);
+                return written + "\n\nsha256 " + BotFiles.sha256(written);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }).whenComplete((written, failed) -> Platform.runLater(() -> {
+            Throwable cause = failed == null ? null : failed.getCause() == null ? failed : failed.getCause();
+            if (cause instanceof UncheckedIOException unchecked) cause = unchecked.getCause();
+            Alert alert = failed == null
+                    ? ThemedWindows.alert(Alert.AlertType.INFORMATION, written, ButtonType.OK)
+                    : ThemedWindows.alert(Alert.AlertType.ERROR, cause.getMessage(), ButtonType.OK);
+            alert.initOwner(primaryStage);
+            alert.setHeaderText(failed == null ? "Exported" : "Not exported");
+            alert.showAndWait();
+        }));
     }
 
     /**

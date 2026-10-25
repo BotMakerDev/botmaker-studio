@@ -90,6 +90,15 @@ public record GalleryEntry(String name, String owner, String repo, String descri
                 .filter(c -> c != null).findFirst().orElse("");
     }
 
+    /**
+     * The sha256 the catalog pins for {@code tag}'s {@code .bmk}, which an opened file must match; empty when it
+     * approved no such release, or one with no {@code .bmk} (2026-10-25).
+     */
+    public Optional<String> bmkShaOf(String tag) {
+        return releases.stream().filter(r -> r.tag().equals(tag)).map(Catalog.Bot.Release::bmkSha256)
+                .filter(s -> s != null && !s.isBlank()).findFirst();
+    }
+
     /** How far this bot is trusted: its publisher's rank, or its plugins' when one of theirs is lower. */
     public PublisherRank trust() {
         return PublisherRank.lower(rank, pluginsRank);

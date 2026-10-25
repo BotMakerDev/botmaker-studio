@@ -1,5 +1,24 @@
 # Sharing — the gallery is read whole and written one file at a time
 
+> **2026-10-25: a bot travels as a `.bmk` too** (spec `docs/superpowers/specs/2026-10-24-run-mode-bmk-design.md`
+> § 2 in the umbrella). `sharing/BmkExport` writes one (*Project ▸ Export .bmk…*: a saved, tagged version, the
+> sources read off `HEAD`'s blobs, `ProjectVcs.filesAtHead`), through the cli's `com.botmaker.cli.bmk`.
+> `sharing/BmkOpen` opens one: `BotFile.peek`, then the catalog's `bmkSha256` for that `owner/repo` and tag when
+> it pins one (`GalleryEntry.bmkShaOf`), then the trust sheet (`ui/app/home/BmkFlow`; once per bot for a pinned
+> file, remembered in `ProjectPreferences.trustedBots`, every time for an unpinned one), then `BotFile.read` into
+> `UnpackedBots.dirOf` and the Central jars and this system's JavaFX natives fetched by coordinate alone
+> (`MavenService.fetch`) and checked; `UnpackedBots.CHECKED` is written last, so a half-done folder is no bot and
+> the next open redoes it. **An unpacked bot's classpath is its `bot.json`, never its pom**
+> (`MavenService.resolve` asks `UnpackedBots.classpath` first): the pom's JitPack dependencies may be gone, which
+> is why the file packs them; resolving the pom would also need each packed jar's pom, which the file does not
+> carry. It is read-only (`ProjectMode.isReader`); *Edit in Studio* goes through `BmkEdit`, which clones the
+> author's repository at the file's tag and commit, linked as *Get* does, or copies the sources unlinked when the
+> repository cannot be reached. My bots lists each bot's newest checked tag and hides it once a clone of the same
+> `owner/repo` exists. Studio's resolver (Maven Resolver, the raw pom's dependencies) and `mvn dependency:list`
+> can pick different versions of a transitive jar (Firestone: apiguardian 1.1.0 against 1.1.2, JUnit's platform
+> 1.7.2 against 1.9.3), so a
+> `.bmk` exported in Studio may differ from `botmaker bot export`'s of the same commit.
+
 > **2026-10-24: New Project asks the catalog again on every open** (`CatalogClient.refresh()`, its `Reply` saying
 > whether the answer is fresh or the kept copy), so a bot published minutes ago is a *Start from* card. Bots and
 > plugins are cards (`StartCards`, `NewProjectPlugins`); a plugin card is locked when the picked bot's pom

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.botmaker.studio.config.Constants.PROJECTS_ROOT;
 
@@ -67,6 +68,11 @@ public class ProjectPreferences {
      * per-project: a block reached for in one bot is reached for in the next.
      */
     private List<String> pinnedStatements = new ArrayList<>();
+    /**
+     * The bots, {@code owner/repo} lower case, whose catalog-pinned {@code .bmk} the user agreed to open: the trust
+     * sheet shows once per bot (2026-10-25). A file the catalog does not pin asks every time.
+     */
+    private List<String> trustedBots = new ArrayList<>();
 
     public ProjectPreferences() {}
 
@@ -87,6 +93,10 @@ public class ProjectPreferences {
     }
     public boolean isHideWaylandNotice() { return hideWaylandNotice; }
     public void setHideWaylandNotice(boolean hide) { this.hideWaylandNotice = hide; }
+    public List<String> getTrustedBots() { return trustedBots; }
+    public void setTrustedBots(List<String> keys) {
+        this.trustedBots = keys == null ? new ArrayList<>() : new ArrayList<>(keys);
+    }
     public List<String> getPinnedStatements() { return pinnedStatements; }
     public void setPinnedStatements(List<String> ids) {
         this.pinnedStatements = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
@@ -222,6 +232,18 @@ public class ProjectPreferences {
     public static void setWaylandNoticeHidden(boolean hide) {
         ProjectPreferences prefs = load();
         prefs.setHideWaylandNotice(hide);
+        prefs.save();
+    }
+
+    /** The {@code owner/repo} keys of the bots whose {@code .bmk} the user agreed to open ({@code BmkOpen.trustKey}). */
+    public static Set<String> trustedBots() {
+        return Set.copyOf(load().getTrustedBots());
+    }
+
+    /** Remembers that the user agreed to open {@code key}'s files, which the catalog pins. */
+    public static void trustBot(String key) {
+        ProjectPreferences prefs = load();
+        if (!prefs.getTrustedBots().contains(key)) prefs.getTrustedBots().add(key);
         prefs.save();
     }
 

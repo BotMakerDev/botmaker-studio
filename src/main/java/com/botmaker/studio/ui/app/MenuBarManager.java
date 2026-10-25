@@ -54,6 +54,7 @@ public class MenuBarManager {
     private Runnable onPickerGallery;
     private Runnable onGetMoreBots;
     private Runnable onPublishGallery;
+    private Runnable onExportBmk;
     private Runnable onShowHistory;
     /** What each Navigate item does; an item with no entry is greyed. */
     private final java.util.Map<Shortcuts, Runnable> onNavigate = new java.util.EnumMap<>(Shortcuts.class);
@@ -295,6 +296,12 @@ public class MenuBarManager {
             if (onPublishGallery != null) onPublishGallery.run();
         });
 
+        // The tagged version as one file, for someone who only runs bots (2026-10-25).
+        MenuItem exportBmkItem = new MenuItem("Export .bmk...");
+        exportBmkItem.setOnAction(e -> {
+            if (onExportBmk != null) onExportBmk.run();
+        });
+
         // Opens the project's own GitHub repo; disabled until the project has been published.
         projectRepoItem = new MenuItem("Project Repository on GitHub");
         projectRepoItem.setDisable(true);
@@ -309,7 +316,7 @@ public class MenuBarManager {
                 new SeparatorMenuItem(),
                 projectSettingsItem, new SeparatorMenuItem(),
                 recoverFilesItem, reviewItem, migrateItem, historyItem, new SeparatorMenuItem(),
-                browseGalleryItem, publishGalleryItem, new SeparatorMenuItem(),
+                browseGalleryItem, publishGalleryItem, exportBmkItem, new SeparatorMenuItem(),
                 projectRepoItem);
         return projectMenu;
     }
@@ -897,6 +904,11 @@ public class MenuBarManager {
      */
     public void setOnPublishGallery(Runnable callback) {
         this.onPublishGallery = callback;
+    }
+
+    /** Sets the callback for when "Export .bmk..." is clicked. */
+    public void setOnExportBmk(Runnable callback) {
+        this.onExportBmk = callback;
     }
 
     /**

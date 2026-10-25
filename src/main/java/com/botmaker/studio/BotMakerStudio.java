@@ -1,5 +1,6 @@
 package com.botmaker.studio;
 
+import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
@@ -11,12 +12,17 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.project.migration.ProjectSchema;
 import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.app.home.BmkFlow;
+import com.botmaker.studio.ui.app.home.MyBots;
 import com.botmaker.studio.ui.app.home.RunHome;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.UIManager;
@@ -39,6 +45,8 @@ import javafx.stage.Stage;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.Optional;
 
 
 public class BotMakerStudio extends Application {
@@ -101,7 +109,20 @@ public class BotMakerStudio extends Application {
         // BotMaker opens on the bot list (2026-10-25, spec § 1a), not on the project last opened: only a project
         // named on the command line opens straight away.
         Path requested = requestedProject();
-        if (requested != null && projectExists(requested)) {
+        Optional<Path> bmk = named("open").map(Path::of).map(p -> p.toAbsolutePath().normalize());
+        Optional<String> run = named("run");
+        if (bmk.isPresent()) {
+            // A second launch is a Studio of its own (2026-10-25): it opens the file on its home.
+            showProjectSelection(primaryStage).openBmk(bmk.get());
+        } else if (run.isPresent()) {
+            Optional<Path> dir = botByRepo(run.get());
+            if (dir.isPresent()) {
+                openAs(primaryStage, dir.get(), true, false);
+            } else {
+                System.err.println("No bot " + run.get() + " in My bots — showing the bot list instead.");
+                showProjectSelection(primaryStage);
+            }
+        } else if (requested != null && projectExists(requested)) {
             openProject(primaryStage, requested, false);
         } else {
             if (requested != null) {
@@ -134,7 +155,7 @@ public class BotMakerStudio extends Application {
 
             @Override
             public void edit(Path dir, boolean freshlyCreated) {
-                openAs(primaryStage, dir, false, freshlyCreated);
+                editProject(primaryStage, dir, freshlyCreated);
             }
         });
         this.currentWindow = home;
@@ -143,6 +164,20 @@ public class BotMakerStudio extends Application {
         primaryStage.show();
         requestSceneLayout(primaryStage);
         return home;
+    }
+
+    /**
+     * Opens the editor on {@code projectDir}; a bot opened from a {@code .bmk} is cloned from its author first
+     * ({@link BmkFlow#edit}), and the editor opens on the clone (spec § 1a).
+     */
+    private void editProject(Stage primaryStage, Path projectDir, boolean freshlyCreated) {
+        Optional<BotJson> unpacked = UnpackedBots.at(projectDir);
+        if (unpacked.isEmpty()) {
+            openAs(primaryStage, projectDir, false, freshlyCreated);
+            return;
+        }
+        new BmkFlow(primaryStage, line -> {}).edit(projectDir, unpacked.get(),
+                clone -> openAs(primaryStage, clone, false, false));
     }
 
     /** Opens {@code projectDir} in the Runner ({@code asUser}) or the editor, as a home card's button asked. */
@@ -394,6 +429,10 @@ public class BotMakerStudio extends Application {
                 ? RunnerWindow.Origin.INSTALLED
                 : RunnerWindow.Origin.PREVIEW;
         RunnerWindow runner = new RunnerWindow(currentProject.context(), primaryStage, origin, () -> {
+            if (UnpackedBots.isUnpacked(projectDir)) {
+                editProject(primaryStage, projectDir, false);
+                return;
+            }
             showAsUser = Boolean.FALSE;
             openProject(primaryStage, projectDir, false);
         }, () -> switchToProjectSelector(primaryStage));
@@ -574,6 +613,31 @@ public class BotMakerStudio extends Application {
         boolean isPath = named.contains("/") || named.contains(java.io.File.separator);
         Path dir = isPath ? Path.of(named) : Constants.PROJECTS_ROOT.resolve(named);
         return dir.toAbsolutePath().normalize();
+    }
+
+    /** The command line's {@code --<name>=<value>}, when it is there and not blank. */
+    private Optional<String> named(String name) {
+        Parameters parameters = getParameters();
+        String value = parameters == null ? null : parameters.getNamed().get(name);
+        return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
+    }
+
+    /**
+     * {@code --run=<owner>/<repo>}: the My bots folder of that bot — the one the author's repository was cloned into,
+     * else its newest tag opened from a file — as My bots shows it.
+     */
+    private static Optional<Path> botByRepo(String slug) {
+        int slash = slug.indexOf('/');
+        if (slash <= 0) return Optional.empty();
+        String key = MyBots.key(slug.substring(0, slash), slug.substring(slash + 1));
+        var opened = ProjectPreferences.recentOpenTimes();
+        return MyBots.scan(MyBots.folders(new ProjectManager(), ProjectPreferences.recentDirectories(),
+                        UnpackedBots.newest(UnpackedBots.root())), dir -> MyBots.read(dir, opened), Map.of())
+                .stream()
+                .filter(b -> b.state() == MyBots.State.READY && b.runnable())
+                .filter(b -> MyBots.read(b.dir(), Map.of()).originalUrl().flatMap(SyncModel::slug)
+                        .map(s -> MyBots.key(s.owner(), s.repo()).equals(key)).orElse(false))
+                .map(MyBots.MyBot::dir).findFirst();
     }
 
     private static boolean projectExists(Path projectDir) {

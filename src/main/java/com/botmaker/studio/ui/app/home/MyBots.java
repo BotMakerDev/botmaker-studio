@@ -6,7 +6,10 @@ import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.cli.bmk.BotJson;
+import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.sharing.UnpackedBots;
 
 import com.botmaker.studio.runtime.TreeCompile;
 
@@ -19,6 +22,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -140,24 +144,45 @@ public final class MyBots {
      * @param runnable    whether a class holds {@code main}; a project that is no bot is only edited
      * @param lastUsed    when Studio last opened it, else when its folder last changed
      * @param title       the pom's {@code <name>}, set in Project Settings; the card shows the folder's without one
+     * @param unpacked    a bot opened from a {@code .bmk} ({@link UnpackedBots}): its author and tag come from its
+     *                    {@code bot.json}, and it has no history to merge an update into
      */
     public record Facts(Optional<String> originalUrl, Optional<String> version, boolean runnable,
-                        LocalDateTime lastUsed, Optional<String> title) {}
+                        LocalDateTime lastUsed, Optional<String> title, boolean unpacked) {
+
+        /** A project's facts: one with a folder of its own, not an unpacked bot. */
+        public Facts(Optional<String> originalUrl, Optional<String> version, boolean runnable, LocalDateTime lastUsed,
+                     Optional<String> title) {
+            this(originalUrl, version, runnable, lastUsed, title, false);
+        }
+    }
 
     /**
      * One card. {@code owner} is the author of a bot got from someone, empty for the user's own ("mine");
-     * {@code available} is the catalog's newer tag.
+     * {@code available} is the catalog's newer tag; {@code unpacked} a bot opened from a {@code .bmk}.
      */
     public record MyBot(Path dir, String name, Optional<String> owner, Optional<String> version,
-                        LocalDateTime lastUsed, Optional<String> available, boolean runnable, State state) {}
+                        LocalDateTime lastUsed, Optional<String> available, boolean runnable, State state,
+                        boolean unpacked) {
+
+        /** A project's card. */
+        public MyBot(Path dir, String name, Optional<String> owner, Optional<String> version, LocalDateTime lastUsed,
+                     Optional<String> available, boolean runnable, State state) {
+            this(dir, name, owner, version, lastUsed, available, runnable, state, false);
+        }
+    }
 
     /**
      * The cards for {@code projectDirs}, most recently used first, gone ones last. {@code facts} is asked only of
-     * a folder that is there; {@code latestTagByRepo} is the catalog's tag by lower-case {@code owner/repo}.
+     * a folder that is there; {@code latestTagByRepo} is the catalog's tag by lower-case {@code owner/repo}. An
+     * unpacked bot whose author's repository is also a project here is left out: <i>Edit in Studio</i> made that
+     * clone, and the card points to it (spec § 1a).
      */
     public static List<MyBot> scan(List<Path> projectDirs, Function<Path, Facts> facts,
                                    Map<String, String> latestTagByRepo) {
         List<MyBot> bots = new ArrayList<>();
+        Set<String> cloned = new HashSet<>();
+        Map<MyBot, String> unpackedRepo = new HashMap<>();
         for (Path dir : projectDirs) {
             String name = dir.getFileName() == null ? dir.toString() : dir.getFileName().toString();
             if (Files.exists(dir) && !isProject(dir)) continue;   // there but no project (now): left out, as before
@@ -168,12 +193,19 @@ public final class MyBots {
             }
             Facts f = facts.apply(dir);
             Optional<SyncModel.Slug> original = f.originalUrl().flatMap(SyncModel::slug);
-            Optional<String> available = original
+            // An unpacked bot has no history to merge a newer tag into; a newer .bmk is opened beside it instead.
+            Optional<String> available = f.unpacked() ? Optional.empty() : original
                     .map(s -> latestTagByRepo.get(key(s.owner(), s.repo())))
                     .flatMap(latest -> GalleryEntry.updateTarget(f.version().orElse(""), latest));
-            bots.add(new MyBot(dir, f.title().orElse(name), original.map(SyncModel.Slug::owner), f.version(),
-                    f.lastUsed(), available, f.runnable(), State.READY));
+            MyBot bot = new MyBot(dir, f.title().orElse(name), original.map(SyncModel.Slug::owner), f.version(),
+                    f.lastUsed(), available, f.runnable(), State.READY, f.unpacked());
+            bots.add(bot);
+            original.map(s -> key(s.owner(), s.repo())).ifPresent(k -> {
+                if (f.unpacked()) unpackedRepo.put(bot, k);
+                else cloned.add(k);
+            });
         }
+        bots.removeIf(b -> cloned.contains(unpackedRepo.get(b)));
         bots.sort(Comparator.comparing((MyBot b) -> b.state() == State.GONE)
                 .thenComparing(MyBot::lastUsed, Comparator.reverseOrder())
                 .thenComparing(MyBot::name, String.CASE_INSENSITIVE_ORDER));
@@ -194,24 +226,30 @@ public final class MyBots {
 
     /**
      * The folders My bots lists: the root's projects, then the remembered ones outside it — gone ones too, so
-     * their card can say so. Each folder once.
+     * their card can say so — then the bots opened from a {@code .bmk}, each one's newest tag. Each folder once.
      */
-    public static List<Path> folders(ProjectManager projects, List<Path> remembered) {
+    public static List<Path> folders(ProjectManager projects, List<Path> remembered, List<Path> unpacked) {
         Set<Path> dirs = new LinkedHashSet<>();
         projects.listProjects().forEach(p -> dirs.add(p.projectPath().toAbsolutePath().normalize()));
         for (Path dir : remembered) {
             Path d = dir.toAbsolutePath().normalize();
-            if (!projects.isUnderRoot(d)) dirs.add(d);
+            if (!projects.isUnderRoot(d) && !UnpackedBots.isUnpacked(d)) dirs.add(d);
         }
+        unpacked.forEach(d -> dirs.add(d.toAbsolutePath().normalize()));
         return List.copyOf(dirs);
     }
 
-    /** What {@code dir}'s folder says. Blocking: a repository is opened. */
+    /** What {@code dir}'s folder says. Blocking: a repository is opened, or an unpacked bot's bot.json read. */
     public static Facts read(Path dir, Map<Path, LocalDateTime> openedTimes) {
-        ProjectVcs vcs = new ProjectVcs(dir);
         LocalDateTime changed = lastModified(dir);
         LocalDateTime opened = openedTimes.get(dir.toAbsolutePath().normalize());
         LocalDateTime used = opened != null && opened.isAfter(changed) ? opened : changed;
+        Optional<BotJson> bot = UnpackedBots.at(dir);
+        if (bot.isPresent()) {
+            return new Facts(Optional.of(BotInstaller.cloneUrl(bot.get().owner(), bot.get().repo())),
+                    Optional.of(bot.get().tag()), true, used, Optional.of(bot.get().name()), true);
+        }
+        ProjectVcs vcs = new ProjectVcs(dir);
         return new Facts(Optional.ofNullable(vcs.remoteUrl(Remote.ORIGINAL)), vcs.nearestTag(),
                 ProjectConfig.hasMain(dir), used, PomInfo.read(dir).name());
     }

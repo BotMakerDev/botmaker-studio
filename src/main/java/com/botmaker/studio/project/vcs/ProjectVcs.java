@@ -24,6 +24,8 @@ import org.eclipse.jgit.transport.RemoteRefUpdate;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.FileTreeIterator;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.lib.FileMode;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -38,7 +40,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 /**
  * Git history for one user project, backed by JGit (no system git binary): versions ({@link #checkpoint}),
@@ -1306,6 +1310,33 @@ public final class ProjectVcs {
         } catch (Exception e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * The bytes {@code HEAD}'s commit holds for each file {@code wanted} accepts, by path: the blobs themselves,
+     * never the working tree, so no line-ending conversion or filter changes them (a {@code .bmk}'s sources,
+     * 2026-10-25). A link or a submodule {@code wanted} accepts is refused: the caller wants files.
+     *
+     * @throws IOException with the path, for a link or a submodule; or when there is no commit
+     */
+    public Map<String, byte[]> filesAtHead(Predicate<String> wanted) throws IOException {
+        if (headCommit().isEmpty()) throw new IOException("This project has no version yet.");
+        Map<String, byte[]> out = new TreeMap<>();
+        try (Git git = open(); RevWalk walk = new RevWalk(git.getRepository());
+             TreeWalk tree = new TreeWalk(git.getRepository())) {
+            tree.addTree(walk.parseCommit(git.getRepository().resolve(Constants.HEAD)).getTree());
+            tree.setRecursive(true);
+            while (tree.next()) {
+                String path = tree.getPathString();
+                if (!wanted.test(path)) continue;
+                FileMode mode = tree.getFileMode(0);
+                if (mode != FileMode.REGULAR_FILE && mode != FileMode.EXECUTABLE_FILE) {
+                    throw new IOException(path + " is a link or a submodule, not a file.");
+                }
+                out.put(path, git.getRepository().open(tree.getObjectId(0)).getBytes());
+            }
+        }
+        return out;
     }
 
     private List<String> tags() {

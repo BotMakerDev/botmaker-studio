@@ -5,6 +5,7 @@ import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.studio.sharing.UnpackedBots;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -53,6 +54,8 @@ public final class ProjectMode {
      */
     public static boolean isReader(Path projectDir, String signedInLogin) {
         if (projectDir == null) return false;
+        // A bot opened from a .bmk is for running only: editing it goes through a clone (BmkEdit, 2026-10-25).
+        if (UnpackedBots.isUnpacked(projectDir)) return true;
         BotSource source = BotSource.read(projectDir).orElse(null);
         if (source == null) return false;                 // locally created → always yours to edit
         if (isYours(projectDir, source, signedInLogin)) return false;  // your own bot, or your fork of one

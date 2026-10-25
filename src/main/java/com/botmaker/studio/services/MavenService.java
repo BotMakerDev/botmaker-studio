@@ -1,8 +1,11 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.cli.bmk.BotFile;
+import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.sharing.UnpackedBots;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Repository;
@@ -42,6 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -436,10 +440,98 @@ public final class MavenService {
 
     /** {@link #resolveClasspath(Path, ProgressReporter)}, keeping what failed. */
     public static Resolution resolve(Path projectDir, ProgressReporter progress) {
+        // A bot opened from a .bmk runs with the jars its bot.json lists, never its pom's: the pom's JitPack
+        // dependencies may be gone, which is why the file packs them (2026-10-25).
+        Optional<Resolution> unpacked = UnpackedBots.classpath(projectDir, progress);
+        if (unpacked.isPresent()) return unpacked.get();
+        Collected collected = collect(projectDir, progress);
+        List<String> jars = new ArrayList<>();
+        collectJars(collected.results(), jars);
+        return new Resolution(jars, collected.problems());
+    }
+
+    /**
+     * Every jar {@code projectDir}'s pom resolves to, with its coordinate ({@code group:artifact:version}, plus
+     * {@code :classifier}), sorted by it: what a {@code .bmk} lists. No native-classifier jar
+     * ({@link BotFiles#isNative}), no other type than {@code jar}.
+     *
+     * @throws IOException naming the dependencies that did not resolve
+     */
+    public static List<BotFile.Jar> resolvedJars(Path projectDir) throws IOException {
+        Collected collected = collect(projectDir, ProgressReporter.NONE);
+        if (!collected.problems().isEmpty()) {
+            throw new IOException("Some of the bot's libraries did not resolve: "
+                    + String.join("; ", collected.problems()));
+        }
+        Map<String, BotFile.Jar> jars = new TreeMap<>();
+        for (ArtifactResult result : collected.results()) {
+            Artifact a = result.getArtifact();
+            if (a == null || a.getPath() == null || !"jar".equals(a.getExtension())) continue;
+            if (BotFiles.isNative(a.getClassifier())) continue;
+            String coordinate = a.getGroupId() + ":" + a.getArtifactId() + ":" + a.getBaseVersion()
+                    + (a.getClassifier().isEmpty() ? "" : ":" + a.getClassifier());
+            jars.putIfAbsent(coordinate, new BotFile.Jar(coordinate, a.getPath()));
+        }
+        return List.copyOf(jars.values());
+    }
+
+    /**
+     * What {@link #fetch} got: each coordinate's file in {@code ~/.m2}, and the coordinates it could not get
+     * (offline, gone from the repository).
+     */
+    public record Fetched(Map<String, Path> files, List<String> missing) {
+        public Fetched {
+            files = Map.copyOf(files);
+            missing = List.copyOf(missing);
+        }
+    }
+
+    /**
+     * The jars {@code coordinates} name ({@code group:artifact:version[:classifier]}), each alone — no pom read, no
+     * dependency followed — from {@code ~/.m2}, else Maven Central, JitPack or Google's repository. For a list that
+     * is already whole, a {@code .bmk}'s.
+     */
+    public static Fetched fetch(List<String> coordinates, ProgressReporter progress) {
+        RepositorySystem system = new RepositorySystemSupplier().get();
+        DefaultRepositorySystemSession session = newSession(system);
+        session.setTransferListener(new AbstractTransferListener() {
+            @Override
+            public void transferInitiated(TransferEvent event) {
+                progress.report(-1, "Downloading " + fileName(event.getResource()));
+            }
+        });
+        List<RemoteRepository> repositories = buildRemoteRepositories(new Model());
+        List<ArtifactRequest> requests = new ArrayList<>();
+        for (String coordinate : coordinates) {
+            String[] p = coordinate.split(":");
+            if (p.length < 3) continue;
+            requests.add(new ArtifactRequest(new DefaultArtifact(p[0], p[1], p.length > 3 ? p[3] : "", "jar", p[2]),
+                    repositories, null).setRequestContext(coordinate));
+        }
+        List<ArtifactResult> results;
+        try {
+            results = system.resolveArtifacts(session, requests);
+        } catch (ArtifactResolutionException e) {
+            results = e.getResults();
+        }
+        Map<String, Path> files = new LinkedHashMap<>();
+        for (ArtifactResult result : results) {
+            if (result.isResolved() && result.getArtifact().getPath() != null) {
+                files.put(result.getRequest().getRequestContext(), result.getArtifact().getPath());
+            }
+        }
+        List<String> missing = coordinates.stream().filter(c -> !files.containsKey(c)).toList();
+        return new Fetched(files, missing);
+    }
+
+    /** The pom's dependencies resolved, with what failed. */
+    private record Collected(List<ArtifactResult> results, List<String> problems) {}
+
+    private static Collected collect(Path projectDir, ProgressReporter progress) {
         Path pomPath = projectDir.resolve("pom.xml");
         if (!Files.exists(pomPath)) {
             System.err.println("No pom.xml found at " + pomPath);
-            return new Resolution(List.of(), List.of("pom.xml — not found"));
+            return new Collected(List.of(), List.of("pom.xml — not found"));
         }
 
         Model model;
@@ -447,7 +539,7 @@ public final class MavenService {
             model = new MavenXpp3Reader().read(in);
         } catch (Exception e) {
             System.err.println("Failed to read pom.xml: " + e.getMessage());
-            return new Resolution(List.of(), List.of("pom.xml — " + e.getMessage()));
+            return new Collected(List.of(), List.of("pom.xml — " + e.getMessage()));
         }
 
         RepositorySystem system = new RepositorySystemSupplier().get();
@@ -491,21 +583,21 @@ public final class MavenService {
         }
 
         DependencyRequest dependencyRequest = new DependencyRequest(collectRequest, null);
-        List<String> jars = new ArrayList<>();
+        List<ArtifactResult> results = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         try {
             DependencyResult result = system.resolveDependencies(session, dependencyRequest);
-            collectJars(result.getArtifactResults(), jars);
+            results.addAll(result.getArtifactResults());
         } catch (DependencyResolutionException e) {
             System.err.println("Some dependencies failed to resolve: " + e.getMessage());
-            if (e.getResult() != null) {
-                collectJars(e.getResult().getArtifactResults(), jars);
+            if (e.getResult() != null && e.getResult().getArtifactResults() != null) {
+                results.addAll(e.getResult().getArtifactResults());
                 collectProblems(e.getResult().getArtifactResults(), problems);
             }
             // A collection failure (a pom that is not there at all) has no artifact results to name.
             if (problems.isEmpty()) problems.add(firstLine(e.getMessage()));
         }
-        return new Resolution(jars, problems);
+        return new Collected(results, problems);
     }
 
     /** A resolver session over {@code ~/.m2}, the one every resolution here starts from. */

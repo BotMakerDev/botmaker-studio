@@ -12,6 +12,7 @@ import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
@@ -33,6 +34,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -119,7 +121,8 @@ public final class RunHome implements ProjectWindow {
         BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), new GitHubAuth()));
         RunHome home = new RunHome(stage, actions, () -> {
             var opened = ProjectPreferences.recentOpenTimes();
-            return MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories()),
+            return MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories(),
+                            UnpackedBots.newest(UnpackedBots.root())),
                     dir -> MyBots.read(dir, opened),
                     MyBots.latestTags(CatalogClient.session().kept().bots()));
         }, new GetBots.Shelf() {
@@ -210,9 +213,39 @@ public final class RunHome implements ProjectWindow {
 
         BorderPane root = new BorderPane(scroll);
         root.setTop(bar);
+        // A .bmk dropped anywhere on the home opens it (spec § 2 "Opening one").
+        root.setOnDragOver(e -> {
+            if (droppedBmk(e.getDragboard().getFiles()).isPresent()) e.acceptTransferModes(TransferMode.COPY);
+            e.consume();
+        });
+        root.setOnDragDropped(e -> {
+            Optional<Path> bmk = droppedBmk(e.getDragboard().getFiles());
+            bmk.ifPresent(this::openBmk);
+            e.setDropCompleted(bmk.isPresent());
+            e.consume();
+        });
         reload();
         // Unsized, as every scene swapped onto the shell's one stage: a sized one would resize the user's window.
         return ThemedWindows.scene(root);
+    }
+
+    /** The one {@code .bmk} among {@code files}, when the drop is exactly one. */
+    static Optional<Path> droppedBmk(List<File> files) {
+        if (files == null || files.size() != 1) return Optional.empty();
+        Path file = files.getFirst().toPath();
+        return file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".bmk") ? Optional.of(file)
+                : Optional.empty();
+    }
+
+    /**
+     * Opens a {@code .bmk} ({@link BmkFlow}: the trust sheet when it needs one), then shows it in My bots and opens
+     * its runner window. {@code botmaker-studio --open=<file>} comes here too.
+     */
+    public void openBmk(Path bmk) {
+        new BmkFlow(stage, this::say).open(bmk, dir -> {
+            reload();
+            actions.run(dir);
+        });
     }
 
     /** Reads My bots again, off the FX thread, and shows the cards. */
@@ -317,12 +350,15 @@ public final class RunHome implements ProjectWindow {
         return bot.version().map(v -> by + " · " + v).orElse(by);
     }
 
-    /** The card's ⋯: archive a root project, forget one kept elsewhere. */
+    /** The card's ⋯: archive a root project, forget one kept elsewhere, delete one opened from a file. */
     private Node more(MyBot bot) {
         boolean elsewhere = !projectManager.isUnderRoot(bot.dir());
-        MenuItem item = new MenuItem(elsewhere ? "Remove from My bots" : "Archive…");
+        MenuItem item = new MenuItem(bot.unpacked() ? "Remove from My bots…" : elsewhere ? "Remove from My bots"
+                : "Archive…");
         item.setOnAction(e -> {
-            if (elsewhere) {
+            if (bot.unpacked()) {
+                removeUnpacked(bot);
+            } else if (elsewhere) {
                 // Not Studio's folder to move: forgetting it touches no file, and opening it again undoes it.
                 ProjectPreferences.removeRecent(bot.dir());
                 reload();
@@ -333,6 +369,25 @@ public final class RunHome implements ProjectWindow {
         MenuButton menu = new MenuButton("⋯");
         menu.getItems().add(item);
         return menu;
+    }
+
+    /**
+     * Deletes a bot opened from a file, every tag of it: there is nothing of the user's in it (its runner's values
+     * are kept apart), and opening the file again brings it back.
+     */
+    private void removeUnpacked(MyBot bot) {
+        Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
+                "Remove “" + bot.name() + "” from this computer?\n\nIts settings are kept; open its .bmk file again "
+                        + "to get it back.", ButtonType.OK, ButtonType.CANCEL);
+        confirm.initOwner(stage);
+        confirm.setHeaderText("Remove this bot?");
+        if (confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
+        try {
+            UnpackedBots.remove(bot.dir());
+            reload();
+        } catch (IOException ex) {
+            error("Failed to remove the bot", ex.getMessage());
+        }
     }
 
     private void archive(MyBot bot) {

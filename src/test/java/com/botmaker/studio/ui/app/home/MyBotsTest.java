@@ -115,4 +115,28 @@ class MyBotsTest {
         assertEquals(CompileState.UNKNOWN, MyBots.compileState(other, throwing).get(5, TimeUnit.SECONDS));
         assertEquals(CompileState.OK, MyBots.compileState(other, d -> CompileState.OK).get(5, TimeUnit.SECONDS));
     }
+
+    /**
+     * A bot opened from a .bmk is a card by its author, with no update badge (it has no history to merge into);
+     * once Edit in Studio cloned its repository, the clone's card takes its place.
+     */
+    @Test
+    void anUnpackedBotGivesWayToItsClone() throws IOException {
+        Path unpacked = project("v1.0.0");
+        Path clone = project("Firestone");
+        Function<Path, Facts> facts = d -> d.equals(unpacked)
+                ? new Facts(Optional.of("https://github.com/LiQiyeDev/Firestone.git"), Optional.of("v1.0.0"), true,
+                MONDAY, Optional.of("Firestone"), true)
+                : facts("https://github.com/LiQiyeDev/Firestone.git", "v1.0.0");
+        Map<String, String> newer = Map.of(MyBots.key("LiQiyeDev", "Firestone"), "v1.1.0");
+
+        MyBot alone = only(MyBots.scan(List.of(unpacked), facts, newer));
+        assertEquals("by LiQiyeDev · v1.0.0", RunHome.who(alone));
+        assertEquals(Optional.empty(), alone.available());
+        assertEquals(true, alone.unpacked());
+
+        MyBot both = only(MyBots.scan(List.of(unpacked, clone), facts, newer));
+        assertEquals(clone, both.dir());
+        assertEquals(Optional.of("v1.1.0"), both.available());
+    }
 }

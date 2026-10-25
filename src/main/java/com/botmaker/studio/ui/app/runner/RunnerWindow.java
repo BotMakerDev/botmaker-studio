@@ -298,8 +298,9 @@ public final class RunnerWindow implements ProjectWindow {
         listed = original.flatMap(s -> CatalogClient.session().kept().bots().stream()
                 .filter(e -> MyBots.key(e.owner(), e.repo()).equals(MyBots.key(s.owner(), s.repo())))
                 .findFirst());
-        Optional<String> available = listed.flatMap(e -> GalleryEntry.updateTarget(facts.version().orElse(""),
-                e.tag()));
+        // A bot opened from a .bmk has no history to merge into: its newer tag is a newer file, opened beside it.
+        Optional<String> available = facts.unpacked() ? Optional.empty()
+                : listed.flatMap(e -> GalleryEntry.updateTarget(facts.version().orElse(""), e.tag()));
         kept = RunnerValues.load(RunnerValues.keyOf(original.map(SyncModel.Slug::owner),
                 original.map(SyncModel.Slug::repo), dir));
         return new RunnerHeader.About(facts.title().orElse(config.projectName()), original.map(SyncModel.Slug::owner), facts.version(),

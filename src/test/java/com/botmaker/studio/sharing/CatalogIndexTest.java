@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -79,6 +80,18 @@ class CatalogIndexTest {
                              {"id": "com.botmaker.basics", "repo": "o/basics", "releases": [{"tag": "v0.5.0"}]}]}""");
         assertEquals(List.of("com.botmaker.basics"), index.plugins().get(0).brings());
         assertEquals(List.of(), index.plugins().get(1).brings());
+    }
+
+    /** A bot release's {@code bmkSha256} (2026-10-25) is what an opened {@code .bmk} must match; an older one has none. */
+    @Test
+    void aBotReleaseCarriesItsBmkSha() {
+        CatalogIndex index = CatalogIndex.parse("""
+                {"bots": [{"repo": "o/miner", "releases": [{"tag": "v2", "commit": "c2", "bmkSha256": "ab12"},
+                                                           {"tag": "v1", "commit": "c1"}]}]}""");
+        GalleryEntry bot = index.bots().getFirst();
+        assertEquals(Optional.of("ab12"), bot.bmkShaOf("v2"));
+        assertEquals(Optional.empty(), bot.bmkShaOf("v1"));
+        assertEquals(Optional.empty(), bot.bmkShaOf("v3"));
     }
 
     /** No reading of the old single {@code tag}: a schema-3 row has no release, so it is skipped. */
