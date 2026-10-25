@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.home;
 
+import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.Facts;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
@@ -138,5 +139,35 @@ class MyBotsTest {
         MyBot both = only(MyBots.scan(List.of(unpacked, clone), facts, newer));
         assertEquals(clone, both.dir());
         assertEquals(Optional.of("v1.1.0"), both.available());
+    }
+
+    /**
+     * A run copy is listed once, by the unpacked list, never for being remembered: a removed one came back as a
+     * gone card asking to be removed again (2026-10-25, finding 12c). A gone folder elsewhere still shows.
+     */
+    @Test
+    void aRememberedRunCopyIsNeverAGoneCard() {
+        Path projects = root.resolve("projects");
+        Path runCopies = root.resolve("bots");
+        ProjectManager manager = new ProjectManager(projects, projects.resolve(".archive"));
+        Path removed = runCopies.resolve("LiQiyeDev/Firestone/v1.0.2");
+        Path elsewhere = root.resolve("usb/Bot");
+
+        assertEquals(List.of(elsewhere), MyBots.folders(manager, List.of(removed, elsewhere), runCopies, List.of()));
+    }
+
+    @Test
+    void eachCardIsTakenOffItsOwnWay() {
+        MyBot project = new MyBot(root.resolve("A"), "A", Optional.empty(), Optional.empty(), MONDAY,
+                Optional.empty(), true, State.READY);
+        MyBot gone = new MyBot(root.resolve("B"), "B", Optional.empty(), Optional.empty(), MONDAY,
+                Optional.empty(), false, State.GONE);
+        MyBot runCopy = new MyBot(root.resolve("C"), "C", Optional.of("x"), Optional.of("v1"), MONDAY,
+                Optional.empty(), true, State.READY, true, Optional.empty());
+
+        assertEquals(MyBots.Removal.ARCHIVE, MyBots.removalOf(project, true));
+        assertEquals(MyBots.Removal.FORGET, MyBots.removalOf(project, false));
+        assertEquals(MyBots.Removal.FORGET, MyBots.removalOf(gone, true));
+        assertEquals(MyBots.Removal.DELETE, MyBots.removalOf(runCopy, false));
     }
 }

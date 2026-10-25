@@ -102,6 +102,26 @@ class RunHomeFxTest extends FxHeadlessTest {
         assertEquals(List.of("run Firestone", "edit Firestone"), asked);
     }
 
+    /** Select mode (layout S1): check boxes for the buttons, a bar that counts, Done to leave. */
+    @Test
+    void selectModeTicksCardsAndCountsThem() {
+        cards();
+        clickOn(lookup("Select").queryButton());
+        List<Node> cards = cards();
+        assertTrue(cards.stream().noneMatch(c -> says(c, "▶ Run")), "the cards' buttons are hidden");
+        clickOn(cards.get(0));
+        clickOn(cards.get(2));
+        assertEquals(List.of("2 selected"), lookup(".label").queryAll().stream()
+                .map(n -> ((Label) n).getText()).filter(t -> t.endsWith("selected")).toList());
+        // None of these is the projects root's, so there is nothing to archive, only to remove.
+        assertTrue(lookup("Archive").queryButton().isDisabled());
+        assertTrue(!lookup("Remove from My bots").queryButton().isDisabled());
+
+        clickOn(lookup("Done").queryButton());
+        assertTrue(says(cards().get(0), "▶ Run"), "the buttons are back");
+        assertTrue(!lookup("Cancel").queryButton().getParent().isVisible(), "the bar is gone");
+    }
+
     @Test
     void aGoneFolderSaysSo() {
         Node gone = cards().get(2);

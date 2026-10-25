@@ -247,14 +247,42 @@ public final class MyBots {
      * their card can say so — then the bots opened from a {@code .bmk}, each one's newest tag. Each folder once.
      */
     public static List<Path> folders(ProjectManager projects, List<Path> remembered, List<Path> unpacked) {
+        return folders(projects, remembered, UnpackedBots.root(), unpacked);
+    }
+
+    /**
+     * {@link #folders(ProjectManager, List, List)} with the run copies under {@code unpackedRoot}: a remembered
+     * folder there is never listed for being remembered, gone or not, since {@code unpacked} lists each bot there
+     * once (2026-10-25: a removed run copy came back as a gone card).
+     */
+    static List<Path> folders(ProjectManager projects, List<Path> remembered, Path unpackedRoot,
+                              List<Path> unpacked) {
+        Path runCopies = unpackedRoot.toAbsolutePath().normalize();
         Set<Path> dirs = new LinkedHashSet<>();
         projects.listProjects().forEach(p -> dirs.add(p.projectPath().toAbsolutePath().normalize()));
         for (Path dir : remembered) {
             Path d = dir.toAbsolutePath().normalize();
-            if (!projects.isUnderRoot(d) && !UnpackedBots.isUnpacked(d)) dirs.add(d);
+            if (!projects.isUnderRoot(d) && !d.startsWith(runCopies)) dirs.add(d);
         }
         unpacked.forEach(d -> dirs.add(d.toAbsolutePath().normalize()));
         return List.copyOf(dirs);
+    }
+
+    /** What taking a card off My bots does to its folder. */
+    public enum Removal {
+        /** A project of the root's: moved into the archive, restorable. */
+        ARCHIVE,
+        /** A folder elsewhere, or one that is gone: forgotten, its folder untouched. */
+        FORGET,
+        /** A bot opened from a file: every tag of it deleted; its file opens it again. */
+        DELETE
+    }
+
+    /** {@code bot}'s {@link Removal}; {@code underRoot} whether its folder is one of the projects root's. */
+    public static Removal removalOf(MyBot bot, boolean underRoot) {
+        if (bot.state() == State.GONE) return Removal.FORGET;
+        if (bot.unpacked()) return Removal.DELETE;
+        return underRoot ? Removal.ARCHIVE : Removal.FORGET;
     }
 
     /** What {@code dir}'s folder says. Blocking: a repository is opened, or an unpacked bot's bot.json read. */

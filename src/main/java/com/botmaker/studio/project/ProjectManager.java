@@ -2,6 +2,10 @@ package com.botmaker.studio.project;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -37,7 +41,7 @@ public class ProjectManager {
     }
 
     /** A manager over another root — for tests, which must not touch the user's own projects. */
-    ProjectManager(Path root, Path archiveRoot) {
+    public ProjectManager(Path root, Path archiveRoot) {
         this.root = root.toAbsolutePath().normalize();
         this.archiveRoot = archiveRoot.toAbsolutePath().normalize();
     }
@@ -116,7 +120,7 @@ public class ProjectManager {
      * and moving it into {@code ~/BotMakerProjects/.archive} would take it out from under whatever else keeps
      * it there. Forgetting it is the recents list's job.
      */
-    public void archiveProject(Path dir) throws IOException {
+    public Path archiveProject(Path dir) throws IOException {
         Path source = dir.toAbsolutePath().normalize();
         if (!isUnderRoot(source)) {
             throw new IOException("“" + source.getFileName() + "” is in " + source.getParent()
@@ -126,21 +130,72 @@ public class ProjectManager {
         if (!Files.exists(source)) {
             throw new IOException("Project '" + source.getFileName() + "' does not exist.");
         }
-        Files.createDirectories(archiveRoot);
-        Files.move(source, archiveRoot.resolve(source.getFileName()));
+        // A name already archived (the same bot got and archived twice) gets " (2)", " (3)": both are kept.
+        Path target = free(archiveRoot, source.getFileName().toString());
+        try {
+            Files.createDirectories(archiveRoot);
+            Files.move(source, target);
+            if (!target.getFileName().equals(source.getFileName())) {
+                Files.writeString(fromFile(target.getFileName().toString()), source.getFileName().toString());
+            }
+        } catch (IOException e) {
+            deleteIfEmpty(archiveRoot);
+            throw new IOException("“" + source.getFileName() + "” could not be moved into the archive ("
+                    + archiveRoot + "): " + reason(e), e);
+        }
+        return target;
     }
 
-    /** Restores an archived project back into the live projects directory. */
+    /**
+     * Restores an archived project back into the live projects directory, under the name it was archived from: a
+     * {@code " (2)"} {@link #archiveProject} added is dropped when that name is free. A name the user gave, such as
+     * {@code "Bot (2)"}, is never shortened: only {@link #fromFile} says a number was added.
+     */
     public void restoreProject(String name) throws IOException {
         Path source = archiveRoot.resolve(name);
         if (!Files.exists(source)) {
             throw new IOException("Archived project '" + name + "' does not exist.");
         }
-        Path dest = root.resolve(name);
+        Path from = fromFile(name);
+        Path dest = root.resolve(Files.isRegularFile(from) ? Files.readString(from).strip() : name);
+        if (Files.exists(dest) || !dest.getParent().equals(root)) dest = root.resolve(name);
         if (Files.exists(dest)) {
-            throw new IOException("A project named '" + name + "' already exists.");
+            throw new IOException("A project named '" + dest.getFileName() + "' already exists.");
         }
         Files.move(source, dest);
+        Files.deleteIfExists(from);
+        deleteIfEmpty(archiveRoot);
+    }
+
+    /** {@code name} under {@code dir}, else the first of {@code "name (2)"}, {@code "name (3)"}… not taken. */
+    static Path free(Path dir, String name) {
+        Path candidate = dir.resolve(name);
+        for (int n = 2; Files.exists(candidate); n++) candidate = dir.resolve(name + " (" + n + ")");
+        return candidate;
+    }
+
+    /** Beside an archived folder that got a number, the name it was archived from: {@code .archive/<name>.from}. */
+    private Path fromFile(String archivedName) {
+        return archiveRoot.resolve(archivedName + ".from");
+    }
+
+    /** What went wrong, in words: a bare path is what a {@link FileSystemException} says. */
+    private static String reason(IOException e) {
+        return switch (e) {
+            case AccessDeniedException a -> "a file in it is in use, or not yours to move";
+            case FileAlreadyExistsException a -> "a folder of that name is already there";
+            case DirectoryNotEmptyException a -> "it cannot be moved across disks while files in it are in use";
+            default -> e.getMessage() == null ? e.toString() : e.getMessage();
+        };
+    }
+
+    /** Removes {@code dir} when nothing is in it, so Studio leaves no empty folder behind. */
+    private static void deleteIfEmpty(Path dir) {
+        try (Stream<Path> left = Files.list(dir)) {
+            if (left.findAny().isEmpty()) Files.delete(dir);
+        } catch (IOException e) {
+            // gone already, or something is in it: either way there is nothing to tidy
+        }
     }
 
     /**
@@ -164,6 +219,8 @@ public class ProjectManager {
         } catch (UncheckedIOException e) {
             throw e.getCause();
         }
+        Files.deleteIfExists(fromFile(name));
+        deleteIfEmpty(archiveRoot);
     }
 
     /**

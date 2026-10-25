@@ -34,8 +34,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   to the programs menu* off, the menu still holds the bots that have a shortcut, from the next time My bots is
   shown. A file of yours under the bot's name on the desktop is never replaced or deleted. A development run greys
   it out.
+- **Select several bots in My bots** (2026-10-25): *Select* in the My bots heading puts a check box on each card.
+  A bar at the bottom counts them and offers *Archive*, *Remove from My bots* and *Cancel*. Each button acts on
+  the selected bots it applies to: Archive on Studio's own projects, Remove on the rest. *Done* leaves.
+- **＋ New bot shows what it is doing** (2026-10-25): while a bot is copied or made, My bots shows its card with a
+  bar, until its editor opens. A failure still says why in a window.
 
 ### Fixed
+
+- **Archiving a bot whose name is already archived** (2026-10-25): it is kept as *Name (2)* instead of failing
+  with a bare path, and restoring it gives back its own name when that is free. A failed archive says why in a
+  sentence. Archiving, restoring or deleting leaves no empty `.archive` folder.
+- **My bots forgets what is gone** (2026-10-25): an archived or removed bot leaves the recents. A folder of
+  Studio's that is gone is dropped from `botmaker-config.json` when it is read, so a new bot in the same folder
+  starts with no old *Used* date. A gone folder of yours elsewhere still shows its card. A removed bot opened
+  from a file no longer comes back as a "This bot's folder is gone" card.
 
 - **The plugin prompt of a bot opened from a file names the plugin** (2026-10-25): a plugin jar packed in the
   bot's `lib/` was named after the bot's tag folder ("1.0.0 lib") and checked under no coordinate. It is now

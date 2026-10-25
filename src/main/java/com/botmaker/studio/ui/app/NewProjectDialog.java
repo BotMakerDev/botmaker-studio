@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 /**
  * New Project: a name, where to start from (Blank or a published bot, as cards) and the plugins to add. Moved out
@@ -46,14 +45,22 @@ public final class NewProjectDialog {
     private final ProjectCreator projectCreator = new ProjectCreator();
     private final GitHubClient gitHubClient;
     private final GitHubAuth gitHubAuth;
-    /** Hears the new project's folder, on the FX thread, once it is created. */
-    private final Consumer<Path> onCreated;
+    private final Creation creation;
 
-    public NewProjectDialog(Window owner, GitHubClient gitHubClient, GitHubAuth gitHubAuth, Consumer<Path> onCreated) {
+    /** Hears a creation, on the FX thread, from the dialog's Create until the project is made or failed. */
+    public interface Creation {
+        /** {@code name} is being made; {@code step} says how, in a line ("Copying Firestone 1.0.2…"). */
+        void started(String name, String step);
+
+        /** {@code name} is made in {@code dir}, or failed (empty), which the dialog has said. */
+        void ended(String name, Optional<Path> dir);
+    }
+
+    public NewProjectDialog(Window owner, GitHubClient gitHubClient, GitHubAuth gitHubAuth, Creation creation) {
         this.owner = owner;
         this.gitHubClient = gitHubClient;
         this.gitHubAuth = gitHubAuth;
-        this.onCreated = onCreated;
+        this.creation = creation;
     }
 
     /** Asks, and creates the project when the user says Create. */
@@ -269,13 +276,18 @@ public final class NewProjectDialog {
      */
     private void create(CreateRequest req) {
         String projectName = req.projectName();
+        GalleryEntry bot = req.start().entry();
+        creation.started(projectName, bot == null ? "Making a blank bot…"
+                : "Copying " + bot.name() + (bot.tag().isBlank() ? "" : " " + bot.tag()) + "…");
         new Thread(() -> {
             try {
-                NewProjects.create(projectName, req.start().entry(), req.plugins(), gitHubClient, gitHubAuth);
-                Platform.runLater(() -> onCreated.accept(Constants.PROJECTS_ROOT.resolve(projectName)));
+                NewProjects.create(projectName, bot, req.plugins(), gitHubClient, gitHubAuth);
+                Platform.runLater(() -> creation.ended(projectName,
+                        Optional.of(Constants.PROJECTS_ROOT.resolve(projectName))));
             } catch (Exception e) {
                 // ProjectCreator's own sentence says it better than a header could.
                 Platform.runLater(() -> {
+                    creation.ended(projectName, Optional.empty());
                     Alert error = ThemedWindows.alert(Alert.AlertType.ERROR);
                     error.initOwner(owner);
                     error.setTitle("Error");

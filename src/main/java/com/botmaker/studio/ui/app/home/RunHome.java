@@ -24,6 +24,7 @@ import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
+import com.botmaker.studio.ui.app.home.MyBots.Removal;
 import com.botmaker.studio.ui.app.home.MyBots.State;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -38,6 +39,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
@@ -54,9 +56,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -98,6 +105,18 @@ public final class RunHome implements ProjectWindow {
     private final Label myBotsLine = new Label("Looking for your bots…");
     private final Label getMoreHeading = heading("Get more bots");
     private final GetBots getBots;
+    private final Button select = new Button("Select");
+    private final Label selectedCount = new Label();
+    private final Button archiveSelected = new Button("Archive");
+    private final Button removeSelected = new Button("Remove from My bots");
+    private final HBox selectionBar = new HBox(8);
+    /** The cards last read, shown again as they are when Select mode turns on or off; FX thread only. */
+    private List<MyBot> shownBots = List.of();
+    /** Whether Select mode is on, and the folders ticked in it; FX thread only. */
+    private boolean selecting;
+    private final Set<Path> selected = new LinkedHashSet<>();
+    /** The bots ＋ New bot is making, by name, with the step under way; FX thread only. */
+    private final Map<String, String> creating = new LinkedHashMap<>();
     private ScrollPane scroll;
     /** Asked by {@link #scrollToGetBots} and not yet made after My bots' cards came; FX thread only. */
     private boolean scrollPending;
@@ -226,8 +245,20 @@ public final class RunHome implements ProjectWindow {
         version.getStyleClass().add("gallery-card-note");
         Button newBot = new Button("＋ New bot");
         newBot.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-        newBot.setOnAction(e -> new NewProjectDialog(stage, gitHubClient, gitHubAuth,
-                dir -> actions.edit(dir, true)).show());
+        newBot.setOnAction(e -> new NewProjectDialog(stage, gitHubClient, gitHubAuth, new NewProjectDialog.Creation() {
+            @Override
+            public void started(String name, String step) {
+                creating.put(name, step);
+                showCards();
+            }
+
+            @Override
+            public void ended(String name, Optional<Path> dir) {
+                creating.remove(name);
+                showCards();
+                dir.ifPresent(d -> actions.edit(d, true));
+            }
+        }).show());
         Button openFolder = new Button("Open folder…");
         openFolder.setOnAction(e -> openFolder());
         Button archived = new Button("View archived…");
@@ -244,7 +275,15 @@ public final class RunHome implements ProjectWindow {
         myBotsLine.getStyleClass().add("gallery-card-note");
         myBotsLine.managedProperty().bind(myBotsLine.visibleProperty());
 
-        VBox body = new VBox(10, heading("My bots"));
+        select.setOnAction(e -> {
+            if (selecting) leaveSelection();
+            else enterSelection();
+        });
+        Region headingSpacer = new Region();
+        HBox.setHgrow(headingSpacer, Priority.ALWAYS);
+        HBox myBotsHeading = new HBox(10, heading("My bots"), headingSpacer, select);
+        myBotsHeading.setAlignment(Pos.CENTER_LEFT);
+        VBox body = new VBox(10, myBotsHeading);
         if (ProgramEntries.forThisComputer().isPresent()) {
             CheckBox inMenu = new CheckBox(ProgramsMenuChoice.LABEL);
             inMenu.setSelected(ProgramsMenuChoice.load().on());
@@ -261,8 +300,22 @@ public final class RunHome implements ProjectWindow {
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.getStyleClass().add("np-scroll");
 
+        archiveSelected.setOnAction(e -> takeOff(selectedBots(), true));
+        removeSelected.setOnAction(e -> takeOff(selectedBots(), false));
+        Button cancel = new Button("Cancel");
+        cancel.setOnAction(e -> leaveSelection());
+        Region barSpacer = new Region();
+        HBox.setHgrow(barSpacer, Priority.ALWAYS);
+        selectionBar.getChildren().setAll(selectedCount, barSpacer, archiveSelected, removeSelected, cancel);
+        selectionBar.setAlignment(Pos.CENTER_LEFT);
+        selectionBar.setPadding(new Insets(8, 16, 8, 16));
+        selectionBar.getStyleClass().add("runner-header");
+        selectionBar.managedProperty().bind(selectionBar.visibleProperty());
+        selectionBar.setVisible(false);
+
         BorderPane root = new BorderPane(scroll);
         root.setTop(bar);
+        root.setBottom(selectionBar);
         // A .bmk dropped anywhere on the home opens it (spec § 2 "Opening one").
         root.setOnDragOver(e -> {
             if (droppedBmk(e.getDragboard().getFiles()).isPresent()) e.acceptTransferModes(TransferMode.COPY);
@@ -310,7 +363,9 @@ public final class RunHome implements ProjectWindow {
                 return;
             }
             say(found.isEmpty() ? "No bots yet: ＋ New bot starts one, or get one below." : "");
-            myBots.getChildren().setAll(found.stream().map(this::card).toList());
+            shownBots = List.copyOf(found);
+            selected.retainAll(found.stream().map(MyBot::dir).collect(Collectors.toSet()));
+            showCards();
             getBots.mine(found.stream().flatMap(b -> b.original().stream())
                     .map(s -> MyBots.key(s.owner(), s.repo())).collect(Collectors.toSet()));
             if (scrollPending) {
@@ -319,6 +374,30 @@ public final class RunHome implements ProjectWindow {
                 Platform.runLater(this::applyScroll);
             }
         }));
+    }
+
+    /** The cards of {@link #shownBots}, after one per bot ＋ New bot is making; and Select mode's bar. */
+    private void showCards() {
+        List<Node> cards = new ArrayList<>();
+        creating.forEach((name, step) -> cards.add(creatingCard(name, step)));
+        shownBots.forEach(b -> cards.add(card(b)));
+        myBots.getChildren().setAll(cards);
+        select.setText(selecting ? "Done" : "Select");
+        select.setDisable(!selecting && shownBots.isEmpty());
+        selectionBar.setVisible(selecting);
+        if (selecting) updateSelectionBar();
+    }
+
+    /** A bot ＋ New bot is making: its name and the step under way, until it opens or fails. */
+    private Node creatingCard(String name, String step) {
+        Label title = new Label(name);
+        title.getStyleClass().add("np-card-name");
+        ProgressBar bar = new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
+        bar.setMaxWidth(Double.MAX_VALUE);
+        VBox card = new VBox(6, new HBox(8, BotIconView.letter(name, ICON_SIZE), title), line(step), bar);
+        card.getStyleClass().addAll("np-card", "mybots-card");
+        card.setPrefWidth(CARD_WIDTH);
+        return card;
     }
 
     private void say(String text) {
@@ -352,14 +431,32 @@ public final class RunHome implements ProjectWindow {
         card.getStyleClass().addAll("np-card", "mybots-card");
         card.setPrefWidth(CARD_WIDTH);
 
+        if (selecting) {
+            // Select mode: a check box in place of the buttons, and a click anywhere on the card ticks it.
+            CheckBox tick = new CheckBox();
+            tick.setSelected(selected.contains(bot.dir()));
+            tick.selectedProperty().addListener((o, was, now) -> {
+                if (now) selected.add(bot.dir());
+                else selected.remove(bot.dir());
+                updateSelectionBar();
+            });
+            top.getChildren().addFirst(tick);
+            card.setOnMouseClicked(e -> {
+                // A click on the box itself (its inner box or mark) is the box's own toggle.
+                for (Node n = e.getTarget() instanceof Node t ? t : null; n != null; n = n.getParent()) {
+                    if (n == tick) return;
+                }
+                tick.setSelected(!tick.isSelected());
+            });
+            card.getChildren().add(line(bot.state() == State.GONE ? "This bot's folder is gone." : who(bot)));
+            return card;
+        }
+
         if (bot.state() == State.GONE) {
             card.getChildren().add(line("This bot's folder is gone."));
             card.getChildren().add(line(bot.dir().toString()));
             Button remove = new Button("Remove from My bots");
-            remove.setOnAction(e -> {
-                ProjectPreferences.removeRecent(bot.dir());
-                reload();
-            });
+            remove.setOnAction(e -> takeOff(List.of(bot), false));
             card.getChildren().add(remove);
             return card;
         }
@@ -404,59 +501,102 @@ public final class RunHome implements ProjectWindow {
 
     /** The card's ⋯: archive a root project, forget one kept elsewhere, delete one opened from a file. */
     private Node more(MyBot bot) {
-        boolean elsewhere = !projectManager.isUnderRoot(bot.dir());
-        MenuItem item = new MenuItem(bot.unpacked() ? "Remove from My bots…" : elsewhere ? "Remove from My bots"
-                : "Archive…");
-        item.setOnAction(e -> {
-            if (bot.unpacked()) {
-                removeUnpacked(bot);
-            } else if (elsewhere) {
-                // Not Studio's folder to move: forgetting it touches no file, and opening it again undoes it.
-                ProjectPreferences.removeRecent(bot.dir());
-                reload();
-            } else {
-                archive(bot);
-            }
+        Removal removal = removalOf(bot);
+        MenuItem item = new MenuItem(switch (removal) {
+            case ARCHIVE -> "Archive…";
+            case FORGET -> "Remove from My bots";
+            case DELETE -> "Remove from My bots…";
         });
+        item.setOnAction(e -> takeOff(List.of(bot), removal == Removal.ARCHIVE));
         MenuButton menu = new MenuButton("⋯");
         menu.getItems().add(item);
         return menu;
     }
 
+    private Removal removalOf(MyBot bot) {
+        return MyBots.removalOf(bot, projectManager.isUnderRoot(bot.dir()));
+    }
+
     /**
-     * Deletes a bot opened from a file, every tag of it: there is nothing of the user's in it (its runner's values
-     * are kept apart), and opening the file again brings it back.
+     * Takes {@code bots} off My bots (one card's ⋯, or the selection's bar): {@code archive} moves the root's
+     * projects among them into the archive; otherwise a folder elsewhere or gone is forgotten (it is not Studio's
+     * to move, and opening it again undoes it) and a bot opened from a file is deleted, every tag of it (nothing of
+     * the user's is in it; its runner's values are kept apart). Asked first, except a forget alone, which touches
+     * no file. Each one's entry leaves the recents. Failures are said together, each in a sentence.
      */
-    private void removeUnpacked(MyBot bot) {
-        Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
-                "Remove “" + bot.name() + "” from this computer?\n\nIts settings are kept; open its .bmk file again "
-                        + "to get it back.", ButtonType.OK, ButtonType.CANCEL);
-        confirm.initOwner(stage);
-        confirm.setHeaderText("Remove this bot?");
-        if (confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
-        try {
-            UnpackedBots.remove(bot.dir());
-            reload();
-        } catch (IOException ex) {
-            error("Failed to remove the bot", ex.getMessage());
+    private void takeOff(List<MyBot> bots, boolean archive) {
+        List<MyBot> acting = bots.stream()
+                .filter(b -> archive == (removalOf(b) == Removal.ARCHIVE)).toList();
+        if (acting.isEmpty()) return;
+        boolean deletes = acting.stream().anyMatch(b -> removalOf(b) == Removal.DELETE);
+        if ((archive || deletes) && !confirmTakeOff(acting, archive)) return;
+        List<String> failures = new ArrayList<>();
+        for (MyBot bot : acting) {
+            try {
+                switch (removalOf(bot)) {
+                    case ARCHIVE -> projectManager.archiveProject(bot.dir());
+                    case DELETE -> UnpackedBots.remove(bot.dir());
+                    case FORGET -> { }
+                }
+                ProjectPreferences.removeRecent(bot.dir());
+            } catch (IOException ex) {
+                failures.add(ex.getMessage());
+            }
+        }
+        leaveSelection();
+        reload();
+        if (!failures.isEmpty()) {
+            error(archive ? "Could not archive every bot" : "Could not remove every bot",
+                    String.join("\n\n", failures));
         }
     }
 
-    private void archive(MyBot bot) {
-        Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
-                "Archive “" + bot.name() + "”?\n\nIt will be moved to the archive and hidden from My bots. "
-                        + "You can restore or permanently delete it later via “View archived…”.",
-                ButtonType.OK, ButtonType.CANCEL);
+    private boolean confirmTakeOff(List<MyBot> bots, boolean archive) {
+        boolean one = bots.size() == 1;
+        String names = one ? "“" + bots.getFirst().name() + "”" : bots.size() + " bots";
+        String body = archive
+                ? "Archive " + names + "?\n\n" + (one ? "It moves" : "They move") + " to the archive and "
+                        + (one ? "leaves" : "leave") + " My bots. You can restore or delete " + (one ? "it" : "them")
+                        + " later via “View archived…”."
+                : "Remove " + names + " from My bots?\n\nA bot opened from a file is deleted from this computer; "
+                        + "its settings are kept, and opening its .bmk file again gets it back. Any other folder "
+                        + "stays where it is.";
+        Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, body, ButtonType.OK, ButtonType.CANCEL);
         confirm.initOwner(stage);
-        confirm.setHeaderText("Archive this bot?");
-        Optional<ButtonType> choice = confirm.showAndWait();
-        if (choice.isEmpty() || choice.get() != ButtonType.OK) return;
-        try {
-            projectManager.archiveProject(bot.dir());
-            reload();
-        } catch (Exception ex) {
-            error("Failed to archive the bot", ex.getMessage());
-        }
+        confirm.setHeaderText(archive ? "Archive?" : "Remove from My bots?");
+        return confirm.showAndWait().filter(ButtonType.OK::equals).isPresent();
+    }
+
+    /** Select mode (spec § 1b, layout S1): a check box per card, the cards' buttons hidden, the bar below. */
+    private void enterSelection() {
+        selecting = true;
+        selected.clear();
+        showCards();
+    }
+
+    private void leaveSelection() {
+        if (!selecting) return;
+        selecting = false;
+        selected.clear();
+        showCards();
+    }
+
+    /** The bar's count and its two buttons, each acting on the selected bots it applies to. */
+    private void updateSelectionBar() {
+        List<MyBot> picked = selectedBots();
+        long archivable = picked.stream().filter(b -> removalOf(b) == Removal.ARCHIVE).count();
+        selectedCount.setText(picked.size() + " selected");
+        archiveSelected.setText(archivable == picked.size() || archivable == 0 ? "Archive"
+                : "Archive " + archivable);
+        archiveSelected.setDisable(archivable == 0);
+        long removable = picked.size() - archivable;
+        removeSelected.setText(removable == picked.size() || removable == 0 ? "Remove from My bots"
+                : "Remove " + removable + " from My bots");
+        removeSelected.setDisable(removable == 0);
+    }
+
+    private List<MyBot> selectedBots() {
+        return shownBots.stream().filter(b -> selected.contains(b.dir())).toList();
     }
 
     /**

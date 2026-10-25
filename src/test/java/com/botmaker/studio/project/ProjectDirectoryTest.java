@@ -179,4 +179,68 @@ class ProjectDirectoryTest {
         assertFalse(Files.exists(inside));
         assertEquals(List.of("Old"), manager.listArchivedProjects().stream().map(ProjectInfo::name).toList());
     }
+
+    /** The same bot got and archived twice (2026-10-25): both kept, the second as " (2)", restored as itself. */
+    @Test
+    void aNameAlreadyArchivedGetsANumberAndRestoresWithout() throws IOException {
+        Path root = tmp.resolve("BotMakerProjects");
+        Path archive = root.resolve(".archive");
+        ProjectManager manager = new ProjectManager(root, archive);
+        manager.archiveProject(project(root.resolve("Firestone"), "com/firestone"));
+
+        Path second = manager.archiveProject(project(root.resolve("Firestone"), "com/firestone"));
+
+        assertEquals(archive.resolve("Firestone (2)"), second);
+        assertEquals(List.of("Firestone", "Firestone (2)"), manager.listArchivedProjects().stream()
+                .map(ProjectInfo::name).sorted().toList());
+        manager.deleteProject("Firestone");
+        manager.restoreProject("Firestone (2)");
+        assertTrue(Files.isDirectory(root.resolve("Firestone")), "restored under the name it was archived from");
+        assertFalse(Files.exists(archive), "no empty archive folder is left");
+    }
+
+    @Test
+    void aNumberTheUserGaveIsKeptOnRestore() throws IOException {
+        Path root = tmp.resolve("BotMakerProjects");
+        ProjectManager manager = new ProjectManager(root, root.resolve(".archive"));
+        manager.archiveProject(project(root.resolve("Bot (2)"), "com/bot"));
+
+        manager.restoreProject("Bot (2)");
+
+        assertTrue(Files.isDirectory(root.resolve("Bot (2)")));
+        assertFalse(Files.exists(root.resolve("Bot")));
+    }
+
+    @Test
+    void aFailedArchiveSaysWhyInASentence() throws IOException {
+        Path root = tmp.resolve("BotMakerProjects");
+        Path inside = project(root.resolve("Old"), "com/old");
+        Files.writeString(root.resolve("blocker"), "");
+        ProjectManager manager = new ProjectManager(root, root.resolve("blocker/.archive"));
+
+        IOException refused = assertThrows(IOException.class, () -> manager.archiveProject(inside));
+        assertTrue(Files.isDirectory(inside), "nothing moved");
+        assertTrue(refused.getMessage().startsWith("“Old” could not be moved into the archive"),
+                refused.getMessage());
+    }
+
+    /**
+     * Folders Studio keeps that are gone leave the recents (2026-10-25: 7 of 10 pointed nowhere); a gone folder
+     * elsewhere stays, so its card says so.
+     */
+    @Test
+    void goneFoldersStudioKeepsArePruned() throws IOException {
+        Path root = tmp.resolve("BotMakerProjects");
+        Path kept = project(root.resolve("Kept"), "com/kept");
+        ProjectPreferences prefs = new ProjectPreferences();
+        prefs.recordOpened(root.resolve("Archived"));
+        prefs.recordOpened(tmp.resolve("bots/LiQiyeDev/Firestone/v1.0.2"));
+        prefs.recordOpened(tmp.resolve("usb/Bot"));
+        prefs.recordOpened(kept);
+
+        prefs.prune(List.of(root, tmp.resolve("bots")));
+
+        assertEquals(List.of(kept, tmp.resolve("usb/Bot")),
+                prefs.getRecentProjects().stream().map(ProjectPreferences.ProjectEntry::directory).toList());
+    }
 }

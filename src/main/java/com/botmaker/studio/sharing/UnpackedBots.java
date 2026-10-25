@@ -115,9 +115,14 @@ public final class UnpackedBots {
      * it or no unpacked bot. The runner's values are kept elsewhere, so a later open gets them back.
      */
     public static void remove(Path dir) throws IOException {
-        Path root = root().toAbsolutePath().normalize();
+        remove(root(), dir);
+    }
+
+    /** {@link #remove(Path)} under {@code base}: every tag, then the {@code <repo>/} and an emptied {@code <owner>/}. */
+    static void remove(Path base, Path dir) throws IOException {
+        Path root = base.toAbsolutePath().normalize();
         Path tag = dir.toAbsolutePath().normalize();
-        if (!isUnpacked(tag) || !tag.startsWith(root) || root.relativize(tag).getNameCount() != 3) {
+        if (at(root, tag).isEmpty() || !tag.startsWith(root) || root.relativize(tag).getNameCount() != 3) {
             throw new IOException(dir + " is not a bot opened from a file.");
         }
         BmkOpen.deleteTree(tag.getParent());

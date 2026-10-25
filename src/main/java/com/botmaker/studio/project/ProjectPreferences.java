@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.studio.sharing.UnpackedBots;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -156,10 +157,27 @@ public class ProjectPreferences {
         return out;
     }
 
+    /**
+     * Drops every remembered folder under one of {@code roots} that is gone (2026-10-25): Studio's own folders,
+     * which only Studio moves or deletes, so a gone one was archived, removed or deleted and is no card. A gone
+     * folder elsewhere stays, so its card says so: the user put it in the list. A new project in a path used
+     * before starts with no "Used" date.
+     */
+    void prune(List<Path> roots) {
+        List<Path> ours = roots.stream().map(r -> r.toAbsolutePath().normalize()).toList();
+        for (ProjectEntry entry : List.copyOf(recentProjects)) {
+            Path dir = entry.directory().toAbsolutePath().normalize();
+            if (ours.stream().anyMatch(dir::startsWith) && !Files.exists(dir)) forgetRecent(dir);
+        }
+    }
+
     // --- Persistence ---
 
+    /** The preferences, with the folders Studio keeps that are gone forgotten ({@link #prune}). */
     public static ProjectPreferences load() {
-        return read(CONFIG_FILE);
+        ProjectPreferences prefs = read(CONFIG_FILE);
+        prefs.prune(List.of(PROJECTS_ROOT, UnpackedBots.root()));
+        return prefs;
     }
 
     public void save() {
