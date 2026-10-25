@@ -48,18 +48,32 @@ public final class UnpackedBots {
         return root.resolve(bot.owner()).resolve(bot.repo()).resolve(bot.tag());
     }
 
-    /** {@code dir}'s {@code bot.json}, when {@code dir} is a checked unpacked bot; empty for any other folder. */
+    /** {@code dir}'s {@code bot.json}, when {@code dir} is a checked unpacked bot under {@link #root()}. */
     public static Optional<BotJson> at(Path dir) {
-        Path json = dir.resolve(BotFile.BOT_JSON);
-        if (!Files.isRegularFile(dir.resolve(CHECKED)) || !Files.isRegularFile(json)) return Optional.empty();
+        return at(root(), dir);
+    }
+
+    /**
+     * {@code dir}'s {@code bot.json}, when {@code dir} is a checked unpacked bot under {@code root}; empty for any
+     * other folder. Only {@code root/<owner>/<repo>/<tag>} counts, with those three names the ones its {@code bot.json}
+     * says: a project cloned from someone's repository may ship a {@code bot.json} and a marker of its own, and must
+     * not pass for a bot this computer checked (its classpath and its author would be the file's word).
+     */
+    public static Optional<BotJson> at(Path root, Path dir) {
+        Path base = root.toAbsolutePath().normalize();
+        Path tag = dir.toAbsolutePath().normalize();
+        if (!tag.startsWith(base) || base.relativize(tag).getNameCount() != 3) return Optional.empty();
+        Path json = tag.resolve(BotFile.BOT_JSON);
+        if (!Files.isRegularFile(tag.resolve(CHECKED)) || !Files.isRegularFile(json)) return Optional.empty();
         try {
-            return Optional.of(JSON.readValue(json.toFile(), BotJson.class));
+            BotJson bot = JSON.readValue(json.toFile(), BotJson.class);
+            return dirOf(base, bot).equals(tag) ? Optional.of(bot) : Optional.empty();
         } catch (IOException | RuntimeException e) {
             return Optional.empty();
         }
     }
 
-    /** Whether {@code dir} is a checked unpacked bot. */
+    /** Whether {@code dir} is a checked unpacked bot under {@link #root()}. */
     public static boolean isUnpacked(Path dir) {
         return at(dir).isPresent();
     }
@@ -71,7 +85,7 @@ public final class UnpackedBots {
     public static List<Path> newest(Path root) {
         List<Path> out = new ArrayList<>();
         for (Path repo : children(root).flatMap(UnpackedBots::children).toList()) {
-            children(repo).filter(UnpackedBots::isUnpacked).max(NEWEST_LAST).ifPresent(out::add);
+            children(repo).filter(tag -> at(root, tag).isPresent()).max(NEWEST_LAST).ifPresent(out::add);
         }
         return out;
     }
