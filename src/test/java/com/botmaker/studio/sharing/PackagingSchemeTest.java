@@ -28,6 +28,14 @@ class PackagingSchemeTest {
     }
 
     @Test
+    void everyLineOfTheLinuxMenuEntryIsAGroupAnEntryOrAComment() throws IOException {
+        List<String> bad = Files.readAllLines(PACKAGING.resolve("linux/BotMaker Studio.desktop")).stream()
+                .filter(l -> !l.isBlank() && !l.startsWith("#") && !l.startsWith("[") && !l.contains("="))
+                .toList();
+        assertEquals(List.of(), bad, "a bare placeholder line makes GLib and KDE refuse the whole entry");
+    }
+
+    @Test
     void theMacBundleDeclaresTheSchemeAndKeepsItsFileTypes() throws IOException {
         String plist = Files.readString(PACKAGING.resolve("macos/Info.plist"));
         assertTrue(plist.contains("<key>CFBundleURLTypes</key>"));

@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **The website's *Open in Studio* opens Studio on Linux** (2026-10-25): the deb and rpm menu entry carried a line
+  the desktop refused, so no `botmaker://` link and no double-clicked `.bmk` reached Studio.
+
 ## [1.9.1] — 2026-10-25
 
 ### Fixed

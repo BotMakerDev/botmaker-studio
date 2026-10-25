@@ -1,14 +1,14 @@
 # Menu entry template for jpackage's deb and rpm (resource-dir override; the name is the launcher's).
-# JDK 25/26's own template with two changes. " %u" on the Exec line: without it a double-clicked .bmk starts
+# JDK 25's own template with two changes. " %u" on the Exec line: without it a double-clicked .bmk starts
 # Studio without the file (2026-10-25); %u, not %f, so a clicked botmaker:// link arrives too, a file as a path or
 # a file: URI. The MimeType line is written out rather than jpackage's, to add x-scheme-handler/botmaker; the .bmk
 # type is the one every installer associates. Words in capitals are jpackage's placeholders; never write one in a
-# comment.
+# comment, and none JDK 25 does not replace: its jpackage left a later JDK's startup-directory placeholder line as it was, and
+# GLib and KDE then refused the whole entry, so no botmaker:// link opened (2026-10-25, Studio 1.9.1).
 [Desktop Entry]
 Name=APPLICATION_NAME
 Comment=APPLICATION_DESCRIPTION
 Exec=APPLICATION_LAUNCHER %u
-STARTUP_DIRECTORY
 Icon=APPLICATION_ICON
 Terminal=false
 Type=Application
