@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProgramEntriesTest {
@@ -156,6 +158,40 @@ class ProgramEntriesTest {
         linux.sync(List.of());
         assertFalse(Files.exists(apps.resolve("botmaker-bot-" + entry.id() + ".desktop")));
         assertFalse(Files.exists(icons.resolve(entry.id() + ".png")));
+    }
+
+    @Test
+    void aShortcutIsAddedAndRemovedOnItsOwnBesideTheUsersFiles(@TempDir Path home) throws Exception {
+        Path desktop = Files.createDirectories(home.resolve("Desktop"));
+        Files.writeString(desktop.resolve("notes.txt"), "the user's");
+        var linux = new ProgramEntries.Linux(desktop, home.resolve("desktop-icons"), "/opt/b/bin/studio");
+        assertFalse(linux.has(FIRESTONE));
+
+        linux.add(FIRESTONE);
+        Path file = desktop.resolve("botmaker-bot-liqiyedev-firestone.desktop");
+        assertTrue(linux.has(FIRESTONE));
+        assertTrue(Files.isExecutable(file), "a desktop launches only an executable launcher");
+        assertTrue(Files.readString(file).contains("Exec=/opt/b/bin/studio --run=LiQiyeDev/Firestone"));
+
+        linux.remove(FIRESTONE);
+        assertFalse(linux.has(FIRESTONE));
+        assertFalse(Files.exists(home.resolve("desktop-icons/liqiyedev-firestone.png")));
+        assertEquals("the user's", Files.readString(desktop.resolve("notes.txt")));
+
+        // A file of the user's under the bot's name: not ours, never replaced or deleted.
+        Path theirs = Files.createDirectories(desktop.resolve("Firestone.app"));
+        var mac = new ProgramEntries.Mac(desktop, home.resolve("desktop-icons"));
+        assertFalse(mac.has(FIRESTONE));
+        mac.remove(FIRESTONE);
+        assertTrue(Files.isDirectory(theirs));
+        assertThrows(IOException.class, () -> mac.add(FIRESTONE));
+        Files.delete(theirs);
+
+        mac.add(FIRESTONE);
+        assertTrue(mac.has(FIRESTONE) && Files.isDirectory(desktop.resolve("Firestone.app")));
+        mac.remove(FIRESTONE);
+        assertFalse(Files.exists(desktop.resolve("Firestone.app")));
+        assertTrue(Files.exists(desktop.resolve("notes.txt")));
     }
 
     @Test

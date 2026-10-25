@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.home;
 
+import com.botmaker.studio.sharing.BmkDownload;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;
@@ -50,13 +51,13 @@ class RunHomeFxTest extends FxHeadlessTest {
             }
         }, () -> bots, new GetBots.Shelf() {
             @Override
-            public Path get(GalleryEntry entry) {
-                return Path.of("/p", entry.name());
+            public Path download(GalleryEntry entry, BmkDownload.Progress progress) {
+                return Path.of("/cache", entry.name() + ".bmk");
             }
 
             @Override
-            public boolean has(GalleryEntry entry) {
-                return false;
+            public Path cloneOf(GalleryEntry entry) {
+                return Path.of("/p", entry.name());
             }
         }, dir -> dir.endsWith("PushTest") ? CompileState.ERRORS : CompileState.OK);
         stage.setScene(home.createScene());

@@ -24,8 +24,26 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   endpoint runs. An installed Studio never serves it. `read` names the menu bar's menus and lists their items
   only with `menus: true`; with no window named, `read` and `look` take an open menu first; and a press that opens
   or closes a project answers what it pressed, since the endpoint now closes only once the press has answered.
+- **Get runs a bot; Edit in Studio gets its code** (2026-10-25): *Get* on a Get more bots card downloads the
+  release's `.bmk` that the catalog checked, opens it, and opens its Run window, with no second warning. It shows
+  the download's progress on the card. *Edit in Studio* clones the release, linked to its author, as *Get* did
+  before. A bot with no checked `.bmk` yet offers only *Edit in Studio* and says so. A bot already in My bots says
+  *In My bots*, matched by its author's repository, not by its name.
+- **⤴ Add shortcut in the Run window** (2026-10-25): a shortcut on the desktop and an entry in the programs menu
+  that open this bot's Run window. It then reads *✓ Shortcut*, and a click offers to remove it. With *Add my bots
+  to the programs menu* off, the menu still holds the bots that have a shortcut, from the next time My bots is
+  shown. A file of yours under the bot's name on the desktop is never replaced or deleted. A development run greys
+  it out.
 
 ### Fixed
+
+- **The plugin prompt of a bot opened from a file names the plugin** (2026-10-25): a plugin jar packed in the
+  bot's `lib/` was named after the bot's tag folder ("1.0.0 lib") and checked under no coordinate. It is now
+  named by its `bot.json` line, for example `botmaker-sdk 2.0.0`, and the catalog's check finds its row.
+- **Export as .bmk starts in your Downloads folder** (2026-10-25): the XDG download folder, else `~/Downloads`,
+  else the desktop, else the home. It no longer starts in the project folder, where the file was swept into the
+  next version. `*.bmk` is ignored in every project: in the `.gitignore` of a new one, and in the local
+  `.git/info/exclude` of every one, so an older project's `.gitignore` is left as its author wrote it.
 
 - **Export as .bmk packs only the jars Maven Central does not serve** (2026-10-25), as `botmaker bot export` does:
   a Central jar under a `com.github` groupId is listed, so the catalog no longer refuses the release.

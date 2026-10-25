@@ -180,10 +180,14 @@ public final class MyBots {
      */
     public static List<ProgramEntries.Entry> programEntries(List<MyBot> bots) {
         return bots.stream().filter(b -> b.state() == State.READY && b.runnable())
-                .map(b -> b.original()
-                        .map(s -> ProgramEntries.Entry.ofRepo(s.owner(), s.repo(), b.name(), b.dir()))
-                        .orElseGet(() -> ProgramEntries.Entry.ofFolder(b.dir(), b.name())))
+                .map(b -> entryOf(b.original(), b.name(), b.dir()))
                 .toList();
+    }
+
+    /** A bot's programs-menu entry or shortcut: by its author's repository, else by its folder. */
+    public static ProgramEntries.Entry entryOf(Optional<SyncModel.Slug> original, String name, Path dir) {
+        return original.map(s -> ProgramEntries.Entry.ofRepo(s.owner(), s.repo(), name, dir))
+                .orElseGet(() -> ProgramEntries.Entry.ofFolder(dir, name));
     }
 
     /**

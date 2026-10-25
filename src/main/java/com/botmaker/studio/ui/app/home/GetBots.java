@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubConfig;
+import com.botmaker.studio.sharing.BmkDownload;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.ShowCommunity;
@@ -26,8 +27,8 @@ import javafx.scene.layout.VBox;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -36,23 +37,37 @@ import java.util.function.Predicate;
 /**
  * The home's <i>Get more bots</i> (2026-10-25, plan phase 2): the catalog's bots as cards under My bots, in the
  * same scroll. It replaced the Browse Bots window: search, {@link ShowCommunity}, <i>Hide</i> and <i>Show hidden</i>
- * ({@link HiddenBots}), the ★ count, and <i>Get</i>, the same linked clone Install made. A bot got moves up into
- * My bots, where its update badge is (Browse Bots' <i>Installed</i> tab went with it).
+ * ({@link HiddenBots}), the ★ count, <i>Get</i> and <i>Edit in Studio</i>. <i>Get</i> downloads the listed release's
+ * {@code .bmk} and opens it to run; <i>Edit in Studio</i> clones the release linked to its author (2026-10-25, the
+ * user's call). A bot with no {@code .bmk} pinned yet offers only <i>Edit in Studio</i>. A bot already in My bots,
+ * by its author's repository, says so.
  */
 public final class GetBots {
 
-    /** Where a got bot goes: My bots' folders. */
+    /** Where a got bot comes from. Both blocking, off the FX thread. */
     public interface Shelf {
-        /** Clones {@code entry} at its listed tag, linked to its author. Blocking. */
-        Path get(GalleryEntry entry) throws IOException;
+        /** Downloads {@code entry}'s listed {@code .bmk} ({@link BmkDownload}), saying how far it got. */
+        Path download(GalleryEntry entry, BmkDownload.Progress progress) throws IOException;
 
-        /** Whether {@code entry} is already in My bots. */
-        boolean has(GalleryEntry entry);
+        /** Clones {@code entry} at its listed tag, linked to its author. */
+        Path cloneOf(GalleryEntry entry) throws IOException;
     }
+
+    /** What is done with a bot once it is here, on the FX thread. */
+    public interface Got {
+        /** {@code bmk} was downloaded: open it to run. */
+        void downloaded(GalleryEntry entry, Path bmk);
+
+        /** {@code dir} is the clone: open it in the editor. */
+        void cloned(Path dir);
+    }
+
+    /** The two ways to get a bot, for the card's status while one is under way. */
+    private enum Way { RUN, EDIT }
 
     private final Shelf shelf;
     private final Predicate<GalleryEntry> agrees;
-    private final Runnable onGot;
+    private final Got got;
     private final TextField search = new TextField();
     private final CheckBox showCommunity = new CheckBox(ShowCommunity.LABEL);
     private final CheckBox showHidden = new CheckBox("Show hidden");
@@ -61,24 +76,25 @@ public final class GetBots {
     private List<GalleryEntry> all = List.of();
     private boolean loaded;
     private HiddenBots hidden;
+    /** My bots' authors' repositories, {@link MyBots#key}: a bot among them is already here. FX thread only. */
+    private Set<String> mine = Set.of();
     /**
-     * By {@link GalleryEntry#slug}, FX thread only: the gets under way, and the last failure of each. Kept here, not
-     * on a card, because every keystroke or catalog answer rebuilds the cards; a card read from them shows the
-     * same state again, so a bot being cloned never offers a second <i>Get</i>.
+     * By {@link GalleryEntry#slug}, FX thread only: the gets under way with their progress line, and the last
+     * failure of each. Kept here, not on a card, because every keystroke or catalog answer rebuilds the cards; a
+     * card read from them shows the same state again, so a bot being got never offers a second <i>Get</i>.
      */
-    private final Set<String> getting = new HashSet<>();
+    private final Map<String, String> getting = new HashMap<>();
     private final Map<String, String> failures = new HashMap<>();
 
     /**
      * @param agrees asked before a bot is got, with its {@link GalleryEntry#trustWarning}; only a bot that
      *               {@link GalleryEntry#asksFirst} is asked about
-     * @param onGot  runs on the FX thread once a bot is in My bots
      */
-    public GetBots(Shelf shelf, Predicate<GalleryEntry> agrees, Runnable onGot, ShowCommunity community,
+    public GetBots(Shelf shelf, Predicate<GalleryEntry> agrees, Got got, ShowCommunity community,
                    HiddenBots hidden) {
         this.shelf = shelf;
         this.agrees = agrees;
-        this.onGot = onGot;
+        this.got = got;
         this.hidden = hidden;
         showCommunity.setSelected(community.shown());
     }
@@ -129,6 +145,16 @@ public final class GetBots {
         else if (!fresh) say("Offline: the catalog as it was at its last read.");
     }
 
+    /** My bots as now read: {@code keys} their authors' repositories ({@link MyBots#key}). */
+    public void mine(Set<String> keys) {
+        mine = Set.copyOf(keys);
+        refilter();
+    }
+
+    private boolean isMine(GalleryEntry entry) {
+        return mine.contains(MyBots.key(entry.owner(), entry.repo()));
+    }
+
     private void refilter() {
         List<GalleryEntry> shown = shown(all, search.getText(), new ShowCommunity(showCommunity.isSelected()),
                 hidden, showHidden.isSelected());
@@ -142,7 +168,7 @@ public final class GetBots {
         line.setVisible(!text.isEmpty());
     }
 
-    /** One bot: the card Publish previews, its ★ count, Hide and Get. */
+    /** One bot: the card Publish previews, its ★ count, Hide, Edit in Studio and Get. */
     private Node card(GalleryEntry entry) {
         Label stars = new Label("★ " + entry.stars());
         stars.getStyleClass().add("gallery-card-note");
@@ -156,24 +182,41 @@ public final class GetBots {
             hidden.save();
             refilter();
         });
-        Label status = new Label();
+        String slug = entry.slug();
+        boolean inFlight = getting.containsKey(slug);
+        boolean here = !inFlight && isMine(entry);
+        boolean ready = BmkDownload.ready(entry);
+        String note = inFlight ? getting.get(slug) : failures.getOrDefault(slug,
+                ready || here ? "" : "No ready-to-run file yet: Edit in Studio gets its code.");
+        Label status = new Label(note);
         status.getStyleClass().add("gallery-card-note");
         status.setWrapText(true);
         status.managedProperty().bind(status.visibleProperty());
-        String failure = failures.getOrDefault(entry.slug(), "");
-        status.setText(failure);
-        status.setVisible(!failure.isEmpty());
-        boolean inFlight = getting.contains(entry.slug());
-        boolean got = !inFlight && shelf.has(entry);
-        Button get = new Button(inFlight ? "Getting…" : got ? "In My bots" : "Get");
-        get.setDisable(inFlight || got);
-        if (!got) get.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-        get.setOnAction(e -> get(entry));
+        status.setVisible(!note.isEmpty());
 
         Region push = new Region();
         HBox.setHgrow(push, Priority.ALWAYS);
-        HBox buttons = new HBox(6, stars, push, hide, get);
+        HBox buttons = new HBox(6, stars, push, hide);
         buttons.setAlignment(Pos.CENTER_LEFT);
+        if (here) {
+            Button in = new Button("In My bots");
+            in.setDisable(true);
+            buttons.getChildren().add(in);
+        } else {
+            Button edit = new Button("Edit in Studio");
+            edit.setTooltip(new Tooltip("Get its code, linked to its author, to change it"));
+            edit.setDisable(inFlight);
+            edit.setOnAction(e -> get(entry, Way.EDIT));
+            buttons.getChildren().add(edit);
+            if (ready) {
+                Button get = new Button("Get");
+                get.setTooltip(new Tooltip("Download it and run it"));
+                get.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
+                get.setDisable(inFlight);
+                get.setOnAction(e -> get(entry, Way.RUN));
+                buttons.getChildren().add(get);
+            }
+        }
         Node icon = BotIconView.remote(entry.name(), entry.owner(), entry.repo(), entry.commitOf(entry.tag()),
                 RunHome.ICON_SIZE);
         HBox top = new HBox(8, icon, GalleryCard.of(entry));
@@ -183,8 +226,8 @@ public final class GetBots {
         return card;
     }
 
-    /** Clones {@code entry} off the FX thread, once the user agreed to a bot nobody reviewed. */
-    private void get(GalleryEntry entry) {
+    /** Gets {@code entry} off the FX thread, once the user agreed to a bot nobody reviewed. */
+    private void get(GalleryEntry entry, Way way) {
         String slug = entry.slug();
         if (entry.tag().isBlank()) {
             failures.put(slug, "The catalog lists no release of " + slug + ".");
@@ -194,20 +237,43 @@ public final class GetBots {
         // Only a community bot, or one using a community plugin, is confirmed first (2026-10-23).
         if (entry.asksFirst() && !agrees.test(entry)) return;
         failures.remove(slug);
-        getting.add(slug);
+        getting.put(slug, way == Way.RUN ? "Downloading…" : "Getting its code…");
         refilter();
         CompletableFuture.supplyAsync(() -> {
             try {
-                return shelf.get(entry);
+                return way == Way.RUN ? shelf.download(entry, progress(slug)) : shelf.cloneOf(entry);
             } catch (IOException ex) {
                 throw new IllegalStateException(ex.getMessage(), ex);
             }
-        }).whenComplete((dir, failed) -> Platform.runLater(() -> {
+        }).whenComplete((path, failed) -> Platform.runLater(() -> {
             getting.remove(slug);
             if (failed != null) failures.put(slug, "Could not get it: " + rootMessage(failed));
             refilter();
-            if (failed == null) onGot.run();
+            if (failed != null) return;
+            if (way == Way.RUN) got.downloaded(entry, path);
+            else got.cloned(path);
         }));
+    }
+
+    /** The card's line while {@code slug} downloads: shown again only when the percentage moves. */
+    private BmkDownload.Progress progress(String slug) {
+        int[] shown = {-1};
+        return (done, total) -> {
+            int percent = total > 0 ? (int) (done * 100 / total) : -1;
+            if (percent == shown[0]) return;
+            shown[0] = percent;
+            String text = "Downloading " + megabytes(done) + (total > 0 ? " of " + megabytes(total) + " (" + percent
+                    + " %)" : "") + "…";
+            Platform.runLater(() -> {
+                if (!getting.containsKey(slug)) return;
+                getting.put(slug, text);
+                refilter();
+            });
+        };
+    }
+
+    static String megabytes(long bytes) {
+        return String.format(Locale.ROOT, "%.1f MB", bytes / 1_000_000.0);
     }
 
     private static String rootMessage(Throwable t) {

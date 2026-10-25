@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.studio.config.AppPaths;
 import com.botmaker.studio.docs.StudioAction;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -190,7 +191,9 @@ final class StudioActions {
     private void exportBmk() {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("Export .bmk into…");
-        chooser.setInitialDirectory(config.projectPath().toFile());
+        // Not the project's folder: a file there would ride along in its next version (finding N3).
+        File start = AppPaths.saveFolder().toFile();
+        if (start.isDirectory()) chooser.setInitialDirectory(start);
         File picked = chooser.showDialog(primaryStage);
         if (picked == null) return;
         CompletableFuture.supplyAsync(() -> {

@@ -2,8 +2,11 @@ package com.botmaker.studio.config;
 
 import com.botmaker.shared.tools.UserDirs;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -54,6 +57,66 @@ public final class AppPaths {
     /** The home the programs-menu entries are made under: the user's, or the sandbox. */
     public static Path entriesHome() {
         return sandbox().orElseGet(() -> Path.of(System.getProperty("user.home")));
+    }
+
+    /**
+     * The folder a save is offered in first (Export .bmk, 2026-10-25): the XDG download folder, else
+     * {@code ~/Downloads}, else the desktop, else the home; the first that is a folder. Never the project's folder:
+     * a file there is swept into the bot's next version (finding N3).
+     */
+    public static Path saveFolder() {
+        Path home = entriesHome();
+        return firstFolder(home, List.of(userDir(XDG_DOWNLOAD, home).orElse(home.resolve("Downloads")),
+                home.resolve("Downloads"), desktop()));
+    }
+
+    /** The user's desktop folder: the XDG desktop folder, else {@code ~/Desktop}; the sandbox's {@code Desktop/}. */
+    public static Path desktop() {
+        Path home = entriesHome();
+        return userDir(XDG_DESKTOP, home).orElse(home.resolve("Desktop"));
+    }
+
+    static final String XDG_DOWNLOAD = "XDG_DOWNLOAD_DIR";
+    static final String XDG_DESKTOP = "XDG_DESKTOP_DIR";
+
+    /** {@code key}'s folder in this user's {@code user-dirs.dirs}; never in a sandbox, which stands for the home. */
+    private static Optional<Path> userDir(String key, Path home) {
+        if (sandbox().isPresent()) return Optional.empty();
+        String config = System.getenv("XDG_CONFIG_HOME");
+        Path file = (config == null || config.isBlank() ? home.resolve(".config") : Path.of(config))
+                .resolve("user-dirs.dirs");
+        try {
+            return userDir(key, Files.readString(file), home);
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * {@code key}'s folder in {@code text}, a {@code user-dirs.dirs} ({@code XDG_DOWNLOAD_DIR="$HOME/Téléchargements"}):
+     * a path under {@code $HOME} or an absolute one, as {@code xdg-user-dirs} writes them. A folder set to the home
+     * itself means none (the spec's way to turn one off).
+     */
+    static Optional<Path> userDir(String key, String text, Path home) {
+        for (String line : text.lines().map(String::strip).toList()) {
+            if (!line.startsWith(key + "=")) continue;
+            String value = line.substring(key.length() + 1).strip();
+            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                value = value.substring(1, value.length() - 1);
+            }
+            Path dir;
+            if (value.equals("$HOME") || value.equals("$HOME/")) return Optional.empty();
+            else if (value.startsWith("$HOME/")) dir = home.resolve(value.substring("$HOME/".length()));
+            else if (value.startsWith("/")) dir = Path.of(value);
+            else return Optional.empty();
+            return Optional.of(dir.normalize());
+        }
+        return Optional.empty();
+    }
+
+    /** The first of {@code candidates} that is a folder, else {@code home}. */
+    static Path firstFolder(Path home, List<Path> candidates) {
+        return candidates.stream().filter(Files::isDirectory).findFirst().orElse(home);
     }
 
     /** The properties a sandbox sets, so {@link UserDirs} and Java's preferences answer inside it. */

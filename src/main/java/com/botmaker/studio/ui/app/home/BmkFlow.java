@@ -23,6 +23,7 @@ import javafx.stage.Window;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -44,10 +45,24 @@ public final class BmkFlow {
 
     /** Opens {@code bmk}, asking the user when the bot needs their trust; {@code onOpened} gets the unpacked folder. */
     public void open(Path bmk, Consumer<Path> onOpened) {
-        open(bmk, false, onOpened);
+        open(bmk, false, onOpened, () -> { });
     }
 
-    private void open(Path bmk, boolean agreed, Consumer<Path> onOpened) {
+    /**
+     * Opens {@code bmk}, the listed file <i>Get</i> downloaded ({@link GetBots}): the user agreed with that click, so
+     * no trust sheet, and the file, a copy in the cache, is deleted once the open is done, opened or not.
+     */
+    public void openGot(Path bmk, Consumer<Path> onOpened) {
+        open(bmk, true, onOpened, () -> {
+            try {
+                Files.deleteIfExists(bmk);
+            } catch (IOException e) {
+                System.err.println("Could not delete " + bmk + ": " + e.getMessage());
+            }
+        });
+    }
+
+    private void open(Path bmk, boolean agreed, Consumer<Path> onOpened, Runnable done) {
         status.accept("Opening " + bmk.getFileName() + "…");
         CatalogClient.session().fetch()
                 .thenApplyAsync(catalog -> BmkOpen.open(bmk, catalog, ProjectPreferences.trustedBots(), agreed,
@@ -55,16 +70,26 @@ public final class BmkFlow {
                 .whenComplete((result, failed) -> Platform.runLater(() -> {
                     status.accept("");
                     if (failed != null) {
+                        done.run();
                         error("Could not open this bot", failed.getMessage());
                         return;
                     }
                     switch (result) {
-                        case BmkOpen.Opened opened -> onOpened.accept(opened.dir());
-                        case BmkOpen.Refused refused -> error("Could not open this bot", refused.why());
+                        case BmkOpen.Opened opened -> {
+                            done.run();
+                            onOpened.accept(opened.dir());
+                        }
+                        case BmkOpen.Refused refused -> {
+                            done.run();
+                            error("Could not open this bot", refused.why());
+                        }
                         case BmkOpen.NeedsTrust trust -> {
-                            if (!agrees(trust)) return;
+                            if (!agrees(trust)) {
+                                done.run();
+                                return;
+                            }
                             if (trust.listed()) ProjectPreferences.trustBot(trust.key());
-                            open(bmk, true, onOpened);
+                            open(bmk, true, onOpened, done);
                         }
                     }
                 }));

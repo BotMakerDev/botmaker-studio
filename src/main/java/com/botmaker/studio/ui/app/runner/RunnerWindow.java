@@ -234,7 +234,8 @@ public final class RunnerWindow implements ProjectWindow {
 
     /**
      * Header A (2026-10-25, spec § 1a): {@link RunnerHeader}, with this window's way back to editing — or, on
-     * somebody else's bot, a look at the code and "Improve this bot" — after the titles.
+     * somebody else's bot, a look at the code and "Improve this bot" — after the titles, then the shortcut
+     * ({@link ShortcutButton}).
      */
     private Node header() {
         List<Node> extra = new ArrayList<>();
@@ -250,6 +251,7 @@ public final class RunnerWindow implements ProjectWindow {
             improve.setOnAction(e -> switchToEditorMode());
             extra.addAll(List.of(code, improve));
         }
+        extra.add(ShortcutButton.of(MyBots.entryOf(original, about.name(), config.projectPath()), stage));
         header = new RunnerHeader(about, BotIconView.local(about.name(), config.projectPath(),
                 RunnerHeader.ICON_SIZE), StopKeyPreference.name(), extra, new RunnerHeader.Actions() {
             @Override

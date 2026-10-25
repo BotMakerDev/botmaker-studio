@@ -73,6 +73,26 @@ public final class UnpackedBots {
         }
     }
 
+    /** {@link #libOf(Path, Path)} under {@link #root()}. */
+    public static Optional<BotJson.Lib> libOf(Path jar) {
+        return libOf(root(), jar);
+    }
+
+    /**
+     * The {@code bot.json} line of {@code jar} when it is a jar packed in a checked unpacked bot under {@code root}:
+     * its coordinate, which its path in {@code lib/} does not say as a Maven repository's would (the plugin gate
+     * names and checks a plugin by it, 2026-10-25). Empty for any other jar.
+     */
+    public static Optional<BotJson.Lib> libOf(Path root, Path jar) {
+        Path base = root.toAbsolutePath().normalize();
+        Path file = jar.toAbsolutePath().normalize();
+        if (!file.startsWith(base) || base.relativize(file).getNameCount() < 5) return Optional.empty();
+        Path tag = base.resolve(base.relativize(file).subpath(0, 3));
+        return at(base, tag).flatMap(bot -> bot.libs().stream()
+                .filter(l -> l.packed().map(p -> tag.resolve(p).normalize().equals(file)).orElse(false))
+                .findFirst());
+    }
+
     /** Whether {@code dir} is a checked unpacked bot under {@link #root()}. */
     public static boolean isUnpacked(Path dir) {
         return at(dir).isPresent();

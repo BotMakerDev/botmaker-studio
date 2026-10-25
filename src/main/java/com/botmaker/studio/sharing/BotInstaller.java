@@ -33,10 +33,6 @@ public final class BotInstaller {
         return Constants.PROJECTS_ROOT.resolve(sanitizeName(name));
     }
 
-    public boolean isInstalled(String name) {
-        return Files.exists(installDir(name));
-    }
-
     /**
      * Installs {@code entry} at release {@code tag} as a <b>clone</b> of its author's repository
      * ({@code docs/refactor/39-versions.md} §7): the remote is {@code original}, branch {@code main} starts at

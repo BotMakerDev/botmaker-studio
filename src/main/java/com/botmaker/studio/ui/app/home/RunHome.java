@@ -3,9 +3,11 @@ package com.botmaker.studio.ui.app.home;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.shared.tools.UserDirs;
 import com.botmaker.studio.config.AppVersion;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.studio.sharing.BmkDownload;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.GalleryEntry;
@@ -58,6 +60,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * The home BotMaker opens on (2026-10-25, spec § 1a, layout A): <i>My bots</i> over <i>Get more bots</i> in one
@@ -112,7 +115,21 @@ public final class RunHome implements ProjectWindow {
         this.actions = actions;
         this.bots = bots;
         this.compiles = compiles;
-        this.getBots = new GetBots(shelf, this::agrees, this::reload, ShowCommunity.load(), HiddenBots.load());
+        this.getBots = new GetBots(shelf, this::agrees, new GetBots.Got() {
+            @Override
+            public void downloaded(GalleryEntry entry, Path bmk) {
+                new BmkFlow(stage, RunHome.this::say).openGot(bmk, dir -> {
+                    reload();
+                    actions.run(dir);
+                });
+            }
+
+            @Override
+            public void cloned(Path dir) {
+                reload();
+                actions.edit(dir, false);
+            }
+        }, ShowCommunity.load(), HiddenBots.load());
     }
 
     /**
@@ -121,7 +138,8 @@ public final class RunHome implements ProjectWindow {
      */
     public static RunHome studio(Stage stage, Actions actions) {
         ProjectManager projects = new ProjectManager();
-        BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), new GitHubAuth()));
+        GitHubAuth auth = new GitHubAuth();
+        BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), auth));
         RunHome home = new RunHome(stage, actions, () -> {
             var opened = ProjectPreferences.recentOpenTimes();
             List<MyBot> found = MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories(),
@@ -132,13 +150,14 @@ public final class RunHome implements ProjectWindow {
             return found;
         }, new GetBots.Shelf() {
             @Override
-            public Path get(GalleryEntry entry) throws IOException {
-                return installer.install(entry, entry.tag());
+            public Path download(GalleryEntry entry, BmkDownload.Progress progress) throws IOException {
+                return new BmkDownload(auth.isAuthenticated() ? auth.token() : null)
+                        .fetch(entry, UserDirs.cache(), progress);
             }
 
             @Override
-            public boolean has(GalleryEntry entry) {
-                return installer.isInstalled(entry.name());
+            public Path cloneOf(GalleryEntry entry) throws IOException {
+                return installer.install(entry, entry.tag());
             }
         }, MyBots::compile);
         // Asked again on every visit, as New Project does, so a bot published since Studio started is offered.
@@ -150,13 +169,17 @@ public final class RunHome implements ProjectWindow {
     }
 
     /**
-     * Makes the programs menu hold {@code bots} (none when the user turned it off), each time My bots is read: a bot
-     * removed, archived or gone loses its entry here. Nothing on a development run ({@link ProgramEntries}).
+     * Makes the programs menu hold {@code bots} (when the user turned it off, only those with a desktop shortcut,
+     * which stands for both), each time My bots is read: a bot removed, archived or gone loses its entry here.
+     * Nothing on a development run ({@link ProgramEntries}).
      */
     private static void syncProgramsMenu(List<MyBot> bots) {
         ProgramEntries.forThisComputer().ifPresent(entries -> {
             try {
-                entries.sync(ProgramsMenuChoice.load().on() ? MyBots.programEntries(bots) : List.of());
+                List<ProgramEntries.Entry> all = MyBots.programEntries(bots);
+                Optional<ProgramEntries> desktop = ProgramEntries.desktopOfThisComputer();
+                entries.sync(ProgramsMenuChoice.load().on() ? all
+                        : all.stream().filter(e -> desktop.map(d -> d.has(e)).orElse(false)).toList());
             } catch (IOException | RuntimeException e) {
                 System.err.println("Could not update the programs menu: " + e.getMessage());
             }
@@ -288,6 +311,8 @@ public final class RunHome implements ProjectWindow {
             }
             say(found.isEmpty() ? "No bots yet: ＋ New bot starts one, or get one below." : "");
             myBots.getChildren().setAll(found.stream().map(this::card).toList());
+            getBots.mine(found.stream().flatMap(b -> b.original().stream())
+                    .map(s -> MyBots.key(s.owner(), s.repo())).collect(Collectors.toSet()));
             if (scrollPending) {
                 // Once, on the first cards: a later reload (a Get, a Remove) leaves the user's scroll alone.
                 scrollPending = false;

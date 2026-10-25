@@ -148,25 +148,78 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
      * empty in a development run, or on a system with no programs menu we know.
      */
     static Optional<ProgramEntries> forThisComputer() {
+        return ofThisComputer(false);
+    }
+
+    /**
+     * This computer's desktop shortcuts, made one bot at a time by the Run window's <i>Add shortcut</i> (2026-10-25,
+     * K1): the same files as the menu's, on the desktop ({@link AppPaths#desktop}). Never {@link #sync}ed: the
+     * desktop holds the user's own files beside ours. Empty where {@link #forThisComputer} is.
+     */
+    static Optional<ProgramEntries> desktopOfThisComputer() {
+        return ofThisComputer(true);
+    }
+
+    private static Optional<ProgramEntries> ofThisComputer(boolean desktop) {
         String launcher = System.getProperty("jpackage.app-path");
         if (launcher == null || launcher.isBlank()) return Optional.empty();
         // A sandbox (AppPaths) stands for the home, so a test's entries land in it and not in the real menu.
         boolean sandboxed = AppPaths.sandbox().isPresent();
         Path home = AppPaths.entriesHome();
-        Path icons = UserDirs.data().resolve("menu-icons");
+        // Apart from the menu's: a menu sync deletes every icon of its folder that no menu entry uses.
+        Path icons = UserDirs.data().resolve(desktop ? "desktop-icons" : "menu-icons");
         Os os = Os.current();
         if (os.isLinux()) {
             String dataHome = sandboxed ? null : System.getenv("XDG_DATA_HOME");
             Path data = dataHome != null && !dataHome.isBlank() ? Path.of(dataHome) : home.resolve(".local/share");
-            return Optional.of(new Linux(data.resolve("applications"), icons, launcher));
+            return Optional.of(new Linux(desktop ? AppPaths.desktop() : data.resolve("applications"), icons,
+                    launcher));
         }
         if (os.isWindows()) {
+            if (desktop) return Optional.of(new Windows(AppPaths.desktop(), icons, launcher));
             String appData = sandboxed ? home.resolve("AppData").toString() : System.getenv("APPDATA");
             if (appData == null || appData.isBlank()) return Optional.empty();
             return Optional.of(new Windows(Windows.startMenu(Path.of(appData)), icons, launcher));
         }
-        if (os.isMac()) return Optional.of(new Mac(home.resolve("Applications").resolve(FOLDER), icons));
+        if (os.isMac()) {
+            return Optional.of(new Mac(desktop ? AppPaths.desktop() : home.resolve("Applications").resolve(FOLDER),
+                    icons));
+        }
         return Optional.empty();
+    }
+
+    /** The name {@code entry} is written under on its own: its title, made a file name ({@link #fileNames}). */
+    static String nameOf(Entry entry) {
+        return fileNames(List.of(entry)).get(entry);
+    }
+
+    /**
+     * Whether the file {@code entry} is written as under {@code fileName} is there and is this entry's, made by us:
+     * on a desktop a file of that name may be the user's own.
+     */
+    boolean ours(Entry entry, String fileName);
+
+    /** Whether {@code entry}, written on its own ({@link #add}), is there. */
+    default boolean has(Entry entry) {
+        return ours(entry, nameOf(entry));
+    }
+
+    /** Writes {@code entry} on its own, replacing what we wrote there; refused over a file of the user's. */
+    default void add(Entry entry) throws IOException {
+        String name = nameOf(entry);
+        Path top = files(entry, name).getFirst();
+        if (Files.exists(top, LinkOption.NOFOLLOW_LINKS) && !ours(entry, name)) {
+            throw new IOException(top.getFileName() + " is already there, and is not BotMaker's: rename or move it "
+                    + "first.");
+        }
+        write(entry, name);
+    }
+
+    /** Deletes {@code entry}, written on its own, and its icon; nothing when the file there is not ours. */
+    default void remove(Entry entry) throws IOException {
+        String name = nameOf(entry);
+        if (!ours(entry, name)) return;
+        for (Path file : files(entry, name)) delete(file);
     }
 
     /** {@code entry}'s icon as a PNG of {@code side} pixels: its {@code icon.png} scaled, else its letter. */
@@ -249,6 +302,14 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
             List<Path> files = files(entry, fileName);
             writeIfChanged(files.get(1), png(entry, BotIcon.SIZE));
             writeIfChanged(files.get(0), desktop(entry, files.get(1)).getBytes(StandardCharsets.UTF_8));
+            // A desktop runs a launcher file only when it is executable (GNOME, KDE); the menu reads it either way.
+            Files.setPosixFilePermissions(files.get(0), PosixFilePermissions.fromString("rwxr-xr-x"));
+        }
+
+        /** The file name carries the entry's id and our prefix. */
+        @Override
+        public boolean ours(Entry entry, String fileName) {
+            return Files.isRegularFile(files(entry, fileName).getFirst(), LinkOption.NOFOLLOW_LINKS);
         }
 
         @Override
@@ -343,6 +404,13 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
             return arg.contains(" ") ? "\"" + arg + "\"" : arg;
         }
 
+        /** The shortcut, and our record of having made it for this entry under that name. */
+        @Override
+        public boolean ours(Entry entry, String fileName) {
+            List<Path> files = files(entry, fileName);
+            return Files.isRegularFile(files.get(0)) && Files.isRegularFile(files.get(2));
+        }
+
         @Override
         public List<Path> existing() throws IOException {
             return listed(folder).stream().filter(p -> p.getFileName().toString().endsWith(".lnk")).toList();
@@ -365,6 +433,18 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
             Path script = contents.resolve("MacOS").resolve("run");
             writeIfChanged(script, script(entry).getBytes(StandardCharsets.UTF_8));
             Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+        }
+
+        /** A bundle whose identifier is this entry's. */
+        @Override
+        public boolean ours(Entry entry, String fileName) {
+            Path plist = files(entry, fileName).getFirst().resolve("Contents").resolve("Info.plist");
+            try {
+                return Files.isRegularFile(plist, LinkOption.NOFOLLOW_LINKS)
+                        && Files.readString(plist).contains("<string>com.botmaker.bot." + xml(entry.id()) + "</string>");
+            } catch (IOException e) {
+                return false;
+            }
         }
 
         @Override

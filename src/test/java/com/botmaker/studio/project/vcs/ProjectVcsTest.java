@@ -25,6 +25,9 @@ class ProjectVcsTest {
 
         assertTrue(vcs.isRepo());
         assertTrue(Files.exists(dir.resolve(".gitignore")));
+        // An export written into the folder rides along in no version (finding N3).
+        assertTrue(Files.readString(dir.resolve(".gitignore")).lines().anyMatch("*.bmk"::equals));
+        assertTrue(Files.readString(dir.resolve(".git/info/exclude")).lines().anyMatch("*.bmk"::equals));
         List<ProjectVcs.CommitInfo> history = vcs.history();
         assertEquals(1, history.size());
         assertEquals("Initial commit", history.get(0).message());

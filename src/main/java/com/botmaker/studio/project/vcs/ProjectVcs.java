@@ -128,7 +128,10 @@ public final class ProjectVcs {
      */
     private static final List<String> GITIGNORE_LINES = List.of(
             "target/", ".idea/", ".gradle/", "build/", "out/", "*.class",
-            com.botmaker.studio.project.ProjectMode.MARKER, "/" + ProjectConfig.STUDIO_DIR + "/");
+            com.botmaker.studio.project.ProjectMode.MARKER, "/" + ProjectConfig.STUDIO_DIR + "/", ProjectVcs.BMK);
+
+    /** An exported bot file: tens of MB a version or a push would carry (2026-10-25, finding N3). */
+    static final String BMK = "*.bmk";
 
     private final Path projectDir;
     private final PersonIdent author;
@@ -1463,6 +1466,9 @@ public final class ProjectVcs {
      * reads it since 2026-09-27, so a copy left on disk was swept into the next automatic version (the gamebot
      * template's, one push from its {@code main}). Excluding it deletes nothing and leaves a project that
      * already tracks it as it is — git never un-tracks a file for an exclude line.
+     *
+     * <p>{@code *.bmk} since 2026-10-25: an export written into the project folder (finding N3). Here rather than
+     * in the {@code .gitignore} of a project made before, for the same reason as {@code .botmaker/}.
      */
     private void excludeStudioState() throws IOException {
         Path gitDir = gitDir();
@@ -1482,7 +1488,7 @@ public final class ProjectVcs {
 
     /** What {@link #excludeStudioState} keeps out of every version: Studio's state, and an old Studio's leftover. */
     static final List<String> EXCLUDED = List.of("/" + ProjectConfig.STUDIO_DIR + "/",
-            "/src/main/resources/botmaker-project.properties");
+            "/src/main/resources/botmaker-project.properties", BMK);
 
     private void writeGitignore() throws IOException {
         Path gitignore = projectDir.resolve(".gitignore");

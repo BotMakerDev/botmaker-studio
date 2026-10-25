@@ -1,5 +1,7 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.cli.bmk.BotJson;
+import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.shared.github.GitHubAuth;
@@ -8,6 +10,7 @@ import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.CatalogIndex;
 import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.studio.sharing.UnpackedBots;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -134,6 +137,8 @@ public final class PluginGate {
     private final Predicate<Path> declaresPlugin;
     private final Predicate<Path> builtHere;
     private final Pins pins;
+    /** A run copy's packed jar's {@code bot.json} line ({@link UnpackedBots#libOf}), empty for any other jar. */
+    private final Function<Path, Optional<BotJson.Lib>> packed;
 
     /** What the catalog says of a jar at a version ({@link ReleasePins#check}). */
     @FunctionalInterface
@@ -153,6 +158,15 @@ public final class PluginGate {
     PluginGate(Supplier<CatalogIndex> catalog, Path repository, Supplier<String> login,
                Supplier<CommunityConsent> consent, Consumer<CommunityConsent> keep, Asker asker,
                Predicate<Path> declaresPlugin, Predicate<Path> builtHere, Pins pins) {
+        this(catalog, repository, login, consent, keep, asker, declaresPlugin, builtHere, pins, UnpackedBots::libOf);
+    }
+
+    /** @param packed a run copy's packed jar's {@code bot.json} line, empty for any other jar */
+    PluginGate(Supplier<CatalogIndex> catalog, Path repository, Supplier<String> login,
+               Supplier<CommunityConsent> consent, Consumer<CommunityConsent> keep, Asker asker,
+               Predicate<Path> declaresPlugin, Predicate<Path> builtHere, Pins pins,
+               Function<Path, Optional<BotJson.Lib>> packed) {
+        this.packed = packed;
         this.catalog = catalog;
         this.repository = repository.toAbsolutePath().normalize();
         this.login = login;
@@ -243,14 +257,19 @@ public final class PluginGate {
                 libraries.add(entry);
                 continue;
             }
-            String coordinate = coordinateOf(jar);
-            String version = ReleasedPlugins.versionOf(jar);
-            Optional<PluginRegistry.Plugin> row = rowFor(listed, coordinate);
+            boolean isPacked = packed.apply(jar).isPresent();
+            String version = versionOf(jar);
+            Optional<PluginRegistry.Plugin> row = rowOf(listed, jar);
+            // A packed jar its bot.json names but the catalog did not pin is no listed plugin: unlisted, and
+            // asked about by its bytes, never under a coordinate a yes was given to before.
+            boolean claimed = isPacked && row.isEmpty();
+            String coordinate = claimed ? "" : coordinateOf(jar);
+            // A packed jar has no pom beside it (bot.json, not a pom, says what it runs with): its bytes are checked.
             ReleasePins.Verdict verdict = row.isEmpty() || dev.contains(jar) ? ReleasePins.Verdict.NOT_APPROVED
-                    : pins.check(jar, row.get(), version);
+                    : isPacked ? ReleasePins.Verdict.APPROVED : pins.check(jar, row.get(), version);
             Optional<String> refusal = refusal(verdict, row, version);
             if (refusal.isPresent()) {
-                refused.add(new PluginLoader.PluginFailure(ReleasedPlugins.describe(entry),
+                refused.add(new PluginLoader.PluginFailure(describe(entry),
                         new IllegalStateException(refusal.get())));
                 continue;
             }
@@ -259,17 +278,17 @@ public final class PluginGate {
                 plugins.add(entry);
                 continue;
             }
-            String key = CommunityConsent.key(coordinate.isBlank() ? ReleasedPlugins.describe(entry) : coordinate,
-                    version, row);
+            String key = claimed ? "packed@" + ReleasePins.sha256(jar).orElse(entry)
+                    : CommunityConsent.key(coordinate.isBlank() ? describe(entry) : coordinate, version, row);
             if (agreed == null) agreed = consent.get();
             if (agreed.allows(key)) {
                 plugins.add(entry);
-            } else if (asks(new Asked(coordinate, ReleasedPlugins.describe(entry), row))) {
+            } else if (asks(new Asked(coordinate, describe(entry), row))) {
                 agreed = agreed.with(key);
                 keep.accept(agreed);
                 plugins.add(entry);
             } else {
-                refused.add(new PluginLoader.PluginFailure(ReleasedPlugins.describe(entry),
+                refused.add(new PluginLoader.PluginFailure(describe(entry),
                         new IllegalStateException(DECLINED)));
             }
         }
@@ -281,7 +300,7 @@ public final class PluginGate {
         for (String library : libraries) {
             packagesOf(normal(library)).stream().filter(pluginPackages::containsKey).findFirst().ifPresent(pkg -> {
                 shadowing.add(library);
-                refused.add(new PluginLoader.PluginFailure(ReleasedPlugins.describe(library),
+                refused.add(new PluginLoader.PluginFailure(describe(library),
                         new IllegalStateException(shadows(pkg, pluginPackages.get(pkg)))));
             });
         }
@@ -357,12 +376,12 @@ public final class PluginGate {
         for (StudioPlugin plugin : plugins) {
             Optional<Path> jar = jarOf.apply(plugin).map(path -> path.toAbsolutePath().normalize());
             Optional<PluginRegistry.Plugin> row = jar.filter(path -> !dev.contains(path))
-                    .flatMap(path -> rowFor(listed, coordinateOf(path)));
+                    .flatMap(path -> rowOf(listed, path));
             String id = idOf(plugin);
             if (row.isEmpty() || row.get().id().equals(id)) {
                 bound.add(plugin);
             } else {
-                refused.add(new PluginLoader.PluginFailure(ReleasedPlugins.describe(jar.get().toString()),
+                refused.add(new PluginLoader.PluginFailure(describe(jar.get().toString()),
                         new IllegalStateException("its id is " + (id.isEmpty() ? "unreadable" : id)
                                 + ", but the catalog lists this coordinate as " + row.get().id())));
             }
@@ -380,10 +399,37 @@ public final class PluginGate {
     }
 
     /**
+     * {@code jar}'s catalog row. A run copy's packed jar names its coordinate in its {@code bot.json}, which the bot's
+     * author wrote: it has that row only when its bytes are the jar the catalog pinned for that release.
+     */
+    Optional<PluginRegistry.Plugin> rowOf(CatalogIndex listed, Path jar) {
+        Optional<PluginRegistry.Plugin> row = rowFor(listed, coordinateOf(jar));
+        if (packed.apply(jar).isEmpty()) return row;
+        String version = versionOf(jar);
+        Optional<String> sum = ReleasePins.sha256(jar);
+        return row.filter(r -> r.release(version).map(Catalog.Plugin.Release::jarSha256)
+                .filter(pin -> sum.map(pin::equals).orElse(false)).isPresent());
+    }
+
+    /** {@code entry} as {@code <artifact> <version>}: a run copy's packed jar by its {@code bot.json} line. */
+    String describe(String entry) {
+        return packed.apply(normal(entry)).map(l -> l.artifactId() + " " + l.version())
+                .orElseGet(() -> ReleasedPlugins.describe(entry));
+    }
+
+    /** {@code jar}'s version: a run copy's packed jar's from its {@code bot.json} line, not its folder's name. */
+    String versionOf(Path jar) {
+        return packed.apply(jar).map(BotJson.Lib::version).orElseGet(() -> ReleasedPlugins.versionOf(jar));
+    }
+
+    /**
      * The {@code groupId:artifactId} of a jar in {@link #repository}'s layout
-     * ({@code <group dirs>/<artifact>/<version>/<file>}), blank for a jar anywhere else.
+     * ({@code <group dirs>/<artifact>/<version>/<file>}), or of a jar packed in a run copy by its {@code bot.json}
+     * line ({@link UnpackedBots#libOf}); blank for a jar anywhere else.
      */
     String coordinateOf(Path jar) {
+        Optional<BotJson.Lib> lib = packed.apply(jar);
+        if (lib.isPresent()) return lib.get().groupId() + ":" + lib.get().artifactId();
         if (!jar.startsWith(repository)) return "";
         Path relative = repository.relativize(jar);
         int parts = relative.getNameCount();
