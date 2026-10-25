@@ -59,6 +59,10 @@ final class AssistantPane {
 
     private static final String SHELL = System.getenv("SHELL");
 
+    /** How long a start waits for the port: at most {@code BIND_TRIES} times {@code BIND_PAUSE_MS}. */
+    private static final int BIND_TRIES = 16;
+    private static final long BIND_PAUSE_MS = 250;
+
     private final StudioContext ctx;
     private final Path projectDir;
     private final BorderPane root = new BorderPane();
@@ -305,7 +309,7 @@ final class AssistantPane {
             try {
                 // A dev Studio's UI endpoint holds the port while no project serves; this one takes it over.
                 HomeEndpoint.yieldPort();
-                started = McpEndpoint.start(starting.port(), starting.token(), new LiveEditorBot(ctx), driver, log);
+                started = startRetrying(starting, ctx, driver, log);
             } catch (Exception e) {
                 failure = "Could not listen on port " + starting.port() + ": " + e.getMessage();
                 HomeEndpoint.serve();
@@ -349,6 +353,23 @@ final class AssistantPane {
         } else if (sessions.getTabs().isEmpty()) {
             stopEndpoint();
             mcpStatus.setText("Opening a tool starts the endpoint; tick this to keep it for other clients.");
+        }
+    }
+
+    /**
+     * The endpoint started, tried again for a few seconds: a dev Studio's endpoint that a {@code ui} press closed
+     * lets go of the port only once the press has answered ({@code McpEndpoint#close}).
+     */
+    private McpEndpoint startRetrying(McpConfig config, StudioContext ctx, StudioBridge driver, RunLog log)
+            throws Exception {
+        LiveEditorBot bot = new LiveEditorBot(ctx);
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return McpEndpoint.start(config.port(), config.token(), bot, driver, log);
+            } catch (Exception taken) {
+                if (attempt >= BIND_TRIES) throw taken;
+                Thread.sleep(BIND_PAUSE_MS);
+            }
         }
     }
 

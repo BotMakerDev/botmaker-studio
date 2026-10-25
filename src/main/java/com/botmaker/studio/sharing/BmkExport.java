@@ -3,6 +3,7 @@ package com.botmaker.studio.sharing;
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.cli.bmk.BotJson;
+import com.botmaker.cli.bmk.Central;
 import com.botmaker.cli.publish.PublishTarget;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
@@ -85,7 +86,7 @@ public final class BmkExport {
         Path next = Files.createTempFile(outDir, ".bmk", ".next");
         try {
             try (OutputStream out = Files.newOutputStream(next)) {
-                BotFile.write(sources, head, resolved, out);
+                BotFile.write(sources, head, resolved, Central.maven(), out);
             }
             Files.move(next, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } finally {

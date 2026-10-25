@@ -9,6 +9,7 @@ import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.servlet.DispatcherType;
+import javafx.application.Platform;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +29,7 @@ import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -58,6 +60,7 @@ public final class McpEndpoint implements AutoCloseable {
     private final Server jetty;
     private final McpSyncServer mcp;
     private final int port;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     private McpEndpoint(Server jetty, McpSyncServer mcp, int port) {
         this.jetty = jetty;
@@ -144,8 +147,28 @@ public final class McpEndpoint implements AutoCloseable {
         return "http://127.0.0.1:" + port + PATH;
     }
 
+    /**
+     * Closes once a {@code ui} press in flight has answered: a press that opens or closes a project hands the port
+     * over mid-call, and its client would read the cut call as Studio being down. On the FX thread the close waits
+     * off it, since the press reads the windows there.
+     */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) return;
+        if (!UiTools.pressing()) {
+            shut();
+        } else if (Platform.isFxApplicationThread()) {
+            Thread.ofVirtual().start(() -> {
+                UiTools.awaitPresses();
+                shut();
+            });
+        } else {
+            UiTools.awaitPresses();
+            shut();
+        }
+    }
+
+    private void shut() {
         try {
             mcp.close();
         } finally {

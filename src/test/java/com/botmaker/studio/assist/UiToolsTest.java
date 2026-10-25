@@ -3,7 +3,11 @@ package com.botmaker.studio.assist;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -34,8 +38,9 @@ class UiToolsTest extends FxHeadlessTest {
         archive.setOnAction(e -> archived.incrementAndGet());
         TextField field = new TextField();
         field.setPromptText("Name");
+        Menu file = new Menu("File", null, new MenuItem("My Bots"));
         stage.setTitle("My bots");
-        stage.setScene(new Scene(new VBox(name, archive, field), 300, 200));
+        stage.setScene(new Scene(new VBox(new MenuBar(file), name, archive, field), 300, 200));
         stage.show();
     }
 
@@ -57,12 +62,42 @@ class UiToolsTest extends FxHeadlessTest {
     void aPressFiresTheButtonAndTypeFillsTheField() {
         UiTools ui = new UiTools();
         String read = UiTools.onFx(() -> ui.read("my bots"));
-        ui.press(refOf(read, "button \"Archive\""));
+        int archive = refOf(read, "button \"Archive\"");
+        assertTrue(ui.press(archive).startsWith("Pressed r" + archive + " (button \"Archive\")."));
         WaitForAsyncUtils.waitForFxEvents();
         assertEquals(1, archived.get());
+        assertFalse(UiTools.pressing());
         int field = refOf(read, "field");
         UiTools.onFx(() -> ui.type(field, "Firestone"));
         assertTrue(UiTools.onFx(() -> ui.read(null)).contains("field \"Firestone\""));
+    }
+
+    @Test
+    void theMenuBarIsNamedOnlyUnlessAskedFor() {
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read(null));
+        assertTrue(read.contains("menu bar [File]"), read);
+        assertFalse(read.contains("File ▸ My Bots"), read);
+        assertTrue(UiTools.onFx(() -> ui.read(null, true)).contains("menu \"File ▸ My Bots\""));
+    }
+
+    @Test
+    void anOpenMenuIsReadWhenNoWindowIsNamed() {
+        ContextMenu menu = new ContextMenu(new MenuItem("Archive…"));
+        UiTools.onFx(() -> {
+            menu.show(stage);
+            return null;
+        });
+        try {
+            String read = UiTools.onFx(() -> new UiTools().read(null));
+            assertTrue(read.contains("menu \"Archive…\""), read);
+            assertFalse(read.contains("button \"Archive\""), read);
+        } finally {
+            UiTools.onFx(() -> {
+                menu.hide();
+                return null;
+            });
+        }
     }
 
     @Test

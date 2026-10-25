@@ -53,6 +53,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -75,6 +76,11 @@ final class UiTools {
     /** At most this many lines in one read; the rest is counted. */
     private static final int MOST_LINES = 400;
     private static final long SETTLE_MS = 400;
+    /** The longest an endpoint's close waits for a press, and the moment after for its answer to go out. */
+    private static final long MOST_PRESS_MS = 3_000;
+    private static final long SENT_MS = 150;
+    /** Presses in flight, over every endpoint's {@code ui}. */
+    private static final AtomicInteger PRESSING = new AtomicInteger();
 
     /** {@code ui}'s actions. */
     sealed interface Ui {
@@ -83,7 +89,9 @@ final class UiTools {
         }
 
         @Describe("what a window shows, each control with a ref; a label its width cuts short says cut")
-        record Read(@Describe(value = WINDOW, optional = true) String window) implements Ui {
+        record Read(@Describe(value = WINDOW, optional = true) String window,
+                    @Describe(value = "true lists the menu bar's items too", optional = true) Boolean menus)
+                implements Ui {
         }
 
         @Describe("press a button, link, menu item, tab, check box, list item or clickable area")
@@ -129,7 +137,8 @@ final class UiTools {
                     try {
                         return switch (action) {
                             case Ui.Windows ignored -> AgentReply.text(onFx(UiTools::windows));
-                            case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window())));
+                            case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(),
+                                    Boolean.TRUE.equals(read.menus()))));
                             case Ui.Press press -> AgentReply.text(press(press.ref()));
                             case Ui.Type type -> AgentReply.text(onFx(() -> type(type.ref(), type.text())));
                             case Ui.Look look -> look(look.window(), look.scale());
@@ -184,12 +193,16 @@ final class UiTools {
         return window instanceof Stage s && s.getTitle() != null ? s.getTitle() : "";
     }
 
-    /** The window {@code which} names: its number, part of its title, else the focused one, else the first. */
+    /**
+     * The window {@code which} names: its number, part of its title; else an open menu (the newest), which takes
+     * the keys while its owner keeps the focus; else the focused one, else the first.
+     */
     static Window window(String which) {
         List<Window> all = showing();
         if (all.isEmpty()) throw new IllegalArgumentException("No window is shown.");
         if (which == null || which.isBlank()) {
-            return all.stream().filter(Window::isFocused).findFirst().orElse(all.getFirst());
+            return all.reversed().stream().filter(ContextMenu.class::isInstance).findFirst()
+                    .or(() -> all.stream().filter(Window::isFocused).findFirst()).orElse(all.getFirst());
         }
         String asked = which.strip();
         if (asked.matches("\\d+")) {
@@ -207,6 +220,11 @@ final class UiTools {
     // ---- read ---------------------------------------------------------------------------------------------
 
     String read(String which) {
+        return read(which, false);
+    }
+
+    /** {@code menus}: the menu bar's items too, which run to thousands of characters in the editor. */
+    String read(String which, boolean menus) {
         Window window = window(which);
         refs.clear();
         List<String> lines = new ArrayList<>();
@@ -214,7 +232,7 @@ final class UiTools {
         if (window instanceof ContextMenu menu) {
             items(menu.getItems(), "", lines);
         } else if (window.getScene() != null) {
-            walk(window.getScene().getRoot(), lines);
+            walk(window.getScene().getRoot(), menus, lines);
         }
         if (lines.size() > MOST_LINES) {
             int more = lines.size() - MOST_LINES;
@@ -230,11 +248,16 @@ final class UiTools {
         return next;
     }
 
-    private void walk(Node node, List<String> lines) {
+    private void walk(Node node, boolean menus, List<String> lines) {
         if (node == null || !node.isVisible()) return;
         String off = node.isDisabled() ? " (off)" : "";
         if (node.getStyleClass().stream().anyMatch(c -> c.endsWith("card"))) lines.add("-- card");
         switch (node) {
+            case MenuBar bar when !menus -> {
+                lines.add("menu bar " + bar.getMenus().stream().map(Menu::getText).toList()
+                        + " (menus true lists its items)");
+                return;
+            }
             case MenuBar bar -> {
                 for (Menu menu : bar.getMenus()) items(menu.getItems(), menu.getText() + " ▸ ", lines);
                 return;
@@ -245,12 +268,12 @@ final class UiTools {
                             + (tab.isSelected() ? " (selected)" : "") + (tab.isDisabled() ? " (off)" : ""));
                 }
                 Tab selected = tabs.getSelectionModel().getSelectedItem();
-                if (selected != null) walk(selected.getContent(), lines);
+                if (selected != null) walk(selected.getContent(), menus, lines);
                 return;
             }
             case TitledPane pane -> {
                 lines.add("r" + ref(pane) + " section \"" + pane.getText() + "\"" + (pane.isExpanded() ? "" : " (closed)"));
-                if (pane.isExpanded()) walk(pane.getContent(), lines);
+                if (pane.isExpanded()) walk(pane.getContent(), menus, lines);
                 return;
             }
             case TextInputControl field -> {
@@ -275,7 +298,7 @@ final class UiTools {
             }
             case Labeled labeled -> {
                 labeled(labeled, off, lines);
-                if (labeled.getGraphic() != null && !(labeled instanceof ButtonBase)) walk(labeled.getGraphic(), lines);
+                if (labeled.getGraphic() != null && !(labeled instanceof ButtonBase)) walk(labeled.getGraphic(), menus, lines);
                 return;
             }
             case Text text -> {
@@ -289,7 +312,7 @@ final class UiTools {
             }
         }
         if (node instanceof Parent parent) {
-            for (Node child : parent.getChildrenUnmodifiable()) walk(child, lines);
+            for (Node child : parent.getChildrenUnmodifiable()) walk(child, menus, lines);
         }
     }
 
@@ -343,22 +366,60 @@ final class UiTools {
         return target;
     }
 
-    String press(int ref) {
-        Runnable act = onFx(() -> action(ref));
-        AtomicReference<RuntimeException> failed = new AtomicReference<>();
-        // Not waited for: a press that opens a dialog runs until the dialog is answered.
-        Platform.runLater(() -> {
-            try {
-                act.run();
-            } catch (RuntimeException e) {
-                failed.set(e);
-            }
-        });
-        settle();
-        if (failed.get() != null) {
-            throw new IllegalStateException("pressing r" + ref + " failed: " + failed.get().getMessage());
+    /** Whether a press is in flight, which an endpoint's close waits for. */
+    static boolean pressing() {
+        return PRESSING.get() > 0;
+    }
+
+    /** Until no press is in flight, at most {@link #MOST_PRESS_MS}, then a moment for its answer to be sent. */
+    static void awaitPresses() {
+        long until = System.nanoTime() + MOST_PRESS_MS * 1_000_000;
+        try {
+            while (pressing() && System.nanoTime() < until) Thread.sleep(20);
+            Thread.sleep(SENT_MS);
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
         }
-        return "Pressed r" + ref + ". Windows now:\n" + onFx(UiTools::windows);
+    }
+
+    String press(int ref) {
+        PRESSING.incrementAndGet();
+        try {
+            String[] what = new String[1];
+            Runnable act = onFx(() -> {
+                what[0] = named(target(ref));
+                return action(ref);
+            });
+            AtomicReference<RuntimeException> failed = new AtomicReference<>();
+            // Not waited for: a press that opens a dialog runs until the dialog is answered.
+            Platform.runLater(() -> {
+                try {
+                    act.run();
+                } catch (RuntimeException e) {
+                    failed.set(e);
+                }
+            });
+            settle();
+            if (failed.get() != null) {
+                throw new IllegalStateException("pressing r" + ref + " failed: " + failed.get().getMessage());
+            }
+            return "Pressed r" + ref + " " + what[0] + ". Windows now:\n" + onFx(UiTools::windows);
+        } finally {
+            PRESSING.decrementAndGet();
+        }
+    }
+
+    /** What a press names in its answer: the target's kind and text. */
+    private static String named(Object target) {
+        String text = switch (target) {
+            case MenuItem item -> item.getText();
+            case Tab tab -> tab.getText();
+            case Labeled labeled -> labeled.getText();
+            default -> null;
+        };
+        String kind = target instanceof MenuItem ? "menu" : target instanceof Tab ? "tab"
+                : target.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        return text == null || text.isBlank() ? "(" + kind + ")" : "(" + kind + " \"" + text + "\")";
     }
 
     /** What pressing {@code ref} does. FX thread. */

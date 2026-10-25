@@ -21,7 +21,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The `ui` MCP tool, dev Studio only** (2026-10-25): with `BOTMAKER_MCP_UI=1`, the MCP endpoint serves `ui`,
   which lists Studio's windows, reads what one shows (a label its width cuts short says `cut`), presses and types,
   takes a picture and waits for a text. It answers on the bot list and in the Run window too, where no project's
-  endpoint runs. An installed Studio never serves it.
+  endpoint runs. An installed Studio never serves it. `read` names the menu bar's menus and lists their items
+  only with `menus: true`; with no window named, `read` and `look` take an open menu first; and a press that opens
+  or closes a project answers what it pressed, since the endpoint now closes only once the press has answered.
+
+### Fixed
+
+- **Export as .bmk packs only the jars Maven Central does not serve** (2026-10-25), as `botmaker bot export` does:
+  a Central jar under a `com.github` groupId is listed, so the catalog no longer refuses the release.
 
 ## [1.8.0] — 2026-10-25
 
