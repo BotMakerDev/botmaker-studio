@@ -111,6 +111,20 @@ public final class BmkOpen {
      */
     public static Result open(Path bmk, CatalogIndex catalog, Set<String> trusted, boolean agreed, Path root,
                               Fetcher fetch) {
+        return open(bmk, catalog, trusted, agreed, Optional.empty(), root, fetch);
+    }
+
+    /**
+     * {@link #open(Path, CatalogIndex, Set, boolean, Path, Fetcher)} of the file <i>Get</i> downloaded for {@code got}:
+     * the user's click on that card is their yes, so it counts only for that bot's listed tag, pinned with this very
+     * file. Any other file is refused, not asked about.
+     */
+    public static Result openGot(Path bmk, CatalogIndex catalog, GalleryEntry got, Path root, Fetcher fetch) {
+        return open(bmk, catalog, Set.of(), true, Optional.of(got), root, fetch);
+    }
+
+    private static Result open(Path bmk, CatalogIndex catalog, Set<String> trusted, boolean agreed,
+                               Optional<GalleryEntry> got, Path root, Fetcher fetch) {
         try {
             BotJson bot = BotFile.peek(bmk);
             Optional<GalleryEntry> entry = catalog.bots().stream()
@@ -121,6 +135,12 @@ public final class BmkOpen {
             if (pinned.isPresent() && !pinned.get().equalsIgnoreCase(sha)) {
                 return new Refused("This file is not the one the catalog lists for " + bot.name() + " " + bot.tag()
                         + ": it was changed, or made from another commit.");
+            }
+            if (got.isPresent() && !(trustKey(bot).equals((got.get().slug()).toLowerCase(Locale.ROOT))
+                    && bot.tag().equals(got.get().tag()) && pinned.isPresent())) {
+                return new Refused("The file downloaded for " + got.get().slug() + " " + got.get().tag() + " is "
+                        + bot.owner() + "/" + bot.repo() + " " + bot.tag() + ", not the one the catalog lists. It was "
+                        + "not opened.");
             }
             Path dir = UnpackedBots.dirOf(root, bot);
             // One open at a time: two of one bot (a drop and --open) would unpack over each other.

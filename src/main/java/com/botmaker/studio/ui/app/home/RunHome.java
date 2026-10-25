@@ -118,7 +118,7 @@ public final class RunHome implements ProjectWindow {
         this.getBots = new GetBots(shelf, this::agrees, new GetBots.Got() {
             @Override
             public void downloaded(GalleryEntry entry, Path bmk) {
-                new BmkFlow(stage, RunHome.this::say).openGot(bmk, dir -> {
+                new BmkFlow(stage, RunHome.this::say).openGot(bmk, entry, dir -> {
                     reload();
                     actions.run(dir);
                 });
