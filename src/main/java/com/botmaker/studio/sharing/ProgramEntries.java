@@ -2,6 +2,7 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.shared.platform.Os;
 import com.botmaker.shared.tools.UserDirs;
+import com.botmaker.studio.config.AppPaths;
 import com.botmaker.studio.project.BotIcon;
 
 import javax.imageio.ImageIO;
@@ -149,16 +150,18 @@ public sealed interface ProgramEntries permits ProgramEntries.Linux, ProgramEntr
     static Optional<ProgramEntries> forThisComputer() {
         String launcher = System.getProperty("jpackage.app-path");
         if (launcher == null || launcher.isBlank()) return Optional.empty();
-        Path home = Path.of(System.getProperty("user.home"));
+        // A sandbox (AppPaths) stands for the home, so a test's entries land in it and not in the real menu.
+        boolean sandboxed = AppPaths.sandbox().isPresent();
+        Path home = AppPaths.entriesHome();
         Path icons = UserDirs.data().resolve("menu-icons");
         Os os = Os.current();
         if (os.isLinux()) {
-            String dataHome = System.getenv("XDG_DATA_HOME");
+            String dataHome = sandboxed ? null : System.getenv("XDG_DATA_HOME");
             Path data = dataHome != null && !dataHome.isBlank() ? Path.of(dataHome) : home.resolve(".local/share");
             return Optional.of(new Linux(data.resolve("applications"), icons, launcher));
         }
         if (os.isWindows()) {
-            String appData = System.getenv("APPDATA");
+            String appData = sandboxed ? home.resolve("AppData").toString() : System.getenv("APPDATA");
             if (appData == null || appData.isBlank()) return Optional.empty();
             return Optional.of(new Windows(Windows.startMenu(Path.of(appData)), icons, launcher));
         }

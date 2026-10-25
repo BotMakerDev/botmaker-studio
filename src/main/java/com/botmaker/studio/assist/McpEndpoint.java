@@ -93,7 +93,30 @@ public final class McpEndpoint implements AutoCloseable {
                 .tools(tools)
                 .build();
         refresh.set(new PluginToolRefresh(mcp, json, driver, ownNames, McpTools.names(theirs))::run);
+        return serve(port, token, transport, mcp);
+    }
 
+    /**
+     * Serves only {@code tools} on {@code port}, with no project behind them: the bot list's endpoint in a dev
+     * Studio ({@link HomeEndpoint}), so the {@code ui} tool answers before any project opens.
+     */
+    static McpEndpoint startHome(int port, String token, List<McpServerFeatures.SyncToolSpecification> tools)
+            throws Exception {
+        Objects.requireNonNull(token, "token");
+        HttpServletStreamableServerTransportProvider transport = HttpServletStreamableServerTransportProvider.builder()
+                .jsonMapper(new JacksonMcpJsonMapper(new ObjectMapper())).mcpEndpoint(PATH).build();
+        McpSyncServer mcp = McpServer.sync(transport)
+                .serverInfo("botmaker-studio", "1")
+                .instructions(HomeEndpoint.INSTRUCTIONS)
+                .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
+                .tools(tools)
+                .build();
+        return serve(port, token, transport, mcp);
+    }
+
+    /** {@code mcp} on {@code port} behind the token; nothing is left running when it cannot start. */
+    private static McpEndpoint serve(int port, String token, HttpServletStreamableServerTransportProvider transport,
+                                     McpSyncServer mcp) throws Exception {
         Server jetty = new Server(new InetSocketAddress("127.0.0.1", port));
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");

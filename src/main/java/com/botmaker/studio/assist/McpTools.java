@@ -138,6 +138,8 @@ public final class McpTools {
         tools.addAll(StudioTools.of(driver));
         tools.addAll(RunTools.of(driver, log));
         tools.addAll(ProjectTools.of(driver, log, pluginsChanged));
+        // A dev Studio's own windows, for Claude to drive (BOTMAKER_MCP_UI); never in the installed app.
+        if (UiTools.enabled()) tools.add(new UiTools().tool());
         return tools.stream().map(t -> guarded(driver, served(json, t))).toList();
     }
 
@@ -268,7 +270,7 @@ public final class McpTools {
      * unknown or ill-typed argument, which it says as {@code "<tool>: why"} — answers {@code REFUSED:} as the
      * handler's own refusals do.
      */
-    private static SyncToolSpecification served(McpJsonMapper json, AssistantTool<?> tool) {
+    static SyncToolSpecification served(McpJsonMapper json, AssistantTool<?> tool) {
         return spec(json, tool.name(), tool.description(), schemaOf(tool.schema()), request -> {
             AgentReply reply = tool.invoke(arguments(request), null);
             String said = reply.parts().isEmpty() ? "" : reply.parts().getFirst().text();

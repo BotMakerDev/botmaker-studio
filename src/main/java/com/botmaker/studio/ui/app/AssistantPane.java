@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.assist.AiTool;
+import com.botmaker.studio.assist.HomeEndpoint;
 import com.botmaker.studio.assist.McpConfig;
 import com.botmaker.studio.assist.McpEndpoint;
 import com.botmaker.studio.assist.RunLog;
@@ -302,9 +303,12 @@ final class AssistantPane {
             McpEndpoint started = null;
             String failure = null;
             try {
+                // A dev Studio's UI endpoint holds the port while no project serves; this one takes it over.
+                HomeEndpoint.yieldPort();
                 started = McpEndpoint.start(starting.port(), starting.token(), new LiveEditorBot(ctx), driver, log);
             } catch (Exception e) {
                 failure = "Could not listen on port " + starting.port() + ": " + e.getMessage();
+                HomeEndpoint.serve();
             }
             McpEndpoint result = started;
             String reason = failure;
@@ -352,6 +356,7 @@ final class AssistantPane {
         if (endpoint == null) return;
         endpoint.close();
         endpoint = null;
+        HomeEndpoint.serve();
         runLog.close();
         runLog = null;
         mcpStatus.setText("Stopped.");

@@ -10,6 +10,19 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **A sandbox home for trying Studio** (2026-10-25): `BOTMAKER_HOME=<folder>` (or `-Dbotmaker.home`) keeps the
+  projects, `botmaker-config.json`, the bots opened from a file, the settings, the preferences and the
+  programs-menu entries under that folder, so a test never touches the user's own bots. The cache, which holds
+  the GitHub login and `mcp.json`, stays the real one.
+- **The `ui` MCP tool, dev Studio only** (2026-10-25): with `BOTMAKER_MCP_UI=1`, the MCP endpoint serves `ui`,
+  which lists Studio's windows, reads what one shows (a label its width cuts short says `cut`), presses and types,
+  takes a picture and waits for a text. It answers on the bot list and in the Run window too, where no project's
+  endpoint runs. An installed Studio never serves it.
+
 ## [1.8.0] — 2026-10-25
 
 ### Added

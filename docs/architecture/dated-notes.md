@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **A dev Studio can be driven over MCP since 2026-10-25.** `config/AppPaths` owns the per-user folders: with
+> `BOTMAKER_HOME` set, the projects root (`Constants.PROJECTS_ROOT`), `UserDirs`' data and config, Java's preferences
+> and `ProgramEntries`' folders all move under it (`AppPaths.apply`, in `BotMakerStudio`'s static block, before any
+> of them is read); the cache does not. `assist/UiTools` is the `ui` tool over `Window.getWindows()`, served only with
+> `BOTMAKER_MCP_UI=1` and never under `jpackage.app-path`. `assist/HomeEndpoint` serves it (with `quit_studio`) on the
+> MCP port whenever no project's endpoint holds it; `AssistantPane` yields it before binding and hands it back after
+> closing. The bridge's `start_studio home ui` sets both variables.
+
 > **Studio opens on the bot list since 2026-10-25** (umbrella run-mode-bmk plan). `ui/app/home/RunHome` (My bots
 > over Get more bots, one page; each card ▶ Run and *Edit in Studio*; ＋ New bot) is the startup screen unless
 > `--project`; Browse Bots and `GalleryDialog` are deleted (`ui/app/home/GetBots`). The Run window is the old

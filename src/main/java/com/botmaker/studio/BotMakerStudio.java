@@ -6,6 +6,8 @@ import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
 import com.botmaker.studio.assist.BotGuard;
+import com.botmaker.studio.assist.HomeEndpoint;
+import com.botmaker.studio.config.AppPaths;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.plugin.PluginGate;
 import com.botmaker.studio.plugin.PluginHost;
@@ -56,6 +58,11 @@ import java.util.Optional;
 
 
 public class BotMakerStudio extends Application {
+
+    static {
+        // Before any folder or preference is read: a sandbox home (BOTMAKER_HOME) moves them all.
+        AppPaths.apply();
+    }
 
     /** Narrowest the shell may be dragged — see {@code configureWindow}. */
     private static final double MIN_WINDOW_WIDTH = 900;
@@ -119,6 +126,9 @@ public class BotMakerStudio extends Application {
                 getParameters() == null ? List.of() : getParameters().getUnnamed());
         Optional<String> run = named("run");
         listenForOpenedFiles(primaryStage);
+        // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
+        HomeEndpoint.mainWindow(primaryStage);
+        HomeEndpoint.serve();
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on its home.
             showProjectSelection(primaryStage).openBmk(bmk.get());
@@ -504,6 +514,12 @@ public class BotMakerStudio extends Application {
             currentWindow.dispose();
             currentWindow = null;
         }
+    }
+
+    /** The toolkit is ending: the UI tools' endpoint goes too, or its server threads keep the JVM alive. */
+    @Override
+    public void stop() {
+        HomeEndpoint.yieldPort();
     }
 
     private void switchToProjectSelector(Stage primaryStage) {
