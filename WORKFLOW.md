@@ -161,7 +161,7 @@ The Gallery browses what everyone else has published; installing from it creates
 
 An installed bot opens in the Runner — someone else's bot is something you run — and its code is shown full-colour with every edit refused rather than hidden, so you can read how it works. "Improve this bot" turns it into an ordinary project of yours, for good. A bot you published yourself is never treated as somebody else's, on any machine you are signed in on.
 
-*In Studio:* Project ▸ Browse Gallery…
+*In Studio:* Project ▸ Get More Bots… (the home's Get more bots)
 
 ## Further reading
 
