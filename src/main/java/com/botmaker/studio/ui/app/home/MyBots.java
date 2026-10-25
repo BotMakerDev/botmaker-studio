@@ -9,6 +9,7 @@ import com.botmaker.studio.project.vcs.SyncModel;
 import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.studio.sharing.UnpackedBots;
 
 import com.botmaker.studio.runtime.TreeCompile;
@@ -159,17 +160,30 @@ public final class MyBots {
 
     /**
      * One card. {@code owner} is the author of a bot got from someone, empty for the user's own ("mine");
-     * {@code available} is the catalog's newer tag; {@code unpacked} a bot opened from a {@code .bmk}.
+     * {@code available} is the catalog's newer tag; {@code unpacked} a bot opened from a {@code .bmk};
+     * {@code original} the author's repository it came from, empty for the user's own.
      */
     public record MyBot(Path dir, String name, Optional<String> owner, Optional<String> version,
                         LocalDateTime lastUsed, Optional<String> available, boolean runnable, State state,
-                        boolean unpacked) {
+                        boolean unpacked, Optional<SyncModel.Slug> original) {
 
         /** A project's card. */
         public MyBot(Path dir, String name, Optional<String> owner, Optional<String> version, LocalDateTime lastUsed,
                      Optional<String> available, boolean runnable, State state) {
-            this(dir, name, owner, version, lastUsed, available, runnable, state, false);
+            this(dir, name, owner, version, lastUsed, available, runnable, state, false, Optional.empty());
         }
+    }
+
+    /**
+     * The programs-menu entries of {@code bots}: each one that can run, by its author's repository, else by its
+     * folder (spec § 5).
+     */
+    public static List<ProgramEntries.Entry> programEntries(List<MyBot> bots) {
+        return bots.stream().filter(b -> b.state() == State.READY && b.runnable())
+                .map(b -> b.original()
+                        .map(s -> ProgramEntries.Entry.ofRepo(s.owner(), s.repo(), b.name(), b.dir()))
+                        .orElseGet(() -> ProgramEntries.Entry.ofFolder(b.dir(), b.name())))
+                .toList();
     }
 
     /**
@@ -198,7 +212,7 @@ public final class MyBots {
                     .map(s -> latestTagByRepo.get(key(s.owner(), s.repo())))
                     .flatMap(latest -> GalleryEntry.updateTarget(f.version().orElse(""), latest));
             MyBot bot = new MyBot(dir, f.title().orElse(name), original.map(SyncModel.Slug::owner), f.version(),
-                    f.lastUsed(), available, f.runnable(), State.READY, f.unpacked());
+                    f.lastUsed(), available, f.runnable(), State.READY, f.unpacked(), original);
             bots.add(bot);
             original.map(s -> key(s.owner(), s.repo())).ifPresent(k -> {
                 if (f.unpacked()) unpackedRepo.put(bot, k);

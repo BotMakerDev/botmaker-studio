@@ -11,6 +11,8 @@ import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
+import com.botmaker.studio.sharing.ProgramEntries;
+import com.botmaker.studio.sharing.ProgramsMenuChoice;
 import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
@@ -30,6 +32,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
@@ -121,10 +124,12 @@ public final class RunHome implements ProjectWindow {
         BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), new GitHubAuth()));
         RunHome home = new RunHome(stage, actions, () -> {
             var opened = ProjectPreferences.recentOpenTimes();
-            return MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories(),
+            List<MyBot> found = MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories(),
                             UnpackedBots.newest(UnpackedBots.root())),
                     dir -> MyBots.read(dir, opened),
                     MyBots.latestTags(CatalogClient.session().kept().bots()));
+            syncProgramsMenu(found);
+            return found;
         }, new GetBots.Shelf() {
             @Override
             public Path get(GalleryEntry entry) throws IOException {
@@ -142,6 +147,20 @@ public final class RunHome implements ProjectWindow {
             if (reply.fresh()) home.reload();
         }));
         return home;
+    }
+
+    /**
+     * Makes the programs menu hold {@code bots} (none when the user turned it off), each time My bots is read: a bot
+     * removed, archived or gone loses its entry here. Nothing on a development run ({@link ProgramEntries}).
+     */
+    private static void syncProgramsMenu(List<MyBot> bots) {
+        ProgramEntries.forThisComputer().ifPresent(entries -> {
+            try {
+                entries.sync(ProgramsMenuChoice.load().on() ? MyBots.programEntries(bots) : List.of());
+            } catch (IOException | RuntimeException e) {
+                System.err.println("Could not update the programs menu: " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -202,9 +221,17 @@ public final class RunHome implements ProjectWindow {
         myBotsLine.getStyleClass().add("gallery-card-note");
         myBotsLine.managedProperty().bind(myBotsLine.visibleProperty());
 
-        VBox body = new VBox(10,
-                heading("My bots"), myBotsLine, myBots,
-                getMoreHeading, getBots.node());
+        VBox body = new VBox(10, heading("My bots"));
+        if (ProgramEntries.forThisComputer().isPresent()) {
+            CheckBox inMenu = new CheckBox(ProgramsMenuChoice.LABEL);
+            inMenu.setSelected(ProgramsMenuChoice.load().on());
+            inMenu.setOnAction(e -> {
+                new ProgramsMenuChoice(inMenu.isSelected()).save();
+                reload();
+            });
+            body.getChildren().add(inMenu);
+        }
+        body.getChildren().addAll(myBotsLine, myBots, getMoreHeading, getBots.node());
         body.setPadding(new Insets(16));
         scroll = new ScrollPane(body);
         scroll.setFitToWidth(true);

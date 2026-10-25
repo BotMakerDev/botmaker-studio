@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **A `.bmk` opens with a double-click** (2026-10-25): the deb, rpm, msi and dmg register the file type
+  `application/x-botmaker-bot`, and Studio opens the file it is given on its home, the trust sheet first.
+- **My bots in the programs menu** (2026-10-25): each bot that can run gets an entry in the system's programs menu
+  that opens its Run window, with its icon: Linux `~/.local/share/applications`, the Windows Start menu, macOS
+  `~/Applications/BotMaker bots`. A bot removed from My bots loses its entry. The home's *Add my bots to the
+  programs menu* turns them all off. Installed Studio only; `--run=` also takes a bot's folder.
+
 - **Publish attaches the bot's `.bmk`** (2026-10-25): after the release, the bot at its tag is written as a `.bmk`
   and attached to the GitHub Release, and the catalog entry pins its sha256; the catalog's check rebuilds it from
   the commit. Publish refuses an `icon.png` that is no PNG or is over 512 KB, as the catalog does.

@@ -656,6 +656,22 @@
                                     </resources>
                                 </configuration>
                             </execution>
+                            <!-- The .bmk file type, filtered so its icon is this system's installer.icon. -->
+                            <execution>
+                                <id>stage-file-association</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/jpackage-associations</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.basedir}/packaging</directory>
+                                            <includes><include>bmk.properties</include></includes>
+                                            <filtering>true</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
 
@@ -866,6 +882,11 @@
                                          JDK 25's template.control plus that line; like the rpm spec, re-fork it
                                          when CI's java-version moves. -->
                                     <resourceDir>${project.basedir}/packaging/linux</resourceDir>
+                                    <!-- .bmk opens with Studio: a mime package, the menu entry's MimeType, and
+                                         packaging/linux/BotMaker Studio.desktop's %f passing the file. -->
+                                    <fileAssociations>
+                                        <association>${project.build.directory}/jpackage-associations/bmk.properties</association>
+                                    </fileAssociations>
                                     <linuxShortcut>true</linuxShortcut>
                                     <linuxMenuGroup>Development</linuxMenuGroup>
                                     <linuxAppCategory>Development</linuxAppCategory>
@@ -897,6 +918,11 @@
                                          template is JDK-version-specific. DEB does not need this (dpkg runs the old prerm
                                          first, then the new postinst, which is the correct order), so it is set here only. -->
                                     <resourceDir>${project.basedir}/packaging/linux</resourceDir>
+                                    <!-- .bmk opens with Studio: a mime package, the menu entry's MimeType, and
+                                         packaging/linux/BotMaker Studio.desktop's %f passing the file. -->
+                                    <fileAssociations>
+                                        <association>${project.build.directory}/jpackage-associations/bmk.properties</association>
+                                    </fileAssociations>
                                     <!-- See build-deb's note for why the GUI stack is declared by hand; the entries
                                          are the same libraries under Fedora/RHEL names. This is the whole story for
                                          the released rpm: it is built on ubuntu-latest, whose rpm package has no ELF
@@ -950,6 +976,10 @@
                                     <winDirChooser>true</winDirChooser>
                                     <!-- Stable UUID so successive MSIs upgrade in place rather than installing side-by-side. -->
                                     <winUpgradeUuid>de0da915-fc1b-41fb-81d7-e4adae8cd8f9</winUpgradeUuid>
+                                    <!-- .bmk opens with Studio: the launcher gets the file as its one argument. -->
+                                    <fileAssociations>
+                                        <association>${project.build.directory}/jpackage-associations/bmk.properties</association>
+                                    </fileAssociations>
                                 </configuration>
                             </execution>
                             <!-- On macOS the app-image is a bundle, `BotMaker Studio.app`, not a directory.
@@ -1206,6 +1236,24 @@
                                             <arg value="${project.build.directory}/icon.icns"/>
                                         </exec>
                                     </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- On macOS the file type lives in the app's Info.plist (CFBundleDocumentTypes), which the
+                         app-image writes and the dmg only wraps: so it is added to dist's build-app-image here,
+                         merged by execution id. The file reaches Studio as an open-file event, not an argument
+                         (BotMakerStudio.listenForOpenedFiles). -->
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>build-app-image</id>
+                                <configuration>
+                                    <fileAssociations>
+                                        <association>${project.build.directory}/jpackage-associations/bmk.properties</association>
+                                    </fileAssociations>
                                 </configuration>
                             </execution>
                         </executions>

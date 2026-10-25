@@ -6,6 +6,8 @@ import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.studio.services.MavenService;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -37,6 +39,25 @@ import java.util.stream.Stream;
 public final class BmkOpen {
 
     private BmkOpen() {}
+
+    /**
+     * The {@code .bmk} the command line asks to open: {@code --open=<file>}, else the first bare argument naming a
+     * {@code .bmk} — a path, or a {@code file:} URI — which is how a double-click arrives (the Linux menu entry's
+     * {@code %f}, the Windows file association's {@code "%1"}).
+     */
+    public static Optional<Path> requested(Optional<String> named, List<String> unnamed) {
+        if (named.isPresent()) return Optional.of(Path.of(named.get()).toAbsolutePath().normalize());
+        for (String arg : unnamed) {
+            if (!arg.toLowerCase(Locale.ROOT).endsWith(".bmk")) continue;
+            try {
+                Path file = arg.startsWith("file:") ? Path.of(URI.create(arg)) : Path.of(arg);
+                return Optional.of(file.toAbsolutePath().normalize());
+            } catch (IllegalArgumentException | FileSystemNotFoundException e) {   // InvalidPathException too
+                // not a path this system reads: the next argument may be
+            }
+        }
+        return Optional.empty();
+    }
 
     /** What an open came to. */
     public sealed interface Result permits Refused, NeedsTrust, Opened {}

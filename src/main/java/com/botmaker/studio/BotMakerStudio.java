@@ -14,7 +14,9 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectManager;
 import com.botmaker.studio.project.ProjectPreferences;
-import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.shared.platform.Os;
+import com.botmaker.studio.sharing.BmkOpen;
+import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.project.migration.ProjectSchema;
 import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
@@ -42,9 +44,13 @@ import javafx.scene.image.Image;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.awt.Desktop;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -109,8 +115,10 @@ public class BotMakerStudio extends Application {
         // BotMaker opens on the bot list (2026-10-25, spec § 1a), not on the project last opened: only a project
         // named on the command line opens straight away.
         Path requested = requestedProject();
-        Optional<Path> bmk = named("open").map(Path::of).map(p -> p.toAbsolutePath().normalize());
+        Optional<Path> bmk = BmkOpen.requested(named("open"),
+                getParameters() == null ? List.of() : getParameters().getUnnamed());
         Optional<String> run = named("run");
+        listenForOpenedFiles(primaryStage);
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on its home.
             showProjectSelection(primaryStage).openBmk(bmk.get());
@@ -131,6 +139,35 @@ public class BotMakerStudio extends Application {
                 System.err.println("No project at " + requested + " — showing the bot list instead.");
             }
             showProjectSelection(primaryStage);
+        }
+    }
+
+    /**
+     * macOS hands a double-clicked {@code .bmk} to the running app as an event, never on the command line (the
+     * dmg's file type, spec § 5). It opens on the home; with a project open, the user is told where to go instead
+     * of the project being closed under them.
+     */
+    private void listenForOpenedFiles(Stage primaryStage) {
+        if (!Os.current().isMac()) return;
+        try {
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.APP_OPEN_FILE)) return;
+            Desktop.getDesktop().setOpenFileHandler(event -> {
+                Optional<Path> bmk = BmkOpen.requested(Optional.empty(),
+                        event.getFiles().stream().map(File::getPath).toList());
+                bmk.ifPresent(file -> Platform.runLater(() -> {
+                    if (currentWindow instanceof RunHome home) {
+                        home.openBmk(file);
+                    } else {
+                        Alert alert = ThemedWindows.alert(Alert.AlertType.INFORMATION);
+                        alert.initOwner(primaryStage);
+                        alert.setHeaderText("Open " + file.getFileName() + " from My bots");
+                        alert.setContentText("Go back to My bots (File ▸ My Bots), then open the file again.");
+                        alert.show();
+                    }
+                }));
+            });
+        } catch (RuntimeException | LinkageError e) {
+            System.err.println("A double-clicked .bmk will not reach this Studio: " + e.getMessage());
         }
     }
 
@@ -624,19 +661,29 @@ public class BotMakerStudio extends Application {
 
     /**
      * {@code --run=<owner>/<repo>}: the My bots folder of that bot — the one the author's repository was cloned into,
-     * else its newest tag opened from a file — as My bots shows it.
+     * else its newest tag opened from a file — as My bots shows it. {@code --run=<absolute folder>}: that bot of the
+     * user's own, the way a programs-menu entry names one ({@link ProgramEntries}).
      */
     private static Optional<Path> botByRepo(String slug) {
+        Optional<Path> byFolder;
+        try {
+            Path folder = Path.of(slug);
+            byFolder = folder.isAbsolute() ? Optional.of(folder.normalize()) : Optional.empty();
+        } catch (InvalidPathException e) {
+            byFolder = Optional.empty();   // not a path on this system: an owner/repo, or nothing
+        }
+        Optional<Path> asked = byFolder;
         int slash = slug.indexOf('/');
-        if (slash <= 0) return Optional.empty();
-        String key = MyBots.key(slug.substring(0, slash), slug.substring(slash + 1));
+        if (byFolder.isEmpty() && slash <= 0) return Optional.empty();
+        String key = byFolder.isPresent() ? "" : MyBots.key(slug.substring(0, slash), slug.substring(slash + 1));
         var opened = ProjectPreferences.recentOpenTimes();
         return MyBots.scan(MyBots.folders(new ProjectManager(), ProjectPreferences.recentDirectories(),
                         UnpackedBots.newest(UnpackedBots.root())), dir -> MyBots.read(dir, opened), Map.of())
                 .stream()
                 .filter(b -> b.state() == MyBots.State.READY && b.runnable())
-                .filter(b -> MyBots.read(b.dir(), Map.of()).originalUrl().flatMap(SyncModel::slug)
-                        .map(s -> MyBots.key(s.owner(), s.repo()).equals(key)).orElse(false))
+                .filter(b -> asked.map(f -> f.equals(b.dir().toAbsolutePath().normalize()))
+                        .orElseGet(() -> b.original().map(s -> MyBots.key(s.owner(), s.repo()).equals(key))
+                                .orElse(false)))
                 .map(MyBots.MyBot::dir).findFirst();
     }
 

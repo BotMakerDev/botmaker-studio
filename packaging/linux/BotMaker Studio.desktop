@@ -1,0 +1,13 @@
+# Menu entry template for jpackage's deb and rpm (resource-dir override; the name is the launcher's).
+# JDK 25/26's own template plus " %f" on the Exec line: without it a double-clicked .bmk starts Studio
+# without the file (2026-10-25). Words in capitals are jpackage's placeholders; never write one in a comment.
+[Desktop Entry]
+Name=APPLICATION_NAME
+Comment=APPLICATION_DESCRIPTION
+Exec=APPLICATION_LAUNCHER %f
+STARTUP_DIRECTORY
+Icon=APPLICATION_ICON
+Terminal=false
+Type=Application
+Categories=DEPLOY_BUNDLE_CATEGORY
+DESKTOP_MIMES
