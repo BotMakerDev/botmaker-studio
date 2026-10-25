@@ -124,7 +124,7 @@ public final class BmkFlow {
     }
 
     /** {@code ask}'s answer, asked on the FX thread while the making's thread waits. */
-    private static <T> T onFx(Supplier<T> ask) {
+    static <T> T onFx(Supplier<T> ask) {
         if (Platform.isFxApplicationThread()) return ask.get();
         CompletableFuture<T> answer = new CompletableFuture<>();
         Platform.runLater(() -> {

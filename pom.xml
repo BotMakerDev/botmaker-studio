@@ -799,6 +799,9 @@
                                     <macPackageIdentifier>com.botmaker.studio</macPackageIdentifier>
                                     <macPackageName>BotMaker Studio</macPackageName>
                                     <macAppCategory>public.app-category.developer-tools</macAppCategory>
+                                    <!-- packaging/macos/Info.plist: jpackage's own plus CFBundleURLTypes, so a
+                                         botmaker:// link opens the app. Only a Mac build reads that name. -->
+                                    <resourceDir>${project.basedir}/packaging/macos</resourceDir>
                                 </configuration>
                             </execution>
 
@@ -999,6 +1002,8 @@
                                     <vendor>LiQiyeDev</vendor>
                                     <appImage>${project.build.directory}/dist/BotMaker Studio.app</appImage>
                                     <destination>${project.build.directory}/dist</destination>
+                                    <!-- The same Info.plist as the app-image's, should the dmg write it again. -->
+                                    <resourceDir>${project.basedir}/packaging/macos</resourceDir>
                                 </configuration>
                             </execution>
                         </executions>

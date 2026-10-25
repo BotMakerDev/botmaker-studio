@@ -13,6 +13,7 @@ import com.botmaker.studio.services.ProgressReporter;
 import com.botmaker.studio.sharing.BmkDownload;
 import com.botmaker.studio.sharing.BmkOpen;
 import com.botmaker.studio.sharing.BotInstaller;
+import com.botmaker.studio.sharing.BotLink;
 import com.botmaker.studio.sharing.CatalogClient;
 import com.botmaker.studio.sharing.CatalogIndex;
 import com.botmaker.studio.sharing.GalleryEntry;
@@ -380,6 +381,37 @@ public final class RunHome implements ProjectWindow {
      */
     public void openBmk(Path bmk) {
         actions.make(new BmkFlow(stage).opening(bmk));
+    }
+
+    /**
+     * Opens a website's {@code botmaker://run/<owner>/<repo>} link as its card's <i>Get</i> would (2026-10-25): on
+     * the loading page's Downloading step, the catalog's listed release found, agreed to when nobody reviewed it,
+     * downloaded, checked and unpacked, then its runner window. A repository the catalog does not list, or lists with
+     * no ready-to-run file, is the page's failed step.
+     */
+    public void openLink(BotLink link) {
+        actions.make(new LoadingPage.Making(LoadingPage.Bot.named(link.repo(), Optional.empty()),
+                OpenStep.DOWNLOADING, progress -> linked(link, progress), LoadingPage.Opens.RUNNER));
+    }
+
+    /** Blocking: {@code link}'s catalog entry, then {@link #got}. */
+    private Path linked(BotLink link, ProgressReporter progress) throws Exception {
+        progress.message("Finding " + link.slug() + " in the catalog…");
+        CatalogIndex catalog;
+        try {
+            catalog = CatalogClient.session().fetch().join();
+        } catch (CompletionException e) {
+            throw e.getCause() instanceof Exception cause ? cause : e;
+        }
+        GalleryEntry entry = catalog.bots().stream().filter(link::names).findFirst()
+                .orElseThrow(() -> new IOException("The catalog lists no bot " + link.slug() + "."));
+        if (!BmkDownload.ready(entry)) {
+            throw new IOException("The catalog lists no ready-to-run file for " + entry.slug() + " yet: Edit in "
+                    + "Studio, on its card in Get more bots, gets its code.");
+        }
+        // Only a community bot, or one using a community plugin, is confirmed first, as on its card (2026-10-23).
+        if (entry.asksFirst() && !BmkFlow.onFx(() -> agrees(entry))) throw new LoadingPage.Cancelled();
+        return got(entry, progress);
     }
 
     /** Reads My bots again, off the FX thread, and shows the cards. */

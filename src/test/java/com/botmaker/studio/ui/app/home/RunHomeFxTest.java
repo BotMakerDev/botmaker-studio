@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.studio.sharing.BmkDownload;
+import com.botmaker.studio.sharing.BotLink;
 import com.botmaker.studio.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.PublisherRank;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
@@ -175,6 +176,14 @@ class RunHomeFxTest extends FxHeadlessTest {
         assertEquals(List.of("make Miner COPYING EDITOR"), asked);
         assertTrue(lookup(".getbots-card").lookup(".label").queryAll().stream()
                 .noneMatch(n -> "Getting its code…".equals(((Label) n).getText())));
+    }
+
+    /** A website's Open in Studio link is got as Get would, on the loading page, then the Runner. */
+    @Test
+    void aBotLinkGetsItsBotOnTheLoadingPage() {
+        cards();
+        interact(() -> home.openLink(new BotLink("LiQiyeDev", "Firestone")));
+        assertEquals(List.of("make Firestone DOWNLOADING RUNNER"), asked);
     }
 
     @Test

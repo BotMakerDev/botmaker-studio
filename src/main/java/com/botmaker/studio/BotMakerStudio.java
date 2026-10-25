@@ -19,7 +19,10 @@ import com.botmaker.studio.project.ProjectPreferences;
 import com.botmaker.shared.platform.Os;
 import com.botmaker.studio.services.OpenStep;
 import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.studio.services.StudioChannel;
 import com.botmaker.studio.sharing.BmkOpen;
+import com.botmaker.studio.sharing.BotLink;
+import com.botmaker.studio.sharing.LinkScheme;
 import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.project.migration.ProjectSchema;
@@ -44,6 +47,7 @@ import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
@@ -98,6 +102,9 @@ public class BotMakerStudio extends Application {
     /** Guards the one-time-per-session Wayland → X11 notice (across project switches). */
     private boolean waylandNoticeChecked;
 
+    /** Where a second launch hands this Studio a clicked link, when it could listen ({@link StudioChannel}). */
+    private Optional<StudioChannel> channel = Optional.empty();
+
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -130,16 +137,23 @@ public class BotMakerStudio extends Application {
         // BotMaker opens on the bot list (2026-10-25, spec § 1a), not on the project last opened: only a project
         // named on the command line opens straight away.
         Path requested = requestedProject();
-        Optional<Path> bmk = BmkOpen.requested(named("open"),
-                getParameters() == null ? List.of() : getParameters().getUnnamed());
+        List<String> unnamed = getParameters() == null ? List.of() : getParameters().getUnnamed();
+        Optional<Path> bmk = BmkOpen.requested(named("open"), unnamed);
+        Optional<String> link = BotLink.asked(unnamed);
         Optional<String> run = named("run");
         listenForOpenedFiles(primaryStage);
+        // A link clicked while this Studio runs comes here, not to a second Studio (main hands it over).
+        channel = StudioChannel.listen(StudioChannel.socket(), text -> Platform.runLater(() -> openLink(text)));
+        LinkScheme.registerOnWindows();
         // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
         HomeEndpoint.mainWindow(primaryStage);
         HomeEndpoint.serve();
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on the loading page (N12).
             make(primaryStage, new BmkFlow(primaryStage).opening(bmk.get()));
+        } else if (link.isPresent()) {
+            showProjectSelection(primaryStage);
+            openLink(link.get());
         } else if (run.isPresent()) {
             Optional<Path> dir = botByRepo(run.get());
             if (dir.isPresent()) {
@@ -187,6 +201,53 @@ public class BotMakerStudio extends Application {
         } catch (RuntimeException | LinkageError e) {
             System.err.println("A double-clicked .bmk will not reach this Studio: " + e.getMessage());
         }
+        // A clicked botmaker:// link arrives the same way, launched or running (the bundle's CFBundleURLTypes).
+        try {
+            if (!Desktop.getDesktop().isSupported(Desktop.Action.APP_OPEN_URI)) return;
+            Desktop.getDesktop().setOpenURIHandler(event ->
+                    Platform.runLater(() -> openLink(event.getURI().toString())));
+        } catch (RuntimeException | LinkageError e) {
+            System.err.println("A clicked botmaker:// link will not reach this Studio: " + e.getMessage());
+        }
+    }
+
+    /**
+     * A clicked {@code botmaker://run/<owner>/<repo>} link ({@link BotLink}), on the FX thread: the bot already in My
+     * bots by that repository opens in its runner window, as {@code --run} does; any other is got as its card's
+     * <i>Get</i> would ({@link RunHome#openLink}). With a bot open, the user is asked before it is closed. A link
+     * Studio does not open is said, and nothing changes.
+     */
+    private void openLink(String text) {
+        primaryStage.setIconified(false);
+        primaryStage.toFront();
+        Optional<BotLink> link = BotLink.parse(text);
+        if (link.isEmpty()) {
+            Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING);
+            alert.initOwner(primaryStage);
+            alert.setHeaderText("Not a bot link");
+            alert.setContentText(text + " is not a link Studio opens. A bot's link is botmaker://run/<owner>/<repo>.");
+            alert.show();
+            return;
+        }
+        if (!(currentWindow instanceof RunHome)) {
+            Alert confirm = ThemedWindows.alert(Alert.AlertType.CONFIRMATION,
+                    "Studio closes what is open, then opens " + link.get().slug() + " to run.",
+                    ButtonType.OK, ButtonType.CANCEL);
+            confirm.initOwner(primaryStage);
+            confirm.setHeaderText("Open " + link.get().slug() + "?");
+            if (confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
+        }
+        // My bots is read off the FX thread: it opens each bot's repository.
+        CompletableFuture.supplyAsync(() -> botByRepo(link.get().slug())).whenComplete((mine, failed) ->
+                Platform.runLater(() -> {
+                    if (mine != null && mine.isPresent()) {
+                        openAs(primaryStage, mine.get(), true, false);
+                    } else {
+                        RunHome home = currentWindow instanceof RunHome shown ? shown
+                                : showProjectSelection(primaryStage);
+                        home.openLink(link.get());
+                    }
+                }));
     }
 
     // =========================================================================
@@ -620,6 +681,7 @@ public class BotMakerStudio extends Application {
     @Override
     public void stop() {
         HomeEndpoint.yieldPort();
+        channel.ifPresent(StudioChannel::close);
     }
 
     private void switchToProjectSelector(Stage primaryStage) {
@@ -832,6 +894,9 @@ public class BotMakerStudio extends Application {
         if (System.getProperty("os.name", "").toLowerCase().contains("linux")) {
             X11ErrorTrap.install();
         }
+        // A clicked botmaker:// link goes to the Studio already running, if one listens; this launch ends there.
+        Optional<String> link = BotLink.asked(List.of(args));
+        if (link.isPresent() && StudioChannel.handOver(StudioChannel.socket(), link.get())) return;
         speakEnglish();
         launch(args);
     }

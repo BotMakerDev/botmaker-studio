@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **`botmaker://run/<owner>/<repo>` links open a bot to run** (2026-10-25, `sharing/BotLink`): the website's *Open
+  in Studio*. Studio gets the catalog's listed release as its card's *Get* does, on the loading page, so no `.bmk`
+  lands in the browser's downloads; a bot already in My bots by that repository opens in its runner window. A link
+  of any other shape is refused with a sentence. A Studio already running receives the link (`StudioChannel`, a
+  local socket) and asks before closing an open bot. The deb and rpm menu entry (`%u`, `x-scheme-handler/botmaker`)
+  and the dmg's `Info.plist` (`CFBundleURLTypes`) register the scheme; on Windows the installed Studio writes
+  `HKCU\Software\Classes\botmaker` as it starts.
 - **Deleting a branch deletes it on GitHub too** (2026-10-25): *Delete…* of a branch your copy has asks first,
   with *Also delete it on GitHub* ticked. A `studio/<branch>` line merged on GitHub is deleted there, and pushes
   go to the branch again.
