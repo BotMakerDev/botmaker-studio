@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **A plugin is its pom's coordinate since 2026-10-27** (umbrella plan *one jar, one plugin*; `../../../docs/refactor/24-plugin-platform.md`
+> §10). No plugin id, no `displayName()`, no services file: `PluginHost` holds plugin-host's `LoadedPlugin`s
+> (coordinate, name, jar, instance), and every owner record, editor verdict, catalog row and consent key is keyed by
+> `PluginCoordinate` or by repo. A plugin's holder files are in `plugins/<groupId>/<artifactId>/`, each part one
+> package name (`ManagedHolders.segment`; an older `plugins/sdk/` holder is still found by its marks); its assistant
+> tools are `<artifactId>_<tool>`. The bundled set and `ServiceLoader` discovery are gone, and so is
+> `PluginGate.checkIds`. Older text here naming a plugin id or `plugins/<last id segment>/` is history.
+
 > **`botmaker://run/<owner>/<repo>` opens a bot to run since 2026-10-25** (umbrella bmk-links plan). `sharing/BotLink`
 > parses a link; `services/StudioChannel` (`studio.sock`, a Unix socket in the cache, or in the sandbox home) hands it
 > to a Studio already running, and the one that receives it opens it on the loading page as *Get* does

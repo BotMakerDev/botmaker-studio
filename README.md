@@ -115,7 +115,7 @@ another folder with **Open Folder…**. A bot using the SDK looks like this:
 │   ├── MyBot.java                   # main() — Bot.runFlow(Sdk.class); a cloned bot keeps its class names
 │   ├── Collect.java, Battle.java…   # one class per activity — this is where your blocks live
 │   ├── Parameters.java              # the @Param fields Project ▸ Parameters edits
-│   └── plugins/sdk/                 # the SDK plugin's values, edited through its windows
+│   └── plugins/com_github_botmakerdev/botmaker_sdk/   # the SDK plugin's values (its groupId/artifactId), edited through its windows
 │       ├── Sdk.java                 #   the flow, the capture source, the bot's settings
 │       ├── Activities.java          #   one enum per activity, one constant per outcome
 │       └── Pictures.java            #   one constant per picture
@@ -124,7 +124,7 @@ another folder with **Open Folder…**. A bot using the SDK looks like this:
 ```
 
 Every file is yours, and any of them can be edited by hand outside Studio. Studio writes a project's Java
-only when it creates it. After that, a plugin's values (`@SdkValue` in `plugins/sdk/`) and the `@Param`
+only when it creates it. After that, a plugin's values (`@SdkValue` in `plugins/<groupId>/<artifactId>/`) and the `@Param`
 fields change through the plugin's windows and **Project ▸ Parameters**, not on the block canvas, which shows
 them but refuses an edit. Studio rewrites only the expression a marked method returns, so comments and
 helpers you add around it survive. The `pom.xml` is the single source of truth for dependencies, and

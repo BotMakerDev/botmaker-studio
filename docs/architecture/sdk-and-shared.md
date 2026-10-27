@@ -176,8 +176,8 @@ point of it.**
     `LOCAL_BUILD` (a `*SNAPSHOT` in `~/.m2`; it wins the version and keeps the registry entry's editor
     dependencies, exactly as `ManagePluginsDialog.merge` already does), `UNLISTED` (the pom declares a
     plugin nothing else accounts for). **What makes a dependency a plugin is `MavenService.declaresPlugin`**
-    — the `META-INF/services/com.botmaker.plugin.api.StudioPlugin` entry `ServiceLoader` itself reads, made
-    public for this and previously the local-build scan's alone. A second rule would answer differently for
+    — a pom in the jar setting `botmaker.plugin`, read by `PluginPoms` as the loader reads it (2026-10-27; the
+    services file before), made public for this and previously the local-build scan's alone. A second rule would answer differently for
     the first hand-published plugin, which is the case `UNLISTED` exists for. **`InstalledPlugin.of` reaches
     no network**: it is handed the registry's answer, `~/.m2`'s and a predicate, so an unreachable registry
     leaves `available` blank on a row rather than emptying the table, and `withAvailable` is how an async

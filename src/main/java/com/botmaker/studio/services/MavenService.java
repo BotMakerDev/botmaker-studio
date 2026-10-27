@@ -861,7 +861,7 @@ public final class MavenService {
      * would then pin basics where the SDK never was. The umbrella states the rule; this applies it, for any
      * plugin, after every install (2026-10-01).
      *
-     * <p>Plugins only, told apart by the service file in their jar ({@link #declaresPlugin}): a library the bot
+     * <p>Plugins only, told apart by the declaring pom in their jar ({@link #declaresPlugin}): a library the bot
      * pins on purpose is the user's to pin. Each declared plugin's tree is collected on its own, so Maven's
      * conflict resolution over the whole pom (which keeps the direct entry and drops the deeper one) cannot hide
      * the edge. Best-effort: a plugin whose tree cannot be collected brings nothing, so nothing is removed for it.

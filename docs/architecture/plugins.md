@@ -57,10 +57,10 @@ JitPack — and a plugin now is too:
   see them. It is deliberately not `updateLibraries(currentLibraries(), currentSdkVersion())`, which would
   rewrite the pom to say what it already says. *Project ▸ Reload Plugins* reports the plugins it found,
   because a reload that found nothing new looks exactly like one that did nothing.
-- **`MavenService.localPluginBuilds()` finds them by the service file, not by a convention.** A candidate is
-  a `*SNAPSHOT` directory in `~/.m2` whose jar carries
-  `META-INF/services/com.botmaker.plugin.api.StudioPlugin` — the entry `ServiceLoader` itself reads — so
-  nothing here keeps a list, a naming rule or a registry in step with anything. Gated on
+- **`MavenService.localPluginBuilds()` finds them by the declaring pom, not by a convention.** A candidate is
+  a `*SNAPSHOT` directory in `~/.m2` whose jar has a `META-INF/maven/**/pom.xml` setting `botmaker.plugin` —
+  read by plugin-host's `PluginPoms`, the reader the loader itself uses (2026-10-27; the services file before) —
+  so nothing here keeps a list, a naming rule or a registry in step with anything. Gated on
   `AppVersion.isDevBuild()`, exactly like `localSdkVersions()`.
 - **In Manage Plugins a local build *replaces* the registry's version for that coordinate**, rather than
   adding a second row: two rows for one artifact would offer two versions of it, and a developer who just
