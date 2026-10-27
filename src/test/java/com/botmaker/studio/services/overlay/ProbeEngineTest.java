@@ -2,6 +2,7 @@ package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.studio.plugin.TestPlugins;
 import com.botmaker.plugin.api.overlay.Probe;
 import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.studio.plugin.PluginHost;
@@ -45,7 +46,7 @@ class ProbeEngineTest {
     }
 
     private static ProbeCalls.Job job(Object key, Probe probe, ProbeCalls.Argument... arguments) throws Exception {
-        return new ProbeCalls.Job(key, new ProbeCalls.Declared("test", new OverlayPart.ProbedCall(
+        return new ProbeCalls.Job(key, new ProbeCalls.Declared(TestPlugins.coordinate("test"),new OverlayPart.ProbedCall(
                 Integer.class.getMethod("parseInt", String.class), probe)), List.of(arguments));
     }
 

@@ -2,6 +2,7 @@ package com.botmaker.studio.services;
 
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotFiles;
+import com.botmaker.plugin.host.PluginPoms;
 import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.UserLibrary;
@@ -119,7 +120,9 @@ public final class MavenService {
     // (sharing/PublishRequest.unreleasedPins).
 
     /**
-     * Whether {@code jar} declares a {@code StudioPlugin} the way {@code ServiceLoader} finds one.
+     * Whether a pom in {@code jar} names a plugin ({@code botmaker.plugin}, 2026-10-27, read by {@link PluginPoms}).
+     * A jar whose two poms each name one counts too: the loader refuses it, and the consent question must not
+     * pass it as a library.
      *
      * <p><b>This is the project's only definition of "is this a plugin".</b>
      * {@code services/upgrade/InstalledPlugin} asks it of a dependency the pom declares that no registry
@@ -128,11 +131,7 @@ public final class MavenService {
      * is precisely the case that reader exists for.
      */
     public static boolean declaresPlugin(Path jar) {
-        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
-            return zip.getEntry("META-INF/services/com.botmaker.plugin.api.StudioPlugin") != null;
-        } catch (IOException | RuntimeException e) {
-            return false;
-        }
+        return !PluginPoms.read(jar).isEmpty();
     }
 
     /** Dependencies every generated project gets (mirrors the old build.gradle). */

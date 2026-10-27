@@ -2,10 +2,11 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.plugin.host.LoadedPlugin;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -17,30 +18,23 @@ class OverlayPartMergeTest {
         void run();
     }
 
-    private record Fake(String id, Optional<OverlayPart> part) implements StudioPlugin {
-        @Override
-        public Optional<OverlayPart> overlayPart() {
-            return part;
-        }
-    }
-
-    private record Broken(String id) implements StudioPlugin {
-        @Override
-        public Optional<OverlayPart> overlayPart() {
-            throw new IllegalStateException("no");
-        }
+    private static LoadedPlugin offering(String artifactId, Supplier<OverlayPart> part) {
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().overlay(part));
     }
 
     @Test
     void aPluginThatThrowsOrDeclaresNothingCostsOnlyItself() {
         OverlayPart targets = OverlayPart.of().targets(Body.class, "Activities");
         List<PluginHost.OwnedOverlay> merged = PluginHost.mergeOverlayParts(List.of(
-                new Broken("broken"),
-                new Fake("none", Optional.empty()),
-                new Fake("empty", Optional.of(OverlayPart.of())),
-                new Fake("nulled", null),
-                new Fake("ok", Optional.of(targets))));
-        assertEquals(List.of("ok"), merged.stream().map(PluginHost.OwnedOverlay::pluginId).toList());
+                offering("broken", () -> {
+                    throw new IllegalStateException("no");
+                }),
+                TestPlugins.loaded("none", StudioPlugin.declare()),
+                offering("empty", OverlayPart::of),
+                offering("nulled", () -> null),
+                offering("ok", () -> targets)));
+        assertEquals(List.of(TestPlugins.coordinate("ok")),
+                merged.stream().map(PluginHost.OwnedOverlay::plugin).toList());
         assertEquals(targets, merged.getFirst().part());
     }
 }

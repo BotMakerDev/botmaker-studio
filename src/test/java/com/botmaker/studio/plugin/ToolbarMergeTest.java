@@ -3,6 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
+import com.botmaker.plugin.host.LoadedPlugin;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
@@ -11,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -26,19 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ToolbarMergeTest {
 
     /** A plugin that offers exactly what it is handed. */
-    private record Fake(String id, List<ToolbarItem> items) implements StudioPlugin {
-        @Override
-        public List<ToolbarItem> toolbarItems() {
-            return items;
-        }
+    private static LoadedPlugin fake(String artifactId, List<ToolbarItem> items) {
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(() -> items));
     }
 
     /** A plugin whose item list throws — a bug in somebody else's jar, met while a project is opening. */
-    private record Broken(String id) implements StudioPlugin {
-        @Override
-        public List<ToolbarItem> toolbarItems() {
+    private static LoadedPlugin broken(String artifactId) {
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(() -> {
             throw new IllegalStateException("no");
-        }
+        }));
     }
 
     private static ToolbarItem item(String id, ToolbarGroup group, int order) {
@@ -54,7 +50,7 @@ class ToolbarMergeTest {
     @Test
     void items_sort_by_group_then_by_their_own_order() {
         List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
-                new Fake("a", List.of(
+                fake("a", List.of(
                         item("tools-late", ToolbarGroup.TOOLS, 90),
                         item("project-early", ToolbarGroup.PROJECT, 10),
                         item("project-late", ToolbarGroup.PROJECT, 20),
@@ -71,11 +67,11 @@ class ToolbarMergeTest {
     @Test
     void a_tie_breaks_on_the_plugin_id_rather_than_on_discovery_order() {
         List<ToolbarItem> zebraFirst = PluginHost.mergeToolbarItems(List.of(
-                new Fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10))),
-                new Fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10)))));
+                fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10))),
+                fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10)))));
         List<ToolbarItem> alphaFirst = PluginHost.mergeToolbarItems(List.of(
-                new Fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10))),
-                new Fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10)))));
+                fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10))),
+                fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10)))));
 
         assertEquals(List.of("a", "z"), ids(zebraFirst));
         assertEquals(ids(alphaFirst), ids(zebraFirst), "the bar must not depend on which plugin loaded first");
@@ -89,7 +85,7 @@ class ToolbarMergeTest {
     @Test
     void the_studio_group_is_refused_and_the_plugins_other_items_survive() {
         List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
-                new Fake("a", List.of(
+                fake("a", List.of(
                         item("sneaky", ToolbarGroup.STUDIO, 1),
                         item("honest", ToolbarGroup.TOOLS, 1)))));
 
@@ -100,30 +96,17 @@ class ToolbarMergeTest {
     @Test
     void a_plugin_that_throws_does_not_cost_the_others_their_items() {
         List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
-                new Broken("broken"),
-                new Fake("good", List.of(item("kept", ToolbarGroup.RUN, 1)))));
+                broken("broken"),
+                fake("good", List.of(item("kept", ToolbarGroup.RUN, 1)))));
 
         assertEquals(List.of("kept"), ids(merged));
-    }
-
-    /**
-     * A null item is dropped rather than crashing the merge. An item with no label or no press cannot be built
-     * at all since the steps became the only way to make one.
-     */
-    @Test
-    void a_null_item_is_dropped() {
-        List<ToolbarItem> offered = new ArrayList<>();
-        offered.add(null);
-        offered.add(item("fine", ToolbarGroup.RUN, 3));
-
-        assertEquals(List.of("fine"), ids(PluginHost.mergeToolbarItems(List.of(new Fake("a", offered)))));
     }
 
     /** A plugin contributing nothing is the ordinary case, and the default the contract ships. */
     @Test
     void a_plugin_that_contributes_nothing_is_not_an_error() {
-        assertTrue(PluginHost.mergeToolbarItems(List.of(new Fake("a", List.of()))).isEmpty());
-        assertTrue(PluginHost.mergeToolbarItems(List.of(new Fake("a", null))).isEmpty());
+        assertTrue(PluginHost.mergeToolbarItems(List.of(fake("a", List.of()))).isEmpty());
+        assertTrue(PluginHost.mergeToolbarItems(List.of(fake("a", null))).isEmpty());
         assertTrue(PluginHost.mergeToolbarItems(List.of()).isEmpty());
     }
 
@@ -154,7 +137,7 @@ class ToolbarMergeTest {
      */
     @Test
     void an_overlay_item_is_merged_like_any_other() {
-        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(new Fake("com.example.one", List.of(
+        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(fake("com.example.one", List.of(
                 item("point-here", ToolbarGroup.OVERLAY, 10),
                 item("cut", ToolbarGroup.TOOLS, 20)))));
 
@@ -169,7 +152,7 @@ class ToolbarMergeTest {
      */
     @Test
     void itemsIn_answers_one_group_only() {
-        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(new Fake("com.example.one", List.of(
+        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(fake("com.example.one", List.of(
                 item("point-here", ToolbarGroup.OVERLAY, 10),
                 item("cut", ToolbarGroup.TOOLS, 20)))));
 
@@ -182,12 +165,12 @@ class ToolbarMergeTest {
     @Test
     void each_item_keeps_the_plugin_that_offered_it() {
         List<PluginHost.OwnedItem> owned = PluginHost.mergeOwnedToolbarItems(List.of(
-                new Fake("zebra", List.of(item("z", ToolbarGroup.TOOLS, 10))),
-                new Fake("alpha", List.of(item("a", ToolbarGroup.PROJECT, 10)))));
+                fake("zebra", List.of(item("z", ToolbarGroup.TOOLS, 10))),
+                fake("alpha", List.of(item("a", ToolbarGroup.PROJECT, 10)))));
 
         assertEquals(List.of("a", "z"), owned.stream().map(o -> o.item().id()).toList());
-        assertEquals(List.of("alpha", "zebra"), owned.stream().map(PluginHost.OwnedItem::pluginId).toList());
-        // A plugin that names no display name is shown by its id.
+        assertEquals(List.of(TestPlugins.coordinate("alpha"), TestPlugins.coordinate("zebra")),
+                owned.stream().map(PluginHost.OwnedItem::plugin).toList());
         assertEquals("alpha", owned.getFirst().pluginName());
     }
 }

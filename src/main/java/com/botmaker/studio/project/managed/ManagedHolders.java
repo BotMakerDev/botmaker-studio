@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.params.Param;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.plugin.api.source.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
@@ -77,12 +78,12 @@ public final class ManagedHolders {
     }
 
     /**
-     * The holder for {@code value}, declared by the plugin {@code pluginId} beside {@code declared}.
+     * The holder for {@code value}, declared by the plugin {@code plugin} beside {@code declared}.
      *
      * @param declared every value the same plugin declares; those sharing {@code value}'s holder go in the
      *                 same class
      */
-    public static Plan plan(ProjectConfig config, String pluginId, ManagedValue<?> value,
+    public static Plan plan(ProjectConfig config, PluginCoordinate plugin, ManagedValue<?> value,
                             List<ManagedValue<?>> declared,
                             ValueGrammar grammar) {
         String holder = value.holder();
@@ -90,17 +91,17 @@ public final class ManagedHolders {
             return new Plan.Refused(ManagedIds.spelled(value.id(), List.of(value))
                                     + " is not a value this project can be given a file for.");
         }
-        String segment = segment(pluginId);
+        String segment = segment(plugin);
         if (segment == null) {
-            return new Plan.Refused("The plugin " + pluginId + " has no name a package can be spelled with.");
+            return new Plan.Refused("The plugin " + plugin + " has no name a package can be spelled with.");
         }
         String pkg = config.mainPackage() + ".plugins." + segment;
         AST ast = AST.newAST(AST.getJLSLatest(), false);
         TreeSet<String> imports = new TreeSet<>();
         AbstractTypeDeclaration written;
         try {
-            written = value instanceof ManagedOpenSet.OneEnum<?> ? enumHolder(ast, pluginId, value, imports)
-                    : classHolder(ast, pluginId, value, declared, grammar, imports);
+            written = value instanceof ManagedOpenSet.OneEnum<?> ? enumHolder(ast, plugin, value, imports)
+                    : classHolder(ast, plugin, value, declared, grammar, imports);
         } catch (Unwritable refused) {
             return new Plan.Refused(refused.getMessage());
         }
@@ -134,12 +135,12 @@ public final class ManagedHolders {
      * An enum set's holder: {@code @SdkValue(…) public enum Outcomes implements Outcome {}} — no constant yet,
      * and nothing else, since a constant's name is all of it. Null when the element type has no node.
      */
-    private static EnumDeclaration enumHolder(AST ast, String pluginId, ManagedValue<?> value, Set<String> imports) {
+    private static EnumDeclaration enumHolder(AST ast, PluginCoordinate plugin, ManagedValue<?> value, Set<String> imports) {
         org.eclipse.jdt.core.dom.Type element = ValueTypes.node(ast, value.type(), imports).orElse(null);
         if (element == null) return null;
         EnumDeclaration type = ast.newEnumDeclaration();
         type.setName(ast.newSimpleName(value.holder()));
-        type.setJavadoc(javadoc(ast, pluginId, markName(value)));
+        type.setJavadoc(javadoc(ast, plugin, markName(value)));
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> modifiers = type.modifiers();
         modifiers.add(mark(ast, value, imports));
@@ -154,13 +155,13 @@ public final class ManagedHolders {
      * A class holder: a set's empty class carrying the mark, or one marked method per method-shaped value
      * sharing the holder; null when one of those has no starting value to write.
      */
-    private static TypeDeclaration classHolder(AST ast, String pluginId, ManagedValue<?> value,
+    private static TypeDeclaration classHolder(AST ast, PluginCoordinate plugin, ManagedValue<?> value,
                                                List<ManagedValue<?>> declared, ValueGrammar grammar,
                                                TreeSet<String> imports) {
         String holder = value.holder();
         TypeDeclaration type = ast.newTypeDeclaration();
         type.setName(ast.newSimpleName(holder));
-        type.setJavadoc(javadoc(ast, pluginId, markName(value)));
+        type.setJavadoc(javadoc(ast, plugin, markName(value)));
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> typeModifiers = type.modifiers();
         boolean typeLevel = value instanceof ManagedOpenSet<?>;
@@ -223,10 +224,10 @@ public final class ManagedHolders {
 
     /** The holder's doc comment: whose values these are, and that the file is the user's from now on. */
     @SuppressWarnings("unchecked")
-    private static Javadoc javadoc(AST ast, String pluginId, String markName) {
+    private static Javadoc javadoc(AST ast, PluginCoordinate plugin, String markName) {
         Javadoc javadoc = ast.newJavadoc();
         // One untagged element per line: the flattener starts each on its own " * " line.
-        for (String line : List.of("Values " + pluginId + " keeps in step with its own windows.",
+        for (String line : List.of("Values " + plugin + " keeps in step with its own windows.",
                 "<p>Written by BotMaker because this project had none, and <b>yours from that moment</b>:",
                 "it is never rewritten. BotMaker changes the expression a")) {
             TagElement element = ast.newTagElement();
@@ -273,16 +274,16 @@ public final class ManagedHolders {
      * it, and the holder was never written). What comes back is written by the caller; nothing here touches the
      * filesystem but to look.
      *
-     * @param byPlugin    each plugin's id and every value it declares
+     * @param byPlugin    each plugin's coordinate and every value it declares
      * @param declaredIds the ids the bot's sources already declare
      * @param present     the holders the bot declares ({@link HolderFiles#find})
      */
-    public static List<Plan> missing(ProjectConfig config, java.util.Map<String, List<ManagedValue<?>>> byPlugin,
+    public static List<Plan> missing(ProjectConfig config, java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin,
                                      java.util.Set<String> declaredIds, java.util.Set<HolderFiles.Key> present,
                                      ValueGrammar grammar) {
         List<Plan> out = new ArrayList<>();
         java.util.Set<HolderFiles.Key> planned = new java.util.HashSet<>(present);
-        byPlugin.forEach((pluginId, declared) -> {
+        byPlugin.forEach((plugin, declared) -> {
             java.util.Set<String> holders = new java.util.LinkedHashSet<>();
             for (ManagedValue<?> value : declared) {
                 if (value != null && value.holder() != null) holders.add(value.holder());
@@ -290,10 +291,10 @@ public final class ManagedHolders {
             for (String holder : holders) {
                 List<ManagedValue<?>> held = declared.stream()
                         .filter(v -> v != null && holder.equals(v.holder())).toList();
-                HolderFiles.Key key = HolderFiles.Key.of(pluginId, holder);
+                HolderFiles.Key key = HolderFiles.Key.of(plugin, holder);
                 if (planned.contains(key)) continue;
                 if (held.stream().anyMatch(v -> declaredIds.contains(v.id()))) continue;
-                Plan plan = plan(config, pluginId, held.getFirst(), declared, grammar);
+                Plan plan = plan(config, plugin, held.getFirst(), declared, grammar);
                 if (plan instanceof Plan.Write write && java.nio.file.Files.exists(write.file())) continue;
                 planned.add(key);
                 out.add(plan);
@@ -489,10 +490,10 @@ public final class ManagedHolders {
      * {@code Sdk.java} an older plugin wrote lacked {@code run()}, and nothing ever wrote it). A value whose holder
      * the bot does not have is left out: {@link #missing} writes it with the holder. Nothing here writes.
      *
-     * @param byPlugin each plugin's id and every value it declares
+     * @param byPlugin each plugin's coordinate and every value it declares
      */
     public static java.util.Map<Path, List<ManagedValue<?>>> valuesToKeep(
-            com.botmaker.studio.project.source.BotIndex index, java.util.Map<String, List<ManagedValue<?>>> byPlugin) {
+            com.botmaker.studio.project.source.BotIndex index, java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
         List<ManagedValue<?>> known = byPlugin.values().stream().flatMap(List::stream).toList();
         java.util.Map<String, Path> marked = new java.util.HashMap<>();
         java.util.Map<HolderFiles.Key, Path> holders = index.read(units -> {
@@ -514,12 +515,12 @@ public final class ManagedHolders {
             return HolderFiles.find(units, byPlugin);
         });
         java.util.Map<Path, List<ManagedValue<?>>> kept = new java.util.LinkedHashMap<>();
-        byPlugin.forEach((pluginId, declared) -> {
+        byPlugin.forEach((plugin, declared) -> {
             for (ManagedValue<?> value : declared) {
                 if (value == null) continue;
                 boolean method = value instanceof ManagedMethod<?>;
                 if (!(value instanceof ManagedParam<?>) && !(method && !marked.containsKey(value.id()))) continue;
-                HolderFiles.Key key = HolderFiles.Key.of(pluginId, value.holder());
+                HolderFiles.Key key = HolderFiles.Key.of(plugin, value.holder());
                 Path file = marked.getOrDefault(value.id(), key == null ? null : holders.get(key));
                 if (file != null) kept.computeIfAbsent(file, f -> new ArrayList<>()).add(value);
             }
@@ -692,12 +693,15 @@ public final class ManagedHolders {
     }
 
     /**
-     * The last segment of a plugin id, lower-cased, or null when it is no package name — the folder under
-     * {@code plugins/} a plugin's files are in, which {@code PluginFiles} reads back.
+     * The last {@code -} word of a plugin's artifactId, lower-cased, or null when it is no package name — the
+     * folder under {@code plugins/} a plugin's files are in, which {@code PluginFiles} reads back. It was the last
+     * segment of the plugin's id until 2026-10-27, and reads the same folder for BotMaker's own plugins:
+     * {@code botmaker-sdk} is {@code sdk}, {@code botmaker-plugin-basics} is {@code basics}.
      */
-    public static String segment(String pluginId) {
-        if (pluginId == null) return null;
-        String last = pluginId.substring(pluginId.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+    public static String segment(PluginCoordinate plugin) {
+        if (plugin == null) return null;
+        String artifact = plugin.artifactId();
+        String last = artifact.substring(artifact.lastIndexOf('-') + 1).toLowerCase(Locale.ROOT);
         return SourceVersion.isIdentifier(last) && !SourceVersion.isKeyword(last) ? last : null;
     }
 

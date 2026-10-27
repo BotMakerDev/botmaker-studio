@@ -70,12 +70,13 @@ public record CommunityConsent(Set<String> allowed) {
     }
 
     /**
-     * What a yes for this plugin is kept as: {@code owner/repo#id} for a community row, so one yes covers every
-     * release of that entry; {@code owner/repo#id@version} for another version of an official or trusted row,
-     * which its rank does not vouch for; the coordinate for a plugin the catalog does not list.
+     * What a yes for this plugin is kept as: {@code owner/repo} for a community row, so one yes covers every
+     * release of that entry; {@code owner/repo@version} for another version of an official or trusted row,
+     * which its rank does not vouch for; the coordinate for a plugin the catalog does not list. (It was
+     * {@code owner/repo#id} until 2026-10-27, when a plugin's id went: a yes kept before is asked again.)
      */
     public static String key(String coordinate, String version, Optional<PluginRegistry.Plugin> row) {
-        return row.map(r -> r.repo().toLowerCase(Locale.ROOT) + "#" + r.id()
+        return row.map(r -> r.repo().toLowerCase(Locale.ROOT)
                         + (r.rank() == PublisherRank.COMMUNITY ? "" : "@" + version))
                 .orElse(coordinate);
     }

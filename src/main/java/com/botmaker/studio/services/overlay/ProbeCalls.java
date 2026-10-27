@@ -1,6 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -41,7 +42,7 @@ public final class ProbeCalls {
     private ProbeCalls() {}
 
     /** A declared probe, with the plugin that declared it. */
-    public record Declared(String pluginId, OverlayPart.ProbedCall probed) {}
+    public record Declared(PluginCoordinate plugin, OverlayPart.ProbedCall probed) {}
 
     /**
      * One argument as the bot writes it, and the initializer of the managed constant it names when it
@@ -75,7 +76,7 @@ public final class ProbeCalls {
     public static List<Declared> declared(List<PluginHost.OwnedOverlay> parts) {
         List<Declared> out = new ArrayList<>();
         for (PluginHost.OwnedOverlay owned : parts) {
-            for (OverlayPart.ProbedCall probed : owned.part().probes()) out.add(new Declared(owned.pluginId(), probed));
+            for (OverlayPart.ProbedCall probed : owned.part().probes()) out.add(new Declared(owned.plugin(), probed));
         }
         return out;
     }

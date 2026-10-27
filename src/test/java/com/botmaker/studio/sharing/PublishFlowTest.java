@@ -110,7 +110,7 @@ class PublishFlowTest {
     /** The catalog lists a bot only when its pom declares a catalog plugin (its rule 6), so Publish waits. */
     @Test
     void aBotWithNoCatalogPluginIsNotPublishable() {
-        PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("com.botmaker.sdk", "BotMaker SDK",
+        PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("BotMaker SDK",
                 "com.github.BotMakerDev:botmaker-sdk", "BotMakerDev/botmaker-sdk", "", List.of(), "", List.of(),
                 "v1.5.0");
         List<UserLibrary> declared = List.of(new UserLibrary("com.github.botmakerdev", "botmaker-sdk", "v1.5.0"),

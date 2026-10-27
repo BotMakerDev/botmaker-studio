@@ -5,7 +5,8 @@ import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.studio.services.MavenService;
-import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginCatalog;
 import com.botmaker.studio.sharing.PluginRegistry;
@@ -207,9 +208,9 @@ final class BrowsePluginsTab {
                 : "No plugin matches that search."));
     }
 
-    /** The ids of the plugins bound to the open project — whatever put them on its classpath. */
-    private static List<String> boundPluginIds() {
-        return PluginHost.plugins().stream().map(StudioPlugin::id).toList();
+    /** The coordinates of the plugins bound to the open project — whatever put them on its classpath. */
+    private static List<PluginCoordinate> boundPlugins() {
+        return PluginHost.plugins().stream().map(LoadedPlugin::coordinate).toList();
     }
 
     /**
@@ -223,23 +224,23 @@ final class BrowsePluginsTab {
      * <p>Static and pure so it is asserted with no scene.
      */
     static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
-                                  List<String> boundIds) {
-        return alreadyProvided(plugin, declared, boundIds, List.of());
+                                  List<PluginCoordinate> bound) {
+        return alreadyProvided(plugin, declared, bound, List.of());
     }
 
     /**
      * {@link #alreadyProvided(PluginRegistry.Plugin, List, List)}, a plugin also counting as brought when its
-     * artifact's jar is on {@code classpath} — the only answer for a local build's own row (2026-10-06), whose
-     * id is its coordinate because no registry entry names its plugin id.
+     * artifact's jar is on {@code classpath} — what answers while nothing is bound (2026-10-06).
      */
     static String alreadyProvided(PluginRegistry.Plugin plugin, List<UserLibrary> declared,
-                                  List<String> boundIds, List<String> classpath) {
+                                  List<PluginCoordinate> bound, List<String> classpath) {
         // A coordinate the pom already declares is an ordinary re-install or version change, whatever else
         // is bound: this tab is idempotent by coordinate and must stay so.
         if (plugin.isInstalledIn(declared)) return "";
-        boolean bound = !plugin.id().isBlank() && boundIds.contains(plugin.id());
-        if (!bound && !onClasspath(plugin, classpath)) return "";
-        String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
+        PluginCoordinate coordinate = PluginCoordinate.parse(plugin.coordinate());
+        boolean isBound = bound.stream().anyMatch(each -> PluginHost.same(each, coordinate));
+        if (!isBound && !onClasspath(plugin, classpath)) return "";
+        String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
         return name + " is already on this project's classpath — another plugin it is a dependency of brings "
                 + "it, and Installed lists it read-only. Declaring it here too would let this pom pin a version "
                 + "that plugin was never built against. Change the version of the plugin that brings it instead.";
@@ -279,7 +280,7 @@ final class BrowsePluginsTab {
             error("This entry has no resolvable coordinate — nothing to install.");
             return;
         }
-        String provided = alreadyProvided(plugin, installed, boundPluginIds(), libraryService.resolvedClasspath());
+        String provided = alreadyProvided(plugin, installed, boundPlugins(), libraryService.resolvedClasspath());
         if (!provided.isEmpty()) {
             error(provided);
             return;
@@ -356,7 +357,7 @@ final class BrowsePluginsTab {
                 setGraphic(null);
                 return;
             }
-            Label name = new Label(plugin.name().isBlank() ? plugin.id() : plugin.name());
+            Label name = new Label(plugin.name().isBlank() ? plugin.coordinate() : plugin.name());
             name.setStyle("-fx-font-weight: bold;");
             boolean localBuild = localCoordinates.contains(plugin.coordinate());
             Label coordinate = new Label(plugin.coordinate()
@@ -380,7 +381,7 @@ final class BrowsePluginsTab {
             Node action;
             // Brought by another plugin: nothing to install, and nothing this pom can remove. Saying
             // "Install" and then refusing the click is what this label replaces.
-            String provided = alreadyProvided(plugin, installed, boundPluginIds(), classpath);
+            String provided = alreadyProvided(plugin, installed, boundPlugins(), classpath);
             if (!provided.isEmpty()) {
                 Button bundled = new Button("Installed with another plugin — view…");
                 bundled.setTooltip(new Tooltip(provided));

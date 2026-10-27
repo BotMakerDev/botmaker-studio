@@ -98,22 +98,22 @@ final class NewProjectPlugins {
     /** The user's ticks still shown and not locked: neither the bot's own nor one another plugin brings. */
     List<PluginRegistry.Plugin> picked() {
         List<PluginRegistry.Plugin> shown = visible(installable, community, locks.keySet());
-        return shown.stream().filter(p -> ticked.contains(p.id()) && !locks.containsKey(p.id())).toList();
+        return shown.stream().filter(p -> ticked.contains(p.repo()) && !locks.containsKey(p.repo())).toList();
     }
 
     /** {@code rows} as {@code choice} shows them, ranked; a locked plugin is shown whatever its rank. Pure. */
     static List<PluginRegistry.Plugin> visible(List<PluginRegistry.Plugin> rows, ShowCommunity choice,
                                                Set<String> locked) {
         return rows.stream()
-                .filter(p -> choice.shown() || p.rank() != PublisherRank.COMMUNITY || locked.contains(p.id()))
+                .filter(p -> choice.shown() || p.rank() != PublisherRank.COMMUNITY || locked.contains(p.repo()))
                 .sorted(PluginRegistry.Plugin.RANKED)
                 .toList();
     }
 
-    /** A bot's plugins by registry id: its cards to lock, with the version its pom pins. Pure. */
+    /** A bot's plugins by catalog repo: its cards to lock, with the version its pom pins. Pure. */
     static Map<String, PublishedBotPlugins.Pin> locked(List<PublishedBotPlugins.Pin> pins) {
         return pins.stream().collect(Collectors.toUnmodifiableMap(
-                PublishedBotPlugins.Pin::id, pin -> pin, (first, again) -> first));
+                PublishedBotPlugins.Pin::repo, pin -> pin, (first, again) -> first));
     }
 
     /** A card's name: the plugin's, or its coordinate when the catalog gave none. */
@@ -141,13 +141,13 @@ final class NewProjectPlugins {
         // The ticks a hidden rank leaves out bring nothing: they are not picked either.
         List<PluginRegistry.Plugin> ranked = installable.stream().sorted(PluginRegistry.Plugin.RANKED).toList();
         Set<String> shownTicks = ranked.stream()
-                .filter(p -> ticked.contains(p.id()) && (community.shown() || p.rank() != PublisherRank.COMMUNITY))
-                .map(PluginRegistry.Plugin::id)
+                .filter(p -> ticked.contains(p.repo()) && (community.shown() || p.rank() != PublisherRank.COMMUNITY))
+                .map(PluginRegistry.Plugin::repo)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<String, List<String>> brings = ranked.stream().collect(Collectors.toMap(
-                PluginRegistry.Plugin::id, PluginRegistry.Plugin::brings, (first, again) -> first, LinkedHashMap::new));
+                PluginRegistry.Plugin::repo, PluginRegistry.Plugin::brings, (first, again) -> first, LinkedHashMap::new));
         Map<String, String> names = ranked.stream().collect(Collectors.toMap(
-                PluginRegistry.Plugin::id, NewProjectPlugins::name, (first, again) -> first));
+                PluginRegistry.Plugin::repo, NewProjectPlugins::name, (first, again) -> first));
         locks = PluginLock.of(botName, inOrder(botOwn, brings.keySet()), shownTicks, brings, names);
 
         // A redraw while the user is on the keyboard keeps them on the same card.
@@ -171,21 +171,21 @@ final class NewProjectPlugins {
     private static Map<String, PublishedBotPlugins.Pin> inOrder(Map<String, PublishedBotPlugins.Pin> botOwn,
                                                                Set<String> listed) {
         Map<String, PublishedBotPlugins.Pin> ranked = new LinkedHashMap<>();
-        listed.stream().filter(botOwn::containsKey).forEach(id -> ranked.put(id, botOwn.get(id)));
+        listed.stream().filter(botOwn::containsKey).forEach(repo -> ranked.put(repo, botOwn.get(repo)));
         botOwn.forEach(ranked::putIfAbsent);
         return ranked;
     }
 
     private void toggle(PluginRegistry.Plugin plugin) {
-        if (locks.containsKey(plugin.id())) return;
-        if (!ticked.remove(plugin.id())) ticked.add(plugin.id());
+        if (locks.containsKey(plugin.repo())) return;
+        if (!ticked.remove(plugin.repo())) ticked.add(plugin.repo());
         showCards();
         onChange.run();
     }
 
     private Node card(PluginRegistry.Plugin plugin) {
-        PluginLock lock = locks.get(plugin.id());
-        boolean isTicked = lock != null || ticked.contains(plugin.id());
+        PluginLock lock = locks.get(plugin.repo());
+        boolean isTicked = lock != null || ticked.contains(plugin.repo());
         Label name = GalleryCard.cardName(name(plugin));
         Label check = new Label("✓");
         check.getStyleClass().add("np-card-check");
@@ -195,7 +195,7 @@ final class NewProjectPlugins {
         card.getStyleClass().add("np-card");
         if (isTicked) card.getStyleClass().add("np-card-picked");
         card.setPrefWidth(StartCards.CARD_WIDTH);
-        card.setUserData(plugin.id());
+        card.setUserData(plugin.repo());
 
         if (lock != null) {
             card.getStyleClass().add("np-card-locked");
@@ -206,7 +206,7 @@ final class NewProjectPlugins {
         if (!plugin.repo().isBlank()) card.getChildren().add(StartCards.line("by " + owner(plugin.repo())));
         HBox facts = new HBox(6, GalleryCard.badge(plugin.rank()));
         facts.setAlignment(Pos.CENTER_LEFT);
-        String version = version(plugin, botOwn.get(plugin.id()));
+        String version = version(plugin, botOwn.get(plugin.repo()));
         if (!version.isEmpty()) facts.getChildren().add(StartCards.line(version));
         card.getChildren().add(facts);
         if (!plugin.description().isBlank()) {

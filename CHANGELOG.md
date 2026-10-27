@@ -10,6 +10,24 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- **A plugin is its pom's coordinate** (2026-10-27): Studio loads the one plugin a jar's pom names
+  (`botmaker.plugin`) and knows it by `groupId:artifactId` and the pom's `<name>`; plugins have no id any more.
+  A jar whose pom names two plugins, or a second jar with a coordinate already loaded, is refused and named in
+  Plugins & Libraries.
+- The catalog's plugin rows and a bot's pinned plugins are read by repo (catalog schema 5); a community plugin you
+  agreed to run is asked about once more, since that yes was kept under its old id.
+- A plugin's files stay in `plugins/<last word of its artifactId>/` — `plugins/sdk`, `plugins/basics`, as before.
+- An editor choice made between two plugins is saved by coordinate; one saved by id before is forgotten.
+
+### Removed
+
+- The empty bundled plugin set: a project whose classpath loads nothing binds no plugin, and the catalog id check
+  after loading is gone (the catalog pins the coordinate itself).
+
 ## [1.9.2] — 2026-10-25
 
 ### Fixed

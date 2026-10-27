@@ -13,10 +13,13 @@ public final class PublishedBotPlugins {
     private PublishedBotPlugins() {
     }
 
-    /** A plugin a bot's pom declares: its catalog id and the version the pom pins, which may be blank. */
-    public record Pin(String id, String version) {
+    /**
+     * A plugin a bot's pom declares: its catalog entry's repo ({@code owner/name}, a plugin's id until 2026-10-27)
+     * and the version the pom pins, which may be blank.
+     */
+    public record Pin(String repo, String version) {
         public Pin {
-            id = id == null ? "" : id.trim();
+            repo = repo == null ? "" : repo.trim();
             version = version == null ? "" : version.trim();
         }
     }

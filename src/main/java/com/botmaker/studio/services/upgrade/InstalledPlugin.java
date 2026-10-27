@@ -118,7 +118,7 @@ public record InstalledPlugin(UserLibrary artifact, String displayName, String i
      * The live {@code isPlugin} predicate: resolve the coordinate and ask the jar.
      *
      * <p>{@code MavenService.declaresPlugin} is the project's one definition of the question — the
-     * {@code META-INF/services} entry {@code ServiceLoader} itself reads. <b>Resolution is local-or-nothing
+     * {@code botmaker.plugin} property of the jar's pom, which the loader itself reads. <b>Resolution is local-or-nothing
      * in practice and must stay best-effort</b>: a coordinate that has never been downloaded answers false
      * and the row is simply absent, which is the right failure. The alternative — listing a dependency as a
      * plugin because its name looks like one — puts a row in the window whose Check can only fail.

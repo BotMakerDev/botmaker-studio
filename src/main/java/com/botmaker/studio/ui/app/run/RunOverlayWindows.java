@@ -72,7 +72,7 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         try {
             return factory.create(context);
         } catch (RuntimeException | LinkageError e) {
-            System.err.println("Warning: " + owned.pluginId() + "'s run overlay part '" + owned.part().id()
+            System.err.println("Warning: " + owned.plugin() + "'s run overlay part '" + owned.part().id()
                     + "' could not be drawn: " + e);
             return null;
         }

@@ -1,10 +1,11 @@
 package com.botmaker.studio.parser.factories;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -364,7 +365,7 @@ public class StatementFactory {
             MethodSignature overload = defaultOverload(l, ctx.state(), ctx.analyzer());
             List<ResolvedType> params = overload == null ? null : overload.paramTypes();
             boolean takesHolders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l);
-            Map<String, List<ManagedValue<?>>> byPlugin = takesHolders ? pluginValues() : Map.of();
+            Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = takesHolders ? pluginValues() : Map.of();
             List<HolderUnit> holders = takesHolders ? valuesHolders(ctx.state(), byPlugin) : List.of();
             if (!holders.isEmpty()) {
                 // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed each
@@ -430,13 +431,13 @@ public class StatementFactory {
      * The serving plugin is the one whose class loader loaded the facade.
      */
     private static List<HeldParam> pluginParams(List<HolderUnit> holders, Class<?> facade,
-                                                Map<String, List<ManagedValue<?>>> byPlugin) {
-        for (StudioPlugin plugin : PluginHost.plugins()) {
-            if (plugin.getClass().getClassLoader() != facade.getClassLoader()) continue;
+                                                Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
+            if (plugin.plugin().getClass().getClassLoader() != facade.getClassLoader()) continue;
             List<HeldParam> held = new ArrayList<>();
-            for (ManagedValue<?> value : byPlugin.getOrDefault(plugin.id(), List.of())) {
+            for (ManagedValue<?> value : byPlugin.getOrDefault(plugin.coordinate(), List.of())) {
                 if (!(value instanceof ManagedParam<?> param)) continue;
-                HolderFiles.Key key = HolderFiles.Key.of(plugin.id(), param.holder());
+                HolderFiles.Key key = HolderFiles.Key.of(plugin.coordinate(), param.holder());
                 holders.stream().filter(h -> h.key().equals(key)).findFirst()
                         .ifPresent(holder -> held.add(new HeldParam(param, holder)));
             }
@@ -472,7 +473,7 @@ public class StatementFactory {
      * editor happened to show.
      */
     static Map<HolderFiles.Key, CompilationUnit> holderUnits(ProjectState state,
-                                                             Map<String, List<ManagedValue<?>>> byPlugin) {
+                                                             Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
         if (state == null) return Map.of();
         return BotIndex.of(state).read(trees -> {
             Map<HolderFiles.Key, CompilationUnit> units = new HashMap<>();
@@ -571,26 +572,26 @@ public class StatementFactory {
      * the project lacks is left out: naming it would not compile. A file nobody opened counts too — {@code Sdk.java}
      * never had a tree, so Run activity flow was seeded {@code new Flow()} (2026-10-12).
      */
-    static List<HolderUnit> valuesHolders(ProjectState state, Map<String, List<ManagedValue<?>>> byPlugin) {
+    static List<HolderUnit> valuesHolders(ProjectState state, Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
         Map<HolderFiles.Key, CompilationUnit> units = holderUnits(state, byPlugin);
         Map<HolderFiles.Key, HolderUnit> holders = new LinkedHashMap<>();
-        byPlugin.forEach((pluginId, declared) -> {
+        byPlugin.forEach((plugin, declared) -> {
             for (ManagedValue<?> value : declared) {
                 if (value == null || value instanceof ManagedOpenSet<?> || value.holder() == null) continue;
-                HolderFiles.Key key = HolderFiles.Key.of(pluginId, value.holder());
+                HolderFiles.Key key = HolderFiles.Key.of(plugin, value.holder());
                 if (key != null && units.containsKey(key)) holders.putIfAbsent(key, new HolderUnit(key, units.get(key)));
             }
         });
         return List.copyOf(holders.values());
     }
 
-    /** Each loaded plugin's id and the values it declares, in plugin order; a plugin that cannot say costs only itself. */
-    private static Map<String, List<ManagedValue<?>>> pluginValues() {
-        Map<String, List<ManagedValue<?>>> byPlugin = new LinkedHashMap<>();
-        for (StudioPlugin plugin : PluginHost.plugins()) {
+    /** Each loaded plugin's coordinate and the values it declares, in plugin order; one that cannot say costs only itself. */
+    private static Map<PluginCoordinate, List<ManagedValue<?>>> pluginValues() {
+        Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = new LinkedHashMap<>();
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
             try {
-                List<ManagedValue<?>> declared = plugin.managedValues();
-                if (declared != null) byPlugin.put(plugin.id(), declared);
+                List<ManagedValue<?>> declared = plugin.plugin().managedValues();
+                if (declared != null) byPlugin.put(plugin.coordinate(), declared);
             } catch (RuntimeException | LinkageError e) {
                 // Its holders are left out; every other plugin's are still handed over.
             }

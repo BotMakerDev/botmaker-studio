@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.index.TypeSummaryManager;
@@ -46,6 +47,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class LibraryCallImportsTest {
 
     private static final String PKG = "com.example.lib";
+
+    /** The SDK's coordinate, whose holders are in {@code plugins/sdk/}. */
+    private static final PluginCoordinate SDK = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
 
     private static final String HOST = """
             package com.mybot;
@@ -184,7 +188,7 @@ class LibraryCallImportsTest {
         EditContext ctx = EditContext.of(cu, new ProjectAnalyzer(new TypeSummaryManager(Set.of(PKG)), state), state);
 
         HolderFiles.Key key = new HolderFiles.Key("sdk", "Sdk");
-        CompilationUnit sdk = StatementFactory.holderUnits(state, java.util.Map.of("com.botmaker.sdk", List.of()))
+        CompilationUnit sdk = StatementFactory.holderUnits(state, java.util.Map.of(SDK, List.of()))
                 .get(key);
         assertNotNull(sdk);
         assertTrue(StatementFactory.declaresField(sdk, "Sdk", "flow"));
@@ -214,7 +218,7 @@ class LibraryCallImportsTest {
                 public final class Tags {}
                 """));
         java.util.Map<HolderFiles.Key, CompilationUnit> units = StatementFactory.holderUnits(state,
-                java.util.Map.of("com.botmaker.sdk", List.of(), "com.acme.other", List.of()));
+                java.util.Map.of(SDK, List.of(), new PluginCoordinate("com.acme", "other"), List.of()));
         HolderFiles.Key sdk = new HolderFiles.Key("sdk", "Pictures");
         HolderFiles.Key other = new HolderFiles.Key("other", "Pictures");
         assertEquals(Set.of(sdk, other), units.keySet(), "the bot's own Tags is no plugin's holder");

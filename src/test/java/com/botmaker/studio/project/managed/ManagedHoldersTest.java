@@ -2,6 +2,7 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.params.BotRecords;
@@ -23,6 +24,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -31,6 +33,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * id>/}, and never over a file that is there.
  */
 class ManagedHoldersTest {
+
+    /** The SDK, whose holders are in {@code plugins/sdk/} — the folder its artifactId's last word names. */
+    private static final PluginCoordinate SDK = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
+    private static final PluginCoordinate TEST = new PluginCoordinate("com.github.BotMakerDev", "botmaker-test");
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
             ManagedValue.method(TestValue.Id.GREETING).in("Sdk").holds(String.class, null).because("Mine."),
@@ -49,7 +55,7 @@ class ManagedHoldersTest {
     private ManagedHolders.Plan plan(TestValue.Id id) {
         ManagedValue<?> value = DECLARED.stream().filter(v -> v.id().equals(ManagedValue.idOf(id))).findFirst()
                 .orElseThrow();
-        return ManagedHolders.plan(ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", value, DECLARED,
+        return ManagedHolders.plan(ProjectConfig.forDirectory(dir.resolve("bot")), SDK, value, DECLARED,
                 TestValues.GRAMMAR);
     }
 
@@ -93,7 +99,7 @@ class ManagedHoldersTest {
         ManagedValue<TestOutcome> outcomes = ManagedValue.openSet(TestValue.Id.OUTCOMES)
                 .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine.");
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", outcomes, List.of(outcomes),
+                ProjectConfig.forDirectory(dir.resolve("bot")), SDK, outcomes, List.of(outcomes),
                 TestValues.GRAMMAR)).source();
 
         assertTrue(source.contains("@TestValue(TestValue.Id.OUTCOMES)\npublic enum Outcomes implements TestOutcome {"),
@@ -113,7 +119,7 @@ class ManagedHoldersTest {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
 
         String values = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
-                "com.botmaker.test", declared.getFirst(), declared, TestValues.GRAMMAR)).source();
+                TEST, declared.getFirst(), declared, TestValues.GRAMMAR)).source();
         assertTrue(values.contains("import " + TestValue.class.getCanonicalName() + ";"), values);
         assertTrue(values.contains("@TestValue(TestValue.Id.GREETING)\n    public static String greeting() {"),
                 values);
@@ -123,7 +129,7 @@ class ManagedHoldersTest {
         assertEquals(0, parse(values).getProblems().length, values);
 
         String names = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
-                "com.botmaker.test", declared.getLast(), declared, TestValues.GRAMMAR)).source();
+                TEST, declared.getLast(), declared, TestValues.GRAMMAR)).source();
         assertTrue(names.contains("@TestValue(TestValue.Id.NAMES)\npublic final class Names {"), names);
     }
 
@@ -146,7 +152,7 @@ class ManagedHoldersTest {
     @Test
     void onBindEveryMissingHolderIsPlannedOnce() {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
-        List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of("com.botmaker.sdk", DECLARED),
+        List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of(SDK, DECLARED),
                 java.util.Set.of(), java.util.Set.of(), TestValues.GRAMMAR);
         assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), plans.stream()
                 .map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList());
@@ -155,7 +161,7 @@ class ManagedHoldersTest {
     @Test
     void onBindAHolderTheBotAlreadyHasIsLeftAlone() throws Exception {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
-        java.util.Map<String, List<ManagedValue<?>>> sdk = java.util.Map.of("com.botmaker.sdk", DECLARED);
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> sdk = java.util.Map.of(SDK, DECLARED);
         // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
         assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
                 java.util.Set.of(ManagedValue.idOf(TestValue.Id.REST_BETWEEN)), java.util.Set.of(), TestValues.GRAMMAR)));
@@ -197,7 +203,7 @@ class ManagedHoldersTest {
     void aParameterIsAMarkedParamFieldBeforeTheMethods() {
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), DO_SETUP, PAUSE);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                ProjectConfig.forDirectory(dir.resolve("bot")), SDK, DECLARED.getFirst(), declared,
                 TestValues.GRAMMAR)).source();
 
         assertTrue(source.contains("    @TestValue(TestValue.Id.DO_SETUP)\n    @Param(category = \"Run\","
@@ -235,7 +241,7 @@ class ManagedHoldersTest {
         com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
-        java.util.Map<String, List<ManagedValue<?>>> byPlugin = java.util.Map.of("com.botmaker.sdk",
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = java.util.Map.of(SDK,
                 List.of(DECLARED.getFirst(), DO_SETUP));
 
         java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
@@ -248,7 +254,7 @@ class ManagedHoldersTest {
 
         // Kept as declared already: nothing to write.
         assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
-        assertTrue(ManagedHolders.valuesToKeep(index, java.util.Map.of("com.botmaker.other", List.of(DO_SETUP)))
+        assertTrue(ManagedHolders.valuesToKeep(index, java.util.Map.of(new PluginCoordinate("com.github.BotMakerDev", "botmaker-other"), List.of(DO_SETUP)))
                 .isEmpty());
     }
 
@@ -278,7 +284,7 @@ class ManagedHoldersTest {
                 Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), dir);
 
         java.util.Map<HolderFiles.Key, Path> found = index.read(units -> HolderFiles.find(units,
-                java.util.Map.of("com.botmaker.sdk", DECLARED, "com.acme.other", List.of(DO_SETUP))));
+                java.util.Map.of(SDK, DECLARED, new PluginCoordinate("com.acme", "other"), List.of(DO_SETUP))));
         assertEquals(java.util.Map.of(new HolderFiles.Key("sdk", "Sdk"), moved), found);
     }
 
@@ -343,7 +349,7 @@ class ManagedHoldersTest {
                 .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.Visibility.EDITOR).because("Mine.");
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), spot);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir.resolve("bot")), "com.botmaker.sdk", DECLARED.getFirst(), declared,
+                ProjectConfig.forDirectory(dir.resolve("bot")), SDK, DECLARED.getFirst(), declared,
                 TestValues.GRAMMAR)).source();
         assertTrue(source.contains("greeting()"), source);
         assertTrue(!source.contains("mine"), source);
@@ -397,7 +403,7 @@ class ManagedHoldersTest {
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
         ManagedValue<?> rest = DECLARED.get(1);
-        java.util.Map<String, List<ManagedValue<?>>> byPlugin = java.util.Map.of("com.botmaker.sdk",
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = java.util.Map.of(SDK,
                 List.of(DECLARED.getFirst(), rest, DO_SETUP));
 
         java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
@@ -435,7 +441,17 @@ class ManagedHoldersTest {
         assertEquals("flow", ManagedHolders.methodName("flow"));
         assertEquals("restBetween", ManagedHolders.methodName("rest-between"));
         assertEquals("classValue", ManagedHolders.methodName("class"));
-        assertEquals("sdk", ManagedHolders.segment("com.botmaker.sdk"));
+        assertEquals("sdk", ManagedHolders.segment(SDK));
+    }
+
+    /** The folder is the artifactId's last word: the same {@code plugins/<folder>/} the plugin id gave before. */
+    @Test
+    void aPluginsFolderIsTheLastWordOfItsArtifactId() {
+        assertEquals("basics", ManagedHolders.segment(
+                new PluginCoordinate("com.github.BotMakerDev", "botmaker-plugin-basics")));
+        assertEquals("greeter", ManagedHolders.segment(new PluginCoordinate("com.acme", "Greeter")));
+        assertNull(ManagedHolders.segment(new PluginCoordinate("com.acme", "my-class")), "a keyword names no package");
+        assertNull(ManagedHolders.segment(new PluginCoordinate("com.acme", "plugin-2")));
     }
 
     private static CompilationUnit parse(String source) {

@@ -289,9 +289,9 @@ public final class InstalledPluginsTab {
             List<UserLibrary> declaredLibraries = libraryService.declaredLibraries();
             List<InstalledPlugin> found = InstalledPlugin.of(
                     declaredLibraries, entries, InstalledPlugin.jarDeclaresPlugin(config.projectPath()));
-            List<PluginHost.LoadedPlugin> loaded = PluginHost.loaded();
+            List<PluginHost.LoadedJar> loaded = PluginHost.loaded();
             List<Declared> declared = declaredOnce(found, loaded);
-            List<PluginHost.LoadedPlugin> bundled = bundled(declaredLibraries, loaded);
+            List<PluginHost.LoadedJar> bundled = bundled(declaredLibraries, loaded);
             Map<String, String> local = new java.util.HashMap<>();
             builds.forEach(build -> local.put(build.coordinate(), build.version()));
             Platform.runLater(() -> {
@@ -320,7 +320,7 @@ public final class InstalledPluginsTab {
     }
 
     /** {@code found} as one entry per plugin, the copy kept being the one Studio {@code loaded}. */
-    static List<Declared> declaredOnce(List<InstalledPlugin> found, List<PluginHost.LoadedPlugin> loaded) {
+    static List<Declared> declaredOnce(List<InstalledPlugin> found, List<PluginHost.LoadedJar> loaded) {
         List<Declared> out = new ArrayList<>();
         for (List<InstalledPlugin> group : InstalledPlugin.sameArtifactGroups(found)) {
             InstalledPlugin kept = InstalledPlugin.keeper(group, row -> loadedFrom(row, loaded).isPresent()
@@ -331,7 +331,7 @@ public final class InstalledPluginsTab {
     }
 
     /** The loaded plugin whose jar is exactly {@code row}'s coordinate: its groupId too, not the other one. */
-    static Optional<PluginHost.LoadedPlugin> loadedFrom(InstalledPlugin row, List<PluginHost.LoadedPlugin> loaded) {
+    static Optional<PluginHost.LoadedJar> loadedFrom(InstalledPlugin row, List<PluginHost.LoadedJar> loaded) {
         String group = row.artifact().groupId();
         return loaded.stream()
                 .filter(l -> l.isOf(group, row.artifact().artifactId()))
@@ -343,14 +343,14 @@ public final class InstalledPluginsTab {
      * The loaded plugins whose jar the pom does not declare: each came with another plugin (plugin-basics
      * with the SDK). Shown read-only — its version is Maven's mediation, not this pom's to pin.
      */
-    static List<PluginHost.LoadedPlugin> bundled(List<UserLibrary> declared, List<PluginHost.LoadedPlugin> loaded) {
+    static List<PluginHost.LoadedJar> bundled(List<UserLibrary> declared, List<PluginHost.LoadedJar> loaded) {
         return loaded.stream()
                 .filter(l -> declared.stream().noneMatch(lib -> l.isOf(lib.groupId(), lib.artifactId())))
                 .toList();
     }
 
     /** What the Loaded cell says: the jar's version, marked when it is a dev build, or that nothing loaded. */
-    static String loadedText(Optional<PluginHost.LoadedPlugin> loaded) {
+    static String loadedText(Optional<PluginHost.LoadedJar> loaded) {
         return loaded.map(l -> l.version() + (l.dev() ? " (dev build)" : "")).orElse("not loaded");
     }
 
@@ -362,7 +362,7 @@ public final class InstalledPluginsTab {
                 + " only; compiling and running the bot still mixes both until one is removed.";
     }
 
-    private void render(List<Declared> declared, List<PluginHost.LoadedPlugin> bundled) {
+    private void render(List<Declared> declared, List<PluginHost.LoadedJar> bundled) {
         progress.setVisible(false);
         table.getChildren().clear();
         rows.clear();
@@ -377,7 +377,7 @@ public final class InstalledPluginsTab {
         }
 
         status("");
-        List<PluginHost.LoadedPlugin> loaded = PluginHost.loaded();
+        List<PluginHost.LoadedJar> loaded = PluginHost.loaded();
         int line = 0;
         table.add(heading("Plugin"), 0, line);
         table.add(heading("Installed"), 1, line);
@@ -400,7 +400,7 @@ public final class InstalledPluginsTab {
             row.loadVersions();
             if (!entry.twins().isEmpty()) table.add(twinBar(entry), 0, line++, 6, 1);
         }
-        for (PluginHost.LoadedPlugin plugin : bundled) {
+        for (PluginHost.LoadedJar plugin : bundled) {
             Label name = new Label(plugin.name());
             Label version = new Label(plugin.version());
             version.getStyleClass().add("sdk-upgrade-detail");
@@ -425,7 +425,7 @@ public final class InstalledPluginsTab {
     }
 
     /** The Loaded cell, its tooltip saying why when nothing loaded. */
-    private static Label loadedCell(Optional<PluginHost.LoadedPlugin> loaded, String artifactId) {
+    private static Label loadedCell(Optional<PluginHost.LoadedJar> loaded, String artifactId) {
         Label cell = new Label(loadedText(loaded));
         cell.getStyleClass().add("sdk-upgrade-detail");
         if (loaded.isEmpty()) {

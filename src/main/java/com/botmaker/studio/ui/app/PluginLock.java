@@ -45,7 +45,7 @@ record PluginLock(Reason reason, String by) {
     }
 
     /**
-     * The locked plugins by id. The bot's own are {@code used by botName}; then everything the bot's own and the
+     * The locked plugins by id, each its catalog entry's repo (2026-10-27). The bot's own are {@code used by botName}; then everything the bot's own and the
      * {@code ticked} ones bring, followed through {@code brings} breadth-first, bot-own before ticked, each in the
      * order given, is {@code brought by} the plugin whose {@code brings} reached it first ({@code names}, else its
      * id). An id keeps its first lock, and a ticked plugin is locked when another brings it, so the project never

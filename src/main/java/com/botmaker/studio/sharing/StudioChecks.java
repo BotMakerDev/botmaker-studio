@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -38,7 +37,7 @@ final class StudioChecks implements Checks {
         String path = EntryPath.bot(target.repo());
         try {
             List<Finding> findings = BotChecks.checkPom(target.dir().resolve("pom.xml"), path,
-                    EntryGate.pluginIds(catalog.catalog()));
+                    EntryGate.pluginRepos(catalog.catalog()));
             if (!Finding.refused(findings)) findings = BotChecks.checkIcon(target.dir(), path);
             if (!Finding.refused(findings)) {
                 Path classes = target.dir().resolve("target").resolve("classes");
@@ -52,7 +51,7 @@ final class StudioChecks implements Checks {
             findings.stream().filter(f -> f.severity() != Finding.Severity.ERROR).forEach(f -> listener.warn(f.message()));
             List<String> errors = findings.stream().filter(f -> f.severity() == Finding.Severity.ERROR)
                     .map(Finding::message).toList();
-            return errors.isEmpty() ? Result.passed(Optional.empty()) : Result.refused(String.join("\n", errors));
+            return errors.isEmpty() ? Result.passed() : Result.refused(String.join("\n", errors));
         } catch (IOException e) {
             return Result.refused(e.getMessage());
         }

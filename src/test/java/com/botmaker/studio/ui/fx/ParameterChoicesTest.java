@@ -46,23 +46,22 @@ class ParameterChoicesTest extends FxHeadlessTest {
     private static final String PLUGIN = """
             package fixture.text;
 
+            import com.botmaker.plugin.api.DeclaredPlugin;
             import com.botmaker.plugin.api.StudioPlugin;
             import com.botmaker.plugin.api.slot.SlotEditor;
             import javafx.scene.control.TextField;
             import java.util.List;
 
-            public final class TextPlugin implements StudioPlugin {
-                @Override public String id() { return "fixture.text"; }
-
-                @Override public List<SlotEditor> slotEditors() {
-                    return List.of(SlotEditor.forType(String.class).draw(() -> ctx -> {
+            public final class TextPlugin extends DeclaredPlugin {
+                public TextPlugin() {
+                    super(StudioPlugin.declare().editors(() -> List.of(SlotEditor.forType(String.class).draw(() -> ctx -> {
                         TextField field = new TextField(ctx.value(String.class).orElse(""));
                         field.setOnAction(e -> ctx.set(field.getText()));
                         field.focusedProperty().addListener((o, had, has) -> {
                             if (!has) ctx.set(field.getText());
                         });
                         return field;
-                    }));
+                    }))));
                 }
             }
             """;
@@ -209,7 +208,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
         if (node instanceof Parent parent) for (Node child : parent.getChildrenUnmodifiable()) walk(child, visit);
     }
 
-    /** The fixture plugin, compiled against the test classpath and registered the way {@code ServiceLoader} reads. */
+    /** The fixture plugin, compiled against the test classpath and named by its jar's pom ({@code botmaker.plugin}). */
     private Path pluginJar() throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         assumeTrue(compiler != null, "no platform compiler on this JRE; the fixture plugin cannot be built");
@@ -220,9 +219,10 @@ class ParameterChoicesTest extends FxHeadlessTest {
         Files.createDirectories(out);
         assertEquals(0, compiler.run(null, null, null, "-d", out.toString(), src.toString()),
                 "the fixture plugin must compile");
-        Path service = out.resolve("META-INF/services/com.botmaker.plugin.api.StudioPlugin");
-        Files.createDirectories(service.getParent());
-        Files.writeString(service, "fixture.text.TextPlugin\n");
+        Path pom = out.resolve("META-INF/maven/fixture/text/pom.xml");
+        Files.createDirectories(pom.getParent());
+        Files.writeString(pom, "<project><groupId>fixture</groupId><artifactId>text</artifactId><properties>"
+                + "<botmaker.plugin>fixture.text.TextPlugin</botmaker.plugin></properties></project>");
 
         Path jar = root.resolve("fixture-text.jar");
         try (JarOutputStream jos = new JarOutputStream(Files.newOutputStream(jar));

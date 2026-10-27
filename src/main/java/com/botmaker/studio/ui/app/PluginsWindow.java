@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
@@ -246,10 +246,10 @@ public final class PluginsWindow {
     }
 
     /** What Reload says it found: every plugin bound, by name. */
-    static String loadedText(List<StudioPlugin> plugins) {
+    static String loadedText(List<LoadedPlugin> plugins) {
         if (plugins.isEmpty()) return "No plugin loaded.";
         return plugins.size() + (plugins.size() == 1 ? " plugin" : " plugins") + " loaded: "
-                + plugins.stream().map(StudioPlugin::displayName).collect(Collectors.joining(", ")) + ".";
+                + plugins.stream().map(LoadedPlugin::name).collect(Collectors.joining(", ")) + ".";
     }
 
     /**

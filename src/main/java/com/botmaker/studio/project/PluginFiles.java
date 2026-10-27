@@ -1,7 +1,8 @@
 package com.botmaker.studio.project;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.managed.ManagedHolders;
 
 import java.nio.file.Path;
@@ -16,7 +17,7 @@ import java.util.Set;
  * both read (2026-09-27).
  *
  * <p><b>The rule.</b> A file is a plugin's when it is {@code …/plugins/<segment>/<Holder>.java}, {@code segment}
- * is the last segment of a <em>loaded</em> plugin's id, and that plugin declares a {@link ManagedValue} whose
+ * is a <em>loaded</em> plugin's ({@link ManagedHolders#segment}, from its coordinate), and that plugin declares a {@link ManagedValue} whose
  * {@code holder} is {@code Holder} — exactly the file {@link ManagedHolders} writes when a project lacks it. A
  * file the user put in {@code plugins/} themselves, or one whose plugin is not loaded, is an ordinary file of
  * theirs: nothing here guesses from a folder name alone, which is what {@code ExplorerModel} did until then.
@@ -31,12 +32,12 @@ public final class PluginFiles {
     /**
      * One holder a loaded plugin declares.
      *
-     * @param pluginId   the plugin's id
-     * @param pluginName what the user calls it ({@code StudioPlugin.displayName})
+     * @param plugin     the plugin's coordinate
+     * @param pluginName what the user calls it (its pom's {@code <name>})
      * @param segment    the folder under {@code plugins/} its files are in
      * @param className  the holder class, and so the file's name without {@code .java}
      */
-    public record Holder(String pluginId, String pluginName, String segment, String className) {
+    public record Holder(PluginCoordinate plugin, String pluginName, String segment, String className) {
 
         /** The status-line badge of a file this holder is. */
         public String badge() {
@@ -53,12 +54,12 @@ public final class PluginFiles {
     private PluginFiles() {}
 
     /** Every holder {@code plugins} declare, a plugin that cannot say costing only itself. */
-    public static List<Holder> holdersOf(List<StudioPlugin> plugins) {
+    public static List<Holder> holdersOf(List<LoadedPlugin> plugins) {
         List<Holder> out = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
+        for (LoadedPlugin plugin : plugins) {
             try {
-                String segment = ManagedHolders.segment(plugin.id());
-                List<ManagedValue<?>> values = plugin.managedValues();
+                String segment = ManagedHolders.segment(plugin.coordinate());
+                List<ManagedValue<?>> values = plugin.plugin().managedValues();
                 if (segment == null || values == null) continue;
                 Set<String> classes = new LinkedHashSet<>();
                 for (ManagedValue<?> value : values) {
@@ -67,7 +68,7 @@ public final class PluginFiles {
                     }
                 }
                 for (String className : classes) {
-                    out.add(new Holder(plugin.id(), plugin.displayName(), segment, className));
+                    out.add(new Holder(plugin.coordinate(), plugin.name(), segment, className));
                 }
             } catch (RuntimeException | LinkageError e) {
                 // A plugin built against a contract without managed values, or one that throws, owns no file.

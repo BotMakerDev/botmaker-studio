@@ -20,8 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LocalBuildsTest {
 
-    private static final String SERVICE = "META-INF/services/com.botmaker.plugin.api.StudioPlugin";
-
     @TempDir
     Path repository;
 
@@ -37,7 +35,7 @@ class LocalBuildsTest {
     }
 
     @Test
-    void aJarWithoutTheServiceFileIsNotAPlugin() throws Exception {
+    void aJarWhosePomNamesNoPluginIsNotAPlugin() throws Exception {
         install("com/example", "some-library", "0.1.0-SNAPSHOT", false, 1000);
 
         assertTrue(LocalBuilds.scan(repository).isEmpty());
@@ -91,8 +89,11 @@ class LocalBuildsTest {
         Path jar = dir.resolve(artifactId + "-" + version + ".jar");
         try (OutputStream out = Files.newOutputStream(jar); ZipOutputStream zip = new ZipOutputStream(out)) {
             if (plugin) {
-                zip.putNextEntry(new ZipEntry(SERVICE));
-                zip.write("com.example.ExamplePlugin\n".getBytes());
+                String groupId = groupPath.replace('/', '.');
+                zip.putNextEntry(new ZipEntry("META-INF/maven/" + groupId + "/" + artifactId + "/pom.xml"));
+                zip.write(("<project><groupId>" + groupId + "</groupId><artifactId>" + artifactId + "</artifactId>"
+                        + "<properties><botmaker.plugin>com.example.ExamplePlugin</botmaker.plugin></properties>"
+                        + "</project>").getBytes());
                 zip.closeEntry();
             }
             zip.putNextEntry(new ZipEntry("com/example/Anything.class"));

@@ -66,7 +66,8 @@ import java.util.Objects;
  *                            it existed. A name this Studio does not know is ignored on read, and so is not
  *                            written back; see {@code ToolbarVisibility} (backward-compatible; absent → empty)
  * @param preferredEditors    which plugin's editor draws a type two plugins both claim:
- *                            {@code fully.qualified.TypeName → pluginId}. Empty is the ordinary state — a row
+ *                            {@code fully.qualified.TypeName → groupId:artifactId} (a plugin id until
+ *                            2026-10-27; such a verdict names no plugin now). Empty is the ordinary state — a row
  *                            exists only where a user was actually shown a contest and answered it. A verdict
  *                            naming an uninstalled plugin is inert rather than an error, the same shape as
  *                            {@code lastTarget} naming a deleted method; see
@@ -269,23 +270,24 @@ public record StudioProjectSettings(List<String> knownWindowTitles, Map<String, 
     }
 
     /**
-     * This settings with {@code typeName}'s editor set to {@code pluginId} ({@code null} clears it).
+     * This settings with {@code typeName}'s editor set to the plugin {@code plugin}, its {@code groupId:artifactId}
+     * ({@code null} clears it).
      *
      * <p>Keyed on the fully qualified Java type rather than on a value-type id, which is what makes one
      * verdict serve both densities: a block's slot knows a resolved Java type and a Parameters row knows a
      * {@code ValueType} whose {@code javaName()} spells the same thing. A value-type id would be unanswerable
      * on the canvas, where there is no id — only a type.
      */
-    public StudioProjectSettings withPreferredEditor(String typeName, String pluginId) {
+    public StudioProjectSettings withPreferredEditor(String typeName, String plugin) {
         Map<String, String> next = new LinkedHashMap<>(preferredEditors);
-        if (pluginId == null) next.remove(typeName);
-        else next.put(typeName, pluginId);
+        if (plugin == null) next.remove(typeName);
+        else next.put(typeName, plugin);
         return new StudioProjectSettings(knownWindowTitles, favoriteOverloads, favoriteMethods, template,
                 lastTarget, overlayState, workspaceLayout, hiddenToolbarGroups, next,
                 runProperties, hiddenTraceWriters, devMode);
     }
 
-    /** The chosen plugin id for {@code typeName}, or {@code null} when the user has not been asked. */
+    /** The chosen plugin's {@code groupId:artifactId} for {@code typeName}, or {@code null} when the user has not been asked. */
     @JsonIgnore
     public String preferredEditorFor(String typeName) {
         return preferredEditors.get(typeName);

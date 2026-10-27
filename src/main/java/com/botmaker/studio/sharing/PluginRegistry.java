@@ -58,7 +58,7 @@ public final class PluginRegistry {
      *                 of its jar and pom (2026-10-24); {@code minContractVersion} and {@code editorDependencies}
      *                 are the newest one's
      */
-    public record Plugin(String id, String name, String coordinate, String repo, String description,
+    public record Plugin(String name, String coordinate, String repo, String description,
                          List<String> tags, String minContractVersion,
                          List<String> editorDependencies, String version, String tag, PublisherRank rank,
                          int stars, List<Catalog.Plugin.Release> releases) {
@@ -66,7 +66,6 @@ public final class PluginRegistry {
         public Plugin {
             releases = releases == null ? List.of() : List.copyOf(releases);
             editorDependencies = editorDependencies == null ? List.of() : List.copyOf(editorDependencies);
-            id = id == null ? "" : id.trim();
             name = name == null ? "" : name.trim();
             coordinate = coordinate == null ? "" : coordinate.trim();
             repo = repo == null ? "" : repo.trim();
@@ -87,18 +86,18 @@ public final class PluginRegistry {
                 .thenComparing(Plugin::name, String.CASE_INSENSITIVE_ORDER);
 
         /** A row the catalog did not rank — a dev build, a test's: community, installing {@code version}. */
-        public Plugin(String id, String name, String coordinate, String repo, String description,
+        public Plugin(String name, String coordinate, String repo, String description,
                       List<String> tags, String minContractVersion, List<String> editorDependencies,
                       String version) {
-            this(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
+            this(name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
                     "", PublisherRank.COMMUNITY, 0);
         }
 
         /** A row approving {@code tag} alone, with no pins: a test's, or one built by hand. */
-        public Plugin(String id, String name, String coordinate, String repo, String description,
+        public Plugin(String name, String coordinate, String repo, String description,
                       List<String> tags, String minContractVersion, List<String> editorDependencies,
                       String version, String tag, PublisherRank rank, int stars) {
-            this(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
+            this(name, coordinate, repo, description, tags, minContractVersion, editorDependencies, version,
                     tag, rank, stars, tag == null || tag.isBlank() ? List.of()
                             : List.of(new Catalog.Plugin.Release(tag.trim(), null, null, null, minContractVersion,
                             editorDependencies)));
@@ -106,7 +105,7 @@ public final class PluginRegistry {
 
         /** This entry installing {@code newVersion}. */
         public Plugin withVersion(String newVersion) {
-            return new Plugin(id, name, coordinate, repo, description, tags, minContractVersion, editorDependencies,
+            return new Plugin(name, coordinate, repo, description, tags, minContractVersion, editorDependencies,
                     newVersion, tag, rank, stars, releases);
         }
 
@@ -116,13 +115,13 @@ public final class PluginRegistry {
         }
 
         /**
-         * The catalog plugins this one brings: the ids its newest release's pom declares, which a project adding
-         * it gets transitively. New Project locks their cards "brought by" this one.
+         * The catalog plugins this one brings: the repos of those its newest release's pom declares, which a
+         * project adding it gets transitively. New Project locks their cards "brought by" this one.
          */
         public List<String> brings() {
             if (releases.isEmpty()) return List.of();
-            return releases.getFirst().plugins().stream().filter(Objects::nonNull).map(DerivedFacts.Pin::id)
-                    .filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().toList();
+            return releases.getFirst().plugins().stream().filter(Objects::nonNull).map(DerivedFacts.Pin::repo)
+                    .filter(repo -> repo != null && !repo.isBlank()).map(String::trim).distinct().toList();
         }
 
         /** The tags the catalog approved, newest first: what Plugins & Libraries offers. */
@@ -179,12 +178,12 @@ public final class PluginRegistry {
                     lib.groupId(), lib.artifactId(), groupId(), artifactId()));
         }
 
-        /** Free-text match over name / id / description / tags, the same shape as {@link GalleryEntry}. */
+        /** Free-text match over name / repo / description / tags, the same shape as {@link GalleryEntry}. */
         public boolean matches(String query) {
             if (query == null || query.isBlank()) return true;
             String q = query.toLowerCase();
             return name.toLowerCase().contains(q)
-                    || id.toLowerCase().contains(q)
+                    || repo.toLowerCase().contains(q)
                     || description.toLowerCase().contains(q)
                     || tags.stream().anyMatch(t -> t.toLowerCase().contains(q));
         }

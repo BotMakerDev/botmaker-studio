@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.components.types;
 
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.TestPlugins;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.TestValues;
@@ -17,10 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TypeCatalogTest {
 
     private static final List<PluginHost.OwnedType> PLUGINS = List.of(
-            new PluginHost.OwnedType("zeta", "Zeta Tools", Duration.class),
-            new PluginHost.OwnedType("basics", "Basics", int.class),        // already in Java: not repeated
-            new PluginHost.OwnedType("basics", "Basics", StringBuilder.class),
-            new PluginHost.OwnedType("basics", "Basics", java.awt.Color.class));
+            new PluginHost.OwnedType(TestPlugins.coordinate("zeta"),"Zeta Tools", Duration.class),
+            new PluginHost.OwnedType(TestPlugins.coordinate("basics"),"Basics", int.class),        // already in Java: not repeated
+            new PluginHost.OwnedType(TestPlugins.coordinate("basics"),"Basics", StringBuilder.class),
+            new PluginHost.OwnedType(TestPlugins.coordinate("basics"),"Basics", java.awt.Color.class));
 
     private static final List<BotRecords.Shape> PROJECT = List.of(
             new BotRecords.Shape("com.bot.Pair", "Pair", true, List.of()),
@@ -73,8 +74,8 @@ class TypeCatalogTest {
     @Test
     void aValueLeavesOutATypeOnlyARunningBotFills() {
         List<PluginHost.OwnedType> plugins = List.of(
-                new PluginHost.OwnedType("sdk", "SDK", TestValues.Body.class),
-                new PluginHost.OwnedType("sdk", "SDK", Duration.class));
+                new PluginHost.OwnedType(TestPlugins.coordinate("sdk"),"SDK", TestValues.Body.class),
+                new PluginHost.OwnedType(TestPlugins.coordinate("sdk"),"SDK", Duration.class));
 
         TypeCatalog value = TypeCatalog.of(TypeCatalog.Purpose.VALUE, TestValues.GRAMMAR, plugins, List.of());
         TypeCatalog local = TypeCatalog.of(TypeCatalog.Purpose.DECLARATION, TestValues.GRAMMAR, plugins, List.of());

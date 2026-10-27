@@ -189,7 +189,7 @@ public final class ValueEditors {
         }
         String typeName = context.typeName();
         List<PluginHost.OwnedEditor> ordered = EditorContest.ordered(
-                claiming, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName));
+                claiming, PluginHost.OwnedEditor::pluginKey, PluginHost.preferredEditorFor(typeName));
 
         List<SlotEditor> result = new ArrayList<>();
         for (PluginHost.OwnedEditor owned : ordered) result.add(owned.editor());

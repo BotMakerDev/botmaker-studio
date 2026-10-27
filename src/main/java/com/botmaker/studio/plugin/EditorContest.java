@@ -42,8 +42,11 @@ public final class EditorContest {
 
     private EditorContest() {}
 
-    /** One claimant, as the menu shows it: the plugin's id, and the name a person reads. */
-    public record Claim(String pluginId, String pluginName) {}
+    /**
+     * One claimant, as the menu shows it: the plugin's coordinate as {@code groupId:artifactId} — what a verdict
+     * is saved as — and the name a person reads.
+     */
+    public record Claim(String plugin, String pluginName) {}
 
     /**
      * {@code claimants} with every editor owned by {@code preferredPluginId} moved to the front, in their own
@@ -77,8 +80,8 @@ public final class EditorContest {
      *
      * @param typeName  the fully qualified Java type the verdict is keyed on
      * @param claimants every plugin whose editor claimed this value, in the order they would be tried
-     * @param chosen    the plugin id currently drawing it
-     * @param onChoose  handed the chosen plugin id; persists the verdict and redraws
+     * @param chosen    the coordinate of the plugin currently drawing it
+     * @param onChoose  handed the chosen plugin's coordinate; persists the verdict and redraws
      */
     public static ContextMenu menu(String typeName, List<Claim> claimants, String chosen,
                                    Consumer<String> onChoose) {
@@ -87,8 +90,8 @@ public final class EditorContest {
         for (Claim claim : claimants) {
             RadioMenuItem item = new RadioMenuItem(claim.pluginName());
             item.setToggleGroup(group);
-            item.setSelected(claim.pluginId().equals(chosen));
-            item.setOnAction(e -> onChoose.accept(claim.pluginId()));
+            item.setSelected(claim.plugin().equals(chosen));
+            item.setOnAction(e -> onChoose.accept(claim.plugin()));
             editWith.getItems().add(item);
         }
         Label header = new Label(simple(typeName) + " — " + claimants.size() + " plugins offer an editor");

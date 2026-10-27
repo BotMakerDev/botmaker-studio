@@ -23,7 +23,7 @@ import java.util.Optional;
  *
  * <p>{@link #parse} never throws. This Studio is the reader that lags: a row it cannot read costs that row, a
  * field it does not know is skipped, and a body that is no catalog at all is {@link #EMPTY}. A row with no
- * release (the single {@code tag} of schema 3 is not read) is skipped. A bot's plugin id that names no plugin row
+ * release (the single {@code tag} of schema 3 is not read) is skipped. A bot's plugin repo that names no plugin row
  * (a plugin unlisted since the catalog was built) is kept as a pin; it simply matches no row.
  */
 public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntry> bots) {
@@ -64,11 +64,11 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
         for (JsonNode row : root.path("plugins")) {
             row(row, Catalog.Plugin.class).flatMap(CatalogIndex::plugin).ifPresent(plugins::add);
         }
-        Map<String, PublisherRank> rankById = new HashMap<>();
-        for (PluginRegistry.Plugin plugin : plugins) rankById.putIfAbsent(plugin.id(), plugin.rank());
+        Map<String, PublisherRank> rankByRepo = new HashMap<>();
+        for (PluginRegistry.Plugin plugin : plugins) rankByRepo.putIfAbsent(plugin.repo(), plugin.rank());
         List<GalleryEntry> bots = new ArrayList<>();
         for (JsonNode row : root.path("bots")) {
-            row(row, Catalog.Bot.class).flatMap(bot -> bot(bot, rankById)).ifPresent(bots::add);
+            row(row, Catalog.Bot.class).flatMap(bot -> bot(bot, rankByRepo)).ifPresent(bots::add);
         }
         return Optional.of(new CatalogIndex(plugins, bots));
     }
@@ -83,19 +83,18 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
     }
 
     private static Optional<PluginRegistry.Plugin> plugin(Catalog.Plugin row) {
-        String id = trim(row.id());
         String repo = trim(row.repo());
         List<Catalog.Plugin.Release> releases = row.releases().stream()
                 .filter(r -> r != null && !trim(r.tag()).isEmpty()).toList();
-        if (id.isEmpty() || !isSlug(repo) || releases.isEmpty()) return Optional.empty();
+        if (!isSlug(repo) || releases.isEmpty()) return Optional.empty();
         Catalog.Plugin.Release newest = releases.getFirst();
         String name = trim(row.name());
-        return Optional.of(new PluginRegistry.Plugin(id, name.isEmpty() ? repoName(repo) : name,
+        return Optional.of(new PluginRegistry.Plugin(name.isEmpty() ? repoName(repo) : name,
                 trim(row.coordinate()), repo, row.description(), row.tags(), trim(newest.minContractVersion()),
                 newest.editorDependencies(), "", newest.tag(), rank(row.rank()), row.stars(), releases));
     }
 
-    private static Optional<GalleryEntry> bot(Catalog.Bot row, Map<String, PublisherRank> rankById) {
+    private static Optional<GalleryEntry> bot(Catalog.Bot row, Map<String, PublisherRank> rankByRepo) {
         String repo = trim(row.repo());
         List<Catalog.Bot.Release> releases = row.releases().stream()
                 .filter(r -> r != null && !trim(r.tag()).isEmpty()).toList();
@@ -105,10 +104,10 @@ public record CatalogIndex(List<PluginRegistry.Plugin> plugins, List<GalleryEntr
         // A plugin no row lists vouches for nothing, as an unknown rank does.
         PublisherRank pluginsRank = PublisherRank.ADMIN;
         for (DerivedFacts.Pin pin : newest.plugins()) {
-            String id = pin == null ? "" : trim(pin.id());
-            if (id.isEmpty()) continue;
-            pins.add(new PublishedBotPlugins.Pin(id, trim(pin.version())));
-            pluginsRank = PublisherRank.lower(pluginsRank, rankById.getOrDefault(id, PublisherRank.COMMUNITY));
+            String pinned = pin == null ? "" : trim(pin.repo());
+            if (pinned.isEmpty()) continue;
+            pins.add(new PublishedBotPlugins.Pin(pinned, trim(pin.version())));
+            pluginsRank = PublisherRank.lower(pluginsRank, rankByRepo.getOrDefault(pinned, PublisherRank.COMMUNITY));
         }
         String name = repoName(repo);
         return Optional.of(new GalleryEntry(name, repo.substring(0, repo.indexOf('/')), name, row.description(),

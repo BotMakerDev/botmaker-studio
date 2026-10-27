@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -31,20 +31,19 @@ import java.util.stream.Stream;
 final class StagedPlugin implements AutoCloseable {
 
     private final PluginLoader loader;
-    private final List<StudioPlugin> plugins;
+    private final LoadedPlugin plugin;
     private final List<String> classpath;
     private final ValueGrammar grammar;
 
-    private StagedPlugin(PluginLoader loader, List<StudioPlugin> plugins, List<String> classpath,
-                         ValueGrammar grammar) {
+    private StagedPlugin(PluginLoader loader, LoadedPlugin plugin, List<String> classpath, ValueGrammar grammar) {
         this.loader = loader;
-        this.plugins = plugins;
+        this.plugin = plugin;
         this.classpath = classpath;
         this.grammar = grammar;
     }
 
     /**
-     * {@code coordinate} at {@code version}, its plugins those loaded from {@code jar}; empty when the classpath
+     * {@code coordinate} at {@code version}, its plugin the one loaded from {@code jar}; empty when the classpath
      * cannot be resolved or no plugin loads from that jar.
      */
     static Optional<StagedPlugin> open(Path projectDir, String coordinate, String version, Path jar) {
@@ -54,15 +53,13 @@ final class StagedPlugin implements AutoCloseable {
         List<String> classpath = resolved.get();
         PluginLoader loader = PluginLoader.openReporting(classpath).loader();
         if (loader == null) return Optional.empty();
-        List<StudioPlugin> fromJar = new ArrayList<>();
-        for (StudioPlugin plugin : loader.plugins()) {
-            if (PluginUpgradeService.loadedFrom(plugin, jar)) fromJar.add(plugin);
-        }
+        Optional<LoadedPlugin> fromJar = loader.plugins().stream()
+                .filter(plugin -> PluginUpgradeService.loadedFrom(plugin, jar)).findFirst();
         if (fromJar.isEmpty()) {
             loader.close();
             return Optional.empty();
         }
-        return Optional.of(new StagedPlugin(loader, List.copyOf(fromJar), List.copyOf(classpath),
+        return Optional.of(new StagedPlugin(loader, fromJar.get(), List.copyOf(classpath),
                 PluginHost.grammarOf(loader.plugins())));
     }
 
@@ -93,21 +90,14 @@ final class StagedPlugin implements AutoCloseable {
         }
     }
 
-    /** The id of the first plugin the jar holds — what its holders' folder is named after. */
-    String pluginId() {
-        return plugins.getFirst().id();
-    }
-
-    /** Every value the jar's plugins declare; a plugin that throws declares nothing. */
+    /** Every value the jar's plugin declares; one that throws declares nothing. */
     List<ManagedValue<?>> declared() {
         List<ManagedValue<?>> out = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
-            try {
-                List<ManagedValue<?>> values = plugin.managedValues();
-                if (values != null) values.stream().filter(v -> v != null).forEach(out::add);
-            } catch (RuntimeException | LinkageError e) {
-                System.err.println("Warning: " + plugin.id() + " could not list managed values: " + e);
-            }
+        try {
+            List<ManagedValue<?>> values = plugin.plugin().managedValues();
+            if (values != null) values.stream().filter(v -> v != null).forEach(out::add);
+        } catch (RuntimeException | LinkageError e) {
+            System.err.println("Warning: " + plugin.coordinate() + " could not list managed values: " + e);
         }
         return List.copyOf(out);
     }

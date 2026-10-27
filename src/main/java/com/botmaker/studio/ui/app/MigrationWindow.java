@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
@@ -338,17 +338,17 @@ final class MigrationWindow {
                                        BotIndex index, Class<?> to) {
         Optional<ManagedValue<?>> missing = MigrationSteps.missingHolder(index, declared, to);
         if (missing.isEmpty()) return Map.of();
-        for (StudioPlugin plugin : PluginHost.plugins()) {
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
             List<ManagedValue<?>> own;
             try {
-                own = plugin.managedValues();
+                own = plugin.plugin().managedValues();
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
             if (own == null || own.stream().noneMatch(value -> value != null && value.id().equals(missing.get().id()))) {
                 continue;
             }
-            if (ManagedHolders.plan(config, plugin.id(), missing.get(), own, grammar)
+            if (ManagedHolders.plan(config, plugin.coordinate(), missing.get(), own, grammar)
                     instanceof ManagedHolders.Plan.Write holder) {
                 return Map.of(holder.file(), holder.source());
             }

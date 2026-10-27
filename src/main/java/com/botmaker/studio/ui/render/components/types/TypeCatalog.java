@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components.types;
 
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
@@ -96,14 +97,14 @@ public final class TypeCatalog {
         }
         add(out, PROJECT, own);
 
-        Map<String, List<Entry>> byPlugin = new LinkedHashMap<>();
-        Map<String, String> names = new LinkedHashMap<>();
+        Map<PluginCoordinate, List<Entry>> byPlugin = new LinkedHashMap<>();
+        Map<PluginCoordinate, String> names = new LinkedHashMap<>();
         for (PluginHost.OwnedType owned : plugins) {
             Class<?> cls = owned.type();
             if (purpose == Purpose.VALUE && onlyARunningBotFills(grammar, cls)) continue;
             if (!listed.add(cls)) continue;
-            names.putIfAbsent(owned.pluginId(), owned.pluginName());
-            byPlugin.computeIfAbsent(owned.pluginId(), id -> new ArrayList<>())
+            names.putIfAbsent(owned.plugin(), owned.pluginName());
+            byPlugin.computeIfAbsent(owned.plugin(), plugin -> new ArrayList<>())
                     .add(new Entry(JavaNames.simple(cls), packageOf(cls), cls));
         }
         names.entrySet().stream()

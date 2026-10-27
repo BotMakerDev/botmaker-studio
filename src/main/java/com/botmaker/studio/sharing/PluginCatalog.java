@@ -52,7 +52,7 @@ public final class PluginCatalog {
                 rows.set(at, rows.get(at).withVersion(build.version()));
             } else {
                 // Nothing lists its optional dependencies, so installing it declares the plugin alone.
-                rows.add(unlisted++, new PluginRegistry.Plugin(build.coordinate(), build.artifactId(), build.coordinate(),
+                rows.add(unlisted++, new PluginRegistry.Plugin(build.artifactId(), build.coordinate(),
                         "", LOCAL_BUILD_DESCRIPTION, List.of(), "", List.of(), build.version()));
             }
         }

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.sharing.PluginRegistry;
 import org.junit.jupiter.api.Test;
@@ -22,19 +23,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PluginAlreadyProvidedTest {
 
-    private static PluginRegistry.Plugin entry(String id, String name, String coordinate) {
-        return new PluginRegistry.Plugin(id, name, coordinate, "", "", List.of(), "", List.of(),
+    private static PluginRegistry.Plugin entry(String name, String coordinate) {
+        return new PluginRegistry.Plugin(name, coordinate, "", "", List.of(), "", List.of(),
                 "1.0.0");
     }
 
     private static final PluginRegistry.Plugin BASICS =
-            entry("com.botmaker.basics", "Basics", "com.github.BotMakerDev:botmaker-plugin-basics");
+            entry("Basics", "com.github.BotMakerDev:botmaker-plugin-basics");
+    private static final PluginCoordinate SDK_BOUND = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
+    /** Bound under BotMaker's former groupId: still the catalog's basics. */
+    private static final PluginCoordinate BASICS_BOUND =
+            new PluginCoordinate("com.github.LiQiyeDev", "botmaker-plugin-basics");
 
     @Test
     void aPluginAnotherPluginBringsIsRefusedWithTheReason() {
         String refusal = BrowsePluginsTab.alreadyProvided(BASICS,
                 List.of(new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.1.12")),
-                List.of("com.botmaker.sdk", "com.botmaker.basics"));
+                List.of(SDK_BOUND, BASICS_BOUND));
 
         assertTrue(refusal.contains("Basics"), refusal);
         assertTrue(refusal.contains("already on this project's classpath"), refusal);
@@ -45,15 +50,14 @@ class PluginAlreadyProvidedTest {
     void aPluginThePomAlreadyDeclaresIsNeverRefused() {
         assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS,
                 List.of(new UserLibrary("com.github.BotMakerDev", "botmaker-plugin-basics", "0.0.5")),
-                List.of("com.botmaker.sdk", "com.botmaker.basics")),
+                List.of(SDK_BOUND, BASICS_BOUND)),
                 "re-installing is idempotent by coordinate and must stay possible");
     }
 
     @Test
     void aLocalBuildsRowIsRefusedWhenItsJarIsAlreadyOnTheClasspath() {
-        // A dev-mode row for a build no registry lists: its id is its coordinate, so only the jar can tell.
-        PluginRegistry.Plugin local = entry("com.github.BotMakerDev:botmaker-plugin-basics", "botmaker-plugin-basics",
-                "com.github.BotMakerDev:botmaker-plugin-basics");
+        // A dev-mode row for a build no registry lists, with nothing bound: only the jar can tell.
+        PluginRegistry.Plugin local = entry("botmaker-plugin-basics", "com.github.BotMakerDev:botmaker-plugin-basics");
         List<String> classpath = List.of("/home/u/.m2/repository/com/github/BotMakerDev/botmaker-plugin-basics/"
                 + "0.3.1-SNAPSHOT/botmaker-plugin-basics-0.3.1-SNAPSHOT.jar");
 
@@ -64,14 +68,14 @@ class PluginAlreadyProvidedTest {
 
     @Test
     void aPluginNothingBringsInstallsNormally() {
-        assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS, List.of(), List.of("com.botmaker.sdk")));
+        assertEquals("", BrowsePluginsTab.alreadyProvided(BASICS, List.of(), List.of(SDK_BOUND)));
     }
 
-    /** An entry with no id is every entry written before the registry had one; it is never refused. */
+    /** An entry whose coordinate does not parse matches no bound plugin; it is never refused for one. */
     @Test
-    void anEntryWithNoIdIsNeverRefused() {
-        PluginRegistry.Plugin anonymous = entry("", "Nameless", "g:a");
+    void anEntryWithNoCoordinateIsNeverRefused() {
+        PluginRegistry.Plugin anonymous = entry("Nameless", "");
 
-        assertEquals("", BrowsePluginsTab.alreadyProvided(anonymous, List.of(), List.of("", "x")));
+        assertEquals("", BrowsePluginsTab.alreadyProvided(anonymous, List.of(), List.of(SDK_BOUND)));
     }
 }

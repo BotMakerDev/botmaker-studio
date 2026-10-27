@@ -25,10 +25,11 @@ class CatalogClientTest {
 
     private static String catalog(String botRepo) {
         return """
-                {"plugins": [{"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk",
+                {"plugins": [{"repo": "BotMakerDev/botmaker-sdk",
                               "releases": [{"tag": "v2.1.0"}]}],
                  "bots": [{"repo": "%s", "releases": [{"tag": "v1.0.0",
-                                                       "plugins": [{"id": "com.botmaker.sdk", "version": "v2.1.0"}]}]}]}
+                                                       "plugins": [{"repo": "BotMakerDev/botmaker-sdk",
+                                                                    "version": "v2.1.0"}]}]}]}
                 """.formatted(botRepo);
     }
 

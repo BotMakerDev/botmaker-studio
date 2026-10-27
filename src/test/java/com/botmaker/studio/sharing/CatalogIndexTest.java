@@ -24,10 +24,13 @@ class CatalogIndexTest {
     private static final String POM_V210 = "2".repeat(64);
     private static final String COMMIT_V120 = "c".repeat(40);
 
-    /** Schema 4 (2026-10-24): every approved release, newest first, each pinned; what the cli's index writes. */
+    /**
+     * Schema 5 (2026-10-27): every approved release, newest first, each pinned; a plugin is its repo and coordinate,
+     * with no id; what the cli's index writes.
+     */
     private static final String SPEC = """
-            { "schemaVersion": 4, "builtAt": "2026-10-24T18:00:00Z",
-              "plugins": [ { "id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
+            { "schemaVersion": 5, "builtAt": "2026-10-27T18:00:00Z",
+              "plugins": [ { "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
                              "coordinate": "com.github.BotMakerDev:botmaker-sdk", "name": "BotMaker SDK",
                              "description": "…", "tags": ["…"], "stars": 4,
                              "releases": [ { "tag": "v2.1.0", "commit": "%s", "jarSha256": "%s", "pomSha256": "%s",
@@ -36,7 +39,7 @@ class CatalogIndexTest {
               "bots":    [ { "repo": "somedev/firestone-bot", "rank": "trusted",
                              "description": "…", "tags": ["…"], "stars": 3, "forkOf": "LiQiyeDev/firestone",
                              "releases": [ { "tag": "v1.2.0", "commit": "%s",
-                                             "plugins": [ { "id": "com.botmaker.sdk", "version": "2.1.0" } ] },
+                                             "plugins": [ { "repo": "BotMakerDev/botmaker-sdk", "version": "2.1.0" } ] },
                                            { "tag": "v1.1.0", "commit": "%s" } ] } ] }
             """.formatted("a".repeat(40), JAR_V210, POM_V210, "b".repeat(40), COMMIT_V120, "d".repeat(40));
 
@@ -45,7 +48,7 @@ class CatalogIndexTest {
         CatalogIndex index = CatalogIndex.parse(SPEC);
 
         PluginRegistry.Plugin sdk = index.plugins().getFirst();
-        assertEquals("com.botmaker.sdk", sdk.id());
+        assertEquals("BotMakerDev/botmaker-sdk", sdk.repo());
         assertEquals("BotMaker SDK", sdk.name());
         assertEquals("v2.1.0", sdk.version(), "the newest approved release is installed");
         assertEquals(PublisherRank.ADMIN, sdk.rank());
@@ -64,7 +67,8 @@ class CatalogIndexTest {
         assertEquals(PublisherRank.TRUSTED, bot.rank());
         assertEquals(3, bot.stars());
         assertEquals("based on LiQiyeDev/firestone", bot.basedOnLine());
-        assertEquals(List.of(new PublishedBotPlugins.Pin("com.botmaker.sdk", "2.1.0")), bot.plugins());
+        assertEquals(List.of(new PublishedBotPlugins.Pin("BotMakerDev/botmaker-sdk", "2.1.0")), bot.plugins());
+        assertEquals(PublisherRank.ADMIN, bot.pluginsRank(), "its pin names the admin row by repo");
         assertEquals(List.of("v1.2.0", "v1.1.0"), bot.approvedTags());
         assertEquals(COMMIT_V120, bot.commitOf("v1.2.0"), "what Install and Get vX.Y take");
         assertEquals("", bot.commitOf("v9.9.9"));
@@ -74,11 +78,11 @@ class CatalogIndexTest {
     @Test
     void pluginBringsFromNewestRelease() {
         CatalogIndex index = CatalogIndex.parse("""
-                {"plugins": [{"id": "com.botmaker.sdk", "repo": "o/sdk",
-                              "releases": [{"tag": "v2", "plugins": [{"id": "com.botmaker.basics", "version": "v0.5.0"}]},
-                                           {"tag": "v1", "plugins": [{"id": "old.one", "version": "v1"}]}]},
-                             {"id": "com.botmaker.basics", "repo": "o/basics", "releases": [{"tag": "v0.5.0"}]}]}""");
-        assertEquals(List.of("com.botmaker.basics"), index.plugins().get(0).brings());
+                {"plugins": [{"repo": "o/sdk",
+                              "releases": [{"tag": "v2", "plugins": [{"repo": "o/basics", "version": "v0.5.0"}]},
+                                           {"tag": "v1", "plugins": [{"repo": "o/old-one", "version": "v1"}]}]},
+                             {"repo": "o/basics", "releases": [{"tag": "v0.5.0"}]}]}""");
+        assertEquals(List.of("o/basics"), index.plugins().get(0).brings());
         assertEquals(List.of(), index.plugins().get(1).brings());
     }
 
@@ -98,7 +102,7 @@ class CatalogIndexTest {
     @Test
     void aRowWithNoReleaseIsSkipped() {
         CatalogIndex index = CatalogIndex.parse("""
-                {"schemaVersion": 3, "plugins": [{"id": "x", "repo": "o/x", "tag": "v1"}],
+                {"schemaVersion": 3, "plugins": [{"repo": "o/x", "tag": "v1"}],
                  "bots": [{"repo": "o/b", "tag": "v1"}, {"repo": "o/c", "releases": []}]}""");
         assertTrue(index.isEmpty());
     }
@@ -117,22 +121,22 @@ class CatalogIndexTest {
     void aPinWhosePluginIsGoneIsKept() {
         CatalogIndex index = CatalogIndex.parse("""
                 {"plugins": [], "bots": [{"repo": "a/b",
-                                          "releases": [{"tag": "v1", "plugins": [{"id": "gone.plugin"}]}]}]}""");
-        assertEquals(List.of(new PublishedBotPlugins.Pin("gone.plugin", "")), index.bots().getFirst().plugins());
+                                          "releases": [{"tag": "v1", "plugins": [{"repo": "o/gone"}]}]}]}""");
+        assertEquals(List.of(new PublishedBotPlugins.Pin("o/gone", "")), index.bots().getFirst().plugins());
     }
 
     @Test
     void aRowItCannotReadCostsThatRowOnly() {
         CatalogIndex index = CatalogIndex.parse("""
-                {"plugins": [{"repo": "o/no-id", "releases": [{"tag": "v1"}]},
-                             {"id": "x", "repo": "not-a-slug", "releases": [{"tag": "v1"}]}, 5,
-                             {"id": "ok", "repo": "o/ok", "rank": "galactic", "whatIsThis": 42,
+                {"plugins": [{"name": "no repo", "releases": [{"tag": "v1"}]},
+                             {"repo": "not-a-slug", "releases": [{"tag": "v1"}]}, 5,
+                             {"id": "a field schema 5 dropped", "repo": "o/ok", "rank": "galactic", "whatIsThis": 42,
                               "releases": [{"tag": "v1", "since": "a field this Studio does not know"}]}],
                  "bots": [{"repo": "o/a/b", "releases": [{"tag": "v1"}]}, {"releases": [{"tag": "v1"}]},
                           {"repo": "o/odd", "stars": "many", "releases": [{"tag": "v1"}]},
                           {"repo": "o/fine", "releases": [{"tag": "v1"}]}]}""");
 
-        assertEquals(List.of("ok"), index.plugins().stream().map(PluginRegistry.Plugin::id).toList());
+        assertEquals(List.of("o/ok"), index.plugins().stream().map(PluginRegistry.Plugin::repo).toList());
         assertEquals(PublisherRank.COMMUNITY, index.plugins().getFirst().rank(), "an unknown rank vouches for nothing");
         assertEquals(List.of("o/fine"), index.bots().stream().map(GalleryEntry::slug).toList(),
                 "a row whose field is the wrong type costs that row");
@@ -172,7 +176,8 @@ class CatalogIndexTest {
 
             answer.set(null);
             CatalogClient offline = new CatalogClient(new GitHubClient(), urls, cache);
-            assertEquals("com.botmaker.sdk", offline.fetch().join().plugins().getFirst().id(), "the kept catalog");
+            assertEquals("BotMakerDev/botmaker-sdk", offline.fetch().join().plugins().getFirst().repo(),
+                    "the kept catalog");
             offline.fetch().join();
             assertEquals(3, requests.get(), "a failed read is asked again");
 

@@ -1,7 +1,8 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.managed.ManagedHolders;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -108,9 +109,17 @@ public final class PluginOwners {
         return List.copyOf(missing);
     }
 
+    /**
+     * Whether a loaded plugin answers for the folder id {@code id}. A plugin has had no id since 2026-10-27; the
+     * folder was its id, so a plugin claims it when the id is a package its class is in or under
+     * ({@code com.botmaker.sdk} for {@code com.botmaker.sdk.plugin.SdkPlugin}), or when the id's last segment is
+     * the plugin's holder folder ({@code com.botmaker.basics} for {@code botmaker-plugin-basics}).
+     */
     private static boolean isLoaded(String id) {
-        for (StudioPlugin plugin : PluginHost.plugins()) {
-            if (id.equals(plugin.id())) return true;
+        String last = id.substring(id.lastIndexOf('.') + 1);
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
+            if (plugin.plugin().getClass().getName().startsWith(id + ".")
+                    || last.equals(ManagedHolders.segment(plugin.coordinate()))) return true;
         }
         return false;
     }

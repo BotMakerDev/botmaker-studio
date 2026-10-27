@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.HostActionContext;
@@ -288,7 +289,7 @@ public class ToolbarManager {
             if (item.group() == ToolbarGroup.OVERLAY) continue;
             Button button = ToolbarItems.button(item, ctx);
             placed.add(new Placed(item.group(), item.order(), item.id(), button, item,
-                    owned.pluginId(), owned.pluginName()));
+                    owned.plugin(), owned.pluginName()));
         }
 
         // The reading order the bar was hand-arranged into, now stated as four groups rather than as an
@@ -308,9 +309,9 @@ public class ToolbarManager {
         // Since 2026-09-26 the bar is one section per owner — Studio's own first, then each plugin by name —
         // and the groups above order the buttons inside a section. Mixed, a plugin's button sat between two
         // of Studio's and nothing said whose it was; a section says it once, in its caption.
-        placed.sort(Comparator.comparing((Placed p) -> p.ownerId() != null)
+        placed.sort(Comparator.comparing((Placed p) -> p.owner() != null)
                 .thenComparing(p -> p.ownerName() == null ? "" : p.ownerName().toLowerCase(java.util.Locale.ROOT))
-                .thenComparing(p -> p.ownerId() == null ? "" : p.ownerId())
+                .thenComparing(p -> p.owner() == null ? "" : p.owner().toString())
                 .thenComparing(Placed::group)
                 .thenComparingInt(Placed::order)
                 .thenComparing(Placed::id));
@@ -324,9 +325,9 @@ public class ToolbarManager {
         String section = null;
         boolean first = true;
         for (Placed p : placed) {
-            String owner = p.ownerId() == null ? "" : p.ownerId();
+            String owner = p.owner() == null ? "" : p.owner().toString();
             if (first || !owner.equals(section)) {
-                nodes.add(sectionCaption(p.ownerId() == null ? "Studio" : p.ownerName(), !first));
+                nodes.add(sectionCaption(p.owner() == null ? "Studio" : p.ownerName(), !first));
                 section = owner;
                 first = false;
             }
@@ -370,7 +371,7 @@ public class ToolbarManager {
      * Making the record cover a read-out would add a member with exactly one implementor.
      */
     private record Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item,
-                          String ownerId, String ownerName) {
+                          PluginCoordinate owner, String ownerName) {
 
         /** Studio's own: no owning plugin. */
         Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item) {

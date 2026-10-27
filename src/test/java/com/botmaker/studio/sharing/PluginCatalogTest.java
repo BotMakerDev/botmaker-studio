@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class PluginCatalogTest {
 
     private static PluginRegistry.Plugin published(String id, String coordinate, String version) {
-        return new PluginRegistry.Plugin(id, id, coordinate, "", "", List.of(), "",
+        return new PluginRegistry.Plugin(id, coordinate, "", "", List.of(), "",
                 List.of("g:companion:1"), version);
     }
 

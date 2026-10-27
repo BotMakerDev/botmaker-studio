@@ -30,7 +30,7 @@ class InstalledPluginTest {
 
     private static PluginRegistry.Plugin entry(String coordinate, String name, String verified,
                                                List<String> editorDependencies) {
-        return new PluginRegistry.Plugin(coordinate, name, coordinate, "LiQiyeDev/x", "", List.of(), "",
+        return new PluginRegistry.Plugin(name, coordinate, "LiQiyeDev/x", "", List.of(), "",
                 editorDependencies, verified);
     }
 

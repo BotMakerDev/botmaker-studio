@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.OutputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -42,7 +44,7 @@ class CommunityConsentTest {
     private static final BooleanSupplier NOT_RELEASE = () -> false;
 
     private static PluginRegistry.Plugin row(String id, String coordinate, String repo, PublisherRank rank) {
-        return new PluginRegistry.Plugin(id, id, coordinate, repo, "", List.of(), "", List.of(), "", "v1.0.0",
+        return new PluginRegistry.Plugin(id, coordinate, repo, "", List.of(), "", List.of(), "", "v1.0.0",
                 rank, 0);
     }
 
@@ -71,7 +73,7 @@ class CommunityConsentTest {
                 RELEASE));
         assertTrue(CommunityConsent.needsAsking(SDK.coordinate(), "v0.9.0", Optional.of(SDK), true, "", false,
                 RELEASE));
-        assertEquals("botmakerdev/botmaker-sdk#com.botmaker.sdk@9.9.9",
+        assertEquals("botmakerdev/botmaker-sdk@9.9.9",
                 CommunityConsent.key(SDK.coordinate(), "9.9.9", Optional.of(SDK)));
 
         List<PluginGate.Asked> asked = new ArrayList<>();
@@ -160,11 +162,11 @@ class CommunityConsentTest {
 
     @Test
     void aYesIsKeptByEntryAndRoundTrips() {
-        assertEquals("bob/farm-plugin#farm", CommunityConsent.key(FARM.coordinate(), "v2.0.0", Optional.of(FARM)));
+        assertEquals("bob/farm-plugin", CommunityConsent.key(FARM.coordinate(), "v2.0.0", Optional.of(FARM)));
         assertEquals("com.github.eve:x", CommunityConsent.key("com.github.eve:x", "1", Optional.empty()));
-        CommunityConsent agreed = CommunityConsent.of("").with("bob/farm-plugin#farm").with("com.github.eve:x");
+        CommunityConsent agreed = CommunityConsent.of("").with("bob/farm-plugin").with("com.github.eve:x");
         assertEquals(agreed, CommunityConsent.of(String.join("\n", agreed.allowed())));
-        assertTrue(agreed.allows("bob/farm-plugin#farm"));
+        assertTrue(agreed.allows("bob/farm-plugin"));
     }
 
     private static PluginGate gate(CatalogIndex listed, String login, CommunityConsent start,
@@ -192,7 +194,7 @@ class CommunityConsentTest {
         assertEquals(1, asked.size(), "only the community plugin: the SDK is official, slf4j declares no plugin");
         assertEquals(Optional.of(FARM), asked.getFirst().row());
         assertTrue(asked.getFirst().question().contains("by bob"), asked.getFirst().question());
-        assertEquals(Set.of("bob/farm-plugin#farm"), kept.get().allowed());
+        assertEquals(Set.of("bob/farm-plugin"), kept.get().allowed());
 
         gate.admit(LISTED, List.of(COMMUNITY_JAR), List.of());
         assertEquals(1, asked.size(), "a kept yes is not asked again");
@@ -285,7 +287,8 @@ class CommunityConsentTest {
     void aLibraryInAnAdmittedPluginsPackageIsLeftOff(@TempDir Path dir) throws Exception {
         Path repo = dir.resolve("repository");
         Path sdk = jar(repo.resolve("com/github/BotMakerDev/botmaker-sdk/v1.0.0/botmaker-sdk-v1.0.0.jar"),
-                "META-INF/services/com.botmaker.plugin.api.StudioPlugin", "com/botmaker/sdk/plugin/SdkPlugin.class");
+                "com/botmaker/sdk/plugin/SdkPlugin.class");
+        declare(sdk, "com.github.BotMakerDev", "botmaker-sdk", "com.botmaker.sdk.plugin.SdkPlugin");
         Path evil = jar(repo.resolve("com/github/eve/util/1.0/util-1.0.jar"),
                 "META-INF/versions/17/com/botmaker/sdk/plugin/SdkPlugin.class", "com/eve/Util.class");
         Path plain = jar(repo.resolve("org/slf4j/slf4j-api/2.0.0/slf4j-api-2.0.0.jar"), "org/slf4j/Logger.class",
@@ -314,6 +317,17 @@ class CommunityConsentTest {
         return path;
     }
 
+    /** Adds to {@code jar} the pom that names {@code pluginClass} its plugin ({@code botmaker.plugin}). */
+    private static void declare(Path jar, String groupId, String artifactId, String pluginClass) throws Exception {
+        try (FileSystem zip = FileSystems.newFileSystem(jar)) {
+            Path pom = zip.getPath("META-INF", "maven", groupId, artifactId, "pom.xml");
+            Files.createDirectories(pom.getParent());
+            Files.writeString(pom, "<project><groupId>" + groupId + "</groupId><artifactId>" + artifactId
+                    + "</artifactId><properties><botmaker.plugin>" + pluginClass
+                    + "</botmaker.plugin></properties></project>");
+        }
+    }
+
     /** The pom beside an SDK jar of this test, {@code botmaker-sdk-<tag>.pom}. */
     private static Path pom(Path jar) {
         String name = jar.getFileName().toString();
@@ -327,7 +341,7 @@ class CommunityConsentTest {
     }
 
     private static PluginRegistry.Plugin sdkApproving(List<Catalog.Plugin.Release> releases) {
-        return new PluginRegistry.Plugin("com.botmaker.sdk", "SDK", "com.github.BotMakerDev:botmaker-sdk",
+        return new PluginRegistry.Plugin("SDK", "com.github.BotMakerDev:botmaker-sdk",
                 "BotMakerDev/botmaker-sdk", "", List.of(), "", List.of(), "", releases.getFirst().tag(),
                 PublisherRank.ADMIN, 0, releases);
     }

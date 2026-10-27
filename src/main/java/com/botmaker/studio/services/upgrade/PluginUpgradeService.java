@@ -1,7 +1,8 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.Migration;
 import com.botmaker.studio.migrate.Rewrite;
@@ -33,7 +34,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * What changing one installed plugin's version — or taking it out — does to <em>this bot</em>, and the pass that
@@ -290,16 +290,14 @@ public final class PluginUpgradeService {
     public PluginHolders holders() {
         Optional<Path> jar = resolve(currentVersion());
         if (jar.isEmpty()) return PluginHolders.NONE;
-        List<StudioPlugin> fromJar = PluginHost.plugins().stream().filter(p -> loadedFrom(p, jar.get())).toList();
+        List<LoadedPlugin> fromJar = PluginHost.plugins().stream().filter(p -> loadedFrom(p, jar.get())).toList();
         return PluginHolders.of(config, state, PluginFiles.holdersOf(fromJar));
     }
 
-    static boolean loadedFrom(StudioPlugin plugin, Path jar) {
+    static boolean loadedFrom(LoadedPlugin plugin, Path jar) {
         try {
-            var source = plugin.getClass().getProtectionDomain().getCodeSource();
-            if (source == null) return false;
-            return Path.of(source.getLocation().toURI()).toRealPath().equals(jar.toRealPath());
-        } catch (Exception e) {
+            return plugin.jar().toRealPath().equals(jar.toRealPath());
+        } catch (IOException | RuntimeException e) {
             return false;
         }
     }
@@ -519,13 +517,11 @@ public final class PluginUpgradeService {
     /** Every value the plugins bound from this coordinate declare now; a plugin that throws declares nothing. */
     private List<ManagedValue<?>> ownDeclared() {
         List<ManagedValue<?>> own = new ArrayList<>();
-        Set<String> ids = PluginHost.loaded().stream()
-                .filter(l -> l.isOf(artifact.groupId(), artifact.artifactId()))
-                .map(PluginHost.LoadedPlugin::id).collect(Collectors.toSet());
-        for (StudioPlugin plugin : PluginHost.plugins()) {
-            if (!ids.contains(plugin.id())) continue;
+        PluginCoordinate coordinate = new PluginCoordinate(artifact.groupId(), artifact.artifactId());
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
+            if (!PluginHost.same(plugin.coordinate(), coordinate)) continue;
             try {
-                List<ManagedValue<?>> values = plugin.managedValues();
+                List<ManagedValue<?>> values = plugin.plugin().managedValues();
                 if (values != null) values.stream().filter(v -> v != null).forEach(own::add);
             } catch (RuntimeException | LinkageError e) {
                 // Declares nothing it can say.

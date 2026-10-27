@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
+import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.plugin.api.run.RunOverlayPart;
@@ -15,12 +16,14 @@ import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.EditableType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.FilledTypes;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.Palettes;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.grammar.JavaNames;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.sharing.CatalogIndex;
+import com.botmaker.studio.project.PluginFiles;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -32,32 +35,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
  * The plugins this Studio has loaded, and the one place their contributions are composed.
  *
- * <p><b>Plugins are discovered, never named.</b> Nothing in this package writes down an implementation
- * class: {@link ServiceLoader} reads each jar's own {@code META-INF/services} declaration and hands back
- * instances typed as {@link StudioPlugin}, so every call from here on is javac-checked against the contract.
- * The SDK reaches this list exactly as a third-party plugin would — it is Studio's plugin #1 and gets no
- * back door.
+ * <p><b>Plugins are declared, never named here.</b> Nothing in this package writes down an implementation
+ * class: each jar's own pom names its plugin ({@code botmaker.plugin}, 2026-10-27), {@link PluginLoader} hands
+ * back each one as a {@link LoadedPlugin} — its coordinate, name, jar and instance — and every call from here on
+ * is javac-checked against the contract. A plugin is its coordinate: every owner below is keyed by it. The SDK
+ * reaches this list exactly as a third-party plugin would — it is Studio's plugin #1 and gets no back door.
  *
  * <p><b>The set is bound per project, and that is what makes the pin real.</b> {@link #bind} builds a
  * {@link PluginLoader} over the project's <em>resolved artifacts</em>, so the plugin answering for a bot
  * pinned to SDK 1.1.0 is the one inside that jar. That loader lived in this package until 2026-08-28 and is
  * now {@code botmaker-plugin-host}: Studio is no longer the only host, and the delegation split it makes is
- * the last code here that should exist in two copies. What stayed is everything below — the bundled
- * fallback, the swap, and the two catalogs — because all of it is about <em>Studio's</em> open project. With no project open — an import repair, a paste, the
- * project selection screen — the answer comes from {@link #bundled}, the plugins on Studio's own
- * classloader, and that is also the fallback for every way binding can fail.
+ * the last code here that should exist in two copies. What stayed is everything below — the swap and the two
+ * catalogs — because all of it is about <em>Studio's</em> open project. With no project open, or a classpath
+ * that loads nothing, the set is empty: Studio bundles no plugin (the bundled set was always empty, and was
+ * dropped on 2026-10-27).
  *
- * <p><b>Fail-open, in one direction only.</b> An empty classpath, a jar with no services file, a plugin
- * whose constructor throws: each is logged and answered with the bundled set. Menus widen, never empty; a
- * type no plugin declares is read as unknown and its value is preserved read-only. {@link #grammar()} must
- * never throw, whatever the state of the loader.
+ * <p><b>Fail-open, in one direction only.</b> An empty classpath, a jar whose pom names no plugin, a plugin
+ * whose constructor throws: each is reported ({@link #failures()}) and the rest bind. A type no plugin declares
+ * is read as unknown and its value is preserved read-only. {@link #grammar()} must never throw, whatever the
+ * state of the loader.
  *
  * <h2>Two catalogs, and the difference matters</h2>
  *
@@ -81,33 +83,16 @@ public final class PluginHost {
     private PluginHost() {}
 
     /**
-     * The plugins on Studio's own classloader — the fallback, and the whole of the no-project path.
-     *
-     * <p>Built once and never rebound: it is a property of this build, not of anything a user does. It is
-     * also why this phase needed no separate step for "discovery without a project" — the no-project path
-     * <em>is</em> plain {@link ServiceLoader}, over the same declaration a project's jar carries.
-     */
-    private static final List<StudioPlugin> BUNDLED = discover(PluginHost.class.getClassLoader());
-
-    /**
-     * The plugin set answering right now: the bound project's, or {@link #BUNDLED}. Volatile because
+     * The plugin set answering right now: the bound project's, empty with none. Volatile because
      * {@link #bind} runs off the FX thread (the classpath resolve it follows does) while the readers below
      * are called from wherever a variable is constructed.
      */
-    private static volatile List<StudioPlugin> plugins = BUNDLED;
+    private static volatile List<LoadedPlugin> plugins = List.of();
 
-    /** The loader behind a bound set, held only so it can be closed. Null whenever {@link #BUNDLED} is live. */
+    /** The loader behind a bound set, held only so it can be closed. Null whenever the set is empty. */
     private static volatile PluginLoader loader;
 
-    /**
-     * Whether the live set is serving an open project — which is <em>not</em> the same question as whether
-     * {@link #loader} is non-null.
-     *
-     * <p>A project whose own plugins failed to load is served by {@link #BUNDLED} with no loader at all, and
-     * that set is holding whatever it opened for that project exactly as a project's own would. So this is
-     * what decides that {@link StudioPlugin#projectClosing()} is owed, rather than the loader: without it,
-     * the fail-open case — the one where a leak is least likely to be noticed — would never be told.
-     */
+    /** Whether the live set is serving an open project, so {@link StudioPlugin#projectClosing()} is owed. */
     private static boolean serving;
 
     /** The bound set's merged palette, built on first ask and dropped on every bind. */
@@ -117,10 +102,10 @@ public final class PluginHost {
      * Memoised on the same reasoning as the palette — the merge walks every plugin and the value cells ask
      * on every keystroke — and rebuilt on every bind, which is why it is a field rather than a constant.
      */
-    private static volatile ValueGrammar grammar = compose(BUNDLED).grammar();
+    private static volatile ValueGrammar grammar = compose(List.of()).grammar();
 
     /** Memoised beside the value catalog, and rebuilt on the same bind, for the same reason. */
-    private static volatile List<OwnedEditor> ownedSlotEditors = mergeOwnedSlotEditors(BUNDLED);
+    private static volatile List<OwnedEditor> ownedSlotEditors = List.of();
 
     /** The same editors without their owner — derived, so the two can never disagree. See {@link #slotEditors()}. */
     private static volatile List<SlotEditor> slotEditors = strip(ownedSlotEditors);
@@ -137,15 +122,14 @@ public final class PluginHost {
     private static volatile Map<String, String> preferredEditors = Map.of();
 
     /** Memoised beside the slot editors, rebuilt on the same bind. See {@link #toolbarItems()}. */
-    private static volatile List<OwnedItem> ownedToolbarItems = mergeOwnedToolbarItems(BUNDLED);
-    private static volatile List<ToolbarItem> toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
+    private static volatile List<OwnedItem> ownedToolbarItems = List.of();
+    private static volatile List<ToolbarItem> toolbarItems = List.of();
 
     /** Memoised the same way. See {@link #managedValues()}. */
-    private static volatile List<ManagedValue<?>> managedValues = mergeManagedValues(BUNDLED);
+    private static volatile List<ManagedValue<?>> managedValues = List.of();
 
     /** The holder files the bound plugins declare, rebuilt on the same bind. See {@link #pluginFiles()}. */
-    private static volatile List<com.botmaker.studio.project.PluginFiles.Holder> pluginFiles =
-            com.botmaker.studio.project.PluginFiles.holdersOf(BUNDLED);
+    private static volatile List<PluginFiles.Holder> pluginFiles = List.of();
 
     /** What the last {@link #bind} could not load. See {@link #failures()}. */
     private static volatile List<PluginLoader.PluginFailure> failures = List.of();
@@ -162,20 +146,31 @@ public final class PluginHost {
      */
     private static StudioServices opening;
 
-    public static List<StudioPlugin> plugins() {
+    /** The bound plugins, each with its coordinate, name and jar; empty with no project. */
+    public static List<LoadedPlugin> plugins() {
         return plugins;
+    }
+
+    /** The bound plugins' instances, in the same order. */
+    public static List<StudioPlugin> instances() {
+        return instancesOf(plugins);
+    }
+
+    /** {@code set}'s instances, in order. */
+    public static List<StudioPlugin> instancesOf(List<LoadedPlugin> set) {
+        return set.stream().map(LoadedPlugin::plugin).toList();
     }
 
     /**
      * The bound plugin whose jar holds {@code type}, or empty for a class no plugin ships — the bot's own, the
      * JDK's, another library's. Decided by where the class was loaded from, not by its name: a jar is the
-     * one thing two plugins cannot share.
+     * one thing two plugins cannot share, and the loader refuses a jar that declares two.
      */
-    public static Optional<StudioPlugin> pluginOwning(Class<?> type) {
-        java.net.URL where = codeSource(type);
+    public static Optional<LoadedPlugin> pluginOwning(Class<?> type) {
+        Path where = jarOf(type);
         if (where == null) return Optional.empty();
-        for (StudioPlugin plugin : plugins) {
-            if (where.equals(codeSource(plugin.getClass()))) return Optional.of(plugin);
+        for (LoadedPlugin plugin : plugins) {
+            if (where.equals(plugin.jar())) return Optional.of(plugin);
         }
         return Optional.empty();
     }
@@ -184,7 +179,7 @@ public final class PluginHost {
     public static Optional<String> pluginNameFor(String simpleName) {
         return ownerOf(simpleName)
                 .flatMap(facade -> pluginOwning(facade.type()))
-                .map(PluginHost::nameOf);
+                .map(LoadedPlugin::name);
     }
 
     /**
@@ -195,26 +190,32 @@ public final class PluginHost {
     public static Optional<String> pluginNameOwning(String binaryName) {
         if (binaryName == null || binaryName.isBlank()) return Optional.empty();
         try {
-            return pluginOwning(Class.forName(binaryName, false, classLoader())).map(PluginHost::nameOf);
+            return pluginOwning(Class.forName(binaryName, false, classLoader())).map(LoadedPlugin::name);
         } catch (ClassNotFoundException | LinkageError e) {
             return Optional.empty();
         }
     }
 
-    private static String nameOf(StudioPlugin plugin) {
-        try {
-            String name = plugin.displayName();
-            return name == null || name.isBlank() ? plugin.id() : name;
-        } catch (RuntimeException | LinkageError e) {
-            return plugin.id();
-        }
+    /** The bound plugin {@code coordinate} names, BotMaker's two groupIds counting as one; empty for none. */
+    public static Optional<LoadedPlugin> plugin(PluginCoordinate coordinate) {
+        if (coordinate == null) return Optional.empty();
+        return plugins.stream().filter(loaded -> same(loaded.coordinate(), coordinate)).findFirst();
     }
 
-    private static java.net.URL codeSource(Class<?> type) {
+    /** Whether two coordinates name one plugin: BotMaker's two groupIds count as one (DuplicatePlugins). */
+    public static boolean same(PluginCoordinate a, PluginCoordinate b) {
+        return a != null && b != null
+                && DuplicatePlugins.sameArtifact(a.groupId(), a.artifactId(), b.groupId(), b.artifactId());
+    }
+
+    /** The classpath entry {@code type} was loaded from, absolute and normalised, or null for none. */
+    private static Path jarOf(Class<?> type) {
         try {
             java.security.CodeSource source = type.getProtectionDomain().getCodeSource();
-            return source == null ? null : source.getLocation();
-        } catch (SecurityException e) {
+            return source == null || source.getLocation() == null ? null
+                    : Path.of(source.getLocation().toURI()).toAbsolutePath().normalize();
+        } catch (SecurityException | java.net.URISyntaxException | IllegalArgumentException
+                 | java.nio.file.FileSystemNotFoundException e) {
             return null;
         }
     }
@@ -223,12 +224,11 @@ public final class PluginHost {
      * Binds the plugins declared on {@code resolvedClasspath}, replacing whatever was bound before.
      *
      * <p>Called immediately after a project's classpath is resolved — on open, and again whenever the
-     * libraries or the SDK pin change. Anything that goes wrong leaves {@link #BUNDLED} bound: see the
-     * fail-open note in the class javadoc.
+     * libraries or the SDK pin change. A classpath that loads nothing binds the empty set: see the fail-open
+     * note in the class javadoc.
      *
      * <p>{@code services} names the project being bound, and every plugin that ends up serving it is told
-     * through {@link StudioPlugin#projectOpened(StudioServices)} — including the bundled set, which is what
-     * serves a project whose own plugins would not load. It is what a plugin reads its own files out of; no
+     * through {@link StudioPlugin#projectOpened(StudioServices)}. It is what a plugin reads its own files out of; no
      * contribution surface takes a services argument, deliberately, because they are asked every time a
      * window is drawn.
      */
@@ -247,41 +247,27 @@ public final class PluginHost {
         // One groupId's copy of each artifact a pom names under both of BotMaker's (DuplicatePlugins): two
         // copies on one loader is a mix of the two versions, class by class.
         DuplicatePlugins.Split single = DuplicatePlugins.split(released.loadable());
-        // A community plugin loads only once the user agreed to run it here, and a catalog plugin binds only
-        // under its entry's id (PluginGate, 2026-10-23). Asked before the lock is taken: the question waits for
-        // the FX thread, which may itself be waiting on the lock to unbind.
+        // A community plugin loads only once the user agreed to run it here (PluginGate, 2026-10-23). Asked before
+        // the lock is taken: the question waits for the FX thread, which may itself be waiting on the lock to
+        // unbind. A catalog plugin is its coordinate, which the catalog pins, so nothing is compared after it
+        // loads (the id check went on 2026-10-27).
         PluginGate checking = gate;
-        CatalogIndex listed = checking == null ? CatalogIndex.EMPTY : checking.catalog();
         PluginGate.Admitted admitted = checking == null
                 ? new PluginGate.Admitted(single.loadable(), List.of())
-                : checking.admit(listed, single.loadable(), released.dev());
-        bindAdmitted(services, released, single, checking, listed, admitted);
+                : checking.admit(checking.catalog(), single.loadable(), released.dev());
+        bindAdmitted(services, released, single, admitted);
     }
 
     private static synchronized void bindAdmitted(StudioServices services, ReleasedPlugins.Split released,
-                                                  DuplicatePlugins.Split single, PluginGate checking,
-                                                  CatalogIndex listed, PluginGate.Admitted admitted) {
+                                                  DuplicatePlugins.Split single, PluginGate.Admitted admitted) {
         opening = services;
         PluginLoader.Loaded loaded = PluginLoader.openReporting(admitted.loadable());
         failures = concat(concat(concat(released.refused(), single.dropped()), admitted.refused()),
                 loaded.failures());
         PluginLoader opened = loaded.loader();
-        if (opened == null) {
-            // Not unbind(): a classpath that would not open is still a project opening, and the bundled set
-            // is about to serve it. Saying "no project" here would leave the next close with nobody to tell.
-            swap(null, BUNDLED);
-            devBuilds = List.of();
-            loadedJars = List.of();
-            serving = true;
-            return;
-        }
-        List<StudioPlugin> incoming = opened.plugins();
-        if (checking != null) {
-            PluginGate.Checked checked = checking.checkIds(listed, incoming, PluginHost::jarOf, released.dev());
-            incoming = checked.bound();
-            failures = concat(failures, checked.refused());
-        }
-        swap(opened, incoming);
+        // Not unbind() for a classpath that would not open: it is still a project opening, and saying "no project"
+        // here would leave the next close with nobody to tell.
+        swap(opened, opened == null ? List.of() : opened.plugins());
         devBuilds = bound(released.dev());
         loadedJars = loadedJars();
         serving = true;
@@ -291,31 +277,21 @@ public final class PluginHost {
     private static volatile PluginGate gate;
 
     /**
-     * Makes every later {@link #bind} ask before a community plugin loads and refuse a catalog plugin whose id is
-     * not its entry's ({@link PluginGate}). Studio calls it once at start; a host that never does binds as before.
+     * Makes every later {@link #bind} ask before a community plugin loads ({@link PluginGate}). Studio calls it
+     * once at start; a host that never does binds as before.
      */
     public static void guard(PluginGate checking) {
         gate = checking;
-    }
-
-    /** The jar {@code plugin}'s class came from, empty for one from no file. */
-    private static Optional<Path> jarOf(StudioPlugin plugin) {
-        java.net.URL where = codeSource(plugin.getClass());
-        if (where == null) return Optional.empty();
-        try {
-            return Optional.of(Path.of(where.toURI()));
-        } catch (java.net.URISyntaxException | RuntimeException e) {
-            return Optional.empty();
-        }
     }
 
     /**
      * A bound plugin and the resolved jar it came from — what the Installed tab says is <i>loaded</i>, so a
      * user can tell a dev build from a release without guessing.
      *
-     * @param jar the classpath entry, in the Maven repository layout
+     * @param coordinate the plugin's identity, its pom's {@code groupId:artifactId}
+     * @param jar        the classpath entry, in the Maven repository layout
      */
-    public record LoadedPlugin(String id, String name, String jar) {
+    public record LoadedJar(PluginCoordinate coordinate, String name, String jar) {
 
         /** The jar's version directory: {@code 1.3.1-SNAPSHOT}, {@code v1.2.3}. */
         public String version() {
@@ -327,14 +303,9 @@ public final class PluginHost {
             return ReleasedPlugins.isDevVersion(version());
         }
 
-        /** Whether the jar is {@code groupId:artifactId}'s, BotMaker's two groupIds counting as one. */
+        /** Whether this is {@code groupId:artifactId}'s plugin, BotMaker's two groupIds counting as one. */
         public boolean isOf(String groupId, String artifactId) {
-            Path artifactDir = Path.of(jar).getParent() == null ? null : Path.of(jar).getParent().getParent();
-            if (artifactDir == null || artifactDir.getFileName() == null
-                    || !artifactDir.getFileName().toString().equals(artifactId)) return false;
-            String group = groupId();
-            if (!group.isEmpty()) return DuplicatePlugins.sameArtifact(group, artifactId, groupId, artifactId);
-            return artifactDir.toString().replace('\\', '/').endsWith("/" + groupId.replace('.', '/') + "/" + artifactId);
+            return DuplicatePlugins.sameArtifact(coordinate.groupId(), coordinate.artifactId(), groupId, artifactId);
         }
 
         /** Which of BotMaker's two groupIds the jar is under, or {@code ""} for another publisher's. */
@@ -349,30 +320,21 @@ public final class PluginHost {
     }
 
     /** What the last {@link #bind} bound, each with its jar. See {@link #loaded()}. */
-    private static volatile List<LoadedPlugin> loadedJars = List.of();
+    private static volatile List<LoadedJar> loadedJars = List.of();
 
     /**
-     * Every bound plugin that came from a jar on the project's classpath, with that jar — empty before a
-     * project binds and for the bundled set. Rebuilt on every {@link #bind}.
+     * Every bound plugin that came from a jar in the Maven repository layout, with that jar — empty before a
+     * project binds. Rebuilt on every {@link #bind}.
      */
-    public static List<LoadedPlugin> loaded() {
+    public static List<LoadedJar> loaded() {
         return loadedJars;
     }
 
-    private static List<LoadedPlugin> loadedJars() {
-        List<LoadedPlugin> out = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
-            java.net.URL where = codeSource(plugin.getClass());
-            if (where == null) continue;
-            try {
-                LoadedPlugin found = new LoadedPlugin(plugin.id(), nameOf(plugin),
-                        Path.of(where.toURI()).toAbsolutePath().normalize().toString());
-                if (found.inRepository()) out.add(found);
-            } catch (java.net.URISyntaxException | RuntimeException | LinkageError e) {
-                // Not a file, or a plugin whose id() throws: nothing to say about its jar.
-            }
-        }
-        return List.copyOf(out);
+    private static List<LoadedJar> loadedJars() {
+        return plugins.stream()
+                .map(plugin -> new LoadedJar(plugin.coordinate(), plugin.name(), plugin.jar().toString()))
+                .filter(LoadedJar::inRepository)
+                .toList();
     }
 
     /**
@@ -381,24 +343,15 @@ public final class PluginHost {
      */
     private static List<String> bound(List<String> devJars) {
         if (devJars.isEmpty()) return List.of();
-        java.util.Set<String> sources = new java.util.HashSet<>();
-        for (StudioPlugin plugin : plugins) {
-            java.net.URL where = codeSource(plugin.getClass());
-            if (where == null) continue;
-            try {
-                sources.add(java.nio.file.Path.of(where.toURI()).toAbsolutePath().normalize().toString());
-            } catch (java.net.URISyntaxException | IllegalArgumentException e) {
-                // Not a file: it is no jar on the project's classpath.
-            }
-        }
+        Set<Path> sources = pluginJars();
         return devJars.stream()
-                .filter(jar -> sources.contains(java.nio.file.Path.of(jar).toAbsolutePath().normalize().toString()))
+                .filter(jar -> sources.contains(Path.of(jar).toAbsolutePath().normalize()))
                 .map(ReleasedPlugins::describe)
                 .toList();
     }
 
     /**
-     * Falls back to the bundled plugins and releases the project's jars.
+     * Binds the empty set and releases the project's jars.
      *
      * <p>Closing is required rather than tidy: an open {@code URLClassLoader} keeps every jar it read open,
      * and on Windows that makes the file unreplaceable — so a project switch that skipped this would break
@@ -406,7 +359,7 @@ public final class PluginHost {
      */
     public static synchronized void unbind() {
         opening = null;
-        swap(null, BUNDLED);
+        swap(null, List.of());
         serving = false;
         failures = List.of();
         devBuilds = List.of();
@@ -438,7 +391,7 @@ public final class PluginHost {
         return failures;
     }
 
-    private static void swap(PluginLoader opened, List<StudioPlugin> bound) {
+    private static void swap(PluginLoader opened, List<LoadedPlugin> bound) {
         Composition composed = compose(bound);
         ValueGrammar merged = composed.grammar();
         bound = composed.bound();
@@ -471,7 +424,7 @@ public final class PluginHost {
         assistantGuides = mergeAssistantGuides(bound);
         runOverlayParts = null;
         overlayParts = null;
-        pluginFiles = com.botmaker.studio.project.PluginFiles.holdersOf(bound);
+        pluginFiles = PluginFiles.holdersOf(bound);
         catalog = null;
         catalogued = null;
         shipped = new ConcurrentHashMap<>();
@@ -486,10 +439,6 @@ public final class PluginHost {
      * bind never displaced anything, so nothing has closed — and <b>before</b> the outgoing
      * {@link PluginLoader} is closed, because a plugin's release code is that plugin's own class and cannot
      * run on a dead classloader.
-     *
-     * <p>The bundled set gets it too. It is never unloaded, so it is the set holding a project's resources
-     * whenever a project's own plugins failed to bind — which is precisely when leaking them would be least
-     * noticed.
      *
      * <p>Total, like every other pass over plugin code here: one plugin that throws on the way out must not
      * stop the next plugin from being told, and must not stop the project that is opening.
@@ -506,48 +455,27 @@ public final class PluginHost {
      * every plugin that was serving one has just had {@link StudioPlugin#projectClosing()}, which is the
      * statement that it is over. A plugin holds no project between binds.
      */
-    static void openIncoming(List<StudioPlugin> incoming, StudioServices services) {
+    static void openIncoming(List<LoadedPlugin> incoming, StudioServices services) {
         if (services == null) return;
-        for (StudioPlugin plugin : incoming) {
+        for (LoadedPlugin plugin : incoming) {
             try {
-                plugin.projectOpened(services);
+                plugin.plugin().projectOpened(services);
             } catch (RuntimeException | Error e) {
-                System.err.println("Warning: plugin '" + plugin.id()
-                        + "' failed to take the opening project: " + e);
+                System.err.println("Warning: plugin " + plugin.coordinate()
+                        + " failed to take the opening project: " + e);
             }
         }
     }
 
-    static void closeOutgoing(List<StudioPlugin> outgoing) {
-        for (StudioPlugin plugin : outgoing) {
+    static void closeOutgoing(List<LoadedPlugin> outgoing) {
+        for (LoadedPlugin plugin : outgoing) {
             try {
-                plugin.projectClosing();
+                plugin.plugin().projectClosing();
             } catch (RuntimeException | Error e) {
-                System.err.println("Warning: plugin '" + plugin.id()
-                        + "' failed to release what it held for the closing project: " + e);
+                System.err.println("Warning: plugin " + plugin.coordinate()
+                        + " failed to release what it held for the closing project: " + e);
             }
         }
-    }
-
-    /**
-     * Every {@link StudioPlugin} {@code classLoader} can see, or an empty list.
-     *
-     * <p>Total by construction: a missing service file and a provider that will not instantiate are both
-     * ordinary states here — a bot's classpath legitimately carries no plugin at all — and neither may take
-     * Studio down on the way to a project screen.
-     */
-    private static List<StudioPlugin> discover(ClassLoader classLoader) {
-        List<StudioPlugin> found = new ArrayList<>();
-        try {
-            // An explicit loop, not a stream: providers instantiate lazily and one that throws must not
-            // cost the ones already found.
-            for (StudioPlugin plugin : ServiceLoader.load(StudioPlugin.class, classLoader)) {
-                found.add(plugin);
-            }
-        } catch (RuntimeException | Error e) {
-            System.err.println("Warning: could not discover bundled plugins: " + e);
-        }
-        return List.copyOf(found);
     }
 
     /**
@@ -566,12 +494,12 @@ public final class PluginHost {
      * The grammar {@code plugins} would compose if they were bound — what an upgrade reads a bot through with the
      * target jar loaded beside the bound one (2026-10-11), so a value is read and written as that jar's classes.
      */
-    public static ValueGrammar grammarOf(List<StudioPlugin> plugins) {
+    public static ValueGrammar grammarOf(List<LoadedPlugin> plugins) {
         return compose(plugins).grammar();
     }
 
     /**
-     * The loader the serving plugins came from — the open project's, or Studio's own for the bundled set. A
+     * The loader the serving plugins came from — the open project's, or Studio's own with none bound. A
      * call or a type a plugin's editor asks about is loaded here, so the {@code Class} it compares against is
      * one that plugin could have named.
      */
@@ -602,7 +530,13 @@ public final class PluginHost {
      * record — so ownership is the merge's to remember. Nothing needed it until a user had to be shown
      * <em>which</em> plugin is drawing their value; see {@link EditorContest}.
      */
-    public record OwnedEditor(String pluginId, String pluginName, SlotEditor editor) {}
+    public record OwnedEditor(PluginCoordinate plugin, String pluginName, SlotEditor editor) {
+
+        /** The plugin as a verdict names it ({@link #preferredEditorFor}): {@code groupId:artifactId}. */
+        public String pluginKey() {
+            return plugin.toString();
+        }
+    }
 
     /** Every loaded plugin's slot editors with their owner, in plugin order. */
     public static List<OwnedEditor> ownedSlotEditors() {
@@ -616,23 +550,23 @@ public final class PluginHost {
      * this is where it becomes an editor rather than the plugin listing it a second time. A plain
      * {@code PluginType} (2026-09-27) is drawn by another plugin's {@code forType} or the host's fallback.
      */
-    static List<OwnedEditor> mergeOwnedSlotEditors(List<StudioPlugin> set) {
+    static List<OwnedEditor> mergeOwnedSlotEditors(List<LoadedPlugin> set) {
         List<OwnedEditor> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
-            String name = displayNameOf(plugin);
-            List<SlotEditor> offered = quietly(plugin, "offer slot editors", plugin::slotEditors);
+        for (LoadedPlugin loaded : set) {
+            StudioPlugin plugin = loaded.plugin();
+            List<SlotEditor> offered = quietly(loaded, "offer slot editors", plugin::slotEditors);
             if (offered != null) {
                 for (SlotEditor editor : offered) {
-                    if (editor != null) merged.add(new OwnedEditor(plugin.id(), name, editor));
+                    if (editor != null) merged.add(new OwnedEditor(loaded.coordinate(), loaded.name(), editor));
                 }
             }
-            List<PluginType<?>> types = quietly(plugin, "declare types", () -> typesOf(plugin));
+            List<PluginType<?>> types = quietly(loaded, "declare types", () -> typesOf(plugin));
             if (types == null) continue;
             for (PluginType<?> type : types) {
                 if (!(type instanceof EditableType<?> drawn)) continue;   // a plain type: somebody else draws it
-                Class<?> cls = quietly(plugin, "name a type", drawn::type);
+                Class<?> cls = quietly(loaded, "name a type", drawn::type);
                 if (cls == null) continue;
-                merged.add(new OwnedEditor(plugin.id(), name,
+                merged.add(new OwnedEditor(loaded.coordinate(), loaded.name(),
                         SlotEditor.forType(cls).draw(() -> drawn::editor, () -> drawn::preview)));
             }
         }
@@ -640,31 +574,20 @@ public final class PluginHost {
     }
 
     /** A type a plugin declares, with that plugin — what the type chooser groups its list by. */
-    public record OwnedType(String pluginId, String pluginName, Class<?> type) {}
+    public record OwnedType(PluginCoordinate plugin, String pluginName, Class<?> type) {}
 
     /** Every bound plugin's declared types, in plugin order; one that throws costs only its own. */
     public static List<OwnedType> ownedTypes() {
         List<OwnedType> out = new ArrayList<>();
-        for (StudioPlugin plugin : plugins()) {
-            List<PluginType<?>> types = quietly(plugin, "declare types", () -> typesOf(plugin));
+        for (LoadedPlugin loaded : plugins()) {
+            List<PluginType<?>> types = quietly(loaded, "declare types", () -> typesOf(loaded.plugin()));
             if (types == null) continue;
-            String name = displayNameOf(plugin);
             for (PluginType<?> type : types) {
-                Class<?> cls = type == null ? null : quietly(plugin, "name a type", type::type);
-                if (cls != null) out.add(new OwnedType(plugin.id(), name, cls));
+                Class<?> cls = type == null ? null : quietly(loaded, "name a type", type::type);
+                if (cls != null) out.add(new OwnedType(loaded.coordinate(), loaded.name(), cls));
             }
         }
         return List.copyOf(out);
-    }
-
-    /** A plugin's own name for itself, falling back to its id — a plugin that throws here costs only a label. */
-    private static String displayNameOf(StudioPlugin plugin) {
-        try {
-            String name = plugin.displayName();
-            return name == null || name.isBlank() ? plugin.id() : name;
-        } catch (RuntimeException | Error e) {
-            return plugin.id();
-        }
     }
 
     private static <O, T> List<T> strip(List<O> owned, java.util.function.Function<O, T> part) {
@@ -683,7 +606,8 @@ public final class PluginHost {
     }
 
     /**
-     * The plugin id the user chose to draw {@code typeName}, or {@code null} for no verdict.
+     * The plugin coordinate ({@code groupId:artifactId}) the user chose to draw {@code typeName}, or {@code null}
+     * for no verdict.
      *
      * @param typeName the fully qualified Java type — {@code ResolvedType.qualifiedName()} on the canvas,
      *                 {@code ValueType.javaName()} in the Parameters window, which is one key space on
@@ -697,9 +621,9 @@ public final class PluginHost {
      * Every loaded plugin's toolbar items, sorted into the order the bar draws them.
      *
      * <p>Sorted here rather than at render time because the order is a property of the <em>set</em>, not of
-     * the bar: group first, then the item's own {@code order}, then the contributing plugin's id. That last
-     * tie-break is what stops a bar built from two plugins depending on which one {@code ServiceLoader}
-     * happened to find first — the same reasoning that makes the value catalog refuse a clash instead of
+     * the bar: group first, then the item's own {@code order}, then the contributing plugin's coordinate. That
+     * last tie-break is what stops a bar built from two plugins depending on which one the loader happened to
+     * find first — the same reasoning that makes the value catalog refuse a clash instead of
      * letting the winner be decided by load order.
      *
      * <p>Studio's own items are <b>not</b> here. They are added by the toolbar itself, which is why
@@ -760,7 +684,7 @@ public final class PluginHost {
     }
 
     /** A run overlay part with the plugin that offered it. */
-    public record OwnedPart(String pluginId, RunOverlayPart part) {}
+    public record OwnedPart(PluginCoordinate plugin, RunOverlayPart part) {}
 
     /** Built on first ask after each bind, since listing parts loads the plugins' JavaFX classes. */
     private static volatile List<OwnedPart> runOverlayParts;
@@ -787,15 +711,15 @@ public final class PluginHost {
         return leastReady(plugins);
     }
 
-    static Optional<Readiness> leastReady(List<StudioPlugin> set) {
+    static Optional<Readiness> leastReady(List<LoadedPlugin> set) {
         Readiness least = null;
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             Optional<Readiness> said;
             try {
-                said = plugin.readiness();
+                said = plugin.plugin().readiness();
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it has nothing to say.
-                System.err.println("Warning: " + plugin.id() + " could not say whether the bot can start: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not say whether the bot can start: " + e);
                 continue;
             }
             if (said == null || said.isEmpty()) continue;
@@ -804,28 +728,28 @@ public final class PluginHost {
         return Optional.ofNullable(least);
     }
 
-    static List<OwnedPart> mergeRunOverlayParts(List<StudioPlugin> set) {
+    static List<OwnedPart> mergeRunOverlayParts(List<LoadedPlugin> set) {
         List<OwnedPart> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             List<RunOverlayPart> offered;
             try {
-                offered = plugin.runOverlayParts();
+                offered = plugin.plugin().runOverlayParts();
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply draws nothing.
-                System.err.println("Warning: " + plugin.id() + " could not offer run overlay parts: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not offer run overlay parts: " + e);
                 continue;
             }
             if (offered == null) continue;
             Set<String> ids = new LinkedHashSet<>();
             for (RunOverlayPart part : offered) {
-                if (part != null && ids.add(part.id())) merged.add(new OwnedPart(plugin.id(), part));
+                if (part != null && ids.add(part.id())) merged.add(new OwnedPart(plugin.coordinate(), part));
             }
         }
         return List.copyOf(merged);
     }
 
     /** An overlay editor part with the plugin that declared it. */
-    public record OwnedOverlay(String pluginId, String pluginName, OverlayPart part) {}
+    public record OwnedOverlay(PluginCoordinate plugin, String pluginName, OverlayPart part) {}
 
     /** Built on first ask after each bind, since a part's supplier loads the plugin's JavaFX classes. */
     private static volatile List<OwnedOverlay> overlayParts;
@@ -843,25 +767,25 @@ public final class PluginHost {
         return parts;
     }
 
-    static List<OwnedOverlay> mergeOverlayParts(List<StudioPlugin> set) {
+    static List<OwnedOverlay> mergeOverlayParts(List<LoadedPlugin> set) {
         List<OwnedOverlay> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             Optional<OverlayPart> offered;
             try {
-                offered = plugin.overlayPart();
+                offered = plugin.plugin().overlayPart();
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply adds nothing.
-                System.err.println("Warning: " + plugin.id() + " could not offer an overlay part: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not offer an overlay part: " + e);
                 continue;
             }
             if (offered == null || offered.isEmpty() || offered.get().isEmpty()) continue;
-            merged.add(new OwnedOverlay(plugin.id(), plugin.displayName(), offered.get()));
+            merged.add(new OwnedOverlay(plugin.coordinate(), plugin.name(), offered.get()));
         }
         return List.copyOf(merged);
     }
 
     /** An assistant tool with the plugin that offered it. */
-    public record OwnedTool(String pluginId, String pluginName, com.botmaker.plugin.api.assist.AssistantTool<?> tool) {}
+    public record OwnedTool(PluginCoordinate plugin, String pluginName, AssistantTool<?> tool) {}
 
     private static volatile List<OwnedTool> assistantTools = List.of();
 
@@ -880,43 +804,43 @@ public final class PluginHost {
         return assistantGuides;
     }
 
-    static List<OwnedGuide> mergeAssistantGuides(List<StudioPlugin> set) {
+    static List<OwnedGuide> mergeAssistantGuides(List<LoadedPlugin> set) {
         List<OwnedGuide> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             try {
-                String text = plugin.assistantGuide();
-                if (text != null && !text.isBlank()) merged.add(new OwnedGuide(plugin.displayName(), text.strip()));
+                String text = plugin.plugin().assistantGuide();
+                if (text != null && !text.isBlank()) merged.add(new OwnedGuide(plugin.name(), text.strip()));
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply says nothing.
-                System.err.println("Warning: " + plugin.id() + " could not give its assistant guide: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not give its assistant guide: " + e);
             }
         }
         return List.copyOf(merged);
     }
 
-    static List<OwnedTool> mergeAssistantTools(List<StudioPlugin> set) {
+    static List<OwnedTool> mergeAssistantTools(List<LoadedPlugin> set) {
         List<OwnedTool> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             try {
-                List<com.botmaker.plugin.api.assist.AssistantTool<?>> offered = plugin.assistantTools();
+                List<AssistantTool<?>> offered = plugin.plugin().assistantTools();
                 if (offered == null) continue;
                 for (var tool : offered) {
-                    if (tool != null) merged.add(new OwnedTool(plugin.id(), plugin.displayName(), tool));
+                    if (tool != null) merged.add(new OwnedTool(plugin.coordinate(), plugin.name(), tool));
                 }
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply offers none.
-                System.err.println("Warning: " + plugin.id() + " could not list assistant tools: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not list assistant tools: " + e);
             }
         }
         return List.copyOf(merged);
     }
 
     /** Every plugin's entries, a throwing or malformed one costing only itself. */
-    static List<ManagedValue<?>> mergeManagedValues(List<StudioPlugin> set) {
+    static List<ManagedValue<?>> mergeManagedValues(List<LoadedPlugin> set) {
         List<ManagedValue<?>> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             try {
-                List<ManagedValue<?>> offered = plugin.managedValues();
+                List<ManagedValue<?>> offered = plugin.plugin().managedValues();
                 if (offered == null) continue;
                 for (ManagedValue<?> value : offered) {
                     if (value != null && value.id() != null && !value.id().isBlank()) {
@@ -925,16 +849,16 @@ public final class PluginHost {
                 }
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it simply manages nothing.
-                System.err.println("Warning: " + plugin.id() + " could not list managed values: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not list managed values: " + e);
             }
         }
         return List.copyOf(merged);
     }
 
     // Package-private rather than private: the three rules below — the STUDIO refusal, the sort's tie-break
-    // on the plugin id, and a throwing plugin costing only itself — have no visible symptom when they are
-    // wrong. A bar in a slightly different order looks like somebody's preference, not like a bug.
-    static List<ToolbarItem> mergeToolbarItems(List<StudioPlugin> set) {
+    // on the plugin's coordinate, and a throwing plugin costing only itself — have no visible symptom when they
+    // are wrong. A bar in a slightly different order looks like somebody's preference, not like a bug.
+    static List<ToolbarItem> mergeToolbarItems(List<LoadedPlugin> set) {
         return mergeOwnedToolbarItems(set).stream().map(OwnedItem::item).toList();
     }
 
@@ -942,7 +866,7 @@ public final class PluginHost {
      * A toolbar item with the plugin that offered it — what lets the bar draw one section per plugin
      * (2026-09-26) rather than mixing every plugin's buttons into the host's four groups.
      */
-    public record OwnedItem(String pluginId, String pluginName, ToolbarItem item) {}
+    public record OwnedItem(PluginCoordinate plugin, String pluginName, ToolbarItem item) {}
 
     /** Every loaded plugin's toolbar items with their owner, in {@link #toolbarItems()}' order. */
     public static List<OwnedItem> ownedToolbarItems() {
@@ -950,31 +874,31 @@ public final class PluginHost {
     }
 
     /** {@link #mergeToolbarItems}, keeping the owner. */
-    static List<OwnedItem> mergeOwnedToolbarItems(List<StudioPlugin> set) {
+    static List<OwnedItem> mergeOwnedToolbarItems(List<LoadedPlugin> set) {
         List<OwnedItem> merged = new ArrayList<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin plugin : set) {
             List<ToolbarItem> offered;
             try {
-                offered = plugin.toolbarItems();
+                offered = plugin.plugin().toolbarItems();
             } catch (RuntimeException | Error e) {
                 // A plugin that cannot list its buttons must not cost the ones that can, nor the project.
-                System.err.println("Warning: " + plugin.id() + " could not offer toolbar items: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not offer toolbar items: " + e);
                 continue;
             }
             if (offered == null) continue;
             for (ToolbarItem item : offered) {
                 if (item == null || item.label() == null || item.onClick() == null) continue;
                 if (item.group() == ToolbarGroup.STUDIO) {
-                    System.err.println("Warning: " + plugin.id() + " asked for the STUDIO toolbar group with '"
+                    System.err.println("Warning: " + plugin.coordinate() + " asked for the STUDIO toolbar group with '"
                             + item.id() + "'; that group is the host's own and the item is dropped.");
                     continue;
                 }
-                merged.add(new OwnedItem(plugin.id(), displayNameOf(plugin), item));
+                merged.add(new OwnedItem(plugin.coordinate(), plugin.name(), item));
             }
         }
         merged.sort(Comparator.comparing((OwnedItem o) -> o.item().group())
                 .thenComparingInt(o -> o.item().order())
-                .thenComparing(OwnedItem::pluginId));
+                .thenComparing(o -> o.plugin().toString()));
         return List.copyOf(merged);
     }
 
@@ -1015,11 +939,11 @@ public final class PluginHost {
      * plugin's contribution and nobody else's. It is a printed line rather than a dialog because the window
      * that asked has a section to draw and a user in front of it.
      */
-    private static <T> T quietly(StudioPlugin plugin, String what, Supplier<T> call) {
+    private static <T> T quietly(LoadedPlugin plugin, String what, Supplier<T> call) {
         try {
             return call.get();
         } catch (RuntimeException | LinkageError e) {
-            System.err.println("Warning: plugin " + plugin.id() + " failed to " + what + ": " + e);
+            System.err.println("Warning: plugin " + plugin.coordinate() + " failed to " + what + ": " + e);
             return null;
         }
     }
@@ -1032,7 +956,7 @@ public final class PluginHost {
      * @param bound    {@code set} minus whatever could not compose, in the same order
      * @param rejected one entry per plugin left out, in the shape {@link #failures()} already reports
      */
-    record Composition(ValueGrammar grammar, List<StudioPlugin> bound,
+    record Composition(ValueGrammar grammar, List<LoadedPlugin> bound,
                        List<PluginLoader.PluginFailure> rejected) {
     }
 
@@ -1049,39 +973,40 @@ public final class PluginHost {
      * <p>Total, like every other pass over plugin code here: a plugin whose {@code types()} or
      * {@code componentTypes()} throws is a rejection and not a failed bind.
      */
-    static Composition compose(List<StudioPlugin> set) {
+    static Composition compose(List<LoadedPlugin> set) {
         List<PluginType<?>> types = new ArrayList<>();
         List<ComponentType<?>> components = new ArrayList<>();
-        List<StudioPlugin> kept = new ArrayList<>();
+        List<LoadedPlugin> kept = new ArrayList<>();
         List<PluginLoader.PluginFailure> rejected = new ArrayList<>();
         Map<String, String> claimedBy = new HashMap<>();
-        for (StudioPlugin plugin : set) {
+        for (LoadedPlugin loaded : set) {
+            StudioPlugin plugin = loaded.plugin();
             List<PluginType<?>> offered;
             List<ComponentType<?>> parts;
             List<String> names = new ArrayList<>();
             try {
                 offered = typesOf(plugin);
                 for (String problem : FilledTypes.of(plugin).problems()) {
-                    System.err.println("Warning: plugin " + plugin.id() + ": " + problem);
+                    System.err.println("Warning: plugin " + loaded.coordinate() + ": " + problem);
                 }
                 parts = plugin.componentTypes();
                 if (offered != null) {
                     for (PluginType<?> type : offered) if (type != null) names.add(JavaNames.canonical(type.type()));
                 }
             } catch (RuntimeException | LinkageError e) {
-                rejected.add(new PluginLoader.PluginFailure(plugin.id(), e));
+                rejected.add(new PluginLoader.PluginFailure(loaded.name(), e));
                 continue;
             }
             List<String> clashes = names.stream().filter(claimedBy::containsKey).distinct().toList();
             if (!clashes.isEmpty()) {
-                rejected.add(new PluginLoader.PluginFailure(plugin.id(),
+                rejected.add(new PluginLoader.PluginFailure(loaded.name(),
                         new IllegalStateException(clashMessage(clashes, claimedBy))));
                 continue;
             }
-            for (String name : names) claimedBy.putIfAbsent(name, plugin.id());
+            for (String name : names) claimedBy.putIfAbsent(name, loaded.name());
             if (offered != null) offered.stream().filter(t -> t != null).forEach(types::add);
             if (parts != null) parts.stream().filter(c -> c != null).forEach(components::add);
-            kept.add(plugin);
+            kept.add(loaded);
         }
         return new Composition(ValueGrammar.of(types, components), List.copyOf(kept), List.copyOf(rejected));
     }
@@ -1220,17 +1145,9 @@ public final class PluginHost {
      * {@code Debug} and {@code BotSettings} came back through "Java &amp; Libraries" once the class dropdown
      * stopped listing them).
      */
-    public static Set<java.nio.file.Path> pluginJars() {
-        Set<java.nio.file.Path> jars = new LinkedHashSet<>();
-        for (StudioPlugin plugin : plugins) {
-            java.net.URL where = codeSource(plugin.getClass());
-            if (where == null) continue;
-            try {
-                jars.add(java.nio.file.Path.of(where.toURI()).toAbsolutePath().normalize());
-            } catch (java.net.URISyntaxException | IllegalArgumentException | java.nio.file.FileSystemNotFoundException e) {
-                // A plugin from somewhere that is not a file owns no library entry to hide.
-            }
-        }
+    public static Set<Path> pluginJars() {
+        Set<Path> jars = new LinkedHashSet<>();
+        for (LoadedPlugin plugin : plugins) jars.add(plugin.jar());
         return jars;
     }
 
@@ -1256,10 +1173,10 @@ public final class PluginHost {
         });
     }
 
-    private static PaletteCatalog merge(List<StudioPlugin> set) {
+    private static PaletteCatalog merge(List<LoadedPlugin> set) {
         PaletteCatalog merged = PaletteCatalog.empty();
-        for (StudioPlugin plugin : set) {
-            PaletteCatalog offered = quietly(plugin, "build its palette", () -> Palettes.of(plugin));
+        for (LoadedPlugin plugin : set) {
+            PaletteCatalog offered = quietly(plugin, "build its palette", () -> Palettes.of(plugin.plugin()));
             if (offered != null) merged = merged.mergedWith(offered);
         }
         return merged;

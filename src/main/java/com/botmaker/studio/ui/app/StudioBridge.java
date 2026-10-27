@@ -44,7 +44,7 @@ import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.trial.Trials;
-import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
@@ -677,9 +677,9 @@ final class StudioBridge implements StudioDriver {
                     : !plugin.available().isBlank() && !plugin.available().equals(version)
                     ? "  (the registry checked " + plugin.available() + ")" : ""));
         }
-        List<StudioPlugin> bound = PluginHost.plugins();
+        List<LoadedPlugin> bound = PluginHost.plugins();
         lines.add(bound.isEmpty() ? "No plugin is loaded." : "Loaded: "
-                + String.join(", ", bound.stream().map(StudioPlugin::displayName).toList()) + ".");
+                + String.join(", ", bound.stream().map(LoadedPlugin::name).toList()) + ".");
         String failed = PluginsWindow.failureText(PluginHost.failures());
         if (!failed.isEmpty()) lines.add(failed);
         return String.join("\n", lines);
@@ -693,7 +693,7 @@ final class StudioBridge implements StudioDriver {
         List<String> lines = new ArrayList<>();
         for (PluginRegistry.Plugin plugin : entries) {
             if (!plugin.matches(query) || !plugin.isInstallable()) continue;
-            lines.add(plugin.id() + "  " + plugin.name()
+            lines.add(plugin.coordinate() + "  " + plugin.name()
                     + (plugin.version().isBlank() ? "" : " " + plugin.version())
                     + (plugin.isInstalledIn(declared) ? "  (in the bot)" : "")
                     + (plugin.description().isBlank() ? "" : " — " + plugin.description().strip()));
@@ -706,11 +706,11 @@ final class StudioBridge implements StudioDriver {
         List<PluginRegistry.Plugin> entries = registryEntries();
         if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
         PluginRegistry.Plugin plugin = registryPlugin(entries, id);
-        String name = plugin.name().isBlank() ? plugin.id() : plugin.name();
+        String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
         List<UserLibrary> declared = ctx.libraryService().declaredLibraries();
         if (plugin.isInstalledIn(declared)) throw new IllegalArgumentException(name + " is in the bot already.");
         String provided = BrowsePluginsTab.alreadyProvided(plugin, declared,
-                PluginHost.plugins().stream().map(StudioPlugin::id).toList());
+                PluginHost.plugins().stream().map(LoadedPlugin::coordinate).toList());
         if (!provided.isEmpty()) throw new IllegalArgumentException(provided);
         String version = plugin.version();
         if (version.isBlank()) {
@@ -1337,11 +1337,12 @@ final class StudioBridge implements StudioDriver {
         return String.join("\n", lines);
     }
 
-    /** The installable registry plugin {@code id} names — by its id, name or artifactId. */
+    /** The installable registry plugin {@code id} names — by its coordinate, repo, name or artifactId. */
     private static PluginRegistry.Plugin registryPlugin(List<PluginRegistry.Plugin> entries, String id) {
         String wanted = id == null ? "" : id.strip();
         return entries.stream().filter(PluginRegistry.Plugin::isInstallable)
-                .filter(p -> p.id().equalsIgnoreCase(wanted) || p.name().equalsIgnoreCase(wanted)
+                .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.repo().equalsIgnoreCase(wanted)
+                        || p.name().equalsIgnoreCase(wanted)
                         || p.artifactId().equalsIgnoreCase(wanted))
                 .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
                         + ". plugins search lists them."));
@@ -1407,7 +1408,7 @@ final class StudioBridge implements StudioDriver {
             List<PluginRegistry.Plugin> entries = registryEntries();
             if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
             picks = plugins.stream().map(id -> registryPlugin(entries, id)).toList();
-            String names = String.join(", ", picks.stream().map(p -> p.name().isBlank() ? p.id() : p.name()).toList());
+            String names = String.join(", ", picks.stream().map(p -> p.name().isBlank() ? p.coordinate() : p.name()).toList());
             if (!userAgrees("Create a project with plugins?", "The assistant wants to create " + wanted + " with "
                     + names + ".\n\nA plugin runs with Studio's own permissions. Catalog plugins are checked by "
                     + "machine for loading, never reviewed for safety.")) {
@@ -1713,9 +1714,9 @@ final class StudioBridge implements StudioDriver {
     public List<PluginTool> pluginTools() {
         List<PluginTool> out = new ArrayList<>();
         for (PluginHost.OwnedTool owned : PluginHost.assistantTools()) {
-            String segment = ManagedHolders.segment(owned.pluginId());
+            String segment = ManagedHolders.segment(owned.plugin());
             if (segment == null) {
-                System.err.println("Warning: " + owned.pluginId() + "'s assistant tools have no name to be served under.");
+                System.err.println("Warning: " + owned.plugin() + "'s assistant tools have no name to be served under.");
                 continue;
             }
             out.add(new PluginTool(segment + "_" + owned.tool().name(), owned.pluginName(), owned.tool()));

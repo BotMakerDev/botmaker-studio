@@ -19,8 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginRegistryTest {
 
     private static final String CATALOG = """
-            {"schemaVersion": 4, "plugins": [ {
-              "id" : "com.example.discord",
+            {"schemaVersion": 5, "plugins": [ {
               "name" : "Discord Notifier",
               "repo" : "someone/botmaker-discord-plugin",
               "rank" : "community",
@@ -39,7 +38,7 @@ class PluginRegistryTest {
     void a_row_reads_back_whole_and_installs_its_tag() {
         PluginRegistry.Plugin plugin = discord();
 
-        assertEquals("com.example.discord", plugin.id());
+        assertEquals("someone/botmaker-discord-plugin", plugin.repo());
         assertEquals("com.github.someone", plugin.groupId());
         assertEquals("botmaker-discord-plugin", plugin.artifactId());
         assertEquals("v0.1.0", plugin.tag());
@@ -72,7 +71,7 @@ class PluginRegistryTest {
     /** BotMaker's former groupId is the same plugin: offering it again under the new one declared it twice. */
     @Test
     void installed_counts_botmakers_former_group_id() {
-        PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("com.botmaker.sdk", "SDK",
+        PluginRegistry.Plugin sdk = new PluginRegistry.Plugin("SDK",
                 "com.github.BotMakerDev:botmaker-sdk", "", "", List.of(), "", List.of(), "1.3.0");
 
         assertTrue(sdk.isInstalledIn(List.of(new UserLibrary("com.github.LiQiyeDev", "botmaker-sdk", "v1.2.3"))));

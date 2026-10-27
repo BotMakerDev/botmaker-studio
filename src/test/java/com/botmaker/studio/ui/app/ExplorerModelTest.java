@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.plugin.TestPlugins;
 import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import com.botmaker.studio.project.vcs.ProjectVcs;
@@ -60,7 +61,7 @@ class ExplorerModelTest {
         assertEquals(ExplorerModel.Kind.ENTRY_POINT, ExplorerModel.kindOf(main, "class MyBot {}", main));
         assertEquals(ExplorerModel.Kind.PARAMETERS,
                 ExplorerModel.kindOf(pkg.resolve("Parameters.java"), "@Param(min = 1) static int x = 2;", main));
-        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Sdk"));
+        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Sdk"));
         assertEquals(ExplorerModel.Kind.PLUGIN_FILE,
                 ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main, sdk),
                 "a plugin's file is that before it is anything else");

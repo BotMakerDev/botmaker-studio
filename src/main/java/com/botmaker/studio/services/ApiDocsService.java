@@ -1,6 +1,6 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.plugin.api.StudioPlugin;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.ApiDocsParser;
@@ -10,10 +10,8 @@ import com.botmaker.studio.project.ProjectConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.CodeSource;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -89,17 +87,11 @@ public final class ApiDocsService {
     }
 
     /** The jar each plugin's class was loaded from. A plugin loaded from a directory (a test) has none. */
-    static Set<Path> pluginJars(List<StudioPlugin> plugins) {
+    static Set<Path> pluginJars(List<LoadedPlugin> plugins) {
         Set<Path> jars = new LinkedHashSet<>();
-        for (StudioPlugin plugin : plugins) {
-            CodeSource source = plugin.getClass().getProtectionDomain().getCodeSource();
-            if (source == null || source.getLocation() == null) continue;
-            try {
-                Path path = Path.of(source.getLocation().toURI());
-                if (Files.isRegularFile(path) && path.toString().endsWith(".jar")) jars.add(path);
-            } catch (URISyntaxException | IllegalArgumentException e) {
-                // Not a file on disk; nothing to find sources beside.
-            }
+        for (LoadedPlugin plugin : plugins) {
+            Path path = plugin.jar();
+            if (Files.isRegularFile(path) && path.toString().endsWith(".jar")) jars.add(path);
         }
         return Set.copyOf(jars);
     }

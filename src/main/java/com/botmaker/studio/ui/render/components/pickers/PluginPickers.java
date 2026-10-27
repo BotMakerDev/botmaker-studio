@@ -62,7 +62,7 @@ final class PluginPickers {
         }
         String typeName = ctx.paramType() == null ? null : ctx.paramType().qualifiedName();
         for (PluginHost.OwnedEditor owned : EditorContest.ordered(
-                claimants, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName))) {
+                claimants, PluginHost.OwnedEditor::pluginKey, PluginHost.preferredEditorFor(typeName))) {
             try {
                 Node node = owned.editor().preview(context);
                 if (node != null) return node;
@@ -109,7 +109,7 @@ final class PluginPickers {
 
         String typeName = ctx.paramType() == null ? null : ctx.paramType().qualifiedName();
         List<PluginHost.OwnedEditor> ordered = EditorContest.ordered(
-                claimants, PluginHost.OwnedEditor::pluginId, PluginHost.preferredEditorFor(typeName));
+                claimants, PluginHost.OwnedEditor::pluginKey, PluginHost.preferredEditorFor(typeName));
 
         for (PluginHost.OwnedEditor owned : ordered) {
             Node node;
@@ -122,7 +122,7 @@ final class PluginPickers {
                 continue;
             }
             if (node == null) continue;
-            if (ordered.size() > 1) offerTheOthers(node, typeName, ordered, owned.pluginId(), ctx);
+            if (ordered.size() > 1) offerTheOthers(node, typeName, ordered, owned.pluginKey(), ctx);
             return node;
         }
         return null;
@@ -142,11 +142,11 @@ final class PluginPickers {
 
         List<EditorContest.Claim> claims = new ArrayList<>();
         for (PluginHost.OwnedEditor owned : ordered) {
-            claims.add(new EditorContest.Claim(owned.pluginId(), owned.pluginName()));
+            claims.add(new EditorContest.Claim(owned.pluginKey(), owned.pluginName()));
         }
-        EditorContest.arm(node, EditorContest.menu(typeName, claims, drawing, pluginId -> {
+        EditorContest.arm(node, EditorContest.menu(typeName, claims, drawing, plugin -> {
             ProjectSettingsService settings = ProjectSettingsService.forProject(ctx.context());
-            settings.update(settings.current().withPreferredEditor(typeName, pluginId))
+            settings.update(settings.current().withPreferredEditor(typeName, plugin))
                     .thenRun(() -> Platform.runLater(ctx.context()::rerenderActiveFile));
         }));
     }

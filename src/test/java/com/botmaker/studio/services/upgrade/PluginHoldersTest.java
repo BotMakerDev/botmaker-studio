@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.upgrade;
 
+import com.botmaker.studio.plugin.TestPlugins;
 import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -18,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginHoldersTest {
 
     private static final List<PluginFiles.Holder> SDK = List.of(
-            new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Sdk"),
-            new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Pictures"));
+            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Sdk"),
+            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Pictures"));
 
     @TempDir
     Path root;
@@ -81,7 +82,7 @@ class PluginHoldersTest {
         ProjectConfig config = project();
 
         PluginHolders holders = PluginHolders.of(config, new ProjectState(),
-                List.of(new PluginFiles.Holder("com.other.basics", "Basics", "basics", "Basics")));
+                List.of(new PluginFiles.Holder(TestPlugins.coordinate("basics"),"Basics", "basics", "Basics")));
 
         assertTrue(holders.isEmpty());
     }

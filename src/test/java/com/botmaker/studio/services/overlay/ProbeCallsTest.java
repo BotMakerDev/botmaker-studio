@@ -1,6 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
+import com.botmaker.studio.plugin.TestPlugins;
 import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
@@ -57,7 +58,7 @@ class ProbeCallsTest {
                         Math.abs(Integer.parseInt("9"));
                     }
                 }""");
-        declared = List.of(new ProbeCalls.Declared("test", new OverlayPart.ProbedCall(
+        declared = List.of(new ProbeCalls.Declared(TestPlugins.coordinate("test"),new OverlayPart.ProbedCall(
                 Integer.class.getMethod("parseInt", String.class), context -> ProbeResult.unknown("probed"))));
     }
 

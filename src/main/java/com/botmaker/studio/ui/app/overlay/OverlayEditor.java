@@ -11,6 +11,7 @@ import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.Pressed;
 import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
@@ -130,8 +131,8 @@ public final class OverlayEditor {
     private final ArgumentConfigPopover config;
     private final Label status = new Label();
     private final CheckBox autoFillArgs = new CheckBox("Fill arguments after adding");
-    /** Each plugin's tool context for this opening, by plugin id; closed with the panel. */
-    private final Map<String, ToolContext> toolContexts = new HashMap<>();
+    /** Each plugin's tool context for this opening, by plugin coordinate; closed with the panel. */
+    private final Map<PluginCoordinate, ToolContext> toolContexts = new HashMap<>();
 
     private CodeBlock root;
     /** {@link #root}'s one-walk structural index, rebuilt lazily by {@link #index()} when the tree changes. */
@@ -282,7 +283,7 @@ public final class OverlayEditor {
             try {
                 owned.part().watchedFor(ask).ifPresent(said::add);
             } catch (RuntimeException | LinkageError e) {
-                System.err.println("Warning: " + owned.pluginId() + " could not say what the bot watches: " + e);
+                System.err.println("Warning: " + owned.plugin() + " could not say what the bot watches: " + e);
             }
         }
         return said;
@@ -300,7 +301,7 @@ public final class OverlayEditor {
                 Optional<OverlayPart.FrameSource> frames = owned.part().framesFor(ask);
                 if (frames.isPresent()) return frames.get();
             } catch (RuntimeException | LinkageError e) {
-                System.err.println("Warning: " + owned.pluginId() + " could not say where the bot's frames come from: " + e);
+                System.err.println("Warning: " + owned.plugin() + " could not say where the bot's frames come from: " + e);
             }
         }
         return null;
@@ -697,8 +698,8 @@ public final class OverlayEditor {
 
     // ── the tools ───────────────────────────────────────────────────────────────────────────────────────
 
-    private ToolContext toolContext(String pluginId) {
-        return toolContexts.computeIfAbsent(pluginId, id -> new ToolContext(services, () -> watched,
+    private ToolContext toolContext(PluginCoordinate plugin) {
+        return toolContexts.computeIfAbsent(plugin, key -> new ToolContext(services, () -> watched,
                 this::insertCall, this::status, new BotPixelMarks(layer.marks(), () -> watched)));
     }
 

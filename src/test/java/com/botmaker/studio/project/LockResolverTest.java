@@ -1,6 +1,7 @@
 package com.botmaker.studio.project;
 
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import com.botmaker.studio.project.managed.TestValue;
 import org.eclipse.jdt.core.dom.AST;
@@ -290,7 +291,8 @@ class LockResolverTest {
      */
     @Test
     void aLoadedPluginsFileIsTheWholeFileLocked() {
-        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder("com.botmaker.sdk", "SDK", "sdk", "Sdk"));
+        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(
+                new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk"), "SDK", "sdk", "Sdk"));
         Path plugins = CONFIG.mainPackageDir().resolve("plugins").resolve("sdk");
 
         LockResolver.Managed managed = new LockResolver(CONFIG, plugins.resolve("Sdk.java")).managed(sdk);

@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.EditableType;
 import com.botmaker.plugin.api.value.PluginType;
+import com.botmaker.plugin.host.LoadedPlugin;
 import javafx.scene.Node;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
@@ -44,21 +45,17 @@ class PluginCompositionTest {
         };
     }
 
-    private static StudioPlugin plugin(String id, Class<?>... types) {
+    private static LoadedPlugin plugin(String id, Class<?>... types) {
         List<PluginType<?>> declarations = new ArrayList<>();
         for (Class<?> type : types) declarations.add(declared(type));
-        return new StudioPlugin() {
-            @Override public String id() { return id; }
-            @Override public List<PluginType<?>> types() { return List.copyOf(declarations); }
-        };
+        return TestPlugins.loaded(id, StudioPlugin.declare().types(() -> List.copyOf(declarations)));
     }
 
     /** A plugin whose own declarations throw — a broken build, not a clash. Rejected the same way. */
-    private static StudioPlugin throwing(String id) {
-        return new StudioPlugin() {
-            @Override public String id() { return id; }
-            @Override public List<PluginType<?>> types() { throw new IllegalStateException("no types here"); }
-        };
+    private static LoadedPlugin throwing(String id) {
+        return TestPlugins.loaded(id, StudioPlugin.declare().types(() -> {
+            throw new IllegalStateException("no types here");
+        }));
     }
 
     record Channel(String name) {}
@@ -67,9 +64,9 @@ class PluginCompositionTest {
 
     @Test
     void twoPluginsDeclaringOneTypeCostOnlyTheSecondOne() {
-        StudioPlugin sdk = plugin("com.botmaker.sdk", Duration.class, Image.class);
-        StudioPlugin basics = plugin("com.botmaker.basics", Duration.class, String.class);
-        StudioPlugin other = plugin("com.example.other", Channel.class);
+        LoadedPlugin sdk = plugin("com.botmaker.sdk", Duration.class, Image.class);
+        LoadedPlugin basics = plugin("com.botmaker.basics", Duration.class, String.class);
+        LoadedPlugin other = plugin("com.example.other", Channel.class);
 
         PluginHost.Composition composed = PluginHost.compose(List.of(sdk, basics, other));
 
@@ -97,7 +94,7 @@ class PluginCompositionTest {
 
     @Test
     void aPluginWhoseOwnDeclarationsThrowIsRejectedAndTheRestStillBind() {
-        StudioPlugin good = plugin("com.example.good", Channel.class);
+        LoadedPlugin good = plugin("com.example.good", Channel.class);
 
         PluginHost.Composition composed = PluginHost.compose(List.of(throwing("com.example.broken"), good));
 
@@ -128,10 +125,8 @@ class PluginCompositionTest {
             @Override public List<Object> components(Channel value) { return List.of(value.name()); }
             @Override public Channel build(List<Object> parts) { return new Channel((String) parts.getFirst()); }
         };
-        StudioPlugin plugin = new StudioPlugin() {
-            @Override public String id() { return "com.example.chat"; }
-            @Override public List<ComponentType<?>> componentTypes() { return List.of(channel); }
-        };
+        LoadedPlugin plugin = TestPlugins.loaded("com.example.chat",
+                StudioPlugin.declare().parts(() -> List.of(channel)));
 
         PluginHost.Composition composed = PluginHost.compose(List.of(plugin));
 
@@ -146,12 +141,12 @@ class PluginCompositionTest {
      */
     @Test
     void aDeclaredTypeBecomesASlotEditorAfterThePluginsOwn() {
-        StudioPlugin plugin = plugin("com.example.chat", Channel.class);
+        LoadedPlugin plugin = plugin("com.example.chat", Channel.class);
 
         List<PluginHost.OwnedEditor> editors = PluginHost.mergeOwnedSlotEditors(List.of(plugin));
 
         assertEquals(1, editors.size());
-        assertEquals("com.example.chat", editors.getFirst().pluginId());
+        assertEquals(TestPlugins.coordinate("com.example.chat"), editors.getFirst().plugin());
     }
 
     /** A plain PluginType says its owner does not draw it (6f): the host makes no owner editor of it. */
@@ -161,10 +156,8 @@ class PluginCompositionTest {
             @Override public Class<Channel> type() { return Channel.class; }
             @Override public Channel fresh() { return null; }
         };
-        StudioPlugin plugin = new StudioPlugin() {
-            @Override public String id() { return "com.example.chat"; }
-            @Override public List<PluginType<?>> types() { return List.of(plain); }
-        };
+        LoadedPlugin plugin = TestPlugins.loaded("com.example.chat",
+                StudioPlugin.declare().types(() -> List.of(plain)));
 
         assertEquals(List.of(), PluginHost.mergeOwnedSlotEditors(List.of(plugin)));
     }

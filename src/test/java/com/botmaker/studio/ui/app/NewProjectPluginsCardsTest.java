@@ -28,11 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** New Project's plugin cards (2026-10-24): the ✓ toggles, a locked card says who gives it and is no pick. */
 class NewProjectPluginsCardsTest extends FxHeadlessTest {
 
-    private static final PluginRegistry.Plugin SDK = new PluginRegistry.Plugin("sdk", "BotMaker SDK",
+    private static final PluginRegistry.Plugin SDK = new PluginRegistry.Plugin("BotMaker SDK",
             "com.github.BotMakerDev:botmaker-sdk", "BotMakerDev/botmaker-sdk", "The SDK.", null, null, null, "",
             "v2.0.0", PublisherRank.ADMIN, 5, List.of(new Catalog.Plugin.Release("v2.0.0", null, null, null, null,
-            null, List.of(new DerivedFacts.Pin("basics", "v0.2.0")))));
-    private static final PluginRegistry.Plugin BASICS = new PluginRegistry.Plugin("basics", "Basics",
+            null, List.of(new DerivedFacts.Pin("BotMakerDev/botmaker-plugin-basics", "v0.2.0")))));
+    private static final PluginRegistry.Plugin BASICS = new PluginRegistry.Plugin("Basics",
             "com.github.BotMakerDev:botmaker-plugin-basics", "BotMakerDev/botmaker-plugin-basics", "", null, null,
             null, "", "v0.2.0", PublisherRank.ADMIN, 1);
 
@@ -96,7 +96,7 @@ class NewProjectPluginsCardsTest extends FxHeadlessTest {
     @Test
     void aBotsOwnPluginIsUsedByIt() {
         GalleryEntry firestone = new GalleryEntry("firestone", "LiQiyeDev", "Firestone", "", List.of(), "", "1.0.0",
-                PublisherRank.ADMIN, 0, List.of(new PublishedBotPlugins.Pin("sdk", "v1.9.0")), PublisherRank.ADMIN);
+                PublisherRank.ADMIN, 0, List.of(new PublishedBotPlugins.Pin("BotMakerDev/botmaker-sdk", "v1.9.0")), PublisherRank.ADMIN);
         interact(() -> plugins.lockFor(StartChoice.of(firestone)));
 
         assertTrue(saying("used by Firestone"));

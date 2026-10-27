@@ -1,6 +1,5 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.ValueContext;
 import com.botmaker.plugin.api.source.ManagedClasses;
@@ -9,6 +8,8 @@ import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.plugin.api.value.Ref;
+import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
@@ -156,15 +157,15 @@ public final class HostPluginValues implements PluginValues {
      * Writes the holder of {@code id} when the project has none ({@link ManagedHolders}), never over a file
      * that exists; when the bot has the holder but not the value, adds the value to it (2026-10-12: a
      * {@code Sdk.java} an older SDK wrote had no {@code run()}, and the flow editor had nowhere to save). The
-     * declaring plugin is found among the bound ones by the id it declared.
+     * declaring plugin is found among the bound ones by the value id it declared.
      */
     public Optional<String> create(String id) {
         if (id == null || id.isBlank()) return Optional.of("No value was named.");
         if (JavaManagedValues.find(config, state, id).isPresent()) return Optional.empty();
-        for (StudioPlugin plugin : PluginHost.plugins()) {
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
             List<ManagedValue<?>> declared;
             try {
-                declared = plugin.managedValues();
+                declared = plugin.plugin().managedValues();
             } catch (RuntimeException | LinkageError e) {
                 continue;
             }
@@ -176,13 +177,13 @@ public final class HostPluginValues implements PluginValues {
                 // condition holds), is written into the holder the bot has.
                 java.util.Map<Path, List<ManagedValue<?>>> kept = value instanceof ManagedOpenSet<?>
                         ? java.util.Map.of()
-                        : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.id(), List.of(value)));
+                        : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.coordinate(), List.of(value)));
                 if (!kept.isEmpty()) {
                     if (state.isReaderMode()) return Optional.of("This project is open read-only.");
                     return keep(kept).isEmpty() ? Optional.of("BotMaker cannot write a starting value for "
                             + ManagedIds.spelled(id, PluginHost.managedValues()) + ".") : Optional.empty();
                 }
-                ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.id(), value, declared,
+                ManagedHolders.Plan plan = ManagedHolders.plan(config, plugin.coordinate(), value, declared,
                         PluginHost.grammar());
                 if (plan instanceof ManagedHolders.Plan.Refused refused) return Optional.of(refused.reason());
                 ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan;
@@ -219,23 +220,23 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private List<String> writeMissing() {
-        java.util.Map<String, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = new java.util.LinkedHashMap<>();
         // A holder is found by every value its plugin declares: one the user moved may carry only the marks of
         // conditional parameters that no longer apply.
-        java.util.Map<String, List<ManagedValue<?>>> allByPlugin = new java.util.LinkedHashMap<>();
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> allByPlugin = new java.util.LinkedHashMap<>();
         // A conditional parameter that does not apply to this bot is not written (2026-10-12):
         // ManagedParam.ConditionStep.when, read against the bot as it stands, once for every plugin.
         HostParamScope scope = HostParamScope.over(this);
-        for (StudioPlugin plugin : PluginHost.plugins()) {
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
             try {
-                List<ManagedValue<?>> offered = plugin.managedValues();
+                List<ManagedValue<?>> offered = plugin.plugin().managedValues();
                 List<ManagedValue<?>> all = offered == null ? List.of()
                         : offered.stream().filter(java.util.Objects::nonNull).toList();
                 List<ManagedValue<?>> declared = all.stream()
                         .filter(value -> !(value instanceof ManagedParam<?> param) || param.appliesIn(scope))
                         .toList();
-                if (!declared.isEmpty()) byPlugin.put(plugin.id(), declared);
-                if (!all.isEmpty()) allByPlugin.put(plugin.id(), all);
+                if (!declared.isEmpty()) byPlugin.put(plugin.coordinate(), declared);
+                if (!all.isEmpty()) allByPlugin.put(plugin.coordinate(), all);
             } catch (RuntimeException | LinkageError e) {
                 // A plugin that cannot say what it manages gets no file; every other plugin still does.
             }
@@ -262,7 +263,7 @@ public final class HostPluginValues implements PluginValues {
         // since the bot's main reads it by name, and a changed category, note or audience is written over the
         // old one. A method value the holder lacks is not: the user may have deleted it, and create() writes it
         // when a plugin window asks for it (2026-10-12).
-        java.util.Map<String, List<ManagedValue<?>>> params = new java.util.LinkedHashMap<>();
+        java.util.Map<PluginCoordinate, List<ManagedValue<?>>> params = new java.util.LinkedHashMap<>();
         byPlugin.forEach((plugin, declared) ->
                 params.put(plugin, declared.stream().filter(ManagedParam.class::isInstance).toList()));
         keep(ManagedHolders.valuesToKeep(index(), params))

@@ -24,7 +24,7 @@ class EditorCompanionsTest {
 
     private static PluginRegistry.Plugin sdkEntry(String group) {
         String coordinate = group + ":botmaker-sdk";
-        return new PluginRegistry.Plugin("com.botmaker.sdk", "BotMaker SDK", coordinate, "BotMakerDev/botmaker-sdk",
+        return new PluginRegistry.Plugin("BotMaker SDK", coordinate, "BotMakerDev/botmaker-sdk",
                 "", List.of(), "", List.of("io.javalin:javalin:6.7.0", "com.google.zxing:core:3.5.3"), "v1.2.3");
     }
 

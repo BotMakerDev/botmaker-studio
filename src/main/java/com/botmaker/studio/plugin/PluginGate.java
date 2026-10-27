@@ -2,7 +2,6 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.cli.catalog.Catalog;
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.studio.services.MavenService;
@@ -34,22 +33,16 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * What the catalog says about the plugins a project binds (2026-10-23), checked at two moments of
- * {@link PluginHost#bind}.
+ * What the catalog says about the plugins a project binds (2026-10-23), checked before {@link PluginHost#bind}
+ * loads a jar ({@link #admit}): a plugin's constructor runs the moment it loads, so a community plugin, or one the
+ * catalog does not list, is loaded only after the user agreed to run it on this computer — asked once, the yes
+ * kept in {@link CommunityConsent}. A no leaves it off the loader, reported as a failure, and it is asked again on
+ * the next bind. Who is asked is {@link CommunityConsent#needsAsking}.
  *
- * <p><b>Before a jar is loaded</b> ({@link #admit}): a plugin's constructor runs the moment it loads, so a
- * community plugin, or one the catalog does not list, is loaded only after the user agreed to run it on this
- * computer — asked once, the yes kept in {@link CommunityConsent}. A no leaves it off the loader, reported as a
- * failure, and it is asked again on the next bind. Who is asked is {@link CommunityConsent#needsAsking}.
+ * <p>Nothing is compared after the plugins are constructed (2026-10-27): a plugin is its pom's coordinate, which
+ * is the catalog row's, so there is no second id to check against the entry.
  *
- * <p><b>After the plugins are constructed</b> ({@link #checkIds}): a plugin loaded from a catalog coordinate
- * must say the id that entry lists. The catalog's own check compares them, but runs the plugin to read its id,
- * and a plugin that exits the JVM there is never compared. So Studio compares again and drops a plugin whose id
- * is not its entry's; a dev build and a coordinate the catalog does not list are not compared. By then its
- * constructor has run and its jar stays on the project's loader: the check keeps a listed plugin from binding
- * under another entry's id, and the consent above is what keeps unreviewed code from running.
- *
- * <p>A dev build skips both only when this computer installed it ({@link #installedHere}): dev mode is read from
+ * <p>A dev build skips the question only when this computer installed it ({@link #installedHere}): dev mode is read from
  * the project's own files, which a cloned bot may bring.
  *
  * <p>Four ways round the question were closed on 2026-10-23 (Phase 7b, after a security review): a library
@@ -86,7 +79,7 @@ public final class PluginGate {
 
         /** The question, in words: whose plugin, why it is asked, what a yes does. */
         public String question() {
-            String what = row.map(r -> "“" + (r.name().isBlank() ? r.id() : r.name()) + "” (" + jar + ") by "
+            String what = row.map(r -> "“" + (r.name().isBlank() ? r.repo() : r.name()) + "” (" + jar + ") by "
                             + r.repo().substring(0, Math.max(0, r.repo().indexOf('/')))
                             + (r.rank() == PublisherRank.COMMUNITY ? " is a community plugin."
                             : " is not a release the catalog approved (its newest is " + r.tag() + "), or Studio "
@@ -107,14 +100,6 @@ public final class PluginGate {
     public record Admitted(List<String> loadable, List<PluginLoader.PluginFailure> refused) {
         public Admitted {
             loadable = List.copyOf(loadable);
-            refused = List.copyOf(refused);
-        }
-    }
-
-    /** What {@link #checkIds} binds, and the plugins whose id is not their entry's. */
-    public record Checked(List<StudioPlugin> bound, List<PluginLoader.PluginFailure> refused) {
-        public Checked {
-            bound = List.copyOf(bound);
             refused = List.copyOf(refused);
         }
     }
@@ -149,7 +134,7 @@ public final class PluginGate {
     /**
      * @param repository     the Maven repository the classpath's jars are in, which a jar's coordinate is read
      *                       off
-     * @param declaresPlugin whether a jar carries the {@code StudioPlugin} service entry
+     * @param declaresPlugin whether a jar's pom names a plugin ({@code botmaker.plugin})
      * @param builtHere      whether a jar was installed on this computer rather than downloaded
      *                       ({@link #installedHere}): only such a dev build skips the question
      * @param pins           what the catalog says of a jar at a version: only an {@code APPROVED} one loads on its
@@ -318,7 +303,7 @@ public final class PluginGate {
     static Optional<String> refusal(ReleasePins.Verdict verdict, Optional<PluginRegistry.Plugin> row,
                                     String version) {
         if (row.isEmpty()) return Optional.empty();
-        String plugin = row.get().name().isBlank() ? row.get().id() : row.get().name();
+        String plugin = row.get().name().isBlank() ? row.get().repo() : row.get().name();
         return switch (verdict) {
             case CHANGED -> Optional.of("not loaded: " + plugin + " " + version + " changed after the catalog "
                     + "approved it — its jar or pom is not the one the catalog's check passed");
@@ -359,42 +344,6 @@ public final class PluginGate {
             return asker.agrees(asked);
         } catch (RuntimeException e) {
             return false;   // a question that could not be put is not a yes
-        }
-    }
-
-    /**
-     * {@code plugins} without those loaded from a catalog coordinate whose id is not that entry's.
-     *
-     * @param jarOf   the jar a plugin's class came from, empty for one from no jar
-     * @param devJars the dev builds dev mode let through; one installed on this computer is not compared
-     */
-    Checked checkIds(CatalogIndex listed, List<StudioPlugin> plugins, Function<StudioPlugin, Optional<Path>> jarOf,
-                     List<String> devJars) {
-        Set<Path> dev = builtHere(devJars);
-        List<StudioPlugin> bound = new ArrayList<>();
-        List<PluginLoader.PluginFailure> refused = new ArrayList<>();
-        for (StudioPlugin plugin : plugins) {
-            Optional<Path> jar = jarOf.apply(plugin).map(path -> path.toAbsolutePath().normalize());
-            Optional<PluginRegistry.Plugin> row = jar.filter(path -> !dev.contains(path))
-                    .flatMap(path -> rowOf(listed, path));
-            String id = idOf(plugin);
-            if (row.isEmpty() || row.get().id().equals(id)) {
-                bound.add(plugin);
-            } else {
-                refused.add(new PluginLoader.PluginFailure(describe(jar.get().toString()),
-                        new IllegalStateException("its id is " + (id.isEmpty() ? "unreadable" : id)
-                                + ", but the catalog lists this coordinate as " + row.get().id())));
-            }
-        }
-        return new Checked(bound, refused);
-    }
-
-    private static String idOf(StudioPlugin plugin) {
-        try {
-            String id = plugin.id();
-            return id == null ? "" : id;
-        } catch (RuntimeException | LinkageError e) {
-            return "";
         }
     }
 

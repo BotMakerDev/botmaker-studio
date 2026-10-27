@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.PluginCoordinate;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -32,9 +33,9 @@ public final class HolderFiles {
     /** One plugin's holder: its package segment ({@link ManagedHolders#segment}) and its class name. */
     public record Key(String segment, String name) {
 
-        /** The holder {@code name} of the plugin {@code pluginId}, or {@code null} when its id spells no package. */
-        public static Key of(String pluginId, String name) {
-            String segment = ManagedHolders.segment(pluginId);
+        /** The holder {@code name} of the plugin {@code plugin}, or {@code null} when it spells no package. */
+        public static Key of(PluginCoordinate plugin, String name) {
+            String segment = ManagedHolders.segment(plugin);
             return segment == null || name == null ? null : new Key(segment, name);
         }
     }
@@ -43,9 +44,10 @@ public final class HolderFiles {
      * Every holder of {@code byPlugin} the bot declares, and its file.
      *
      * @param units    each bot file and its tree
-     * @param byPlugin each plugin's id and every value it declares
+     * @param byPlugin each plugin's coordinate and every value it declares
      */
-    public static Map<Key, Path> find(Map<Path, CompilationUnit> units, Map<String, List<ManagedValue<?>>> byPlugin) {
+    public static Map<Key, Path> find(Map<Path, CompilationUnit> units,
+                                      Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
         Map<Key, Path> written = new LinkedHashMap<>();
         Map<Key, Path> moved = new HashMap<>();
         units.forEach((file, unit) -> {
@@ -55,8 +57,8 @@ public final class HolderFiles {
                 if (!(each instanceof AbstractTypeDeclaration type)) continue;
                 String name = type.getName().getIdentifier();
                 if (segment != null) written.putIfAbsent(new Key(segment, name), file);
-                byPlugin.forEach((pluginId, declared) -> {
-                    Key key = Key.of(pluginId, name);
+                byPlugin.forEach((plugin, declared) -> {
+                    Key key = Key.of(plugin, name);
                     if (key != null && !moved.containsKey(key) && marksHeldValue(type, name, declared)) {
                         moved.put(key, file);
                     }

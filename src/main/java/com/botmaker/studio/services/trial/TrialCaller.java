@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.trial;
 
-import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.assist.TrialEntry;
+import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.project.managed.ManagedIds;
@@ -59,13 +59,13 @@ public final class TrialCaller {
 
     /** The first bound plugin's trial entry ({@code trial(Bot::trial)}); empty when no plugin offers one. */
     public static Optional<Method> entry() {
-        for (StudioPlugin plugin : PluginHost.plugins()) {
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
             try {
-                Optional<Method> entry = plugin.trialEntry();
+                Optional<Method> entry = plugin.plugin().trialEntry();
                 if (entry != null && entry.isPresent()) return entry;
             } catch (RuntimeException | LinkageError e) {
                 // Includes a plugin built against a contract without this method: it offers no trial.
-                System.err.println("Warning: " + plugin.id() + " could not offer a trial entry: " + e);
+                System.err.println("Warning: " + plugin.coordinate() + " could not offer a trial entry: " + e);
             }
         }
         return Optional.empty();

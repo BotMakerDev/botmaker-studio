@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ShowCommunityTest {
 
     private static PluginRegistry.Plugin plugin(String id, PublisherRank rank, int stars) {
-        return new PluginRegistry.Plugin(id, id, "g:" + id, "o/" + id, "", List.of(), "", List.of(), "", "v1", rank,
+        return new PluginRegistry.Plugin(id, "g:" + id, "o/" + id, "", List.of(), "", List.of(), "", "v1", rank,
                 stars);
     }
 

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.upgrade.InstalledPlugin;
@@ -20,15 +21,15 @@ class InstalledRowsTest {
     private static final UserLibrary NEW_SDK =
             new UserLibrary("com.github.BotMakerDev", "botmaker-sdk", "1.3.1-SNAPSHOT");
 
-    private static PluginHost.LoadedPlugin loaded(String id, String org, String artifact, String version) {
-        return new PluginHost.LoadedPlugin(id, id, REPO + org + "/" + artifact + "/" + version + "/"
-                + artifact + "-" + version + ".jar");
+    private static PluginHost.LoadedJar loaded(String name, String org, String artifact, String version) {
+        return new PluginHost.LoadedJar(new PluginCoordinate("com.github." + org, artifact), name,
+                REPO + org + "/" + artifact + "/" + version + "/" + artifact + "-" + version + ".jar");
     }
 
-    private static final PluginHost.LoadedPlugin SDK_LOADED =
-            loaded("com.botmaker.sdk", "BotMakerDev", "botmaker-sdk", "1.3.1-SNAPSHOT");
-    private static final PluginHost.LoadedPlugin BASICS_LOADED =
-            loaded("com.botmaker.basics", "BotMakerDev", "botmaker-plugin-basics", "0.3.1-SNAPSHOT");
+    private static final PluginHost.LoadedJar SDK_LOADED =
+            loaded("BotMaker SDK", "BotMakerDev", "botmaker-sdk", "1.3.1-SNAPSHOT");
+    private static final PluginHost.LoadedJar BASICS_LOADED =
+            loaded("BotMaker Basics", "BotMakerDev", "botmaker-plugin-basics", "0.3.1-SNAPSHOT");
 
     @Test
     void aPluginDeclaredTwiceIsOneRowOnTheCopyStudioLoaded() {
@@ -54,7 +55,7 @@ class InstalledRowsTest {
     void theLoadedCellNamesTheJarsVersionAndADevBuild() {
         assertEquals("1.3.1-SNAPSHOT (dev build)", InstalledPluginsTab.loadedText(Optional.of(SDK_LOADED)));
         assertEquals("v1.2.3", InstalledPluginsTab.loadedText(
-                Optional.of(loaded("com.botmaker.sdk", "LiQiyeDev", "botmaker-sdk", "v1.2.3"))));
+                Optional.of(loaded("BotMaker SDK", "LiQiyeDev", "botmaker-sdk", "v1.2.3"))));
         assertEquals("not loaded", InstalledPluginsTab.loadedText(Optional.empty()));
     }
 

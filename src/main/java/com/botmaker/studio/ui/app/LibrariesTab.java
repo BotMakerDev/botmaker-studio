@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
@@ -134,8 +135,7 @@ final class LibrariesTab {
 
     /** Fills {@link #unneeded} once the registry answers; a registry that cannot be read marks nothing. */
     private void markUnneeded(List<UserLibrary> rows, List<UserLibrary> plugins) {
-        List<com.botmaker.studio.plugin.PluginHost.LoadedPlugin> loaded =
-                com.botmaker.studio.plugin.PluginHost.loaded();
+        List<PluginHost.LoadedJar> loaded = PluginHost.loaded();
         int asked = ++unneededAsked;
         registry.browse().thenAccept(entries -> {
             java.util.Set<String> found = PluginCatalog.unneededEditorDependencies(rows, entries,
