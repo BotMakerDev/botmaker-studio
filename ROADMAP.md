@@ -5,6 +5,10 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
+- **Three tests fail at random under the full parallel gate and pass alone** (2026-10-27, one per
+  `tools/gate-snapshot.sh --all` run): `ZoomPaneTest.zoomingInNarrowsTheLayoutAndGrowsTheDrawing` (content
+  1200 wide, not 400: a layout before the 400-wide root applies), `TerminalViewTest` (`waitForScreen` times out)
+  and `CodeExecutionServiceTest.aBotIsCompiledRunAndItsOutputReachesTheConsole` (stdout not on the bus in time).
 - **Not yet run against a real model**: the Assistant tab and its MCP endpoint (`assist/`,
   `docs/refactor/38-llm-edits.md`). The Studio halves of the MCP tools (`StudioBridge`) have no automatic test;
   a plugin added in the Plugins & Libraries window is served from the endpoint's next start; a `revert` ends a
