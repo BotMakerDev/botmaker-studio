@@ -105,7 +105,7 @@ public final class Workflow {
                         + "the method and the compiler says so, pointing at the flow, instead of a card that "
                         + "quietly stops doing anything; return another activity's outcome and it does not "
                         + "compile either.",
-                        "The flow itself is a value in your own plugins/sdk/Sdk.java, written by the editor "
+                        "The flow itself is a value in your own Sdk.java under plugins/, written by the editor "
                         + "when you save and readable as ordinary Java when you do not. To stop an activity "
                         + "running, turn its switch off — the card stays and so does your method. Delete "
                         + "activity removes the card and its wires; the file you wrote the steps in is left "

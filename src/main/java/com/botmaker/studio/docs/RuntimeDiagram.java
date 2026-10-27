@@ -31,7 +31,7 @@ public final class RuntimeDiagram {
             "Your activities are not a script that runs top to bottom. A run holds one current activity, "
             + "calls the method the flow names for it, and follows the wire leaving the outcome that method "
             + "reported — so the shape of a run is a loop, and it is the flow you drew that decides where it "
-            + "goes next. The flow is a value in your own plugins/sdk/Sdk.java: nothing is generated, and "
+            + "goes next. The flow is a value in your own Sdk.java, under plugins/: nothing is generated, and "
             + "you can read what the bot will do without opening the editor.";
 
     /**
