@@ -20,7 +20,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Plugins & Libraries.
 - The catalog's plugin rows and a bot's pinned plugins are read by repo (catalog schema 5); a community plugin you
   agreed to run is asked about once more, since that yes was kept under its old id.
-- A plugin's files stay in `plugins/<last word of its artifactId>/` — `plugins/sdk`, `plugins/basics`, as before.
+- A plugin's files move to `plugins/<groupId>/<artifactId>/`, each part one package name (`plugins/com_github_botmakerdev/botmaker_sdk/`), so two plugins never share a folder; BotMaker's former groupId spells the current one. A bot's holders in the old `plugins/sdk/` are no longer the SDK's: Studio writes new ones on bind. A plugin's assistant tools are served as `<artifactId>_<tool>` (`botmaker_sdk_click`, was `sdk_click`).
 - An editor choice made between two plugins is saved by coordinate; one saved by id before is forgotten.
 
 ### Removed

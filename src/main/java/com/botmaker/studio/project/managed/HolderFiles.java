@@ -69,12 +69,9 @@ public final class HolderFiles {
         return Map.copyOf(written);
     }
 
-    /** The segment of {@code file} when it lies in {@code plugins/<segment>/}, else {@code null}. */
+    /** The segment of {@code file} when it lies in {@code plugins/<group>/<artifact>/}, else {@code null}. */
     private static String writtenSegment(Path file) {
-        Path folder = file == null ? null : file.getParent();
-        Path plugins = folder == null ? null : folder.getParent();
-        return plugins != null && plugins.getFileName() != null && plugins.getFileName().toString().equals("plugins")
-                ? folder.getFileName().toString() : null;
+        return ManagedHolders.segmentOf(file);
     }
 
     /** Whether {@code type}, or one of its members, carries the mark of a value {@code declared} holds in {@code name}. */

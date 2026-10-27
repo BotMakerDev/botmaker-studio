@@ -19,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PluginHoldersTest {
 
     private static final List<PluginFiles.Holder> SDK = List.of(
-            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Sdk"),
-            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Pictures"));
+            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "com_github_botmakerdev.botmaker_sdk","Sdk"),
+            new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "com_github_botmakerdev.botmaker_sdk","Pictures"));
 
     @TempDir
     Path root;
@@ -42,10 +42,10 @@ class PluginHoldersTest {
 
         PluginHolders.Deleted deleted = holders.delete(config, new ProjectState(), "SDK");
 
-        Path folder = config.mainPackageDir().resolve("plugins/sdk");
+        Path folder = config.mainPackageDir().resolve("plugins/com_github_botmakerdev/botmaker_sdk");
         assertFalse(Files.exists(folder), "the empty folder goes with its files");
         String base = Files.readString(config.mainPackageDir().resolve("Base.java"));
-        assertFalse(base.contains("import " + config.mainPackage() + ".plugins.sdk.Sdk;"), base);
+        assertFalse(base.contains("import " + config.mainPackage() + ".plugins.com_github_botmakerdev.botmaker_sdk.Sdk;"), base);
         assertTrue(base.contains("@Refactor(\"Sdk went with the SDK plugin"), base);
         assertEquals(1, deleted.rewritten());
         assertEquals(List.of("Base.java · main() still names Sdk."), deleted.left());
@@ -58,8 +58,8 @@ class PluginHoldersTest {
         Files.writeString(config.mainPackageDir().resolve("Other.java"), """
                 package %s;
 
-                import static %s.plugins.sdk.Sdk.flow;
-                import %s.plugins.sdk.*;
+                import static %s.plugins.com_github_botmakerdev.botmaker_sdk.Sdk.flow;
+                import %s.plugins.com_github_botmakerdev.botmaker_sdk.*;
 
                 public class Other {
                     static final Object PICTURES = new Pictures();
@@ -74,7 +74,7 @@ class PluginHoldersTest {
         assertTrue(deleted.left().contains("Other.java:7 names Pictures outside a function; change it by hand."),
                 deleted.left().toString());
         assertTrue(deleted.left().stream().anyMatch(l -> l.startsWith("Other.java imported " + pkg
-                + ".plugins.sdk.Sdk.flow statically")), deleted.left().toString());
+                + ".plugins.com_github_botmakerdev.botmaker_sdk.Sdk.flow statically")), deleted.left().toString());
     }
 
     @Test
@@ -90,25 +90,25 @@ class PluginHoldersTest {
     private ProjectConfig project() throws Exception {
         ProjectConfig config = ProjectConfig.forProject("Base", root);
         Path main = config.mainPackageDir();
-        Path sdk = main.resolve("plugins/sdk");
+        Path sdk = main.resolve("plugins/com_github_botmakerdev/botmaker_sdk");
         Files.createDirectories(sdk);
         String pkg = config.mainPackage();
         Files.writeString(sdk.resolve("Sdk.java"), """
-                package %s.plugins.sdk;
+                package %s.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 public final class Sdk {
                     public static String flow() { return ""; }
                 }
                 """.formatted(pkg));
         Files.writeString(sdk.resolve("Pictures.java"), """
-                package %s.plugins.sdk;
+                package %s.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 public final class Pictures {}
                 """.formatted(pkg));
         Files.writeString(main.resolve("Base.java"), """
                 package %s;
 
-                import %s.plugins.sdk.Sdk;
+                import %s.plugins.com_github_botmakerdev.botmaker_sdk.Sdk;
 
                 public class Base {
 

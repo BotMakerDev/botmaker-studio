@@ -123,11 +123,14 @@ public record PluginHolders(Map<Path, String> files, List<String> references) {
         });
         for (Path file : files.keySet()) {
             Files.deleteIfExists(file);
-            Path folder = file.getParent();
-            if (folder != null && Files.isDirectory(folder)) {
+            // plugins/<group>/<artifact>/: each folder the deletion leaves empty goes, the group's after the artifact's
+            for (Path folder = file.getParent(); folder != null && folder.getFileName() != null
+                    && !folder.getFileName().toString().equals("plugins") && Files.isDirectory(folder);
+                 folder = folder.getParent()) {
                 try (Stream<Path> rest = Files.list(folder)) {
-                    if (rest.findAny().isEmpty()) Files.delete(folder);
+                    if (rest.findAny().isPresent()) break;
                 }
+                Files.delete(folder);
             }
         }
         return new Deleted(rewritten[0], left);

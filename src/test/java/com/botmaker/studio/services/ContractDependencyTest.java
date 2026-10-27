@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.plugin.host.PluginPoms;
 import com.botmaker.studio.config.HostContract;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -134,6 +135,10 @@ class ContractDependencyTest {
         Path sdk = Path.of(System.getProperty("user.home"), ".m2", "repository", "com", "github", "BotMakerDev",
                 "botmaker-sdk", "0.0.0-SNAPSHOT");
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(sdk), "needs the SDK chain installed");
+        // A snapshot installed before 2026-10-27 names its plugin in a services file, so it reads as a library.
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                PluginPoms.declaresPlugin(sdk.resolve("botmaker-sdk-0.0.0-SNAPSHOT.jar")),
+                "needs an SDK snapshot whose pom names its plugin");
         Path projectDir = blankProject();
         // Pinned at what the local SDK brings (its contract is the snapshot too), so the plugin's is not older.
         MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
@@ -151,6 +156,10 @@ class ContractDependencyTest {
         Path sdk = Path.of(System.getProperty("user.home"), ".m2", "repository", "com", "github", "BotMakerDev",
                 "botmaker-sdk", "0.0.0-SNAPSHOT");
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(sdk), "needs the SDK chain installed");
+        // A snapshot installed before 2026-10-27 names its plugin in a services file, so it reads as a library.
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                PluginPoms.declaresPlugin(sdk.resolve("botmaker-sdk-0.0.0-SNAPSHOT.jar")),
+                "needs an SDK snapshot whose pom names its plugin");
         Path projectDir = blankProject();
         MavenService.declareIfAbsent(projectDir, new com.botmaker.studio.project.UserLibrary(
                 HostContract.GROUP_ID, HostContract.ARTIFACT_ID, "v99.0.0"));

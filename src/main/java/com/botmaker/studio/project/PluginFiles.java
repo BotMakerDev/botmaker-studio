@@ -82,13 +82,8 @@ public final class PluginFiles {
         if (file == null || file.getFileName() == null) return Optional.empty();
         String name = file.getFileName().toString();
         if (!name.endsWith(".java")) return Optional.empty();
-        Path folder = file.getParent();
-        Path plugins = folder == null ? null : folder.getParent();
-        if (plugins == null || plugins.getFileName() == null
-                || !plugins.getFileName().toString().equals("plugins")) {
-            return Optional.empty();
-        }
-        String segment = folder.getFileName().toString();
+        String segment = ManagedHolders.segmentOf(file);
+        if (segment == null) return Optional.empty();
         String className = name.substring(0, name.length() - ".java".length());
         for (Holder holder : holders) {
             if (holder.segment().equals(segment) && holder.className().equals(className)) return Optional.of(holder);

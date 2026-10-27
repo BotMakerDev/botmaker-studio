@@ -48,7 +48,7 @@ class LibraryCallImportsTest {
 
     private static final String PKG = "com.example.lib";
 
-    /** The SDK's coordinate, whose holders are in {@code plugins/sdk/}. */
+    /** The SDK's coordinate, whose holders are in {@code plugins/com_github_botmakerdev/botmaker_sdk/}. */
     private static final PluginCoordinate SDK = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
 
     private static final String HOST = """
@@ -177,8 +177,8 @@ class LibraryCallImportsTest {
     @Test
     void aHolderNobodyOpenedIsFoundReadAndImportedByItsPackage() {
         ProjectState state = new ProjectState();
-        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/sdk/Sdk.java"), """
-                package com.mybot.plugins.sdk;
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), """
+                package com.mybot.plugins.com_github_botmakerdev.botmaker_sdk;
                 public final class Sdk {
                     public static String flow = "";
                 }
@@ -187,7 +187,7 @@ class LibraryCallImportsTest {
                 TestSupport.runtimeClassPath(), HOST, TestSupport.SOURCE_ROOT);
         EditContext ctx = EditContext.of(cu, new ProjectAnalyzer(new TypeSummaryManager(Set.of(PKG)), state), state);
 
-        HolderFiles.Key key = new HolderFiles.Key("sdk", "Sdk");
+        HolderFiles.Key key = new HolderFiles.Key("com_github_botmakerdev.botmaker_sdk","Sdk");
         CompilationUnit sdk = StatementFactory.holderUnits(state, java.util.Map.of(SDK, List.of()))
                 .get(key);
         assertNotNull(sdk);
@@ -195,7 +195,7 @@ class LibraryCallImportsTest {
         assertTrue(!StatementFactory.declaresField(sdk, "Sdk", "skip"), "a field the holder lacks is not named");
 
         StatementFactory.holderName(ctx, new StatementFactory.HolderUnit(key, sdk), new java.util.HashMap<>());
-        assertTrue(ctx.applyTo(HOST).contains("import com.mybot.plugins.sdk.Sdk;"), ctx.applyTo(HOST));
+        assertTrue(ctx.applyTo(HOST).contains("import com.mybot.plugins.com_github_botmakerdev.botmaker_sdk.Sdk;"), ctx.applyTo(HOST));
     }
 
     /**
@@ -205,12 +205,12 @@ class LibraryCallImportsTest {
     @Test
     void holdersOfOneSimpleNameAreToldApartByPlugin() {
         ProjectState state = new ProjectState();
-        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/sdk/Pictures.java"), """
-                package com.mybot.plugins.sdk;
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/com_github_botmakerdev/botmaker_sdk/Pictures.java"), """
+                package com.mybot.plugins.com_github_botmakerdev.botmaker_sdk;
                 public final class Pictures {}
                 """));
-        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/other/Pictures.java"), """
-                package com.mybot.plugins.other;
+        state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/plugins/com_acme/other/Pictures.java"), """
+                package com.mybot.plugins.com_acme.other;
                 public final class Pictures {}
                 """));
         state.addFile(new ProjectFile(Path.of("src/main/java/com/mybot/Tags.java"), """
@@ -219,8 +219,8 @@ class LibraryCallImportsTest {
                 """));
         java.util.Map<HolderFiles.Key, CompilationUnit> units = StatementFactory.holderUnits(state,
                 java.util.Map.of(SDK, List.of(), new PluginCoordinate("com.acme", "other"), List.of()));
-        HolderFiles.Key sdk = new HolderFiles.Key("sdk", "Pictures");
-        HolderFiles.Key other = new HolderFiles.Key("other", "Pictures");
+        HolderFiles.Key sdk = new HolderFiles.Key("com_github_botmakerdev.botmaker_sdk","Pictures");
+        HolderFiles.Key other = new HolderFiles.Key("com_acme.other","Pictures");
         assertEquals(Set.of(sdk, other), units.keySet(), "the bot's own Tags is no plugin's holder");
 
         CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(
@@ -229,11 +229,11 @@ class LibraryCallImportsTest {
         java.util.Map<String, HolderFiles.Key> named = new java.util.HashMap<>();
         assertEquals("Pictures", StatementFactory.holderName(ctx,
                 new StatementFactory.HolderUnit(sdk, units.get(sdk)), named).getFullyQualifiedName());
-        assertEquals("com.mybot.plugins.other.Pictures", StatementFactory.holderName(ctx,
+        assertEquals("com.mybot.plugins.com_acme.other.Pictures", StatementFactory.holderName(ctx,
                 new StatementFactory.HolderUnit(other, units.get(other)), named).getFullyQualifiedName());
         String imports = ctx.applyTo(HOST);
-        assertTrue(imports.contains("import com.mybot.plugins.sdk.Pictures;"), imports);
-        assertTrue(!imports.contains("import com.mybot.plugins.other.Pictures;"), imports);
+        assertTrue(imports.contains("import com.mybot.plugins.com_github_botmakerdev.botmaker_sdk.Pictures;"), imports);
+        assertTrue(!imports.contains("import com.mybot.plugins.com_acme.other.Pictures;"), imports);
     }
 
     @Test

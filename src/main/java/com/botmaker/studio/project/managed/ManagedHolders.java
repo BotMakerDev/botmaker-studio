@@ -7,6 +7,7 @@ import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.parser.helpers.SourceFormatter;
+import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
@@ -126,8 +127,9 @@ public final class ManagedHolders {
         List<AbstractTypeDeclaration> types = unit.types();
         types.add(written);
 
-        String relative = "plugins/" + segment + "/" + holder + ".java";
-        return new Plan.Write(config.mainPackageDir().resolve("plugins").resolve(segment).resolve(holder + ".java"),
+        String folder = segment.replace('.', '/');
+        String relative = "plugins/" + folder + "/" + holder + ".java";
+        return new Plan.Write(config.mainPackageDir().resolve("plugins").resolve(folder).resolve(holder + ".java"),
                 relative, laidOut(unit));
     }
 
@@ -693,16 +695,41 @@ public final class ManagedHolders {
     }
 
     /**
-     * The last {@code -} word of a plugin's artifactId, lower-cased, or null when it is no package name — the
-     * folder under {@code plugins/} a plugin's files are in, which {@code PluginFiles} reads back. It was the last
-     * segment of the plugin's id until 2026-10-27, and reads the same folder for BotMaker's own plugins:
-     * {@code botmaker-sdk} is {@code sdk}, {@code botmaker-plugin-basics} is {@code basics}.
+     * The package under {@code plugins/} a plugin's files are in, which {@code PluginFiles} reads back: its groupId
+     * then its artifactId, each one package name, lower-cased, every character no identifier takes made {@code _}
+     * — {@code com.github.BotMakerDev:botmaker-sdk} is {@code com_github_botmakerdev.botmaker_sdk}. Null when a
+     * part spells no package name. Until 2026-10-27 it was the last segment of the plugin's id, and for a day the
+     * artifactId's last word, which two plugins could share; the coordinate is the plugin's one identity (the
+     * user's call). BotMaker's former groupId spells the current one, so the folder stays where the 2026-10-05
+     * coordinate move found it.
      */
     public static String segment(PluginCoordinate plugin) {
         if (plugin == null) return null;
-        String artifact = plugin.artifactId();
-        String last = artifact.substring(artifact.lastIndexOf('-') + 1).toLowerCase(Locale.ROOT);
-        return SourceVersion.isIdentifier(last) && !SourceVersion.isKeyword(last) ? last : null;
+        String group = DuplicatePlugins.isBotMakerGroup(plugin.groupId()) ? DuplicatePlugins.CURRENT_GROUP
+                : plugin.groupId();
+        String groupPart = packagePart(group);
+        String artifactPart = packagePart(plugin.artifactId());
+        return groupPart == null || artifactPart == null ? null : groupPart + "." + artifactPart;
+    }
+
+    /** The {@link #segment} of {@code file} when it lies in {@code plugins/<group>/<artifact>/}, else null. */
+    public static String segmentOf(Path file) {
+        Path artifact = file == null ? null : file.getParent();
+        Path group = artifact == null ? null : artifact.getParent();
+        Path plugins = group == null ? null : group.getParent();
+        return plugins != null && plugins.getFileName() != null && plugins.getFileName().toString().equals("plugins")
+                ? group.getFileName() + "." + artifact.getFileName() : null;
+    }
+
+    /** {@code text} as one package name, or null when it cannot be one. */
+    private static String packagePart(String text) {
+        StringBuilder out = new StringBuilder();
+        for (char c : text.toLowerCase(Locale.ROOT).toCharArray()) {
+            out.append(Character.isJavaIdentifierPart(c) && c != '$' ? c : '_');
+        }
+        if (!out.isEmpty() && Character.isDigit(out.charAt(0))) out.insert(0, '_');
+        String name = out.toString();
+        return SourceVersion.isIdentifier(name) && !SourceVersion.isKeyword(name) ? name : null;
     }
 
     private static boolean isImplicit(String name, String pkg) {

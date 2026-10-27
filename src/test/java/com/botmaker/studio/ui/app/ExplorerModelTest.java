@@ -61,18 +61,18 @@ class ExplorerModelTest {
         assertEquals(ExplorerModel.Kind.ENTRY_POINT, ExplorerModel.kindOf(main, "class MyBot {}", main));
         assertEquals(ExplorerModel.Kind.PARAMETERS,
                 ExplorerModel.kindOf(pkg.resolve("Parameters.java"), "@Param(min = 1) static int x = 2;", main));
-        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "sdk", "Sdk"));
+        List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "com_github_botmakerdev.botmaker_sdk", "Sdk"));
         assertEquals(ExplorerModel.Kind.PLUGIN_FILE,
-                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main, sdk),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), "@Param int x;", main, sdk),
                 "a plugin's file is that before it is anything else");
         assertEquals(ExplorerModel.Kind.PARAMETERS,
-                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Mine.java"), "@Param int x;", main, sdk),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Mine.java"), "@Param int x;", main, sdk),
                 "a file the user put beside it is theirs: no loaded plugin declares it");
         assertEquals(ExplorerModel.Kind.PARAMETERS,
-                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/Sdk.java"), "@Param int x;", main, List.of()),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), "@Param int x;", main, List.of()),
                 "with its plugin not loaded, it is an ordinary file");
         assertEquals(ExplorerModel.Kind.JAVA,
-                ExplorerModel.kindOf(pkg.resolve("plugins/sdk/deep/Sdk.java"), "class Sdk {}", main, sdk),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/deep/Sdk.java"), "class Sdk {}", main, sdk),
                 "exactly one package below plugins, as HostPluginValues writes one");
         assertEquals(ExplorerModel.Kind.JAVA, ExplorerModel.kindOf(pkg.resolve("Moves.java"), "class Moves {}", main));
         assertEquals(ExplorerModel.Kind.LIBRARY,

@@ -34,7 +34,6 @@ import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedRenames;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
@@ -109,6 +108,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1712,14 +1712,18 @@ final class StudioBridge implements StudioDriver {
 
     @Override
     public List<PluginTool> pluginTools() {
+        // A tool is served as <artifactId>_<name>; two plugins with one artifactId keep the first's.
         List<PluginTool> out = new ArrayList<>();
+        Set<String> served = new LinkedHashSet<>();
         for (PluginHost.OwnedTool owned : PluginHost.assistantTools()) {
-            String segment = ManagedHolders.segment(owned.plugin());
-            if (segment == null) {
-                System.err.println("Warning: " + owned.plugin() + "'s assistant tools have no name to be served under.");
+            String name = owned.plugin().artifactId().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_")
+                    + "_" + owned.tool().name();
+            if (!served.add(name)) {
+                System.err.println("Warning: " + owned.plugin() + "'s assistant tool " + name + " is already served"
+                        + " by another plugin.");
                 continue;
             }
-            out.add(new PluginTool(segment + "_" + owned.tool().name(), owned.pluginName(), owned.tool()));
+            out.add(new PluginTool(name, owned.pluginName(), owned.tool()));
         }
         return out;
     }

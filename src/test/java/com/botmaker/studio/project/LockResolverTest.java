@@ -292,8 +292,9 @@ class LockResolverTest {
     @Test
     void aLoadedPluginsFileIsTheWholeFileLocked() {
         List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(
-                new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk"), "SDK", "sdk", "Sdk"));
-        Path plugins = CONFIG.mainPackageDir().resolve("plugins").resolve("sdk");
+                new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk"), "SDK",
+                "com_github_botmakerdev.botmaker_sdk", "Sdk"));
+        Path plugins = CONFIG.mainPackageDir().resolve("plugins/com_github_botmakerdev/botmaker_sdk");
 
         LockResolver.Managed managed = new LockResolver(CONFIG, plugins.resolve("Sdk.java")).managed(sdk);
         assertNotNull(managed);

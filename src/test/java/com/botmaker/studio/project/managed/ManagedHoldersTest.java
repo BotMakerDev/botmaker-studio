@@ -24,6 +24,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ManagedHoldersTest {
 
-    /** The SDK, whose holders are in {@code plugins/sdk/} — the folder its artifactId's last word names. */
+    /** The SDK, whose holders are in {@code plugins/com_github_botmakerdev/botmaker_sdk/} — the folder its artifactId's last word names. */
     private static final PluginCoordinate SDK = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
     private static final PluginCoordinate TEST = new PluginCoordinate("com.github.BotMakerDev", "botmaker-test");
 
@@ -63,10 +64,10 @@ class ManagedHoldersTest {
     void aMethodHolderHoldsEverySiblingEachReadableAsItsFreshValue() {
         ManagedHolders.Plan.Write write = assertInstanceOf(ManagedHolders.Plan.Write.class,
                 plan(TestValue.Id.GREETING));
-        assertEquals("plugins/sdk/Sdk.java", write.relative());
-        assertTrue(write.file().endsWith(Path.of("plugins", "sdk", "Sdk.java")), write.file().toString());
+        assertEquals("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java", write.relative());
+        assertTrue(write.file().endsWith(Path.of("plugins", "com_github_botmakerdev", "botmaker_sdk", "Sdk.java")), write.file().toString());
         String source = write.source();
-        assertTrue(source.contains("package " + ProjectConfig.forDirectory(dir.resolve("bot")).mainPackage() + ".plugins.sdk;"),
+        assertTrue(source.contains("package " + ProjectConfig.forDirectory(dir.resolve("bot")).mainPackage() + ".plugins.com_github_botmakerdev.botmaker_sdk;"),
                 source);
         assertTrue(source.contains("import " + TestValue.class.getCanonicalName() + ";"), source);
         assertTrue(source.contains("import java.time.Duration;"), source);
@@ -154,7 +155,7 @@ class ManagedHoldersTest {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         List<ManagedHolders.Plan> plans = ManagedHolders.missing(config, java.util.Map.of(SDK, DECLARED),
                 java.util.Set.of(), java.util.Set.of(), TestValues.GRAMMAR);
-        assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), plans.stream()
+        assertEquals(List.of("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java", "plugins/com_github_botmakerdev/botmaker_sdk/Pictures.java"), plans.stream()
                 .map(p -> ((ManagedHolders.Plan.Write) p).relative()).toList());
     }
 
@@ -163,20 +164,20 @@ class ManagedHoldersTest {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         java.util.Map<PluginCoordinate, List<ManagedValue<?>>> sdk = java.util.Map.of(SDK, DECLARED);
         // A value it holds is declared somewhere (the user moved Sdk.java and renamed it).
-        assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
+        assertEquals(List.of("plugins/com_github_botmakerdev/botmaker_sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
                 java.util.Set.of(ManagedValue.idOf(TestValue.Id.REST_BETWEEN)), java.util.Set.of(), TestValues.GRAMMAR)));
         // The bot has it ({@link HolderFiles#find}): written, or moved and still marked.
-        assertEquals(List.of("plugins/sdk/Sdk.java"), relatives(ManagedHolders.missing(config, sdk,
-                java.util.Set.of(), java.util.Set.of(new HolderFiles.Key("sdk", "Pictures")), TestValues.GRAMMAR)));
+        assertEquals(List.of("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), relatives(ManagedHolders.missing(config, sdk,
+                java.util.Set.of(), java.util.Set.of(new HolderFiles.Key("com_github_botmakerdev.botmaker_sdk","Pictures")), TestValues.GRAMMAR)));
         // Another plugin's holder of that name is not this one's.
-        assertEquals(List.of("plugins/sdk/Sdk.java", "plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(
+        assertEquals(List.of("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java", "plugins/com_github_botmakerdev/botmaker_sdk/Pictures.java"), relatives(ManagedHolders.missing(
                 config, sdk, java.util.Set.of(), java.util.Set.of(new HolderFiles.Key("other", "Pictures")),
                 TestValues.GRAMMAR)));
         // Its file is on disk, whatever it holds.
         ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan(TestValue.Id.GREETING);
         Files.createDirectories(write.file().getParent());
         Files.writeString(write.file(), "// the user's");
-        assertEquals(List.of("plugins/sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
+        assertEquals(List.of("plugins/com_github_botmakerdev/botmaker_sdk/Pictures.java"), relatives(ManagedHolders.missing(config, sdk,
                 java.util.Set.of(), java.util.Set.of(), TestValues.GRAMMAR)));
     }
 
@@ -224,9 +225,9 @@ class ManagedHoldersTest {
     /** A holder the bot has gets back a parameter it lacks; one it has, or a holder it lacks, is left alone. */
     @Test
     void onBindAMissingParameterIsAddedToTheHolderTheBotHas() {
-        Path sdk = dir.resolve("src/main/java/com/bot/plugins/sdk/Sdk.java");
+        Path sdk = dir.resolve("src/main/java/com/bot/plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java");
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
 
@@ -285,14 +286,14 @@ class ManagedHoldersTest {
 
         java.util.Map<HolderFiles.Key, Path> found = index.read(units -> HolderFiles.find(units,
                 java.util.Map.of(SDK, DECLARED, new PluginCoordinate("com.acme", "other"), List.of(DO_SETUP))));
-        assertEquals(java.util.Map.of(new HolderFiles.Key("sdk", "Sdk"), moved), found);
+        assertEquals(java.util.Map.of(new HolderFiles.Key("com_github_botmakerdev.botmaker_sdk","Sdk"), moved), found);
     }
 
     /** A field of the parameter's name from before the plugin declared it is marked, never declared twice. */
     @Test
     void anUnmarkedFieldOfTheNameIsMarkedNotDuplicated() {
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
                 import %s;
@@ -316,7 +317,7 @@ class ManagedHoldersTest {
     @Test
     void aMarkedFieldsDeclarationFollowsThePlugin() {
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
                 import %s;
@@ -366,7 +367,7 @@ class ManagedHoldersTest {
                 .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.Visibility.PUBLIC)
                 .because("Mine.");
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 public final class Sdk {
                 }
@@ -379,9 +380,9 @@ class ManagedHoldersTest {
     /** A holder the bot has gets back a method value it lacks, its fresh value inside (2026-10-12). */
     @Test
     void onBindAMissingMethodIsAddedToTheHolderTheBotHas() {
-        Path sdk = dir.resolve("src/main/java/com/bot/plugins/sdk/Sdk.java");
+        Path sdk = dir.resolve("src/main/java/com/bot/plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java");
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
 
@@ -424,7 +425,7 @@ class ManagedHoldersTest {
     @Test
     void anUnmarkedMethodOfTheNameIsLeftAlone() {
         String had = """
-                package com.bot.plugins.sdk;
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
 
                 public final class Sdk {
 
@@ -441,17 +442,18 @@ class ManagedHoldersTest {
         assertEquals("flow", ManagedHolders.methodName("flow"));
         assertEquals("restBetween", ManagedHolders.methodName("rest-between"));
         assertEquals("classValue", ManagedHolders.methodName("class"));
-        assertEquals("sdk", ManagedHolders.segment(SDK));
     }
 
-    /** The folder is the artifactId's last word: the same {@code plugins/<folder>/} the plugin id gave before. */
+    /** The folder is the whole coordinate, so two plugins never share one; BotMaker's two groupIds spell one. */
     @Test
-    void aPluginsFolderIsTheLastWordOfItsArtifactId() {
-        assertEquals("basics", ManagedHolders.segment(
-                new PluginCoordinate("com.github.BotMakerDev", "botmaker-plugin-basics")));
-        assertEquals("greeter", ManagedHolders.segment(new PluginCoordinate("com.acme", "Greeter")));
-        assertNull(ManagedHolders.segment(new PluginCoordinate("com.acme", "my-class")), "a keyword names no package");
-        assertNull(ManagedHolders.segment(new PluginCoordinate("com.acme", "plugin-2")));
+    void aPluginsFolderIsItsGroupIdAndArtifactId() {
+        assertEquals("com_github_botmakerdev.botmaker_sdk", ManagedHolders.segment(SDK));
+        assertEquals("com_github_botmakerdev.botmaker_plugin_basics", ManagedHolders.segment(
+                new PluginCoordinate("com.github.LiQiyeDev", "botmaker-plugin-basics")));
+        assertNotEquals(ManagedHolders.segment(new PluginCoordinate("com.alice", "discord-plugin")),
+                ManagedHolders.segment(new PluginCoordinate("com.alice", "slack-plugin")));
+        assertEquals("com_acme._2d", ManagedHolders.segment(new PluginCoordinate("com.acme", "2d")));
+        assertNull(ManagedHolders.segment(new PluginCoordinate("com.acme", "class")), "a keyword names no package");
     }
 
     private static CompilationUnit parse(String source) {
